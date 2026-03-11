@@ -2,27 +2,33 @@ from __future__ import annotations
 
 from typing import Never
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_user
 from backend.app.auth.dependencies import get_session
 from backend.app.market.read_models import MarketSummaryReadModel
+from backend.app.market.projections import MarketSummaryProjector
 from backend.app.market.schemas import (
     ListingCreate,
-    MarketSummaryView,
     ListingView,
+    MarketPlayerDetailView,
+    MarketPlayerHistoryView,
+    MarketPlayerListView,
+    MarketSummaryView,
     OfferCounterCreate,
     OfferCreate,
     OfferView,
     TradeIntentCreate,
     TradeIntentView,
 )
+from backend.app.pricing.schemas import MarketCandlesView, MarketMoversView, MarketTickerView
 from backend.app.market.service import (
     MarketConflictError,
     MarketEngine,
     MarketError,
     MarketNotFoundError,
+    MarketPlayerQueryService,
     MarketPermissionError,
     MarketValidationError,
 )
@@ -34,9 +40,18 @@ router = APIRouter(prefix="/market", tags=["market"])
 def get_market_engine(request: Request) -> MarketEngine:
     market_engine = getattr(request.app.state, "market_engine", None)
     if market_engine is None:
-        market_engine = MarketEngine()
+        session_factory = getattr(request.app.state, "session_factory", None)
+        summary_projector = MarketSummaryProjector(session_factory) if session_factory is not None else None
+        market_engine = MarketEngine(summary_projector=summary_projector)
         request.app.state.market_engine = market_engine
     return market_engine
+
+
+def get_market_player_query_service(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> MarketPlayerQueryService:
+    return MarketPlayerQueryService(session=session, market_engine=get_market_engine(request))
 
 
 def raise_market_http_exception(exc: MarketError) -> Never:
@@ -95,6 +110,108 @@ def get_market_summary(
     if summary is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Market summary for {asset_id} was not found")
     return MarketSummaryView.model_validate(summary)
+
+
+@router.get("/players", response_model=MarketPlayerListView)
+def list_market_players(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    position: str | None = Query(default=None),
+    nationality: str | None = Query(default=None),
+    club: str | None = Query(default=None),
+    min_age: int | None = Query(default=None, ge=0),
+    max_age: int | None = Query(default=None, ge=0),
+    min_value: float | None = Query(default=None, ge=0),
+    max_value: float | None = Query(default=None, ge=0),
+    search: str | None = Query(default=None),
+    sort: str = Query(default="current_value"),
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketPlayerListView:
+    try:
+        result = service.list_players(
+            limit=limit,
+            offset=offset,
+            position=position,
+            nationality=nationality,
+            club=club,
+            min_age=min_age,
+            max_age=max_age,
+            min_value=min_value,
+            max_value=max_value,
+            search=search,
+            sort=sort,
+        )
+    except MarketError as exc:
+        raise_market_http_exception(exc)
+
+    return MarketPlayerListView.model_validate(result)
+
+
+@router.get("/players/{player_id}", response_model=MarketPlayerDetailView)
+def get_market_player_detail(
+    player_id: str,
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketPlayerDetailView:
+    try:
+        result = service.get_player_detail(player_id)
+    except MarketError as exc:
+        raise_market_http_exception(exc)
+
+    return MarketPlayerDetailView.model_validate(result)
+
+
+@router.get("/players/{player_id}/history", response_model=MarketPlayerHistoryView)
+def get_market_player_history(
+    player_id: str,
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketPlayerHistoryView:
+    try:
+        result = service.get_player_history(player_id)
+    except MarketError as exc:
+        raise_market_http_exception(exc)
+
+    return MarketPlayerHistoryView.model_validate(result)
+
+
+@router.get("/players/{player_id}/candles", response_model=MarketCandlesView)
+def get_market_player_candles(
+    player_id: str,
+    interval: str = Query(default="1h"),
+    limit: int = Query(default=30, ge=1, le=500),
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketCandlesView:
+    try:
+        result = service.get_player_candles(player_id, interval=interval, limit=limit)
+    except MarketError as exc:
+        raise_market_http_exception(exc)
+
+    return MarketCandlesView.model_validate(result)
+
+
+@router.get("/ticker/{player_id}", response_model=MarketTickerView)
+def get_market_ticker(
+    player_id: str,
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketTickerView:
+    try:
+        result = service.get_player_ticker(player_id)
+    except MarketError as exc:
+        raise_market_http_exception(exc)
+
+    return MarketTickerView.model_validate(result)
+
+
+@router.get("/movers", response_model=MarketMoversView)
+def get_market_movers(
+    limit: int = Query(default=5, ge=1, le=25),
+    service: MarketPlayerQueryService = Depends(get_market_player_query_service),
+) -> MarketMoversView:
+    try:
+        result = service.get_market_movers(limit=limit)
+    except MarketError as exc:
+        raise_market_http_exception(exc)
+
+    return MarketMoversView.model_validate(result)
 
 
 @router.get("/listings/{listing_id}/offers", response_model=list[OfferView])
@@ -231,3 +348,13 @@ def withdraw_trade_intent(
         raise_market_http_exception(exc)
 
     return TradeIntentView.model_validate(trade_intent)
+
+
+api_router = APIRouter(prefix="/api")
+api_router.include_router(router)
+
+combined_router = APIRouter(tags=["market"])
+combined_router.include_router(router)
+combined_router.include_router(api_router)
+
+router = combined_router

@@ -4,7 +4,13 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Protocol
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from backend.app.ingestion.models import Player
 from backend.app.market.models import Listing, Offer, TradeIntent
+from backend.app.players.read_models import PlayerSummaryReadModel
+from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 class MarketRepository(Protocol):
@@ -113,3 +119,107 @@ class InMemoryMarketRepository:
     def iter_listings(self) -> tuple[Listing, ...]:
         with self._lock:
             return tuple(self._listings.values())
+
+
+@dataclass(frozen=True, slots=True)
+class MarketPlayerRecord:
+    player: Player
+    summary: PlayerSummaryReadModel | None
+    latest_snapshot: PlayerValueSnapshotRecord | None
+
+
+@dataclass(slots=True)
+class SqlAlchemyMarketPlayerRepository:
+    session: Session
+
+    def list_player_records(self) -> list[MarketPlayerRecord]:
+        players = list(
+            self.session.scalars(
+                select(Player)
+                .options(
+                    selectinload(Player.country),
+                    selectinload(Player.current_club),
+                    selectinload(Player.current_competition),
+                    selectinload(Player.supply_tier),
+                    selectinload(Player.liquidity_band),
+                    selectinload(Player.image_metadata),
+                )
+                .where(Player.is_tradable.is_(True))
+                .order_by(Player.full_name.asc(), Player.id.asc())
+            )
+        )
+        return self._build_records(players)
+
+    def get_player_record(self, player_id: str) -> MarketPlayerRecord | None:
+        player = self.session.scalar(
+            select(Player)
+            .options(
+                selectinload(Player.country),
+                selectinload(Player.current_club),
+                selectinload(Player.current_competition),
+                selectinload(Player.supply_tier),
+                selectinload(Player.liquidity_band),
+                selectinload(Player.image_metadata),
+            )
+            .where(
+                Player.id == player_id,
+                Player.is_tradable.is_(True),
+            )
+        )
+        if player is None:
+            return None
+        records = self._build_records([player])
+        return records[0] if records else None
+
+    def player_exists(self, player_id: str) -> bool:
+        statement = select(Player.id).where(
+            Player.id == player_id,
+            Player.is_tradable.is_(True),
+        )
+        return self.session.scalar(statement) is not None
+
+    def list_player_history(self, player_id: str) -> tuple[PlayerValueSnapshotRecord, ...]:
+        statement = (
+            select(PlayerValueSnapshotRecord)
+            .where(PlayerValueSnapshotRecord.player_id == player_id)
+            .order_by(
+                PlayerValueSnapshotRecord.as_of.desc(),
+                PlayerValueSnapshotRecord.created_at.desc(),
+                PlayerValueSnapshotRecord.id.desc(),
+            )
+        )
+        return tuple(self.session.scalars(statement))
+
+    def _build_records(self, players: list[Player]) -> list[MarketPlayerRecord]:
+        if not players:
+            return []
+
+        player_ids = [player.id for player in players]
+        summary_statement = select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_ids))
+        summaries = {
+            summary.player_id: summary
+            for summary in self.session.scalars(summary_statement)
+        }
+
+        latest_snapshots: dict[str, PlayerValueSnapshotRecord] = {}
+        snapshot_statement = (
+            select(PlayerValueSnapshotRecord)
+            .where(PlayerValueSnapshotRecord.player_id.in_(player_ids))
+            .order_by(
+                PlayerValueSnapshotRecord.player_id.asc(),
+                PlayerValueSnapshotRecord.as_of.desc(),
+                PlayerValueSnapshotRecord.created_at.desc(),
+                PlayerValueSnapshotRecord.id.desc(),
+            )
+        )
+        for snapshot in self.session.scalars(snapshot_statement):
+            latest_snapshots.setdefault(snapshot.player_id, snapshot)
+
+        return [
+            MarketPlayerRecord(
+                player=player,
+                summary=summaries.get(player.id),
+                latest_snapshot=latest_snapshots.get(player.id),
+            )
+            for player in players
+        ]

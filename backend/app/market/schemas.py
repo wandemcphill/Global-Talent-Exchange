@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -108,3 +109,128 @@ class MarketSummaryView(BaseModel):
     active_trade_intent_count: int
     last_activity_at: datetime
     updated_at: datetime
+
+
+class MarketPlayerListItemView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: str
+    player_name: str
+    position: str | None
+    nationality: str | None
+    current_club_name: str | None
+    age: int | None
+    current_value_credits: float | None
+    movement_pct: float | None
+    trend_score: float | None
+    market_interest_score: int | None
+    average_rating: float | None
+
+
+class MarketPlayerListView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[MarketPlayerListItemView]
+    limit: int
+    offset: int
+    total: int
+
+
+class MarketPlayerIdentityView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_name: str
+    first_name: str | None
+    last_name: str | None
+    short_name: str | None
+    position: str | None
+    normalized_position: str | None
+    nationality: str | None
+    nationality_code: str | None
+    age: int | None
+    date_of_birth: date | None
+    preferred_foot: str | None
+    shirt_number: int | None
+    height_cm: int | None
+    weight_kg: int | None
+    current_club_id: str | None
+    current_club_name: str | None
+    current_competition_id: str | None
+    current_competition_name: str | None
+    image_url: str | None
+
+
+class MarketPlayerMarketProfileView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    is_tradable: bool
+    market_value_eur: float | None
+    supply_tier: dict[str, Any] | None
+    liquidity_band: dict[str, Any] | None
+    holder_count: int | None
+    top_holder_share_pct: float | None
+    top_3_holder_share_pct: float | None
+    snapshot_market_price_credits: float | None
+    quoted_market_price_credits: float | None
+    trusted_trade_price_credits: float | None
+    trade_trust_score: float | None
+
+
+class MarketPlayerValueProfileView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    last_snapshot_id: str | None
+    last_snapshot_at: datetime | None
+    current_value_credits: float | None
+    previous_value_credits: float | None
+    movement_pct: float | None
+    football_truth_value_credits: float | None
+    market_signal_value_credits: float | None
+    published_card_value_credits: float | None
+
+
+class MarketPlayerTrendProfileView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    trend_score: float | None
+    market_interest_score: int | None
+    average_rating: float | None
+    global_scouting_index: float | None
+    previous_global_scouting_index: float | None
+    global_scouting_index_movement_pct: float | None
+    drivers: tuple[str, ...]
+
+
+class MarketPlayerDetailView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: str
+    identity: MarketPlayerIdentityView
+    market_profile: MarketPlayerMarketProfileView
+    value: MarketPlayerValueProfileView
+    trend: MarketPlayerTrendProfileView
+
+
+class MarketPlayerHistoryPointView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    snapshot_id: str
+    as_of: datetime
+    current_value_credits: float
+    previous_value_credits: float
+    movement_pct: float
+    football_truth_value_credits: float
+    market_signal_value_credits: float
+    published_card_value_credits: float | None
+    trend_score: float | None
+    global_scouting_index: float | None
+    previous_global_scouting_index: float | None
+    global_scouting_index_movement_pct: float | None
+    drivers: tuple[str, ...]
+
+
+class MarketPlayerHistoryView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: str
+    history: list[MarketPlayerHistoryPointView]
