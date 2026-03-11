@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+pytest-cache-files*/
+.env
+.env.*
+.vscode/
+*.log
+v1_original/
+v2/
+global_talent_exchange_v2_ai_build_kit/
+README_ONE_ZIP_PACKAGE
