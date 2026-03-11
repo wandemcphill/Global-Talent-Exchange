@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+DEFAULT_PROVIDER_NAME = "mock"
+DEFAULT_CURSOR_KEY = "default"
+DEFAULT_LOCK_TTL_SECONDS = 15 * 60
+DEFAULT_DATABASE_URL = "sqlite+pysqlite:///./gte_ingestion.db"
+
+ENV_DATABASE_URL = "GTE_DATABASE_URL"
+ENV_REDIS_URL = "GTE_REDIS_URL"
+ENV_PROVIDER_NAME = "GTE_INGESTION_PROVIDER"
+ENV_PROVIDER_TIMEOUT_SECONDS = "GTE_PROVIDER_TIMEOUT_SECONDS"
+ENV_FOOTBALL_DATA_BASE_URL = "FOOTBALL_DATA_BASE_URL"
+ENV_FOOTBALL_DATA_API_KEY = "FOOTBALL_DATA_API_KEY"
+
+TOP_PROSPECTS_TTL_SECONDS = int(timedelta(minutes=10).total_seconds())
+PLAYER_PROFILE_SUMMARY_TTL_SECONDS = int(timedelta(minutes=5).total_seconds())
+TRENDING_PLAYERS_TTL_SECONDS = int(timedelta(minutes=5).total_seconds())
+COMPETITION_TABLE_TTL_SECONDS = int(timedelta(minutes=3).total_seconds())
+CLUB_ROSTER_SNAPSHOT_TTL_SECONDS = int(timedelta(minutes=5).total_seconds())
+
+BOOTSTRAP_ENTITY_TYPE = "bootstrap"
+INCREMENTAL_ENTITY_TYPE = "incremental"
+MATCHES_ENTITY_TYPE = "match"
+STANDINGS_ENTITY_TYPE = "team_standing"
+PLAYER_MATCH_STATS_ENTITY_TYPE = "player_match_stat"
+PLAYER_SEASON_STATS_ENTITY_TYPE = "player_season_stat"
+
+SYNC_RUN_STATUS_RUNNING = "running"
+SYNC_RUN_STATUS_SUCCESS = "success"
+SYNC_RUN_STATUS_FAILED = "failed"
+SYNC_RUN_STATUS_PARTIAL = "partial_success"
