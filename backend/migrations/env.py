@@ -11,19 +11,19 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from backend.app.db import get_database_url  # noqa: E402
-from backend.app.models import Base  # noqa: E402
-import backend.app.ingestion.models  # noqa: E402,F401
+from backend.app.db import get_database_url, get_target_metadata, load_model_modules  # noqa: E402
 
 config = context.config
 
-if config.get_main_option("sqlalchemy.url") == "sqlite:///./gte_backend.db":
+load_model_modules()
+configured_url = config.get_main_option("sqlalchemy.url")
+if configured_url in {"", "sqlite:///./gte_backend.db", "sqlite+pysqlite:///./gte_backend.db"}:
     config.set_main_option("sqlalchemy.url", get_database_url())
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = get_target_metadata()
 
 
 def run_migrations_offline() -> None:

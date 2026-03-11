@@ -43,6 +43,8 @@ CLUB_ALIASES = {
     "spurs": "Tottenham Hotspur",
 }
 
+LEAGUE_A_COMPETITIONS = MAJOR_COMPETITIONS
+
 POSITION_ALIASES = {
     "goalkeeper": "GK",
     "keeper": "GK",
@@ -153,6 +155,46 @@ def parse_measurement(value: Any) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def parse_money(value: Any) -> float | None:
+    if value in (None, "", "null"):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    match = DIGIT_RE.search(str(value).replace(",", ""))
+    return float(match.group(1)) if match else None
+
+
+def infer_internal_league_code(*, competition_name: str, competition_type: str) -> str:
+    normalized_name = (competition_name or "").strip().lower()
+    normalized_type = (competition_type or "").strip().lower()
+    if normalized_name in LEAGUE_A_COMPETITIONS:
+        return "league_a"
+    if normalized_type == "league":
+        return "league_b"
+    if normalized_type == "cup":
+        return "league_c"
+    return "league_d"
+
+
+def estimate_player_profile_completeness(payload: dict[str, Any]) -> float:
+    candidate_values = (
+        payload.get("name") or payload.get("fullName") or payload.get("displayName"),
+        payload.get("firstName"),
+        payload.get("lastName"),
+        payload.get("shortName") or payload.get("shirtName"),
+        payload.get("position"),
+        payload.get("dateOfBirth") or payload.get("birthDate"),
+        payload.get("nationality") or payload.get("country") or payload.get("countryName"),
+        payload.get("height"),
+        payload.get("weight"),
+        payload.get("preferredFoot"),
+        payload.get("shirtNumber"),
+        payload.get("marketValueEur") or payload.get("marketValue") or payload.get("valueEur"),
+    )
+    present = sum(1 for value in candidate_values if value not in (None, "", "null"))
+    return round(present / len(candidate_values), 4)
+
+
 def _season_label(start_date: date | None, end_date: date | None, fallback: str | None = None) -> str:
     if fallback:
         cleaned = clean_name(fallback)
@@ -179,6 +221,7 @@ def normalize_country_payload(provider_name: str, payload: dict[str, Any]) -> Co
 def normalize_competition_payload(provider_name: str, payload: dict[str, Any]) -> CompetitionUpsert:
     area = payload.get("area") or {}
     competition_name = normalize_competition_name(payload.get("name")) or "Unknown Competition"
+    competition_type = clean_name(payload.get("type") or payload.get("competitionType") or "league") or "league"
     current_season = payload.get("currentSeason") or payload.get("season") or {}
     return CompetitionUpsert(
         provider_name=provider_name,
@@ -188,7 +231,12 @@ def normalize_competition_payload(provider_name: str, payload: dict[str, Any]) -
         code=clean_name(payload.get("code")),
         country_provider_external_id=str(area.get("id")) if area.get("id") is not None else None,
         country_name=normalize_country_name(area.get("name")),
-        competition_type=clean_name(payload.get("type") or payload.get("competitionType") or "league") or "league",
+        internal_league_code=clean_name(payload.get("internalLeagueCode"))
+        or infer_internal_league_code(
+            competition_name=competition_name,
+            competition_type=competition_type,
+        ),
+        competition_type=competition_type,
         gender=clean_name(payload.get("gender")),
         emblem_url=payload.get("emblem") or payload.get("emblemUrl"),
         is_major=competition_name.lower() in MAJOR_COMPETITIONS,
@@ -263,6 +311,10 @@ def normalize_player_payload(
         weight_kg=parse_measurement(payload.get("weight")),
         preferred_foot=clean_name(payload.get("preferredFoot")),
         shirt_number=payload.get("shirtNumber"),
+        market_value_eur=parse_money(
+            payload.get("marketValueEur") or payload.get("marketValue") or payload.get("valueEur")
+        ),
+        profile_completeness_score=estimate_player_profile_completeness(payload),
     )
 
 

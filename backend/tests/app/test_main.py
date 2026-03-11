@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import create_engine, text
 
 from backend.app.auth.dependencies import get_session
 from backend.app.auth.router import register_user
 from backend.app.auth.schemas import RegisterRequest
+from backend.app.cache.redis_helpers import NullCacheBackend
+from backend.app.ingestion.service import IngestionService
 from backend.app.main import create_app
 from backend.app.market.router import create_listing
 from backend.app.market.schemas import ListingCreate
 from backend.app.models.user import User
-from backend.app.value_engine.router import build_value_snapshots
-from backend.app.value_engine.schemas import ValueSnapshotBatchRequest
 from backend.app.wallets.router import list_wallet_accounts
 
 
@@ -40,31 +43,62 @@ async def test_app_startup_runs_migrations_and_registers_core_routes(app_and_eng
     app, engine = app_and_engine
 
     async with app.router.lifespan_context(app):
+        assert hasattr(app.state, "settings")
+        assert hasattr(app.state, "db_engine")
+        assert hasattr(app.state, "session_factory")
         assert hasattr(app.state, "market_engine")
+        assert hasattr(app.state, "ingestion_pipeline")
+        assert hasattr(app.state, "value_engine_bridge")
+        assert hasattr(app.state, "ingestion_job_runner")
+        assert "health" in app.state.domain_modules
+        assert "admin" in app.state.domain_modules
+        assert "surveillance" in app.state.domain_modules
+        assert "value_engine" in app.state.domain_modules
+
         session, session_generator = _resolve_session(app)
         try:
             health_route = next(route for route in app.routes if getattr(route, "path", None) == "/health")
-            health_response = health_route.endpoint(session=session)
+            health_response = health_route.endpoint(request=SimpleNamespace(app=app))
         finally:
             _close_session(session_generator)
 
     assert get_session in app.dependency_overrides
-    assert health_response == {"status": "ok"}
+    assert health_response["status"] == "ok"
+    assert health_response["components"]["database"]["status"] == "ok"
     paths = app.openapi()["paths"]
     assert "/health" in paths
     assert "/auth/register" in paths
+    assert "/auth/login" in paths
+    assert "/admin/config/supply-tiers" in paths
+    assert "/admin/config/liquidity-bands" in paths
+    assert "/admin/config/suspicion-thresholds" in paths
+    assert "/admin/config/value-controls" in paths
     assert "/wallets/accounts" in paths
+    assert "/wallets/payment-events" in paths
+    assert "/players/summaries/recent" in paths
+    assert "/clubs/{club_id}" in paths
+    assert "/competitions/{competition_id}" in paths
     assert "/market/listings" in paths
-    assert "/value-engine/snapshots" in paths
+    assert "/market/summary/{asset_id}" in paths
+    assert "/market/offers" in paths
+    assert "/value-engine/snapshots/rebuild" in paths
+    assert "/surveillance/suspicious-players" in paths
+    assert "/surveillance/suspicious-clusters" in paths
+    assert "/surveillance/thin-market-alerts" in paths
+    assert "/surveillance/holder-concentration-alerts" in paths
+    assert "/surveillance/circular-trade-alerts" in paths
+    assert "/portfolios/me" in paths
+    assert "/notifications/me" in paths
+    assert "/realtime/status" in paths
 
     with engine.connect() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
 
-    assert revision == "20260311_0001"
+    assert revision == "20260311_0004"
 
 
 @pytest.mark.anyio
-async def test_connected_routes_share_database_bootstrap(app_and_engine) -> None:
+async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and_engine) -> None:
     app, _engine = app_and_engine
 
     async with app.router.lifespan_context(app):
@@ -91,31 +125,31 @@ async def test_connected_routes_share_database_bootstrap(app_and_engine) -> None
                 current_user=current_user,
                 market_engine=app.state.market_engine,
             )
-            snapshot_response = build_value_snapshots(
-                ValueSnapshotBatchRequest.model_validate(
-                    {
-                        "as_of": "2026-03-06T00:00:00Z",
-                        "inputs": [
-                            {
-                                "player_id": "player-1",
-                                "player_name": "Ada Forward",
-                                "reference_market_value_eur": 70000000,
-                                "current_credits": 710.0,
-                                "demand_signal": {
-                                    "purchases": 4,
-                                    "shortlist_adds": 10,
-                                    "follows": 25,
-                                },
-                            }
-                        ],
-                    }
-                )
+
+            ingestion_service = IngestionService(session, cache_backend=NullCacheBackend())
+            ingestion_service.bootstrap_sync(provider_name="mock")
+            ingestion_service.sync_matches(provider_name="mock")
+            ingestion_service.sync_player_stats(provider_name="mock")
+            session.commit()
+
+            snapshots = app.state.value_engine_bridge.run(
+                as_of=datetime(2026, 3, 11, tzinfo=timezone.utc),
             )
+            later_snapshots = app.state.value_engine_bridge.run(
+                as_of=datetime(2026, 3, 12, tzinfo=timezone.utc),
+            )
+            job_summary = app.state.ingestion_job_runner.nightly_full_sync()
         finally:
             _close_session(session_generator)
 
     assert {account.unit.value for account in wallet_accounts} == {"coin", "credit"}
     assert listing_response.seller_user_id == register_response.user.id
-    assert len(snapshot_response.snapshots) == 1
-    assert snapshot_response.snapshots[0].player_id == "player-1"
-    assert snapshot_response.snapshots[0].target_credits > 0
+    assert len(snapshots) >= 1
+    assert len(later_snapshots) >= 1
+    assert all(snapshot.target_credits > 0 for snapshot in snapshots)
+    first_run = {snapshot.player_id: snapshot for snapshot in snapshots}
+    for snapshot in later_snapshots:
+        if snapshot.player_id in first_run:
+            assert snapshot.previous_credits == first_run[snapshot.player_id].target_credits
+    assert job_summary.status == "success"
+    assert len(app.state.value_engine_bridge.last_run_snapshots) >= 1

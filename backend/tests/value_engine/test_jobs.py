@@ -3,7 +3,7 @@ import unittest
 
 from backend.app.ingestion.models import CompetitionContext, NormalizedMatchEvent
 from backend.app.value_engine.jobs import InMemoryValueSnapshotRepository, ValueSnapshotJob
-from backend.app.value_engine.models import DemandSignal, PlayerValueInput
+from backend.app.value_engine.models import DemandSignal, PlayerValueInput, ScoutingSignal
 
 
 class ValueSnapshotJobTests(unittest.TestCase):
@@ -39,6 +39,7 @@ class ValueSnapshotJobTests(unittest.TestCase):
                         ),
                     ),
                     demand_signal=DemandSignal(purchases=4, shortlist_adds=10, follows=25),
+                    scouting_signal=ScoutingSignal(shortlist_adds=10, watchlist_adds=25, scouting_activity=4),
                 ),
                 "p-2": PlayerValueInput(
                     player_id="p-2",
@@ -47,6 +48,7 @@ class ValueSnapshotJobTests(unittest.TestCase):
                     reference_market_value_eur=25_000_000,
                     current_credits=250.0,
                     demand_signal=DemandSignal(watchlist_adds=20, follows=50),
+                    scouting_signal=ScoutingSignal(watchlist_adds=20, transfer_room_adds=5),
                 ),
             }
         )
@@ -58,6 +60,9 @@ class ValueSnapshotJobTests(unittest.TestCase):
         self.assertEqual(len(repository.saved_snapshots), 2)
         self.assertEqual([snapshot.player_id for snapshot in snapshots], ["p-1", "p-2"])
         self.assertTrue(all(snapshot.target_credits > 0 for snapshot in snapshots))
+        self.assertTrue(all(snapshot.football_truth_value_credits > 0 for snapshot in snapshots))
+        self.assertTrue(all(snapshot.market_signal_value_credits > 0 for snapshot in snapshots))
+        self.assertTrue(all(snapshot.global_scouting_index >= 0 for snapshot in snapshots))
 
 
 if __name__ == "__main__":

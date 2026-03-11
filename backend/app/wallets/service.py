@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.models.base import generate_uuid, utcnow
 from backend.app.models.user import User
 from backend.app.models.wallet import (
@@ -43,6 +44,9 @@ class LedgerPosting:
 
 
 class WalletService:
+    def __init__(self, event_publisher: EventPublisher | None = None) -> None:
+        self.event_publisher = event_publisher or InMemoryEventPublisher()
+
     def ensure_default_accounts(self, session: Session, user: User) -> dict[LedgerUnit, LedgerAccount]:
         accounts: dict[LedgerUnit, LedgerAccount] = {}
         for unit, label in ((LedgerUnit.COIN, "Coins"), (LedgerUnit.CREDIT, "Credits")):
@@ -124,6 +128,17 @@ class WalletService:
             session.flush()
         except IntegrityError as exc:
             raise LedgerError("Provider reference already exists.") from exc
+        self.event_publisher.publish(
+            DomainEvent(
+                name="wallet.payment.created",
+                payload={
+                    "payment_event_id": event.id,
+                    "user_id": user.id,
+                    "provider": normalized_provider.value,
+                    "amount": str(event.amount),
+                },
+            )
+        )
         return event
 
     def verify_payment_event(self, session: Session, payment_event: PaymentEvent, *, actor: User | None = None) -> PaymentEvent:
@@ -153,6 +168,17 @@ class WalletService:
         payment_event.processed_at = utcnow()
         payment_event.ledger_transaction_id = entries[0].transaction_id
         session.flush()
+        self.event_publisher.publish(
+            DomainEvent(
+                name="wallet.payment.verified",
+                payload={
+                    "payment_event_id": payment_event.id,
+                    "user_id": user.id,
+                    "transaction_id": payment_event.ledger_transaction_id,
+                    "amount": str(payment_event.amount),
+                },
+            )
+        )
         return payment_event
 
     def append_transaction(
@@ -212,6 +238,18 @@ class WalletService:
         ]
         session.add_all(entries)
         session.flush()
+        self.event_publisher.publish(
+            DomainEvent(
+                name="wallet.transaction.appended",
+                payload={
+                    "transaction_id": transaction_id,
+                    "reason": reason.value,
+                    "reference": reference,
+                    "external_reference": external_reference,
+                    "account_ids": [posting.account.id for posting in normalized_postings],
+                },
+            )
+        )
         return entries
 
     def get_balance(self, session: Session, account: LedgerAccount) -> Decimal:

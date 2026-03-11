@@ -1,66 +1,95 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
-from sqlalchemy import text
+from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.auth.dependencies import get_session
-from backend.app.auth.router import router as auth_router
-from backend.app.db import create_session_factory, ensure_database_schema_current, get_engine
-from backend.app.market.router import router as market_router
-from backend.app.market.service import MarketEngine
-from backend.app.users.router import router as users_router
-from backend.app.value_engine.router import router as value_engine_router
-from backend.app.wallets.router import router as wallets_router
+from backend.app.core.config import Settings, get_settings
+from backend.app.core.container import ApplicationContext, build_application_context
+from backend.app.core.database import create_database_engine, create_session_factory
+from backend.app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from backend.app.modules import DOMAIN_MODULES
 
 
 def create_app(
     *,
+    settings: Settings | None = None,
     engine: Engine | None = None,
     session_factory: sessionmaker[Session] | None = None,
-    run_migration_check: bool = True,
+    modules: tuple[DomainModule, ...] = DOMAIN_MODULES,
+    run_migration_check: bool | None = None,
 ) -> FastAPI:
-    bound_engine = session_factory.kw.get("bind") if session_factory is not None else None
-    database_engine = engine or bound_engine or get_engine()
+    resolved_settings = settings or get_settings()
+    database_engine = _resolve_database_engine(
+        settings=resolved_settings,
+        engine=engine,
+        session_factory=session_factory,
+    )
     database_session_factory = session_factory or create_session_factory(database_engine)
-
-    def get_app_session() -> Iterator[Session]:
-        session = database_session_factory()
-        try:
-            yield session
-        finally:
-            session.close()
+    context = build_application_context(
+        settings=resolved_settings,
+        engine=database_engine,
+        session_factory=database_session_factory,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        if run_migration_check:
-            ensure_database_schema_current(database_engine)
-        app.state.market_engine = MarketEngine()
-        yield
+        initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
+        _bind_application_state(app, context=context, engine=initialized_engine, modules=modules)
+        run_module_hooks(app, context, modules, phase="startup")
+        try:
+            yield
+        finally:
+            run_module_hooks(app, context, modules, phase="shutdown")
 
     app = FastAPI(
-        title="Global Talent Exchange API",
-        version="0.1.0",
+        title=resolved_settings.app_name,
+        version=resolved_settings.app_version,
         lifespan=lifespan,
     )
-    app.dependency_overrides[get_session] = get_app_session
-
-    app.include_router(auth_router)
-    app.include_router(users_router)
-    app.include_router(wallets_router)
-    app.include_router(market_router)
-    app.include_router(value_engine_router)
-
-    @app.get("/health", tags=["health"])
-    def read_health(session: Session = Depends(get_app_session)) -> dict[str, str]:
-        session.execute(text("SELECT 1"))
-        return {"status": "ok"}
-
+    app.dependency_overrides[get_session] = context.database.get_session
+    register_domain_modules(app, modules)
     return app
+
+
+def _resolve_database_engine(
+    *,
+    settings: Settings,
+    engine: Engine | None,
+    session_factory: sessionmaker[Session] | None,
+) -> Engine:
+    if engine is not None:
+        return engine
+    bound_engine = session_factory.kw.get("bind") if session_factory is not None else None  # type: ignore[union-attr]
+    if bound_engine is not None:
+        return bound_engine
+    return create_database_engine(settings.database_url)
+
+
+def _bind_application_state(
+    app: FastAPI,
+    *,
+    context: ApplicationContext,
+    engine: Engine,
+    modules: tuple[DomainModule, ...],
+) -> None:
+    app.state.settings = context.settings
+    app.state.context = context
+    app.state.db_engine = engine
+    app.state.session_factory = context.database.session_factory
+    app.state.cache_backend = context.cache_backend
+    app.state.event_publisher = context.event_publisher
+    app.state.job_backend = context.job_backend
+    app.state.notifications = context.notifications
+    app.state.realtime = context.realtime
+    app.state.market_engine = context.market_engine
+    app.state.ingestion_pipeline = context.ingestion_pipeline
+    app.state.value_engine_bridge = context.value_engine_bridge
+    app.state.ingestion_job_runner = context.ingestion_job_runner
+    app.state.domain_modules = tuple(module.name for module in modules)
 
 
 app = create_app()

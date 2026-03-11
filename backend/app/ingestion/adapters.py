@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 from .models import CompetitionContext, NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
 
@@ -43,6 +43,34 @@ def _has_big_moment(
     )
     final_goal = competition.is_major and "final" in stage.lower() and goals > 0 and won_match
     return tagged or final_goal
+
+
+class IngestionAdapter(Protocol):
+    provider_name: str
+
+    def can_handle(self, payload: Mapping[str, Any]) -> bool:
+        ...
+
+
+@dataclass(slots=True)
+class IngestionAdapterRegistry:
+    adapters: list[IngestionAdapter] = field(default_factory=list)
+
+    def register(self, adapter: IngestionAdapter) -> None:
+        self.adapters.append(adapter)
+
+    def resolve(self, payload: Mapping[str, Any]) -> IngestionAdapter:
+        for adapter in self.adapters:
+            if adapter.can_handle(payload):
+                return adapter
+        raise ValueError("No ingestion adapter can handle payload")
+
+    @classmethod
+    def default(cls) -> "IngestionAdapterRegistry":
+        registry = cls()
+        registry.register(MatchStatsAdapter())
+        registry.register(MatchAnalyticsAdapter())
+        return registry
 
 
 @dataclass(slots=True)

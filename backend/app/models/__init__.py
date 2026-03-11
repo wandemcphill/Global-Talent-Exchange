@@ -1,4 +1,4 @@
-﻿from backend.app.models.base import Base
+from backend.app.models.base import Base
 from backend.app.models.user import KycStatus, User, UserRole
 from backend.app.models.wallet import (
     LedgerAccount,

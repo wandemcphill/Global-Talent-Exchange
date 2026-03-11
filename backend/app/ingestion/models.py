@@ -115,12 +115,102 @@ class SyncRunStatus(StrEnum):
     PARTIAL_SUCCESS = "partial_success"
 
 
+class VerificationStatus(StrEnum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+
+
+class ImageModerationStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class InternalLeagueCode(StrEnum):
+    LEAGUE_A = "league_a"
+    LEAGUE_B = "league_b"
+    LEAGUE_C = "league_c"
+    LEAGUE_D = "league_d"
+    LEAGUE_E = "league_e"
+
+
+class InternalLeague(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "ingestion_internal_leagues"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_ingestion_internal_leagues_code"),
+        UniqueConstraint("name", name="uq_ingestion_internal_leagues_name"),
+        UniqueConstraint("rank", name="uq_ingestion_internal_leagues_rank"),
+        Index("ix_ingestion_internal_leagues_name", "name"),
+    )
+
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    competition_multiplier: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1.0")
+    visibility_weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1.0")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+
+    competitions: Mapped[list["Competition"]] = relationship(back_populates="internal_league")
+    clubs: Mapped[list["Club"]] = relationship(back_populates="internal_league")
+    players: Mapped[list["Player"]] = relationship(back_populates="internal_league")
+
+
+class SupplyTier(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "ingestion_supply_tiers"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_ingestion_supply_tiers_code"),
+        UniqueConstraint("name", name="uq_ingestion_supply_tiers_name"),
+        UniqueConstraint("rank", name="uq_ingestion_supply_tiers_rank"),
+        Index("ix_ingestion_supply_tiers_name", "name"),
+    )
+
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_score: Mapped[float] = mapped_column(Float, nullable=False)
+    max_score: Mapped[float] = mapped_column(Float, nullable=False)
+    target_share: Mapped[float] = mapped_column(Float, nullable=False)
+    circulating_supply: Mapped[int] = mapped_column(Integer, nullable=False)
+    daily_pack_supply: Mapped[int] = mapped_column(Integer, nullable=False)
+    season_mint_cap: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+
+    players: Mapped[list["Player"]] = relationship(back_populates="supply_tier")
+
+
+class LiquidityBand(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "ingestion_liquidity_bands"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_ingestion_liquidity_bands_code"),
+        UniqueConstraint("name", name="uq_ingestion_liquidity_bands_name"),
+        UniqueConstraint("rank", name="uq_ingestion_liquidity_bands_rank"),
+        Index("ix_ingestion_liquidity_bands_name", "name"),
+    )
+
+    code: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_price_credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_price_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_spread_bps: Mapped[int] = mapped_column(Integer, nullable=False)
+    maker_inventory_target: Mapped[int] = mapped_column(Integer, nullable=False)
+    instant_sell_fee_bps: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+
+    players: Mapped[list["Player"]] = relationship(back_populates="liquidity_band")
+
+
 class Country(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_countries"
     __table_args__ = (
         UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_countries_provider_external_id"),
         Index("ix_ingestion_countries_alpha2_code", "alpha2_code"),
         Index("ix_ingestion_countries_alpha3_code", "alpha3_code"),
+        Index("ix_ingestion_countries_fifa_code", "fifa_code"),
+        Index("ix_ingestion_countries_confederation_code", "confederation_code"),
     )
 
     source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -128,6 +218,10 @@ class Country(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     alpha2_code: Mapped[str | None] = mapped_column(String(4), nullable=True)
     alpha3_code: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    fifa_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    confederation_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    market_region: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    is_enabled_for_universe: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     flag_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
@@ -142,6 +236,7 @@ class Competition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_competitions_provider_external_id"),
         Index("ix_ingestion_competitions_slug", "slug"),
         Index("ix_ingestion_competitions_code", "code"),
+        Index("ix_ingestion_competitions_internal_league_id", "internal_league_id"),
     )
 
     source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -151,20 +246,33 @@ class Competition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("ingestion_countries.id", ondelete="SET NULL"),
         nullable=True,
     )
+    internal_league_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_internal_leagues.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     slug: Mapped[str] = mapped_column(String(180), nullable=False)
     code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     competition_type: Mapped[str] = mapped_column(String(32), nullable=False, default="league", server_default="league")
+    format_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    age_bracket: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    domestic_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     gender: Mapped[str | None] = mapped_column(String(32), nullable=True)
     emblem_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_major: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    is_tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    competition_strength: Mapped[float | None] = mapped_column(Float, nullable=True)
     current_season_external_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     country: Mapped[Country | None] = relationship(back_populates="competitions")
+    internal_league: Mapped[InternalLeague | None] = relationship(back_populates="competitions")
     seasons: Mapped[list["Season"]] = relationship(back_populates="competition")
+    clubs: Mapped[list["Club"]] = relationship(back_populates="current_competition")
     matches: Mapped[list["Match"]] = relationship(back_populates="competition")
     standings: Mapped[list["TeamStanding"]] = relationship(back_populates="competition")
+    current_players: Mapped[list["Player"]] = relationship(back_populates="current_competition")
 
 
 class Season(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -189,6 +297,10 @@ class Season(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     current_matchday: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    season_status: Mapped[str] = mapped_column(String(32), nullable=False, default="upcoming", server_default="upcoming")
+    trading_window_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trading_window_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    data_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     competition: Mapped[Competition] = relationship(back_populates="seasons")
@@ -203,6 +315,8 @@ class Club(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_clubs_provider_external_id"),
         Index("ix_ingestion_clubs_slug", "slug"),
         Index("ix_ingestion_clubs_name", "name"),
+        Index("ix_ingestion_clubs_current_competition_id", "current_competition_id"),
+        Index("ix_ingestion_clubs_internal_league_id", "internal_league_id"),
     )
 
     source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -212,17 +326,32 @@ class Club(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("ingestion_countries.id", ondelete="SET NULL"),
         nullable=True,
     )
+    current_competition_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_competitions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    internal_league_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_internal_leagues.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     slug: Mapped[str] = mapped_column(String(180), nullable=False)
     short_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(32), nullable=True)
     founded_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     website: Mapped[str | None] = mapped_column(String(255), nullable=True)
     venue: Mapped[str | None] = mapped_column(String(160), nullable=True)
     crest_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    popularity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     country: Mapped[Country | None] = relationship(back_populates="clubs")
+    current_competition: Mapped[Competition | None] = relationship(back_populates="clubs")
+    internal_league: Mapped[InternalLeague | None] = relationship(back_populates="clubs")
     players: Mapped[list["Player"]] = relationship(back_populates="current_club")
     home_matches: Mapped[list["Match"]] = relationship(
         back_populates="home_club",
@@ -241,6 +370,10 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_players_provider_external_id"),
         Index("ix_ingestion_players_full_name", "full_name"),
         Index("ix_ingestion_players_normalized_position", "normalized_position"),
+        Index("ix_ingestion_players_current_competition_id", "current_competition_id"),
+        Index("ix_ingestion_players_internal_league_id", "internal_league_id"),
+        Index("ix_ingestion_players_supply_tier_id", "supply_tier_id"),
+        Index("ix_ingestion_players_liquidity_band_id", "liquidity_band_id"),
     )
 
     source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -255,6 +388,26 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("ingestion_clubs.id", ondelete="SET NULL"),
         nullable=True,
     )
+    current_competition_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_competitions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    internal_league_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_internal_leagues.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    supply_tier_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_supply_tiers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    liquidity_band_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_liquidity_bands.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     full_name: Mapped[str] = mapped_column(String(160), nullable=False)
     first_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -266,15 +419,96 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     weight_kg: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preferred_foot: Mapped[str | None] = mapped_column(String(16), nullable=True)
     shirt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    market_value_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profile_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     country: Mapped[Country | None] = relationship(back_populates="players")
     current_club: Mapped[Club | None] = relationship(back_populates="players")
+    current_competition: Mapped[Competition | None] = relationship(back_populates="current_players")
+    internal_league: Mapped[InternalLeague | None] = relationship(back_populates="players")
+    supply_tier: Mapped[SupplyTier | None] = relationship(back_populates="players")
+    liquidity_band: Mapped[LiquidityBand | None] = relationship(back_populates="players")
     player_tenures: Mapped[list["PlayerClubTenure"]] = relationship(back_populates="player")
     match_stats: Mapped[list["PlayerMatchStat"]] = relationship(back_populates="player")
     season_stats: Mapped[list["PlayerSeasonStat"]] = relationship(back_populates="player")
     injury_statuses: Mapped[list["InjuryStatus"]] = relationship(back_populates="player")
     market_signals: Mapped[list["MarketSignal"]] = relationship(back_populates="player")
+    verification: Mapped["PlayerVerification | None"] = relationship(
+        back_populates="player",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    image_metadata: Mapped[list["PlayerImageMetadata"]] = relationship(
+        back_populates="player",
+        cascade="all, delete-orphan",
+    )
+
+
+class PlayerVerification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "ingestion_player_verifications"
+    __table_args__ = (
+        UniqueConstraint("player_id", name="uq_ingestion_player_verifications_player_id"),
+        Index("ix_ingestion_player_verifications_status", "status"),
+    )
+
+    player_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=VerificationStatus.PENDING.value,
+        server_default=VerificationStatus.PENDING.value,
+    )
+    verification_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rights_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    player: Mapped[Player] = relationship(back_populates="verification")
+
+
+class PlayerImageMetadata(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "ingestion_player_image_metadata"
+    __table_args__ = (
+        UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_player_images_provider_external_id"),
+        UniqueConstraint("player_id", "image_role", name="uq_ingestion_player_images_player_role"),
+        Index("ix_ingestion_player_images_player_id", "player_id"),
+        Index("ix_ingestion_player_images_moderation_status", "moderation_status"),
+    )
+
+    source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider_external_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    player_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    image_role: Mapped[str] = mapped_column(String(32), nullable=False, default="portrait", server_default="portrait")
+    source_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    moderation_status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=ImageModerationStatus.PENDING.value,
+        server_default=ImageModerationStatus.PENDING.value,
+    )
+    rights_cleared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    last_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    player: Mapped[Player] = relationship(back_populates="image_metadata")
 
 
 class PlayerClubTenure(UUIDPrimaryKeyMixin, TimestampMixin, Base):

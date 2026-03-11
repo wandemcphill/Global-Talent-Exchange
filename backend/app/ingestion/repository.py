@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.base import utcnow
 
+from .market_profile import PlayerMarketProfileService
 from .constants import DEFAULT_CURSOR_KEY, SYNC_RUN_STATUS_SUCCESS
 from .models import (
     Club,
@@ -18,6 +19,8 @@ from .models import (
     Country,
     IngestionJobLock,
     InjuryStatus,
+    InternalLeague,
+    LiquidityBand,
     MarketSignal,
     Match,
     Player,
@@ -28,6 +31,7 @@ from .models import (
     ProviderSyncCursor,
     ProviderSyncRun,
     Season,
+    SupplyTier,
     SyncRunStatus,
     TeamStanding,
 )
@@ -68,8 +72,14 @@ class MutationStats:
 
 
 class IngestionRepository:
-    def __init__(self, session: Session):
+    def __init__(
+        self,
+        session: Session,
+        *,
+        market_profile_service: PlayerMarketProfileService | None = None,
+    ):
         self.session = session
+        self.market_profile_service = market_profile_service or PlayerMarketProfileService()
 
     def start_sync_run(
         self,
@@ -238,6 +248,18 @@ class IngestionRepository:
         rows = self.session.scalars(select(Country).where(Country.name.in_(names)))
         return {row.name: row for row in rows}
 
+    def _lookup_by_attribute(self, model: type[ModelT], attribute_name: str, values: set[str]) -> dict[str, ModelT]:
+        normalized_values = {value for value in values if value}
+        if not normalized_values:
+            return {}
+        rows = self.session.scalars(select(model).where(getattr(model, attribute_name).in_(normalized_values)))
+        return {getattr(row, attribute_name): row for row in rows}
+
+    def refresh_player_market_profiles(self, player_ids: set[str] | None = None) -> None:
+        if player_ids is not None and not player_ids:
+            return
+        self.market_profile_service.refresh_player_profiles(self.session, player_ids=player_ids)
+
     def _apply_update(self, instance: Any, values: dict[str, Any]) -> bool:
         changed = False
         for key, new_value in values.items():
@@ -297,6 +319,10 @@ class IngestionRepository:
                     "name": record.name,
                     "alpha2_code": record.alpha2_code,
                     "alpha3_code": record.alpha3_code,
+                    "fifa_code": record.fifa_code,
+                    "confederation_code": record.confederation_code,
+                    "market_region": record.market_region,
+                    "is_enabled_for_universe": record.is_enabled_for_universe,
                     "flag_url": record.flag_url,
                     "last_synced_at": utcnow(),
                 }
@@ -312,6 +338,11 @@ class IngestionRepository:
         }
         country_lookup = self._provider_lookup(Country, country_pairs)
         country_by_name = self._country_lookup_by_name({record.country_name for record in records if record.country_name})
+        internal_league_lookup = self._lookup_by_attribute(
+            InternalLeague,
+            "code",
+            {record.internal_league_code for record in records if record.internal_league_code},
+        )
         payloads: list[dict[str, Any]] = []
         for record in records:
             country = None
@@ -319,18 +350,25 @@ class IngestionRepository:
                 country = country_lookup.get((record.provider_name, record.country_provider_external_id))
             if country is None and record.country_name:
                 country = country_by_name.get(record.country_name)
+            internal_league = internal_league_lookup.get(record.internal_league_code or "")
             payloads.append(
                 {
                     "source_provider": record.provider_name,
                     "provider_external_id": record.provider_external_id,
                     "country_id": country.id if country else None,
+                    "internal_league_id": internal_league.id if internal_league else None,
                     "name": record.name,
                     "slug": record.slug,
                     "code": record.code,
                     "competition_type": record.competition_type.lower(),
+                    "format_type": record.format_type,
+                    "age_bracket": record.age_bracket,
+                    "domestic_level": record.domestic_level,
                     "gender": record.gender,
                     "emblem_url": record.emblem_url,
                     "is_major": record.is_major,
+                    "is_tradable": record.is_tradable,
+                    "competition_strength": record.competition_strength,
                     "current_season_external_id": record.current_season_external_id,
                     "last_synced_at": utcnow(),
                 }
@@ -361,6 +399,10 @@ class IngestionRepository:
                     "end_date": record.end_date,
                     "is_current": record.is_current,
                     "current_matchday": record.current_matchday,
+                    "season_status": record.season_status,
+                    "trading_window_opens_at": record.trading_window_opens_at,
+                    "trading_window_closes_at": record.trading_window_closes_at,
+                    "data_completeness_score": record.data_completeness_score,
                     "last_synced_at": utcnow(),
                 }
             )
@@ -375,6 +417,19 @@ class IngestionRepository:
         }
         country_lookup = self._provider_lookup(Country, country_pairs)
         country_by_name = self._country_lookup_by_name({record.country_name for record in records if record.country_name})
+        competition_lookup = self._provider_lookup(
+            Competition,
+            {
+                (record.provider_name, record.current_competition_provider_external_id)
+                for record in records
+                if record.current_competition_provider_external_id
+            },
+        )
+        internal_league_lookup = self._lookup_by_attribute(
+            InternalLeague,
+            "code",
+            {record.internal_league_code for record in records if record.internal_league_code},
+        )
         payloads = []
         for record in records:
             country = None
@@ -382,25 +437,37 @@ class IngestionRepository:
                 country = country_lookup.get((record.provider_name, record.country_provider_external_id))
             if country is None and record.country_name:
                 country = country_by_name.get(record.country_name)
+            competition = None
+            if record.current_competition_provider_external_id:
+                competition = competition_lookup.get((record.provider_name, record.current_competition_provider_external_id))
+            internal_league = internal_league_lookup.get(record.internal_league_code or "")
+            if internal_league is None and competition is not None and competition.internal_league_id:
+                internal_league = competition.internal_league
             payloads.append(
                 {
                     "source_provider": record.provider_name,
                     "provider_external_id": record.provider_external_id,
                     "country_id": country.id if country else None,
+                    "current_competition_id": competition.id if competition else None,
+                    "internal_league_id": internal_league.id if internal_league else None,
                     "name": record.name,
                     "slug": record.slug,
                     "short_name": record.short_name,
                     "code": record.code,
+                    "gender": record.gender,
                     "founded_year": record.founded_year,
                     "website": record.website,
                     "venue": record.venue,
                     "crest_url": record.crest_url,
+                    "popularity_score": record.popularity_score,
+                    "is_tradable": record.is_tradable,
                     "last_synced_at": utcnow(),
                 }
             )
         return self._upsert_models(Club, payloads)
 
     def upsert_players(self, records: list[PlayerUpsert]) -> MutationStats:
+        self.market_profile_service.ensure_catalogs(self.session)
         country_pairs = {
             (record.provider_name, record.country_provider_external_id)
             for record in records
@@ -416,6 +483,29 @@ class IngestionRepository:
                 if record.current_club_provider_external_id
             },
         )
+        competition_lookup = self._provider_lookup(
+            Competition,
+            {
+                (record.provider_name, record.current_competition_provider_external_id)
+                for record in records
+                if record.current_competition_provider_external_id
+            },
+        )
+        internal_league_lookup = self._lookup_by_attribute(
+            InternalLeague,
+            "code",
+            {record.internal_league_code for record in records if record.internal_league_code},
+        )
+        supply_tier_lookup = self._lookup_by_attribute(
+            SupplyTier,
+            "code",
+            {record.supply_tier_code for record in records if record.supply_tier_code},
+        )
+        liquidity_band_lookup = self._lookup_by_attribute(
+            LiquidityBand,
+            "code",
+            {record.liquidity_band_code for record in records if record.liquidity_band_code},
+        )
         payloads = []
         for record in records:
             country = None
@@ -426,12 +516,26 @@ class IngestionRepository:
             club = None
             if record.current_club_provider_external_id:
                 club = club_lookup.get((record.provider_name, record.current_club_provider_external_id))
+            competition = None
+            if record.current_competition_provider_external_id:
+                competition = competition_lookup.get((record.provider_name, record.current_competition_provider_external_id))
+            internal_league = internal_league_lookup.get(record.internal_league_code or "")
+            if internal_league is None and competition is not None and competition.internal_league_id:
+                internal_league = competition.internal_league
+            if internal_league is None and club is not None and club.internal_league_id:
+                internal_league = club.internal_league
+            supply_tier = supply_tier_lookup.get(record.supply_tier_code or "")
+            liquidity_band = liquidity_band_lookup.get(record.liquidity_band_code or "")
             payloads.append(
                 {
                     "source_provider": record.provider_name,
                     "provider_external_id": record.provider_external_id,
                     "country_id": country.id if country else None,
                     "current_club_id": club.id if club else None,
+                    "current_competition_id": competition.id if competition else None,
+                    "internal_league_id": internal_league.id if internal_league else None,
+                    "supply_tier_id": supply_tier.id if supply_tier else None,
+                    "liquidity_band_id": liquidity_band.id if liquidity_band else None,
                     "full_name": record.full_name,
                     "first_name": record.first_name,
                     "last_name": record.last_name,
@@ -443,10 +547,19 @@ class IngestionRepository:
                     "weight_kg": record.weight_kg,
                     "preferred_foot": record.preferred_foot,
                     "shirt_number": record.shirt_number,
+                    "market_value_eur": record.market_value_eur,
+                    "profile_completeness_score": record.profile_completeness_score,
+                    "is_tradable": record.is_tradable,
                     "last_synced_at": utcnow(),
                 }
             )
-        return self._upsert_models(Player, payloads)
+        stats = self._upsert_models(Player, payloads)
+        player_lookup = self._provider_lookup(
+            Player,
+            {(record.provider_name, record.provider_external_id) for record in records},
+        )
+        self.refresh_player_market_profiles({player.id for player in player_lookup.values()})
+        return stats
 
     def upsert_player_tenures(self, records: list[PlayerClubTenureUpsert]) -> MutationStats:
         player_lookup = self._provider_lookup(
@@ -620,6 +733,7 @@ class IngestionRepository:
             {(record.provider_name, record.season_provider_external_id) for record in records if record.season_provider_external_id},
         )
         payloads: list[dict[str, Any]] = []
+        player_ids_to_refresh: set[str] = set()
         stats = MutationStats(records_seen=len(records))
         for record in records:
             player = player_lookup.get((record.provider_name, record.player_provider_external_id))
@@ -627,6 +741,7 @@ class IngestionRepository:
             if player is None or match is None:
                 stats.failed_count += 1
                 continue
+            player_ids_to_refresh.add(player.id)
             club = None
             competition = None
             season = None
@@ -657,6 +772,7 @@ class IngestionRepository:
                 }
             )
         stats.merge(self._upsert_models(PlayerMatchStat, payloads))
+        self.refresh_player_market_profiles(player_ids_to_refresh)
         return stats
 
     def upsert_player_season_stats(self, records: list[PlayerSeasonStatUpsert]) -> MutationStats:
@@ -681,12 +797,14 @@ class IngestionRepository:
             {(record.provider_name, record.season_provider_external_id) for record in records if record.season_provider_external_id},
         )
         payloads: list[dict[str, Any]] = []
+        player_ids_to_refresh: set[str] = set()
         stats = MutationStats(records_seen=len(records))
         for record in records:
             player = player_lookup.get((record.provider_name, record.player_provider_external_id))
             if player is None:
                 stats.failed_count += 1
                 continue
+            player_ids_to_refresh.add(player.id)
             club = None
             competition = None
             season = None
@@ -717,6 +835,7 @@ class IngestionRepository:
                 }
             )
         stats.merge(self._upsert_models(PlayerSeasonStat, payloads))
+        self.refresh_player_market_profiles(player_ids_to_refresh)
         return stats
 
     def upsert_injury_statuses(self, records: list[InjuryStatusUpsert]) -> MutationStats:
@@ -758,12 +877,14 @@ class IngestionRepository:
             {(record.provider_name, record.player_provider_external_id) for record in records},
         )
         payloads: list[dict[str, Any]] = []
+        player_ids_to_refresh: set[str] = set()
         stats = MutationStats(records_seen=len(records))
         for record in records:
             player = player_lookup.get((record.provider_name, record.player_provider_external_id))
             if player is None:
                 stats.failed_count += 1
                 continue
+            player_ids_to_refresh.add(player.id)
             payloads.append(
                 {
                     "source_provider": record.provider_name,
@@ -776,6 +897,7 @@ class IngestionRepository:
                 }
             )
         stats.merge(self._upsert_models(MarketSignal, payloads))
+        self.refresh_player_market_profiles(player_ids_to_refresh)
         return stats
 
     def get_entity_by_provider_external_id(

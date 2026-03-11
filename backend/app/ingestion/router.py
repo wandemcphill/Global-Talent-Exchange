@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.cache.redis_helpers import build_cache_backend
 from backend.app.ingestion.schemas import CursorRead, ProviderHealthSnapshot, SyncExecutionSummary, SyncRunRead, SyncStatusRead, SyncTriggerRequest
 from backend.app.ingestion.service import IngestionService
 from backend.app.models.user import User
@@ -13,18 +12,31 @@ from backend.app.providers import ProviderConfigurationError
 router = APIRouter(prefix="/internal/ingestion", tags=["ingestion"], dependencies=[Depends(get_current_admin)])
 
 
-def get_ingestion_service(session: Session = Depends(get_session)) -> IngestionService:
-    return IngestionService(session, cache_backend=build_cache_backend())
+def get_ingestion_service(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> IngestionService:
+    return IngestionService(
+        session,
+        cache_backend=request.app.state.cache_backend,
+        settings=request.app.state.settings,
+    )
 
 
 @router.post("/bootstrap-sync", response_model=SyncExecutionSummary, status_code=status.HTTP_202_ACCEPTED)
 def trigger_bootstrap_sync(
     payload: SyncTriggerRequest,
     session: Session = Depends(get_session),
+    request: Request = None,
     _: User = Depends(get_current_admin),
 ) -> SyncExecutionSummary:
     try:
-        summary = IngestionService(session, cache_backend=build_cache_backend()).bootstrap_sync(
+        cache_backend = request.app.state.cache_backend if request is not None else None
+        summary = IngestionService(
+            session,
+            cache_backend=cache_backend,
+            settings=request.app.state.settings if request is not None else None,
+        ).bootstrap_sync(
             provider_name=payload.provider_name,
             competition_external_id=payload.competition_external_id,
             season_external_id=payload.season_external_id,
@@ -40,10 +52,16 @@ def trigger_bootstrap_sync(
 def trigger_incremental_sync(
     payload: SyncTriggerRequest,
     session: Session = Depends(get_session),
+    request: Request = None,
     _: User = Depends(get_current_admin),
 ) -> SyncExecutionSummary:
     try:
-        summary = IngestionService(session, cache_backend=build_cache_backend()).sync_incremental(
+        cache_backend = request.app.state.cache_backend if request is not None else None
+        summary = IngestionService(
+            session,
+            cache_backend=cache_backend,
+            settings=request.app.state.settings if request is not None else None,
+        ).sync_incremental(
             provider_name=payload.provider_name,
             cursor_key=payload.cursor_key,
         )
@@ -59,9 +77,15 @@ def refresh_competition(
     competition_external_id: str,
     payload: SyncTriggerRequest,
     session: Session = Depends(get_session),
+    request: Request = None,
     _: User = Depends(get_current_admin),
 ) -> SyncExecutionSummary:
-    summary = IngestionService(session, cache_backend=build_cache_backend()).refresh_competition(
+    cache_backend = request.app.state.cache_backend if request is not None else None
+    summary = IngestionService(
+        session,
+        cache_backend=cache_backend,
+        settings=request.app.state.settings if request is not None else None,
+    ).refresh_competition(
         provider_name=payload.provider_name,
         competition_external_id=competition_external_id,
         season_external_id=payload.season_external_id,
@@ -75,9 +99,15 @@ def refresh_club(
     club_external_id: str,
     payload: SyncTriggerRequest,
     session: Session = Depends(get_session),
+    request: Request = None,
     _: User = Depends(get_current_admin),
 ) -> SyncExecutionSummary:
-    summary = IngestionService(session, cache_backend=build_cache_backend()).refresh_club(
+    cache_backend = request.app.state.cache_backend if request is not None else None
+    summary = IngestionService(
+        session,
+        cache_backend=cache_backend,
+        settings=request.app.state.settings if request is not None else None,
+    ).refresh_club(
         provider_name=payload.provider_name,
         club_external_id=club_external_id,
         competition_external_id=payload.competition_external_id,
@@ -92,9 +122,15 @@ def refresh_player(
     player_external_id: str,
     payload: SyncTriggerRequest,
     session: Session = Depends(get_session),
+    request: Request = None,
     _: User = Depends(get_current_admin),
 ) -> SyncExecutionSummary:
-    summary = IngestionService(session, cache_backend=build_cache_backend()).refresh_player(
+    cache_backend = request.app.state.cache_backend if request is not None else None
+    summary = IngestionService(
+        session,
+        cache_backend=cache_backend,
+        settings=request.app.state.settings if request is not None else None,
+    ).refresh_player(
         provider_name=payload.provider_name,
         player_external_id=player_external_id,
         club_external_id=payload.club_external_id,

@@ -1,0 +1,23 @@
+target_player_count = 100000
+rebalance_interval_hours = 24
+
+[weights]
+performance = 0.28
+projected_ceiling = 0.22
+market_interest = 0.18
+competition_strength = 0.14
+availability = 0.08
+scarcity = 0.06
+regional_reach = 0.04
+
+[age_curve_multipliers]
+u17 = 1.18
+u21 = 1.10
+prime = 1.00
+veteran = 0.86
+
+[competition_tier_multipliers]
+elite = 1.18
+pro = 1.00
+emerging = 0.90
+development = 0.82

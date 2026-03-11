@@ -93,3 +93,18 @@ class TradeIntentView(BaseModel):
     status: TradeIntentStatus
     created_at: datetime
     updated_at: datetime
+
+
+class MarketSummaryView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    asset_id: str
+    open_listing_id: str | None
+    open_listing_type: str | None
+    seller_user_id: str | None
+    ask_price: int | None
+    pending_offer_count: int
+    best_offer_price: int | None
+    active_trade_intent_count: int
+    last_activity_at: datetime
+    updated_at: datetime

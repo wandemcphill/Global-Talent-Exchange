@@ -1,0 +1,43 @@
+[[bands]]
+code = "entry"
+name = "entry"
+min_price_credits = 0
+max_price_credits = 49
+max_spread_bps = 1400
+maker_inventory_target = 60
+instant_sell_fee_bps = 1200
+
+[[bands]]
+code = "growth"
+name = "growth"
+min_price_credits = 50
+max_price_credits = 149
+max_spread_bps = 1000
+maker_inventory_target = 90
+instant_sell_fee_bps = 1000
+
+[[bands]]
+code = "premium"
+name = "premium"
+min_price_credits = 150
+max_price_credits = 399
+max_spread_bps = 700
+maker_inventory_target = 120
+instant_sell_fee_bps = 850
+
+[[bands]]
+code = "bluechip"
+name = "bluechip"
+min_price_credits = 400
+max_price_credits = 999
+max_spread_bps = 500
+maker_inventory_target = 150
+instant_sell_fee_bps = 700
+
+[[bands]]
+code = "marquee"
+name = "marquee"
+min_price_credits = 1000
+max_spread_bps = 350
+maker_inventory_target = 200
+instant_sell_fee_bps = 600

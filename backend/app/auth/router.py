@@ -1,19 +1,30 @@
 ﻿from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_session
 from backend.app.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
 from backend.app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
 from backend.app.users.schemas import UserPublic
+from backend.app.wallets.service import WalletService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _build_auth_service(request: Request | None) -> AuthService:
+    if request is not None and hasattr(request.app.state, "event_publisher"):
+        return AuthService(wallet_service=WalletService(event_publisher=request.app.state.event_publisher))
+    return AuthService()
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register_user(payload: RegisterRequest, session: Session = Depends(get_session)) -> TokenResponse:
-    service = AuthService()
+def register_user(
+    payload: RegisterRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> TokenResponse:
+    service = _build_auth_service(request)
     try:
         user = service.register_user(
             session,
@@ -36,8 +47,12 @@ def register_user(payload: RegisterRequest, session: Session = Depends(get_sessi
 
 
 @router.post("/login", response_model=TokenResponse)
-def login_user(payload: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
-    service = AuthService()
+def login_user(
+    payload: LoginRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> TokenResponse:
+    service = _build_auth_service(request)
     try:
         user = service.authenticate_user(session, email=payload.email, password=payload.password)
         token, expires_in = service.issue_access_token(user)

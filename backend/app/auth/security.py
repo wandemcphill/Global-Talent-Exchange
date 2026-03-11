@@ -9,6 +9,8 @@ import time
 from datetime import timedelta
 from typing import Any
 
+from backend.app.core.config import get_settings
+
 PBKDF2_DIGEST = "sha256"
 PBKDF2_ITERATIONS = 390000
 ACCESS_TOKEN_TTL_SECONDS = 3600
@@ -30,7 +32,7 @@ def _urlsafe_b64decode(value: str) -> bytes:
 
 
 def _auth_secret(secret: str | None = None) -> bytes:
-    return (secret or os.getenv(AUTH_SECRET_ENV, DEFAULT_AUTH_SECRET)).encode("utf-8")
+    return (secret or get_settings().auth_secret or DEFAULT_AUTH_SECRET).encode("utf-8")
 
 
 def hash_password(password: str) -> str:

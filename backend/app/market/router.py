@@ -3,10 +3,14 @@ from __future__ import annotations
 from typing import Never
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_user
+from backend.app.auth.dependencies import get_session
+from backend.app.market.read_models import MarketSummaryReadModel
 from backend.app.market.schemas import (
     ListingCreate,
+    MarketSummaryView,
     ListingView,
     OfferCounterCreate,
     OfferCreate,
@@ -80,6 +84,17 @@ def cancel_listing(
         raise_market_http_exception(exc)
 
     return ListingView.model_validate(listing)
+
+
+@router.get("/summary/{asset_id}", response_model=MarketSummaryView)
+def get_market_summary(
+    asset_id: str,
+    session: Session = Depends(get_session),
+) -> MarketSummaryView:
+    summary = session.get(MarketSummaryReadModel, asset_id)
+    if summary is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Market summary for {asset_id} was not found")
+    return MarketSummaryView.model_validate(summary)
 
 
 @router.get("/listings/{listing_id}/offers", response_model=list[OfferView])

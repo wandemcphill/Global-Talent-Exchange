@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 from uuid import uuid4
 
+from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.market.models import (
     Listing,
     ListingStatus,
@@ -14,6 +16,8 @@ from backend.app.market.models import (
     TradeIntentStatus,
     utcnow,
 )
+from backend.app.market.projections import MarketSummaryProjector
+from backend.app.market.repositories import InMemoryMarketRepository, MarketRepository
 
 
 class MarketError(Exception):
@@ -37,10 +41,16 @@ class MarketValidationError(MarketError):
 
 
 class MarketEngine:
-    def __init__(self) -> None:
-        self._listings: dict[str, Listing] = {}
-        self._offers: dict[str, Offer] = {}
-        self._trade_intents: dict[str, TradeIntent] = {}
+    def __init__(
+        self,
+        *,
+        repository: MarketRepository | None = None,
+        summary_projector: MarketSummaryProjector | None = None,
+        event_publisher: EventPublisher | None = None,
+    ) -> None:
+        self.repository = repository or InMemoryMarketRepository()
+        self.summary_projector = summary_projector
+        self.event_publisher = event_publisher or InMemoryEventPublisher()
 
     def create_listing(
         self,
@@ -76,7 +86,18 @@ class MarketEngine:
             created_at=now,
             updated_at=now,
         )
-        self._listings[listing.listing_id] = listing
+        self.repository.save_listing(listing)
+        self._after_asset_mutation(
+            asset_id=asset_id,
+            event_name="market.listing.created",
+            payload={
+                "listing_id": listing.listing_id,
+                "asset_id": asset_id,
+                "seller_user_id": seller_user_id,
+                "listing_type": listing.listing_type.value,
+                "ask_price": listing.ask_price,
+            },
+        )
         return listing
 
     def cancel_listing(self, *, listing_id: str, acting_user_id: str) -> Listing:
@@ -93,6 +114,15 @@ class MarketEngine:
             asset_id=listing.asset_id,
             seller_user_id=listing.seller_user_id,
             listing_id=listing_id,
+        )
+        self._after_asset_mutation(
+            asset_id=listing.asset_id,
+            event_name="market.listing.cancelled",
+            payload={
+                "listing_id": listing.listing_id,
+                "asset_id": listing.asset_id,
+                "seller_user_id": listing.seller_user_id,
+            },
         )
         return updated_listing
 
@@ -145,7 +175,19 @@ class MarketEngine:
             created_at=now,
             updated_at=now,
         )
-        self._offers[offer.offer_id] = offer
+        self.repository.save_offer(offer)
+        self._after_asset_mutation(
+            asset_id=asset_id,
+            event_name="market.offer.created",
+            payload={
+                "offer_id": offer.offer_id,
+                "asset_id": asset_id,
+                "seller_user_id": seller_user_id,
+                "buyer_user_id": buyer_user_id,
+                "listing_id": listing_id,
+                "cash_amount": cash_amount,
+            },
+        )
         return offer
 
     def counter_offer(
@@ -185,7 +227,19 @@ class MarketEngine:
             created_at=now,
             updated_at=now,
         )
-        self._offers[counter.offer_id] = counter
+        self.repository.save_offer(counter)
+        self._after_asset_mutation(
+            asset_id=offer.asset_id,
+            event_name="market.offer.countered",
+            payload={
+                "offer_id": counter.offer_id,
+                "asset_id": offer.asset_id,
+                "seller_user_id": offer.seller_user_id,
+                "buyer_user_id": offer.buyer_user_id,
+                "listing_id": offer.listing_id,
+                "cash_amount": cash_amount,
+            },
+        )
         return counter
 
     def accept_offer(self, *, offer_id: str, acting_user_id: str) -> Offer:
@@ -210,6 +264,17 @@ class MarketEngine:
             exclude_offer_id=offer.offer_id,
         )
         self._fulfill_trade_intents(offer)
+        self._after_asset_mutation(
+            asset_id=offer.asset_id,
+            event_name="market.offer.accepted",
+            payload={
+                "offer_id": offer.offer_id,
+                "asset_id": offer.asset_id,
+                "seller_user_id": offer.seller_user_id,
+                "buyer_user_id": offer.buyer_user_id,
+                "listing_id": offer.listing_id,
+            },
+        )
         return accepted_offer
 
     def reject_offer(self, *, offer_id: str, acting_user_id: str) -> Offer:
@@ -218,7 +283,19 @@ class MarketEngine:
             raise MarketConflictError("only pending offers can be rejected")
         if offer.recipient_user_id != acting_user_id:
             raise MarketPermissionError("only the recipient can reject the offer")
-        return self._store_offer(replace(offer, status=OfferStatus.REJECTED, updated_at=utcnow()))
+        rejected_offer = self._store_offer(replace(offer, status=OfferStatus.REJECTED, updated_at=utcnow()))
+        self._after_asset_mutation(
+            asset_id=offer.asset_id,
+            event_name="market.offer.rejected",
+            payload={
+                "offer_id": offer.offer_id,
+                "asset_id": offer.asset_id,
+                "seller_user_id": offer.seller_user_id,
+                "buyer_user_id": offer.buyer_user_id,
+                "listing_id": offer.listing_id,
+            },
+        )
+        return rejected_offer
 
     def create_trade_intent(
         self,
@@ -240,7 +317,7 @@ class MarketEngine:
             offered_asset_ids=normalized_offered_asset_ids,
         )
 
-        for intent in self._trade_intents.values():
+        for intent in self.repository.iter_trade_intents():
             if (
                 intent.user_id == user_id
                 and intent.asset_id == asset_id
@@ -263,7 +340,17 @@ class MarketEngine:
             created_at=now,
             updated_at=now,
         )
-        self._trade_intents[trade_intent.intent_id] = trade_intent
+        self.repository.save_trade_intent(trade_intent)
+        self._after_asset_mutation(
+            asset_id=asset_id,
+            event_name="market.trade_intent.created",
+            payload={
+                "intent_id": trade_intent.intent_id,
+                "asset_id": asset_id,
+                "user_id": user_id,
+                "direction": trade_intent.direction.value,
+            },
+        )
         return trade_intent
 
     def withdraw_trade_intent(self, *, intent_id: str, acting_user_id: str) -> TradeIntent:
@@ -272,14 +359,24 @@ class MarketEngine:
             raise MarketPermissionError("only the owner can withdraw the trade intent")
         if intent.status != TradeIntentStatus.ACTIVE:
             raise MarketConflictError("trade intent is not active")
-        return self._store_trade_intent(
+        withdrawn_intent = self._store_trade_intent(
             replace(intent, status=TradeIntentStatus.WITHDRAWN, updated_at=utcnow())
         )
+        self._after_asset_mutation(
+            asset_id=intent.asset_id,
+            event_name="market.trade_intent.withdrawn",
+            payload={
+                "intent_id": intent.intent_id,
+                "asset_id": intent.asset_id,
+                "user_id": intent.user_id,
+            },
+        )
+        return withdrawn_intent
 
     def match_trade_intents(self, *, listing_id: str) -> tuple[TradeIntent, ...]:
         listing = self.get_listing(listing_id)
         matches: list[TradeIntent] = []
-        for intent in self._trade_intents.values():
+        for intent in self.repository.iter_trade_intents():
             if intent.status != TradeIntentStatus.ACTIVE:
                 continue
             if intent.asset_id != listing.asset_id:
@@ -292,32 +389,28 @@ class MarketEngine:
         return tuple(matches)
 
     def get_listing(self, listing_id: str) -> Listing:
-        try:
-            return self._listings[listing_id]
-        except KeyError as exc:
-            raise MarketNotFoundError(f"listing {listing_id} was not found") from exc
+        listing = self.repository.get_listing(listing_id)
+        if listing is None:
+            raise MarketNotFoundError(f"listing {listing_id} was not found")
+        return listing
 
     def get_offer(self, offer_id: str) -> Offer:
-        try:
-            return self._offers[offer_id]
-        except KeyError as exc:
-            raise MarketNotFoundError(f"offer {offer_id} was not found") from exc
+        offer = self.repository.get_offer(offer_id)
+        if offer is None:
+            raise MarketNotFoundError(f"offer {offer_id} was not found")
+        return offer
 
     def get_trade_intent(self, intent_id: str) -> TradeIntent:
-        try:
-            return self._trade_intents[intent_id]
-        except KeyError as exc:
-            raise MarketNotFoundError(f"trade intent {intent_id} was not found") from exc
+        trade_intent = self.repository.get_trade_intent(intent_id)
+        if trade_intent is None:
+            raise MarketNotFoundError(f"trade intent {intent_id} was not found")
+        return trade_intent
 
     def list_offers_for_listing(self, *, listing_id: str) -> tuple[Offer, ...]:
-        return tuple(offer for offer in self._offers.values() if offer.listing_id == listing_id)
+        return self.repository.list_offers_for_listing(listing_id)
 
     def list_offers_for_asset(self, *, asset_id: str, seller_user_id: str) -> tuple[Offer, ...]:
-        return tuple(
-            offer
-            for offer in self._offers.values()
-            if offer.asset_id == asset_id and offer.seller_user_id == seller_user_id
-        )
+        return self.repository.list_offers_for_asset(asset_id, seller_user_id)
 
     def _reject_pending_offers(
         self,
@@ -327,7 +420,7 @@ class MarketEngine:
         exclude_offer_id: str | None = None,
         listing_id: str | None = None,
     ) -> None:
-        for offer in tuple(self._offers.values()):
+        for offer in self.repository.iter_offers():
             if offer.offer_id == exclude_offer_id:
                 continue
             if offer.asset_id != asset_id or offer.seller_user_id != seller_user_id:
@@ -339,7 +432,7 @@ class MarketEngine:
             self._store_offer(replace(offer, status=OfferStatus.REJECTED, updated_at=utcnow()))
 
     def _fulfill_trade_intents(self, offer: Offer) -> None:
-        for intent in tuple(self._trade_intents.values()):
+        for intent in self.repository.iter_trade_intents():
             if intent.status != TradeIntentStatus.ACTIVE or intent.asset_id != offer.asset_id:
                 continue
             if intent.user_id == offer.buyer_user_id and intent.direction in {
@@ -379,23 +472,20 @@ class MarketEngine:
         return True
 
     def _store_listing(self, listing: Listing) -> Listing:
-        self._listings[listing.listing_id] = listing
-        return listing
+        return self.repository.save_listing(listing)
 
     def _store_offer(self, offer: Offer) -> Offer:
-        self._offers[offer.offer_id] = offer
-        return offer
+        return self.repository.save_offer(offer)
 
     def _store_trade_intent(self, trade_intent: TradeIntent) -> TradeIntent:
-        self._trade_intents[trade_intent.intent_id] = trade_intent
-        return trade_intent
+        return self.repository.save_trade_intent(trade_intent)
 
     def _has_open_listing(self, *, asset_id: str, seller_user_id: str) -> bool:
         return any(
             listing.asset_id == asset_id
             and listing.seller_user_id == seller_user_id
             and listing.status == ListingStatus.OPEN
-            for listing in self._listings.values()
+            for listing in self.repository.iter_listings()
         )
 
     def _has_pending_negotiation(
@@ -412,7 +502,7 @@ class MarketEngine:
             and offer.buyer_user_id == buyer_user_id
             and offer.listing_id == listing_id
             and offer.status == OfferStatus.PENDING
-            for offer in self._offers.values()
+            for offer in self.repository.iter_offers()
         )
 
     def _validate_listing_payload(
@@ -488,3 +578,17 @@ class MarketEngine:
 
     def _new_id(self, prefix: str) -> str:
         return f"{prefix}_{uuid4().hex[:12]}"
+
+    def _after_asset_mutation(self, *, asset_id: str, event_name: str, payload: dict[str, Any]) -> None:
+        self._project_asset_summary(asset_id)
+        self.event_publisher.publish(DomainEvent(name=event_name, payload=payload))
+
+    def _project_asset_summary(self, asset_id: str) -> None:
+        if self.summary_projector is None:
+            return
+        self.summary_projector.rebuild_asset_summary(
+            asset_id=asset_id,
+            listings=self.repository.list_listings_for_asset(asset_id),
+            offers=self.repository.list_offers_for_asset(asset_id),
+            trade_intents=self.repository.list_trade_intents_for_asset(asset_id),
+        )

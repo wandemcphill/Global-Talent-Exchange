@@ -18,6 +18,10 @@ class CountryUpsert(IngestionBaseModel):
     name: str
     alpha2_code: str | None = None
     alpha3_code: str | None = None
+    fifa_code: str | None = None
+    confederation_code: str | None = None
+    market_region: str | None = None
+    is_enabled_for_universe: bool = True
     flag_url: str | None = None
 
 
@@ -29,10 +33,16 @@ class CompetitionUpsert(IngestionBaseModel):
     code: str | None = None
     country_provider_external_id: str | None = None
     country_name: str | None = None
+    internal_league_code: str | None = None
     competition_type: str = "league"
+    format_type: str | None = None
+    age_bracket: str | None = None
+    domestic_level: int | None = None
     gender: str | None = None
     emblem_url: str | None = None
     is_major: bool = False
+    is_tradable: bool = True
+    competition_strength: float | None = None
     current_season_external_id: str | None = None
 
 
@@ -47,6 +57,10 @@ class SeasonUpsert(IngestionBaseModel):
     end_date: date | None = None
     is_current: bool = False
     current_matchday: int | None = None
+    season_status: str = "upcoming"
+    trading_window_opens_at: datetime | None = None
+    trading_window_closes_at: datetime | None = None
+    data_completeness_score: float | None = None
 
 
 class ClubUpsert(IngestionBaseModel):
@@ -58,10 +72,15 @@ class ClubUpsert(IngestionBaseModel):
     code: str | None = None
     country_provider_external_id: str | None = None
     country_name: str | None = None
+    current_competition_provider_external_id: str | None = None
+    internal_league_code: str | None = None
+    gender: str | None = None
     founded_year: int | None = None
     website: str | None = None
     venue: str | None = None
     crest_url: str | None = None
+    popularity_score: float | None = None
+    is_tradable: bool = True
 
 
 class PlayerUpsert(IngestionBaseModel):
@@ -74,6 +93,10 @@ class PlayerUpsert(IngestionBaseModel):
     country_name: str | None = None
     country_provider_external_id: str | None = None
     current_club_provider_external_id: str | None = None
+    current_competition_provider_external_id: str | None = None
+    internal_league_code: str | None = None
+    supply_tier_code: str | None = None
+    liquidity_band_code: str | None = None
     position: str | None = None
     normalized_position: str | None = None
     date_of_birth: date | None = None
@@ -81,6 +104,9 @@ class PlayerUpsert(IngestionBaseModel):
     weight_kg: int | None = None
     preferred_foot: str | None = None
     shirt_number: int | None = None
+    market_value_eur: float | None = None
+    profile_completeness_score: float | None = None
+    is_tradable: bool = True
 
 
 class PlayerClubTenureUpsert(IngestionBaseModel):

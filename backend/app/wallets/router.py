@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_user, get_session
@@ -11,12 +11,19 @@ from backend.app.wallets.service import LedgerError, WalletService
 router = APIRouter(prefix="/wallets", tags=["wallets"])
 
 
+def _build_wallet_service(request: Request | None) -> WalletService:
+    if request is not None and hasattr(request.app.state, "event_publisher"):
+        return WalletService(event_publisher=request.app.state.event_publisher)
+    return WalletService()
+
+
 @router.get("/accounts", response_model=list[WalletAccountBalance])
 def list_wallet_accounts(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ) -> list[WalletAccountBalance]:
-    service = WalletService()
+    service = _build_wallet_service(request)
     accounts = service.list_accounts_for_user(session, current_user)
     return [
         WalletAccountBalance(
@@ -38,8 +45,9 @@ def create_payment_event(
     payload: PaymentEventCreate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ) -> PaymentEventView:
-    service = WalletService()
+    service = _build_wallet_service(request)
     try:
         payment_event = service.create_payment_event(
             session,

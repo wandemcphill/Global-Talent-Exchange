@@ -3,23 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Mapping
 
-from .adapters import MatchAnalyticsAdapter, MatchStatsAdapter
+from .adapters import IngestionAdapterRegistry
 from .models import NormalizedMatchEvent, PlayerEventWindow
 
 
 @dataclass(slots=True)
 class NormalizedMatchEventPipeline:
-    adapters: tuple[object, ...] = field(
-        default_factory=lambda: (
-            MatchStatsAdapter(),
-            MatchAnalyticsAdapter(),
-        )
-    )
+    adapter_registry: IngestionAdapterRegistry = field(default_factory=IngestionAdapterRegistry.default)
 
     def process(self, payloads: Iterable[Mapping[str, object]]) -> list[NormalizedMatchEvent]:
         normalized: list[NormalizedMatchEvent] = []
         for payload in payloads:
-            adapter = self._resolve_adapter(payload)
+            adapter = self.adapter_registry.resolve(payload)
             normalized.extend(adapter.normalize(payload))
         deduped = {event.dedupe_key: event for event in normalized}
         return sorted(deduped.values(), key=lambda event: (event.occurred_at, event.player_id, event.match_id))
@@ -48,9 +43,3 @@ class NormalizedMatchEventPipeline:
                 big_moment_count=sum(1 for event in player_events if event.big_moment),
             )
         return windows
-
-    def _resolve_adapter(self, payload: Mapping[str, object]) -> object:
-        for adapter in self.adapters:
-            if adapter.can_handle(payload):
-                return adapter
-        raise ValueError("No ingestion adapter can handle payload")

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from backend.app.core.config import DEFAULT_DATABASE_URL as CORE_DEFAULT_DATABASE_URL
+
 DEFAULT_PROVIDER_NAME = "mock"
 DEFAULT_CURSOR_KEY = "default"
 DEFAULT_LOCK_TTL_SECONDS = 15 * 60
-DEFAULT_DATABASE_URL = "sqlite+pysqlite:///./gte_ingestion.db"
+DEFAULT_DATABASE_URL = CORE_DEFAULT_DATABASE_URL
 
 ENV_DATABASE_URL = "GTE_DATABASE_URL"
 ENV_REDIS_URL = "GTE_REDIS_URL"

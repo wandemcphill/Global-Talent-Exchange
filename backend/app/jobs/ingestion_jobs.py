@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from backend.app.cache.redis_helpers import build_cache_backend
+from backend.app.core.jobs import BackgroundJobBackend, InlineJobBackend
 from backend.app.ingestion.constants import DEFAULT_PROVIDER_NAME
 from backend.app.ingestion.locks import IngestionLockManager, LockAcquisitionError
 from backend.app.ingestion.tasks import (
@@ -12,6 +13,7 @@ from backend.app.ingestion.tasks import (
     run_incremental_sync,
     run_player_refresh,
 )
+from backend.app.models.base import utcnow
 
 
 @dataclass(slots=True)
@@ -19,6 +21,8 @@ class IngestionJobRunner:
     session_factory: object
     cache_backend: object = field(default_factory=build_cache_backend)
     provider_name: str = DEFAULT_PROVIDER_NAME
+    value_snapshot_runner: object | None = None
+    job_backend: BackgroundJobBackend = field(default_factory=InlineJobBackend)
 
     def nightly_full_sync(self):
         return self._run_locked(
@@ -81,12 +85,25 @@ class IngestionJobRunner:
         )
 
     def _run_locked(self, lock_key: str, operation):
-        with self.session_factory() as session:
-            lock_manager = IngestionLockManager(session)
-            handle = lock_manager.acquire(lock_key)
-            if not handle.acquired:
-                raise LockAcquisitionError(f"Another ingestion worker already owns '{lock_key}'.")
-            try:
-                return operation()
-            finally:
-                lock_manager.release(handle)
+        def execute():
+            with self.session_factory() as session:
+                lock_manager = IngestionLockManager(session)
+                handle = lock_manager.acquire(lock_key)
+                if not handle.acquired:
+                    raise LockAcquisitionError(f"Another ingestion worker already owns '{lock_key}'.")
+                try:
+                    result = operation()
+                    self._run_value_snapshots()
+                    return result
+                finally:
+                    lock_manager.release(handle)
+
+        execution = self.job_backend.run(f"ingestion.{lock_key}", execute)
+        return execution.result
+
+    def _run_value_snapshots(self) -> None:
+        if self.value_snapshot_runner is None:
+            return
+        run = getattr(self.value_snapshot_runner, "run", None)
+        if callable(run):
+            run(as_of=utcnow())

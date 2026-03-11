@@ -1,0 +1,101 @@
+baseline_eur_per_credit = 100000
+smoothing_factor = 0.70
+daily_movement_cap = 0.12
+demand_movement_cap = 0.05
+market_signal_cap = 0.18
+gsi_neutral_score = 50.0
+gsi_smoothing_factor = 1.0
+gsi_daily_movement_cap = 0.30
+gsi_signal_cap = 0.45
+gsi_signal_scale = 140.0
+gsi_anchor_pull_strength = 0.08
+anchor_pull_strength = 0.20
+market_price_pull_strength = 0.65
+default_liquidity_weight = 0.20
+minimum_floor_ratio = 0.60
+performance_scale = 850.0
+award_scale = 600.0
+transfer_scale = 900.0
+demand_scale = 1200.0
+big_moment_bonus = 18.0
+
+[ftv_msv_blend_weights]
+ftv_weight = 0.70
+msv_weight = 0.30
+
+[competition_multipliers]
+"world cup" = 1.35
+"uefa club championship" = 1.30
+afcon = 1.25
+"copa america" = 1.25
+euros = 1.25
+"league a" = 1.20
+"league b" = 1.10
+"league c" = 1.05
+
+[award_impacts]
+ballon_dor_winner = 82.0
+ballon_dor_top_3 = 56.0
+ballon_dor_top_10 = 32.0
+ballon_dor_top_20 = 16.0
+player_of_the_season = 34.0
+young_player_of_the_season = 28.0
+golden_ball = 30.0
+golden_shoe = 26.0
+u20_golden = 24.0
+u20_silver = 18.0
+u20_bronze = 12.0
+u17_golden = 18.0
+u17_silver = 12.0
+u17_bronze = 8.0
+man_of_the_match = 6.0
+
+[demand_weights]
+purchases = 6.0
+sales = 5.0
+shortlist_adds = 2.5
+watchlist_adds = 1.0
+follows = 0.5
+
+[gsi_signal_weights]
+watchlist_adds = 1.8
+shortlist_adds = 3.8
+transfer_room_adds = 5.5
+scouting_activity = 6.5
+
+[liquidity_band_market_weights]
+entry = 0.15
+growth = 0.30
+premium = 0.50
+bluechip = 0.65
+marquee = 0.80
+
+[[price_band_limits]]
+code = "default"
+min_ratio = 0.80
+max_ratio = 1.20
+
+[[price_band_limits]]
+code = "entry"
+min_ratio = 0.88
+max_ratio = 1.08
+
+[[price_band_limits]]
+code = "growth"
+min_ratio = 0.84
+max_ratio = 1.12
+
+[[price_band_limits]]
+code = "premium"
+min_ratio = 0.80
+max_ratio = 1.18
+
+[[price_band_limits]]
+code = "bluechip"
+min_ratio = 0.76
+max_ratio = 1.24
+
+[[price_band_limits]]
+code = "marquee"
+min_ratio = 0.72
+max_ratio = 1.30

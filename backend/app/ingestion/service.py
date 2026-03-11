@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 from backend.app.cache.redis_helpers import HotReadCache, NullCacheBackend
+from backend.app.core.config import Settings
 from backend.app.ingestion.constants import (
     BOOTSTRAP_ENTITY_TYPE,
     DEFAULT_CURSOR_KEY,
@@ -19,6 +20,7 @@ from backend.app.ingestion.constants import (
     SYNC_RUN_STATUS_SUCCESS,
 )
 from backend.app.ingestion.models import Club, Competition, Match, Player, ProviderSyncRun, Season
+from backend.app.ingestion.market_profile import PlayerMarketProfileService
 from backend.app.ingestion.normalizers import (
     build_player_tenure_payload,
     flatten_standings,
@@ -69,8 +71,16 @@ class IngestionService:
         *,
         provider_registry: ProviderRegistry | None = None,
         cache_backend=None,
+        settings: Settings | None = None,
     ) -> None:
-        self.repository = IngestionRepository(session)
+        self.repository = IngestionRepository(
+            session,
+            market_profile_service=(
+                PlayerMarketProfileService(settings=settings)
+                if settings is not None
+                else None
+            ),
+        )
         self.provider_registry = provider_registry or ProviderRegistry()
         self.cache = HotReadCache(cache_backend or NullCacheBackend())
         self.logger = logger
