@@ -8,6 +8,7 @@ import '../data/jersey_variant_dto.dart';
 import '../widgets/clash_warning_banner.dart';
 import '../widgets/jersey_color_picker_row.dart';
 import '../widgets/jersey_preview_card.dart';
+import '../widgets/identity_status_banner.dart';
 import '../widgets/pattern_selector.dart';
 import 'club_identity_controller.dart';
 
@@ -106,6 +107,14 @@ class _JerseyEditorScreenState extends State<JerseyEditorScreen> {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 20),
+                          if (_controller.errorMessage != null) ...<Widget>[
+                            IdentityStatusBanner(
+                              icon: Icons.error_outline,
+                              message: _controller.errorMessage!,
+                              color: GteShellTheme.negative,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           ClashWarningBanner(
                             warnings: _controller.warnings,
                             title: _controller.hasUnsavedChanges

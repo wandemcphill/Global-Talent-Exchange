@@ -58,10 +58,17 @@ class DynastyStatusBanner extends StatelessWidget {
                 ),
               ],
             ),
+            if (profile.currentEraLabel == DynastyEraType.globalDynasty) ...<
+                Widget>[
+              const SizedBox(height: 16),
+              const _GlobalDynastyCallout(),
+            ],
             const SizedBox(height: 18),
             Text(
               profile.clubName,
-              style: Theme.of(context).textTheme.displaySmall,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    letterSpacing: -0.8,
+                  ),
             ),
             const SizedBox(height: 10),
             Text(
@@ -105,19 +112,65 @@ class DynastyStatusBanner extends StatelessWidget {
 
   String _bannerBody(DynastyProfileDto profile) {
     if (profile.currentEraLabel == DynastyEraType.globalDynasty) {
-      return 'The club is no longer chasing legacy. It is defending one. '
-          'Every new season is measured against a world-class standard.';
+      return 'The club is no longer chasing legacy. It is defending a crown. '
+          'Every new season is judged against a world-class standard.';
     }
     if (profile.currentEraLabel == DynastyEraType.fallenGiant) {
-      return 'Supporters are living with a famous history and waiting for a new surge. '
-          'The story is respected, not finished.';
+      return 'A storied crest in a quieter chapter. '
+          'The history is honored, and the next surge is still possible.';
     }
     if (profile.isRisingClub && !profile.hasRecognizedDynasty) {
       return 'There is momentum here, but the threshold is still strict. '
-          'One strong cycle can become a statement. A second one becomes history.';
+          'One defining run becomes a statement. A second one becomes history.';
     }
     return 'Dynasty labels stay rare on purpose. The badge must keep winning, keep qualifying, '
         'and keep feeling inevitable.';
+  }
+}
+
+class _GlobalDynastyCallout extends StatelessWidget {
+  const _GlobalDynastyCallout();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: const LinearGradient(
+          colors: <Color>[
+            Color(0xFFFFE8A8),
+            Color(0xFFFFC76B),
+          ],
+        ),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x66FFD978),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(
+            Icons.auto_awesome,
+            size: 16,
+            color: Color(0xFF2B1A04),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'GLOBAL DYNASTY',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFF2B1A04),
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

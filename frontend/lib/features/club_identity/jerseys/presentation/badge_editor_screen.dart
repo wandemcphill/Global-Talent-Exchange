@@ -10,6 +10,7 @@ import '../widgets/badge_preview_widget.dart';
 import '../widgets/badge_shape_selector.dart';
 import '../widgets/clash_warning_banner.dart';
 import '../widgets/identity_color_utils.dart';
+import '../widgets/identity_status_banner.dart';
 import 'club_identity_controller.dart';
 
 class BadgeEditorScreen extends StatefulWidget {
@@ -134,6 +135,14 @@ class _BadgeEditorScreenState extends State<BadgeEditorScreen> {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 20),
+                          if (_controller.errorMessage != null) ...<Widget>[
+                            IdentityStatusBanner(
+                              icon: Icons.error_outline,
+                              message: _controller.errorMessage!,
+                              color: GteShellTheme.negative,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           ClashWarningBanner(
                             warnings: _controller.hasUnsavedChanges
                                 ? const <String>[

@@ -4,6 +4,7 @@ import '../../../../widgets/gte_shell_theme.dart';
 import '../../../../widgets/gte_state_panel.dart';
 import '../widgets/clash_warning_banner.dart';
 import '../widgets/identity_preview_panel.dart';
+import '../widgets/identity_status_banner.dart';
 import 'club_identity_controller.dart';
 
 class IdentityPreviewScreen extends StatelessWidget {
@@ -63,6 +64,14 @@ class IdentityPreviewScreen extends StatelessWidget {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 20),
+                        if (controller.errorMessage != null) ...<Widget>[
+                          IdentityStatusBanner(
+                            icon: Icons.error_outline,
+                            message: controller.errorMessage!,
+                            color: GteShellTheme.negative,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         ClashWarningBanner(
                           warnings: controller.warnings,
                           title: controller.hasUnsavedChanges

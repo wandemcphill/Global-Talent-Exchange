@@ -49,6 +49,11 @@ class EraHistoryCard extends StatelessWidget {
             era.seasonSpanLabel,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
+          const SizedBox(height: 6),
+          Text(
+            era.eraLabel.strapline,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 12,

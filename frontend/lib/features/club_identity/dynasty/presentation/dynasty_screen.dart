@@ -80,7 +80,7 @@ class _DynastyScreenState extends State<DynastyScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('Dynasty overview'),
+          title: const Text('Dynasty Overview'),
         ),
         body: AnimatedBuilder(
           animation: _controller,
@@ -155,17 +155,22 @@ class _DynastyScreenState extends State<DynastyScreen> {
                     'Active streaks',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Runs that keep the badge in the dynasty conversation.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   const SizedBox(height: 12),
                   StreakIndicatorRow(streaks: profile.activeStreaks),
                   const SizedBox(height: 20),
                   DynastyReasonList(
                     title: profile.hasRecognizedDynasty
-                        ? 'Why the detector believes'
-                        : 'What is still missing',
+                        ? 'Dynasty trigger reasons'
+                        : 'What still separates them',
                     reasons: profile.reasons,
                     emptyTitle: profile.isRisingClub
-                        ? 'No formal dynasty case yet'
-                        : 'Still building a profile',
+                        ? 'No dynasty case yet'
+                        : 'Still building a case file',
                     emptyMessage: profile.isRisingClub
                         ? 'The club is rising, but the detector is still waiting for a decisive cycle.'
                         : 'This club has not yet produced the repeated elite finishes needed for an era label.',
@@ -201,14 +206,14 @@ class _LastFourSummaryCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             profile.hasRecognizedDynasty
-                ? 'The cycle that defines the current label.'
-                : 'The current evidence still falls short of dynasty territory.',
+                ? 'The stretch that built the current era label.'
+                : 'The run is promising, but it still sits below dynasty standard.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
           if (seasons.isEmpty)
             Text(
-              'No recent season summary is available yet.',
+              'Recent season summaries will appear once four full campaigns are logged.',
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else

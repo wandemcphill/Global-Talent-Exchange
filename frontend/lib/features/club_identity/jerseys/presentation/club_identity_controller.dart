@@ -27,6 +27,7 @@ class ClubIdentityController extends ChangeNotifier {
 
   ClubIdentityDto? _saved;
   ClubIdentityDto? _draft;
+  ClubIdentityDto? _optimisticBackup;
 
   ClubIdentityDto? get identity => _draft;
 
@@ -89,6 +90,8 @@ class ClubIdentityController extends ChangeNotifier {
     isSaving = true;
     errorMessage = null;
     successMessage = null;
+    _optimisticBackup = _saved;
+    _saved = draft;
     notifyListeners();
     try {
       await _repository.patchIdentity(
@@ -105,9 +108,11 @@ class ClubIdentityController extends ChangeNotifier {
       successMessage =
           'Identity saved and reloaded from the latest profile snapshot.';
     } catch (error) {
+      _saved = _optimisticBackup;
       errorMessage = 'Could not save identity changes. $error';
     } finally {
       isSaving = false;
+      _optimisticBackup = null;
       notifyListeners();
     }
   }
@@ -119,6 +124,7 @@ class ClubIdentityController extends ChangeNotifier {
     _draft = _saved;
     successMessage = null;
     errorMessage = null;
+    _optimisticBackup = null;
     notifyListeners();
   }
 

@@ -16,12 +16,12 @@ class StreakIndicatorRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<_StreakCardData> items = <_StreakCardData>[
       _StreakCardData(
-        label: 'Top 4',
+        label: 'Top-four run',
         value: streaks.topFour,
         icon: Icons.trending_up,
       ),
       _StreakCardData(
-        label: 'Trophy years',
+        label: 'Trophy seasons',
         value: streaks.trophySeasons,
         icon: Icons.emoji_events_outlined,
       ),
@@ -31,7 +31,7 @@ class StreakIndicatorRow extends StatelessWidget {
         icon: Icons.public_outlined,
       ),
       _StreakCardData(
-        label: 'Reputation',
+        label: 'Reputation rise',
         value: streaks.positiveReputation,
         icon: Icons.auto_graph_outlined,
       ),

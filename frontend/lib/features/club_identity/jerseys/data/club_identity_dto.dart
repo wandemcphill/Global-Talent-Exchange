@@ -163,18 +163,43 @@ class ClubIdentityDto {
   }
 
   factory ClubIdentityDto.fromJson(Map<String, dynamic> json) {
+    final String clubId = json['club_id'] as String? ?? '';
+    final String clubName = json['club_name'] as String? ?? '';
+    final String shortClubCode = json['short_club_code'] as String? ?? '';
+    final ColorPaletteProfileDto colorPalette = ColorPaletteProfileDto.fromJson(
+        json['color_palette'] as Map<String, dynamic>);
+    final BadgeProfileDto badgeProfile = BadgeProfileDto.fromJson(
+        json['badge_profile'] as Map<String, dynamic>);
+    final JerseySetDto jerseySet =
+        JerseySetDto.fromJson(json['jersey_set'] as Map<String, dynamic>);
+    final Map<String, dynamic>? matchIdentityJson =
+        json['match_identity'] as Map<String, dynamic>?;
+    final MatchIdentityDto matchIdentity = matchIdentityJson == null
+        ? MatchIdentityDto(
+            clubName: clubName,
+            shortClubCode: shortClubCode,
+            homeKitColors: <String>[
+              jerseySet.home.primaryColor,
+              jerseySet.home.secondaryColor,
+              jerseySet.home.accentColor,
+            ],
+            awayKitColors: <String>[
+              jerseySet.away.primaryColor,
+              jerseySet.away.secondaryColor,
+              jerseySet.away.accentColor,
+            ],
+            generatedBadge: badgeProfile,
+            badgeUrl: badgeProfile.badgeUrl,
+          )
+        : MatchIdentityDto.fromJson(matchIdentityJson);
     return ClubIdentityDto(
-      clubId: json['club_id'] as String? ?? '',
-      clubName: json['club_name'] as String? ?? '',
-      shortClubCode: json['short_club_code'] as String? ?? '',
-      colorPalette: ColorPaletteProfileDto.fromJson(
-          json['color_palette'] as Map<String, dynamic>),
-      badgeProfile: BadgeProfileDto.fromJson(
-          json['badge_profile'] as Map<String, dynamic>),
-      jerseySet:
-          JerseySetDto.fromJson(json['jersey_set'] as Map<String, dynamic>),
-      matchIdentity: MatchIdentityDto.fromJson(
-          json['match_identity'] as Map<String, dynamic>),
+      clubId: clubId,
+      clubName: clubName,
+      shortClubCode: shortClubCode,
+      colorPalette: colorPalette,
+      badgeProfile: badgeProfile,
+      jerseySet: jerseySet,
+      matchIdentity: matchIdentity,
     );
   }
 

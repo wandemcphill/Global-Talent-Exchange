@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 
 import '../../../../widgets/gte_shell_theme.dart';
 import '../../../../widgets/gte_state_panel.dart';
@@ -7,6 +8,7 @@ import '../data/club_identity_repository.dart';
 import '../widgets/badge_preview_widget.dart';
 import '../widgets/clash_warning_banner.dart';
 import '../widgets/club_code_chip.dart';
+import '../widgets/identity_status_banner.dart';
 import '../widgets/identity_color_utils.dart';
 import '../widgets/jersey_preview_card.dart';
 import 'badge_editor_screen.dart';
@@ -19,12 +21,16 @@ class ClubIdentityScreen extends StatefulWidget {
     super.key,
     required this.clubId,
     this.initialClubName,
+    this.apiBaseUrl,
+    this.backendMode,
     this.controller,
     this.repository,
   });
 
   final String clubId;
   final String? initialClubName;
+  final String? apiBaseUrl;
+  final GteBackendMode? backendMode;
   final ClubIdentityController? controller;
   final ClubIdentityRepository? repository;
 
@@ -44,7 +50,14 @@ class _ClubIdentityScreenState extends State<ClubIdentityScreen> {
         ClubIdentityController(
           clubId: widget.clubId,
           initialClubName: widget.initialClubName,
-          repository: widget.repository ?? MockClubIdentityRepository(),
+          repository: widget.repository ??
+              (widget.apiBaseUrl == null
+                  ? MockClubIdentityRepository()
+                  : ClubIdentityApiRepository.standard(
+                      baseUrl: widget.apiBaseUrl!,
+                      mode:
+                          widget.backendMode ?? GteBackendMode.liveThenFixture,
+                    )),
         );
     _controller.load();
   }
@@ -108,9 +121,17 @@ class _ClubIdentityScreenState extends State<ClubIdentityScreen> {
                                   onEditBadge: _openBadgeEditor,
                                 ),
                                 const SizedBox(height: 20),
+                                if (_controller.errorMessage != null) ...<Widget>[
+                                  IdentityStatusBanner(
+                                    icon: Icons.error_outline,
+                                    message: _controller.errorMessage!,
+                                    color: GteShellTheme.negative,
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
                                 if (_controller.successMessage !=
                                     null) ...<Widget>[
-                                  _InlineStatus(
+                                  IdentityStatusBanner(
                                     icon: Icons.check_circle_outline,
                                     message: _controller.successMessage!,
                                     color: GteShellTheme.positive,
@@ -399,44 +420,6 @@ class _ActionPanel extends StatelessWidget {
             onPressed: controller.isLoading ? null : controller.reload,
             icon: const Icon(Icons.refresh),
             label: const Text('Reload'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InlineStatus extends StatelessWidget {
-  const _InlineStatus({
-    required this.icon,
-    required this.message,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String message;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(icon, color: color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: GteShellTheme.textPrimary,
-                  ),
-            ),
           ),
         ],
       ),

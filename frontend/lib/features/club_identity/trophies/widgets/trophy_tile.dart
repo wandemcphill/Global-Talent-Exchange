@@ -16,28 +16,36 @@ class TrophyTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool highlight = trophy.isEliteHonor || trophy.isMajorHonor;
+    final bool isWorld = trophy.isWorldSuperCup;
+    final bool highlight = isWorld || trophy.isEliteHonor || trophy.isMajorHonor;
+    final Color borderColor = isWorld
+        ? GteShellTheme.accentWarm.withValues(alpha: 0.85)
+        : trophy.isEliteHonor
+            ? GteShellTheme.accentWarm.withValues(alpha: 0.65)
+            : highlight
+                ? GteShellTheme.accent.withValues(alpha: 0.5)
+                : GteShellTheme.stroke;
+    final TextStyle? titleStyle =
+        Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: isWorld ? GteShellTheme.accentWarm : null,
+            );
     return Container(
       width: compact ? 220 : null,
       padding: EdgeInsets.all(compact ? 14 : 18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: trophy.isEliteHonor
-              ? GteShellTheme.accentWarm.withValues(alpha: 0.65)
-              : highlight
-                  ? GteShellTheme.accent.withValues(alpha: 0.5)
-                  : GteShellTheme.stroke,
-        ),
+        border: Border.all(color: borderColor),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            trophy.isEliteHonor
-                ? const Color(0x26FFC76B)
-                : highlight
-                    ? const Color(0x167DE2D1)
-                    : GteShellTheme.panelStrong.withValues(alpha: 0.88),
+            isWorld
+                ? const Color(0x33FFD27F)
+                : trophy.isEliteHonor
+                    ? const Color(0x26FFC76B)
+                    : highlight
+                        ? const Color(0x167DE2D1)
+                        : GteShellTheme.panelStrong.withValues(alpha: 0.88),
             GteShellTheme.panel.withValues(alpha: 0.92),
           ],
         ),
@@ -47,6 +55,12 @@ class TrophyTile extends StatelessWidget {
             blurRadius: 22,
             offset: const Offset(0, 12),
           ),
+          if (isWorld)
+            BoxShadow(
+              color: GteShellTheme.accentWarm.withValues(alpha: 0.28),
+              blurRadius: 26,
+              offset: const Offset(0, 14),
+            ),
         ],
       ),
       child: Column(
@@ -56,6 +70,7 @@ class TrophyTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               _TrophyEmblem(
+                isWorldSuperCup: isWorld,
                 isEliteHonor: trophy.isEliteHonor,
                 isMajorHonor: trophy.isMajorHonor,
                 isAcademy: trophy.isAcademy,
@@ -67,11 +82,11 @@ class TrophyTile extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       trophy.trophyName,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: titleStyle,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${trophy.competitionRegion} • ${_formatTier(trophy.competitionTier)}',
+                      '${trophy.competitionRegion} | ${_formatTier(trophy.competitionTier)}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -84,7 +99,12 @@ class TrophyTile extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
-              if (trophy.isEliteHonor)
+              if (isWorld)
+                const MajorHonorBadge(
+                  label: 'World Crown',
+                  style: MajorHonorBadgeStyle.world,
+                )
+              else if (trophy.isEliteHonor)
                 const MajorHonorBadge(
                   label: 'Elite Honor',
                   style: MajorHonorBadgeStyle.elite,
@@ -141,24 +161,28 @@ class TrophyTile extends StatelessWidget {
 
 class _TrophyEmblem extends StatelessWidget {
   const _TrophyEmblem({
+    required this.isWorldSuperCup,
     required this.isEliteHonor,
     required this.isMajorHonor,
     required this.isAcademy,
   });
 
+  final bool isWorldSuperCup;
   final bool isEliteHonor;
   final bool isMajorHonor;
   final bool isAcademy;
 
   @override
   Widget build(BuildContext context) {
-    final Color tone = isEliteHonor
+    final Color tone = isWorldSuperCup
         ? GteShellTheme.accentWarm
-        : isAcademy
-            ? GteShellTheme.positive
-            : isMajorHonor
-                ? GteShellTheme.accent
-                : GteShellTheme.textMuted;
+        : isEliteHonor
+            ? GteShellTheme.accentWarm
+            : isAcademy
+                ? GteShellTheme.positive
+                : isMajorHonor
+                    ? GteShellTheme.accent
+                    : GteShellTheme.textMuted;
     return Container(
       width: 48,
       height: 48,
@@ -168,11 +192,13 @@ class _TrophyEmblem extends StatelessWidget {
         border: Border.all(color: tone.withValues(alpha: 0.5)),
       ),
       child: Icon(
-        isEliteHonor
-            ? Icons.workspace_premium
-            : isAcademy
-                ? Icons.school
-                : Icons.emoji_events_outlined,
+        isWorldSuperCup
+            ? Icons.public
+            : isEliteHonor
+                ? Icons.workspace_premium
+                : isAcademy
+                    ? Icons.school
+                    : Icons.emoji_events_outlined,
         color: tone,
       ),
     );

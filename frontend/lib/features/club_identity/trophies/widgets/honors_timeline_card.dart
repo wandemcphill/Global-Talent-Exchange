@@ -60,7 +60,7 @@ class _HonorsTimelineCardState extends State<HonorsTimelineCard> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '$totalHonors honors archived • $majorHonors major',
+                      '$totalHonors honors archived | $majorHonors major',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],

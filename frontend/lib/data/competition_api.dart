@@ -51,9 +51,6 @@ class CompetitionApi {
         final Object? payload = await _sendBest(
           'GET',
           const <String>['/api/competitions'],
-          query: <String, Object?>{
-            if (userId != null && userId.trim().isNotEmpty) 'user_id': userId,
-          },
         );
         return CompetitionListResponse.fromJson(payload);
       },
@@ -72,7 +69,7 @@ class CompetitionApi {
           'GET',
           <String>['/api/competitions/$competitionId'],
           query: <String, Object?>{
-            if (userId != null && userId.trim().isNotEmpty) 'user_id': userId,
+            if (userId != null && userId.trim().isNotEmpty) 'viewer_id': userId,
             if (inviteCode != null && inviteCode.trim().isNotEmpty)
               'invite_code': inviteCode,
           },
@@ -96,9 +93,6 @@ class CompetitionApi {
         final Object? payload = await _sendBest(
           'GET',
           <String>['/api/competitions/$competitionId/financials'],
-          query: <String, Object?>{
-            if (userId != null && userId.trim().isNotEmpty) 'user_id': userId,
-          },
         );
         return CompetitionFinancialSummary.fromJson(payload);
       },

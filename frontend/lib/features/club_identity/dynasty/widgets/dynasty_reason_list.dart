@@ -9,9 +9,9 @@ class DynastyReasonList extends StatelessWidget {
     super.key,
     required this.title,
     required this.reasons,
-    this.emptyTitle = 'No dynasty reasons yet',
+    this.emptyTitle = 'No dynasty case yet',
     this.emptyMessage =
-        'This club has not built enough sustained evidence for the detector to publish a case.',
+        'The club is building, but the detector needs a longer run of elite seasons.',
   });
 
   final String title;

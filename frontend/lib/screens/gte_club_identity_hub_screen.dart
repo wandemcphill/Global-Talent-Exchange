@@ -195,6 +195,8 @@ class GteClubIdentityHubScreen extends StatelessWidget {
         builder: (BuildContext context) => ClubIdentityScreen(
           clubId: target.clubId,
           initialClubName: target.clubName,
+          apiBaseUrl: apiBaseUrl,
+          backendMode: backendMode,
         ),
       ),
     );

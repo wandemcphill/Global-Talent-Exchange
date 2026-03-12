@@ -16,18 +16,32 @@ class EraLabelChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final _EraTone tone = _toneForEra(era);
+    final bool hasIcon = tone.icon != null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: tone.fill.withValues(alpha: active ? 0.22 : 0.14),
         border: Border.all(color: tone.stroke),
+        boxShadow: tone.glow,
       ),
-      child: Text(
-        era.label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: tone.text,
-            ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (hasIcon) ...<Widget>[
+            Icon(tone.icon, size: 16, color: tone.text),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            era.label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: tone.text,
+                  fontWeight: tone.fontWeight,
+                  letterSpacing:
+                      tone.fontWeight == FontWeight.w700 ? 0.4 : null,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -38,11 +52,17 @@ class _EraTone {
     required this.fill,
     required this.stroke,
     required this.text,
+    this.icon,
+    this.glow,
+    this.fontWeight,
   });
 
   final Color fill;
   final Color stroke;
   final Color text;
+  final IconData? icon;
+  final List<BoxShadow>? glow;
+  final FontWeight? fontWeight;
 }
 
 _EraTone _toneForEra(DynastyEraType era) {
@@ -69,7 +89,16 @@ _EraTone _toneForEra(DynastyEraType era) {
       return const _EraTone(
         fill: Color(0xFFFFD978),
         stroke: Color(0xFFFFE7A9),
-        text: Color(0xFFFFE7A9),
+        text: Color(0xFFFFF1C8),
+        icon: Icons.auto_awesome,
+        glow: <BoxShadow>[
+          BoxShadow(
+            color: Color(0x66FFD978),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+        fontWeight: FontWeight.w700,
       );
     case DynastyEraType.fallenGiant:
       return const _EraTone(

@@ -74,7 +74,7 @@ class _EraHistoryScreenState extends State<EraHistoryScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('Era history'),
+          title: const Text('Era History'),
         ),
         body: AnimatedBuilder(
           animation: _controller,
@@ -114,7 +114,7 @@ class _EraHistoryScreenState extends State<EraHistoryScreen> {
                 child: GteStatePanel(
                   title: 'No era history yet',
                   message:
-                      'This club has not crossed the threshold for a named era. The history screen will fill in once the badge builds a real stretch of dominance.',
+                      'This club has not crossed the threshold for a named era. The history screen fills in once the badge builds a real stretch of dominance.',
                   actionLabel: 'Retry',
                   onAction: () {
                     _controller.loadHistory(widget.clubId);

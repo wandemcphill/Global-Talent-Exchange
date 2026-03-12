@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/gte_http_transport.dart';
+import 'package:gte_frontend/data/gte_models.dart';
+
 import 'badge_profile_dto.dart';
 import 'club_identity_defaults.dart';
 import 'club_identity_dto.dart';
@@ -24,6 +28,156 @@ abstract class ClubIdentityRepository {
   });
 
   Future<BadgeProfileDto> fetchBadge(String clubId);
+}
+
+class ClubIdentityApiRepository extends ClubIdentityRepository {
+  ClubIdentityApiRepository({
+    required this.config,
+    required this.transport,
+    ClubIdentityRepository? fixtures,
+  }) : fixtures = fixtures ?? MockClubIdentityRepository();
+
+  final GteRepositoryConfig config;
+  final GteTransport transport;
+  final ClubIdentityRepository fixtures;
+
+  factory ClubIdentityApiRepository.standard({
+    required String baseUrl,
+    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    ClubIdentityRepository? fixtures,
+    GteTransport? transport,
+  }) {
+    final GteRepositoryConfig config =
+        GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
+    return ClubIdentityApiRepository(
+      config: config,
+      transport: transport ?? GteHttpTransport(),
+      fixtures: fixtures,
+    );
+  }
+
+  @override
+  Future<BadgeProfileDto> fetchBadge(String clubId) {
+    return _withFallback<BadgeProfileDto>(
+      () async => BadgeProfileDto.fromJson(
+        _asMap(await _request('GET', '/api/clubs/$clubId/badge')),
+      ),
+      () => fixtures.fetchBadge(clubId),
+    );
+  }
+
+  @override
+  Future<ClubIdentityDto> fetchIdentity(String clubId) {
+    return _withFallback<ClubIdentityDto>(
+      () async => ClubIdentityDto.fromJson(
+        _asMap(await _request('GET', '/api/clubs/$clubId/identity')),
+      ),
+      () => fixtures.fetchIdentity(clubId),
+    );
+  }
+
+  @override
+  Future<JerseySetDto> fetchJerseys(String clubId) {
+    return _withFallback<JerseySetDto>(
+      () async => JerseySetDto.fromJson(
+        _asMap(await _request('GET', '/api/clubs/$clubId/jerseys')),
+      ),
+      () => fixtures.fetchJerseys(clubId),
+    );
+  }
+
+  @override
+  Future<ClubIdentityDto> patchIdentity({
+    required String clubId,
+    required Map<String, dynamic> patch,
+  }) {
+    return _withFallback<ClubIdentityDto>(
+      () async => ClubIdentityDto.fromJson(
+        _asMap(await _request(
+          'PATCH',
+          '/api/clubs/$clubId/identity',
+          body: patch,
+        )),
+      ),
+      () => fixtures.patchIdentity(clubId: clubId, patch: patch),
+    );
+  }
+
+  @override
+  Future<JerseySetDto> patchJerseys({
+    required String clubId,
+    required Map<String, dynamic> patch,
+  }) {
+    return _withFallback<JerseySetDto>(
+      () async => JerseySetDto.fromJson(
+        _asMap(await _request(
+          'PATCH',
+          '/api/clubs/$clubId/jerseys',
+          body: patch,
+        )),
+      ),
+      () => fixtures.patchJerseys(clubId: clubId, patch: patch),
+    );
+  }
+
+  Future<T> _withFallback<T>(
+    Future<T> Function() liveCall,
+    Future<T> Function() fixtureCall,
+  ) async {
+    if (config.mode == GteBackendMode.fixture) {
+      return fixtureCall();
+    }
+    try {
+      return await liveCall();
+    } on GteApiException catch (error) {
+      if (config.mode == GteBackendMode.liveThenFixture &&
+          (error.supportsFixtureFallback ||
+              error.type == GteApiErrorType.notFound ||
+              error.type == GteApiErrorType.unknown)) {
+        return fixtureCall();
+      }
+      rethrow;
+    } on GteParsingException {
+      if (config.mode == GteBackendMode.liveThenFixture) {
+        return fixtureCall();
+      }
+      rethrow;
+    }
+  }
+
+  Future<Object?> _request(
+    String method,
+    String path, {
+    Object? body,
+  }) async {
+    try {
+      final GteTransportResponse response = await transport.send(
+        GteTransportRequest(
+          method: method,
+          uri: config.uriFor(path),
+          headers: const <String, String>{'Accept': 'application/json'},
+          body: body,
+        ),
+      );
+      if (response.statusCode >= 400) {
+        throw GteApiException(
+          type: _errorType(response.statusCode),
+          message: _errorMessage(response.body),
+          statusCode: response.statusCode,
+          cause: response.body,
+        );
+      }
+      return response.body;
+    } on GteApiException {
+      rethrow;
+    } catch (error) {
+      throw GteApiException(
+        type: GteApiErrorType.network,
+        message: 'Unable to load club identity right now.',
+        cause: error,
+      );
+    }
+  }
 }
 
 class MockClubIdentityRepository extends ClubIdentityRepository {
@@ -161,4 +315,38 @@ JerseyVariantDto _copyVariantFromJson(
         .toList(growable: false),
     commemorativePatch: json['commemorative_patch'] as String?,
   );
+}
+
+Map<String, Object?> _asMap(Object? value) {
+  return GteJson.map(value, label: 'club identity payload');
+}
+
+GteApiErrorType _errorType(int statusCode) {
+  if (statusCode == 404) {
+    return GteApiErrorType.notFound;
+  }
+  if (statusCode == 422) {
+    return GteApiErrorType.validation;
+  }
+  if (statusCode >= 500) {
+    return GteApiErrorType.unavailable;
+  }
+  return GteApiErrorType.unknown;
+}
+
+String _errorMessage(Object? payload) {
+  if (payload is String && payload.trim().isNotEmpty) {
+    return payload;
+  }
+  if (payload is Map) {
+    final Map<String, Object?> json = GteJson.map(payload);
+    final String? detail = GteJson.stringOrNull(
+      json,
+      const <String>['detail', 'message', 'error'],
+    );
+    if (detail != null && detail.isNotEmpty) {
+      return detail;
+    }
+  }
+  return 'Club request failed.';
 }

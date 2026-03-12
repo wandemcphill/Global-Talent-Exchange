@@ -24,7 +24,7 @@ extension DynastyStatusX on DynastyStatus {
       case DynastyStatus.fallen:
         return 'Historic Giant';
       case DynastyStatus.none:
-        return 'No Dynasty';
+        return 'No Dynasty Yet';
     }
   }
 }
@@ -78,17 +78,17 @@ extension DynastyEraTypeX on DynastyEraType {
   String get strapline {
     switch (this) {
       case DynastyEraType.emergingPower:
-        return 'The badge is rising and the league is starting to notice.';
+        return 'The badge is rising, and the league is circling the fixtures.';
       case DynastyEraType.dominantEra:
-        return 'Domestic control has turned from a good spell into a standard.';
+        return 'Domestic control is now routine, not a surprise.';
       case DynastyEraType.continentalDynasty:
-        return 'The club owns big European nights and backs it up every spring.';
+        return 'European nights bend toward this crest.';
       case DynastyEraType.globalDynasty:
-        return 'This is football royalty. The world stage expects them to arrive.';
+        return 'World football takes notice; every tour is a coronation.';
       case DynastyEraType.fallenGiant:
-        return 'The history still carries weight, even if the present has cooled.';
+        return 'A storied crest in a quieter chapter. Respect remains.';
       case DynastyEraType.none:
-        return 'The club is still writing the chapter that could become an era.';
+        return 'The story is still warming; one defining run can ignite an era.';
     }
   }
 
@@ -121,9 +121,9 @@ extension DynastyLeaderboardFilterX on DynastyLeaderboardFilter {
   String get emptyTitle {
     switch (this) {
       case DynastyLeaderboardFilter.activeDynasties:
-        return 'No active dynasties';
+        return 'No active dynasties right now';
       case DynastyLeaderboardFilter.allTimeDynasties:
-        return 'No dynasty records';
+        return 'No dynasty records yet';
       case DynastyLeaderboardFilter.risingPowers:
         return 'No rising powers yet';
     }
@@ -132,7 +132,7 @@ extension DynastyLeaderboardFilterX on DynastyLeaderboardFilter {
   String get emptyMessage {
     switch (this) {
       case DynastyLeaderboardFilter.activeDynasties:
-        return 'No club currently meets the active dynasty bar in this feed.';
+        return 'The current season has not produced a live dynasty badge in this view.';
       case DynastyLeaderboardFilter.allTimeDynasties:
         return 'Dynasty history has not been published for this competition view.';
       case DynastyLeaderboardFilter.risingPowers:

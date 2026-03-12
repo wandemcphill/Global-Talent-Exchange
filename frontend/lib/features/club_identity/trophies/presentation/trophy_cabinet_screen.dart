@@ -5,6 +5,7 @@ import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dt
 import 'package:gte_frontend/features/club_identity/trophies/presentation/honors_timeline_screen.dart';
 import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_identity/trophies/widgets/featured_trophy_shelf.dart';
+import 'package:gte_frontend/features/club_identity/trophies/widgets/major_honor_badge.dart';
 import 'package:gte_frontend/features/club_identity/trophies/widgets/trophy_category_section.dart';
 import 'package:gte_frontend/features/club_identity/trophies/widgets/trophy_count_card.dart';
 import 'package:gte_frontend/features/club_identity/trophies/widgets/trophy_tile.dart';
@@ -127,6 +128,20 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
           historicHonorsTimeline: const <TrophyItemDto>[],
           summaryOutputs: const <String>[],
         );
+    final List<TrophyCategoryDto> seniorCategories = cabinet.trophiesByCategory
+        .where(
+          (TrophyCategoryDto category) =>
+              category.teamScope == TrophyTeamScope.senior,
+        )
+        .toList(growable: false);
+    final List<TrophyCategoryDto> academyCategories = cabinet.trophiesByCategory
+        .where(
+          (TrophyCategoryDto category) =>
+              category.teamScope == TrophyTeamScope.academy,
+        )
+        .toList(growable: false);
+    final bool isAcademyFilter = _filter == TrophyScopeFilter.academy;
+    final bool isAllFilter = _filter == TrophyScopeFilter.all;
 
     return RefreshIndicator(
       onRefresh: _loadCabinet,
@@ -173,12 +188,43 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
             else ...<Widget>[
               FeaturedTrophyShelf(trophies: cabinet.featuredHonors()),
               const SizedBox(height: 20),
-              TrophyCategorySection(
-                title: 'Grouped honors',
-                subtitle:
-                    'Every category stays visible, so users can scan dynasty breadth and specialist awards at a glance.',
-                categories: cabinet.trophiesByCategory,
-              ),
+              if (isAllFilter) ...<Widget>[
+                TrophyCategorySection(
+                  title: 'Senior cabinet',
+                  subtitle:
+                      'First-team honors anchor the main gallery of the museum.',
+                  categories: seniorCategories,
+                  badgeLabel: 'Senior',
+                  badgeStyle: MajorHonorBadgeStyle.major,
+                  emptyMessage: 'No senior honors yet.',
+                ),
+                const SizedBox(height: 16),
+                TrophyCategorySection(
+                  title: 'Academy wing',
+                  subtitle:
+                      'Youth honors live in a dedicated wing, kept distinct from senior shelves.',
+                  categories: academyCategories,
+                  badgeLabel: 'Academy',
+                  badgeStyle: MajorHonorBadgeStyle.academy,
+                  emphasized: true,
+                  emptyMessage: 'No academy honors yet.',
+                ),
+              ] else
+                TrophyCategorySection(
+                  title: isAcademyFilter ? 'Academy wing' : 'Senior cabinet',
+                  subtitle: isAcademyFilter
+                      ? 'Youth honors live in a dedicated wing of the museum.'
+                      : 'First-team honors anchor the main gallery.',
+                  categories: cabinet.trophiesByCategory,
+                  badgeLabel: isAcademyFilter ? 'Academy' : 'Senior',
+                  badgeStyle: isAcademyFilter
+                      ? MajorHonorBadgeStyle.academy
+                      : MajorHonorBadgeStyle.major,
+                  emphasized: isAcademyFilter,
+                  emptyMessage: isAcademyFilter
+                      ? 'No academy honors yet.'
+                      : 'No senior honors yet.',
+                ),
               const SizedBox(height: 20),
               _SeasonSummaryPanel(seasons: cabinet.trophiesBySeason),
               const SizedBox(height: 20),
@@ -287,15 +333,20 @@ class _HeroPanel extends StatelessWidget {
                 caption: 'Every title, special award, and archive marker.',
               ),
               TrophyCountCard(
-                label: 'Elite honors',
-                count: cabinet.eliteHonorsCount,
-                caption: 'World-level honors marked as cabinet centerpieces.',
-                emphasized: true,
+                label: 'Senior honors',
+                count: cabinet.seniorHonorsCount,
+                caption: 'First-team silverware kept in the main gallery.',
               ),
               TrophyCountCard(
                 label: 'Academy honors',
                 count: cabinet.academyHonorsCount,
                 caption: 'Youth success kept distinct from the senior shelf.',
+              ),
+              TrophyCountCard(
+                label: 'Elite honors',
+                count: cabinet.eliteHonorsCount,
+                caption: 'World-level honors marked as cabinet centerpieces.',
+                emphasized: true,
               ),
             ],
           ),
@@ -380,40 +431,46 @@ class _SeasonSummaryPanel extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: seasons.map((TrophySeasonSummaryDto season) {
-              return SizedBox(
-                width: 208,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: GteShellTheme.panelStrong.withValues(alpha: 0.76),
-                    border: Border.all(color: GteShellTheme.stroke),
+          if (seasons.isEmpty)
+            Text(
+              'No season snapshots archived yet.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
+          else
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: seasons.map((TrophySeasonSummaryDto season) {
+                return SizedBox(
+                  width: 208,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: GteShellTheme.panelStrong.withValues(alpha: 0.76),
+                      border: Border.all(color: GteShellTheme.stroke),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(season.seasonLabel,
+                            style: Theme.of(context).textTheme.titleLarge),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${season.totalHonorsCount} honors | ${season.majorHonorsCount} major',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Senior ${season.seniorHonorsCount} | Academy ${season.academyHonorsCount}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(season.seasonLabel,
-                          style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${season.totalHonorsCount} honors • ${season.majorHonorsCount} major',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Senior ${season.seniorHonorsCount} • Academy ${season.academyHonorsCount}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(growable: false),
-          ),
+                );
+              }).toList(growable: false),
+            ),
         ],
       ),
     );
@@ -439,21 +496,27 @@ class _RecentHonorsPanel extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final bool narrow = constraints.maxWidth < 760;
-              return Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: honors.map((TrophyItemDto honor) {
-                  return SizedBox(
-                    width: narrow ? constraints.maxWidth : 280,
-                    child: TrophyTile(trophy: honor),
-                  );
-                }).toList(growable: false),
-              );
-            },
-          ),
+          if (honors.isEmpty)
+            Text(
+              'No recent honors yet. The next trophy will appear here first.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
+          else
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final bool narrow = constraints.maxWidth < 760;
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: honors.map((TrophyItemDto honor) {
+                    return SizedBox(
+                      width: narrow ? constraints.maxWidth : 280,
+                      child: TrophyTile(trophy: honor),
+                    );
+                  }).toList(growable: false),
+                );
+              },
+            ),
         ],
       ),
     );

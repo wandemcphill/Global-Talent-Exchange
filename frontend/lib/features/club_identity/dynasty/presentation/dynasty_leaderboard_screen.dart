@@ -67,7 +67,7 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          title: const Text('Dynasty leaderboard'),
+          title: const Text('Dynasty Leaderboard'),
         ),
         body: AnimatedBuilder(
           animation: _controller,
@@ -116,12 +116,15 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          'Global dynasty table',
-                          style: Theme.of(context).textTheme.headlineSmall,
+                          'Global Dynasty table',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: GteShellTheme.accentWarm,
+                                letterSpacing: -0.4,
+                              ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Filter the current feed between live powers, all-time names, and clubs still climbing toward the threshold.',
+                          'Global and regional dynasties, filtered between live powers, all-time names, and clubs still climbing toward the threshold.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 18),
