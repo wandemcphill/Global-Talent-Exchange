@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# legacy compatibility route - canonical router provides core identity/jersey endpoints
+# this router provides additional legacy endpoints for club identity customization
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
@@ -47,13 +50,10 @@ def patch_club_identity(
     return ClubIdentityProfileView.model_validate(profile)
 
 
-@router.get("/clubs/{club_id}/jerseys", response_model=JerseySetView)
-def get_club_jerseys(
-    club_id: str,
-    service: ClubIdentityService = Depends(get_identity_service),
-) -> JerseySetView:
-    return JerseySetView.model_validate(service.get_jerseys(club_id))
-
+# GET /clubs/{club_id}/jerseys is provided by canonical_clubs router
+# PATCH /clubs/{club_id}/jerseys/{jersey_id} is provided by canonical_clubs router
+# POST /clubs/{club_id}/jerseys is provided by canonical_clubs router
+# This router provides legacy/custom jersey set operations and identity endpoints
 
 @router.patch("/clubs/{club_id}/jerseys", response_model=JerseySetView)
 def patch_club_jerseys(

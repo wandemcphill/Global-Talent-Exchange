@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+# legacy compatibility route - canonical router provides base /reputation endpoint
+# this router provides additional reputation-related endpoints that complement the canonical endpoint
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from backend.app.club_identity.reputation.schemas import (
     ClubPrestigeView,
     ClubReputationHistoryView,
-    ClubReputationView,
     PrestigeLeaderboardView,
 )
 from backend.app.club_identity.reputation.service import ClubReputationQueryService
@@ -15,13 +17,8 @@ from backend.app.db import get_session
 router = APIRouter(prefix="/api", tags=["club-reputation"])
 
 
-@router.get("/clubs/{club_id}/reputation", response_model=ClubReputationView)
-def get_club_reputation(
-    club_id: str,
-    session: Session = Depends(get_session),
-) -> ClubReputationView:
-    return ClubReputationQueryService(session).get_reputation(club_id)
-
+# /clubs/{club_id}/reputation is provided by canonical_clubs router
+# additional endpoints below:
 
 @router.get("/clubs/{club_id}/reputation/history", response_model=ClubReputationHistoryView)
 def get_club_reputation_history(

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+# legacy compatibility route - canonical router provides base /dynasty endpoint
+# this router provides additional dynasty-related endpoints that complement the canonical endpoint
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.app.club_identity.dynasty.api.schemas import (
     ClubDynastyHistoryView,
-    ClubDynastyProfileView,
     DynastyEraView,
     DynastyLeaderboardEntryView,
 )
@@ -15,19 +17,8 @@ from backend.app.club_identity.dynasty.services.dynasty_detector import DynastyQ
 router = APIRouter(prefix="/api", tags=["club-identity-dynasty"])
 
 
-@router.get("/clubs/{club_id}/dynasty", response_model=ClubDynastyProfileView)
-def get_club_dynasty(
-    club_id: str,
-    repository: DynastyReadRepository = Depends(get_dynasty_repository),
-) -> ClubDynastyProfileView:
-    profile = DynastyQueryService(repository).get_profile(club_id)
-    if profile is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Dynasty profile for club {club_id} was not found",
-        )
-    return ClubDynastyProfileView.model_validate(profile)
-
+# /clubs/{club_id}/dynasty is provided by canonical_clubs router
+# additional endpoints below:
 
 @router.get("/clubs/{club_id}/dynasty/history", response_model=ClubDynastyHistoryView)
 def get_club_dynasty_history(
@@ -64,3 +55,6 @@ def get_club_eras(
             detail=f"Dynasty eras for club {club_id} were not found",
         )
     return [DynastyEraView.model_validate(era) for era in eras]
+
+
+__all__ = ["router"]
