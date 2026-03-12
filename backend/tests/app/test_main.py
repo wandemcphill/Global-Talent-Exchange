@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
+from alembic.script import ScriptDirectory
+from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, text
 
@@ -11,6 +12,7 @@ from backend.app.auth.dependencies import get_session
 from backend.app.auth.router import register_user
 from backend.app.auth.schemas import RegisterRequest
 from backend.app.cache.redis_helpers import NullCacheBackend
+from backend.app.core.database import DatabaseRuntime, build_alembic_config
 from backend.app.ingestion.service import IngestionService
 from backend.app.main import create_app
 from backend.app.market.router import create_listing
@@ -38,11 +40,10 @@ def _close_session(generator) -> None:
         next(generator)
 
 
-@pytest.mark.anyio
-async def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -> None:
+def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -> None:
     app, engine = app_and_engine
 
-    async with app.router.lifespan_context(app):
+    with TestClient(app) as client:
         assert hasattr(app.state, "settings")
         assert hasattr(app.state, "db_engine")
         assert hasattr(app.state, "session_factory")
@@ -54,47 +55,139 @@ async def test_app_startup_runs_migrations_and_registers_core_routes(app_and_eng
         assert "admin" in app.state.domain_modules
         assert "surveillance" in app.state.domain_modules
         assert "value_engine" in app.state.domain_modules
+        assert "leagues" in app.state.domain_modules
+        assert "champions_league" in app.state.domain_modules
+        assert "academy" in app.state.domain_modules
+        assert "world_super_cup" in app.state.domain_modules
+        assert "fast_cups" in app.state.domain_modules
+        assert "match_engine" in app.state.domain_modules
+        assert "club_reputation" in app.state.domain_modules
+        assert "dynasty" in app.state.domain_modules
+        assert "club_identity" in app.state.domain_modules
+        assert "replay_archive" in app.state.domain_modules
+        assert "notifications" in app.state.domain_modules
 
-        session, session_generator = _resolve_session(app)
-        try:
-            health_route = next(route for route in app.routes if getattr(route, "path", None) == "/health")
-            health_response = health_route.endpoint(request=SimpleNamespace(app=app))
-        finally:
-            _close_session(session_generator)
+        health_response = client.get("/health")
+        ready_response = client.get("/ready")
+        version_response = client.get("/version")
 
     assert get_session in app.dependency_overrides
-    assert health_response["status"] == "ok"
-    assert health_response["components"]["database"]["status"] == "ok"
+    assert health_response.status_code == 200
+    assert health_response.json() == {"status": "ok"}
+    assert ready_response.status_code == 200
+    assert ready_response.json() == {
+        "status": "ready",
+        "checks": {
+            "database": {
+                "status": "ok",
+                "detail": None,
+            }
+        },
+    }
+    assert version_response.status_code == 200
+    assert version_response.json() == {
+        "app_name": app.state.settings.app_name,
+        "environment": app.state.settings.app_env,
+        "api_version": app.state.settings.app_version,
+        "phase_marker": app.state.settings.phase_marker,
+    }
     paths = app.openapi()["paths"]
     assert "/health" in paths
+    assert "/ready" in paths
+    assert "/version" in paths
     assert "/auth/register" in paths
     assert "/auth/login" in paths
+    assert "/api/auth/me" in paths
     assert "/admin/config/supply-tiers" in paths
     assert "/admin/config/liquidity-bands" in paths
     assert "/admin/config/suspicion-thresholds" in paths
     assert "/admin/config/value-controls" in paths
     assert "/wallets/accounts" in paths
     assert "/wallets/payment-events" in paths
+    assert "/api/wallets/accounts" in paths
+    assert "/api/wallets/summary" in paths
+    assert "/api/wallets/ledger" in paths
+    assert "/api/wallets/payment-events" in paths
     assert "/players/summaries/recent" in paths
     assert "/clubs/{club_id}" in paths
     assert "/competitions/{competition_id}" in paths
     assert "/market/listings" in paths
     assert "/market/summary/{asset_id}" in paths
     assert "/market/offers" in paths
+    assert "/api/market/players" in paths
+    assert "/api/market/players/{player_id}" in paths
+    assert "/api/market/players/{player_id}/candles" in paths
+    assert "/api/market/ticker/{player_id}" in paths
     assert "/value-engine/snapshots/rebuild" in paths
     assert "/surveillance/suspicious-players" in paths
     assert "/surveillance/suspicious-clusters" in paths
     assert "/surveillance/thin-market-alerts" in paths
     assert "/surveillance/holder-concentration-alerts" in paths
     assert "/surveillance/circular-trade-alerts" in paths
+    assert "/api/orders" in paths
+    assert "/api/orders/{order_id}" in paths
+    assert "/api/orders/{order_id}/cancel" in paths
+    assert "/api/orders/book/{player_id}" in paths
+    assert "/api/portfolio" in paths
+    assert "/api/portfolio/snapshot" in paths
+    assert "/api/portfolio/summary" in paths
     assert "/portfolios/me" in paths
+    assert "/leagues/register" in paths
+    assert "/api/leagues/register" in paths
+    assert "/champions-league/qualification-map" in paths
+    assert "/api/champions-league/qualification-map" in paths
+    assert "/academy/registration" in paths
+    assert "/api/academy/registration" in paths
+    assert "/world-super-cup/qualification/explanation" in paths
+    assert "/api/world-super-cup/qualification/explanation" in paths
+    assert "/fast-cups/upcoming" in paths
+    assert "/api/fast-cups/upcoming" in paths
+    assert "/match-engine/replay" in paths
+    assert "/api/match-engine/replay" in paths
+    assert "/api/clubs/{club_id}/reputation" in paths
+    assert "/api/clubs/{club_id}/reputation/history" in paths
+    assert "/api/clubs/{club_id}/prestige" in paths
+    assert "/api/leaderboards/prestige" in paths
+    assert "/api/clubs/{club_id}/dynasty" in paths
+    assert "/api/clubs/{club_id}/dynasty/history" in paths
+    assert "/api/clubs/{club_id}/eras" in paths
+    assert "/api/leaderboards/dynasties" in paths
+    assert "/api/clubs/{club_id}/identity" in paths
+    assert "/api/clubs/{club_id}/jerseys" in paths
+    assert "/api/clubs/{club_id}/badge" in paths
     assert "/notifications/me" in paths
+    assert "/api/notifications/me" in paths
+    assert "/replays/public/featured" in paths
+    assert "/api/replays/public/featured" in paths
     assert "/realtime/status" in paths
 
     with engine.connect() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
 
-    assert revision == "20260311_0004"
+    target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
+    assert revision == target_head
+
+
+def test_ready_returns_service_unavailable_when_database_check_fails(app_and_engine, monkeypatch) -> None:
+    app, _engine = app_and_engine
+
+    def _raise_db_error(_self) -> bool:
+        raise RuntimeError("db offline")
+
+    with TestClient(app) as client:
+        monkeypatch.setattr(DatabaseRuntime, "ping", _raise_db_error)
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "checks": {
+            "database": {
+                "status": "error",
+                "detail": "db offline",
+            }
+        },
+    }
 
 
 @pytest.mark.anyio

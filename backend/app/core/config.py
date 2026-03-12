@@ -228,6 +228,7 @@ class Settings:
     app_name: str
     app_version: str
     app_env: str
+    phase_marker: str
     project_root: Path
     backend_root: Path
     config_root: Path
@@ -601,6 +602,7 @@ def load_settings(
         app_name=resolved_environ.get("GTE_APP_NAME", "Global Talent Exchange API"),
         app_version=resolved_environ.get("GTE_APP_VERSION", "0.1.0"),
         app_env=resolved_environ.get("GTE_APP_ENV", "development"),
+        phase_marker=resolved_environ.get("GTE_PHASE_MARKER", "phase-8"),
         project_root=PROJECT_ROOT,
         backend_root=BACKEND_ROOT,
         config_root=resolved_config_root,

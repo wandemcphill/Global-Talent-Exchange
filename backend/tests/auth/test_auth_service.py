@@ -1,10 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from sqlalchemy import create_engine, select
+import pytest
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import pytest
 
+from backend.app.auth.schemas import CurrentUserUpdateRequest
 from backend.app.auth.security import decode_access_token, verify_password
 from backend.app.auth.service import AuthService, DuplicateUserError, InvalidCredentialsError
 from backend.app.models import Base, LedgerAccount, LedgerUnit
@@ -18,6 +19,11 @@ def session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(2048)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN favourite_club VARCHAR(160)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN nationality VARCHAR(120)"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN preferred_position VARCHAR(120)"))
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
         yield db_session
@@ -90,3 +96,35 @@ def test_authenticate_user_rejects_invalid_password(session) -> None:
 
     with pytest.raises(InvalidCredentialsError, match="Invalid email or password"):
         service.authenticate_user(session, email="owner@example.com", password="WrongPassword1")
+
+
+def test_update_current_user_profile_reads_and_persists_allowed_fields(session) -> None:
+    service = AuthService()
+    user = service.register_user(
+        session,
+        email="owner@example.com",
+        username="owner",
+        password="SuperSecret1",
+        display_name="Owner",
+    )
+    session.commit()
+    session.refresh(user)
+
+    profile = service.update_current_user_profile(
+        session,
+        user=user,
+        payload=CurrentUserUpdateRequest(
+            display_name="Updated Owner",
+            avatar_url="https://cdn.example.com/owner.png",
+            favourite_club="Barcelona",
+            nationality="Spain",
+            preferred_position="Midfielder",
+        ),
+    )
+    session.commit()
+
+    assert profile.display_name == "Updated Owner"
+    assert profile.avatar_url == "https://cdn.example.com/owner.png"
+    assert profile.favourite_club == "Barcelona"
+    assert profile.nationality == "Spain"
+    assert profile.preferred_position == "Midfielder"

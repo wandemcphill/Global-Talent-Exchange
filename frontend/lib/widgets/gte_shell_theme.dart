@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class GteShellTheme {
   static const Color background = Color(0xFF070B12);
@@ -91,7 +91,7 @@ class GteShellTheme {
       navigationBarTheme: const NavigationBarThemeData(
         backgroundColor: panel,
         indicatorColor: Color(0x2E7DE2D1),
-        labelTextStyle: MaterialStatePropertyAll<TextStyle>(
+        labelTextStyle: WidgetStatePropertyAll<TextStyle>(
           TextStyle(fontWeight: FontWeight.w600),
         ),
       ),

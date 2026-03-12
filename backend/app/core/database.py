@@ -21,9 +21,13 @@ MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "backend.app.models",
+    "backend.app.club_identity.models.reputation",
+    "backend.app.fast_cups.repositories.database",
     "backend.app.ingestion.models",
+    "backend.app.leagues.repository",
     "backend.app.market.read_models",
     "backend.app.players.read_models",
+    "backend.app.replay_archive.persistence",
     "backend.app.value_engine.read_models",
 )
 

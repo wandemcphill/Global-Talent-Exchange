@@ -1,0 +1,536 @@
+import 'package:flutter/foundation.dart';
+
+import '../data/gte_api_repository.dart';
+import '../data/gte_exchange_api_client.dart';
+import '../data/gte_exchange_models.dart';
+import '../data/gte_models.dart';
+
+class GteExchangeController extends ChangeNotifier {
+  GteExchangeController({
+    required GteExchangeApiClient api,
+  }) : _api = api;
+
+  final GteExchangeApiClient _api;
+  final GteRequestGate _marketGate = GteRequestGate();
+  final GteRequestGate _playerGate = GteRequestGate();
+  final GteRequestGate _portfolioGate = GteRequestGate();
+  final GteRequestGate _ordersGate = GteRequestGate();
+  final GteRequestGate _authGate = GteRequestGate();
+
+  bool isBootstrapping = false;
+  bool isLoadingMarket = false;
+  bool isLoadingMoreMarket = false;
+  bool isLoadingPlayer = false;
+  bool isSigningIn = false;
+  bool isLoadingPortfolio = false;
+  bool isLoadingOrders = false;
+  bool isSubmittingOrder = false;
+  bool isRefreshingOrder = false;
+  bool isCancellingOrder = false;
+
+  String marketSearch = '';
+  String selectedCandleInterval = '1h';
+
+  String? marketError;
+  String? playerError;
+  String? authError;
+  String? portfolioError;
+  String? ordersError;
+  String? orderError;
+
+  GteAuthSession? session;
+  GteMarketPlayerListView? marketPage;
+  GtePlayerMarketSnapshot? selectedPlayer;
+  GteWalletSummary? walletSummary;
+  GtePortfolioView? portfolio;
+  GtePortfolioSummary? portfolioSummary;
+  int recentOrderTotal = 0;
+  int openOrderTotal = 0;
+
+  final Map<String, GteOrderRecord> _ordersById = <String, GteOrderRecord>{};
+  final List<String> _recentOrderIds = <String>[];
+  final List<String> _openOrderIds = <String>[];
+  bool _hasLoadedOrdersOnce = false;
+
+  List<GteMarketPlayerListItem> get players =>
+      marketPage?.items ?? const <GteMarketPlayerListItem>[];
+
+  bool get isAuthenticated => session != null;
+
+  bool get hasMorePlayers {
+    if (marketPage == null) {
+      return false;
+    }
+    return marketPage!.items.length + marketPage!.offset < marketPage!.total;
+  }
+
+  List<GteOrderRecord> get recentOrders => _ordersForIds(_recentOrderIds);
+
+  List<GteOrderRecord> get openOrders => _ordersForIds(_openOrderIds);
+
+  bool get hasLoadedOrders =>
+      isLoadingOrders ||
+      _hasLoadedOrdersOnce ||
+      recentOrderTotal > 0 ||
+      openOrderTotal > 0 ||
+      ordersError != null;
+
+  GteOrderRecord? orderForPlayer(String playerId) {
+    for (final GteOrderRecord order in recentOrders) {
+      if (order.playerId == playerId) {
+        return order;
+      }
+    }
+    for (final GteOrderRecord order in openOrders) {
+      if (order.playerId == playerId) {
+        return order;
+      }
+    }
+    final List<GteOrderRecord> fallback =
+        _ordersById.values.toList(growable: false)
+          ..sort((GteOrderRecord left, GteOrderRecord right) {
+            final DateTime leftStamp = left.updatedAt ??
+                left.createdAt ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            final DateTime rightStamp = right.updatedAt ??
+                right.createdAt ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            return rightStamp.compareTo(leftStamp);
+          });
+    for (final GteOrderRecord order in fallback) {
+      if (order.playerId == playerId) {
+        return order;
+      }
+    }
+    return null;
+  }
+
+  Future<void> bootstrap() async {
+    if (isBootstrapping) {
+      return;
+    }
+    isBootstrapping = true;
+    notifyListeners();
+    try {
+      await loadMarket(reset: true);
+    } finally {
+      isBootstrapping = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMarket({
+    String? search,
+    bool reset = false,
+  }) async {
+    final int requestId = _marketGate.begin();
+    final String nextSearch = (search ?? marketSearch).trim();
+    marketError = null;
+    if (reset || marketPage == null) {
+      isLoadingMarket = true;
+    } else {
+      isLoadingMoreMarket = true;
+    }
+    notifyListeners();
+
+    try {
+      final int offset = reset || marketPage == null
+          ? 0
+          : marketPage!.offset + marketPage!.items.length;
+      final GteMarketPlayerListView response = await _api.fetchPlayers(
+        query: GteMarketPlayersQuery(
+          limit: 20,
+          offset: offset,
+          search: nextSearch.isEmpty ? null : nextSearch,
+        ),
+      );
+      if (!_marketGate.isActive(requestId)) {
+        return;
+      }
+      marketSearch = nextSearch;
+      if (reset || marketPage == null) {
+        marketPage = response;
+      } else {
+        marketPage = GteMarketPlayerListView(
+          items: <GteMarketPlayerListItem>[
+            ...marketPage!.items,
+            ...response.items,
+          ],
+          limit: response.limit,
+          offset: 0,
+          total: response.total,
+        );
+      }
+    } catch (error) {
+      if (_marketGate.isActive(requestId)) {
+        marketError = error.toString();
+      }
+    } finally {
+      if (_marketGate.isActive(requestId)) {
+        isLoadingMarket = false;
+        isLoadingMoreMarket = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> openPlayer(
+    String playerId, {
+    String interval = '1h',
+  }) async {
+    final int requestId = _playerGate.begin();
+    selectedCandleInterval = interval;
+    playerError = null;
+    isLoadingPlayer = true;
+    notifyListeners();
+
+    try {
+      final GtePlayerMarketSnapshot snapshot = await _api.fetchPlayerMarket(
+        playerId,
+        interval: interval,
+        limit: 30,
+      );
+      if (!_playerGate.isActive(requestId)) {
+        return;
+      }
+      selectedPlayer = snapshot;
+    } catch (error) {
+      if (_playerGate.isActive(requestId)) {
+        playerError = error.toString();
+      }
+    } finally {
+      if (_playerGate.isActive(requestId)) {
+        isLoadingPlayer = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> changeCandleInterval(String interval) async {
+    final GtePlayerMarketSnapshot? current = selectedPlayer;
+    if (current == null || interval == selectedCandleInterval) {
+      return;
+    }
+    final int requestId = _playerGate.begin();
+    selectedCandleInterval = interval;
+    isLoadingPlayer = true;
+    playerError = null;
+    notifyListeners();
+
+    try {
+      final GteMarketCandles candles = await _api.fetchCandles(
+        current.detail.playerId,
+        interval: interval,
+        limit: 30,
+      );
+      if (!_playerGate.isActive(requestId)) {
+        return;
+      }
+      selectedPlayer = current.copyWith(candles: candles);
+    } catch (error) {
+      if (_playerGate.isActive(requestId)) {
+        playerError = error.toString();
+      }
+    } finally {
+      if (_playerGate.isActive(requestId)) {
+        isLoadingPlayer = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> signIn({
+    required String email,
+    required String password,
+  }) async {
+    final int requestId = _authGate.begin();
+    authError = null;
+    isSigningIn = true;
+    notifyListeners();
+
+    try {
+      final GteAuthSession nextSession =
+          await _api.login(email: email, password: password);
+      if (!_authGate.isActive(requestId)) {
+        return;
+      }
+      session = nextSession;
+      await _refreshTradingState(
+        playerId: selectedPlayer?.detail.playerId,
+        refreshPlayer: selectedPlayer != null,
+      );
+    } catch (error) {
+      if (_authGate.isActive(requestId)) {
+        authError = error.toString();
+      }
+    } finally {
+      if (_authGate.isActive(requestId)) {
+        isSigningIn = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> signOut() async {
+    await _api.logout();
+    session = null;
+    walletSummary = null;
+    portfolio = null;
+    portfolioSummary = null;
+    authError = null;
+    portfolioError = null;
+    ordersError = null;
+    orderError = null;
+    recentOrderTotal = 0;
+    openOrderTotal = 0;
+    _recentOrderIds.clear();
+    _openOrderIds.clear();
+    _hasLoadedOrdersOnce = false;
+    _ordersById.clear();
+    notifyListeners();
+  }
+
+  Future<void> refreshAccount() async {
+    if (!isAuthenticated) {
+      return;
+    }
+    await _refreshTradingState();
+  }
+
+  Future<void> loadPortfolio() async {
+    if (!isAuthenticated) {
+      return;
+    }
+    final int requestId = _portfolioGate.begin();
+    portfolioError = null;
+    isLoadingPortfolio = true;
+    notifyListeners();
+
+    try {
+      final List<dynamic> payload =
+          await Future.wait<dynamic>(<Future<dynamic>>[
+        _api.fetchWalletSummary(),
+        _api.fetchPortfolio(),
+        _api.fetchPortfolioSummary(),
+      ]);
+      if (!_portfolioGate.isActive(requestId)) {
+        return;
+      }
+      walletSummary = payload[0] as GteWalletSummary;
+      portfolio = payload[1] as GtePortfolioView;
+      portfolioSummary = payload[2] as GtePortfolioSummary;
+    } catch (error) {
+      if (_portfolioGate.isActive(requestId)) {
+        portfolioError = error.toString();
+      }
+    } finally {
+      if (_portfolioGate.isActive(requestId)) {
+        isLoadingPortfolio = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadOrders({
+    int limit = 20,
+  }) async {
+    if (!isAuthenticated) {
+      return;
+    }
+    final int requestId = _ordersGate.begin();
+    ordersError = null;
+    isLoadingOrders = true;
+    notifyListeners();
+
+    try {
+      final List<dynamic> payload =
+          await Future.wait<dynamic>(<Future<dynamic>>[
+        _api.listOrders(limit: limit),
+        _api.listOrders(
+          limit: limit,
+          statuses: const <GteOrderStatus>[
+            GteOrderStatus.open,
+            GteOrderStatus.partiallyFilled,
+          ],
+        ),
+      ]);
+      if (!_ordersGate.isActive(requestId)) {
+        return;
+      }
+      final GteOrderListView recentResponse = payload[0] as GteOrderListView;
+      final GteOrderListView openResponse = payload[1] as GteOrderListView;
+      recentOrderTotal = recentResponse.total;
+      openOrderTotal = openResponse.total;
+      _hasLoadedOrdersOnce = true;
+      _applyOrderList(_recentOrderIds, recentResponse.items);
+      _applyOrderList(_openOrderIds, openResponse.items);
+    } catch (error) {
+      if (_ordersGate.isActive(requestId)) {
+        ordersError = error.toString();
+      }
+    } finally {
+      if (_ordersGate.isActive(requestId)) {
+        isLoadingOrders = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<GteOrderRecord?> placeOrder({
+    required String playerId,
+    required GteOrderSide side,
+    required double quantity,
+    double? maxPrice,
+  }) async {
+    if (!isAuthenticated || isSubmittingOrder) {
+      orderError = isAuthenticated ? orderError : 'Sign in to place orders.';
+      notifyListeners();
+      return null;
+    }
+    isSubmittingOrder = true;
+    orderError = null;
+    notifyListeners();
+    try {
+      final GteOrderRecord order = await _api.placeOrder(
+        playerId: playerId,
+        side: side,
+        quantity: quantity,
+        maxPrice: maxPrice,
+      );
+      _mergeOrder(order);
+      await _refreshTradingState(
+        playerId: playerId,
+        refreshPlayer: true,
+      );
+      return _ordersById[order.id] ?? order;
+    } catch (error) {
+      orderError = error.toString();
+      notifyListeners();
+      return null;
+    } finally {
+      isSubmittingOrder = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GteOrderRecord?> refreshOrder(String orderId) async {
+    if (isRefreshingOrder) {
+      return null;
+    }
+    isRefreshingOrder = true;
+    orderError = null;
+    notifyListeners();
+    try {
+      final GteOrderRecord order = await _api.fetchOrder(orderId);
+      _mergeOrder(order);
+      await _refreshTradingState(
+        playerId: order.playerId,
+        refreshPlayer: selectedPlayer?.detail.playerId == order.playerId,
+      );
+      return _ordersById[order.id] ?? order;
+    } catch (error) {
+      orderError = error.toString();
+      notifyListeners();
+      return null;
+    } finally {
+      isRefreshingOrder = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GteOrderRecord?> cancelOrder(String orderId) async {
+    if (isCancellingOrder) {
+      return null;
+    }
+    isCancellingOrder = true;
+    orderError = null;
+    notifyListeners();
+    try {
+      final GteOrderRecord order = await _api.cancelOrder(orderId);
+      _mergeOrder(order);
+      await _refreshTradingState(
+        playerId: order.playerId,
+        refreshPlayer: selectedPlayer?.detail.playerId == order.playerId,
+      );
+      return _ordersById[order.id] ?? order;
+    } catch (error) {
+      orderError = error.toString();
+      notifyListeners();
+      return null;
+    } finally {
+      isCancellingOrder = false;
+      notifyListeners();
+    }
+  }
+
+  String playerLabel(String playerId) {
+    for (final GteMarketPlayerListItem player in players) {
+      if (player.playerId == playerId) {
+        return player.playerName;
+      }
+    }
+    if (selectedPlayer?.detail.playerId == playerId) {
+      return selectedPlayer!.detail.identity.playerName;
+    }
+    return playerId;
+  }
+
+  Future<void> _refreshTradingState({
+    String? playerId,
+    bool refreshPlayer = false,
+  }) async {
+    final List<Future<void>> tasks = <Future<void>>[];
+    if (isAuthenticated) {
+      tasks.add(loadPortfolio());
+      tasks.add(loadOrders());
+    }
+    if (refreshPlayer && playerId != null) {
+      tasks.add(
+        openPlayer(
+          playerId,
+          interval: selectedCandleInterval,
+        ),
+      );
+    }
+    if (tasks.isEmpty) {
+      return;
+    }
+    await Future.wait<void>(tasks);
+  }
+
+  List<GteOrderRecord> _ordersForIds(List<String> orderIds) {
+    return orderIds
+        .map((String orderId) => _ordersById[orderId])
+        .whereType<GteOrderRecord>()
+        .toList(growable: false);
+  }
+
+  void _applyOrderList(List<String> target, List<GteOrderRecord> orders) {
+    target
+      ..clear()
+      ..addAll(orders.map((GteOrderRecord order) => order.id));
+    for (final GteOrderRecord order in orders) {
+      _ordersById[order.id] = order;
+    }
+  }
+
+  void _mergeOrder(GteOrderRecord order) {
+    _ordersById[order.id] = order;
+    _recentOrderIds
+      ..remove(order.id)
+      ..insert(0, order.id);
+    if (order.canCancel) {
+      _openOrderIds
+        ..remove(order.id)
+        ..insert(0, order.id);
+    } else {
+      _openOrderIds.remove(order.id);
+    }
+    if (recentOrderTotal < _recentOrderIds.length) {
+      recentOrderTotal = _recentOrderIds.length;
+    }
+    if (openOrderTotal < _openOrderIds.length) {
+      openOrderTotal = _openOrderIds.length;
+    }
+  }
+}

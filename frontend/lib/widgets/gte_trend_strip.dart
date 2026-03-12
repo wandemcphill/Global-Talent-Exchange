@@ -1,6 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
-import '../providers/gte_mock_api.dart';
+import '../data/gte_models.dart';
 import 'gte_shell_theme.dart';
 
 class GteTrendStrip extends StatelessWidget {
@@ -25,7 +25,8 @@ class GteTrendStrip extends StatelessWidget {
     final double maxValue = points
         .map((TrendPoint point) => point.value)
         .reduce((double a, double b) => a > b ? a : b);
-    final double spread = (maxValue - minValue).abs() < 0.001 ? 1 : maxValue - minValue;
+    final double spread =
+        (maxValue - minValue).abs() < 0.001 ? 1 : maxValue - minValue;
 
     return SizedBox(
       height: height,
@@ -62,7 +63,10 @@ class GteTrendStrip extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     point.label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 11),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 11),
                   ),
                 ],
               ),

@@ -1,16 +1,30 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 
-from sqlalchemy import select
+from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
 
+from backend.app.auth.schemas import CurrentUserResponse, CurrentUserUpdateRequest
 from backend.app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
 from backend.app.models.base import utcnow
 from backend.app.models.user import User, UserRole
 from backend.app.wallets.service import WalletService
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
+PROFILE_MUTABLE_FIELDS = (
+    "display_name",
+    "avatar_url",
+    "favourite_club",
+    "nationality",
+    "preferred_position",
+)
+# `table()`/`column()` keep profile access inside the auth domain without mutating the ORM model owned elsewhere.
+USER_PROFILE_TABLE = table(
+    "users",
+    column("id"),
+    *[column(field_name) for field_name in PROFILE_MUTABLE_FIELDS],
+)
 
 
 class AuthError(ValueError):
@@ -85,6 +99,59 @@ class AuthService:
             },
         )
         return token, ACCESS_TOKEN_TTL_SECONDS
+
+    def get_current_user_profile(self, session: Session, user: User) -> CurrentUserResponse:
+        profile_fields = self._get_profile_fields(session, user.id)
+        return CurrentUserResponse(
+            id=user.id,
+            email=user.email,
+            username=user.username,
+            display_name=profile_fields["display_name"],
+            avatar_url=profile_fields["avatar_url"],
+            favourite_club=profile_fields["favourite_club"],
+            nationality=profile_fields["nationality"],
+            preferred_position=profile_fields["preferred_position"],
+            role=user.role,
+            kyc_status=user.kyc_status,
+            is_active=user.is_active,
+            created_at=user.created_at,
+            last_login_at=user.last_login_at,
+        )
+
+    def update_current_user_profile(
+        self,
+        session: Session,
+        *,
+        user: User,
+        payload: CurrentUserUpdateRequest,
+    ) -> CurrentUserResponse:
+        updates = payload.model_dump(exclude_unset=True)
+        if updates:
+            session.execute(
+                update(USER_PROFILE_TABLE)
+                .where(USER_PROFILE_TABLE.c.id == user.id)
+                .values(**updates)
+            )
+            session.flush()
+            session.refresh(user)
+
+        return self.get_current_user_profile(session, user)
+
+    def _get_profile_fields(self, session: Session, user_id: str) -> dict[str, str | None]:
+        profile_row = (
+            session.execute(
+                select(
+                    USER_PROFILE_TABLE.c.display_name,
+                    USER_PROFILE_TABLE.c.avatar_url,
+                    USER_PROFILE_TABLE.c.favourite_club,
+                    USER_PROFILE_TABLE.c.nationality,
+                    USER_PROFILE_TABLE.c.preferred_position,
+                ).where(USER_PROFILE_TABLE.c.id == user_id)
+            )
+            .mappings()
+            .one()
+        )
+        return {field_name: profile_row[field_name] for field_name in PROFILE_MUTABLE_FIELDS}
 
     @staticmethod
     def _normalize_email(value: str) -> str:

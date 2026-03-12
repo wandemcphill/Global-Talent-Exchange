@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import 'gte_shell_theme.dart';
 
@@ -16,13 +16,14 @@ class GteMetricChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color tone = positive ? GteShellTheme.positive : GteShellTheme.negative;
+    final Color tone =
+        positive ? GteShellTheme.positive : GteShellTheme.negative;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: tone.withOpacity(0.09),
+        color: tone.withValues(alpha: 0.09),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: tone.withOpacity(0.28)),
+        border: Border.all(color: tone.withValues(alpha: 0.28)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -35,7 +36,8 @@ class GteMetricChip extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: tone),
+            style:
+                Theme.of(context).textTheme.titleMedium?.copyWith(color: tone),
           ),
         ],
       ),

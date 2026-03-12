@@ -1,15 +1,24 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
+from backend.app.auth.dependencies import get_current_user, get_session
+from backend.app.auth.schemas import (
+    CurrentUserResponse,
+    CurrentUserUpdateRequest,
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 from backend.app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
+from backend.app.models.user import User
 from backend.app.users.schemas import UserPublic
 from backend.app.wallets.service import WalletService
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(tags=["auth"])
+legacy_router = APIRouter(prefix="/auth")
+api_router = APIRouter(prefix="/api/auth")
 
 
 def _build_auth_service(request: Request | None) -> AuthService:
@@ -18,7 +27,7 @@ def _build_auth_service(request: Request | None) -> AuthService:
     return AuthService()
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@legacy_router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register_user(
     payload: RegisterRequest,
     session: Session = Depends(get_session),
@@ -46,7 +55,7 @@ def register_user(
     return TokenResponse(access_token=token, expires_in=expires_in, user=UserPublic.model_validate(user))
 
 
-@router.post("/login", response_model=TokenResponse)
+@legacy_router.post("/login", response_model=TokenResponse)
 def login_user(
     payload: LoginRequest,
     session: Session = Depends(get_session),
@@ -66,3 +75,36 @@ def login_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return TokenResponse(access_token=token, expires_in=expires_in, user=UserPublic.model_validate(user))
+
+
+@api_router.get("/me", response_model=CurrentUserResponse)
+def read_current_user_profile(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CurrentUserResponse:
+    return AuthService().get_current_user_profile(session, current_user)
+
+
+@api_router.patch("/me", response_model=CurrentUserResponse)
+def update_current_user_profile(
+    payload: CurrentUserUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CurrentUserResponse:
+    service = AuthService()
+    try:
+        profile = service.update_current_user_profile(
+            session,
+            user=current_user,
+            payload=payload,
+        )
+        session.commit()
+    except AuthError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return profile
+
+
+router.include_router(legacy_router)
+router.include_router(api_router)

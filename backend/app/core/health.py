@@ -1,38 +1,99 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from typing import Literal
 
-from backend.app.core.cache import NullCacheBackend
+from fastapi import APIRouter, Depends, Request, Response, status
+from pydantic import BaseModel
+
+from backend.app.core.config import Settings
+from backend.app.core.database import DatabaseRuntime
 
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
-def read_health(request: Request) -> dict[str, object]:
-    context = request.app.state.context
-    cache_backend = context.cache_backend
-    cache_status = "disabled"
-    if not isinstance(cache_backend, NullCacheBackend):
-        cache_status = "ok" if cache_backend.ping() else "degraded"
+class HealthResponse(BaseModel):
+    status: Literal["ok"] = "ok"
 
-    database_status = "ok" if context.database.ping() else "degraded"
-    jobs_status = "ok"
-    events_status = "ok"
-    overall_status = "ok" if database_status == "ok" else "degraded"
 
-    return {
-        "status": overall_status,
-        "components": {
-            "database": {"status": database_status},
-            "cache": {"status": cache_status},
-            "jobs": {
-                "status": jobs_status,
-                "recent_runs": len(context.job_backend.list_recent()),
-            },
-            "events": {
-                "status": events_status,
-                "published_events": len(context.event_publisher.published_events),
-                "subscribers": context.event_publisher.subscriber_count,
-            },
-        },
-    }
+class ReadinessCheck(BaseModel):
+    status: Literal["ok", "error"]
+    detail: str | None = None
+
+
+class ReadinessResponse(BaseModel):
+    status: Literal["ready", "not_ready"]
+    checks: dict[str, ReadinessCheck]
+
+
+class VersionResponse(BaseModel):
+    app_name: str
+    environment: str
+    api_version: str
+    phase_marker: str
+
+
+class SystemStatusService:
+    def build_health(self) -> HealthResponse:
+        return HealthResponse()
+
+    def build_readiness(self, database: DatabaseRuntime) -> ReadinessResponse:
+        try:
+            is_ready = database.ping()
+        except Exception as exc:
+            return ReadinessResponse(
+                status="not_ready",
+                checks={"database": ReadinessCheck(status="error", detail=str(exc))},
+            )
+
+        if not is_ready:
+            return ReadinessResponse(
+                status="not_ready",
+                checks={
+                    "database": ReadinessCheck(
+                        status="error",
+                        detail="Database connectivity check failed.",
+                    )
+                },
+            )
+
+        return ReadinessResponse(
+            status="ready",
+            checks={"database": ReadinessCheck(status="ok")},
+        )
+
+    def build_version(self, settings: Settings) -> VersionResponse:
+        return VersionResponse(
+            app_name=settings.app_name,
+            environment=settings.app_env,
+            api_version=settings.app_version,
+            phase_marker=settings.phase_marker,
+        )
+
+
+def get_system_status_service() -> SystemStatusService:
+    return SystemStatusService()
+
+
+@router.get("/health", response_model=HealthResponse)
+def read_health(service: SystemStatusService = Depends(get_system_status_service)) -> HealthResponse:
+    return service.build_health()
+
+
+@router.get("/ready", response_model=ReadinessResponse)
+def read_ready(
+    request: Request,
+    response: Response,
+    service: SystemStatusService = Depends(get_system_status_service),
+) -> ReadinessResponse:
+    readiness = service.build_readiness(request.app.state.context.database)
+    if readiness.status != "ready":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return readiness
+
+
+@router.get("/version", response_model=VersionResponse)
+def read_version(
+    request: Request,
+    service: SystemStatusService = Depends(get_system_status_service),
+) -> VersionResponse:
+    return service.build_version(request.app.state.settings)

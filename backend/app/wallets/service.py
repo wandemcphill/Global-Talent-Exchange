@@ -1,10 +1,10 @@
 ﻿from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -43,9 +43,36 @@ class LedgerPosting:
     amount: Decimal
 
 
+@dataclass(frozen=True, slots=True)
+class WalletSummary:
+    available_balance: Decimal
+    reserved_balance: Decimal
+    total_balance: Decimal
+    currency: LedgerUnit
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioSnapshot:
+    user_id: str
+    currency: LedgerUnit
+    available_balance: Decimal
+    reserved_balance: Decimal
+    total_balance: Decimal
+    holdings: list[dict[str, Decimal | str]]
+
+
+@dataclass(frozen=True, slots=True)
+class WalletLedgerPage:
+    page: int
+    page_size: int
+    total: int
+    items: list[LedgerEntry]
+
+
 class WalletService:
     def __init__(self, event_publisher: EventPublisher | None = None) -> None:
         self.event_publisher = event_publisher or InMemoryEventPublisher()
+        self.trade_settlement_reason = LedgerEntryReason.TRADE_SETTLEMENT
 
     def ensure_default_accounts(self, session: Session, user: User) -> dict[LedgerUnit, LedgerAccount]:
         accounts: dict[LedgerUnit, LedgerAccount] = {}
@@ -68,14 +95,20 @@ class WalletService:
     def list_accounts_for_user(self, session: Session, user: User) -> list[LedgerAccount]:
         accounts = session.scalars(
             select(LedgerAccount)
-            .where(LedgerAccount.owner_user_id == user.id)
+            .where(
+                LedgerAccount.owner_user_id == user.id,
+                LedgerAccount.code.like(f"user:{user.id}:%"),
+            )
             .order_by(LedgerAccount.unit.asc(), LedgerAccount.created_at.asc())
         ).all()
         if not accounts:
             self.ensure_default_accounts(session, user)
             accounts = session.scalars(
                 select(LedgerAccount)
-                .where(LedgerAccount.owner_user_id == user.id)
+                .where(
+                    LedgerAccount.owner_user_id == user.id,
+                    LedgerAccount.code.like(f"user:{user.id}:%"),
+                )
                 .order_by(LedgerAccount.unit.asc(), LedgerAccount.created_at.asc())
             ).all()
         return accounts
@@ -87,6 +120,21 @@ class WalletService:
             account = self.ensure_default_accounts(session, user)[unit]
         return account
 
+    def get_user_escrow_account(self, session: Session, user: User, unit: LedgerUnit) -> LedgerAccount:
+        code = self._user_escrow_account_code(user.id, unit)
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                owner_user_id=user.id,
+                code=code,
+                label=f"{unit.value.capitalize()} Escrow",
+                unit=unit,
+                kind=LedgerAccountKind.ESCROW,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
     def ensure_platform_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
         code = f"platform:{unit.value}:clearing"
         account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
@@ -95,6 +143,49 @@ class WalletService:
                 code=code,
                 label=f"Platform {unit.value.capitalize()} Clearing",
                 unit=unit,
+                kind=LedgerAccountKind.SYSTEM,
+                allow_negative=True,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
+    def get_position_account(self, session: Session, user: User, player_id: str) -> LedgerAccount:
+        code = self._position_account_code(user.id, player_id)
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                code=code,
+                label=f"Player {player_id} Position",
+                unit=LedgerUnit.COIN,
+                kind=LedgerAccountKind.USER,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
+    def get_position_escrow_account(self, session: Session, user: User, player_id: str) -> LedgerAccount:
+        code = self._position_escrow_account_code(user.id, player_id)
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                code=code,
+                label=f"Player {player_id} Position Escrow",
+                unit=LedgerUnit.COIN,
+                kind=LedgerAccountKind.ESCROW,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
+    def ensure_platform_position_account(self, session: Session, player_id: str) -> LedgerAccount:
+        code = self._platform_position_account_code(player_id)
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                code=code,
+                label=f"Platform {player_id} Inventory",
+                unit=LedgerUnit.COIN,
                 kind=LedgerAccountKind.SYSTEM,
                 allow_negative=True,
             )
@@ -258,6 +349,359 @@ class WalletService:
         )
         return self._normalize_amount(value)
 
+    def get_wallet_summary(self, session: Session, user: User, *, currency: LedgerUnit = LedgerUnit.CREDIT) -> WalletSummary:
+        available_account = self.get_user_account(session, user, currency)
+        reserved_balance = self._get_user_account_balance_by_kind(session, user, currency, LedgerAccountKind.ESCROW)
+        available_balance = self.get_balance(session, available_account)
+        return WalletSummary(
+            available_balance=available_balance,
+            reserved_balance=reserved_balance,
+            total_balance=self._normalize_amount(available_balance + reserved_balance),
+            currency=currency,
+        )
+
+    def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
+        from backend.app.portfolio.service import PortfolioService
+
+        summary = self.get_wallet_summary(session, user)
+        portfolio_snapshot = PortfolioService(wallet_service=self).build_for_user(session, user)
+        return PortfolioSnapshot(
+            user_id=user.id,
+            currency=summary.currency,
+            available_balance=summary.available_balance,
+            reserved_balance=summary.reserved_balance,
+            total_balance=summary.total_balance,
+            holdings=[asdict(holding) for holding in portfolio_snapshot.holdings],
+        )
+
+    def list_ledger_entries_for_user(
+        self,
+        session: Session,
+        user: User,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> WalletLedgerPage:
+        total = session.scalar(
+            select(func.count(LedgerEntry.id))
+            .select_from(LedgerEntry)
+            .join(LedgerAccount, LedgerAccount.id == LedgerEntry.account_id)
+            .where(
+                or_(
+                    LedgerAccount.owner_user_id == user.id,
+                    LedgerAccount.code.like(f"position:{user.id}:%"),
+                )
+            )
+        )
+        items = session.scalars(
+            select(LedgerEntry)
+            .join(LedgerAccount, LedgerAccount.id == LedgerEntry.account_id)
+            .where(
+                or_(
+                    LedgerAccount.owner_user_id == user.id,
+                    LedgerAccount.code.like(f"position:{user.id}:%"),
+                )
+            )
+            .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+        return WalletLedgerPage(
+            page=page,
+            page_size=page_size,
+            total=int(total or 0),
+            items=items,
+        )
+
+    def reserve_order_funds(
+        self,
+        session: Session,
+        *,
+        user: User,
+        amount: Decimal,
+        reference: str,
+        description: str,
+    ) -> list[LedgerEntry]:
+        reserved_amount = self._normalize_amount(amount)
+        if reserved_amount <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
+        escrow_account = self.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=available_account, amount=-reserved_amount),
+                LedgerPosting(account=escrow_account, amount=reserved_amount),
+            ],
+            reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            reference=reference,
+            description=description,
+            actor=user,
+        )
+
+    def release_reserved_funds(
+        self,
+        session: Session,
+        *,
+        user: User,
+        amount: Decimal,
+        reference: str,
+        description: str,
+    ) -> list[LedgerEntry]:
+        released_amount = self._normalize_amount(amount)
+        if released_amount <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
+        escrow_account = self.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=escrow_account, amount=-released_amount),
+                LedgerPosting(account=available_account, amount=released_amount),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference=reference,
+            description=description,
+            actor=user,
+        )
+
+    def settle_reserved_funds(
+        self,
+        session: Session,
+        *,
+        user: User,
+        amount: Decimal,
+        reference: str,
+        description: str,
+        external_reference: str,
+    ) -> list[LedgerEntry]:
+        settled_amount = self._normalize_amount(amount)
+        if settled_amount <= Decimal("0.0000"):
+            return []
+
+        escrow_account = self.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        platform_account = self.ensure_platform_account(session, LedgerUnit.CREDIT)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=escrow_account, amount=-settled_amount),
+                LedgerPosting(account=platform_account, amount=settled_amount),
+            ],
+            reason=self.trade_settlement_reason,
+            reference=reference,
+            description=description,
+            external_reference=external_reference,
+            actor=user,
+        )
+
+    def settle_available_funds(
+        self,
+        session: Session,
+        *,
+        user: User,
+        amount: Decimal,
+        reference: str,
+        description: str,
+        external_reference: str,
+    ) -> list[LedgerEntry]:
+        settled_amount = self._normalize_amount(amount)
+        if settled_amount <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
+        platform_account = self.ensure_platform_account(session, LedgerUnit.CREDIT)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=available_account, amount=-settled_amount),
+                LedgerPosting(account=platform_account, amount=settled_amount),
+            ],
+            reason=self.trade_settlement_reason,
+            reference=reference,
+            description=description,
+            external_reference=external_reference,
+            actor=user,
+        )
+
+    def credit_trade_proceeds(
+        self,
+        session: Session,
+        *,
+        user: User,
+        amount: Decimal,
+        reference: str,
+        description: str,
+        external_reference: str,
+    ) -> list[LedgerEntry]:
+        credited_amount = self._normalize_amount(amount)
+        if credited_amount <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
+        platform_account = self.ensure_platform_account(session, LedgerUnit.CREDIT)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=available_account, amount=credited_amount),
+                LedgerPosting(account=platform_account, amount=-credited_amount),
+            ],
+            reason=self.trade_settlement_reason,
+            reference=reference,
+            description=description,
+            external_reference=external_reference,
+            actor=user,
+        )
+
+    def reserve_position_units(
+        self,
+        session: Session,
+        *,
+        user: User,
+        player_id: str,
+        quantity: Decimal,
+        reference: str,
+        description: str,
+    ) -> list[LedgerEntry]:
+        reserved_quantity = self._normalize_amount(quantity)
+        if reserved_quantity <= Decimal("0.0000"):
+            return []
+
+        position_account = self.get_position_account(session, user, player_id)
+        escrow_account = self.get_position_escrow_account(session, user, player_id)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=position_account, amount=-reserved_quantity),
+                LedgerPosting(account=escrow_account, amount=reserved_quantity),
+            ],
+            reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            reference=reference,
+            description=description,
+            actor=user,
+        )
+
+    def settle_reserved_position_units(
+        self,
+        session: Session,
+        *,
+        user: User,
+        player_id: str,
+        quantity: Decimal,
+        reference: str,
+        description: str,
+        external_reference: str,
+    ) -> list[LedgerEntry]:
+        settled_quantity = self._normalize_amount(quantity)
+        if settled_quantity <= Decimal("0.0000"):
+            return []
+
+        escrow_account = self.get_position_escrow_account(session, user, player_id)
+        platform_account = self.ensure_platform_position_account(session, player_id)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=escrow_account, amount=-settled_quantity),
+                LedgerPosting(account=platform_account, amount=settled_quantity),
+            ],
+            reason=self.trade_settlement_reason,
+            reference=reference,
+            description=description,
+            external_reference=external_reference,
+            actor=user,
+        )
+
+    def settle_available_position_units(
+        self,
+        session: Session,
+        *,
+        user: User,
+        player_id: str,
+        quantity: Decimal,
+        reference: str,
+        description: str,
+        external_reference: str,
+    ) -> list[LedgerEntry]:
+        settled_quantity = self._normalize_amount(quantity)
+        if settled_quantity <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_position_account(session, user, player_id)
+        platform_account = self.ensure_platform_position_account(session, player_id)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=available_account, amount=-settled_quantity),
+                LedgerPosting(account=platform_account, amount=settled_quantity),
+            ],
+            reason=self.trade_settlement_reason,
+            reference=reference,
+            description=description,
+            external_reference=external_reference,
+            actor=user,
+        )
+
+    def credit_position_units(
+        self,
+        session: Session,
+        *,
+        user: User,
+        player_id: str,
+        quantity: Decimal,
+        reference: str,
+        description: str,
+        external_reference: str,
+    ) -> list[LedgerEntry]:
+        credited_quantity = self._normalize_amount(quantity)
+        if credited_quantity <= Decimal("0.0000"):
+            return []
+
+        position_account = self.get_position_account(session, user, player_id)
+        platform_account = self.ensure_platform_position_account(session, player_id)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=position_account, amount=credited_quantity),
+                LedgerPosting(account=platform_account, amount=-credited_quantity),
+            ],
+            reason=self.trade_settlement_reason,
+            reference=reference,
+            description=description,
+            external_reference=external_reference,
+            actor=user,
+        )
+
+    def get_available_position_quantity(self, session: Session, user: User, player_id: str) -> Decimal:
+        account = session.scalar(
+            select(LedgerAccount).where(LedgerAccount.code == self._position_account_code(user.id, player_id))
+        )
+        if account is None:
+            return Decimal("0.0000")
+        return self.get_balance(session, account)
+
+    def get_reserved_position_quantity(self, session: Session, user: User, player_id: str) -> Decimal:
+        account = session.scalar(
+            select(LedgerAccount).where(LedgerAccount.code == self._position_escrow_account_code(user.id, player_id))
+        )
+        if account is None:
+            return Decimal("0.0000")
+        return self.get_balance(session, account)
+
+    def get_position_quantity(self, session: Session, user: User, player_id: str) -> Decimal:
+        return self._normalize_amount(
+            self.get_available_position_quantity(session, user, player_id)
+            + self.get_reserved_position_quantity(session, user, player_id)
+        )
+
+    def get_reserved_cash_balance(self, session: Session, user: User) -> Decimal:
+        escrow_account = session.scalar(
+            select(LedgerAccount).where(LedgerAccount.code == self._user_escrow_account_code(user.id, LedgerUnit.CREDIT))
+        )
+        if escrow_account is None:
+            return Decimal("0.0000")
+        return self.get_balance(session, escrow_account)
+
     @staticmethod
     def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
         if value is None:
@@ -267,3 +711,37 @@ class WalletService:
     @staticmethod
     def _user_account_code(user_id: str, unit: LedgerUnit) -> str:
         return f"user:{user_id}:{unit.value}"
+
+    @staticmethod
+    def _position_account_code(user_id: str, player_id: str) -> str:
+        return f"position:{user_id}:{player_id}:available"
+
+    @staticmethod
+    def _position_escrow_account_code(user_id: str, player_id: str) -> str:
+        return f"position:{user_id}:{player_id}:escrow"
+
+    @staticmethod
+    def _platform_position_account_code(player_id: str) -> str:
+        return f"platform:position:{player_id}:inventory"
+
+    def _get_user_account_balance_by_kind(
+        self,
+        session: Session,
+        user: User,
+        unit: LedgerUnit,
+        kind: LedgerAccountKind,
+    ) -> Decimal:
+        account = session.scalar(
+            select(LedgerAccount).where(
+                LedgerAccount.owner_user_id == user.id,
+                LedgerAccount.unit == unit,
+                LedgerAccount.kind == kind,
+            )
+        )
+        if account is None:
+            return Decimal("0.0000")
+        return self.get_balance(session, account)
+
+    @staticmethod
+    def _user_escrow_account_code(user_id: str, unit: LedgerUnit) -> str:
+        return f"user:{user_id}:{unit.value}:escrow"

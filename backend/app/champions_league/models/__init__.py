@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from backend.app.champions_league.models.domain import (
+    AdvancementStatus,
+    ChampionsLeagueValidationError,
+    ClubCandidate,
+    ClubSeed,
+    KnockoutBracket,
+    KnockoutTie,
+    LeagueMatchResult,
+    LeaguePhaseTable,
+    LeagueStandingRow,
+    MatchStage,
+    PlayoffBracket,
+    PrizeSettlementPreview,
+    QualificationMap,
+    QualificationRegionSummary,
+    QualificationStatus,
+    QualifiedClub,
+    SettlementEventPlan,
+    TierAllocation,
+)
+
+__all__ = [
+    "AdvancementStatus",
+    "ChampionsLeagueValidationError",
+    "ClubCandidate",
+    "ClubSeed",
+    "KnockoutBracket",
+    "KnockoutTie",
+    "LeagueMatchResult",
+    "LeaguePhaseTable",
+    "LeagueStandingRow",
+    "MatchStage",
+    "PlayoffBracket",
+    "PrizeSettlementPreview",
+    "QualificationMap",
+    "QualificationRegionSummary",
+    "QualificationStatus",
+    "QualifiedClub",
+    "SettlementEventPlan",
+    "TierAllocation",
+]

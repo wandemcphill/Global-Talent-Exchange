@@ -6,11 +6,12 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.auth.dependencies import get_session
+from backend.app.auth.dependencies import get_session as auth_get_session
 from backend.app.core.config import Settings, get_settings
 from backend.app.core.container import ApplicationContext, build_application_context
-from backend.app.core.database import create_database_engine, create_session_factory
+from backend.app.core.database import create_database_engine, create_session_factory, get_session as core_get_session
 from backend.app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from backend.app.db import get_session as db_get_session
 from backend.app.modules import DOMAIN_MODULES
 
 
@@ -50,7 +51,9 @@ def create_app(
         version=resolved_settings.app_version,
         lifespan=lifespan,
     )
-    app.dependency_overrides[get_session] = context.database.get_session
+    app.dependency_overrides[auth_get_session] = context.database.get_session
+    app.dependency_overrides[db_get_session] = context.database.get_session
+    app.dependency_overrides[core_get_session] = context.database.get_session
     register_domain_modules(app, modules)
     return app
 
