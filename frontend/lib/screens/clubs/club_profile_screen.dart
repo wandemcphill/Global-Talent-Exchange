@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_controller.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/club_dynasty_overview_screen.dart';
 import 'package:gte_frontend/models/club_models.dart';
 import 'package:gte_frontend/screens/clubs/club_branding_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_catalog_screen.dart';
-import 'package:gte_frontend/screens/clubs/club_dynasty_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_purchase_history_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_reputation_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_showcase_screen.dart';
@@ -113,7 +113,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
                     ],
                   ),
                 ),
-                if (!widget.isAuthenticated && widget.onOpenLogin != null) ...<Widget>[
+                if (!widget.isAuthenticated &&
+                    widget.onOpenLogin != null) ...<Widget>[
                   const SizedBox(height: 18),
                   GteSurfacePanel(
                     child: Row(
@@ -142,7 +143,12 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
                 const SizedBox(height: 18),
                 ClubHeaderCard(data: data),
                 const SizedBox(height: 18),
-                _ActionGrid(controller: _controller),
+                _ActionGrid(
+                  controller: _controller,
+                  clubId: widget.clubId,
+                  baseUrl: widget.baseUrl,
+                  backendMode: widget.backendMode,
+                ),
                 const SizedBox(height: 18),
                 ReputationProgressCard(reputation: data.reputation),
                 const SizedBox(height: 18),
@@ -226,9 +232,15 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
 class _ActionGrid extends StatelessWidget {
   const _ActionGrid({
     required this.controller,
+    required this.clubId,
+    required this.baseUrl,
+    required this.backendMode,
   });
 
   final ClubController controller;
+  final String clubId;
+  final String baseUrl;
+  final GteBackendMode backendMode;
 
   @override
   Widget build(BuildContext context) {
@@ -269,8 +281,11 @@ class _ActionGrid extends StatelessWidget {
         FilledButton.tonalIcon(
           onPressed: () => Navigator.of(context).push<void>(
             MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubDynastyScreen(controller: controller),
+              builder: (BuildContext context) => ClubDynastyOverviewScreen(
+                clubId: clubId,
+                baseUrl: baseUrl,
+                backendMode: backendMode,
+              ),
             ),
           ),
           icon: const Icon(Icons.timeline_outlined),

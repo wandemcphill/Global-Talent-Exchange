@@ -26,6 +26,7 @@ from backend.app.models.creator_profile import CreatorProfile
 from backend.app.models.player_career_entry import PlayerCareerEntry
 from backend.app.models.player_contract import PlayerContract
 from backend.app.models.player_injury_case import PlayerInjuryCase
+from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
 from backend.app.models.referral_attribution import ReferralAttribution
 from backend.app.models.referral_event import ReferralEvent
 from backend.app.models.referral_reward import ReferralReward
@@ -92,6 +93,7 @@ __all__ = [
     "PlayerCareerEntry",
     "PlayerContract",
     "PlayerInjuryCase",
+    "PlayerLifecycleEvent",
     "ReferralAttribution",
     "ReferralEvent",
     "ReferralReward",

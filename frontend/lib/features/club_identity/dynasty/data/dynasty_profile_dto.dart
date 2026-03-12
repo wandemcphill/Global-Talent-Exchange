@@ -38,22 +38,40 @@ class DynastySeasonSummaryDto {
   factory DynastySeasonSummaryDto.fromJson(Object? value) {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'dynasty season summary');
+    final int seasonIndex = GteJson.integer(
+      json,
+      const <String>['season_index', 'seasonIndex'],
+    );
     final Object? rawLeagueFinish = GteJson.value(
       json,
       const <String>['league_finish', 'leagueFinish'],
     );
+    final String clubId = _stringOr(
+      json,
+      const <String>['club_id', 'clubId'],
+      fallback: 'unknown-club',
+    );
+    final String clubName = _stringOr(
+      json,
+      const <String>['club_name', 'clubName'],
+      fallback: clubId,
+    );
+    final String seasonId = _stringOr(
+      json,
+      const <String>['season_id', 'seasonId'],
+      fallback: seasonIndex == 0 ? 'unknown-season' : '$seasonIndex',
+    );
+    final String seasonLabel = _stringOr(
+      json,
+      const <String>['season_label', 'seasonLabel'],
+      fallback: seasonId,
+    );
     return DynastySeasonSummaryDto(
-      clubId: GteJson.string(json, const <String>['club_id', 'clubId']),
-      clubName: GteJson.string(json, const <String>['club_name', 'clubName']),
-      seasonId: GteJson.string(json, const <String>['season_id', 'seasonId']),
-      seasonLabel: GteJson.string(
-        json,
-        const <String>['season_label', 'seasonLabel'],
-      ),
-      seasonIndex: GteJson.integer(
-        json,
-        const <String>['season_index', 'seasonIndex'],
-      ),
+      clubId: clubId,
+      clubName: clubName,
+      seasonId: seasonId,
+      seasonLabel: seasonLabel,
+      seasonIndex: seasonIndex,
       leagueFinish: rawLeagueFinish == null
           ? null
           : GteJson.integer(
@@ -198,28 +216,53 @@ class DynastyWindowMetricsDto {
     )..sort((DynastySeasonSummaryDto left, DynastySeasonSummaryDto right) {
             return left.seasonIndex.compareTo(right.seasonIndex);
           });
+    final String fallbackClubId =
+        seasons.isNotEmpty ? seasons.first.clubId : 'unknown-club';
+    final String fallbackClubName =
+        seasons.isNotEmpty ? seasons.first.clubName : fallbackClubId;
+    final String fallbackStartId =
+        seasons.isNotEmpty ? seasons.first.seasonId : '';
+    final String fallbackStartLabel =
+        seasons.isNotEmpty ? seasons.first.seasonLabel : fallbackStartId;
+    final String fallbackEndId =
+        seasons.isNotEmpty ? seasons.last.seasonId : fallbackStartId;
+    final String fallbackEndLabel =
+        seasons.isNotEmpty ? seasons.last.seasonLabel : fallbackStartLabel;
     return DynastyWindowMetricsDto(
-      clubId: GteJson.string(json, const <String>['club_id', 'clubId']),
-      clubName: GteJson.string(json, const <String>['club_name', 'clubName']),
+      clubId: _stringOr(
+        json,
+        const <String>['club_id', 'clubId'],
+        fallback: fallbackClubId,
+      ),
+      clubName: _stringOr(
+        json,
+        const <String>['club_name', 'clubName'],
+        fallback: fallbackClubName,
+      ),
       seasonCount: GteJson.integer(
         json,
         const <String>['season_count', 'seasonCount'],
+        fallback: seasons.length,
       ),
-      windowStartSeasonId: GteJson.string(
+      windowStartSeasonId: _stringOr(
         json,
         const <String>['window_start_season_id', 'windowStartSeasonId'],
+        fallback: fallbackStartId,
       ),
-      windowStartSeasonLabel: GteJson.string(
+      windowStartSeasonLabel: _stringOr(
         json,
         const <String>['window_start_season_label', 'windowStartSeasonLabel'],
+        fallback: fallbackStartLabel,
       ),
-      windowEndSeasonId: GteJson.string(
+      windowEndSeasonId: _stringOr(
         json,
         const <String>['window_end_season_id', 'windowEndSeasonId'],
+        fallback: fallbackEndId,
       ),
-      windowEndSeasonLabel: GteJson.string(
+      windowEndSeasonLabel: _stringOr(
         json,
         const <String>['window_end_season_label', 'windowEndSeasonLabel'],
+        fallback: fallbackEndLabel,
       ),
       seasons: seasons,
       leagueTitles: GteJson.integer(
@@ -290,6 +333,39 @@ class DynastyWindowMetricsDto {
       ),
     );
   }
+
+  factory DynastyWindowMetricsDto.empty({
+    required String clubId,
+    required String clubName,
+    String? seasonId,
+    String? seasonLabel,
+  }) {
+    final String resolvedSeasonId = seasonId ?? '';
+    final String resolvedSeasonLabel =
+        seasonLabel ?? (resolvedSeasonId.isEmpty ? '' : resolvedSeasonId);
+    return DynastyWindowMetricsDto(
+      clubId: clubId,
+      clubName: clubName,
+      seasonCount: 0,
+      windowStartSeasonId: resolvedSeasonId,
+      windowStartSeasonLabel: resolvedSeasonLabel,
+      windowEndSeasonId: resolvedSeasonId,
+      windowEndSeasonLabel: resolvedSeasonLabel,
+      seasons: const <DynastySeasonSummaryDto>[],
+      leagueTitles: 0,
+      championsLeagueTitles: 0,
+      worldSuperCupTitles: 0,
+      topFourFinishes: 0,
+      eliteFinishes: 0,
+      worldSuperCupQualifications: 0,
+      trophyDensity: 0,
+      reputationGainTotal: 0,
+      recentTwoTopFourFinishes: 0,
+      recentTwoTrophyDensity: 0,
+      recentTwoReputationGain: 0,
+      recentTwoLeagueTitles: 0,
+    );
+  }
 }
 
 class DynastySnapshotDto {
@@ -316,9 +392,20 @@ class DynastySnapshotDto {
   factory DynastySnapshotDto.fromJson(Object? value) {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'dynasty snapshot');
+    final String clubId = _stringOr(
+      json,
+      const <String>['club_id', 'clubId'],
+      fallback: 'unknown-club',
+    );
+    final String clubName = _stringOr(
+      json,
+      const <String>['club_name', 'clubName'],
+      fallback: clubId,
+    );
+    final Object? rawMetrics = GteJson.value(json, const <String>['metrics']);
     return DynastySnapshotDto(
-      clubId: GteJson.string(json, const <String>['club_id', 'clubId']),
-      clubName: GteJson.string(json, const <String>['club_name', 'clubName']),
+      clubId: clubId,
+      clubName: clubName,
       dynastyStatus: dynastyStatusFromRaw(
         GteJson.value(json, const <String>['dynasty_status', 'dynastyStatus']),
       ),
@@ -333,14 +420,13 @@ class DynastySnapshotDto {
         json,
         const <String>['dynasty_score', 'dynastyScore'],
       ),
-      reasons: GteJson.typedList<String>(
-        json,
-        const <String>['reasons'],
-        (Object? entry) => entry.toString(),
-      ),
-      metrics: DynastyWindowMetricsDto.fromJson(
-        GteJson.value(json, const <String>['metrics']),
-      ),
+      reasons: _stringList(json, const <String>['reasons']),
+      metrics: rawMetrics == null
+          ? DynastyWindowMetricsDto.empty(
+              clubId: clubId,
+              clubName: clubName,
+            )
+          : DynastyWindowMetricsDto.fromJson(rawMetrics),
     );
   }
 }
@@ -366,17 +452,31 @@ class DynastyEventDto {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'dynasty event');
     return DynastyEventDto(
-      seasonId: GteJson.string(json, const <String>['season_id', 'seasonId']),
-      seasonLabel: GteJson.string(
+      seasonId: _stringOr(
+        json,
+        const <String>['season_id', 'seasonId'],
+        fallback: 'unknown-season',
+      ),
+      seasonLabel: _stringOr(
         json,
         const <String>['season_label', 'seasonLabel'],
+        fallback: 'Unknown season',
       ),
-      eventType: GteJson.string(
+      eventType: _stringOr(
         json,
         const <String>['event_type', 'eventType'],
+        fallback: 'event',
       ),
-      title: GteJson.string(json, const <String>['title']),
-      detail: GteJson.string(json, const <String>['detail']),
+      title: _stringOr(
+        json,
+        const <String>['title'],
+        fallback: 'Dynasty update',
+      ),
+      detail: _stringOr(
+        json,
+        const <String>['detail'],
+        fallback: '',
+      ),
       scoreImpact: GteJson.integer(
         json,
         const <String>['score_impact', 'scoreImpact'],
@@ -418,8 +518,16 @@ class DynastyHistoryDto {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'dynasty history');
     return DynastyHistoryDto(
-      clubId: GteJson.string(json, const <String>['club_id', 'clubId']),
-      clubName: GteJson.string(json, const <String>['club_name', 'clubName']),
+      clubId: _stringOr(
+        json,
+        const <String>['club_id', 'clubId'],
+        fallback: 'unknown-club',
+      ),
+      clubName: _stringOr(
+        json,
+        const <String>['club_name', 'clubName'],
+        fallback: 'Unknown club',
+      ),
       dynastyTimeline: GteJson.typedList<DynastySnapshotDto>(
         json,
         const <String>['dynasty_timeline', 'dynastyTimeline'],
@@ -494,6 +602,13 @@ class DynastyProfileDto {
   factory DynastyProfileDto.fromJson(Object? value) {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'dynasty profile');
+    if (json.containsKey('progress')) {
+      return _fromLegacyView(json);
+    }
+    return _fromProfileJson(json);
+  }
+
+  static DynastyProfileDto _fromProfileJson(Map<String, Object?> json) {
     final Object? currentSnapshotValue = GteJson.value(
       json,
       const <String>['current_snapshot', 'currentSnapshot'],
@@ -511,9 +626,19 @@ class DynastyProfileDto {
     )..sort((DynastySeasonSummaryDto left, DynastySeasonSummaryDto right) {
             return left.seasonIndex.compareTo(right.seasonIndex);
           });
+    final String clubId = _stringOr(
+      json,
+      const <String>['club_id', 'clubId'],
+      fallback: 'unknown-club',
+    );
+    final String clubName = _stringOr(
+      json,
+      const <String>['club_name', 'clubName'],
+      fallback: clubId,
+    );
     return DynastyProfileDto(
-      clubId: GteJson.string(json, const <String>['club_id', 'clubId']),
-      clubName: GteJson.string(json, const <String>['club_name', 'clubName']),
+      clubId: clubId,
+      clubName: clubName,
       dynastyStatus: dynastyStatusFromRaw(
         GteJson.value(json, const <String>['dynasty_status', 'dynastyStatus']),
       ),
@@ -539,11 +664,7 @@ class DynastyProfileDto {
             const <String, Object?>{},
       ),
       lastFourSeasonSummary: lastFour,
-      reasons: GteJson.typedList<String>(
-        json,
-        const <String>['reasons'],
-        (Object? entry) => entry.toString(),
-      ),
+      reasons: _stringList(json, const <String>['reasons']),
       currentSnapshot: currentSnapshotValue == null
           ? null
           : DynastySnapshotDto.fromJson(currentSnapshotValue),
@@ -564,4 +685,99 @@ class DynastyProfileDto {
       ),
     );
   }
+
+  static DynastyProfileDto _fromLegacyView(Map<String, Object?> json) {
+    final Map<String, Object?> progress = GteJson.map(
+      GteJson.value(json, const <String>['progress']) ??
+          const <String, Object?>{},
+      label: 'dynasty progress',
+    );
+    final String clubId = _stringOr(
+      progress,
+      const <String>['club_id', 'clubId'],
+      fallback: 'unknown-club',
+    );
+    final String clubName = _stringOr(
+      progress,
+      const <String>['club_name', 'clubName'],
+      fallback: clubId,
+    );
+    final int dynastyScore = GteJson.integer(
+      progress,
+      const <String>['dynasty_score', 'dynastyScore'],
+    );
+    return DynastyProfileDto(
+      clubId: clubId,
+      clubName: clubName,
+      dynastyStatus: DynastyStatus.none,
+      currentEraLabel: DynastyEraType.none,
+      activeDynastyFlag: false,
+      dynastyScore: dynastyScore,
+      activeStreaks: const DynastyStreaksDto(
+        topFour: 0,
+        trophySeasons: 0,
+        worldSuperCupQualification: 0,
+        positiveReputation: 0,
+      ),
+      lastFourSeasonSummary: const <DynastySeasonSummaryDto>[],
+      reasons: _legacyMilestoneReasons(json),
+      currentSnapshot: null,
+      dynastyTimeline: const <DynastySnapshotDto>[],
+      eras: const <DynastyEraDto>[],
+      events: const <DynastyEventDto>[],
+    );
+  }
+}
+
+String _stringOr(
+  Map<String, Object?> json,
+  List<String> keys, {
+  required String fallback,
+}) {
+  return GteJson.stringOrNull(json, keys) ?? fallback;
+}
+
+List<String> _stringList(
+  Map<String, Object?> json,
+  List<String> keys,
+) {
+  final List<String> values = GteJson.typedList<String>(
+    json,
+    keys,
+    (Object? entry) => entry == null ? '' : entry.toString().trim(),
+  );
+  return values
+      .where((String value) => value.isNotEmpty)
+      .toList(growable: false);
+}
+
+List<String> _legacyMilestoneReasons(Map<String, Object?> json) {
+  final Object? rawMilestones = GteJson.value(json, const <String>['milestones']);
+  if (rawMilestones == null) {
+    return const <String>[];
+  }
+  final List<Object?> milestones =
+      GteJson.list(rawMilestones, label: 'dynasty milestones');
+  final List<String> reasons = <String>[];
+  for (final Object? entry in milestones) {
+    final Map<String, Object?> milestone =
+        GteJson.map(entry, label: 'dynasty milestone');
+    final bool unlocked = GteJson.boolean(
+      milestone,
+      const <String>['is_unlocked', 'isUnlocked'],
+    );
+    if (!unlocked) {
+      continue;
+    }
+    final String title =
+        GteJson.stringOrNull(milestone, const <String>['title']) ?? '';
+    final String description =
+        GteJson.stringOrNull(milestone, const <String>['description']) ?? '';
+    if (title.isNotEmpty) {
+      reasons.add(title);
+    } else if (description.isNotEmpty) {
+      reasons.add(description);
+    }
+  }
+  return reasons.toSet().toList(growable: false);
 }

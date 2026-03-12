@@ -11,37 +11,64 @@ class TrophyCategorySection extends StatelessWidget {
     required this.categories,
     required this.title,
     required this.subtitle,
+    this.badgeLabel,
+    this.badgeStyle,
+    this.emphasized = false,
+    this.emptyMessage,
   });
 
   final List<TrophyCategoryDto> categories;
   final String title;
   final String subtitle;
+  final String? badgeLabel;
+  final MajorHonorBadgeStyle? badgeStyle;
+  final bool emphasized;
+  final String? emptyMessage;
 
   @override
   Widget build(BuildContext context) {
     return GteSurfacePanel(
+      emphasized: emphasized,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(title,
+                    style: Theme.of(context).textTheme.headlineSmall),
+              ),
+              if (badgeLabel != null)
+                MajorHonorBadge(
+                  label: badgeLabel!,
+                  style: badgeStyle ?? MajorHonorBadgeStyle.major,
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
           Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 18),
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final double itemWidth = constraints.maxWidth >= 860 ? 232 : 280;
-              return Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: categories.map((TrophyCategoryDto category) {
-                  return SizedBox(
-                    width: itemWidth,
-                    child: _CategoryCard(category: category),
-                  );
-                }).toList(growable: false),
-              );
-            },
-          ),
+          if (categories.isEmpty)
+            Text(
+              emptyMessage ?? 'No honors archived in this wing yet.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
+          else
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final double itemWidth = constraints.maxWidth >= 860 ? 232 : 280;
+                return Wrap(
+                  spacing: 14,
+                  runSpacing: 14,
+                  children: categories.map((TrophyCategoryDto category) {
+                    return SizedBox(
+                      width: itemWidth,
+                      child: _CategoryCard(category: category),
+                    );
+                  }).toList(growable: false),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -57,19 +84,28 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent = category.isEliteHonor
+    final bool isWorld = category.trophyType == 'world_super_cup';
+    final Color accent = isWorld
         ? GteShellTheme.accentWarm
-        : category.isMajorHonor
-            ? GteShellTheme.accent
-            : category.teamScope.label == 'Academy'
-                ? GteShellTheme.positive
-                : GteShellTheme.textPrimary;
+        : category.isEliteHonor
+            ? GteShellTheme.accentWarm
+            : category.isMajorHonor
+                ? GteShellTheme.accent
+                : category.teamScope.label == 'Academy'
+                    ? GteShellTheme.positive
+                    : GteShellTheme.textPrimary;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        color: GteShellTheme.panelStrong.withValues(alpha: 0.8),
-        border: Border.all(color: GteShellTheme.stroke),
+        color: isWorld
+            ? GteShellTheme.accentWarm.withValues(alpha: 0.08)
+            : GteShellTheme.panelStrong.withValues(alpha: 0.8),
+        border: Border.all(
+          color: isWorld
+              ? GteShellTheme.accentWarm.withValues(alpha: 0.6)
+              : GteShellTheme.stroke,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,7 +132,12 @@ class _CategoryCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
-              if (category.isEliteHonor)
+              if (isWorld)
+                const MajorHonorBadge(
+                  label: 'World Crown',
+                  style: MajorHonorBadgeStyle.world,
+                )
+              else if (category.isEliteHonor)
                 const MajorHonorBadge(
                   label: 'Elite',
                   style: MajorHonorBadgeStyle.elite,

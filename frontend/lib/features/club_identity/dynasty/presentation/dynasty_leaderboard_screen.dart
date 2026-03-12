@@ -116,7 +116,7 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          'Global Dynasty table',
+                          'Dynasty leaderboard',
                           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: GteShellTheme.accentWarm,
                                 letterSpacing: -0.4,
@@ -124,7 +124,7 @@ class _DynastyLeaderboardScreenState extends State<DynastyLeaderboardScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Global and regional dynasties, filtered between live powers, all-time names, and clubs still climbing toward the threshold.',
+                          'Dynasty rankings filtered between live powers, all-time names, and clubs still climbing toward the threshold.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 18),

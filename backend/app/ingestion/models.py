@@ -371,6 +371,7 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ingestion_players_full_name", "full_name"),
         Index("ix_ingestion_players_normalized_position", "normalized_position"),
         Index("ix_ingestion_players_current_competition_id", "current_competition_id"),
+        Index("ix_ingestion_players_current_club_profile_id", "current_club_profile_id"),
         Index("ix_ingestion_players_internal_league_id", "internal_league_id"),
         Index("ix_ingestion_players_supply_tier_id", "supply_tier_id"),
         Index("ix_ingestion_players_liquidity_band_id", "liquidity_band_id"),
@@ -386,6 +387,11 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_club_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("ingestion_clubs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    current_club_profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="SET NULL"),
         nullable=True,
     )
     current_competition_id: Mapped[str | None] = mapped_column(

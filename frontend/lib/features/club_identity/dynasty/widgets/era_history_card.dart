@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../widgets/gte_shell_theme.dart';
 import '../../../../widgets/gte_surface_panel.dart';
 import '../data/dynasty_era_dto.dart';
+import '../data/dynasty_types.dart';
 import 'era_label_chip.dart';
 
 class EraHistoryCard extends StatelessWidget {

@@ -28,6 +28,23 @@ class DynastyEraDto {
 
   factory DynastyEraDto.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'dynasty era');
+    final String startSeasonId =
+        GteJson.stringOrNull(json, const <String>['start_season_id', 'startSeasonId']) ??
+            '';
+    final String endSeasonId =
+        GteJson.stringOrNull(json, const <String>['end_season_id', 'endSeasonId']) ??
+            startSeasonId;
+    final String startSeasonLabel =
+        GteJson.stringOrNull(json, const <String>['start_season_label', 'startSeasonLabel']) ??
+            (startSeasonId.isEmpty ? 'Unknown season' : startSeasonId);
+    final String endSeasonLabel =
+        GteJson.stringOrNull(json, const <String>['end_season_label', 'endSeasonLabel']) ??
+            (endSeasonId.isEmpty ? startSeasonLabel : endSeasonId);
+    final List<String> reasons = GteJson.typedList<String>(
+      json,
+      const <String>['reasons'],
+      (Object? entry) => entry == null ? '' : entry.toString().trim(),
+    ).where((String value) => value.isNotEmpty).toList(growable: false);
     return DynastyEraDto(
       eraLabel: dynastyEraTypeFromRaw(
         GteJson.value(json, const <String>['era_label', 'eraLabel']),
@@ -35,22 +52,10 @@ class DynastyEraDto {
       dynastyStatus: dynastyStatusFromRaw(
         GteJson.value(json, const <String>['dynasty_status', 'dynastyStatus']),
       ),
-      startSeasonId: GteJson.string(
-        json,
-        const <String>['start_season_id', 'startSeasonId'],
-      ),
-      startSeasonLabel: GteJson.string(
-        json,
-        const <String>['start_season_label', 'startSeasonLabel'],
-      ),
-      endSeasonId: GteJson.string(
-        json,
-        const <String>['end_season_id', 'endSeasonId'],
-      ),
-      endSeasonLabel: GteJson.string(
-        json,
-        const <String>['end_season_label', 'endSeasonLabel'],
-      ),
+      startSeasonId: startSeasonId,
+      startSeasonLabel: startSeasonLabel,
+      endSeasonId: endSeasonId,
+      endSeasonLabel: endSeasonLabel,
       peakScore: GteJson.integer(
         json,
         const <String>['peak_score', 'peakScore'],
@@ -59,11 +64,7 @@ class DynastyEraDto {
         json,
         const <String>['active'],
       ),
-      reasons: GteJson.typedList<String>(
-        json,
-        const <String>['reasons'],
-        (Object? entry) => entry.toString(),
-      ),
+      reasons: reasons,
     );
   }
 }

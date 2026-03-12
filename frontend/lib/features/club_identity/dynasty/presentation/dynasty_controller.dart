@@ -5,6 +5,7 @@ import '../data/dynasty_api_repository.dart';
 import '../data/dynasty_era_dto.dart';
 import '../data/dynasty_leaderboard_entry_dto.dart';
 import '../data/dynasty_profile_dto.dart';
+import '../data/dynasty_response_mapper.dart';
 import '../data/dynasty_repository.dart';
 import '../data/dynasty_types.dart';
 
@@ -187,21 +188,23 @@ class DynastyController extends ChangeNotifier {
     try {
       final DynastyHistoryDto historyResponse =
           await _repository.fetchDynastyHistory(clubId);
-      List<DynastyEraDto> eras = historyResponse.eras;
+      DynastyHistoryDto resolvedHistory =
+          dynastyResponseMapper.applyEraOverride(historyResponse);
       try {
         final List<DynastyEraDto> explicitEras =
             await _repository.fetchEras(clubId);
-        if (explicitEras.isNotEmpty) {
-          eras = explicitEras;
-        }
+        resolvedHistory = dynastyResponseMapper.applyEraOverride(
+          historyResponse,
+          explicitEras: explicitEras,
+        );
       } catch (_) {
-        // Keep history response if the dedicated eras endpoint is unavailable.
+        // Keep history-derived eras if the dedicated eras endpoint is unavailable.
       }
       if (!_historyGate.isActive(requestId)) {
         return;
       }
-      history = historyResponse.copyWith(eras: eras);
-      fallbackEras = eras;
+      history = resolvedHistory;
+      fallbackEras = resolvedHistory.eras;
     } catch (error) {
       if (_historyGate.isActive(requestId)) {
         historyError = error.toString();

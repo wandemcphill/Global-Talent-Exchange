@@ -40,9 +40,24 @@ class DynastyLeaderboardEntryDto {
   factory DynastyLeaderboardEntryDto.fromJson(Object? value) {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'dynasty leaderboard entry');
+    final String clubId = GteJson.stringOrNull(
+          json,
+          const <String>['club_id', 'clubId'],
+        ) ??
+        'unknown-club';
+    final String clubName = GteJson.stringOrNull(
+          json,
+          const <String>['club_name', 'clubName'],
+        ) ??
+        clubId;
+    final List<String> reasons = GteJson.typedList<String>(
+      json,
+      const <String>['reasons'],
+      (Object? entry) => entry == null ? '' : entry.toString().trim(),
+    ).where((String value) => value.isNotEmpty).toList(growable: false);
     return DynastyLeaderboardEntryDto(
-      clubId: GteJson.string(json, const <String>['club_id', 'clubId']),
-      clubName: GteJson.string(json, const <String>['club_name', 'clubName']),
+      clubId: clubId,
+      clubName: clubName,
       dynastyStatus: dynastyStatusFromRaw(
         GteJson.value(json, const <String>['dynasty_status', 'dynastyStatus']),
       ),
@@ -60,11 +75,7 @@ class DynastyLeaderboardEntryDto {
         json,
         const <String>['dynasty_score', 'dynastyScore'],
       ),
-      reasons: GteJson.typedList<String>(
-        json,
-        const <String>['reasons'],
-        (Object? entry) => entry.toString(),
-      ),
+      reasons: reasons,
     );
   }
 }

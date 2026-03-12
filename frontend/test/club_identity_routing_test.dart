@@ -7,7 +7,8 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
-  testWidgets('club identity hub routes to reputation, trophies, and jerseys',
+  testWidgets(
+      'club identity hub routes to reputation, trophies, dynasty, and jerseys',
       (WidgetTester tester) async {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
@@ -40,6 +41,14 @@ void main() {
     await tester.tap(find.text('Open trophies'));
     await tester.pumpAndSettle();
     expect(find.text('Trophy Cabinet'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Open dynasty'));
+    await tester.tap(find.text('Open dynasty'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dynasty Overview'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();

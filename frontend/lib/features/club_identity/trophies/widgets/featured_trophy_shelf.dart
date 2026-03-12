@@ -28,19 +28,58 @@ class FeaturedTrophyShelf extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 278,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: trophies.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 14),
-              itemBuilder: (BuildContext context, int index) {
-                return TrophyTile(
-                  trophy: trophies[index],
-                  compact: true,
-                );
-              },
+          if (trophies.isEmpty)
+            const _EmptyShelf()
+          else
+            SizedBox(
+              height: 278,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: trophies.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (BuildContext context, int index) {
+                  return TrophyTile(
+                    trophy: trophies[index],
+                    compact: true,
+                  );
+                },
+              ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyShelf extends StatelessWidget {
+  const _EmptyShelf();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 200,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          const Icon(Icons.emoji_events_outlined, size: 34),
+          const SizedBox(height: 12),
+          Text(
+            'No featured honors yet',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'The first major title will live on this shelf.',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
           ),
         ],
       ),

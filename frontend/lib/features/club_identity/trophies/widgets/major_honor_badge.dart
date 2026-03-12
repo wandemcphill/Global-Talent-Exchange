@@ -5,6 +5,7 @@ enum MajorHonorBadgeStyle {
   major,
   elite,
   academy,
+  world,
 }
 
 class MajorHonorBadge extends StatelessWidget {
@@ -74,6 +75,14 @@ class MajorHonorBadge extends StatelessWidget {
           stroke: Color(0x6673F7AF),
           foreground: GteShellTheme.positive,
           icon: Icons.school,
+        );
+      case MajorHonorBadgeStyle.world:
+        return const _BadgePalette(
+          start: Color(0x4DFFD27F),
+          end: Color(0x1AFEF7E0),
+          stroke: Color(0x99FFD27F),
+          foreground: GteShellTheme.accentWarm,
+          icon: Icons.public,
         );
     }
   }

@@ -5,6 +5,7 @@ import 'dynasty_era_dto.dart';
 import 'dynasty_fixture_repository.dart';
 import 'dynasty_leaderboard_entry_dto.dart';
 import 'dynasty_profile_dto.dart';
+import 'dynasty_response_mapper.dart';
 import 'dynasty_repository.dart';
 
 class DynastyApiRepository implements DynastyRepository {
@@ -12,11 +13,13 @@ class DynastyApiRepository implements DynastyRepository {
     required this.config,
     required this.transport,
     required this.fixtures,
-  });
+    DynastyResponseMapper? mapper,
+  }) : mapper = mapper ?? dynastyResponseMapper;
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final DynastyRepository fixtures;
+  final DynastyResponseMapper mapper;
 
   factory DynastyApiRepository.standard({
     required String baseUrl,
@@ -35,9 +38,7 @@ class DynastyApiRepository implements DynastyRepository {
   @override
   Future<DynastyProfileDto> fetchDynastyProfile(String clubId) {
     return _withFallback<DynastyProfileDto>(
-      () async => DynastyProfileDto.fromJson(
-        await _request('GET', '/api/clubs/$clubId/dynasty'),
-      ),
+      () => _fetchLiveProfile(clubId),
       () => fixtures.fetchDynastyProfile(clubId),
     );
   }
@@ -45,27 +46,18 @@ class DynastyApiRepository implements DynastyRepository {
   @override
   Future<DynastyHistoryDto> fetchDynastyHistory(String clubId) {
     return _withFallback<DynastyHistoryDto>(
-      () async => DynastyHistoryDto.fromJson(
-        await _request('GET', '/api/clubs/$clubId/dynasty/history'),
-      ),
+      () async => mapper.mapHistory(
+          await _request('GET', '/api/clubs/$clubId/dynasty/history')),
       () => fixtures.fetchDynastyHistory(clubId),
     );
   }
 
   @override
   Future<List<DynastyEraDto>> fetchEras(String clubId) {
-    return _withFallback<List<DynastyEraDto>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request('GET', '/api/clubs/$clubId/eras'),
-          label: 'dynasty eras',
-        );
-        return payload
-            .map<DynastyEraDto>(DynastyEraDto.fromJson)
-            .toList(growable: false);
-      },
-      () => fixtures.fetchEras(clubId),
-    );
+    if (config.mode == GteBackendMode.fixture) {
+      return fixtures.fetchEras(clubId);
+    }
+    return _fetchLiveEras(clubId);
   }
 
   @override
@@ -73,23 +65,62 @@ class DynastyApiRepository implements DynastyRepository {
     int limit = 25,
   }) {
     return _withFallback<List<DynastyLeaderboardEntryDto>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request(
-            'GET',
-            '/api/leaderboards/dynasties',
-            query: <String, Object?>{'limit': limit},
-          ),
-          label: 'dynasty leaderboard',
-        );
-        return payload
-            .map<DynastyLeaderboardEntryDto>(
-              DynastyLeaderboardEntryDto.fromJson,
-            )
-            .toList(growable: false);
-      },
+      () async => mapper.mapLeaderboard(
+        await _request(
+          'GET',
+          '/api/leaderboards/dynasties',
+          query: <String, Object?>{'limit': limit},
+        ),
+      ),
       () => fixtures.fetchDynastyLeaderboard(limit: limit),
     );
+  }
+
+  Future<DynastyProfileDto> _fetchLiveProfile(String clubId) async {
+    final Object? payload = await _request('GET', '/api/clubs/$clubId/dynasty');
+    if (!_isLegacyProfilePayload(payload)) {
+      return mapper.mapProfile(payload);
+    }
+
+    final DynastyHistoryDto? history = await _tryFetchHistory(clubId);
+    final List<DynastyEraDto> explicitEras =
+        history == null ? const <DynastyEraDto>[] : await _tryFetchEras(clubId);
+    return mapper.mapProfile(
+      payload,
+      history: history,
+      explicitEras: explicitEras,
+    );
+  }
+
+  Future<DynastyHistoryDto?> _tryFetchHistory(String clubId) async {
+    try {
+      return mapper.mapHistory(
+        await _request('GET', '/api/clubs/$clubId/dynasty/history'),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<DynastyEraDto>> _fetchLiveEras(String clubId) async {
+    return mapper.mapEras(await _request('GET', '/api/clubs/$clubId/eras'));
+  }
+
+  Future<List<DynastyEraDto>> _tryFetchEras(String clubId) async {
+    try {
+      return await _fetchLiveEras(clubId);
+    } catch (_) {
+      return const <DynastyEraDto>[];
+    }
+  }
+
+  bool _isLegacyProfilePayload(Object? payload) {
+    if (payload is! Map) {
+      return false;
+    }
+    final Map<String, Object?> json =
+        GteJson.map(payload, label: 'dynasty profile');
+    return json.containsKey('progress');
   }
 
   Future<T> _withFallback<T>(

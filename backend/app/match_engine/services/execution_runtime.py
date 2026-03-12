@@ -7,6 +7,7 @@ from threading import RLock
 from typing import Any
 
 from fastapi import FastAPI
+from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.common.enums.competition_type import CompetitionType
 from backend.app.common.enums.fixture_window import FixtureWindow
@@ -28,6 +29,7 @@ from backend.app.match_engine.schemas import MatchReplayPayloadView
 from backend.app.match_engine.services.match_simulation_service import MatchSimulationService
 from backend.app.match_engine.services.team_factory import SyntheticSquadFactory
 from backend.app.match_engine.simulation.models import MatchEventType
+from backend.app.services.player_lifecycle_service import PlayerLifecycleService
 
 
 @dataclass(slots=True)
@@ -180,6 +182,7 @@ class LocalMatchExecutionWorker:
     match_service: MatchSimulationService = field(default_factory=MatchSimulationService)
     league_service: LeagueSeasonLifecycleService = field(default_factory=LeagueSeasonLifecycleService)
     team_factory: SyntheticSquadFactory = field(default_factory=SyntheticSquadFactory)
+    session_factory: sessionmaker[Session] | None = None
     _completed_match_jobs: set[str] = field(default_factory=set)
     _completed_advancement_jobs: set[str] = field(default_factory=set)
     _completed_notification_jobs: set[str] = field(default_factory=set)
@@ -222,6 +225,7 @@ class LocalMatchExecutionWorker:
         try:
             request = self.team_factory.build_request(job)
             replay_payload = self.match_service.build_replay_payload(request)
+            self._persist_player_lifecycle_incidents(job, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.simulation.completed",
                 job,
@@ -358,6 +362,23 @@ class LocalMatchExecutionWorker:
             )
             self._release_claim(self._completed_match_jobs, claim_key)
             raise
+
+    def _persist_player_lifecycle_incidents(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        if self.session_factory is None:
+            return
+        session = self.session_factory()
+        try:
+            PlayerLifecycleService(session).persist_match_incidents(
+                fixture_id=job.fixture_id,
+                match_date=job.match_date,
+                replay_payload=replay_payload,
+            )
+        finally:
+            session.close()
 
     def execute_advancement(self, job: BracketAdvancementJob) -> None:
         claim_key = job.idempotency_key or job.source_fixture_id
@@ -825,6 +846,7 @@ class LocalMatchExecutionWorker:
 
 
 def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWorker:
+    session_factory = getattr(app.state, "session_factory", None)
     queue_publisher = getattr(app.state, "competition_queue_publisher", None)
     if queue_publisher is None:
         queue_publisher = InMemoryQueuePublisher(event_publisher=app.state.event_publisher)
@@ -840,8 +862,13 @@ def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWor
         worker = LocalMatchExecutionWorker(
             dispatcher=dispatcher,
             event_publisher=app.state.event_publisher,
+            session_factory=session_factory,
+            team_factory=SyntheticSquadFactory(session_factory=session_factory),
         )
         app.state.match_execution_worker = worker
+    else:
+        worker.session_factory = session_factory
+        worker.team_factory.session_factory = session_factory
 
     if not getattr(app.state, "_match_execution_worker_subscribed", False):
         app.state.event_publisher.subscribe(worker.handle_event)
