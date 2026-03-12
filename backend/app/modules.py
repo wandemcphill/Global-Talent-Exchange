@@ -11,6 +11,8 @@ from backend.app.club_identity.dynasty.api.router import router as dynasty_route
 from backend.app.club_identity.jerseys.router import router as club_identity_router
 from backend.app.club_identity.reputation.router import router as club_reputation_router
 from backend.app.competitions.router import router as competitions_router
+from backend.app.routes.admin_club_ops import router as admin_club_ops_router
+from backend.app.routes.club_ops import router as club_ops_router
 from backend.app.core.health import router as health_router
 from backend.app.core.module import DomainModule
 from backend.app.fast_cups.api.router import router as fast_cups_router
@@ -49,6 +51,7 @@ DOMAIN_MODULES = (
     DomainModule(name="wallets", router=wallets_router),
     DomainModule(name="players", router=players_router),
     DomainModule(name="clubs", router=clubs_router),
+    DomainModule(name="club_ops", router=club_ops_router),
     DomainModule(name="competitions", router=competitions_router),
     DomainModule(name="market", router=market_router),
     DomainModule(name="ingestion", router=ingestion_router),
@@ -64,6 +67,7 @@ DOMAIN_MODULES = (
     DomainModule(name="club_reputation", router=club_reputation_router),
     DomainModule(name="dynasty", router=dynasty_router),
     DomainModule(name="club_identity", router=club_identity_router),
+    DomainModule(name="club_ops_admin", router=admin_club_ops_router),
     DomainModule(
         name="replay_archive",
         router=_with_api_alias(replay_archive_router),

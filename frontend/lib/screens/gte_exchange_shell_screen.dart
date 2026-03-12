@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/creator_controller.dart';
+import '../controllers/referral_controller.dart';
 import '../data/gte_api_repository.dart';
+import '../data/creator_api.dart';
+import '../data/referral_api.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_shell_theme.dart';
-import 'gte_club_identity_hub_screen.dart';
+import 'clubs/club_profile_screen.dart';
+import 'competitions/competition_discovery_screen.dart';
+import 'referrals/referral_hub_screen.dart';
 import 'gte_exchange_player_detail_screen.dart';
 import 'gte_login_screen.dart';
 import 'gte_market_players_screen.dart';
@@ -27,11 +33,32 @@ class GteExchangeShellScreen extends StatefulWidget {
 
 class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
   int _tabIndex = 0;
+  late final CreatorController _creatorController;
+  late final ReferralController _referralController;
 
   @override
   void initState() {
     super.initState();
+    _creatorController = CreatorController(
+      api: CreatorApi.standard(
+        baseUrl: widget.apiBaseUrl,
+        mode: widget.backendMode,
+      ),
+    );
+    _referralController = ReferralController(
+      api: ReferralApi.standard(
+        baseUrl: widget.apiBaseUrl,
+        mode: widget.backendMode,
+      ),
+    );
     widget.controller.bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _creatorController.dispose();
+    _referralController.dispose();
+    super.dispose();
   }
 
   @override
@@ -115,11 +142,27 @@ class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
                   },
                 );
               case 2:
-                return GteClubIdentityHubScreen(
-                  controller: widget.controller,
-                  apiBaseUrl: widget.apiBaseUrl,
+                return ClubProfileScreen(
+                  clubId: _clubProfileId(),
+                  clubName: _clubProfileName(),
+                  baseUrl: widget.apiBaseUrl,
                   backendMode: widget.backendMode,
+                  isAuthenticated: widget.controller.isAuthenticated,
                   onOpenLogin: () => _openLogin(targetTab: 2),
+                );
+              case 3:
+                return CompetitionDiscoveryScreen(
+                  baseUrl: widget.apiBaseUrl,
+                  backendMode: widget.backendMode,
+                  currentUserId: _competitionUserId(),
+                  currentUserName: _competitionUserName(),
+                  isAuthenticated: widget.controller.isAuthenticated,
+                  onOpenLogin: () => _openLogin(targetTab: 3),
+                );
+              case 4:
+                return ReferralHubScreen(
+                  referralController: _referralController,
+                  creatorController: _creatorController,
                 );
               case 0:
               default:
@@ -161,6 +204,16 @@ class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
               selectedIcon: Icon(Icons.shield),
               label: 'Club',
             ),
+            NavigationDestination(
+              icon: Icon(Icons.emoji_events_outlined),
+              selectedIcon: Icon(Icons.emoji_events),
+              label: 'Competitions',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.campaign_outlined),
+              selectedIcon: Icon(Icons.campaign),
+              label: 'Community',
+            ),
           ],
         ),
       ),
@@ -196,5 +249,63 @@ class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
         ),
       ),
     );
+  }
+
+  String _competitionUserId() {
+    final String? sessionUserId = widget.controller.session?.user.id.trim();
+    if (sessionUserId != null && sessionUserId.isNotEmpty) {
+      return sessionUserId;
+    }
+    return 'demo-user';
+  }
+
+  String _competitionUserName() {
+    final String? displayName =
+        widget.controller.session?.user.displayName?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return displayName;
+    }
+    final String username =
+        widget.controller.session?.user.username.trim() ?? '';
+    if (username.isNotEmpty) {
+      return username;
+    }
+    return 'Demo Fan';
+  }
+
+  String _clubProfileId() {
+    final String? displayName =
+        widget.controller.session?.user.displayName?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return _slugifyClub(displayName);
+    }
+    final String username =
+        widget.controller.session?.user.username.trim() ?? '';
+    if (username.isNotEmpty) {
+      return _slugifyClub(username);
+    }
+    return 'royal-lagos-fc';
+  }
+
+  String _clubProfileName() {
+    final String? displayName =
+        widget.controller.session?.user.displayName?.trim();
+    if (displayName != null && displayName.isNotEmpty) {
+      return displayName;
+    }
+    final String username =
+        widget.controller.session?.user.username.trim() ?? '';
+    if (username.isNotEmpty) {
+      return username;
+    }
+    return 'Royal Lagos FC';
+  }
+
+  String _slugifyClub(String raw) {
+    final String slug = raw
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return slug.isEmpty ? 'royal-lagos-fc' : slug;
   }
 }

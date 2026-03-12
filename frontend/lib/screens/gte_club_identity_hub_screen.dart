@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../data/gte_api_repository.dart';
+import 'clubs/academy_overview_screen.dart';
+import 'clubs/club_finance_screen.dart';
+import 'clubs/club_sponsorships_screen.dart';
+import 'clubs/scouting_dashboard_screen.dart';
+import 'clubs/youth_pipeline_screen.dart';
 import '../features/club_identity/jerseys/presentation/club_identity_screen.dart';
 import '../features/club_identity/reputation/presentation/reputation_screen.dart';
 import '../features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
@@ -122,6 +127,61 @@ class GteClubIdentityHubScreen extends StatelessWidget {
                 icon: Icons.emoji_events_outlined,
                 onPressed: () => _openTrophies(context, target),
               ),
+              const SizedBox(height: 20),
+              Text(
+                'Club operations',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Transparent club-management views for finance, sponsorship, academy development, and youth scouting.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              _IdentitySection(
+                title: 'Club finances',
+                subtitle:
+                    'Review balance summary, operating budget allocation, and cashflow planning.',
+                buttonLabel: 'Open finances',
+                icon: Icons.account_balance_outlined,
+                onPressed: () => _openFinances(context, target),
+              ),
+              const SizedBox(height: 16),
+              _IdentitySection(
+                title: 'Sponsorship contracts',
+                subtitle:
+                    'Manage active contracts, sponsor asset visibility, and package catalog details.',
+                buttonLabel: 'Open sponsorships',
+                icon: Icons.handshake_outlined,
+                onPressed: () => _openSponsorships(context, target),
+              ),
+              const SizedBox(height: 16),
+              _IdentitySection(
+                title: 'Academy pathway',
+                subtitle:
+                    'Track programs, player progression, training cycles, and promotions.',
+                buttonLabel: 'Open academy',
+                icon: Icons.school_outlined,
+                onPressed: () => _openAcademy(context, target),
+              ),
+              const SizedBox(height: 16),
+              _IdentitySection(
+                title: 'Scouting pipeline',
+                subtitle:
+                    'Monitor assignments, youth prospects, reports, and pipeline summary.',
+                buttonLabel: 'Open scouting',
+                icon: Icons.travel_explore_outlined,
+                onPressed: () => _openScouting(context, target),
+              ),
+              const SizedBox(height: 16),
+              _IdentitySection(
+                title: 'Youth pipeline',
+                subtitle:
+                    'See movement from tracked prospects into trials, scholarships, and promotions.',
+                buttonLabel: 'Open pipeline',
+                icon: Icons.filter_alt_outlined,
+                onPressed: () => _openYouthPipeline(context, target),
+              ),
             ],
           ),
         );
@@ -159,6 +219,71 @@ class GteClubIdentityHubScreen extends StatelessWidget {
         builder: (BuildContext context) => TrophyCabinetScreen(
           clubId: target.clubId,
           clubName: target.clubName,
+        ),
+      ),
+    );
+  }
+
+  void _openFinances(BuildContext context, _ClubIdentityTarget target) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ClubFinanceScreen(
+          clubId: target.clubId,
+          clubName: target.clubName,
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        ),
+      ),
+    );
+  }
+
+  void _openSponsorships(BuildContext context, _ClubIdentityTarget target) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ClubSponsorshipsScreen(
+          clubId: target.clubId,
+          clubName: target.clubName,
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        ),
+      ),
+    );
+  }
+
+  void _openAcademy(BuildContext context, _ClubIdentityTarget target) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => AcademyOverviewScreen(
+          clubId: target.clubId,
+          clubName: target.clubName,
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        ),
+      ),
+    );
+  }
+
+  void _openScouting(BuildContext context, _ClubIdentityTarget target) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ScoutingDashboardScreen(
+          clubId: target.clubId,
+          clubName: target.clubName,
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        ),
+      ),
+    );
+  }
+
+  void _openYouthPipeline(BuildContext context, _ClubIdentityTarget target) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => YouthPipelineScreen(
+          clubId: target.clubId,
+          clubName: target.clubName,
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
         ),
       ),
     );

@@ -43,7 +43,10 @@ class GteSurfacePanel extends StatelessWidget {
     );
 
     if (onTap == null) {
-      return content;
+      return Material(
+        color: Colors.transparent,
+        child: content,
+      );
     }
 
     return Material(
