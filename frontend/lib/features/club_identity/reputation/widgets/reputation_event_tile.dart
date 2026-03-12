@@ -16,6 +16,15 @@ class ReputationEventTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color tone =
         event.isPositive ? GteShellTheme.positive : GteShellTheme.negative;
+    final int year = event.occurredAt.year;
+    final bool hasYear = year > 1970;
+    final String metaLine = hasYear
+        ? '${event.seasonLabel} - ${event.category.label} - $year'
+        : '${event.seasonLabel} - ${event.category.label}';
+    final List<String> highlightTags = <String>[
+      ...event.milestones,
+      ...event.badges.map(prettifyBadgeCode),
+    ].where((String value) => value.trim().isNotEmpty).toList(growable: false);
     return GteSurfacePanel(
       padding: const EdgeInsets.all(18),
       child: Row(
@@ -48,7 +57,7 @@ class ReputationEventTile extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${event.seasonLabel} • ${event.category.label}',
+                            metaLine,
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
@@ -66,16 +75,31 @@ class ReputationEventTile extends StatelessWidget {
                             GteShellTheme.textPrimary.withValues(alpha: 0.84),
                       ),
                 ),
-                if (event.badges.isNotEmpty) ...<Widget>[
+                if (highlightTags.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: event.badges
+                    children: highlightTags
                         .take(3)
                         .map(
-                          (String badge) => Chip(
-                            label: Text(prettifyBadgeCode(badge)),
+                          (String tag) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              color:
+                                  GteShellTheme.panelStrong.withValues(alpha: 0.9),
+                              border: Border.all(
+                                color: GteShellTheme.stroke,
+                              ),
+                            ),
+                            child: Text(
+                              tag,
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
                           ),
                         )
                         .toList(growable: false),

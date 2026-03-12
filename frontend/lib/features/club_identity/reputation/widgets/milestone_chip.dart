@@ -16,6 +16,10 @@ class MilestoneChip extends StatelessWidget {
     final bool positive = milestone.delta >= 0;
     final Color tone =
         positive ? GteShellTheme.accentWarm : GteShellTheme.negative;
+    final String deltaLabel = positive ? '+${milestone.delta}' : '${milestone.delta}';
+    final String? metaLabel = milestone.season == null
+        ? deltaLabel
+        : 'S${milestone.season} - $deltaLabel';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -33,10 +37,24 @@ class MilestoneChip extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Flexible(
-            child: Text(
-              milestone.title,
-              style:
-                  Theme.of(context).textTheme.labelLarge?.copyWith(color: tone),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  milestone.title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(color: tone),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  metaLabel,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: GteShellTheme.textMuted,
+                      ),
+                ),
+              ],
             ),
           ),
         ],

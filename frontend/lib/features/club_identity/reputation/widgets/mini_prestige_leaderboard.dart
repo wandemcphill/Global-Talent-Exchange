@@ -31,15 +31,23 @@ class MiniPrestigeLeaderboard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          ...entries.map(
-            (PrestigeLeaderboardEntryDto entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _MiniLeaderboardRow(
-                entry: entry,
-                highlighted: entry.clubId == currentClubId,
+          if (entries.isEmpty)
+            Text(
+              'Leaderboard data is still syncing for this scope.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: GteShellTheme.textMuted,
+                  ),
+            )
+          else
+            ...entries.map(
+              (PrestigeLeaderboardEntryDto entry) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _MiniLeaderboardRow(
+                  entry: entry,
+                  highlighted: entry.clubId == currentClubId,
+                ),
               ),
             ),
-          ),
           if (note != null) ...<Widget>[
             const SizedBox(height: 8),
             Text(

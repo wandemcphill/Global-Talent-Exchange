@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from .academy_player_status import AcademyPlayerStatus
 from .academy_program_type import AcademyProgramType
-from .club_finance_account_type import ClubFinanceAccountType
-from .club_finance_entry_type import ClubFinanceEntryType
-from .competition_type import CompetitionType
-from .competition_visibility import CompetitionVisibility
-from .competition_status import CompetitionStatus
-from .competition_format import CompetitionFormat
-from .competition_start_mode import CompetitionStartMode
-from .competition_payout_mode import CompetitionPayoutMode
 from .club_brand_asset_type import ClubBrandAssetType
 from .club_cosmetic_purchase_type import ClubCosmeticPurchaseType
+from .club_finance_account_type import ClubFinanceAccountType
+from .club_finance_entry_type import ClubFinanceEntryType
 from .club_identity_visibility import ClubIdentityVisibility
 from .club_reputation_tier import ClubReputationTier
+from .competition_format import CompetitionFormat
+from .competition_payout_mode import CompetitionPayoutMode
+from .competition_start_mode import CompetitionStartMode
+from .competition_status import CompetitionStatus
+from .competition_type import CompetitionType
+from .competition_visibility import CompetitionVisibility
+from .contract_status import ContractStatus
 from .creator_profile_status import CreatorProfileStatus
 from .dynasty_milestone_type import DynastyMilestoneType
 from .fixture_window import FixtureWindow
+from .injury_severity import InjurySeverity
 from .jersey_slot_type import JerseySlotType
 from .match_status import MatchStatus
 from .player_pathway_stage import PlayerPathwayStage
@@ -31,6 +33,8 @@ from .scouting_region_type import ScoutingRegionType
 from .share_code_type import ShareCodeType
 from .sponsorship_asset_type import SponsorshipAssetType
 from .sponsorship_status import SponsorshipStatus
+from .transfer_bid_status import TransferBidStatus
+from .transfer_window_status import TransferWindowStatus
 from .trophy_type import TrophyType
 from .youth_prospect_rating_band import YouthProspectRatingBand
 
@@ -49,9 +53,11 @@ __all__ = [
     "CompetitionStatus",
     "CompetitionType",
     "CompetitionVisibility",
+    "ContractStatus",
     "CreatorProfileStatus",
     "DynastyMilestoneType",
     "FixtureWindow",
+    "InjurySeverity",
     "JerseySlotType",
     "MatchStatus",
     "PlayerPathwayStage",
@@ -66,6 +72,8 @@ __all__ = [
     "ShareCodeType",
     "SponsorshipAssetType",
     "SponsorshipStatus",
+    "TransferBidStatus",
+    "TransferWindowStatus",
     "TrophyType",
     "YouthProspectRatingBand",
 ]

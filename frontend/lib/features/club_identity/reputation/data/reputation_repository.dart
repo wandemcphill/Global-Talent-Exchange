@@ -140,10 +140,16 @@ class ReputationApiRepository implements ReputationRepository {
   ReputationProfileDto _mapOverview(Map<String, Object?> json) {
     final List<Object?> milestonePayload = _asList(json['biggest_milestones']);
     final String clubId = _asString(json['club_id'], fallback: 'unknown-club');
+    final String clubName =
+        _asNullableString(json['club_name']) ?? prettifyClubId(clubId);
+    final String regionLabel =
+        _asNullableString(json['region_label']) ??
+            _asNullableString(json['region']) ??
+            'Global';
     return ReputationProfileDto(
       clubId: clubId,
-      clubName: prettifyClubId(clubId),
-      regionLabel: 'Global',
+      clubName: clubName,
+      regionLabel: regionLabel,
       currentScore: _asInt(json['current_score']),
       highestScore: _asInt(json['highest_score']),
       currentPrestigeTier: prestigeTierFromRaw(
@@ -223,17 +229,24 @@ class ReputationApiRepository implements ReputationRepository {
     for (int index = 0; index < payload.length; index += 1) {
       final Map<String, Object?> item = _asMap(payload[index]);
       final String clubId = _asString(item['club_id'], fallback: 'club-$index');
+      final String clubName =
+          _asNullableString(item['club_name']) ?? prettifyClubId(clubId);
+      final String regionLabel =
+          _asNullableString(item['region_label']) ??
+              _asNullableString(item['region']) ??
+              'Global';
+      final int rank = _asNullableInt(item['rank']) ?? index + 1;
       entries.add(
         PrestigeLeaderboardEntryDto(
           clubId: clubId,
-          clubName: prettifyClubId(clubId),
-          regionLabel: 'Global',
+          clubName: clubName,
+          regionLabel: regionLabel,
           currentScore: _asInt(item['current_score']),
           currentPrestigeTier: prestigeTierFromRaw(
               _asString(item['current_prestige_tier'], fallback: 'Local')),
           highestScore: _asInt(item['highest_score']),
           totalSeasons: _asInt(item['total_seasons']),
-          rank: index + 1,
+          rank: rank,
         ),
       );
     }
@@ -574,11 +587,11 @@ String _buildHistoryDescription({
     'Closed the season on $scoreAfter reputation in $prestigeTier tier.',
   ];
   if (milestones.isNotEmpty) {
-    fragments.add(milestones.join(' • '));
+    fragments.add(milestones.join(' - '));
   }
   if (badges.isNotEmpty) {
     fragments.add(
-      badges.map(prettifyBadgeCode).join(' • '),
+      badges.map(prettifyBadgeCode).join(' - '),
     );
   }
   return fragments.join(' ');

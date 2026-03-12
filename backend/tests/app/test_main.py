@@ -62,11 +62,15 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "fast_cups" in app.state.domain_modules
         assert "match_engine" in app.state.domain_modules
         assert "canonical_clubs" in app.state.domain_modules
+        assert "player_lifecycle" in app.state.domain_modules
         assert "club_reputation" in app.state.domain_modules
         assert "dynasty" in app.state.domain_modules
         assert "club_identity" in app.state.domain_modules
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules
+        assert "creators" in app.state.domain_modules
+        assert "referrals" in app.state.domain_modules
+        assert "admin_referrals" in app.state.domain_modules
 
         health_response = client.get("/health")
         ready_response = client.get("/ready")
@@ -111,7 +115,11 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/wallets/payment-events" in paths
     assert "/players/summaries/recent" in paths
     assert "/clubs/{club_id}" in paths
-    assert "/competitions/{competition_id}" in paths
+    assert "/api/competitions" in paths
+    assert "/api/competitions/{competition_id}" in paths
+    assert "/api/competitions/{competition_id}/publish" in paths
+    assert "/api/competitions/{competition_id}/join" in paths
+    assert "/api/competitions/{competition_id}/financials" in paths
     assert "/market/listings" in paths
     assert "/market/summary/{asset_id}" in paths
     assert "/market/offers" in paths
@@ -156,10 +164,22 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/clubs/{club_id}/identity" in paths
     assert "/api/clubs/{club_id}/jerseys" in paths
     assert "/api/clubs/{club_id}/badge" in paths
+    assert "/api/creators/profile" in paths
+    assert "/api/creators/profile/me" in paths
+    assert "/api/creators/me/summary" in paths
+    assert "/api/referrals/share-codes" in paths
+    assert "/api/referrals/me/summary" in paths
+    assert "/api/admin/referrals/dashboard" in paths
+    assert "/api/admin/referrals/analytics/summary" in paths
     assert "/notifications/me" in paths
     assert "/api/notifications/me" in paths
     assert "/replays/public/featured" in paths
     assert "/api/replays/public/featured" in paths
+    assert "/api/players/{player_id}/career" in paths
+    assert "/api/players/{player_id}/contracts" in paths
+    assert "/api/players/{player_id}/injuries" in paths
+    assert "/api/transfers/windows" in paths
+    assert "/api/transfers/windows/{window_id}/bids" in paths
     assert "/realtime/status" in paths
 
     with engine.connect() as connection:

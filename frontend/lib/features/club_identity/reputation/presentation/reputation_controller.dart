@@ -11,6 +11,8 @@ class ReputationController extends ChangeNotifier {
     this.clubName,
   }) : _repository = repository;
 
+  static const int leaderboardVisibleLimit = 12;
+
   final ReputationRepository _repository;
   final GteRequestGate _loadGate = GteRequestGate();
   final String clubId;
@@ -99,7 +101,7 @@ class ReputationController extends ChangeNotifier {
       return null;
     }
     final List<PrestigeLeaderboardEntryDto> visible =
-        leaderboard.entries.take(8).toList(growable: false);
+        leaderboard.entries.take(leaderboardVisibleLimit).toList(growable: false);
     final bool alreadyVisible = visible
         .any((PrestigeLeaderboardEntryDto entry) => entry.clubId == clubId);
     return alreadyVisible ? null : clubEntry;

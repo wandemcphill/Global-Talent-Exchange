@@ -28,8 +28,17 @@ class PrestigeTierBadge extends StatelessWidget {
             palette.background,
             palette.background.withValues(alpha: 0.68),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         border: Border.all(color: palette.border),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: palette.border.withValues(alpha: 0.35),
+            blurRadius: compact ? 10 : 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

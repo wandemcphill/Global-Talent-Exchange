@@ -13,7 +13,11 @@ from backend.app.competitions.models.league_events import (
     LeagueSeasonEvent,
     LeagueSeasonRegisteredEvent,
 )
-from backend.app.config.competition_constants import LEAGUE_BUY_IN_TIERS, LEAGUE_GROUP_SIZE, LEAGUE_MATCHES_PER_CLUB
+from backend.app.config.competition_constants import (
+    LEAGUE_BUY_IN_TIERS,
+    LEAGUE_GROUP_SIZE,
+    LEAGUE_MATCHES_PER_CLUB,
+)
 from backend.app.leagues.fixtures import LeagueFixtureGenerationService
 from backend.app.leagues.models import LeagueClub, LeagueMatchResult, LeaguePlayerContribution, LeagueSeasonState
 from backend.app.leagues.prizes import LeaguePrizeService

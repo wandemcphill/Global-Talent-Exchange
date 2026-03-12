@@ -95,7 +95,10 @@ class TrophyCabinetDto {
   List<TrophyItemDto> featuredHonors({int limit = 3}) {
     final List<TrophyItemDto> honors = <TrophyItemDto>[
       ...historicHonorsTimeline
-          .where((TrophyItemDto item) => item.isEliteHonor),
+          .where((TrophyItemDto item) => item.isWorldSuperCup),
+      ...historicHonorsTimeline.where(
+        (TrophyItemDto item) => item.isEliteHonor && !item.isWorldSuperCup,
+      ),
       ...historicHonorsTimeline.where(
         (TrophyItemDto item) => item.isMajorHonor && !item.isEliteHonor,
       ),

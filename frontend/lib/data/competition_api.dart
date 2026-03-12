@@ -50,11 +50,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'GET',
-          const <String>[
-            '/api/competitions',
-            '/api/community-competitions',
-            '/api/creator-competitions',
-          ],
+          const <String>['/api/competitions'],
           query: <String, Object?>{
             if (userId != null && userId.trim().isNotEmpty) 'user_id': userId,
           },
@@ -74,11 +70,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'GET',
-          <String>[
-            '/api/competitions/$competitionId',
-            '/api/community-competitions/$competitionId',
-            '/competitions/$competitionId',
-          ],
+          <String>['/api/competitions/$competitionId'],
           query: <String, Object?>{
             if (userId != null && userId.trim().isNotEmpty) 'user_id': userId,
             if (inviteCode != null && inviteCode.trim().isNotEmpty)
@@ -103,10 +95,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'GET',
-          <String>[
-            '/api/competitions/$competitionId/financials',
-            '/api/community-competitions/$competitionId/financials',
-          ],
+          <String>['/api/competitions/$competitionId/financials'],
           query: <String, Object?>{
             if (userId != null && userId.trim().isNotEmpty) 'user_id': userId,
           },
@@ -122,10 +111,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'POST',
-          const <String>[
-            '/api/competitions',
-            '/api/community-competitions',
-          ],
+          const <String>['/api/competitions'],
           body: draft.toCreateRequestJson(),
         );
         return CompetitionSummary.fromJson(payload);
@@ -143,10 +129,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'POST',
-          <String>[
-            '/api/competitions/$competitionId/publish',
-            '/api/community-competitions/$competitionId/publish',
-          ],
+          <String>['/api/competitions/$competitionId/publish'],
           body: <String, Object?>{'open_for_join': openForJoin},
         );
         return CompetitionSummary.fromJson(payload);
@@ -169,10 +152,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'POST',
-          <String>[
-            '/api/competitions/$competitionId/join',
-            '/api/community-competitions/$competitionId/join',
-          ],
+          <String>['/api/competitions/$competitionId/join'],
           body: <String, Object?>{
             'user_id': userId,
             if (userName != null && userName.trim().isNotEmpty)
@@ -203,10 +183,7 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'POST',
-          <String>[
-            '/api/competitions/$competitionId/invites',
-            '/api/community-competitions/$competitionId/invites',
-          ],
+          <String>['/api/competitions/$competitionId/invites'],
           body: <String, Object?>{
             'issued_by': issuedBy,
             'max_uses': maxUses,

@@ -125,7 +125,9 @@ class PrestigeLeaderboardScreen extends StatelessWidget {
                       icon: Icons.public_off,
                     )
                   else
-                    ...entries.take(12).map(
+                    ...entries
+                        .take(ReputationController.leaderboardVisibleLimit)
+                        .map(
                           (PrestigeLeaderboardEntryDto entry) => Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: _LeaderboardRow(
@@ -215,7 +217,7 @@ class _LeaderboardRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '${entry.regionLabel} • Peak ${entry.highestScore} • ${entry.totalSeasons} seasons',
+                  '${entry.regionLabel} - Peak ${entry.highestScore} - ${entry.totalSeasons} seasons',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 12),

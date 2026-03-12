@@ -81,6 +81,7 @@ class TrophyItemDto {
   final bool isEliteHonor;
 
   bool get isAcademy => teamScope == TrophyTeamScope.academy;
+  bool get isWorldSuperCup => trophyType == 'world_super_cup';
 
   String get prestigeLabel {
     if (isEliteHonor) {

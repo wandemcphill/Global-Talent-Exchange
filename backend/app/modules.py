@@ -10,7 +10,10 @@ from backend.app.clubs.router import router as clubs_router
 from backend.app.club_identity.dynasty.api.router import router as dynasty_router
 from backend.app.club_identity.jerseys.router import router as club_identity_router
 from backend.app.club_identity.reputation.router import router as club_reputation_router
-from backend.app.competitions.router import router as competitions_router
+from backend.app.routes.competitions import router as competitions_router
+from backend.app.routes.admin_referrals import router as admin_referrals_router
+from backend.app.routes.creators import router as creators_router
+from backend.app.routes.referrals import router as referrals_router
 from backend.app.routes.admin_clubs import router as admin_clubs_router
 from backend.app.routes.admin_club_ops import router as admin_club_ops_router
 from backend.app.routes.clubs import router as canonical_clubs_router
@@ -24,6 +27,7 @@ from backend.app.market.router import router as market_router
 from backend.app.match_engine.api.router import router as match_engine_router
 from backend.app.notifications.router import notifications_router
 from backend.app.players.router import router as players_router
+from backend.app.routes.player_lifecycle import router as player_lifecycle_router
 from backend.app.portfolios.router import router as portfolios_router
 from backend.app.realtime.router import router as realtime_router
 from backend.app.replay_archive.router import router as replay_archive_router
@@ -52,11 +56,15 @@ DOMAIN_MODULES = (
     DomainModule(name="auth", router=auth_router),
     DomainModule(name="wallets", router=wallets_router),
     DomainModule(name="players", router=players_router),
+    DomainModule(name="player_lifecycle", router=player_lifecycle_router),
     DomainModule(name="clubs", router=clubs_router),
     DomainModule(name="canonical_clubs", router=canonical_clubs_router),
     DomainModule(name="admin_clubs", router=admin_clubs_router),
     DomainModule(name="club_ops", router=club_ops_router),
     DomainModule(name="competitions", router=competitions_router),
+    DomainModule(name="creators", router=creators_router),
+    DomainModule(name="referrals", router=referrals_router),
+    DomainModule(name="admin_referrals", router=admin_referrals_router),
     DomainModule(name="market", router=market_router),
     DomainModule(name="ingestion", router=ingestion_router),
     DomainModule(name="value_engine", router=value_engine_router),
@@ -68,7 +76,7 @@ DOMAIN_MODULES = (
     DomainModule(name="world_super_cup", router=_with_api_alias(world_super_cup_router)),
     DomainModule(name="fast_cups", router=_with_api_alias(fast_cups_router)),
     DomainModule(name="match_engine", router=match_engine_router),
-    # legacy routers provide supplementary endpoints that canonical_clubs doesn't include
+    # legacy club_identity routers provide compatibility endpoints while /api/clubs/... remains canonical
     DomainModule(name="club_reputation", router=club_reputation_router),
     DomainModule(name="dynasty", router=dynasty_router),
     DomainModule(name="club_identity", router=club_identity_router),
