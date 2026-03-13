@@ -1,8 +1,11 @@
+config_version = "living-market-v1"
 baseline_eur_per_credit = 100000
 smoothing_factor = 0.70
 daily_movement_cap = 0.12
 demand_movement_cap = 0.05
 market_signal_cap = 0.18
+scouting_signal_cap = 0.08
+egame_signal_cap = 0.05
 gsi_neutral_score = 50.0
 gsi_smoothing_factor = 1.0
 gsi_daily_movement_cap = 0.30
@@ -13,15 +16,35 @@ anchor_pull_strength = 0.20
 market_price_pull_strength = 0.65
 default_liquidity_weight = 0.20
 minimum_floor_ratio = 0.60
+low_liquidity_penalty = 0.10
+suspicious_trade_penalty = 0.15
 performance_scale = 850.0
 award_scale = 600.0
 transfer_scale = 900.0
 demand_scale = 1200.0
+scouting_scale = 900.0
+egame_scale = 1400.0
 big_moment_bonus = 18.0
+momentum_short_window_days = 7
+momentum_medium_window_days = 30
+momentum_short_sensitivity = 0.35
+momentum_medium_sensitivity = 0.20
+momentum_cap = 0.04
+reference_stale_days = 21
+reference_very_stale_days = 60
+reference_stale_blend = 0.45
+participant_diversity_scale = 6.0
+order_book_wide_spread_bps = 1800
+
+[component_weights]
+ftv_weight = 0.70
+msv_weight = 0.18
+sgv_weight = 0.07
+egv_weight = 0.05
 
 [ftv_msv_blend_weights]
-ftv_weight = 0.70
-msv_weight = 0.30
+ftv_weight = 0.795455
+msv_weight = 0.204545
 
 [competition_multipliers]
 "world cup" = 1.35
@@ -63,12 +86,74 @@ shortlist_adds = 3.8
 transfer_room_adds = 5.5
 scouting_activity = 6.5
 
+[egame_signal_weights]
+selection_count = 1.0
+captain_count = 2.4
+contest_win_count = 3.2
+spotlight_count = 2.0
+featured_performance_count = 2.8
+
 [liquidity_band_market_weights]
 entry = 0.15
 growth = 0.30
 premium = 0.50
 bluechip = 0.65
 marquee = 0.80
+
+[[weight_profiles]]
+code = "default"
+description = "Default living-market weighting profile."
+liquidity_tiers = []
+confidence_tiers = []
+player_classes = []
+ftv_weight = 0.70
+msv_weight = 0.18
+sgv_weight = 0.07
+egv_weight = 0.05
+
+[[weight_profiles]]
+code = "prospect"
+description = "Prospects lean harder on football truth and scouting momentum."
+liquidity_tiers = []
+confidence_tiers = []
+player_classes = ["prospect"]
+ftv_weight = 0.74
+msv_weight = 0.12
+sgv_weight = 0.09
+egv_weight = 0.05
+
+[[weight_profiles]]
+code = "veteran"
+description = "Veterans stay anchored to football truth with reduced hype premium."
+liquidity_tiers = []
+confidence_tiers = []
+player_classes = ["veteran"]
+ftv_weight = 0.76
+msv_weight = 0.15
+sgv_weight = 0.05
+egv_weight = 0.04
+
+[[weight_profiles]]
+code = "low_confidence"
+description = "Low-confidence references suppress non-football influence."
+liquidity_tiers = []
+confidence_tiers = ["low"]
+player_classes = []
+ftv_weight = 0.78
+msv_weight = 0.12
+sgv_weight = 0.06
+egv_weight = 0.04
+
+[[weight_profiles]]
+code = "entry_liquidity"
+description = "Thin entry markets keep market signal tightly bounded."
+liquidity_tiers = ["entry"]
+confidence_tiers = []
+player_classes = []
+ftv_weight = 0.79
+msv_weight = 0.10
+sgv_weight = 0.07
+egv_weight = 0.04
 
 [[price_band_limits]]
 code = "default"

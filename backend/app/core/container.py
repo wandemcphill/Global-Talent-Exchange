@@ -70,6 +70,7 @@ def build_application_context(
         settings=resolved_settings,
         default_lookback_days=resolved_settings.value_snapshot_lookback_days,
     )
+    value_engine_bridge.ensure_event_subscription()
     ingestion_job_runner = IngestionJobRunner(
         session_factory=database.session_factory,
         cache_backend=cache_backend,

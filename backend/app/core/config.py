@@ -87,6 +87,13 @@ def _coerce_float_map(value: object, *, name: str) -> dict[str, float]:
     return normalized
 
 
+def _coerce_string_tuple(value: object, *, name: str) -> tuple[str, ...]:
+    if value is None or value == "":
+        return ()
+    items = _require_array(value, name=name)
+    return tuple(str(item).strip() for item in items if str(item).strip())
+
+
 def _catalog_code(name: str, raw_code: object) -> str:
     candidate = str(raw_code).strip().lower() if raw_code is not None else ""
     if not candidate:
@@ -153,6 +160,19 @@ class PriceBandLimit:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueWeightProfile:
+    code: str
+    description: str
+    liquidity_tiers: tuple[str, ...]
+    confidence_tiers: tuple[str, ...]
+    player_classes: tuple[str, ...]
+    ftv_weight: float
+    msv_weight: float
+    sgv_weight: float
+    egv_weight: float
+
+
+@dataclass(frozen=True, slots=True)
 class ImageVariant:
     name: str
     width: int
@@ -193,11 +213,14 @@ class SuspicionThresholdsConfig:
 
 @dataclass(frozen=True, slots=True)
 class ValueEngineWeightingConfig:
+    config_version: str
     baseline_eur_per_credit: int
     smoothing_factor: float
     daily_movement_cap: float
     demand_movement_cap: float
     market_signal_cap: float
+    scouting_signal_cap: float
+    egame_signal_cap: float
     gsi_neutral_score: float
     gsi_smoothing_factor: float
     gsi_daily_movement_cap: float
@@ -208,18 +231,36 @@ class ValueEngineWeightingConfig:
     market_price_pull_strength: float
     default_liquidity_weight: float
     minimum_floor_ratio: float
+    low_liquidity_penalty: float
+    suspicious_trade_penalty: float
     performance_scale: float
     award_scale: float
     transfer_scale: float
     demand_scale: float
+    scouting_scale: float
+    egame_scale: float
     big_moment_bonus: float
+    momentum_short_window_days: int
+    momentum_medium_window_days: int
+    momentum_short_sensitivity: float
+    momentum_medium_sensitivity: float
+    momentum_cap: float
+    reference_stale_days: int
+    reference_very_stale_days: int
+    reference_stale_blend: float
+    participant_diversity_scale: float
+    order_book_wide_spread_bps: int
     competition_multipliers: dict[str, float]
     award_impacts: dict[str, float]
     demand_weights: dict[str, float]
     gsi_signal_weights: dict[str, float]
+    egame_signal_weights: dict[str, float]
     liquidity_band_market_weights: dict[str, float]
     ftv_weight: float
     msv_weight: float
+    sgv_weight: float
+    egv_weight: float
+    weight_profiles: tuple[ValueWeightProfile, ...]
     price_band_limits: tuple[PriceBandLimit, ...]
 
 
@@ -488,7 +529,14 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         document.get("ftv_msv_blend_weights", {}),
         name="ftv_msv_blend_weights",
     )
+    component_weights = _require_table(
+        document.get("component_weights", {}),
+        name="component_weights",
+    )
+    has_component_weights = bool(component_weights)
     price_band_documents = _require_array(document.get("price_band_limits", []), name="price_band_limits")
+    default_ftv_weight = float(component_weights.get("ftv_weight", ftv_msv_blend_weights.get("ftv_weight", 0.70)))
+    default_msv_weight = float(component_weights.get("msv_weight", ftv_msv_blend_weights.get("msv_weight", 0.18)))
     price_band_limits = tuple(
         PriceBandLimit(
             code=_catalog_code(
@@ -500,12 +548,54 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         )
         for item in price_band_documents
     ) or _default_price_band_limits()
+    weight_profile_documents = _require_array(document.get("weight_profiles", []), name="weight_profiles")
+    weight_profiles = tuple(
+        ValueWeightProfile(
+            code=_catalog_code(
+                str(_require_table(item, name="weight_profiles[]").get("code")),
+                _require_table(item, name="weight_profiles[]").get("code"),
+            ),
+            description=str(_require_table(item, name="weight_profiles[]").get("description", "Value weighting profile")),
+            liquidity_tiers=_coerce_string_tuple(
+                _require_table(item, name="weight_profiles[]").get("liquidity_tiers", []),
+                name="weight_profiles[].liquidity_tiers",
+            ),
+            confidence_tiers=_coerce_string_tuple(
+                _require_table(item, name="weight_profiles[]").get("confidence_tiers", []),
+                name="weight_profiles[].confidence_tiers",
+            ),
+            player_classes=_coerce_string_tuple(
+                _require_table(item, name="weight_profiles[]").get("player_classes", []),
+                name="weight_profiles[].player_classes",
+            ),
+            ftv_weight=float(_require_table(item, name="weight_profiles[]").get("ftv_weight", default_ftv_weight)),
+            msv_weight=float(_require_table(item, name="weight_profiles[]").get("msv_weight", default_msv_weight)),
+            sgv_weight=float(_require_table(item, name="weight_profiles[]").get("sgv_weight", component_weights.get("sgv_weight", 0.08 if has_component_weights else 0.0))),
+            egv_weight=float(_require_table(item, name="weight_profiles[]").get("egv_weight", component_weights.get("egv_weight", 0.04 if has_component_weights else 0.0))),
+        )
+        for item in weight_profile_documents
+    ) or (
+        ValueWeightProfile(
+            code="default",
+            description="Default production weighting profile.",
+            liquidity_tiers=(),
+            confidence_tiers=(),
+            player_classes=(),
+            ftv_weight=default_ftv_weight,
+            msv_weight=default_msv_weight,
+            sgv_weight=float(component_weights.get("sgv_weight", 0.08 if has_component_weights else 0.0)),
+            egv_weight=float(component_weights.get("egv_weight", 0.04 if has_component_weights else 0.0)),
+        ),
+    )
     weighting = ValueEngineWeightingConfig(
+        config_version=str(document.get("config_version", "baseline-v1")),
         baseline_eur_per_credit=int(document.get("baseline_eur_per_credit", 100_000)),
         smoothing_factor=float(document.get("smoothing_factor", 0.70)),
         daily_movement_cap=float(document.get("daily_movement_cap", 0.12)),
         demand_movement_cap=float(document.get("demand_movement_cap", 0.05)),
         market_signal_cap=float(document.get("market_signal_cap", 0.18)),
+        scouting_signal_cap=float(document.get("scouting_signal_cap", 0.08)),
+        egame_signal_cap=float(document.get("egame_signal_cap", 0.05)),
         gsi_neutral_score=float(document.get("gsi_neutral_score", 50.0)),
         gsi_smoothing_factor=float(document.get("gsi_smoothing_factor", 1.0)),
         gsi_daily_movement_cap=float(document.get("gsi_daily_movement_cap", 0.30)),
@@ -516,11 +606,25 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         market_price_pull_strength=float(document.get("market_price_pull_strength", 0.65)),
         default_liquidity_weight=float(document.get("default_liquidity_weight", 0.20)),
         minimum_floor_ratio=float(document.get("minimum_floor_ratio", 0.60)),
+        low_liquidity_penalty=float(document.get("low_liquidity_penalty", 0.10)),
+        suspicious_trade_penalty=float(document.get("suspicious_trade_penalty", 0.15)),
         performance_scale=float(document.get("performance_scale", 850.0)),
         award_scale=float(document.get("award_scale", 600.0)),
         transfer_scale=float(document.get("transfer_scale", 900.0)),
         demand_scale=float(document.get("demand_scale", 1200.0)),
+        scouting_scale=float(document.get("scouting_scale", 900.0)),
+        egame_scale=float(document.get("egame_scale", 1400.0)),
         big_moment_bonus=float(document.get("big_moment_bonus", 18.0)),
+        momentum_short_window_days=int(document.get("momentum_short_window_days", 7)),
+        momentum_medium_window_days=int(document.get("momentum_medium_window_days", 30)),
+        momentum_short_sensitivity=float(document.get("momentum_short_sensitivity", 0.35)),
+        momentum_medium_sensitivity=float(document.get("momentum_medium_sensitivity", 0.20)),
+        momentum_cap=float(document.get("momentum_cap", 0.04)),
+        reference_stale_days=int(document.get("reference_stale_days", 21)),
+        reference_very_stale_days=int(document.get("reference_very_stale_days", 60)),
+        reference_stale_blend=float(document.get("reference_stale_blend", 0.45)),
+        participant_diversity_scale=float(document.get("participant_diversity_scale", 6.0)),
+        order_book_wide_spread_bps=int(document.get("order_book_wide_spread_bps", 1800)),
         competition_multipliers=_coerce_float_map(
             document.get("competition_multipliers", {}),
             name="competition_multipliers",
@@ -528,15 +632,26 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         award_impacts=_coerce_float_map(document.get("award_impacts", {}), name="award_impacts"),
         demand_weights=_coerce_float_map(document.get("demand_weights", {}), name="demand_weights"),
         gsi_signal_weights=_coerce_float_map(document.get("gsi_signal_weights", {}), name="gsi_signal_weights"),
+        egame_signal_weights=_coerce_float_map(document.get("egame_signal_weights", {}), name="egame_signal_weights"),
         liquidity_band_market_weights=_coerce_float_map(
             document.get("liquidity_band_market_weights", {}),
             name="liquidity_band_market_weights",
         ),
-        ftv_weight=float(ftv_msv_blend_weights.get("ftv_weight", 0.70)),
-        msv_weight=float(ftv_msv_blend_weights.get("msv_weight", 0.30)),
+        ftv_weight=default_ftv_weight,
+        msv_weight=default_msv_weight,
+        sgv_weight=float(component_weights.get("sgv_weight", 0.08 if has_component_weights else 0.0)),
+        egv_weight=float(component_weights.get("egv_weight", 0.04 if has_component_weights else 0.0)),
+        weight_profiles=weight_profiles,
         price_band_limits=price_band_limits,
     )
-    if weighting.performance_scale <= 0 or weighting.award_scale <= 0 or weighting.transfer_scale <= 0 or weighting.demand_scale <= 0:
+    if (
+        weighting.performance_scale <= 0
+        or weighting.award_scale <= 0
+        or weighting.transfer_scale <= 0
+        or weighting.demand_scale <= 0
+        or weighting.scouting_scale <= 0
+        or weighting.egame_scale <= 0
+    ):
         raise ValueError("Value engine scales must be greater than zero.")
     if not 0 < weighting.minimum_floor_ratio <= 1:
         raise ValueError("Value engine minimum_floor_ratio must be between 0 and 1.")
@@ -556,13 +671,35 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         raise ValueError("Value engine market_price_pull_strength must be greater than or equal to zero.")
     if not 0 <= weighting.default_liquidity_weight <= 1:
         raise ValueError("Value engine default_liquidity_weight must be between 0 and 1.")
+    if not 0 <= weighting.low_liquidity_penalty <= 1:
+        raise ValueError("Value engine low_liquidity_penalty must be between 0 and 1.")
+    if not 0 <= weighting.suspicious_trade_penalty <= 1:
+        raise ValueError("Value engine suspicious_trade_penalty must be between 0 and 1.")
+    if weighting.momentum_short_window_days <= 0 or weighting.momentum_medium_window_days <= 0:
+        raise ValueError("Value engine momentum windows must be greater than zero.")
+    if weighting.momentum_medium_window_days < weighting.momentum_short_window_days:
+        raise ValueError("Value engine momentum_medium_window_days must be greater than or equal to momentum_short_window_days.")
+    if weighting.reference_stale_days <= 0 or weighting.reference_very_stale_days <= 0:
+        raise ValueError("Value engine reference staleness windows must be greater than zero.")
+    if weighting.reference_very_stale_days < weighting.reference_stale_days:
+        raise ValueError("Value engine reference_very_stale_days must be greater than or equal to reference_stale_days.")
+    if not 0 <= weighting.reference_stale_blend <= 1:
+        raise ValueError("Value engine reference_stale_blend must be between 0 and 1.")
+    if weighting.participant_diversity_scale <= 0:
+        raise ValueError("Value engine participant_diversity_scale must be greater than zero.")
+    if weighting.order_book_wide_spread_bps <= 0:
+        raise ValueError("Value engine order_book_wide_spread_bps must be greater than zero.")
     if not 0 <= weighting.ftv_weight <= 1 or not 0 <= weighting.msv_weight <= 1:
         raise ValueError("Value engine FTV/MSV blend weights must each be between 0 and 1.")
+    if weighting.ftv_weight + weighting.msv_weight <= 0:
+        raise ValueError("Value engine FTV/MSV legacy weights must sum to a positive value.")
     _validate_fraction_sum(
-        "ftv_msv_blend_weights",
+        "component_weights",
         {
             "ftv_weight": weighting.ftv_weight,
             "msv_weight": weighting.msv_weight,
+            "sgv_weight": weighting.sgv_weight,
+            "egv_weight": weighting.egv_weight,
         },
     )
     for key, value in weighting.gsi_signal_weights.items():
@@ -570,11 +707,28 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
             raise ValueError(
                 f"Value engine GSI weight for '{key}' must be greater than or equal to zero, got {value}."
             )
+    for key, value in weighting.egame_signal_weights.items():
+        if value < 0:
+            raise ValueError(
+                f"Value engine e-game weight for '{key}' must be greater than or equal to zero, got {value}."
+            )
     for key, value in weighting.liquidity_band_market_weights.items():
         if not 0 <= value <= 1:
             raise ValueError(
                 f"Value engine liquidity weight for '{key}' must be between 0 and 1, got {value}."
             )
+    if len({profile.code for profile in weighting.weight_profiles}) != len(weighting.weight_profiles):
+        raise ValueError("Value engine weight profile codes must be unique.")
+    for profile in weighting.weight_profiles:
+        _validate_fraction_sum(
+            f"weight_profiles.{profile.code}",
+            {
+                "ftv_weight": profile.ftv_weight,
+                "msv_weight": profile.msv_weight,
+                "sgv_weight": profile.sgv_weight,
+                "egv_weight": profile.egv_weight,
+            },
+        )
     if len({limit.code for limit in weighting.price_band_limits}) != len(weighting.price_band_limits):
         raise ValueError("Value engine price band limit codes must be unique.")
     for limit in weighting.price_band_limits:

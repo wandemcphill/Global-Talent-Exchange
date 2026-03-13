@@ -270,6 +270,15 @@ class GteMarketPlayerValue {
     required this.footballTruthValueCredits,
     required this.marketSignalValueCredits,
     required this.publishedCardValueCredits,
+    required this.scoutingSignalValueCredits,
+    required this.egameSignalValueCredits,
+    required this.confidenceScore,
+    required this.confidenceTier,
+    required this.trend7dPct,
+    required this.trend30dPct,
+    required this.trendDirection,
+    required this.trendConfidence,
+    required this.movementTags,
   });
 
   final String? lastSnapshotId;
@@ -280,6 +289,15 @@ class GteMarketPlayerValue {
   final double? footballTruthValueCredits;
   final double? marketSignalValueCredits;
   final double? publishedCardValueCredits;
+  final double? scoutingSignalValueCredits;
+  final double? egameSignalValueCredits;
+  final double? confidenceScore;
+  final String? confidenceTier;
+  final double? trend7dPct;
+  final double? trend30dPct;
+  final String? trendDirection;
+  final double? trendConfidence;
+  final List<String> movementTags;
 
   factory GteMarketPlayerValue.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -311,6 +329,36 @@ class GteMarketPlayerValue {
         json,
         <String>['published_card_value_credits', 'publishedCardValueCredits'],
       ),
+      scoutingSignalValueCredits: _nullableNumber(
+        json,
+        <String>['scouting_signal_value_credits', 'scoutingSignalValueCredits'],
+      ),
+      egameSignalValueCredits: _nullableNumber(
+        json,
+        <String>['egame_signal_value_credits', 'egameSignalValueCredits'],
+      ),
+      confidenceScore:
+          _nullableNumber(json, <String>['confidence_score', 'confidenceScore']),
+      confidenceTier: GteJson.stringOrNull(
+        json,
+        <String>['confidence_tier', 'confidenceTier'],
+      ),
+      trend7dPct: _nullableNumber(json, <String>['trend_7d_pct', 'trend7dPct']),
+      trend30dPct:
+          _nullableNumber(json, <String>['trend_30d_pct', 'trend30dPct']),
+      trendDirection: GteJson.stringOrNull(
+        json,
+        <String>['trend_direction', 'trendDirection'],
+      ),
+      trendConfidence: _nullableNumber(
+        json,
+        <String>['trend_confidence', 'trendConfidence'],
+      ),
+      movementTags: GteJson.typedList(
+        json,
+        <String>['movement_tags', 'movementTags'],
+        (Object? entry) => entry?.toString() ?? '',
+      ).where((String entry) => entry.isNotEmpty).toList(growable: false),
     );
   }
 }
@@ -324,6 +372,12 @@ class GteMarketPlayerTrend {
     required this.previousGlobalScoutingIndex,
     required this.globalScoutingIndexMovementPct,
     required this.drivers,
+    required this.trend7dPct,
+    required this.trend30dPct,
+    required this.trendDirection,
+    required this.trendConfidence,
+    required this.confidenceTier,
+    required this.movementTags,
   });
 
   final double trendScore;
@@ -333,6 +387,12 @@ class GteMarketPlayerTrend {
   final double? previousGlobalScoutingIndex;
   final double? globalScoutingIndexMovementPct;
   final List<String> drivers;
+  final double? trend7dPct;
+  final double? trend30dPct;
+  final String? trendDirection;
+  final double? trendConfidence;
+  final String? confidenceTier;
+  final List<String> movementTags;
 
   factory GteMarketPlayerTrend.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -366,6 +426,26 @@ class GteMarketPlayerTrend {
       drivers: GteJson.typedList(
         json,
         <String>['drivers'],
+        (Object? entry) => entry?.toString() ?? '',
+      ).where((String entry) => entry.isNotEmpty).toList(growable: false),
+      trend7dPct: _nullableNumber(json, <String>['trend_7d_pct', 'trend7dPct']),
+      trend30dPct:
+          _nullableNumber(json, <String>['trend_30d_pct', 'trend30dPct']),
+      trendDirection: GteJson.stringOrNull(
+        json,
+        <String>['trend_direction', 'trendDirection'],
+      ),
+      trendConfidence: _nullableNumber(
+        json,
+        <String>['trend_confidence', 'trendConfidence'],
+      ),
+      confidenceTier: GteJson.stringOrNull(
+        json,
+        <String>['confidence_tier', 'confidenceTier'],
+      ),
+      movementTags: GteJson.typedList(
+        json,
+        <String>['movement_tags', 'movementTags'],
         (Object? entry) => entry?.toString() ?? '',
       ).where((String entry) => entry.isNotEmpty).toList(growable: false),
     );
@@ -409,30 +489,177 @@ class GteMarketPlayerDetailView {
   }
 }
 
+
+
+class GteLifecycleBadgeView {
+  const GteLifecycleBadgeView({
+    required this.status,
+    required this.label,
+    required this.available,
+    this.reason,
+    this.until,
+  });
+
+  final String status;
+  final String label;
+  final bool available;
+  final String? reason;
+  final DateTime? until;
+
+  factory GteLifecycleBadgeView.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'lifecycle badge');
+    return GteLifecycleBadgeView(
+      status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
+      label: GteJson.string(json, <String>['label'], fallback: 'Unknown'),
+      available: GteJson.boolean(json, <String>['available'], fallback: false),
+      reason: GteJson.stringOrNull(json, <String>['reason']),
+      until: GteJson.dateTimeOrNull(json, <String>['until']),
+    );
+  }
+}
+
+class GteContractBadgeView {
+  const GteContractBadgeView({
+    required this.status,
+    required this.label,
+    this.clubName,
+    this.endsOn,
+  });
+
+  final String status;
+  final String label;
+  final String? clubName;
+  final DateTime? endsOn;
+
+  factory GteContractBadgeView.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'contract badge');
+    return GteContractBadgeView(
+      status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
+      label: GteJson.string(json, <String>['label'], fallback: 'Unknown'),
+      clubName: GteJson.stringOrNull(json, <String>['club_name', 'clubName']),
+      endsOn: GteJson.dateTimeOrNull(json, <String>['ends_on', 'endsOn']),
+    );
+  }
+}
+
+class GteTransferStatusView {
+  const GteTransferStatusView({
+    required this.windowOpen,
+    required this.eligible,
+    this.reason,
+    this.windowLabel,
+    this.lastBidStatus,
+  });
+
+  final bool windowOpen;
+  final bool eligible;
+  final String? reason;
+  final String? windowLabel;
+  final String? lastBidStatus;
+
+  factory GteTransferStatusView.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'transfer status');
+    return GteTransferStatusView(
+      windowOpen: GteJson.boolean(json, <String>['window_open', 'windowOpen']),
+      eligible: GteJson.boolean(json, <String>['eligible']),
+      reason: GteJson.stringOrNull(json, <String>['reason']),
+      windowLabel: GteJson.stringOrNull(json, <String>['window_label', 'windowLabel']),
+      lastBidStatus: GteJson.stringOrNull(json, <String>['last_bid_status', 'lastBidStatus']),
+    );
+  }
+}
+
+class GteLifecycleEventItem {
+  const GteLifecycleEventItem({
+    required this.eventType,
+    required this.summary,
+    this.occurredOn,
+  });
+
+  final String eventType;
+  final String summary;
+  final DateTime? occurredOn;
+
+  factory GteLifecycleEventItem.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'lifecycle event');
+    return GteLifecycleEventItem(
+      eventType: GteJson.string(json, <String>['event_type', 'eventType']),
+      summary: GteJson.string(json, <String>['summary'], fallback: 'Lifecycle event'),
+      occurredOn: GteJson.dateTimeOrNull(json, <String>['occurred_on', 'occurredOn']),
+    );
+  }
+}
+
+class GtePlayerLifecycleSnapshot {
+  const GtePlayerLifecycleSnapshot({
+    required this.playerId,
+    required this.playerName,
+    required this.availabilityBadge,
+    required this.transferStatus,
+    required this.recentEvents,
+    this.contractBadge,
+  });
+
+  final String playerId;
+  final String playerName;
+  final GteLifecycleBadgeView availabilityBadge;
+  final GteTransferStatusView transferStatus;
+  final List<GteLifecycleEventItem> recentEvents;
+  final GteContractBadgeView? contractBadge;
+
+  factory GtePlayerLifecycleSnapshot.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'player lifecycle snapshot');
+    return GtePlayerLifecycleSnapshot(
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      playerName: GteJson.string(json, <String>['player_name', 'playerName']),
+      availabilityBadge: GteLifecycleBadgeView.fromJson(
+        GteJson.value(json, <String>['availability_badge', 'availabilityBadge']) ?? const <String, Object?>{},
+      ),
+      transferStatus: GteTransferStatusView.fromJson(
+        GteJson.value(json, <String>['transfer_status', 'transferStatus']) ?? const <String, Object?>{},
+      ),
+      contractBadge: GteJson.value(json, <String>['contract_badge', 'contractBadge']) == null
+          ? null
+          : GteContractBadgeView.fromJson(
+              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
+            ),
+      recentEvents: GteJson.typedList(
+        json,
+        <String>['recent_events', 'recentEvents'],
+        GteLifecycleEventItem.fromJson,
+      ),
+    );
+  }
+}
+
 class GtePlayerMarketSnapshot {
   const GtePlayerMarketSnapshot({
     required this.detail,
     required this.ticker,
     required this.candles,
     required this.orderBook,
+    this.lifecycle,
   });
 
   final GteMarketPlayerDetailView detail;
   final GteMarketTicker ticker;
   final GteMarketCandles candles;
   final GteOrderBook orderBook;
+  final GtePlayerLifecycleSnapshot? lifecycle;
 
   GtePlayerMarketSnapshot copyWith({
     GteMarketPlayerDetailView? detail,
     GteMarketTicker? ticker,
     GteMarketCandles? candles,
     GteOrderBook? orderBook,
+    GtePlayerLifecycleSnapshot? lifecycle,
   }) {
     return GtePlayerMarketSnapshot(
       detail: detail ?? this.detail,
       ticker: ticker ?? this.ticker,
       candles: candles ?? this.candles,
       orderBook: orderBook ?? this.orderBook,
+      lifecycle: lifecycle ?? this.lifecycle,
     );
   }
 }

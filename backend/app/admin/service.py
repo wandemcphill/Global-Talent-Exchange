@@ -104,13 +104,22 @@ def _render_mapping_table(name: str, values: dict[str, float]) -> list[str]:
     return lines
 
 
+def _render_string_array(name: str, values: tuple[str, ...]) -> list[str]:
+    serialized = ", ".join(json.dumps(value) for value in values)
+    return [f"{name} = [{serialized}]"]
+
+
 def render_value_engine_weighting_config(config: ValueEngineWeightingConfig) -> str:
+    legacy_total = max(config.ftv_weight + config.msv_weight, 0.0001)
     scalar_lines = [
+        f"config_version = {_toml_scalar(config.config_version)}",
         f"baseline_eur_per_credit = {_toml_scalar(config.baseline_eur_per_credit)}",
         f"smoothing_factor = {_toml_scalar(config.smoothing_factor)}",
         f"daily_movement_cap = {_toml_scalar(config.daily_movement_cap)}",
         f"demand_movement_cap = {_toml_scalar(config.demand_movement_cap)}",
         f"market_signal_cap = {_toml_scalar(config.market_signal_cap)}",
+        f"scouting_signal_cap = {_toml_scalar(config.scouting_signal_cap)}",
+        f"egame_signal_cap = {_toml_scalar(config.egame_signal_cap)}",
         f"gsi_neutral_score = {_toml_scalar(config.gsi_neutral_score)}",
         f"gsi_smoothing_factor = {_toml_scalar(config.gsi_smoothing_factor)}",
         f"gsi_daily_movement_cap = {_toml_scalar(config.gsi_daily_movement_cap)}",
@@ -121,15 +130,35 @@ def render_value_engine_weighting_config(config: ValueEngineWeightingConfig) -> 
         f"market_price_pull_strength = {_toml_scalar(config.market_price_pull_strength)}",
         f"default_liquidity_weight = {_toml_scalar(config.default_liquidity_weight)}",
         f"minimum_floor_ratio = {_toml_scalar(config.minimum_floor_ratio)}",
+        f"low_liquidity_penalty = {_toml_scalar(config.low_liquidity_penalty)}",
+        f"suspicious_trade_penalty = {_toml_scalar(config.suspicious_trade_penalty)}",
         f"performance_scale = {_toml_scalar(config.performance_scale)}",
         f"award_scale = {_toml_scalar(config.award_scale)}",
         f"transfer_scale = {_toml_scalar(config.transfer_scale)}",
         f"demand_scale = {_toml_scalar(config.demand_scale)}",
+        f"scouting_scale = {_toml_scalar(config.scouting_scale)}",
+        f"egame_scale = {_toml_scalar(config.egame_scale)}",
         f"big_moment_bonus = {_toml_scalar(config.big_moment_bonus)}",
+        f"momentum_short_window_days = {_toml_scalar(config.momentum_short_window_days)}",
+        f"momentum_medium_window_days = {_toml_scalar(config.momentum_medium_window_days)}",
+        f"momentum_short_sensitivity = {_toml_scalar(config.momentum_short_sensitivity)}",
+        f"momentum_medium_sensitivity = {_toml_scalar(config.momentum_medium_sensitivity)}",
+        f"momentum_cap = {_toml_scalar(config.momentum_cap)}",
+        f"reference_stale_days = {_toml_scalar(config.reference_stale_days)}",
+        f"reference_very_stale_days = {_toml_scalar(config.reference_very_stale_days)}",
+        f"reference_stale_blend = {_toml_scalar(config.reference_stale_blend)}",
+        f"participant_diversity_scale = {_toml_scalar(config.participant_diversity_scale)}",
+        f"order_book_wide_spread_bps = {_toml_scalar(config.order_book_wide_spread_bps)}",
         "",
-        "[ftv_msv_blend_weights]",
+        "[component_weights]",
         f"ftv_weight = {_toml_scalar(config.ftv_weight)}",
         f"msv_weight = {_toml_scalar(config.msv_weight)}",
+        f"sgv_weight = {_toml_scalar(config.sgv_weight)}",
+        f"egv_weight = {_toml_scalar(config.egv_weight)}",
+        "",
+        "[ftv_msv_blend_weights]",
+        f"ftv_weight = {_toml_scalar(round(config.ftv_weight / legacy_total, 6))}",
+        f"msv_weight = {_toml_scalar(round(config.msv_weight / legacy_total, 6))}",
         "",
     ]
     sections = [
@@ -137,8 +166,26 @@ def render_value_engine_weighting_config(config: ValueEngineWeightingConfig) -> 
         *_render_mapping_table("award_impacts", config.award_impacts),
         *_render_mapping_table("demand_weights", config.demand_weights),
         *_render_mapping_table("gsi_signal_weights", config.gsi_signal_weights),
+        *_render_mapping_table("egame_signal_weights", config.egame_signal_weights),
         *_render_mapping_table("liquidity_band_market_weights", config.liquidity_band_market_weights),
     ]
+    weight_profile_lines: list[str] = []
+    for profile in config.weight_profiles:
+        weight_profile_lines.extend(
+            [
+                "[[weight_profiles]]",
+                f"code = {_toml_scalar(profile.code)}",
+                f"description = {_toml_scalar(profile.description)}",
+                *_render_string_array("liquidity_tiers", profile.liquidity_tiers),
+                *_render_string_array("confidence_tiers", profile.confidence_tiers),
+                *_render_string_array("player_classes", profile.player_classes),
+                f"ftv_weight = {_toml_scalar(profile.ftv_weight)}",
+                f"msv_weight = {_toml_scalar(profile.msv_weight)}",
+                f"sgv_weight = {_toml_scalar(profile.sgv_weight)}",
+                f"egv_weight = {_toml_scalar(profile.egv_weight)}",
+                "",
+            ]
+        )
     price_band_lines: list[str] = []
     for price_band in config.price_band_limits:
         price_band_lines.extend(
@@ -150,7 +197,7 @@ def render_value_engine_weighting_config(config: ValueEngineWeightingConfig) -> 
                 "",
             ]
         )
-    return "\n".join([*scalar_lines, *sections, *price_band_lines]).strip() + "\n"
+    return "\n".join([*scalar_lines, *sections, *weight_profile_lines, *price_band_lines]).strip() + "\n"
 
 
 def _settings_environ(settings: Settings) -> dict[str, str]:

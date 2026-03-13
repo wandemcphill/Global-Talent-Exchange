@@ -1,10 +1,20 @@
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import unittest
 
-from backend.app.core.config import PriceBandLimit
+from backend.app.core.config import PriceBandLimit, ValueWeightProfile
 from backend.app.ingestion.models import CompetitionContext, NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
-from backend.app.value_engine.models import DemandSignal, MarketPulse, PlayerValueInput, ScoutingSignal, TradePrint
+from backend.app.value_engine.models import (
+    DemandSignal,
+    EGameSignal,
+    HistoricalValuePoint,
+    MarketPulse,
+    PlayerProfileContext,
+    PlayerValueInput,
+    ReferenceValueContext,
+    ScoutingSignal,
+    TradePrint,
+)
 from backend.app.value_engine.scoring import ValueEngine, credits_from_real_world_value
 
 
@@ -182,7 +192,7 @@ class ValueEngineScoringTests(unittest.TestCase):
         self.assertEqual(with_last_trade.target_credits, without_last_trade.target_credits)
         self.assertIn("last_trade_ignored", with_last_trade.drivers)
 
-    def test_scouting_index_moves_without_pulling_card_price_with_it(self) -> None:
+    def test_scouting_interest_adds_only_bounded_price_uplift(self) -> None:
         engine = ValueEngine()
         base_payload = PlayerValueInput(
             player_id="p-5",
@@ -209,7 +219,12 @@ class ValueEngineScoringTests(unittest.TestCase):
             )
         )
 
-        self.assertEqual(quiet_snapshot.target_credits, scouting_snapshot.target_credits)
+        self.assertGreater(scouting_snapshot.target_credits, quiet_snapshot.target_credits)
+        self.assertLess(scouting_snapshot.target_credits - quiet_snapshot.target_credits, 5.0)
+        self.assertGreater(
+            scouting_snapshot.scouting_signal_value_credits,
+            quiet_snapshot.scouting_signal_value_credits,
+        )
         self.assertGreater(scouting_snapshot.global_scouting_index, quiet_snapshot.global_scouting_index)
         self.assertGreater(scouting_snapshot.global_scouting_index_movement_pct, quiet_snapshot.global_scouting_index_movement_pct)
 
@@ -564,6 +579,21 @@ class ValueEngineScoringTests(unittest.TestCase):
                 base_engine.config,
                 ftv_weight=0.0,
                 msv_weight=1.0,
+                sgv_weight=0.0,
+                egv_weight=0.0,
+                weight_profiles=(
+                    ValueWeightProfile(
+                        code="default",
+                        description="Test market-dominant profile",
+                        liquidity_tiers=(),
+                        confidence_tiers=(),
+                        player_classes=(),
+                        ftv_weight=0.0,
+                        msv_weight=1.0,
+                        sgv_weight=0.0,
+                        egv_weight=0.0,
+                    ),
+                ),
                 price_band_limits=(
                     PriceBandLimit(code="default", min_ratio=0.80, max_ratio=1.20),
                     PriceBandLimit(code="entry", min_ratio=0.95, max_ratio=1.05),
@@ -589,6 +619,148 @@ class ValueEngineScoringTests(unittest.TestCase):
         self.assertEqual(snapshot.breakdown.band_limited_target_credits, snapshot.breakdown.price_band_ceiling_credits)
         self.assertLessEqual(snapshot.target_credits, snapshot.breakdown.price_band_ceiling_credits)
         self.assertIn("price_band_guard", snapshot.drivers)
+
+    def test_position_aware_seeding_keeps_forwards_above_goalkeepers_with_like_for_like_profiles(self) -> None:
+        engine = ValueEngine()
+        shared_reference = ReferenceValueContext(
+            market_value_eur=12_000_000,
+            source="heuristic_profile_baseline",
+            confidence_tier="heuristic_only",
+            confidence_score=35.0,
+            blended_with_profile_baseline=True,
+        )
+        goalkeeper_snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="gk-1",
+                player_name="Keeper One",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=12_000_000,
+                profile_context=PlayerProfileContext(
+                    age_years=24.0,
+                    position_family="goalkeeper",
+                    appearances=28,
+                    starts=28,
+                    minutes_played=2520,
+                    recent_form_rating=7.1,
+                    clean_sheets=12,
+                    saves=98,
+                ),
+                reference_context=shared_reference,
+            )
+        )
+        forward_snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="fw-1",
+                player_name="Forward One",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=12_000_000,
+                profile_context=PlayerProfileContext(
+                    age_years=24.0,
+                    position_family="forward",
+                    appearances=28,
+                    starts=28,
+                    minutes_played=2520,
+                    recent_form_rating=7.1,
+                    goals=18,
+                    assists=8,
+                ),
+                reference_context=shared_reference,
+            )
+        )
+
+        self.assertGreater(
+            forward_snapshot.breakdown.seeded_reference_market_value_eur,
+            goalkeeper_snapshot.breakdown.seeded_reference_market_value_eur,
+        )
+        self.assertGreater(forward_snapshot.football_truth_value_credits, goalkeeper_snapshot.football_truth_value_credits)
+
+    def test_stale_reference_rebases_toward_profile_baseline(self) -> None:
+        engine = ValueEngine()
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-stale",
+                player_name="Stale Anchor",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=22_000_000,
+                profile_context=PlayerProfileContext(
+                    age_years=22.0,
+                    position_family="forward",
+                    appearances=30,
+                    starts=26,
+                    minutes_played=2400,
+                    recent_form_rating=7.8,
+                    goals=20,
+                    assists=9,
+                    player_class="prospect",
+                ),
+                reference_context=ReferenceValueContext(
+                    market_value_eur=22_000_000,
+                    source="market_value_feed",
+                    confidence_tier="inferred_reference",
+                    confidence_score=58.0,
+                    staleness_days=90,
+                    is_stale=True,
+                    blended_with_profile_baseline=True,
+                ),
+            )
+        )
+
+        self.assertEqual(snapshot.breakdown.reference_confidence_tier, "inferred_reference")
+        self.assertGreater(snapshot.breakdown.seeded_reference_market_value_eur, 22_000_000)
+        self.assertLess(snapshot.confidence_score, 80.0)
+        self.assertIn("stale_reference_rebase", snapshot.reason_codes)
+
+    def test_egame_influence_is_bounded_by_cap(self) -> None:
+        engine = ValueEngine()
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-egame",
+                player_name="Arena Star",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=45_000_000,
+                previous_ftv_credits=450.0,
+                previous_pcv_credits=450.0,
+                egame_signal=EGameSignal(
+                    selection_count=600,
+                    captain_count=180,
+                    contest_win_count=75,
+                    spotlight_count=40,
+                    featured_performance_count=22,
+                ),
+            )
+        )
+
+        max_egame_value = round(
+            snapshot.football_truth_value_credits * (1.0 + engine.config.egame_signal_cap),
+            2,
+        )
+        self.assertLessEqual(snapshot.breakdown.egame_adjustment_pct, engine.config.egame_signal_cap)
+        self.assertLessEqual(snapshot.egame_signal_value_credits, max_egame_value)
+        self.assertGreater(snapshot.egame_signal_value_credits, snapshot.football_truth_value_credits)
+
+    def test_positive_history_creates_upward_trend_without_breaking_daily_cap(self) -> None:
+        engine = ValueEngine()
+        as_of = datetime(2026, 3, 10, tzinfo=timezone.utc)
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-momentum",
+                player_name="Momentum Mid",
+                as_of=as_of,
+                reference_market_value_eur=50_000_000,
+                previous_ftv_credits=505.0,
+                previous_pcv_credits=510.0,
+                historical_values=(
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=30), published_value_credits=460.0, confidence_score=62.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=7), published_value_credits=495.0, confidence_score=68.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=1), published_value_credits=510.0, confidence_score=72.0),
+                ),
+            )
+        )
+
+        self.assertEqual(snapshot.trend_direction, "up")
+        self.assertGreater(snapshot.trend_7d_pct, 0.0)
+        self.assertGreater(snapshot.trend_30d_pct, 0.0)
+        self.assertLessEqual(abs(snapshot.movement_pct), engine.config.daily_movement_cap)
 
 
 if __name__ == "__main__":

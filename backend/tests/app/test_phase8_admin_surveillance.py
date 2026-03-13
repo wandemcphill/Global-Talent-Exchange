@@ -158,7 +158,12 @@ async def test_admin_config_endpoints_persist_and_reload_runtime_settings(tmp_pa
 
         updated_value_controls = update_value_controls(
             payload=ValueControlsPayload(
-                ftv_msv_blend_weights={"ftv_weight": 0.64, "msv_weight": 0.36},
+                component_weights={
+                    "ftv_weight": 0.64,
+                    "msv_weight": 0.24,
+                    "sgv_weight": 0.07,
+                    "egv_weight": 0.05,
+                },
                 price_band_limits=[
                     {"code": "default", "min_ratio": 0.82, "max_ratio": 1.18},
                     {"code": "entry", "min_ratio": 0.90, "max_ratio": 1.07},
@@ -168,14 +173,17 @@ async def test_admin_config_endpoints_persist_and_reload_runtime_settings(tmp_pa
             service=admin_service,
             _=admin_user,
         )
-        assert updated_value_controls.ftv_msv_blend_weights.msv_weight == 0.36
+        assert updated_value_controls.component_weights is not None
+        assert updated_value_controls.component_weights.msv_weight == 0.24
 
     assert app.state.settings.suspicion_thresholds.player_min_suspicious_events == 9
     assert app.state.value_engine_bridge.settings.value_engine_weighting.ftv_weight == 0.64
     assert "daily_pack_supply = 45" in (config_root / "supply_tiers.toml").read_text(encoding="utf-8")
     assert "maker_inventory_target = 85" in (config_root / "liquidity_bands.toml").read_text(encoding="utf-8")
     assert "player_min_suspicious_events = 9" in (config_root / "suspicion_thresholds.toml").read_text(encoding="utf-8")
-    assert "ftv_weight = 0.64" in (config_root / "value_engine_weighting.toml").read_text(encoding="utf-8")
+    value_engine_config = (config_root / "value_engine_weighting.toml").read_text(encoding="utf-8")
+    assert "[component_weights]" in value_engine_config
+    assert "ftv_weight = 0.64" in value_engine_config
 
 
 @pytest.mark.anyio
