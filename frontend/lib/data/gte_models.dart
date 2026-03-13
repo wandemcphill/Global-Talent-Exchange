@@ -485,12 +485,16 @@ class GteAuthSession {
     required this.tokenType,
     required this.expiresIn,
     required this.user,
+    this.permissions = const <String>[],
+    this.landingRoute,
   });
 
   final String accessToken;
   final String tokenType;
   final int expiresIn;
   final GteCurrentUser user;
+  final List<String> permissions;
+  final String? landingRoute;
 
   factory GteAuthSession.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'auth session');
@@ -502,6 +506,8 @@ class GteAuthSession {
       expiresIn: GteJson.integer(json, <String>['expires_in', 'expiresIn'],
           fallback: 0),
       user: GteCurrentUser.fromJson(GteJson.value(json, <String>['user'])),
+      permissions: GteJson.typedList<String>(json, <String>['permissions'], (Object? value) => value.toString()),
+      landingRoute: GteJson.stringOrNull(json, <String>['landing_route', 'landingRoute']),
     );
   }
 }

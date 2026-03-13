@@ -44,7 +44,7 @@ def test_club_profile_and_identity_endpoints_work(client, create_club) -> None:
     assert trophies_response.status_code == 200
     assert showcase_response.status_code == 200
     assert profile_response.json()["profile"]["slug"] == "legacy-fc"
-    assert reputation_response.json()["reputation"]["tier"] == "grassroots"
+    assert reputation_response.json()["current_prestige_tier"] == "Local"
     assert branding_response.json()["theme"]["name"] == "Spotlight"
     assert len(jerseys_response.json()["jerseys"]) == 1
     assert trophies_response.json()["cabinet"]["total_trophies"] == 0

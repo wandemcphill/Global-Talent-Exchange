@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/app_feedback.dart';
 import 'package:gte_frontend/data/club_ops_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/models/academy_models.dart';
@@ -94,7 +95,7 @@ class ClubOpsController extends ChangeNotifier {
       clubErrorMessage = null;
     } catch (error) {
       if (_clubGate.isActive(requestId)) {
-        clubErrorMessage = error.toString();
+        clubErrorMessage = AppFeedback.messageFor(error);
       }
     } finally {
       if (_clubGate.isActive(requestId)) {
@@ -135,7 +136,7 @@ class ClubOpsController extends ChangeNotifier {
       adminErrorMessage = null;
     } catch (error) {
       if (_adminGate.isActive(requestId)) {
-        adminErrorMessage = error.toString();
+        adminErrorMessage = AppFeedback.messageFor(error);
       }
     } finally {
       if (_adminGate.isActive(requestId)) {

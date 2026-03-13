@@ -5,7 +5,8 @@ import re
 from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
 
-from backend.app.auth.schemas import CurrentUserResponse, CurrentUserUpdateRequest
+from backend.app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
+from backend.app.admin_godmode.service import AdminGodModeService
 from backend.app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
 from backend.app.models.base import utcnow
 from backend.app.models.user import User, UserRole
@@ -100,6 +101,37 @@ class AuthService:
         )
         return token, ACCESS_TOKEN_TTL_SECONDS
 
+    def resolve_user_permissions(self, app, user: User) -> list[str]:
+        if user.role == UserRole.USER:
+            return []
+        try:
+            state = AdminGodModeService(wallet_service=self.wallet_service)._load_state(app)
+            profile = AdminGodModeService(wallet_service=self.wallet_service).resolve_profile(user, state)
+            return profile.permissions
+        except Exception:
+            if user.role == UserRole.SUPER_ADMIN:
+                return [
+                    "manage_admin_roles",
+                    "manage_commissions",
+                    "manage_payment_rails",
+                    "manage_withdrawals",
+                    "manage_treasury_withdrawals",
+                    "manage_liquidity_desk",
+                    "view_audit_log",
+                    "pause_payments",
+                    "view_integrity_controls",
+                    "manage_manager_catalog",
+                    "manage_competitions",
+                    "manage_manager_supply",
+                ]
+            return []
+
+    @staticmethod
+    def resolve_landing_route(user: User) -> str:
+        if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            return "/admin/god-mode"
+        return "/"
+
     def get_current_user_profile(self, session: Session, user: User) -> CurrentUserResponse:
         profile_fields = self._get_profile_fields(session, user.id)
         return CurrentUserResponse(
@@ -136,6 +168,55 @@ class AuthService:
             session.refresh(user)
 
         return self.get_current_user_profile(session, user)
+
+    def change_password(
+        self,
+        session: Session,
+        *,
+        user: User,
+        payload: ChangePasswordRequest,
+    ) -> User:
+        self._validate_password(payload.new_password)
+        if not verify_password(payload.current_password, user.password_hash):
+            raise InvalidCredentialsError("Current password is incorrect.")
+        user.password_hash = hash_password(payload.new_password)
+        session.flush()
+        return user
+
+    def ensure_admin_user(
+        self,
+        session: Session,
+        *,
+        email: str,
+        password: str,
+        username: str = "gtex.admin",
+        display_name: str = "GTEX Admin",
+        role: UserRole = UserRole.SUPER_ADMIN,
+    ) -> User:
+        normalized_email = self._normalize_email(email)
+        normalized_username = self._normalize_username(username)
+        self._validate_password(password)
+
+        existing_user = session.scalar(select(User).where(User.email == normalized_email))
+        if existing_user is None:
+            return self.register_user(
+                session,
+                email=normalized_email,
+                username=normalized_username,
+                password=password,
+                display_name=display_name,
+                role=role,
+            )
+
+        if existing_user.role != role:
+            existing_user.role = role
+            existing_user.password_hash = hash_password(password)
+        if not existing_user.is_active:
+            existing_user.is_active = True
+        if not existing_user.display_name:
+            existing_user.display_name = display_name
+        session.flush()
+        return existing_user
 
     def _get_profile_fields(self, session: Session, user_id: str) -> dict[str, str | None]:
         profile_row = (

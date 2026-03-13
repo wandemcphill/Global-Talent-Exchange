@@ -117,13 +117,33 @@ class GteExchangeApiClient {
       repository.fetchTicker(playerId),
       repository.fetchCandles(playerId, interval: interval, limit: limit),
       repository.fetchOrderBook(playerId),
+      fetchPlayerLifecycleSnapshot(playerId),
     ]);
     return GtePlayerMarketSnapshot(
       detail: payload[0] as GteMarketPlayerDetailView,
       ticker: payload[1] as GteMarketTicker,
       candles: payload[2] as GteMarketCandles,
       orderBook: payload[3] as GteOrderBook,
+      lifecycle: payload[4] as GtePlayerLifecycleSnapshot?,
     );
+  }
+
+
+  Future<GtePlayerLifecycleSnapshot?> fetchPlayerLifecycleSnapshot(String playerId) async {
+    if (config.mode == GteBackendMode.fixture) {
+      return null;
+    }
+
+    try {
+      return GtePlayerLifecycleSnapshot.fromJson(
+        await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
+      );
+    } catch (error) {
+      if (_shouldFallback(error)) {
+        return null;
+      }
+      rethrow;
+    }
   }
 
   Future<GteMarketCandles> fetchCandles(

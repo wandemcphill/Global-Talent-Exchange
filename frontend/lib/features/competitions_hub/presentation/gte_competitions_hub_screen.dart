@@ -10,6 +10,8 @@ import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
+import 'package:gte_frontend/widgets/gtex_branding.dart';
 
 class GteCompetitionsHubScreen extends StatefulWidget {
   const GteCompetitionsHubScreen({
@@ -94,68 +96,103 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
             children: <Widget>[
-              GteSurfacePanel(
-                emphasized: true,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          'Competitions',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        Material(
-                          color: Colors.transparent,
-                          child: Chip(
-                            avatar: Icon(destination.icon, size: 18),
-                            label: Text(destination.routePath),
+              GtexHeroBanner(
+                eyebrow: 'E-GAME ARENA',
+                title: 'Fixtures, brackets, storylines, and adaptive simulations live here.',
+                description: 'This surface is not the trading floor. It is the orchestration deck for leagues, cups, fast leagues, world super cups, and cinematic 3-5 minute match stories.',
+                accent: Colors.deepPurpleAccent,
+                chips: <Widget>[
+                  GteMetricChip(
+                    label: 'Visible',
+                    value: destination == CompetitionHubDestination.worldSuperCup
+                        ? worldSuperCupWatchlist.length.toString()
+                        : curated.length.toString(),
+                  ),
+                  GteMetricChip(label: 'Open now', value: openCount.toString()),
+                  GteMetricChip(
+                    label: 'Status',
+                    value: hasActiveSeason ? 'LIVE' : 'INACTIVE',
+                    positive: hasActiveSeason,
+                  ),
+                ],
+                actions: <Widget>[
+                  if (!widget.isAuthenticated && widget.onOpenLogin != null)
+                    FilledButton.tonalIcon(
+                      onPressed: widget.onOpenLogin,
+                      icon: const Icon(Icons.login),
+                      label: const Text('Sign in for live join access'),
+                    ),
+                ],
+                sidePanel: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: Colors.white.withValues(alpha: 0.04),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Icon(destination.icon, color: Colors.deepPurpleAccent.shade100),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(destination.routePath, style: Theme.of(context).textTheme.titleMedium),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      destination.hubDescription,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: <Widget>[
-                        GteMetricChip(
-                          label: 'Visible',
-                          value: destination ==
-                                  CompetitionHubDestination.worldSuperCup
-                              ? worldSuperCupWatchlist.length.toString()
-                              : curated.length.toString(),
-                        ),
-                        GteMetricChip(
-                          label: 'Open now',
-                          value: openCount.toString(),
-                        ),
-                        GteMetricChip(
-                          label: 'Status',
-                          value: hasActiveSeason ? 'LIVE' : 'INACTIVE',
-                          positive: hasActiveSeason,
-                        ),
-                      ],
-                    ),
-                    if (!widget.isAuthenticated && widget.onOpenLogin != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 18),
-                        child: FilledButton.tonalIcon(
-                          onPressed: widget.onOpenLogin,
-                          icon: const Icon(Icons.login),
-                          label: const Text('Sign in for live join access'),
-                        ),
+                        ],
                       ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(destination.hubDescription, style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 14),
+                      Text('Arena promise', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Text('Adaptive qualification, realistic match probabilities, key moments, injuries, and manager fingerprints should all show up here in one smooth flow.', style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                  ),
                 ),
+              ),
+              const SizedBox(height: 20),
+              GtexSignalStrip(
+                title: 'Live match center',
+                subtitle: 'Arena mode tracks which stories are live, which brackets are filling, and which formats are ready to burst into 3-5 minute highlight loops.',
+                accent: Colors.deepPurpleAccent,
+                tiles: <Widget>[
+                  GtexSignalTile(
+                    label: 'Featured fixture lane',
+                    value: competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).isNotEmpty ? 'LIVE NOW' : 'QUEUE READY',
+                    caption: competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).isNotEmpty
+                        ? '${competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).length} contests are already in motion.'
+                        : 'No active fixture stream yet. Published contests become the next live watchlist.',
+                    icon: Icons.live_tv_rounded,
+                    color: Colors.deepPurpleAccent,
+                  ),
+                  GtexSignalTile(
+                    label: 'Join pressure',
+                    value: openCount > 0 ? '$openCount OPEN' : 'SEALED',
+                    caption: 'Open and published competitions stay separate from the market so match-night tension never feels like order entry.',
+                    icon: Icons.groups_2_outlined,
+                    color: const Color(0xFFFFA3E0),
+                  ),
+                  GtexSignalTile(
+                    label: 'Format spread',
+                    value: '${competitions.where((CompetitionSummary item) => item.isLeague).length}L / ${competitions.where((CompetitionSummary item) => item.isCup).length}C',
+                    caption: 'Leagues, cups, fast leagues, and future world-stage routes stay visible in one arena stack.',
+                    icon: Icons.emoji_events_outlined,
+                    color: const Color(0xFF8ED8FF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GteSyncStatusCard(
+                title: 'Arena systems',
+                status: widget.controller.discoveryError == null
+                    ? 'Live storylines, bracket states, and replay lanes are humming.'
+                    : 'Arena sync degraded. Last good fixture board remains available.',
+                syncedAt: widget.controller.discoverySyncedAt,
+                accent: Colors.deepPurpleAccent,
+                isRefreshing: widget.controller.isLoadingDiscovery,
+                onRefresh: widget.controller.loadDiscovery,
               ),
               const SizedBox(height: 20),
               GteSurfacePanel(
@@ -263,6 +300,19 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     final List<CompetitionSummary> featured =
         competitionHubFeaturedCompetitions(competitions);
 
+    final List<CompetitionSummary> liveBoard = competitions
+        .where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress || item.status == CompetitionStatus.openForJoin || item.status == CompetitionStatus.published)
+        .take(3)
+        .toList(growable: false);
+    final List<CompetitionSummary> recentlyFinal = competitions
+        .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
+        .take(3)
+        .toList(growable: false);
+    final List<CompetitionSummary> replayLane = featured
+        .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
+        .take(2)
+        .toList(growable: false);
+
     return <Widget>[
       GteSurfacePanel(
         child: Column(
@@ -311,6 +361,36 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         ),
       ),
       const SizedBox(height: 20),
+      if (liveBoard.isNotEmpty) ...<Widget>[
+        const _ArenaSectionHeader(
+          eyebrow: 'MATCHDAY BOARD',
+          title: 'Live fixture desk',
+          description: 'A quick broadcast strip for the stories most likely to spill into highlights, results, and bracket movement.',
+        ),
+        const SizedBox(height: 12),
+        ...liveBoard.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _LiveFixtureCard(competition: item, onOpen: () => _openCompetition(item.id)),
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
+      if (recentlyFinal.isNotEmpty) ...<Widget>[
+        const _ArenaSectionHeader(
+          eyebrow: 'FINAL WHISTLE',
+          title: 'Recently settled',
+          description: 'Completed contests stay visible so users can jump from result to replay lane without losing the competition context.',
+        ),
+        const SizedBox(height: 12),
+        ...recentlyFinal.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _LiveFixtureCard(competition: item, onOpen: () => _openCompetition(item.id)),
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
       if (featured.isEmpty)
         GteStatePanel(
           title: CompetitionHubDestination.overview.emptyTitle,
@@ -319,6 +399,25 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         )
       else
         ...<Widget>[
+          if (replayLane.isNotEmpty) ...<Widget>[
+            const _ArenaSectionHeader(
+              eyebrow: 'REPLAY LANE',
+              title: 'Highlight-ready competitions',
+              description: 'These contests are the cleanest handoff into 3-5 minute stories, recap reels, and manager-fingerprint review.',
+            ),
+            const SizedBox(height: 12),
+            ...replayLane.map(
+              (CompetitionSummary item) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _CompetitionCard(
+                  competition: item,
+                  contextLabel: 'Replay candidate',
+                  onOpen: () => _openCompetition(item.id),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           Text(
             'Featured now',
             style: Theme.of(context).textTheme.titleLarge,
@@ -433,17 +532,69 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
       ];
     }
 
+    final List<CompetitionSummary> liveNow = competitions
+        .where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress)
+        .toList(growable: false);
+    final List<CompetitionSummary> upNext = competitions
+        .where((CompetitionSummary item) => item.status == CompetitionStatus.openForJoin || item.status == CompetitionStatus.published || item.status == CompetitionStatus.filled || item.status == CompetitionStatus.locked)
+        .toList(growable: false);
+    final List<CompetitionSummary> complete = competitions
+        .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
+        .toList(growable: false);
+
     return <Widget>[
-      ...competitions.map(
-        (CompetitionSummary item) => Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: _CompetitionCard(
-            competition: item,
-            contextLabel: destination.label,
-            onOpen: () => _openCompetition(item.id),
+      if (liveNow.isNotEmpty) ...<Widget>[
+        _ArenaSectionHeader(
+          eyebrow: destination.label.toUpperCase(),
+          title: 'Live now',
+          description: 'These contests are already in motion and should read like a match center first, not a lobby card.',
+        ),
+        const SizedBox(height: 12),
+        ...liveNow.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _LiveFixtureCard(competition: item, onOpen: () => _openCompetition(item.id)),
           ),
         ),
-      ),
+        const SizedBox(height: 4),
+      ],
+      if (upNext.isNotEmpty) ...<Widget>[
+        _ArenaSectionHeader(
+          eyebrow: destination.label.toUpperCase(),
+          title: 'Up next',
+          description: 'Open, published, and locked competitions are grouped here so joinability is obvious in one scan.',
+        ),
+        const SizedBox(height: 12),
+        ...upNext.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _CompetitionCard(
+              competition: item,
+              contextLabel: destination.label,
+              onOpen: () => _openCompetition(item.id),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
+      if (complete.isNotEmpty) ...<Widget>[
+        _ArenaSectionHeader(
+          eyebrow: destination.label.toUpperCase(),
+          title: 'Results and replays',
+          description: 'Settled competitions remain visible for recap, bragging rights, and highlight routing.',
+        ),
+        const SizedBox(height: 12),
+        ...complete.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _CompetitionCard(
+              competition: item,
+              contextLabel: 'Final result',
+              onOpen: () => _openCompetition(item.id),
+            ),
+          ),
+        ),
+      ],
     ];
   }
 
@@ -601,9 +752,23 @@ class _CompetitionCard extends StatelessWidget {
                 value:
                     '${competition.participantCount}/${competition.capacity}',
               ),
+              _StatPill(
+                label: 'Join state',
+                value: _joinStateLabel(competition),
+              ),
             ],
           ),
           const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: competition.fillRate.clamp(0, 1),
+              minHeight: 8,
+              backgroundColor: Colors.white.withValues(alpha: 0.06),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.deepPurpleAccent),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: <Widget>[
               FilledButton.tonalIcon(
@@ -657,6 +822,105 @@ class _StatPill extends StatelessWidget {
           Text(label, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 4),
           Text(value, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _ArenaSectionHeader extends StatelessWidget {
+  const _ArenaSectionHeader({required this.eyebrow, required this.title, required this.description});
+
+  final String eyebrow;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexSectionHeader(
+      eyebrow: eyebrow,
+      title: title,
+      description: description,
+      accent: Colors.deepPurpleAccent,
+    );
+  }
+}
+
+class _LiveFixtureCard extends StatelessWidget {
+  const _LiveFixtureCard({required this.competition, required this.onOpen});
+
+  final CompetitionSummary competition;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isLive = competition.status == CompetitionStatus.inProgress;
+    final bool isFinal = competition.status == CompetitionStatus.completed;
+    final double fillPct = competition.fillRate.clamp(0, 1);
+    final Color accent = isFinal
+        ? const Color(0xFFFFC86A)
+        : isLive
+            ? const Color(0xFFFF8CF2)
+            : Colors.deepPurpleAccent;
+    return GteSurfacePanel(
+      onTap: onOpen,
+      accentColor: accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(competition.name, style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text('${competition.creatorLabel} • ${competition.safeFormatLabel}', style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: accent.withValues(alpha: 0.14),
+                ),
+                child: Text(isFinal ? 'FINAL RESULT' : isLive ? 'LIVE MATCH CENTER' : 'UP NEXT', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: accent)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: fillPct,
+              minHeight: 9,
+              backgroundColor: Colors.white.withValues(alpha: 0.06),
+              valueColor: AlwaysStoppedAnimation<Color>(accent),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              _StatPill(label: 'Bracket fill', value: '${(fillPct * 100).round()}%'),
+              _StatPill(label: 'Phase', value: isFinal ? 'Replay ready' : isLive ? 'Story active' : 'Join window'),
+              _StatPill(label: 'Entry', value: gteFormatCredits(competition.entryFee)),
+              _StatPill(label: 'Prize', value: gteFormatCredits(competition.prizePool)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            isFinal
+                ? 'The matchday story is settled. Route users into recap, final standings, and short-form replay context from here.'
+                : isLive
+                    ? 'Manager fingerprints, probability swings, injuries, and key moments should flow into a compact story reel from here.'
+                    : 'This contest is sitting on the launchpad. As soon as it tips into play, it should feel like a separate broadcast product, not a market card.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );

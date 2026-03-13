@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/app_feedback.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_dto.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
@@ -69,7 +70,7 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
         return;
       }
       setState(() {
-        _error = error.toString();
+        _error = AppFeedback.messageFor(error);
         _loading = false;
       });
     }

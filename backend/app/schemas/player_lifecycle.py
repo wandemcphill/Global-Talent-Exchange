@@ -223,6 +223,21 @@ class PlayerOverviewView(CommonSchema):
     recent_events: tuple[PlayerLifecycleEventView, ...] = Field(default_factory=tuple)
 
 
+
+
+class PlayerLifecycleSnapshotView(CommonSchema):
+    player_id: str
+    player_name: str
+    position: str | None = None
+    market_value_eur: float | None = None
+    snapshot_generated_on: date
+    career_summary: PlayerCareerSummaryView
+    availability_badge: AvailabilityBadgeView
+    contract_badge: ContractBadgeView | None = None
+    transfer_status: TransferWindowEligibilityView
+    recent_events: tuple[PlayerLifecycleEventView, ...] = Field(default_factory=tuple)
+
+
 class InjuryCreateRequest(CommonSchema):
     severity: InjurySeverity = InjurySeverity.MINOR
     injury_type: str = Field(min_length=1, max_length=80)

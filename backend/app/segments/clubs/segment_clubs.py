@@ -17,20 +17,16 @@ from backend.app.schemas.club_requests import (
 from backend.app.schemas.club_responses import (
     ClubBrandingView,
     ClubCatalogView,
-    ClubDynastyView,
     ClubJerseysView,
     ClubProfileView,
     ClubPurchasesView,
-    ClubReputationView,
     ClubShowcaseView,
     ClubTrophiesView,
 )
 from backend.app.services.club_branding_service import ClubBrandingService
 from backend.app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
-from backend.app.services.club_dynasty_service import ClubDynastyService
 from backend.app.services.club_jersey_service import ClubJerseyService
 from backend.app.services.club_purchase_service import ClubPurchaseService
-from backend.app.services.club_reputation_service import ClubReputationService
 from backend.app.services.club_showcase_service import ClubShowcaseService
 from backend.app.services.club_trophy_service import ClubTrophyService
 
@@ -116,30 +112,12 @@ def get_club(club_id: str, session: Session = Depends(get_session)) -> ClubProfi
     return ClubProfileView(profile=profile)
 
 
-@router.get("/{club_id}/reputation", response_model=ClubReputationView)
-def get_club_reputation(club_id: str, session: Session = Depends(get_session)) -> ClubReputationView:
-    try:
-        reputation = ClubReputationService(session).get_reputation(club_id)
-    except Exception as error:  # noqa: BLE001
-        raise _to_http_error(error) from error
-    return ClubReputationView(reputation=reputation)
-
-
 @router.get("/{club_id}/showcase", response_model=ClubShowcaseView)
 def get_club_showcase(club_id: str, session: Session = Depends(get_session)) -> ClubShowcaseView:
     try:
         return ClubShowcaseService(session).get_showcase(club_id)
     except Exception as error:  # noqa: BLE001
         raise _to_http_error(error) from error
-
-
-@router.get("/{club_id}/dynasty", response_model=ClubDynastyView)
-def get_club_dynasty(club_id: str, session: Session = Depends(get_session)) -> ClubDynastyView:
-    try:
-        progress, milestones = ClubDynastyService(session).get_dynasty(club_id)
-    except Exception as error:  # noqa: BLE001
-        raise _to_http_error(error) from error
-    return ClubDynastyView(progress=progress, milestones=milestones)
 
 
 @router.get("/{club_id}/trophies", response_model=ClubTrophiesView)

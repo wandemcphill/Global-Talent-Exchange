@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../../core/app_feedback.dart';
 
 import '../../../../data/gte_api_repository.dart';
 import '../data/dynasty_api_repository.dart';
@@ -168,7 +169,7 @@ class DynastyController extends ChangeNotifier {
       profile = response;
     } catch (error) {
       if (_overviewGate.isActive(requestId)) {
-        overviewError = error.toString();
+        overviewError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_overviewGate.isActive(requestId)) {
@@ -207,7 +208,7 @@ class DynastyController extends ChangeNotifier {
       fallbackEras = resolvedHistory.eras;
     } catch (error) {
       if (_historyGate.isActive(requestId)) {
-        historyError = error.toString();
+        historyError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_historyGate.isActive(requestId)) {
@@ -232,7 +233,7 @@ class DynastyController extends ChangeNotifier {
       leaderboard = response;
     } catch (error) {
       if (_leaderboardGate.isActive(requestId)) {
-        leaderboardError = error.toString();
+        leaderboardError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_leaderboardGate.isActive(requestId)) {

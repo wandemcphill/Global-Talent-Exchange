@@ -32,6 +32,7 @@ from backend.app.schemas.player_lifecycle import (
     InjuryRecoveryRequest,
     TransferBidAcceptRequest,
     TransferBidCreateRequest,
+    TransferBidRejectRequest,
 )
 from backend.app.segments.player_lifecycle.segment_player_lifecycle import router
 from backend.app.services.player_lifecycle_service import (
@@ -632,21 +633,29 @@ def test_future_transfer_acceptance_keeps_current_contract_active_until_move_dat
     lifecycle_session.refresh(old_contract)
 
     summary_before_move = lifecycle_service.get_career_summary(context["player_id"], on_date=date(2026, 3, 12))
-    summary_after_move = lifecycle_service.get_career_summary(context["player_id"], on_date=date(2026, 7, 2))
 
     assert accepted.status == "accepted"
     assert old_contract.status == ContractStatus.ACTIVE.value
     assert old_contract.ends_on == date(2026, 6, 30)
     assert summary_before_move.current_club_id == context["club_profile_id"]
+    assert lifecycle_session.get(Player, context["player_id"]).current_club_profile_id == context["club_profile_id"]
     assert summary_before_move.contract_summary is not None
     assert summary_before_move.contract_summary.status == ContractStatus.ACTIVE
     assert summary_before_move.contract_summary.active_contract is not None
     assert summary_before_move.contract_summary.active_contract.club_id == context["club_profile_id"]
     assert summary_before_move.transfer_summary.accepted_bids == 1
     assert summary_before_move.transfer_summary.completed_bids == 0
+
+    summary_after_move = lifecycle_service.get_career_summary(context["player_id"], on_date=date(2026, 7, 2))
+    lifecycle_session.refresh(old_contract)
+
+    assert old_contract.status == ContractStatus.TERMINATED.value
+    assert old_contract.ends_on == date(2026, 6, 30)
     assert summary_after_move.contract_summary is not None
     assert summary_after_move.contract_summary.active_contract is not None
     assert summary_after_move.contract_summary.active_contract.club_id == context["buyer_profile_id"]
+    assert lifecycle_session.get(Player, context["player_id"]).current_club_profile_id == context["buyer_profile_id"]
+    assert lifecycle_service.list_player_transfer_bids(context["player_id"])[0].status == "completed"
 
 
 def test_lifecycle_write_operations_validate_club_references(
@@ -705,6 +714,140 @@ def test_lifecycle_write_operations_validate_club_references(
             ),
             submitted_on=date(2026, 3, 12),
         )
+
+
+def test_reject_transfer_bid_leaves_player_state_unchanged(
+    lifecycle_service: PlayerLifecycleService,
+    lifecycle_session: Session,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    window = add_window(
+        lifecycle_session,
+        window_id="window-reject-transfer",
+        opens_on=date(2026, 3, 1),
+        closes_on=date(2026, 3, 31),
+    )
+    lifecycle_service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=context["club_profile_id"],
+            wage_amount=Decimal("80000.00"),
+            signed_on=date(2025, 7, 1),
+            starts_on=date(2025, 7, 1),
+            ends_on=date(2026, 12, 31),
+        ),
+    )
+    bid = lifecycle_service.create_bid(
+        window.id,
+        TransferBidCreateRequest(
+            player_id=context["player_id"],
+            buying_club_id=context["buyer_profile_id"],
+            bid_amount=Decimal("3500000.00"),
+        ),
+        submitted_on=date(2026, 3, 12),
+    )
+
+    rejected = lifecycle_service.reject_bid(window.id, bid.id, TransferBidRejectRequest(reason="No fit"))
+
+    assert rejected.status == "rejected"
+    assert lifecycle_session.get(Player, context["player_id"]).current_club_profile_id == context["club_profile_id"]
+    assert lifecycle_service.get_contract_summary(context["player_id"], on_date=date(2026, 3, 12)).active_contract.club_id == context["club_profile_id"]
+
+
+def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
+    lifecycle_service: PlayerLifecycleService,
+    lifecycle_session: Session,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    window = add_window(
+        lifecycle_session,
+        window_id="window-repeat-accept",
+        opens_on=date(2026, 3, 1),
+        closes_on=date(2026, 3, 31),
+    )
+    lifecycle_service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=context["club_profile_id"],
+            wage_amount=Decimal("80000.00"),
+            signed_on=date(2025, 7, 1),
+            starts_on=date(2025, 7, 1),
+            ends_on=date(2026, 12, 31),
+        ),
+    )
+    bid = lifecycle_service.create_bid(
+        window.id,
+        TransferBidCreateRequest(
+            player_id=context["player_id"],
+            buying_club_id=context["buyer_profile_id"],
+            bid_amount=Decimal("4500000.00"),
+            wage_offer_amount=Decimal("95000.00"),
+        ),
+        submitted_on=date(2026, 3, 12),
+    )
+    lifecycle_service.accept_bid(
+        window.id,
+        bid.id,
+        TransferBidAcceptRequest(
+            contract_ends_on=date(2028, 6, 30),
+            contract_starts_on=date(2026, 3, 12),
+            wage_amount=Decimal("95000.00"),
+            signed_on=date(2026, 3, 12),
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+
+    with pytest.raises(PlayerLifecycleValidationError, match="Only submitted transfer bids can be accepted"):
+        lifecycle_service.accept_bid(
+            window.id,
+            bid.id,
+            TransferBidAcceptRequest(
+                contract_ends_on=date(2028, 6, 30),
+                contract_starts_on=date(2026, 3, 12),
+                wage_amount=Decimal("95000.00"),
+                signed_on=date(2026, 3, 12),
+            ),
+            reference_on=date(2026, 3, 12),
+        )
+
+    contracts = lifecycle_service.get_contracts(context["player_id"])
+    assert len([contract for contract in contracts if contract.club_id == context["buyer_profile_id"]]) == 1
+
+
+def test_lifecycle_snapshot_endpoint_returns_ui_ready_contract(
+    lifecycle_api: TestClient,
+    lifecycle_session: Session,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    add_window(
+        lifecycle_session,
+        window_id="window-api-snapshot",
+        opens_on=date(2026, 3, 1),
+        closes_on=date(2026, 3, 31),
+    )
+    lifecycle_service = PlayerLifecycleService(lifecycle_session)
+    lifecycle_service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=context["club_profile_id"],
+            wage_amount=Decimal("99000.00"),
+            signed_on=date(2026, 3, 1),
+            starts_on=date(2026, 3, 1),
+            ends_on=date(2027, 6, 30),
+        ),
+    )
+
+    response = lifecycle_api.get(
+        f"/api/players/{context['player_id']}/lifecycle-snapshot",
+        params={"as_of": "2026-03-12", "territory_code": "ENG"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["player_id"] == context["player_id"]
+    assert payload["career_summary"]["contract_summary"]["active_contract"]["club_id"] == context["club_profile_id"]
+    assert payload["availability_badge"]["available"] is True
+    assert isinstance(payload["recent_events"], list)
 
 
 def test_lifecycle_api_smoke_for_injury_and_availability(

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/app_feedback.dart';
 
 import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
@@ -16,6 +17,14 @@ class GteExchangeController extends ChangeNotifier {
   final GteRequestGate _portfolioGate = GteRequestGate();
   final GteRequestGate _ordersGate = GteRequestGate();
   final GteRequestGate _authGate = GteRequestGate();
+
+  Future<void>? _bootstrapFuture;
+  Future<void>? _portfolioFuture;
+  Future<void>? _ordersFuture;
+  DateTime? marketSyncedAt;
+  DateTime? playerSyncedAt;
+  DateTime? portfolioSyncedAt;
+  DateTime? ordersSyncedAt;
 
   bool isBootstrapping = false;
   bool isLoadingMarket = false;
@@ -105,18 +114,19 @@ class GteExchangeController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> bootstrap() async {
-    if (isBootstrapping) {
-      return;
+  Future<void> bootstrap() {
+    if (_bootstrapFuture != null) {
+      return _bootstrapFuture!;
     }
     isBootstrapping = true;
     notifyListeners();
-    try {
-      await loadMarket(reset: true);
-    } finally {
+    final Future<void> task = loadMarket(reset: true).whenComplete(() {
       isBootstrapping = false;
+      _bootstrapFuture = null;
       notifyListeners();
-    }
+    });
+    _bootstrapFuture = task;
+    return task;
   }
 
   Future<void> loadMarket({
@@ -148,6 +158,7 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       marketSearch = nextSearch;
+      marketSyncedAt = DateTime.now().toUtc();
       if (reset || marketPage == null) {
         marketPage = response;
       } else {
@@ -163,7 +174,7 @@ class GteExchangeController extends ChangeNotifier {
       }
     } catch (error) {
       if (_marketGate.isActive(requestId)) {
-        marketError = error.toString();
+        marketError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_marketGate.isActive(requestId)) {
@@ -194,9 +205,10 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       selectedPlayer = snapshot;
+      playerSyncedAt = DateTime.now().toUtc();
     } catch (error) {
       if (_playerGate.isActive(requestId)) {
-        playerError = error.toString();
+        playerError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_playerGate.isActive(requestId)) {
@@ -227,9 +239,10 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       selectedPlayer = current.copyWith(candles: candles);
+      playerSyncedAt = DateTime.now().toUtc();
     } catch (error) {
       if (_playerGate.isActive(requestId)) {
-        playerError = error.toString();
+        playerError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_playerGate.isActive(requestId)) {
@@ -261,7 +274,7 @@ class GteExchangeController extends ChangeNotifier {
       );
     } catch (error) {
       if (_authGate.isActive(requestId)) {
-        authError = error.toString();
+        authError = AppFeedback.messageFor(error);
       }
     } finally {
       if (_authGate.isActive(requestId)) {
@@ -287,6 +300,13 @@ class GteExchangeController extends ChangeNotifier {
     _openOrderIds.clear();
     _hasLoadedOrdersOnce = false;
     _ordersById.clear();
+    _bootstrapFuture = null;
+    _portfolioFuture = null;
+    _ordersFuture = null;
+    marketSyncedAt = null;
+    playerSyncedAt = null;
+    portfolioSyncedAt = null;
+    ordersSyncedAt = null;
     notifyListeners();
   }
 
@@ -297,83 +317,101 @@ class GteExchangeController extends ChangeNotifier {
     await _refreshTradingState();
   }
 
-  Future<void> loadPortfolio() async {
+  Future<void> loadPortfolio() {
     if (!isAuthenticated) {
-      return;
+      return Future<void>.value();
+    }
+    if (_portfolioFuture != null) {
+      return _portfolioFuture!;
     }
     final int requestId = _portfolioGate.begin();
     portfolioError = null;
     isLoadingPortfolio = true;
     notifyListeners();
 
-    try {
-      final List<dynamic> payload =
-          await Future.wait<dynamic>(<Future<dynamic>>[
-        _api.fetchWalletSummary(),
-        _api.fetchPortfolio(),
-        _api.fetchPortfolioSummary(),
-      ]);
-      if (!_portfolioGate.isActive(requestId)) {
-        return;
+    final Future<void> task = () async {
+      try {
+        final List<dynamic> payload = await Future.wait<dynamic>(<Future<dynamic>>[
+          _api.fetchWalletSummary(),
+          _api.fetchPortfolio(),
+          _api.fetchPortfolioSummary(),
+        ]);
+        if (!_portfolioGate.isActive(requestId)) {
+          return;
+        }
+        walletSummary = payload[0] as GteWalletSummary;
+        portfolio = payload[1] as GtePortfolioView;
+        portfolioSummary = payload[2] as GtePortfolioSummary;
+        portfolioSyncedAt = DateTime.now().toUtc();
+      } catch (error) {
+        if (_portfolioGate.isActive(requestId)) {
+          portfolioError = AppFeedback.messageFor(error);
+        }
+      } finally {
+        if (_portfolioGate.isActive(requestId)) {
+          isLoadingPortfolio = false;
+          notifyListeners();
+        }
+        _portfolioFuture = null;
       }
-      walletSummary = payload[0] as GteWalletSummary;
-      portfolio = payload[1] as GtePortfolioView;
-      portfolioSummary = payload[2] as GtePortfolioSummary;
-    } catch (error) {
-      if (_portfolioGate.isActive(requestId)) {
-        portfolioError = error.toString();
-      }
-    } finally {
-      if (_portfolioGate.isActive(requestId)) {
-        isLoadingPortfolio = false;
-        notifyListeners();
-      }
-    }
+    }();
+
+    _portfolioFuture = task;
+    return task;
   }
 
   Future<void> loadOrders({
     int limit = 20,
-  }) async {
+  }) {
     if (!isAuthenticated) {
-      return;
+      return Future<void>.value();
+    }
+    if (_ordersFuture != null) {
+      return _ordersFuture!;
     }
     final int requestId = _ordersGate.begin();
     ordersError = null;
     isLoadingOrders = true;
     notifyListeners();
 
-    try {
-      final List<dynamic> payload =
-          await Future.wait<dynamic>(<Future<dynamic>>[
-        _api.listOrders(limit: limit),
-        _api.listOrders(
-          limit: limit,
-          statuses: const <GteOrderStatus>[
-            GteOrderStatus.open,
-            GteOrderStatus.partiallyFilled,
-          ],
-        ),
-      ]);
-      if (!_ordersGate.isActive(requestId)) {
-        return;
+    final Future<void> task = () async {
+      try {
+        final List<dynamic> payload = await Future.wait<dynamic>(<Future<dynamic>>[
+          _api.listOrders(limit: limit),
+          _api.listOrders(
+            limit: limit,
+            statuses: const <GteOrderStatus>[
+              GteOrderStatus.open,
+              GteOrderStatus.partiallyFilled,
+            ],
+          ),
+        ]);
+        if (!_ordersGate.isActive(requestId)) {
+          return;
+        }
+        final GteOrderListView recentResponse = payload[0] as GteOrderListView;
+        final GteOrderListView openResponse = payload[1] as GteOrderListView;
+        recentOrderTotal = recentResponse.total;
+        openOrderTotal = openResponse.total;
+        _hasLoadedOrdersOnce = true;
+        _applyOrderList(_recentOrderIds, recentResponse.items);
+        _applyOrderList(_openOrderIds, openResponse.items);
+        ordersSyncedAt = DateTime.now().toUtc();
+      } catch (error) {
+        if (_ordersGate.isActive(requestId)) {
+          ordersError = AppFeedback.messageFor(error);
+        }
+      } finally {
+        if (_ordersGate.isActive(requestId)) {
+          isLoadingOrders = false;
+          notifyListeners();
+        }
+        _ordersFuture = null;
       }
-      final GteOrderListView recentResponse = payload[0] as GteOrderListView;
-      final GteOrderListView openResponse = payload[1] as GteOrderListView;
-      recentOrderTotal = recentResponse.total;
-      openOrderTotal = openResponse.total;
-      _hasLoadedOrdersOnce = true;
-      _applyOrderList(_recentOrderIds, recentResponse.items);
-      _applyOrderList(_openOrderIds, openResponse.items);
-    } catch (error) {
-      if (_ordersGate.isActive(requestId)) {
-        ordersError = error.toString();
-      }
-    } finally {
-      if (_ordersGate.isActive(requestId)) {
-        isLoadingOrders = false;
-        notifyListeners();
-      }
-    }
+    }();
+
+    _ordersFuture = task;
+    return task;
   }
 
   Future<GteOrderRecord?> placeOrder({
@@ -404,7 +442,7 @@ class GteExchangeController extends ChangeNotifier {
       );
       return _ordersById[order.id] ?? order;
     } catch (error) {
-      orderError = error.toString();
+      orderError = AppFeedback.messageFor(error);
       notifyListeners();
       return null;
     } finally {
@@ -429,7 +467,7 @@ class GteExchangeController extends ChangeNotifier {
       );
       return _ordersById[order.id] ?? order;
     } catch (error) {
-      orderError = error.toString();
+      orderError = AppFeedback.messageFor(error);
       notifyListeners();
       return null;
     } finally {
@@ -454,7 +492,7 @@ class GteExchangeController extends ChangeNotifier {
       );
       return _ordersById[order.id] ?? order;
     } catch (error) {
-      orderError = error.toString();
+      orderError = AppFeedback.messageFor(error);
       notifyListeners();
       return null;
     } finally {

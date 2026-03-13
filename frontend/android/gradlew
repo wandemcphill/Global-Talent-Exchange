@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+if [ ! -f "$DIR/gradle/wrapper/gradle-wrapper.jar" ]; then
+  echo "Missing gradle-wrapper.jar. Run from frontend/: flutter create . --platforms=android"
+  exit 1
+fi
+exec java -jar "$DIR/gradle/wrapper/gradle-wrapper.jar" "$@"

@@ -5,9 +5,12 @@ import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_formatters.dart';
 import '../widgets/gte_metric_chip.dart';
 import '../widgets/gte_order_detail_card.dart';
+import '../widgets/gte_shell_theme.dart';
+import '../widgets/gte_sync_status_card.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
 import '../widgets/gte_wallet_summary_card.dart';
+import '../widgets/gtex_branding.dart';
 
 class GtePortfolioScreen extends StatelessWidget {
   const GtePortfolioScreen({
@@ -24,16 +27,30 @@ class GtePortfolioScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!controller.isAuthenticated) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: GteStatePanel(
-          title: 'Sign in required',
-          message:
-              'Portfolio, wallet, and order routes are protected. Sign in to load `/api/portfolio`, `/api/portfolio/summary`, `/api/wallets/summary`, and `/api/orders`.',
-          actionLabel: 'Open login',
-          onAction: onOpenLogin,
-          icon: Icons.lock_outline,
-        ),
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        children: <Widget>[
+          GtexHeroBanner(
+            eyebrow: 'CAPITAL ROOM',
+            title: 'The wallet lane stays calm, legible, and protected until you are ready to trade for real.',
+            description: 'Guest mode shows the layout, but not live balances or executable funds. Sign in to unlock the actual capital stack.',
+            accent: GteShellTheme.accentCapital,
+            chips: const <Widget>[
+              GteMetricChip(label: 'Mode', value: 'PREVIEW'),
+              GteMetricChip(label: 'Funding', value: 'LOCKED'),
+              GteMetricChip(label: 'Ledger', value: 'PRIVATE'),
+            ],
+            actions: <Widget>[
+              FilledButton(onPressed: onOpenLogin, child: const Text('Open login')),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const GteStatePanel(
+            title: 'Protected capital surfaces',
+            message: 'Portfolio, wallet, and order routes are protected. Sign in to load balances, holdings, and ledger detail.',
+            icon: Icons.lock_outline,
+          ),
+        ],
       );
     }
 
@@ -45,95 +62,84 @@ class GtePortfolioScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            GteSurfacePanel(
-              emphasized: true,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            GtexHeroBanner(
+              eyebrow: 'CAPITAL ROOM',
+              title: 'Cash, holdings, open orders, and funding trust all live on one calm deck.',
+              description: 'Portfolio mode is deliberately cleaner than trading and quieter than the arena. It should feel bank-grade, transparent, and ready for action without drama.',
+              accent: GteShellTheme.accentCapital,
+              chips: <Widget>[
+                GteMetricChip(label: 'Holdings', value: (controller.portfolio?.holdings.length ?? 0).toString()),
+                GteMetricChip(label: 'Open orders', value: controller.openOrders.length.toString()),
+                GteMetricChip(label: 'Recent orders', value: controller.recentOrders.length.toString()),
+              ],
+              actions: <Widget>[
+                FilledButton.tonalIcon(
+                  onPressed: controller.isLoadingPortfolio || controller.isLoadingOrders ? null : controller.refreshAccount,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh account'),
+                ),
+              ],
+              sidePanel: Column(
                 children: <Widget>[
-                  Text('Portfolio',
-                      style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Track wallet balances, holdings, and recent order activity from one protected trading view.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  _CapitalSignalRow(
+                    leftLabel: 'Funding state',
+                    leftValue: controller.walletSummary == null ? 'SYNCING' : 'READY',
+                    rightLabel: 'Order rail',
+                    rightValue: controller.openOrders.isEmpty ? 'QUIET' : 'ACTIVE',
                   ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: <Widget>[
-                      GteMetricChip(
-                        label: 'Holdings',
-                        value: (controller.portfolio?.holdings.length ?? 0)
-                            .toString(),
-                      ),
-                      GteMetricChip(
-                        label: 'Open orders',
-                        value: controller.openOrders.length.toString(),
-                      ),
-                      GteMetricChip(
-                        label: 'Recent orders',
-                        value: controller.recentOrders.length.toString(),
-                      ),
-                    ],
+                  const SizedBox(height: 12),
+                  _CapitalSignalRow(
+                    leftLabel: 'Holdings',
+                    leftValue: '${controller.portfolio?.holdings.length ?? 0}',
+                    rightLabel: 'Risk view',
+                    rightValue: controller.portfolioSummary == null ? 'WAIT' : 'CLEAR',
                   ),
-                  const SizedBox(height: 18),
-                  FilledButton.tonalIcon(
-                    onPressed: controller.isLoadingPortfolio ||
-                            controller.isLoadingOrders
-                        ? null
-                        : () {
-                            controller.refreshAccount();
-                          },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh account'),
-                  ),
-                  if (controller.isLoadingPortfolio ||
-                      controller.isLoadingOrders) ...<Widget>[
-                    const SizedBox(height: 16),
-                    const LinearProgressIndicator(),
-                  ],
                 ],
               ),
             ),
-            if (controller.portfolioError != null &&
-                (controller.walletSummary != null ||
-                    controller.portfolio != null ||
-                    controller.portfolioSummary != null)) ...<Widget>[
+            if (controller.portfolioError != null && (controller.walletSummary != null || controller.portfolio != null || controller.portfolioSummary != null)) ...<Widget>[
               const SizedBox(height: 20),
-              _InlineAccountNotice(
-                icon: Icons.warning_amber_rounded,
-                message:
-                    'Some account data may be stale. ${controller.portfolioError!}',
-              ),
+              _InlineAccountNotice(icon: Icons.warning_amber_rounded, message: 'Some account data may be stale. ${controller.portfolioError!}'),
             ],
-            if (controller.ordersError != null &&
-                controller.recentOrders.isNotEmpty) ...<Widget>[
+            if (controller.ordersError != null && controller.recentOrders.isNotEmpty) ...<Widget>[
               const SizedBox(height: 20),
               _InlineAccountNotice(
                 icon: Icons.warning_amber_rounded,
-                message:
-                    'Order history refresh failed. Showing the latest successful order snapshot instead.',
+                message: 'Order history refresh failed. Showing the latest successful order snapshot instead.',
               ),
             ],
             const SizedBox(height: 20),
-            if (controller.walletSummary != null)
-              GteWalletSummaryCard(summary: controller.walletSummary!)
+            GteSyncStatusCard(
+              title: 'Funds and ledger confidence',
+              status: controller.isAuthenticated
+                  ? 'Balances, holdings, and order state are being reconciled together.'
+                  : 'Guest preview is active. Sign in to unlock wallet funding and live ledger updates.',
+              syncedAt: controller.portfolioSyncedAt ?? controller.ordersSyncedAt,
+              accent: GteShellTheme.accentCapital,
+              isRefreshing: controller.isLoadingPortfolio || controller.isLoadingOrders,
+              onRefresh: controller.isAuthenticated ? controller.refreshAccount : onOpenLogin,
+            ),
+            const SizedBox(height: 20),
+            if (controller.walletSummary != null) ...<Widget>[
+              GteWalletSummaryCard(summary: controller.walletSummary!),
+              const SizedBox(height: 20),
+              _CapitalBreakdownCard(
+                walletSummary: controller.walletSummary!,
+                portfolioSummary: controller.portfolioSummary,
+                openOrderCount: controller.openOrders.length,
+              ),
+            ]
             else if (controller.isLoadingPortfolio)
               const _LoadingCard(title: 'Wallet summary')
             else
               const GteStatePanel(
                 title: 'Wallet unavailable',
-                message:
-                    'Wallet balances could not be loaded for this session.',
+                message: 'Wallet balances could not be loaded for this session.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             const SizedBox(height: 20),
             if (controller.portfolioSummary != null)
-              _PortfolioSummaryCard(
-                summary: controller.portfolioSummary!,
-                holdingCount: controller.portfolio?.holdings.length ?? 0,
-              )
+              _PortfolioSummaryCard(summary: controller.portfolioSummary!, holdingCount: controller.portfolio?.holdings.length ?? 0)
             else if (controller.isLoadingPortfolio)
               const _LoadingCard(title: 'Portfolio summary')
             else
@@ -143,39 +149,26 @@ class GtePortfolioScreen extends StatelessWidget {
                 icon: Icons.analytics_outlined,
               ),
             const SizedBox(height: 20),
-            if (controller.portfolioError != null &&
-                controller.portfolio == null)
+            if (controller.portfolioError != null && controller.portfolio == null)
               GteStatePanel(
                 title: 'Portfolio unavailable',
                 message: controller.portfolioError!,
                 actionLabel: 'Retry',
-                onAction: () {
-                  controller.refreshAccount();
-                },
+                onAction: controller.refreshAccount,
                 icon: Icons.warning_amber_rounded,
               )
-            else if (controller.isLoadingPortfolio &&
-                controller.portfolio == null)
+            else if (controller.isLoadingPortfolio && controller.portfolio == null)
               const _LoadingCard(title: 'Holdings')
-            else if (controller.portfolio == null ||
-                controller.portfolio!.holdings.isEmpty)
+            else if (controller.portfolio == null || controller.portfolio!.holdings.isEmpty)
               const GteStatePanel(
                 title: 'No holdings yet',
-                message:
-                    'Place an order from a player detail screen to start building the portfolio.',
+                message: 'Place an order from a player detail screen to start building the portfolio.',
                 icon: Icons.account_balance_wallet_outlined,
               )
             else
-              _HoldingsCard(
-                controller: controller,
-                portfolio: controller.portfolio!,
-                onOpenPlayer: onOpenPlayer,
-              ),
+              _HoldingsCard(controller: controller, portfolio: controller.portfolio!, onOpenPlayer: onOpenPlayer),
             const SizedBox(height: 20),
-            _OrdersPanel(
-              controller: controller,
-              onOpenPlayer: onOpenPlayer,
-            ),
+            _OrdersPanel(controller: controller, onOpenPlayer: onOpenPlayer),
           ],
         ),
       ),
@@ -184,53 +177,96 @@ class GtePortfolioScreen extends StatelessWidget {
 }
 
 class _PortfolioSummaryCard extends StatelessWidget {
-  const _PortfolioSummaryCard({
-    required this.summary,
-    required this.holdingCount,
-  });
+  const _PortfolioSummaryCard({required this.summary, required this.holdingCount});
 
   final GtePortfolioSummary summary;
   final int holdingCount;
 
   @override
   Widget build(BuildContext context) {
+    final double deployedRatio = summary.totalEquity <= 0 ? 0 : (summary.totalMarketValue / summary.totalEquity).clamp(0, 1);
+    final Color plColor = summary.unrealizedPlTotal >= 0 ? GteShellTheme.positive : GteShellTheme.negative;
+
     return GteSurfacePanel(
+      accentColor: GteShellTheme.accentCapital,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Portfolio summary',
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text('Portfolio summary', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 14),
+          Row(
+            children: <Widget>[
+              Expanded(
+                flex: 3,
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: Colors.white.withValues(alpha: 0.03),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('Total equity', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      Text(gteFormatCredits(summary.totalEquity), style: Theme.of(context).textTheme.displaySmall?.copyWith(fontSize: 28)),
+                      const SizedBox(height: 14),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: deployedRatio,
+                          minHeight: 10,
+                          backgroundColor: Colors.white.withValues(alpha: 0.06),
+                          valueColor: const AlwaysStoppedAnimation<Color>(GteShellTheme.accentCapital),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text('Capital deployed into positions: ${(deployedRatio * 100).toStringAsFixed(0)}%', style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: plColor.withValues(alpha: 0.1),
+                    border: Border.all(color: plColor.withValues(alpha: 0.22)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('Unrealized P/L', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 8),
+                      Text(gteFormatCredits(summary.unrealizedPlTotal), style: Theme.of(context).textTheme.titleLarge?.copyWith(color: plColor)),
+                      const SizedBox(height: 14),
+                      Text('Realized P/L', style: Theme.of(context).textTheme.bodyMedium),
+                      const SizedBox(height: 6),
+                      Text(
+                        gteFormatCredits(summary.realizedPlTotal),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: summary.realizedPlTotal >= 0 ? GteShellTheme.positive : GteShellTheme.negative,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              GteMetricChip(
-                label: 'Market value',
-                value: gteFormatCredits(summary.totalMarketValue),
-              ),
-              GteMetricChip(
-                label: 'Cash',
-                value: gteFormatCredits(summary.cashBalance),
-              ),
-              GteMetricChip(
-                label: 'Total equity',
-                value: gteFormatCredits(summary.totalEquity),
-              ),
-              GteMetricChip(
-                label: 'Unrealized P/L',
-                value: gteFormatCredits(summary.unrealizedPlTotal),
-                positive: summary.unrealizedPlTotal >= 0,
-              ),
-              GteMetricChip(
-                label: 'Realized P/L',
-                value: gteFormatCredits(summary.realizedPlTotal),
-                positive: summary.realizedPlTotal >= 0,
-              ),
-              GteMetricChip(
-                label: 'Positions',
-                value: holdingCount.toString(),
-              ),
+              GteMetricChip(label: 'Market value', value: gteFormatCredits(summary.totalMarketValue)),
+              GteMetricChip(label: 'Cash', value: gteFormatCredits(summary.cashBalance)),
+              GteMetricChip(label: 'Positions', value: holdingCount.toString()),
+              GteMetricChip(label: 'Account posture', value: holdingCount == 0 ? 'CASH HEAVY' : 'BALANCED', positive: holdingCount > 0),
             ],
           ),
         ],
@@ -240,11 +276,7 @@ class _PortfolioSummaryCard extends StatelessWidget {
 }
 
 class _HoldingsCard extends StatelessWidget {
-  const _HoldingsCard({
-    required this.controller,
-    required this.portfolio,
-    required this.onOpenPlayer,
-  });
+  const _HoldingsCard({required this.controller, required this.portfolio, required this.onOpenPlayer});
 
   final GteExchangeController controller;
   final GtePortfolioView portfolio;
@@ -252,93 +284,94 @@ class _HoldingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double totalValue = portfolio.holdings.fold<double>(0, (double sum, GtePortfolioHolding holding) => sum + holding.marketValue);
     return GteSurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text('Holdings', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
-          Text(
-            'Latest revalued positions with current mark and unrealized performance.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text('Latest revalued positions with mark, unrealized performance, and allocation weight.', style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 16),
-          ...portfolio.holdings.map(
-            (GtePortfolioHolding holding) => Padding(
+          ...portfolio.holdings.map((GtePortfolioHolding holding) {
+            final double share = totalValue <= 0 ? 0 : (holding.marketValue / totalValue).clamp(0, 1);
+            final Color tone = holding.unrealizedPl >= 0 ? GteShellTheme.positive : GteShellTheme.negative;
+            return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: GteSurfacePanel(
                 padding: const EdgeInsets.all(16),
                 onTap: () => onOpenPlayer(holding.playerId),
-                child: Row(
+                accentColor: tone,
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            controller.playerLabel(holding.playerId),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Qty ${holding.quantity.toStringAsFixed(2)} | Avg ${gteFormatCredits(holding.averageCost)} | Mark ${gteFormatCredits(holding.currentPrice)}',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              GteMetricChip(
-                                label: 'Market value',
-                                value: gteFormatCredits(holding.marketValue),
-                              ),
-                              GteMetricChip(
-                                label: 'Unrealized P/L',
-                                value: gteFormatCredits(holding.unrealizedPl),
-                                positive: holding.unrealizedPl >= 0,
-                              ),
-                              GteMetricChip(
-                                label: 'Unrealized %',
-                                value: gteFormatMovement(
-                                    holding.unrealizedPlPercent / 100),
-                                positive: holding.unrealizedPlPercent >= 0,
+                              Text(controller.playerLabel(holding.playerId), style: Theme.of(context).textTheme.titleLarge),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Qty ${holding.quantity.toStringAsFixed(2)} • Avg ${gteFormatCredits(holding.averageCost)} • Mark ${gteFormatCredits(holding.currentPrice)}',
+                                style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ],
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: <Widget>[
+                            Text(gteFormatCredits(holding.marketValue), style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 6),
+                            Text(
+                              gteFormatCredits(holding.unrealizedPl),
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: tone),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: share,
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.06),
+                        valueColor: AlwaysStoppedAnimation<Color>(tone),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Icon(
-                      Icons.chevron_right,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.7),
+                    const SizedBox(height: 10),
+                    Text('Allocation weight ${(share * 100).toStringAsFixed(0)}% of marked holdings.', style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: <Widget>[
+                        GteMetricChip(label: 'Unrealized %', value: gteFormatMovement(holding.unrealizedPlPercent / 100), positive: holding.unrealizedPlPercent >= 0),
+                        GteMetricChip(label: 'Cost basis', value: gteFormatCredits(holding.averageCost * holding.quantity)),
+                        GteMetricChip(label: 'Position health', value: holding.unrealizedPl >= 0 ? 'IN GREEN' : 'UNDER WATER', positive: holding.unrealizedPl >= 0),
+                      ],
                     ),
                   ],
                 ),
               ),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );
   }
 }
 
-enum _OrdersPanelMode {
-  open,
-  recent,
-}
+enum _OrdersPanelMode { open, recent }
 
 class _OrdersPanel extends StatefulWidget {
-  const _OrdersPanel({
-    required this.controller,
-    required this.onOpenPlayer,
-  });
+  const _OrdersPanel({required this.controller, required this.onOpenPlayer});
 
   final GteExchangeController controller;
   final ValueChanged<String> onOpenPlayer;
@@ -354,16 +387,10 @@ class _OrdersPanelState extends State<_OrdersPanel> {
   Widget build(BuildContext context) {
     final GteExchangeController controller = widget.controller;
     final List<GteOrderRecord> openOrders = controller.openOrders;
-    final List<GteOrderRecord> recentClosedOrders = controller.recentOrders
-        .where((GteOrderRecord order) => !order.canCancel)
-        .toList(growable: false);
-    final _OrdersPanelMode effectiveMode =
-        _mode == _OrdersPanelMode.recent && recentClosedOrders.isNotEmpty
-            ? _OrdersPanelMode.recent
-            : _OrdersPanelMode.open;
+    final List<GteOrderRecord> recentClosedOrders = controller.recentOrders.where((GteOrderRecord order) => !order.canCancel).toList(growable: false);
+    final _OrdersPanelMode effectiveMode = _mode == _OrdersPanelMode.recent && recentClosedOrders.isNotEmpty ? _OrdersPanelMode.recent : _OrdersPanelMode.open;
     final bool showOpenView = effectiveMode == _OrdersPanelMode.open;
-    final List<GteOrderRecord> visibleOrders =
-        showOpenView ? openOrders : recentClosedOrders;
+    final List<GteOrderRecord> visibleOrders = showOpenView ? openOrders : recentClosedOrders;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -374,58 +401,33 @@ class _OrdersPanelState extends State<_OrdersPanel> {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Expanded(
-                    child: Text('Open and recent orders',
-                        style: Theme.of(context).textTheme.headlineSmall),
-                  ),
+                  Expanded(child: Text('Open and recent orders', style: Theme.of(context).textTheme.headlineSmall)),
                   FilledButton.tonalIcon(
-                    onPressed: controller.isLoadingOrders
-                        ? null
-                        : () {
-                            controller.loadOrders();
-                          },
-                    icon: const Icon(Icons.refresh),
+                    onPressed: controller.isLoadingOrders ? null : controller.loadOrders,
+                    icon: const Icon(Icons.sync),
                     label: const Text('Refresh orders'),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                showOpenView
-                    ? 'Focused on resting orders from `GET /api/orders?status=open&status=partially_filled`.'
-                    : 'Focused on recent settled activity from `GET /api/orders`.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
               const SizedBox(height: 14),
+              Text('Money states should be readable at a glance: reserved, filled, cancelled, and still working.', style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 16),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: <Widget>[
-                  GteMetricChip(
-                    label: 'Open',
-                    value: openOrders.length.toString(),
-                  ),
-                  GteMetricChip(
-                    label: 'Recent',
-                    value: recentClosedOrders.length.toString(),
-                  ),
-                  GteMetricChip(
-                    label: 'API total',
-                    value: controller.recentOrderTotal.toString(),
-                  ),
+                  GteMetricChip(label: 'Working', value: openOrders.length.toString(), positive: openOrders.isNotEmpty),
+                  GteMetricChip(label: 'Settled', value: recentClosedOrders.length.toString()),
+                  GteMetricChip(label: 'State key', value: showOpenView ? 'RESERVE LIVE' : 'LEDGER VIEW', positive: showOpenView),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
+              const _LedgerLegendRow(),
+              const SizedBox(height: 16),
               SegmentedButton<_OrdersPanelMode>(
                 segments: const <ButtonSegment<_OrdersPanelMode>>[
-                  ButtonSegment<_OrdersPanelMode>(
-                    value: _OrdersPanelMode.open,
-                    label: Text('Open'),
-                  ),
-                  ButtonSegment<_OrdersPanelMode>(
-                    value: _OrdersPanelMode.recent,
-                    label: Text('Recent'),
-                  ),
+                  ButtonSegment<_OrdersPanelMode>(value: _OrdersPanelMode.open, label: Text('Open orders')),
+                  ButtonSegment<_OrdersPanelMode>(value: _OrdersPanelMode.recent, label: Text('Recent ledger')),
                 ],
                 selected: <_OrdersPanelMode>{effectiveMode},
                 onSelectionChanged: (Set<_OrdersPanelMode> selection) {
@@ -434,153 +436,210 @@ class _OrdersPanelState extends State<_OrdersPanel> {
                   });
                 },
               ),
-              if (controller.isLoadingOrders) ...<Widget>[
-                const SizedBox(height: 16),
-                const LinearProgressIndicator(),
-              ],
-              if (controller.ordersError != null &&
-                  visibleOrders.isEmpty) ...<Widget>[
-                const SizedBox(height: 16),
+              const SizedBox(height: 16),
+              if (controller.ordersError != null && controller.recentOrders.isEmpty)
                 GteStatePanel(
                   title: 'Orders unavailable',
                   message: controller.ordersError!,
                   actionLabel: 'Retry',
-                  onAction: () {
-                    controller.loadOrders();
-                  },
+                  onAction: controller.loadOrders,
                   icon: Icons.receipt_long_outlined,
-                ),
-              ] else if (!controller.hasLoadedOrders &&
-                  controller.isLoadingOrders) ...<Widget>[
-                const SizedBox(height: 16),
-                const _LoadingCard(title: 'Orders'),
-              ] else if (visibleOrders.isEmpty) ...<Widget>[
-                const SizedBox(height: 16),
+                )
+              else if (controller.isLoadingOrders && controller.recentOrders.isEmpty && controller.openOrders.isEmpty)
+                const _LoadingCard(title: 'Order ledger')
+              else if (visibleOrders.isEmpty)
                 GteStatePanel(
                   title: showOpenView ? 'No open orders' : 'No recent orders',
                   message: showOpenView
-                      ? 'Resting and partially filled orders will appear here after the next submit.'
-                      : 'Closed or cancelled activity will appear here after your first completed order loop.',
+                      ? 'Working orders will appear here with reserve and execution state.'
+                      : 'Filled, cancelled, and closed order history will appear here once activity starts.',
                   icon: Icons.receipt_long_outlined,
-                ),
-              ] else ...<Widget>[
-                const SizedBox(height: 12),
-                Text(
-                  showOpenView
-                      ? 'Showing ${openOrders.length} visible open orders from ${controller.openOrderTotal} total open records.'
-                      : 'Showing ${recentClosedOrders.length} recent closed orders from the latest API window.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
+                )
+              else
+                ...visibleOrders.map((GteOrderRecord order) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: GteOrderDetailCard(
+                        order: order,
+                        playerLabel: controller.playerLabel(order.playerId),
+                        isRefreshing: controller.isRefreshingOrder,
+                        isCancelling: controller.isCancellingOrder,
+                        onRefresh: () => controller.refreshOrder(order.id),
+                        onCancel: () => controller.cancelOrder(order.id),
+                        showPlayerLabel: true,
+                      ),
+                    )),
             ],
           ),
         ),
-        if (controller.ordersError != null &&
-            visibleOrders.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 16),
-          _InlineAccountNotice(
-            icon: Icons.warning_amber_rounded,
-            message:
-                'Order refresh partially failed. Showing the latest successful snapshot instead.',
-          ),
-        ],
-        if (visibleOrders.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 16),
-          Text(
-            showOpenView ? 'Open orders' : 'Recent orders',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          ...visibleOrders.map(
-            (GteOrderRecord order) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _OrderCardWrapper(
-                controller: controller,
-                order: order,
-                onOpenPlayer: widget.onOpenPlayer,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
 }
 
-class _OrderCardWrapper extends StatelessWidget {
-  const _OrderCardWrapper({
-    required this.controller,
-    required this.order,
-    required this.onOpenPlayer,
+
+class _CapitalBreakdownCard extends StatelessWidget {
+  const _CapitalBreakdownCard({
+    required this.walletSummary,
+    required this.portfolioSummary,
+    required this.openOrderCount,
   });
 
-  final GteExchangeController controller;
-  final GteOrderRecord order;
-  final ValueChanged<String> onOpenPlayer;
+  final GteWalletSummary walletSummary;
+  final GtePortfolioSummary? portfolioSummary;
+  final int openOrderCount;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        GteOrderDetailCard(
-          order: order,
-          playerLabel: controller.playerLabel(order.playerId),
-          isRefreshing: controller.isRefreshingOrder,
-          isCancelling: controller.isCancellingOrder,
-          onRefresh: () {
-            _refreshOrder(context);
-          },
-          onCancel: () {
-            _cancelOrder(context);
-          },
-          showPlayerLabel: true,
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => onOpenPlayer(order.playerId),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Open player'),
+    final double totalAccountValue = (portfolioSummary?.totalEquity ?? 0) > 0
+        ? portfolioSummary!.totalEquity
+        : walletSummary.totalBalance;
+    final double reserveRatio = totalAccountValue <= 0
+        ? 0
+        : (walletSummary.reservedBalance / totalAccountValue).clamp(0, 1);
+    final double exposureRatio = totalAccountValue <= 0 || portfolioSummary == null
+        ? 0
+        : (portfolioSummary!.totalMarketValue / totalAccountValue).clamp(0, 1);
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentCapital,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('Capital breakdown', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text('Available cash, reserved order funds, and invested exposure are separated here so the money story is easy to trust.', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 16),
+          _CapitalLane(
+            label: 'Available cash',
+            value: gteFormatCredits(walletSummary.availableBalance),
+            ratio: totalAccountValue <= 0 ? 0 : (walletSummary.availableBalance / totalAccountValue).clamp(0, 1),
+            tone: GteShellTheme.accentCapital,
+            note: walletSummary.availableBalance > 0 ? 'Ready for new orders.' : 'No free cash currently available.',
           ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _refreshOrder(BuildContext context) async {
-    final GteOrderRecord? refreshed = await controller.refreshOrder(order.id);
-    if (!context.mounted || refreshed == null) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            'Order status refreshed: ${gteFormatOrderStatus(refreshed.status.name)}.'),
+          const SizedBox(height: 12),
+          _CapitalLane(
+            label: 'Reserved by open orders',
+            value: gteFormatCredits(walletSummary.reservedBalance),
+            ratio: reserveRatio,
+            tone: GteShellTheme.accentWarm,
+            note: openOrderCount > 0 ? '$openOrderCount working orders are holding this cash.' : 'No active reserve holds right now.',
+          ),
+          const SizedBox(height: 12),
+          _CapitalLane(
+            label: 'Invested exposure',
+            value: gteFormatCredits(portfolioSummary?.totalMarketValue ?? 0),
+            ratio: exposureRatio,
+            tone: GteShellTheme.accent,
+            note: portfolioSummary == null ? 'Portfolio exposure is still syncing.' : 'Marked value of current holdings.',
+          ),
+        ],
       ),
     );
   }
+}
 
-  Future<void> _cancelOrder(BuildContext context) async {
-    final GteOrderRecord? cancelled = await controller.cancelOrder(order.id);
-    if (!context.mounted || cancelled == null) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            'Order updated: ${gteFormatOrderStatus(cancelled.status.name)}.'),
+class _CapitalLane extends StatelessWidget {
+  const _CapitalLane({
+    required this.label,
+    required this.value,
+    required this.ratio,
+    required this.tone,
+    required this.note,
+  });
+
+  final String label;
+  final String value;
+  final double ratio;
+  final Color tone;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withValues(alpha: 0.03),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(child: Text(label, style: Theme.of(context).textTheme.titleMedium)),
+              Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: tone)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: ratio,
+              minHeight: 8,
+              backgroundColor: Colors.white.withValues(alpha: 0.06),
+              valueColor: AlwaysStoppedAnimation<Color>(tone),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(note, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _LedgerLegendRow extends StatelessWidget {
+  const _LedgerLegendRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: const <Widget>[
+        _LedgerLegendChip(label: 'Open', tone: GteShellTheme.accent, note: 'Funds may still be reserved.'),
+        _LedgerLegendChip(label: 'Partial', tone: GteShellTheme.accentWarm, note: 'A slice has executed.'),
+        _LedgerLegendChip(label: 'Filled', tone: GteShellTheme.positive, note: 'Settled into holdings or cash.'),
+        _LedgerLegendChip(label: 'Cancelled/Rejected', tone: GteShellTheme.negative, note: 'Reserve should unwind.'),
+      ],
+    );
+  }
+}
+
+class _LedgerLegendChip extends StatelessWidget {
+  const _LedgerLegendChip({
+    required this.label,
+    required this.tone,
+    required this.note,
+  });
+
+  final String label;
+  final Color tone;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: tone.withValues(alpha: 0.12),
+        border: Border.all(color: tone.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: tone)),
+          const SizedBox(height: 4),
+          Text(note, style: Theme.of(context).textTheme.bodySmall),
+        ],
       ),
     );
   }
 }
 
 class _InlineAccountNotice extends StatelessWidget {
-  const _InlineAccountNotice({
-    required this.icon,
-    required this.message,
-  });
+  const _InlineAccountNotice({required this.icon, required this.message});
 
   final IconData icon;
   final String message;
@@ -588,20 +647,13 @@ class _InlineAccountNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GteSurfacePanel(
+      padding: const EdgeInsets.all(16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon),
-          ),
+          Icon(icon),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
+          Expanded(child: Text(message, style: Theme.of(context).textTheme.bodyMedium)),
         ],
       ),
     );
@@ -609,9 +661,7 @@ class _InlineAccountNotice extends StatelessWidget {
 }
 
 class _LoadingCard extends StatelessWidget {
-  const _LoadingCard({
-    required this.title,
-  });
+  const _LoadingCard({required this.title});
 
   final String title;
 
@@ -624,6 +674,53 @@ class _LoadingCard extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 16),
           const LinearProgressIndicator(),
+        ],
+      ),
+    );
+  }
+}
+
+class _CapitalSignalRow extends StatelessWidget {
+  const _CapitalSignalRow({required this.leftLabel, required this.leftValue, required this.rightLabel, required this.rightValue});
+
+  final String leftLabel;
+  final String leftValue;
+  final String rightLabel;
+  final String rightValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(child: _CapitalSignalTile(label: leftLabel, value: leftValue)),
+        const SizedBox(width: 12),
+        Expanded(child: _CapitalSignalTile(label: rightLabel, value: rightValue)),
+      ],
+    );
+  }
+}
+
+class _CapitalSignalTile extends StatelessWidget {
+  const _CapitalSignalTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withValues(alpha: 0.04),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 6),
+          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: GteShellTheme.accentCapital)),
         ],
       ),
     );

@@ -6,6 +6,9 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.app.auth.service import AuthService
+from backend.app.models.user import UserRole
+
 from backend.app.auth.dependencies import get_session as auth_get_session
 from backend.app.core.config import Settings, get_settings
 from backend.app.core.container import ApplicationContext, build_application_context
@@ -13,6 +16,11 @@ from backend.app.core.database import create_database_engine, create_session_fac
 from backend.app.core.module import DomainModule, register_domain_modules, run_module_hooks
 from backend.app.db import get_session as db_get_session
 from backend.app.modules import DOMAIN_MODULES
+
+INITIAL_ADMIN_EMAIL = "vidvimedialtd@gmail.com"
+INITIAL_ADMIN_PASSWORD = "NewPass1234!"
+INITIAL_ADMIN_USERNAME = "vidvimedialtd"
+INITIAL_ADMIN_DISPLAY_NAME = "GTEX God Mode Admin"
 
 
 def create_app(
@@ -40,6 +48,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
         _bind_application_state(app, context=context, engine=initialized_engine, modules=modules)
+        _ensure_initial_admin(context.database.session_factory)
         run_module_hooks(app, context, modules, phase="startup")
         try:
             yield
@@ -96,3 +105,17 @@ def _bind_application_state(
 
 
 app = create_app()
+
+
+def _ensure_initial_admin(session_factory: sessionmaker[Session]) -> None:
+    with session_factory() as session:
+        service = AuthService()
+        service.ensure_admin_user(
+            session,
+            email=INITIAL_ADMIN_EMAIL,
+            password=INITIAL_ADMIN_PASSWORD,
+            username=INITIAL_ADMIN_USERNAME,
+            display_name=INITIAL_ADMIN_DISPLAY_NAME,
+            role=UserRole.SUPER_ADMIN,
+        )
+        session.commit()

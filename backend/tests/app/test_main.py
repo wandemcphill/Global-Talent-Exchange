@@ -63,8 +63,6 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "match_engine" in app.state.domain_modules
         assert "canonical_clubs" in app.state.domain_modules
         assert "player_lifecycle" in app.state.domain_modules
-        assert "club_reputation" in app.state.domain_modules
-        assert "dynasty" in app.state.domain_modules
         assert "club_identity" in app.state.domain_modules
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules

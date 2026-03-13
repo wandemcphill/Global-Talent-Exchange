@@ -35,3 +35,28 @@ String gteFormatOrderStatus(String rawStatus) {
   }).replaceAll('_', ' ');
   return spaced.toUpperCase();
 }
+
+
+String gteFormatRelativeTime(DateTime? value, {DateTime? now}) {
+  if (value == null) {
+    return 'waiting for first sync';
+  }
+  final DateTime reference = (now ?? DateTime.now()).toUtc();
+  final Duration delta = reference.difference(value.toUtc());
+  if (delta.inSeconds.abs() < 5) {
+    return 'just now';
+  }
+  if (delta.inMinutes.abs() < 1) {
+    return '${delta.inSeconds.abs()}s ago';
+  }
+  if (delta.inHours.abs() < 1) {
+    return '${delta.inMinutes.abs()}m ago';
+  }
+  if (delta.inDays.abs() < 1) {
+    return '${delta.inHours.abs()}h ago';
+  }
+  if (delta.inDays.abs() < 7) {
+    return '${delta.inDays.abs()}d ago';
+  }
+  return gteFormatDateTime(value);
+}

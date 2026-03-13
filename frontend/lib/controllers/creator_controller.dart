@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/app_feedback.dart';
 
 import '../data/creator_api.dart';
 import '../data/gte_api_repository.dart';
@@ -48,7 +49,7 @@ class CreatorController extends ChangeNotifier {
       errorMessage = null;
     } catch (error) {
       if (_loadGate.isActive(requestId)) {
-        errorMessage = error.toString();
+        errorMessage = AppFeedback.messageFor(error);
       }
     } finally {
       if (_loadGate.isActive(requestId)) {
@@ -72,7 +73,7 @@ class CreatorController extends ChangeNotifier {
       competitionShare = data;
     } catch (error) {
       if (_shareGate.isActive(requestId)) {
-        errorMessage = error.toString();
+        errorMessage = AppFeedback.messageFor(error);
       }
     } finally {
       if (_shareGate.isActive(requestId)) {

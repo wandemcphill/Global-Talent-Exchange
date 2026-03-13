@@ -101,6 +101,11 @@ def client(session: Session) -> Iterator[TestClient]:
     app.include_router(admin_clubs_router)
     app.state.current_user_id = "user-owner"
     app.state.current_admin_id = "user-admin"
+    app.state.session_factory = sessionmaker(
+        bind=session.get_bind(),
+        autoflush=False,
+        expire_on_commit=False,
+    )
 
     def override_session() -> Iterator[Session]:
         yield session

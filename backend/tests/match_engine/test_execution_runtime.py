@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from datetime import datetime
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -29,6 +30,8 @@ from backend.app.match_engine.schemas import (
 )
 from backend.app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
 from backend.app.match_engine.services.team_factory import SyntheticSquadFactory
+from backend.app.schemas.player_lifecycle import ContractCreateRequest, InjuryCreateRequest
+from backend.app.services.player_lifecycle_service import PlayerLifecycleService, PlayerLifecycleValidationError
 from backend.app.match_engine.simulation.models import MatchCompetitionType, MatchEventType, PlayerRole
 from backend.app.models.base import Base
 from backend.app.models.club_profile import ClubProfile
@@ -121,3 +124,120 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
     ]
     assert len(settlement_events) == 1
     assert settlement_events[0].payload["status"] == "completed"
+
+
+def _build_lifecycle_session() -> Session:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    return SessionLocal()
+
+
+def _seed_managed_team_context(session: Session) -> dict[str, str]:
+    user = User(
+        id="managed-owner",
+        email="managed@example.com",
+        username="managed",
+        display_name="Managed Owner",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.VERIFIED,
+    )
+    club_profile = ClubProfile(
+        id="club-managed",
+        owner_user_id=user.id,
+        club_name="Managed FC",
+        short_name="MFC",
+        slug="managed-fc",
+        primary_color="#112233",
+        secondary_color="#ffffff",
+        accent_color="#00aaff",
+    )
+    session.add_all([user, club_profile])
+    roles = [
+        "goalkeeper",
+        "defender", "defender", "defender", "defender",
+        "midfielder", "midfielder", "midfielder",
+        "forward", "forward", "forward",
+        "midfielder", "defender",
+    ]
+    for index, role in enumerate(roles, start=1):
+        session.add(
+            Player(
+                id=f"managed-player-{index}",
+                source_provider="test",
+                provider_external_id=f"managed-player-{index}",
+                current_club_profile_id=club_profile.id,
+                full_name=f"Managed Player {index}",
+                normalized_position=role,
+                market_value_eur=5_000_000 + (index * 100_000),
+            )
+        )
+    session.commit()
+    return {"club_profile_id": club_profile.id}
+
+
+def test_team_factory_uses_persistent_player_ids_and_enforces_eligibility() -> None:
+    session = _build_lifecycle_session()
+    try:
+        context = _seed_managed_team_context(session)
+        lifecycle = PlayerLifecycleService(session)
+        for index in range(1, 14):
+            lifecycle.create_contract(
+                f"managed-player-{index}",
+                ContractCreateRequest(
+                    club_id=context["club_profile_id"],
+                    wage_amount=10000,
+                    signed_on=date(2026, 1, 1),
+                    starts_on=date(2026, 1, 1),
+                    ends_on=date(2026, 12, 31),
+                ),
+            )
+
+        for player_id, injury_type in (("managed-player-1", "Hamstring strain"), ("managed-player-2", "Ankle knock")):
+            lifecycle.create_injury_case(
+                player_id,
+                InjuryCreateRequest(
+                    injury_type=injury_type,
+                    occurred_on=date(2026, 3, 1),
+                    recovery_days=30,
+                    club_id=context["club_profile_id"],
+                ),
+            )
+
+        factory = SyntheticSquadFactory()
+        team = factory.build_team(
+            team_id=context["club_profile_id"],
+            team_name="Managed FC",
+            base_overall=76,
+            match_date=date(2026, 3, 12),
+            lifecycle_service=lifecycle,
+        )
+        starter_ids = {player.player_id for player in team.starters}
+        assert all(player_id.startswith("managed-player-") for player_id in starter_ids)
+        assert "managed-player-1" not in starter_ids
+        assert "managed-player-2" not in starter_ids
+
+        lifecycle.create_injury_case(
+            "managed-player-3",
+            InjuryCreateRequest(
+                injury_type="Calf issue",
+                occurred_on=date(2026, 3, 1),
+                recovery_days=30,
+                club_id=context["club_profile_id"],
+            ),
+        )
+        with pytest.raises(PlayerLifecycleValidationError, match="cannot field an eligible squad"):
+            factory.build_team(
+                team_id=context["club_profile_id"],
+                team_name="Managed FC",
+                base_overall=76,
+                match_date=date(2026, 3, 12),
+                lifecycle_service=lifecycle,
+            )
+    finally:
+        session.close()

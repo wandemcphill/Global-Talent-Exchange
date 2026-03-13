@@ -34,6 +34,16 @@ from backend.app.models.referral_reward_ledger import ReferralRewardLedger
 from backend.app.models.scout_assignment import ScoutAssignment
 from backend.app.models.scouting_region import ScoutingRegion
 from backend.app.models.share_code import ShareCode
+from backend.app.models.manager_market import (
+    ManagerAuditLog,
+    ManagerCatalogEntry,
+    ManagerCompetitionSetting,
+    ManagerHolding,
+    ManagerSettlementRecord,
+    ManagerTeamAssignment,
+    ManagerTradeListing,
+    ManagerTradeRecord,
+)
 from backend.app.models.transfer_bid import TransferBid
 from backend.app.models.transfer_window import TransferWindow
 from backend.app.models.user import KycStatus, User, UserRole
@@ -101,6 +111,14 @@ __all__ = [
     "ScoutAssignment",
     "ScoutingRegion",
     "ShareCode",
+    "ManagerAuditLog",
+    "ManagerCatalogEntry",
+    "ManagerCompetitionSetting",
+    "ManagerHolding",
+    "ManagerSettlementRecord",
+    "ManagerTeamAssignment",
+    "ManagerTradeListing",
+    "ManagerTradeRecord",
     "TransferBid",
     "TransferWindow",
     "User",

@@ -29,7 +29,7 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Creator profile')),
+      appBar: AppBar(title: const Text('Creator profile deck')),
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, _) {
@@ -37,7 +37,8 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
             return const Padding(
               padding: EdgeInsets.all(20),
               child: GteStatePanel(
-                title: 'Loading creator profile',
+                eyebrow: 'CREATOR PROFILE',
+                title: 'Loading creator profile deck',
                 message:
                     'Pulling creator competitions and community growth summary.',
                 icon: Icons.person_search_outlined,
@@ -49,9 +50,12 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
             return Padding(
               padding: const EdgeInsets.all(20),
               child: GteStatePanel(
-                title: 'Creator profile unavailable',
+                eyebrow: 'CREATOR PROFILE',
+                title: 'Creator profile deck unavailable',
                 message: widget.controller.errorMessage!,
                 icon: Icons.error_outline,
+                actionLabel: 'Retry',
+                onAction: widget.controller.load,
               ),
             );
           }
@@ -62,6 +66,14 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                const GteStatePanel(
+                  eyebrow: 'PROFILE SIGNAL',
+                  title: 'Shape a creator identity that feels trusted, promotable, and ready for matchday traffic.',
+                  message: 'This profile deck keeps public links, creator momentum, and competition summaries in one presentation layer so the creator lane feels as premium as market and wallet.',
+                  icon: Icons.person_pin_circle_outlined,
+                  accentColor: Color(0xFF9C6BFF),
+                ),
+                const SizedBox(height: 16),
                 CreatorHeaderCard(profile: profile),
                 const SizedBox(height: 16),
                 CreatorStatsCard(
@@ -75,7 +87,7 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Creator profile link',
+                        'PUBLIC CREATOR LINK',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
@@ -92,12 +104,21 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Creator competitions',
+                        'CREATOR COMPETITION HISTORY',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
-                      for (final CreatorCompetition competition
-                          in profile.competitions) ...<Widget>[
+                      if (profile.competitions.isEmpty)
+                        const GteStatePanel(
+                          eyebrow: 'MATCHDAY RECORD',
+                          title: 'No published creator competitions yet.',
+                          message: 'Once this creator starts hosting competitions, the archive will appear here with season labels, participation cues, and live-state context.',
+                          icon: Icons.history_toggle_off_outlined,
+                          accentColor: Color(0xFF9C6BFF),
+                        )
+                      else
+                        for (final CreatorCompetition competition
+                            in profile.competitions) ...<Widget>[
                         _CompetitionSummaryTile(competition: competition),
                         if (competition != profile.competitions.last)
                           const Divider(height: 28),

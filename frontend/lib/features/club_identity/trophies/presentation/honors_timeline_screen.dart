@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/app_feedback.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/honors_timeline_dto.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/season_honors_dto.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
@@ -72,7 +73,7 @@ class _HonorsTimelineScreenState extends State<HonorsTimelineScreen> {
         return;
       }
       setState(() {
-        _error = error.toString();
+        _error = AppFeedback.messageFor(error);
         _loading = false;
       });
     }

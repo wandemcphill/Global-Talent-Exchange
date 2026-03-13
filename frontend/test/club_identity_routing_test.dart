@@ -8,7 +8,7 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
   testWidgets(
-      'club identity hub routes to reputation, trophies, dynasty, and jerseys',
+      'club hub routes to reputation, trophies, dynasty, and jerseys',
       (WidgetTester tester) async {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
@@ -25,36 +25,33 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Club'));
+    await tester.tap(find.text('Club').last);
     await tester.pumpAndSettle();
-    expect(find.text('Club identity'), findsOneWidget);
+    expect(find.text('Club hub'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Open reputation'));
-    await tester.tap(find.text('Open reputation'));
+    await tester.ensureVisible(find.text('Reputation'));
+    await tester.tap(find.text('Reputation').last);
     await tester.pumpAndSettle();
     expect(find.text('Club reputation'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Open trophies'));
-    await tester.tap(find.text('Open trophies'));
+    await tester.tap(find.text('Trophies').last);
     await tester.pumpAndSettle();
     expect(find.text('Trophy Cabinet'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Open dynasty'));
-    await tester.tap(find.text('Open dynasty'));
+    await tester.tap(find.text('Dynasty').last);
     await tester.pumpAndSettle();
     expect(find.text('Dynasty Overview'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Open identity'));
-    await tester.tap(find.text('Open identity'));
+    await tester.tap(find.text('Identity').last);
     await tester.pumpAndSettle();
     expect(find.text('Club Identity'), findsOneWidget);
   });

@@ -19,6 +19,7 @@ from backend.app.schemas.player_lifecycle import (
     PlayerCareerSummaryView,
     PlayerLifecycleEventView,
     PlayerOverviewView,
+    PlayerLifecycleSnapshotView,
     TransferBidAcceptRequest,
     TransferBidCreateRequest,
     TransferBidRejectRequest,
@@ -73,6 +74,25 @@ def get_player_overview(
 ) -> PlayerOverviewView:
     try:
         return service.get_player_overview(
+            player_id,
+            on_date=as_of,
+            territory_code=territory_code,
+            event_limit=event_limit,
+        )
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.get("/api/players/{player_id}/lifecycle-snapshot", response_model=PlayerLifecycleSnapshotView)
+def get_player_lifecycle_snapshot(
+    player_id: str,
+    as_of: date | None = Query(default=None),
+    territory_code: str | None = Query(default=None),
+    event_limit: int = Query(default=8, ge=1, le=50),
+    service: PlayerLifecycleService = Depends(_service),
+) -> PlayerLifecycleSnapshotView:
+    try:
+        return service.get_player_lifecycle_snapshot(
             player_id,
             on_date=as_of,
             territory_code=territory_code,

@@ -3,6 +3,7 @@
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from decimal import Decimal
+import json
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -20,6 +21,8 @@ from backend.app.models.wallet import (
     PaymentEvent,
     PaymentProvider,
     PaymentStatus,
+    PayoutRequest,
+    PayoutStatus,
 )
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -67,6 +70,14 @@ class WalletLedgerPage:
     page_size: int
     total: int
     items: list[LedgerEntry]
+
+
+@dataclass(frozen=True, slots=True)
+class WithdrawalRequestResult:
+    payout_request: PayoutRequest
+    fee_amount: Decimal
+    total_debit: Decimal
+    source_scope: str
 
 
 class WalletService:
@@ -271,6 +282,218 @@ class WalletService:
             )
         )
         return payment_event
+
+
+
+    def competition_reward_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.CREDIT) -> Decimal:
+        account = self.get_user_account(session, user, unit)
+        reward_total = session.scalar(
+            select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(
+                LedgerEntry.account_id == account.id,
+                LedgerEntry.reason == LedgerEntryReason.COMPETITION_REWARD,
+                LedgerEntry.amount > 0,
+            )
+        )
+        return self._normalize_amount(reward_total)
+
+    def competition_reward_withdrawable_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.CREDIT) -> Decimal:
+        rewards_total = self.competition_reward_balance(session, user, unit)
+        requests = session.scalars(select(PayoutRequest).where(PayoutRequest.user_id == user.id, PayoutRequest.unit == unit)).all()
+        reserved_or_paid = Decimal("0.0000")
+        for request in requests:
+            meta = self._parse_payout_meta(request.notes)
+            if meta.get("source_scope") != "competition":
+                continue
+            if request.status in {PayoutStatus.REJECTED, PayoutStatus.FAILED}:
+                continue
+            reserved_or_paid += self._normalize_amount(request.amount)
+        remaining = rewards_total - reserved_or_paid
+        if remaining < Decimal("0.0000"):
+            remaining = Decimal("0.0000")
+        return self._normalize_amount(remaining)
+
+    def list_payout_requests_for_user(self, session: Session, user: User) -> list[PayoutRequest]:
+        return session.scalars(
+            select(PayoutRequest).where(PayoutRequest.user_id == user.id).order_by(PayoutRequest.created_at.desc())
+        ).all()
+
+    def request_payout(
+        self,
+        session: Session,
+        *,
+        user: User,
+        amount: Decimal,
+        destination_reference: str,
+        unit: LedgerUnit = LedgerUnit.CREDIT,
+        source_scope: str = "trade",
+        withdrawal_fee_bps: int = 1000,
+        minimum_fee: Decimal = Decimal("5.0000"),
+        actor: User | None = None,
+        notes: str | None = None,
+        extra_meta: dict[str, object] | None = None,
+    ) -> WithdrawalRequestResult:
+        normalized_amount = self._normalize_amount(amount)
+        if normalized_amount <= Decimal("0.0000"):
+            raise LedgerError("Withdrawal amount must be positive.")
+        if source_scope not in {"trade", "competition"}:
+            raise LedgerError("Withdrawal source must be trade or competition.")
+
+        user_account = self.get_user_account(session, user, unit)
+        escrow_account = self.get_user_escrow_account(session, user, unit)
+        fee_amount = self._normalize_amount(max((normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)))
+        total_debit = self._normalize_amount(normalized_amount + fee_amount)
+        available_balance = self.get_balance(session, user_account)
+        if available_balance < total_debit:
+            raise InsufficientBalanceError("Available balance is lower than the requested withdrawal plus fee.")
+        if source_scope == "competition":
+            reward_balance = self.competition_reward_withdrawable_balance(session, user, unit)
+            if reward_balance < normalized_amount:
+                raise InsufficientBalanceError("Competition reward balance is lower than the requested e-game withdrawal.")
+
+        reference = f"payout-request:{generate_uuid()}"
+        entries = self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=user_account, amount=-total_debit),
+                LedgerPosting(account=escrow_account, amount=total_debit),
+            ],
+            reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            reference=reference,
+            description=f"Withdrawal hold for {source_scope} payout to {destination_reference}",
+            external_reference=reference,
+            actor=actor or user,
+        )
+        meta = {
+            "source_scope": source_scope,
+            "fee_amount": str(fee_amount),
+            "total_debit": str(total_debit),
+            "requested_net_amount": str(normalized_amount),
+            "destination_reference": destination_reference,
+            "user_notes": notes or "",
+        }
+        if extra_meta:
+            meta.update(extra_meta)
+        payout_request = PayoutRequest(
+            user_id=user.id,
+            account_id=user_account.id,
+            amount=normalized_amount,
+            unit=unit,
+            status=PayoutStatus.REQUESTED,
+            destination_reference=destination_reference.strip(),
+            hold_transaction_id=entries[0].transaction_id if entries else None,
+            notes=json.dumps(meta, sort_keys=True),
+        )
+        session.add(payout_request)
+        session.flush()
+        self.event_publisher.publish(
+            DomainEvent(
+                name="wallet.withdrawal.requested",
+                payload={
+                    "payout_request_id": payout_request.id,
+                    "user_id": user.id,
+                    "source_scope": source_scope,
+                    "amount": str(normalized_amount),
+                    "fee_amount": str(fee_amount),
+                    "total_debit": str(total_debit),
+                },
+            )
+        )
+        return WithdrawalRequestResult(payout_request=payout_request, fee_amount=fee_amount, total_debit=total_debit, source_scope=source_scope)
+
+    def complete_payout_request(self, session: Session, payout_request: PayoutRequest, *, actor: User | None = None) -> PayoutRequest:
+        if payout_request.settlement_transaction_id is not None:
+            return payout_request
+        user = session.get(User, payout_request.user_id)
+        if user is None:
+            raise LedgerError("Payout request references a missing user.")
+        escrow_account = self.get_user_escrow_account(session, user, payout_request.unit)
+        platform_account = self.ensure_platform_account(session, payout_request.unit)
+        meta = self._parse_payout_meta(payout_request.notes)
+        total_debit = self._normalize_amount(meta.get("total_debit", payout_request.amount))
+        reference = f"payout-settlement:{payout_request.id}"
+        entries = self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=escrow_account, amount=-total_debit),
+                LedgerPosting(account=platform_account, amount=total_debit),
+            ],
+            reason=LedgerEntryReason.WITHDRAWAL_SETTLEMENT,
+            reference=reference,
+            description=f"Withdrawal settled to {payout_request.destination_reference}",
+            external_reference=reference,
+            actor=actor,
+        )
+        payout_request.settlement_transaction_id = entries[0].transaction_id if entries else None
+        return payout_request
+
+    def release_payout_request(self, session: Session, payout_request: PayoutRequest, *, actor: User | None = None, failure_reason: str | None = None) -> PayoutRequest:
+        if payout_request.settlement_transaction_id is not None:
+            return payout_request
+        user = session.get(User, payout_request.user_id)
+        if user is None:
+            raise LedgerError("Payout request references a missing user.")
+        escrow_account = self.get_user_escrow_account(session, user, payout_request.unit)
+        user_account = self.get_user_account(session, user, payout_request.unit)
+        meta = self._parse_payout_meta(payout_request.notes)
+        total_debit = self._normalize_amount(meta.get("total_debit", payout_request.amount))
+        reference = f"payout-release:{payout_request.id}"
+        entries = self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=escrow_account, amount=-total_debit),
+                LedgerPosting(account=user_account, amount=total_debit),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference=reference,
+            description=f"Withdrawal released back to user after {failure_reason or 'cancel'}",
+            external_reference=reference,
+            actor=actor,
+        )
+        payout_request.settlement_transaction_id = entries[0].transaction_id if entries else None
+        return payout_request
+
+    def _parse_payout_meta(self, notes: str | None) -> dict[str, object]:
+        raw = (notes or "").strip()
+        if not raw:
+            return {}
+        if raw.startswith("{"):
+            try:
+                value = json.loads(raw)
+                if isinstance(value, dict):
+                    return value
+            except json.JSONDecodeError:
+                return {"raw_notes": raw}
+        return {"raw_notes": raw}
+
+    def get_adaptive_overview(self, session: Session, user: User) -> dict[str, object]:
+        summary = self.get_wallet_summary(session, user)
+        requested_statuses = {PayoutStatus.REQUESTED, PayoutStatus.REVIEWING, PayoutStatus.HELD, PayoutStatus.PROCESSING}
+        pending_withdrawals = session.scalar(
+            select(func.count()).select_from(PayoutRequest).where(
+                PayoutRequest.user_id == user.id,
+                PayoutRequest.status.in_(tuple(requested_statuses)),
+            )
+        ) or 0
+        provider_status = {provider.value: 'available' for provider in PaymentProvider}
+        insights: list[dict[str, str]] = []
+        if summary.available_balance <= Decimal('0.0000'):
+            insights.append({'label': 'Liquidity posture', 'value': 'Wallet is empty. Deposit or complete a sale to unlock actions.', 'tone': 'warning'})
+        elif summary.reserved_balance > summary.available_balance:
+            insights.append({'label': 'Reserved pressure', 'value': 'Reserved commitments are heavier than free balance. Review open market and withdrawal holds.', 'tone': 'warning'})
+        else:
+            insights.append({'label': 'Withdrawal readiness', 'value': 'Withdrawable balance is healthy relative to current holds.', 'tone': 'success'})
+        if pending_withdrawals:
+            insights.append({'label': 'Withdrawal queue', 'value': f'{pending_withdrawals} payout request(s) still moving through review or processing.', 'tone': 'info'})
+        return {
+            'available_balance': summary.available_balance,
+            'reserved_balance': summary.reserved_balance,
+            'total_balance': summary.total_balance,
+            'currency': summary.currency,
+            'withdrawable_balance': summary.available_balance,
+            'pending_withdrawals': int(pending_withdrawals),
+            'payment_provider_status': provider_status,
+            'insights': insights,
+        }
 
     def append_transaction(
         self,

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Iterator
 
@@ -57,9 +57,19 @@ def get_current_user(
 
 
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != UserRole.ADMIN:
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access is required for this action.",
+        )
+    return current_user
+
+
+
+def get_current_super_admin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access is required for this action.",
         )
     return current_user

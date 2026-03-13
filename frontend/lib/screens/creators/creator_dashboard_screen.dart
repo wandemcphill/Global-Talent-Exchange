@@ -32,7 +32,7 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Creator dashboard'),
+        title: const Text('Creator command deck'),
         actions: <Widget>[
           TextButton(
             onPressed: () => _openProfile(context),
@@ -47,7 +47,8 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
             return const Padding(
               padding: EdgeInsets.all(20),
               child: GteStatePanel(
-                title: 'Loading creator dashboard',
+                eyebrow: 'CREATOR COMMAND DECK',
+                title: 'Loading creator command deck',
                 message:
                     'Gathering creator competitions, community invites, and reward summary.',
                 icon: Icons.auto_graph_outlined,
@@ -59,9 +60,12 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
             return Padding(
               padding: const EdgeInsets.all(20),
               child: GteStatePanel(
-                title: 'Creator dashboard unavailable',
+                eyebrow: 'CREATOR SYSTEMS',
+                title: 'Creator command deck unavailable',
                 message: widget.controller.errorMessage!,
                 icon: Icons.error_outline,
+                actionLabel: 'Retry',
+                onAction: widget.controller.load,
               ),
             );
           }
@@ -72,6 +76,14 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                const GteStatePanel(
+                  eyebrow: 'CREATOR MATCHDAY DESK',
+                  title: 'Run community growth, invite momentum, and reward energy from one polished lane.',
+                  message: 'This deck is tuned for hosts and promoters. Use it to track active competitions, share codes, and keep your creator economy moving without losing the premium GTEX rhythm.',
+                  icon: Icons.campaign_outlined,
+                  accentColor: Color(0xFF9C6BFF),
+                ),
+                const SizedBox(height: 16),
                 CreatorHeaderCard(
                   profile: profile,
                   onShareCodeTap: () => _openCompetitionShare(context, null),
@@ -91,7 +103,7 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
                         children: <Widget>[
                           Expanded(
                             child: Text(
-                              'Creator competitions',
+                              'LIVE CREATOR COMPETITIONS',
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ),
@@ -103,8 +115,17 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      for (final CreatorCompetition competition
-                          in profile.competitions) ...<Widget>[
+                      if (profile.competitions.isEmpty)
+                        const GteStatePanel(
+                          eyebrow: 'COMMUNITY READY',
+                          title: 'No creator competitions are live yet.',
+                          message: 'Your creator profile is polished and ready. The next published competition will appear here with sharing tools and invite momentum intact.',
+                          icon: Icons.celebration_outlined,
+                          accentColor: Color(0xFF9C6BFF),
+                        )
+                      else
+                        for (final CreatorCompetition competition
+                            in profile.competitions) ...<Widget>[
                         _DashboardCompetitionTile(
                           competition: competition,
                           onOpenShare: () => _openCompetitionShare(

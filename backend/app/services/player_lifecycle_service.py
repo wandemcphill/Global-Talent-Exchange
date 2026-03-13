@@ -43,6 +43,7 @@ from backend.app.schemas.player_lifecycle import (
     PlayerCareerSummaryView,
     PlayerLifecycleEventView,
     PlayerOverviewView,
+    PlayerLifecycleSnapshotView,
     SeasonProgressionView,
     TransferBidAcceptRequest,
     TransferBidCreateRequest,
@@ -190,6 +191,7 @@ class PlayerLifecycleService:
         on_date: date | None = None,
     ) -> tuple[ClubSquadEligibilityRecord, ...]:
         reference_on = on_date or date.today()
+        self.apply_pending_transfer_activations(as_of=reference_on)
         active_contracts = [
             contract
             for contract in self.get_club_contracts(club_id)
@@ -237,6 +239,66 @@ class PlayerLifecycleService:
             )
         )
 
+    def apply_pending_transfer_activations(
+        self,
+        *,
+        as_of: date | None = None,
+        player_id: str | None = None,
+    ) -> int:
+        reference_on = as_of or date.today()
+        statement = select(TransferBid).where(TransferBid.status == TransferBidStatus.ACCEPTED.value)
+        if player_id is not None:
+            statement = statement.where(TransferBid.player_id == player_id)
+        activated = 0
+        for bid in self.session.scalars(statement):
+            terms = dict(bid.structured_terms_json or {})
+            contract_starts_raw = terms.get("contract_starts_on")
+            if not contract_starts_raw:
+                continue
+            contract_starts_on = date.fromisoformat(contract_starts_raw)
+            if contract_starts_on > reference_on:
+                continue
+            contract = self.session.get(PlayerContract, terms.get("contract_id")) if terms.get("contract_id") else None
+            if contract is None:
+                continue
+            player = self._require_player(bid.player_id)
+            previous_contract = None
+            for existing in self.get_contracts(bid.player_id):
+                if existing.id == contract.id:
+                    continue
+                if existing.club_id == bid.selling_club_id and existing.status != ContractStatus.TERMINATED.value:
+                    previous_contract = existing
+                    break
+            if previous_contract is not None and previous_contract.status != ContractStatus.TERMINATED.value:
+                previous_contract.status = ContractStatus.TERMINATED.value
+                previous_contract.ends_on = min(previous_contract.ends_on, contract_starts_on - timedelta(days=1))
+                self._record_event(
+                    player_id=player.id,
+                    club_id=previous_contract.club_id,
+                    event_type=CONTRACT_TERMINATED_EVENT_TYPE,
+                    event_status=ContractStatus.TERMINATED.value,
+                    occurred_on=reference_on,
+                    effective_from=previous_contract.starts_on,
+                    effective_to=previous_contract.ends_on,
+                    related_entity_type="contract",
+                    related_entity_id=previous_contract.id,
+                    summary=f"{player.full_name} contract terminated",
+                    details={
+                        "buying_club_id": bid.buying_club_id,
+                        "transfer_bid_id": bid.id,
+                    },
+                    notes=bid.notes,
+                )
+            contract.status = self._resolve_new_contract_status(contract.starts_on, contract.ends_on, reference_on=reference_on).value
+            bid.status = TransferBidStatus.COMPLETED.value
+            terms.setdefault("completed_on", reference_on.isoformat())
+            bid.structured_terms_json = terms
+            self._sync_player_active_club_affiliation(bid.player_id, reference_on=reference_on)
+            activated += 1
+        if activated:
+            self.session.commit()
+        return activated
+
     def get_career_summary(
         self,
         player_id: str,
@@ -244,6 +306,7 @@ class PlayerLifecycleService:
         on_date: date | None = None,
     ) -> PlayerCareerSummaryView:
         reference_on = on_date or date.today()
+        self.apply_pending_transfer_activations(as_of=reference_on, player_id=player_id)
         player = self._require_player(player_id)
         career_entries = self.get_career(player_id)
         contracts = self.get_contracts(player_id)
@@ -282,6 +345,7 @@ class PlayerLifecycleService:
         on_date: date | None = None,
     ) -> ContractSummaryView | None:
         reference_on = on_date or date.today()
+        self.apply_pending_transfer_activations(as_of=reference_on, player_id=player_id)
         self._require_player(player_id)
         contracts = self.get_contracts(player_id)
         primary_contract = self._select_primary_contract(contracts, reference_on=reference_on)
@@ -304,6 +368,7 @@ class PlayerLifecycleService:
         on_date: date | None = None,
     ) -> PlayerAvailabilityView:
         reference_on = on_date or date.today()
+        self.apply_pending_transfer_activations(as_of=reference_on, player_id=player_id)
         self._require_player(player_id)
         injuries = self.get_injuries(player_id)
         active_injury = self._select_active_injury(injuries, reference_on=reference_on)
@@ -347,6 +412,7 @@ class PlayerLifecycleService:
         territory_code: str | None = None,
     ) -> TransferWindowEligibilityView:
         reference_on = on_date or date.today()
+        self.apply_pending_transfer_activations(as_of=reference_on, player_id=player_id)
         player = self._require_player(player_id)
         availability = self.get_player_availability(player_id, on_date=reference_on)
         contract_summary = self.get_contract_summary(player_id, on_date=reference_on)
@@ -418,6 +484,33 @@ class PlayerLifecycleService:
             ),
         )
 
+    def get_player_lifecycle_snapshot(
+        self,
+        player_id: str,
+        *,
+        on_date: date | None = None,
+        territory_code: str | None = None,
+        event_limit: int = RECENT_OVERVIEW_EVENT_LIMIT,
+    ) -> PlayerLifecycleSnapshotView:
+        overview = self.get_player_overview(
+            player_id,
+            on_date=on_date,
+            territory_code=territory_code,
+            event_limit=event_limit,
+        )
+        return PlayerLifecycleSnapshotView(
+            player_id=overview.player_id,
+            player_name=overview.player_name,
+            position=overview.position,
+            market_value_eur=overview.market_value_eur,
+            snapshot_generated_on=overview.overview_generated_on,
+            career_summary=overview.career_summary,
+            availability_badge=overview.availability_badge,
+            contract_badge=overview.contract_badge,
+            transfer_status=overview.transfer_status,
+            recent_events=overview.recent_events,
+        )
+
     def create_injury_case(
         self,
         player_id: str,
@@ -426,6 +519,9 @@ class PlayerLifecycleService:
         reference_on: date | None = None,
     ) -> PlayerInjuryCase:
         player = self._require_player(player_id)
+        resolved_club_id = payload.club_id or player.current_club_profile_id
+        if resolved_club_id is not None:
+            self._require_club_profile(resolved_club_id)
         occurred_on = payload.occurred_on or reference_on or date.today()
         if self._select_active_injury(self.get_injuries(player_id), reference_on=occurred_on) is not None:
             raise PlayerLifecycleValidationError(f"Player {player_id} already has an active injury")
@@ -438,7 +534,7 @@ class PlayerLifecycleService:
         )
         injury = PlayerInjuryCase(
             player_id=player.id,
-            club_id=payload.club_id or player.current_club_profile_id,
+            club_id=resolved_club_id,
             severity=payload.severity.value,
             injury_type=payload.injury_type,
             occurred_on=occurred_on,
@@ -526,6 +622,7 @@ class PlayerLifecycleService:
         reference_on: date | None = None,
     ) -> PlayerContract:
         player = self._require_player(player_id)
+        self._require_club_profile(payload.club_id)
         reference_date = reference_on or payload.signed_on or payload.starts_on
         self._validate_contract_dates(starts_on=payload.starts_on, ends_on=payload.ends_on)
         self._validate_contract_overlap(
@@ -638,6 +735,9 @@ class PlayerLifecycleService:
         self._require_player(payload.player_id)
         if payload.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bids require a buying club")
+        self._require_club_profile(payload.buying_club_id)
+        if payload.selling_club_id is not None:
+            self._require_club_profile(payload.selling_club_id)
 
         reference_on = submitted_on or date.today()
         window = self.get_transfer_window(window_id)
@@ -694,6 +794,7 @@ class PlayerLifecycleService:
             raise PlayerLifecycleValidationError("Only submitted transfer bids can be accepted")
         if bid.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bid is missing a buying club")
+        self._require_club_profile(bid.buying_club_id)
 
         player = self._require_player(bid.player_id)
         acceptance_on = reference_on or payload.signed_on or payload.contract_starts_on or date.today()
@@ -712,26 +813,27 @@ class PlayerLifecycleService:
                 raise PlayerLifecycleValidationError("Transfer bid selling club no longer matches the player's contract")
             if current_contract.club_id == bid.buying_club_id:
                 raise PlayerLifecycleValidationError("Player is already contracted to the buying club")
-            if current_contract.starts_on <= contract_starts_on:
+            if current_contract.starts_on <= contract_starts_on and current_contract.ends_on >= contract_starts_on:
                 current_contract.ends_on = contract_starts_on - timedelta(days=1)
-            current_contract.status = ContractStatus.TERMINATED.value
-            self._record_event(
-                player_id=player.id,
-                club_id=current_contract.club_id,
-                event_type=CONTRACT_TERMINATED_EVENT_TYPE,
-                event_status=ContractStatus.TERMINATED.value,
-                occurred_on=acceptance_on,
-                effective_from=current_contract.starts_on,
-                effective_to=current_contract.ends_on,
-                related_entity_type="contract",
-                related_entity_id=current_contract.id,
-                summary=f"{player.full_name} contract terminated",
-                details={
-                    "buying_club_id": bid.buying_club_id,
-                    "transfer_bid_id": bid.id,
-                },
-                notes=bid.notes,
-            )
+            if contract_starts_on <= acceptance_on:
+                current_contract.status = ContractStatus.TERMINATED.value
+                self._record_event(
+                    player_id=player.id,
+                    club_id=current_contract.club_id,
+                    event_type=CONTRACT_TERMINATED_EVENT_TYPE,
+                    event_status=ContractStatus.TERMINATED.value,
+                    occurred_on=acceptance_on,
+                    effective_from=current_contract.starts_on,
+                    effective_to=current_contract.ends_on,
+                    related_entity_type="contract",
+                    related_entity_id=current_contract.id,
+                    summary=f"{player.full_name} contract terminated",
+                    details={
+                        "buying_club_id": bid.buying_club_id,
+                        "transfer_bid_id": bid.id,
+                    },
+                    notes=bid.notes,
+                )
 
         self._validate_contract_overlap(
             bid.player_id,
@@ -757,7 +859,6 @@ class PlayerLifecycleService:
         )
         self.session.add(new_contract)
         self.session.flush()
-        player.current_club_profile_id = bid.buying_club_id
 
         terms = dict(bid.structured_terms_json or {})
         terms.update(
@@ -771,8 +872,10 @@ class PlayerLifecycleService:
         if contract_starts_on <= acceptance_on:
             bid.status = TransferBidStatus.COMPLETED.value
             terms["completed_on"] = acceptance_on.isoformat()
+            self._sync_player_active_club_affiliation(player.id, reference_on=acceptance_on, preferred_profile_id=bid.buying_club_id)
         else:
             bid.status = TransferBidStatus.ACCEPTED.value
+            self._sync_player_active_club_affiliation(player.id, reference_on=acceptance_on)
         bid.structured_terms_json = terms
 
         self._record_event(
@@ -815,6 +918,7 @@ class PlayerLifecycleService:
         )
         self.session.commit()
         self.session.refresh(bid)
+        self.session.expunge(bid)
         return bid
 
     def reject_bid(
@@ -1035,6 +1139,47 @@ class PlayerLifecycleService:
             }
         )
 
+    def _sync_player_active_club_affiliation(
+        self,
+        player_id: str,
+        *,
+        reference_on: date,
+        preferred_profile_id: str | None = None,
+    ) -> None:
+        player = self._require_player(player_id)
+        contract = self._select_current_contract(self.get_contracts(player_id), reference_on=reference_on)
+        if contract is None:
+            return
+        profile_id = preferred_profile_id or contract.club_id
+        if profile_id is not None:
+            player.current_club_profile_id = profile_id
+            ingestion_club = self._resolve_ingestion_club_for_profile(profile_id)
+            if ingestion_club is not None:
+                player.current_club_id = ingestion_club.id
+
+    def _resolve_ingestion_club_for_profile(self, club_profile_id: str | None) -> IngestionClub | None:
+        profile = self._get_club_profile(club_profile_id)
+        if profile is None:
+            return None
+        candidates = [
+            profile.slug,
+            profile.club_name,
+            profile.short_name,
+        ]
+        normalized = {item.strip().lower() for item in candidates if item}
+        if not normalized:
+            return None
+        statement = select(IngestionClub)
+        for club in self.session.scalars(statement):
+            club_tokens = {
+                value.strip().lower()
+                for value in (club.slug, club.name, getattr(club, "provider_external_id", None))
+                if value
+            }
+            if normalized & club_tokens:
+                return club
+        return None
+
     def _require_player(self, player_id: str) -> Player:
         statement = (
             select(Player)
@@ -1089,6 +1234,12 @@ class PlayerLifecycleService:
         if club_id is None:
             return None
         return self.session.get(ClubProfile, club_id)
+
+    def _require_club_profile(self, club_id: str | None) -> ClubProfile:
+        profile = self._get_club_profile(club_id)
+        if profile is None or not club_id:
+            raise PlayerLifecycleNotFoundError(f"Club profile {club_id} was not found")
+        return profile
 
     def _resolve_window_status(
         self,

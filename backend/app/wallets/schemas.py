@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerUnit, PaymentProvider, PaymentStatus
+from backend.app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
 
 
 class WalletAccountBalance(BaseModel):
@@ -68,6 +68,49 @@ class PaymentEventCreate(BaseModel):
         if value <= 0:
             raise ValueError("Payment amounts must be positive.")
         return value
+
+
+class WithdrawalRequestCreate(BaseModel):
+    model_config = ConfigDict(title="WithdrawalRequestCreate")
+
+    amount: Decimal
+    unit: LedgerUnit = LedgerUnit.CREDIT
+    destination_reference: str = Field(min_length=4, max_length=255)
+    source_scope: str = Field(default="trade")
+    notes: str | None = Field(default=None, max_length=255)
+
+    @field_validator("amount")
+    @classmethod
+    def validate_withdrawal_amount(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("Withdrawal amount must be positive.")
+        return value
+
+    @field_validator("source_scope")
+    @classmethod
+    def normalize_scope(cls, value: str) -> str:
+        candidate = value.strip().lower()
+        if candidate not in {"trade", "competition"}:
+            raise ValueError("source_scope must be trade or competition")
+        return candidate
+
+
+class WithdrawalRequestView(BaseModel):
+    model_config = ConfigDict(title="WithdrawalRequestView")
+
+    payout_request_id: str
+    amount: Decimal
+    fee_amount: Decimal
+    total_debit: Decimal
+    unit: LedgerUnit
+    status: PayoutStatus
+    source_scope: str
+    destination_reference: str
+    processing_mode: str = "manual_bank_transfer"
+    payout_channel: str = "bank_transfer"
+    notes: str | None = None
+    requested_at: datetime
+    updated_at: datetime
 
 
 class PaymentEventView(BaseModel):
@@ -243,3 +286,27 @@ class PortfolioSnapshotView(BaseModel):
     reserved_balance: Decimal
     total_balance: Decimal
     holdings: list[PortfolioHoldingView]
+
+
+class WalletAdaptiveInsightView(BaseModel):
+    label: str
+    value: str
+    tone: str = "info"
+
+
+class WalletAdaptiveOverviewView(BaseModel):
+    available_balance: Decimal
+    reserved_balance: Decimal
+    total_balance: Decimal
+    currency: LedgerUnit
+    withdrawable_balance: Decimal
+    competition_reward_balance: Decimal = Decimal("0.0000")
+    competition_reward_withdrawable_balance: Decimal = Decimal("0.0000")
+    pending_withdrawals: int = 0
+    payment_provider_status: dict[str, str] = Field(default_factory=dict)
+    processor_mode: str = "manual_bank_transfer"
+    deposits_via_bank_transfer: bool = True
+    payouts_via_bank_transfer: bool = True
+    egame_withdrawals_enabled: bool = False
+    trade_withdrawals_enabled: bool = True
+    insights: list[WalletAdaptiveInsightView] = Field(default_factory=list)

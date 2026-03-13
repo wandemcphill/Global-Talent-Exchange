@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
 
 from backend.app.common.enums.competition_type import CompetitionType
 from backend.app.competition_engine.queue_contracts import MatchSimulationJob
@@ -16,6 +17,7 @@ from backend.app.match_engine.schemas import (
     TeamTacticalPlanInput,
 )
 from backend.app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
+from backend.app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
 from backend.app.services.player_lifecycle_service import (
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
@@ -83,6 +85,7 @@ class SyntheticSquadFactory:
         match_date: date | None = None,
         lifecycle_service: PlayerLifecycleService | None = None,
     ) -> MatchTeamInput:
+        manager_profile = self._manager_profile_for_team(lifecycle_service.session if lifecycle_service is not None else None, team_id) if lifecycle_service is not None else None
         if lifecycle_service is not None and match_date is not None:
             managed_team = self._build_managed_team(
                 lifecycle_service=lifecycle_service,
@@ -132,7 +135,8 @@ class SyntheticSquadFactory:
             team_id=team_id,
             team_name=team_name,
             formation="4-3-3",
-            tactics=self._build_tactics(resolved_overall),
+            tactics=self._build_tactics(resolved_overall, manager_profile=manager_profile),
+            manager_profile=manager_profile,
             starters=starters,
             bench=bench,
         )
@@ -165,11 +169,13 @@ class SyntheticSquadFactory:
 
         starters, bench = self._select_managed_squad(eligible)
         resolved_overall = max(50, min(96, base_overall))
+        manager_profile = self._manager_profile_for_team(lifecycle_service.session if lifecycle_service is not None else None, team_id)
         return MatchTeamInput(
             team_id=team_id,
             team_name=team_name,
             formation="4-3-3",
-            tactics=self._build_tactics(resolved_overall),
+            tactics=self._build_tactics(resolved_overall, manager_profile=manager_profile),
+            manager_profile=manager_profile,
             starters=[
                 self._build_managed_player(player, assigned_role=role, base_overall=resolved_overall)
                 for player, role in starters
@@ -216,20 +222,65 @@ class SyntheticSquadFactory:
             return None
         return best
 
-    def _build_tactics(self, resolved_overall: int) -> TeamTacticalPlanInput:
+    def _build_tactics(self, resolved_overall: int, manager_profile: dict[str, object] | None = None) -> TeamTacticalPlanInput:
         style = TacticalStyle.ATTACKING if resolved_overall >= 84 else TacticalStyle.DEFENSIVE if resolved_overall <= 68 else TacticalStyle.BALANCED
+        pressing = self._clamp(resolved_overall - 15)
+        tempo = self._clamp(resolved_overall - 12)
+        aggression = self._clamp(42 + ((resolved_overall - 60) // 2))
+        substitution_windows = (60, 72, 82)
+        if manager_profile is not None:
+            mentality = str(manager_profile.get('mentality', 'balanced'))
+            tactics = set(manager_profile.get('tactics') or [])
+            traits = set(manager_profile.get('traits') or [])
+            if mentality in {'attacking', 'pressing'} or 'high_press_attack' in tactics:
+                style = TacticalStyle.ATTACKING
+                pressing = self._clamp(pressing + 10)
+                tempo = self._clamp(tempo + 8)
+            elif mentality in {'defensive', 'pragmatic'} or 'low_block_counter' in tactics or 'compact_midblock' in tactics:
+                style = TacticalStyle.DEFENSIVE
+                pressing = self._clamp(pressing - 6)
+                aggression = self._clamp(aggression - 3)
+            elif mentality in {'technical', 'possession'} or 'tiki_taka' in tactics or 'possession_control' in tactics:
+                style = TacticalStyle.BALANCED
+                tempo = self._clamp(tempo + 4)
+            if 'quick_substitution' in traits:
+                substitution_windows = (56, 67, 78)
+            elif 'late_substitution' in traits:
+                substitution_windows = (67, 78, 86)
         return TeamTacticalPlanInput(
             style=style,
-            pressing=self._clamp(resolved_overall - 15),
-            tempo=self._clamp(resolved_overall - 12),
-            aggression=self._clamp(42 + ((resolved_overall - 60) // 2)),
-            substitution_windows=(60, 72, 82),
+            pressing=pressing,
+            tempo=tempo,
+            aggression=aggression,
+            substitution_windows=substitution_windows,
             red_card_fallback_formation="4-4-1",
             injury_auto_substitution=True,
             yellow_card_substitution_minute=70,
             yellow_card_replacement_roles=(PlayerRole.DEFENDER, PlayerRole.MIDFIELDER),
             max_substitutions=5,
         )
+
+    def _manager_profile_for_team(self, session: Session | None, team_id: str) -> dict[str, object] | None:
+        if session is None:
+            return None
+        assignment = session.scalar(select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == team_id))
+        if assignment is None or not assignment.main_manager_asset_id:
+            return None
+        holding = session.scalar(select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id))
+        if holding is None:
+            return None
+        manager = session.scalar(select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id))
+        if manager is None:
+            return None
+        return {
+            'display_name': manager.display_name,
+            'mentality': manager.mentality,
+            'tactics': list(manager.tactics or []),
+            'traits': list(manager.traits or []),
+            'rarity': manager.rarity,
+            'philosophy_summary': manager.philosophy_summary,
+            'substitution_tendency': manager.substitution_tendency,
+        }
 
     @staticmethod
     def _competition_type(job: MatchSimulationJob) -> MatchCompetitionType:
@@ -391,6 +442,8 @@ class SyntheticSquadFactory:
 
     def _role_fit_score(self, player: Player, required_role: PlayerRole) -> int:
         actual_role = self._resolve_player_role(player)
+        if required_role is PlayerRole.GOALKEEPER:
+            return 3 if actual_role is PlayerRole.GOALKEEPER else 1
         if actual_role is required_role:
             return 3
         if required_role is PlayerRole.DEFENDER and actual_role is PlayerRole.MIDFIELDER:

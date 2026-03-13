@@ -10,6 +10,7 @@ import 'package:gte_frontend/widgets/competitions/competition_visibility_chip.da
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/gtex_branding.dart';
 
 class CompetitionDetailScreen extends StatefulWidget {
   const CompetitionDetailScreen({
@@ -49,7 +50,17 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
             final CompetitionFinancialSummary? financials =
                 widget.controller.selectedFinancials;
             if (widget.controller.isLoadingDetail && competition == null) {
-              return const Center(child: CircularProgressIndicator());
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: GteStatePanel(
+                  eyebrow: 'LIVE MATCH CENTER',
+                  title: 'Loading matchday brief',
+                  message: 'Arena economics, rules, and joinability are being lined up for a cleaner competition detail view.',
+                  icon: Icons.live_tv_outlined,
+                  accentColor: GteShellTheme.accentArena,
+                  isLoading: true,
+                ),
+              );
             }
             if (widget.controller.detailError != null && competition == null) {
               return Padding(
@@ -83,6 +94,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                 children: <Widget>[
                   GteSurfacePanel(
                     emphasized: true,
+                    accentColor: GteShellTheme.accentArena,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
@@ -110,6 +122,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
+                        const GtexSectionBadge(label: 'MATCHDAY BRIEF', color: GteShellTheme.accentArena),
+                        const SizedBox(height: 12),
                         Wrap(
                           spacing: 10,
                           runSpacing: 10,
@@ -177,6 +191,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  const GtexSectionHeader(
+                    eyebrow: 'ARENA ECONOMICS',
+                    title: 'The stake, fee split, and payout path should feel transparent at a glance.',
+                    description: 'Competition detail now treats joinability, payout clarity, and participant protection as first-class match-center information.',
+                    accent: GteShellTheme.accentArena,
+                  ),
+                  const SizedBox(height: 14),
                   CompetitionFinancialBreakdownCard(
                     title: 'Transparent financials',
                     entryFee: financials.entryFee,
@@ -196,6 +217,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                     payouts: financials.payoutStructure,
                   ),
                   const SizedBox(height: 16),
+                  const GtexSectionHeader(
+                    eyebrow: 'RULES AND INTEGRITY',
+                    title: 'Published rules, not hidden odds, drive the outcome.',
+                    description: 'The live match center should stay cinematic without becoming fuzzy. This block keeps the competition logic explicit and participant-safe.',
+                    accent: GteShellTheme.accentArena,
+                  ),
+                  const SizedBox(height: 14),
                   GteSurfacePanel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

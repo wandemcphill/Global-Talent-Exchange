@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -221,3 +223,106 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
     }
     assert payment_payload["provider"] == "monnify"
     assert payment_payload["status"] == "pending"
+
+
+def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"))
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount": 20,
+            "unit": "credit",
+            "source_scope": "trade",
+            "destination_reference": "bank:0012345678",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["source_scope"] == "trade"
+    assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(payload["total_debit"])) == Decimal("25.0000")
+
+
+def test_create_competition_withdrawal_request_is_blocked_by_default(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"))
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount": 20,
+            "unit": "credit",
+            "source_scope": "competition",
+            "destination_reference": "bank:0012345678",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "locked" in response.json()["detail"].lower()
+
+
+def test_create_trade_withdrawal_request_requires_bank_reference_in_manual_mode(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"))
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount": 20,
+            "unit": "credit",
+            "source_scope": "trade",
+            "destination_reference": "acct-0012345678",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "bank:" in response.json()["detail"].lower()
+
+
+def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabled(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"))
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
+        '{"commissions":{"withdrawal_fee_bps":1000,"minimum_withdrawal_fee_credits":"5.0000"},"withdrawal_controls":{"egame_withdrawals_enabled":false,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount": 20,
+            "unit": "credit",
+            "source_scope": "trade",
+            "destination_reference": "gateway:user-bank-token",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "processing"
+    assert payload["processing_mode"] == "automatic_gateway"
+    assert payload["payout_channel"] == "gateway"
+
+
+def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"))
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/adaptive-overview")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert payload["egame_withdrawals_enabled"] is True
+    labels = {item["label"]: item["value"] for item in payload["insights"]}
+    assert labels["Withdrawal rail"] == "Bank transfer"
+    assert labels["E-game cash-out"] == "Enabled"

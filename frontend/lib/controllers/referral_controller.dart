@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/app_feedback.dart';
 
 import '../data/gte_api_repository.dart';
 import '../data/referral_api.dart';
@@ -36,7 +37,7 @@ class ReferralController extends ChangeNotifier {
       errorMessage = null;
     } catch (error) {
       if (_loadGate.isActive(requestId)) {
-        errorMessage = error.toString();
+        errorMessage = AppFeedback.messageFor(error);
       }
     } finally {
       if (_loadGate.isActive(requestId)) {

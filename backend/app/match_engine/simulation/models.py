@@ -112,8 +112,9 @@ class MatchTeamProfile:
     team_name: str
     formation: str
     tactics: TacticalPlan
-    starters: tuple[InternalPlayer, ...]
-    bench: tuple[InternalPlayer, ...]
+    manager_profile: dict[str, object] | None = None
+    starters: tuple[InternalPlayer, ...] = ()
+    bench: tuple[InternalPlayer, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

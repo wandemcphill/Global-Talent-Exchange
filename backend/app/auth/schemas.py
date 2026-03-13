@@ -68,6 +68,22 @@ class LoginRequest(BaseModel):
         return value.strip().lower()
 
 
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_new_password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_new_password_match(self) -> "ChangePasswordRequest":
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("New password confirmation does not match.")
+        if self.current_password == self.new_password:
+            raise ValueError("New password must be different from the current password.")
+        return self
+
+
 class TokenResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +91,8 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: UserPublic
+    permissions: list[str] = Field(default_factory=list)
+    landing_route: str = "/"
 
 
 class CurrentUserResponse(BaseModel):

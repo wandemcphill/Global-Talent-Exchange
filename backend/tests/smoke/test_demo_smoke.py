@@ -44,6 +44,15 @@ def test_seeded_portfolio_works(client, demo_seed, demo_auth_headers) -> None:
 
     assert response.status_code == 200
     payload = response.json()
+    primary_user = demo_seed.demo_users[0]
+    expected_player_ids = {
+        holding.player_id
+        for holding in demo_seed.sample_holdings
+        if holding.owner_username == primary_user.username
+    }
+
     assert payload["currency"] == "credit"
     assert Decimal(str(payload["available_balance"])) == Decimal("1200.0000")
-    assert payload["holdings"] == []
+    assert payload["user_id"] == primary_user.user_id
+    assert expected_player_ids
+    assert {item["player_id"] for item in payload["holdings"]} == expected_player_ids

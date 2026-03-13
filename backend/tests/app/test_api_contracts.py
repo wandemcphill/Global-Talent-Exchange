@@ -81,3 +81,8 @@ def test_target_api_contracts_are_documented_with_stable_operation_ids(contract_
     for legacy_path, api_path in legacy_aliases.items():
         assert legacy_path in openapi["paths"]
         assert api_path in openapi["paths"]
+
+    assert "/api/api/orders" not in openapi["paths"]
+    assert "/api/api/orders/book/{player_id}" not in openapi["paths"]
+    assert "/api/api/orders/{order_id}" not in openapi["paths"]
+    assert "/api/api/orders/{order_id}/cancel" not in openapi["paths"]

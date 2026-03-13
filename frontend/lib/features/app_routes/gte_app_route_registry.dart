@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart';
@@ -477,7 +478,7 @@ class _CompetitionPreloadRouteScreenState
         return;
       }
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage = AppFeedback.messageFor(error);
         _isPrimed = true;
       });
     }
@@ -560,7 +561,7 @@ class _ReputationSubscreenRouteScreenState
         return;
       }
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage = AppFeedback.messageFor(error);
         _isReady = true;
       });
     }
@@ -640,7 +641,7 @@ class _ReplayPreviewRouteScreenState extends State<_ReplayPreviewRouteScreen> {
         return;
       }
       setState(() {
-        _errorMessage = error.toString();
+        _errorMessage = AppFeedback.messageFor(error);
         _isReady = true;
       });
     }

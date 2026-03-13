@@ -282,6 +282,7 @@ class MatchEventGenerator:
                 yellow_card_replacement_roles=team.tactics.yellow_card_replacement_roles,
                 max_substitutions=team.tactics.max_substitutions,
             ),
+            manager_profile=team.manager_profile,
             starters=tuple(self._build_player(player) for player in team.starters),
             bench=tuple(self._build_player(player) for player in team.bench),
         )

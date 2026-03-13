@@ -34,6 +34,8 @@ class ClubController extends ChangeNotifier {
 
   final ClubApi api;
   final String clubId;
+  Future<void>? _loadFuture;
+  DateTime? dataSyncedAt;
   final String? clubName;
 
   bool isLoading = false;
@@ -113,24 +115,33 @@ class ClubController extends ChangeNotifier {
     await load();
   }
 
-  Future<void> load() async {
+  Future<void> load() {
+    if (_loadFuture != null) {
+      return _loadFuture!;
+    }
     isLoading = true;
     errorMessage = null;
     notifyListeners();
-    try {
-      final ClubDashboardData dashboard = await api.fetchDashboard(
-        clubId: clubId,
-        clubName: clubName,
-      );
-      _savedData = dashboard;
-      _data = dashboard;
-      noticeMessage = null;
-    } catch (error) {
-      errorMessage = 'Unable to load club identity surfaces. $error';
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
+    final Future<void> task = () async {
+      try {
+        final ClubDashboardData dashboard = await api.fetchDashboard(
+          clubId: clubId,
+          clubName: clubName,
+        );
+        _savedData = dashboard;
+        _data = dashboard;
+        dataSyncedAt = DateTime.now().toUtc();
+        noticeMessage = null;
+      } catch (error) {
+        errorMessage = 'Unable to load club identity surfaces. $error';
+      } finally {
+        isLoading = false;
+        _loadFuture = null;
+        notifyListeners();
+      }
+    }();
+    _loadFuture = task;
+    return task;
   }
 
   Future<void> refresh() => load();

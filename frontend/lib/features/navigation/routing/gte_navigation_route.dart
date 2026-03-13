@@ -15,9 +15,9 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.home:
         return 'Home';
       case GtePrimaryDestination.market:
-        return 'Market';
+        return 'Trade';
       case GtePrimaryDestination.competitions:
-        return 'Competitions';
+        return 'Arena';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
@@ -40,7 +40,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     }
   }
 
-  String get routePath => '/$pathSegment';
+  String get routePath => '/app/$pathSegment';
 
   IconData get icon {
     switch (this) {
@@ -54,6 +54,23 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return Icons.shield_outlined;
       case GtePrimaryDestination.wallet:
         return Icons.account_balance_wallet_outlined;
+    }
+  }
+
+
+
+  Color get accentColor {
+    switch (this) {
+      case GtePrimaryDestination.home:
+        return const Color(0xFF72F0D8);
+      case GtePrimaryDestination.market:
+        return const Color(0xFF72F0D8);
+      case GtePrimaryDestination.competitions:
+        return const Color(0xFFB26DFF);
+      case GtePrimaryDestination.club:
+        return const Color(0xFF85B8FF);
+      case GtePrimaryDestination.wallet:
+        return const Color(0xFFFFD66B);
     }
   }
 
@@ -109,7 +126,7 @@ class GteNavigationRoute {
 
   String get path {
     if (isCompetitions) {
-      return effectiveCompetitionDestination.routePath;
+      return '/app/competitions/${effectiveCompetitionDestination.pathSegment}';
     }
     return primaryDestination.routePath;
   }
@@ -155,13 +172,20 @@ class GteNavigationRoute {
       return const GteNavigationRoute.home();
     }
 
-    switch (segments.first.toLowerCase()) {
+    final List<String> normalizedSegments = segments.isNotEmpty && segments.first.toLowerCase() == 'app'
+        ? segments.sublist(1)
+        : segments;
+    if (normalizedSegments.isEmpty) {
+      return const GteNavigationRoute.home();
+    }
+
+    switch (normalizedSegments.first.toLowerCase()) {
       case 'market':
         return const GteNavigationRoute.market();
       case 'competitions':
         return GteNavigationRoute.competitions(
           destination: competitionHubDestinationFromPathSegment(
-            segments.length > 1 ? segments[1] : null,
+            normalizedSegments.length > 1 ? normalizedSegments[1] : null,
           ),
         );
       case 'club':

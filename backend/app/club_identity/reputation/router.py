@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.club_identity.reputation.schemas import (
     ClubPrestigeView,
+    ClubReputationView,
     ClubReputationHistoryView,
     PrestigeLeaderboardView,
 )
@@ -17,8 +18,13 @@ from backend.app.db import get_session
 router = APIRouter(prefix="/api", tags=["club-reputation"])
 
 
-# /clubs/{club_id}/reputation is provided by canonical_clubs router
-# additional endpoints below:
+@router.get("/clubs/{club_id}/reputation", response_model=ClubReputationView)
+def get_club_reputation(
+    club_id: str,
+    session: Session = Depends(get_session),
+) -> ClubReputationView:
+    return ClubReputationQueryService(session).get_reputation(club_id)
+
 
 @router.get("/clubs/{club_id}/reputation/history", response_model=ClubReputationHistoryView)
 def get_club_reputation_history(

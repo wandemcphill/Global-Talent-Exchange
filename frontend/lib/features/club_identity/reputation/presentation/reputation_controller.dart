@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../../core/app_feedback.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 
 import '../data/reputation_models.dart';
@@ -137,7 +138,7 @@ class ReputationController extends ChangeNotifier {
       errorMessage = null;
     } catch (error) {
       if (_loadGate.isActive(requestId)) {
-        errorMessage = error.toString();
+        errorMessage = AppFeedback.messageFor(error);
       }
     } finally {
       if (_loadGate.isActive(requestId)) {
@@ -183,7 +184,7 @@ class ReputationController extends ChangeNotifier {
       }
       errorMessage = null;
     } catch (error) {
-      errorMessage = error.toString();
+      errorMessage = AppFeedback.messageFor(error);
     }
     notifyListeners();
   }

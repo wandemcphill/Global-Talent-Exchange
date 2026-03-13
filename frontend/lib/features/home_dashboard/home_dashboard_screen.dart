@@ -7,6 +7,7 @@ import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
+import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
 import 'package:gte_frontend/models/club_models.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -15,6 +16,7 @@ import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
@@ -30,6 +32,9 @@ class HomeDashboardScreen extends StatefulWidget {
     this.onOpenLogin,
     this.clubId,
     this.clubName,
+    this.onOpenClubTab,
+    this.onOpenCompetitionsTab,
+    this.onOpenClubSubtab,
   });
 
   final GteExchangeController exchangeController;
@@ -38,6 +43,9 @@ class HomeDashboardScreen extends StatefulWidget {
   final VoidCallback? onOpenLogin;
   final String? clubId;
   final String? clubName;
+  final VoidCallback? onOpenClubTab;
+  final VoidCallback? onOpenCompetitionsTab;
+  final ValueChanged<ClubNavigationTab>? onOpenClubSubtab;
 
   @override
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
@@ -168,6 +176,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                   ],
                 ),
+                GteSyncStatusCard(
+                  title: 'App-wide premium sync',
+                  status: widget.exchangeController.isAuthenticated
+                      ? 'Market, arena, club, and wallet layers are stitched into one premium shell.'
+                      : 'Preview mode is live. Sign in to unlock trading, wallet execution, and writable club actions.',
+                  syncedAt: widget.exchangeController.marketSyncedAt,
+                  accent: GteShellTheme.accent,
+                  isRefreshing: _clubController.isLoading || _competitionController.isLoadingDiscovery,
+                  onRefresh: _refresh,
+                ),
                 if (_clubController.errorMessage != null ||
                     _competitionController.discoveryError != null) ...<Widget>[
                   const SizedBox(height: 18),
@@ -180,6 +198,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ].join(' '),
                   ),
                 ],
+                const SizedBox(height: 20),
+                _HomeQuickActionsStrip(
+                  isAuthenticated: widget.exchangeController.isAuthenticated,
+                  onOpenClub: () => _openTarget(_HomeLinkTarget.club),
+                  onOpenCompetitions: () =>
+                      _openTarget(_HomeLinkTarget.competitions),
+                  onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
+                  onOpenLogin: widget.onOpenLogin,
+                ),
+                const SizedBox(height: 16),
+                _HomeJourneyPanel(
+                  isAuthenticated: widget.exchangeController.isAuthenticated,
+                  clubName: _clubName,
+                  notificationCount: snapshot.notificationCount,
+                  openCompetitionCount: snapshot.openCompetitionCount,
+                  onOpenCompetitions: () =>
+                      _openTarget(_HomeLinkTarget.competitions),
+                  onOpenClub: () => _openTarget(_HomeLinkTarget.club),
+                  onOpenLogin: widget.onOpenLogin,
+                ),
                 const SizedBox(height: 20),
                 HomeFeaturedEventBanner(
                   label: snapshot.featuredBanner.label,
@@ -194,10 +232,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       _openTarget(snapshot.featuredBanner.target),
                 ),
                 const SizedBox(height: 20),
+                _HomeSectionHeading(
+                  eyebrow: 'RIGHT NOW',
+                  title: 'The control deck keeps the next best move in plain sight.',
+                  detail: 'Top cards are reserved for the most actionable club and match context. The quieter signals live below so the home screen stays premium instead of crowded.',
+                ),
+                const SizedBox(height: 14),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
                     final int columnCount = constraints.maxWidth >= 1220
-                        ? 3
+                        ? 2
                         : constraints.maxWidth >= 760
                             ? 2
                             : 1;
@@ -205,18 +249,59 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     final double cardWidth =
                         (constraints.maxWidth - (spacing * (columnCount - 1))) /
                             columnCount;
-                    final List<_HomeCardData> cards = <_HomeCardData>[
+                    final List<_HomeCardData> primaryCards = <_HomeCardData>[
                       snapshot.nextMatch,
                       snapshot.leagueSnapshot,
                       snapshot.championsLeagueStatus,
                       snapshot.fastCupCountdown,
+                    ];
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: primaryCards
+                          .map(
+                            (_HomeCardData card) => SizedBox(
+                              width: cardWidth,
+                              child: HomeSectionCard(
+                                eyebrow: card.eyebrow,
+                                title: card.title,
+                                summary: card.summary,
+                                detail: card.detail,
+                                icon: card.icon,
+                                accent: card.accent,
+                                stats: card.stats,
+                                highlights: card.highlights,
+                                actionLabel: card.actionLabel,
+                                onTap: () => _openTarget(card.target),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                _HomeSectionHeading(
+                  eyebrow: 'QUIETER SIGNALS',
+                  title: 'Replays and alerts still matter, just without hijacking the dashboard.',
+                  detail: 'These cards stay visible for storylines, reminders, and follow-up actions once the primary route is clear.',
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final int columnCount = constraints.maxWidth >= 1100 ? 2 : 1;
+                    final double spacing = 16;
+                    final double cardWidth =
+                        (constraints.maxWidth - (spacing * (columnCount - 1))) /
+                            columnCount;
+                    final List<_HomeCardData> signalCards = <_HomeCardData>[
                       snapshot.recentReplay,
                       snapshot.notificationsSummary,
                     ];
                     return Wrap(
                       spacing: spacing,
                       runSpacing: spacing,
-                      children: cards
+                      children: signalCards
                           .map(
                             (_HomeCardData card) => SizedBox(
                               width: cardWidth,
@@ -384,6 +469,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Future<void> _openTarget(_HomeLinkTarget target) async {
     if (target == _HomeLinkTarget.club) {
+      if (widget.onOpenClubTab != null) {
+        widget.onOpenClubTab!();
+        return;
+      }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => ClubProfileScreen(
@@ -400,6 +489,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       return;
     }
     if (target == _HomeLinkTarget.competitions) {
+      if (widget.onOpenCompetitionsTab != null) {
+        widget.onOpenCompetitionsTab!();
+        return;
+      }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) => CompetitionDiscoveryScreen(
@@ -413,6 +506,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
         ),
       );
+      return;
+    }
+    if (target == _HomeLinkTarget.trophies && widget.onOpenClubSubtab != null) {
+      widget.onOpenClubSubtab!(ClubNavigationTab.trophies);
+      return;
+    }
+    if (target == _HomeLinkTarget.tactics && widget.onOpenClubSubtab != null) {
+      widget.onOpenClubSubtab!(ClubNavigationTab.tactics);
       return;
     }
     await _ensureClubLoaded();
@@ -542,6 +643,240 @@ class _HomeHeroPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class _HomeQuickActionsStrip extends StatelessWidget {
+  const _HomeQuickActionsStrip({
+    required this.isAuthenticated,
+    required this.onOpenClub,
+    required this.onOpenCompetitions,
+    required this.onOpenReplays,
+    this.onOpenLogin,
+  });
+
+  final bool isAuthenticated;
+  final VoidCallback onOpenClub;
+  final VoidCallback onOpenCompetitions;
+  final VoidCallback onOpenReplays;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool singleColumn = constraints.maxWidth < 820;
+        final List<Widget> cards = <Widget>[
+          _HomeActionCard(
+            eyebrow: 'CLUB',
+            title: 'Shape the identity lane',
+            detail: 'Update club surfaces, trophies, and the institutional story that powers the rest of GTEX.',
+            icon: Icons.shield_outlined,
+            accent: GteShellTheme.accent,
+            actionLabel: 'Open club',
+            onTap: onOpenClub,
+          ),
+          _HomeActionCard(
+            eyebrow: 'ARENA',
+            title: 'Jump into live match center',
+            detail: 'Browse live now, up next, and replay routes without digging through layers.',
+            icon: Icons.stadium_outlined,
+            accent: GteShellTheme.accentArena,
+            actionLabel: 'Open arena',
+            onTap: onOpenCompetitions,
+          ),
+          _HomeActionCard(
+            eyebrow: isAuthenticated ? 'REPLAYS' : 'UNLOCK',
+            title: isAuthenticated ? 'Return to the storylines' : 'Sign in for execution',
+            detail: isAuthenticated
+                ? 'Recent match stories, turning points, and notifications stay one tap away.'
+                : 'Guest mode previews the shell. Sign in to unlock wallet, order rails, and writable club actions.',
+            icon: isAuthenticated ? Icons.play_circle_outline : Icons.lock_open_outlined,
+            accent: isAuthenticated ? GteShellTheme.accentWarm : GteShellTheme.accentCapital,
+            actionLabel: isAuthenticated ? 'Open replays' : 'Sign in',
+            onTap: isAuthenticated ? onOpenReplays : onOpenLogin,
+          ),
+        ];
+        if (singleColumn) {
+          return Column(
+            children: cards
+                .map((Widget child) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: child,
+                    ))
+                .toList(growable: false),
+          );
+        }
+        return Row(
+          children: cards
+              .map(
+                (Widget child) => Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(right: child == cards.last ? 0 : 12),
+                    child: child,
+                  ),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
+class _HomeActionCard extends StatelessWidget {
+  const _HomeActionCard({
+    required this.eyebrow,
+    required this.title,
+    required this.detail,
+    required this.icon,
+    required this.accent,
+    required this.actionLabel,
+    this.onTap,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String detail;
+  final IconData icon;
+  final Color accent;
+  final String actionLabel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: accent,
+      onTap: onTap,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: accent, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  eyebrow,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: accent,
+                        letterSpacing: 1.1,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(detail, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Text(actionLabel, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: accent)),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeJourneyPanel extends StatelessWidget {
+  const _HomeJourneyPanel({
+    required this.isAuthenticated,
+    required this.clubName,
+    required this.notificationCount,
+    required this.openCompetitionCount,
+    required this.onOpenCompetitions,
+    required this.onOpenClub,
+    this.onOpenLogin,
+  });
+
+  final bool isAuthenticated;
+  final String clubName;
+  final int notificationCount;
+  final int openCompetitionCount;
+  final VoidCallback onOpenCompetitions;
+  final VoidCallback onOpenClub;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final String title = isAuthenticated
+        ? 'Next best moves for $clubName'
+        : 'Guest mode is polished, but your account is still on the touchline';
+    final String message = isAuthenticated
+        ? 'There are $openCompetitionCount open competition lanes and $notificationCount alerts waiting. Use Home to move with intent instead of bouncing between tabs.'
+        : 'Browse the shell, inspect market and arena context, then sign in when you are ready to trade, fund, and save club changes.';
+    return GteSurfacePanel(
+      accentColor: isAuthenticated ? GteShellTheme.accent : GteShellTheme.accentCapital,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(message, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonal(
+                onPressed: onOpenCompetitions,
+                child: Text(isAuthenticated ? 'See open competitions' : 'Preview live match center'),
+              ),
+              FilledButton.tonal(
+                onPressed: onOpenClub,
+                child: const Text('Open club lane'),
+              ),
+              if (!isAuthenticated && onOpenLogin != null)
+                FilledButton(
+                  onPressed: onOpenLogin,
+                  child: const Text('Unlock account'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeSectionHeading extends StatelessWidget {
+  const _HomeSectionHeading({
+    required this.eyebrow,
+    required this.title,
+    required this.detail,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          eyebrow,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: GteShellTheme.accent,
+                letterSpacing: 1.1,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(title, style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        Text(detail, style: Theme.of(context).textTheme.bodyMedium),
+      ],
     );
   }
 }

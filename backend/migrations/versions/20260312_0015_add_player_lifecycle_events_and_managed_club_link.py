@@ -12,24 +12,22 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "ingestion_players",
-        sa.Column("current_club_profile_id", sa.String(length=36), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_ingestion_players_current_club_profile_id",
-        "ingestion_players",
-        "club_profiles",
-        ["current_club_profile_id"],
-        ["id"],
-        ondelete="SET NULL",
-    )
-    op.create_index(
-        "ix_ingestion_players_current_club_profile_id",
-        "ingestion_players",
-        ["current_club_profile_id"],
-        unique=False,
-    )
+    with op.batch_alter_table("ingestion_players") as batch_op:
+        batch_op.add_column(
+            sa.Column("current_club_profile_id", sa.String(length=36), nullable=True),
+        )
+        batch_op.create_foreign_key(
+            "fk_ingestion_players_current_club_profile_id",
+            "club_profiles",
+            ["current_club_profile_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        batch_op.create_index(
+            "ix_ingestion_players_current_club_profile_id",
+            ["current_club_profile_id"],
+            unique=False,
+        )
 
     op.create_table(
         "player_lifecycle_events",
@@ -68,6 +66,7 @@ def downgrade() -> None:
     op.drop_index("ix_player_lifecycle_events_player_id", table_name="player_lifecycle_events")
     op.drop_table("player_lifecycle_events")
 
-    op.drop_index("ix_ingestion_players_current_club_profile_id", table_name="ingestion_players")
-    op.drop_constraint("fk_ingestion_players_current_club_profile_id", "ingestion_players", type_="foreignkey")
-    op.drop_column("ingestion_players", "current_club_profile_id")
+    with op.batch_alter_table("ingestion_players") as batch_op:
+        batch_op.drop_index("ix_ingestion_players_current_club_profile_id")
+        batch_op.drop_constraint("fk_ingestion_players_current_club_profile_id", type_="foreignkey")
+        batch_op.drop_column("current_club_profile_id")

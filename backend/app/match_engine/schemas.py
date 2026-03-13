@@ -69,6 +69,7 @@ class MatchTeamInput(CommonSchema):
     team_name: str = Field(min_length=1)
     formation: str = Field(default="4-3-3", min_length=5)
     tactics: TeamTacticalPlanInput = Field(default_factory=TeamTacticalPlanInput)
+    manager_profile: dict[str, Any] | None = None
     starters: list[MatchPlayerInput] = Field(min_length=11, max_length=11)
     bench: list[MatchPlayerInput] = Field(default_factory=list, max_length=12)
 
@@ -222,9 +223,37 @@ class MatchPlayerStatsView(CommonSchema):
     substituted_out_minute: int | None = Field(default=None, ge=0, le=90)
 
 
+
+
+class MatchHighlightClipView(CommonSchema):
+    title: str
+    start_second: int = Field(ge=0)
+    end_second: int = Field(ge=0)
+    importance: int = Field(default=1, ge=1, le=5)
+    event_type: MatchEventType
+    team_name: str | None = None
+
+
+class MatchInjuryReportView(CommonSchema):
+    minute: int = Field(ge=0, le=120)
+    team_name: str
+    player_name: str
+    severity: str = Field(default='monitor')
+    tactical_impact: str
+
+
 class MatchFinalSummaryView(CommonSchema):
     match_id: str
     seed: int = Field(ge=0)
+    win_probability_home: int = Field(default=0, ge=0, le=100)
+    win_probability_draw: int = Field(default=0, ge=0, le=100)
+    win_probability_away: int = Field(default=0, ge=0, le=100)
+    expected_goals_home: float = Field(default=0.0, ge=0)
+    expected_goals_away: float = Field(default=0.0, ge=0)
+    key_highlights: list[str] = Field(default_factory=list)
+    highlight_package: list[MatchHighlightClipView] = Field(default_factory=list)
+    manager_influence_notes: list[str] = Field(default_factory=list)
+    injury_report: list[MatchInjuryReportView] = Field(default_factory=list)
     status: MatchStatus
     competition_type: MatchCompetitionType
     stage: str
@@ -256,6 +285,15 @@ class MatchEventTimelineView(CommonSchema):
 class MatchReplayPayloadView(CommonSchema):
     match_id: str
     seed: int = Field(ge=0)
+    win_probability_home: int = Field(default=0, ge=0, le=100)
+    win_probability_draw: int = Field(default=0, ge=0, le=100)
+    win_probability_away: int = Field(default=0, ge=0, le=100)
+    expected_goals_home: float = Field(default=0.0, ge=0)
+    expected_goals_away: float = Field(default=0.0, ge=0)
+    key_highlights: list[str] = Field(default_factory=list)
+    highlight_package: list[MatchHighlightClipView] = Field(default_factory=list)
+    manager_influence_notes: list[str] = Field(default_factory=list)
+    injury_report: list[MatchInjuryReportView] = Field(default_factory=list)
     status: MatchStatus
     summary: MatchFinalSummaryView
     timeline: MatchEventTimelineView

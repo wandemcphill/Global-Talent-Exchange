@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../core/app_feedback.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/competition_rule_models.dart';
@@ -18,6 +19,10 @@ class CompetitionController extends ChangeNotifier {
 
   final CompetitionApi _api;
   CompetitionDraft draft;
+  Future<void>? _discoveryFuture;
+  Future<void>? _detailFuture;
+  DateTime? discoverySyncedAt;
+  DateTime? detailSyncedAt;
 
   String _currentUserId;
   String? _currentUserName;
@@ -158,58 +163,76 @@ class CompetitionController extends ChangeNotifier {
     }).toList(growable: false);
   }
 
-  Future<void> bootstrap() async {
+  Future<void> bootstrap() {
     if (competitions.isNotEmpty || isLoadingDiscovery) {
-      return;
+      return Future<void>.value();
     }
-    await loadDiscovery();
+    return loadDiscovery();
   }
 
-  Future<void> loadDiscovery() async {
+  Future<void> loadDiscovery() {
+    if (_discoveryFuture != null) {
+      return _discoveryFuture!;
+    }
     isLoadingDiscovery = true;
     discoveryError = null;
     notifyListeners();
-    try {
-      final CompetitionListResponse response = await _api.fetchCompetitions(
-        userId: _currentUserId,
-      );
-      competitions = response.items;
-      _syncSelectedFromList();
-    } catch (error) {
-      discoveryError = error.toString();
-    } finally {
-      isLoadingDiscovery = false;
-      notifyListeners();
-    }
+    final Future<void> task = () async {
+      try {
+        final CompetitionListResponse response = await _api.fetchCompetitions(
+          userId: _currentUserId,
+        );
+        competitions = response.items;
+        discoverySyncedAt = DateTime.now().toUtc();
+        _syncSelectedFromList();
+      } catch (error) {
+        discoveryError = AppFeedback.messageFor(error);
+      } finally {
+        isLoadingDiscovery = false;
+        _discoveryFuture = null;
+        notifyListeners();
+      }
+    }();
+    _discoveryFuture = task;
+    return task;
   }
 
   Future<void> openCompetition(
     String competitionId, {
     String? inviteCode,
-  }) async {
+  }) {
+    if (_detailFuture != null && selectedCompetition?.id == competitionId) {
+      return _detailFuture!;
+    }
     isLoadingDetail = true;
     detailError = null;
     notifyListeners();
-    try {
-      final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
-        _api.fetchCompetition(
-          competitionId,
-          userId: _currentUserId,
-          inviteCode: inviteCode,
-        ),
-        _api.fetchFinancials(
-          competitionId,
-          userId: _currentUserId,
-        ),
-      ]);
-      selectedCompetition = payload[0] as CompetitionSummary;
-      selectedFinancials = payload[1] as CompetitionFinancialSummary;
-    } catch (error) {
-      detailError = error.toString();
-    } finally {
-      isLoadingDetail = false;
-      notifyListeners();
-    }
+    final Future<void> task = () async {
+      try {
+        final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
+          _api.fetchCompetition(
+            competitionId,
+            userId: _currentUserId,
+            inviteCode: inviteCode,
+          ),
+          _api.fetchFinancials(
+            competitionId,
+            userId: _currentUserId,
+          ),
+        ]);
+        selectedCompetition = payload[0] as CompetitionSummary;
+        selectedFinancials = payload[1] as CompetitionFinancialSummary;
+        detailSyncedAt = DateTime.now().toUtc();
+      } catch (error) {
+        detailError = AppFeedback.messageFor(error);
+      } finally {
+        isLoadingDetail = false;
+        _detailFuture = null;
+        notifyListeners();
+      }
+    }();
+    _detailFuture = task;
+    return task;
   }
 
   void setSection(CompetitionDiscoverySection value) {
@@ -341,7 +364,7 @@ class CompetitionController extends ChangeNotifier {
       draft = draft.copyWith(competitionId: created.id);
       return created;
     } catch (error) {
-      actionError = error.toString();
+      actionError = AppFeedback.messageFor(error);
       notifyListeners();
       return null;
     } finally {
@@ -375,7 +398,7 @@ class CompetitionController extends ChangeNotifier {
       _replaceCompetition(joined);
       return joined;
     } catch (error) {
-      actionError = error.toString();
+      actionError = AppFeedback.messageFor(error);
       notifyListeners();
       return null;
     } finally {
@@ -410,7 +433,7 @@ class CompetitionController extends ChangeNotifier {
       );
       return latestInvite;
     } catch (error) {
-      actionError = error.toString();
+      actionError = AppFeedback.messageFor(error);
       notifyListeners();
       return null;
     } finally {

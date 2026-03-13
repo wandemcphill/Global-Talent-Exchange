@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_user, get_session
 from backend.app.auth.schemas import (
+    ChangePasswordRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
     LoginRequest,
@@ -52,7 +53,13 @@ def register_user(
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return TokenResponse(access_token=token, expires_in=expires_in, user=UserPublic.model_validate(user))
+    return TokenResponse(
+        access_token=token,
+        expires_in=expires_in,
+        user=UserPublic.model_validate(user),
+        permissions=service.resolve_user_permissions(request, user) if request is not None else [],
+        landing_route=service.resolve_landing_route(user),
+    )
 
 
 @legacy_router.post("/login", response_model=TokenResponse)
@@ -74,7 +81,13 @@ def login_user(
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return TokenResponse(access_token=token, expires_in=expires_in, user=UserPublic.model_validate(user))
+    return TokenResponse(
+        access_token=token,
+        expires_in=expires_in,
+        user=UserPublic.model_validate(user),
+        permissions=service.resolve_user_permissions(request, user) if request is not None else [],
+        landing_route=service.resolve_landing_route(user),
+    )
 
 
 @api_router.get("/me", response_model=CurrentUserResponse)
@@ -104,6 +117,26 @@ def update_current_user_profile(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return profile
+
+
+@api_router.post("/change-password", response_model=CurrentUserResponse)
+def change_current_user_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CurrentUserResponse:
+    service = AuthService()
+    try:
+        service.change_password(session, user=current_user, payload=payload)
+        session.commit()
+        session.refresh(current_user)
+        return service.get_current_user_profile(session, current_user)
+    except InvalidCredentialsError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except AuthError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 router.include_router(legacy_router)

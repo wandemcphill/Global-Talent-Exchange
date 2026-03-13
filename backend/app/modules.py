@@ -4,12 +4,12 @@ from fastapi import APIRouter
 
 from backend.app.academy.api.router import router as academy_router
 from backend.app.admin.router import router as admin_router
+from backend.app.admin_access.router import router as admin_access_router
+from backend.app.admin_godmode.router import router as admin_godmode_router
 from backend.app.auth.router import router as auth_router
 from backend.app.champions_league.api.router import router as champions_league_router
 from backend.app.clubs.router import router as clubs_router
-from backend.app.club_identity.dynasty.api.router import router as dynasty_router
 from backend.app.club_identity.jerseys.router import router as club_identity_router
-from backend.app.club_identity.reputation.router import router as club_reputation_router
 from backend.app.routes.competitions import router as competitions_router
 from backend.app.routes.admin_referrals import router as admin_referrals_router
 from backend.app.routes.creators import router as creators_router
@@ -24,6 +24,7 @@ from backend.app.fast_cups.api.router import router as fast_cups_router
 from backend.app.ingestion.router import router as ingestion_router
 from backend.app.leagues.router import router as leagues_router
 from backend.app.market.router import router as market_router
+from backend.app.manager_market.router import router as manager_market_router
 from backend.app.match_engine.api.router import router as match_engine_router
 from backend.app.notifications.router import notifications_router
 from backend.app.players.router import router as players_router
@@ -53,6 +54,8 @@ def _initialize_replay_archive(app, _context) -> None:
 DOMAIN_MODULES = (
     DomainModule(name="health", router=health_router),
     DomainModule(name="admin", router=admin_router),
+    DomainModule(name="admin_access", router=admin_access_router),
+    DomainModule(name="admin_godmode", router=admin_godmode_router),
     DomainModule(name="auth", router=auth_router),
     DomainModule(name="wallets", router=wallets_router),
     DomainModule(name="players", router=players_router),
@@ -66,6 +69,7 @@ DOMAIN_MODULES = (
     DomainModule(name="referrals", router=referrals_router),
     DomainModule(name="admin_referrals", router=admin_referrals_router),
     DomainModule(name="market", router=market_router),
+    DomainModule(name="manager_market", router=manager_market_router),
     DomainModule(name="ingestion", router=ingestion_router),
     DomainModule(name="value_engine", router=value_engine_router),
     DomainModule(name="surveillance", router=surveillance_router),
@@ -77,8 +81,6 @@ DOMAIN_MODULES = (
     DomainModule(name="fast_cups", router=_with_api_alias(fast_cups_router)),
     DomainModule(name="match_engine", router=match_engine_router),
     # legacy club_identity routers provide compatibility endpoints while /api/clubs/... remains canonical
-    DomainModule(name="club_reputation", router=club_reputation_router),
-    DomainModule(name="dynasty", router=dynasty_router),
     DomainModule(name="club_identity", router=club_identity_router),
     DomainModule(name="club_ops_admin", router=admin_club_ops_router),
     DomainModule(

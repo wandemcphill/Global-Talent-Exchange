@@ -5,6 +5,7 @@ import '../../models/creator_models.dart';
 import '../../widgets/admin/creator_leaderboard_table.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import '../../widgets/gtex_branding.dart';
 
 class CreatorLeaderboardScreen extends StatefulWidget {
   const CreatorLeaderboardScreen({
@@ -30,7 +31,7 @@ class _CreatorLeaderboardScreenState extends State<CreatorLeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Creator leaderboard')),
+      appBar: AppBar(title: const Text('Creator leaderboard desk')),
       body: FutureBuilder<CreatorLeaderboardSnapshot>(
         future: _future,
         builder: (BuildContext context, AsyncSnapshot<CreatorLeaderboardSnapshot> snapshot) {
@@ -38,9 +39,11 @@ class _CreatorLeaderboardScreenState extends State<CreatorLeaderboardScreen> {
             return const Padding(
               padding: EdgeInsets.all(20),
               child: GteStatePanel(
-                title: 'Loading creator leaderboard',
+                eyebrow: 'CREATOR LEADERBOARD',
+                title: 'Loading creator leaderboard desk',
                 message: 'Ranking top creators, strongest creator competitions, and qualified participation.',
                 icon: Icons.leaderboard_outlined,
+                accentColor: Color(0xFF9C6BFF),
               ),
             );
           }
@@ -48,9 +51,13 @@ class _CreatorLeaderboardScreenState extends State<CreatorLeaderboardScreen> {
             return Padding(
               padding: const EdgeInsets.all(20),
               child: GteStatePanel(
-                title: 'Creator leaderboard unavailable',
+                eyebrow: 'CREATOR LEADERBOARD',
+                title: 'Creator leaderboard desk unavailable',
                 message: '${snapshot.error ?? 'Unknown error'}',
                 icon: Icons.error_outline,
+                accentColor: Color(0xFF9C6BFF),
+                actionLabel: 'Retry',
+                onAction: () => setState(() { _future = widget.api.fetchCreatorLeaderboard(); }),
               ),
             );
           }
@@ -61,6 +68,17 @@ class _CreatorLeaderboardScreenState extends State<CreatorLeaderboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                GtexHeroBanner(
+                  eyebrow: 'CREATOR LEADERBOARD DESK',
+                  title: 'Review who is converting attention into matchday participation, retention, and reward quality.',
+                  description: 'This admin lane is tuned for promotion quality, creator reliability, and competition momentum. It should feel like an executive signal board, not a raw export.',
+                  accent: const Color(0xFF9C6BFF),
+                  chips: <Widget>[
+                    Chip(label: Text('Creators ${leaderboard.entries.length}')),
+                    Chip(label: Text(leaderboard.topCreatorLabel)),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 GteSurfacePanel(
                   emphasized: true,
                   child: Column(
@@ -95,7 +113,16 @@ class _CreatorLeaderboardScreenState extends State<CreatorLeaderboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                CreatorLeaderboardTable(entries: leaderboard.entries),
+                if (leaderboard.entries.isEmpty)
+                  const GteStatePanel(
+                    eyebrow: 'CREATOR SIGNALS',
+                    title: 'No creator ranking signal yet',
+                    message: 'Once creator competitions and participation volume mature, the ranking table will appear here with growth and quality context.',
+                    icon: Icons.insights_outlined,
+                    accentColor: Color(0xFF9C6BFF),
+                  )
+                else
+                  CreatorLeaderboardTable(entries: leaderboard.entries),
               ],
             ),
           );

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 class UserRole(StrEnum):
     USER = "user"
     ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
 
 
 class KycStatus(StrEnum):
