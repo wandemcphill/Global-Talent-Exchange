@@ -335,6 +335,9 @@ class DemoBootstrapService:
                 user = auth_service.register_user(
                     session,
                     email=spec.email,
+                    full_name=spec.display_name,
+                    phone_number="0000000000",
+                    is_over_18=True,
                     username=spec.username,
                     password=demo_password,
                     display_name=spec.display_name,

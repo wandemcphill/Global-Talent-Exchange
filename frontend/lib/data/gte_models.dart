@@ -838,6 +838,10 @@ class GteWalletOverview {
     required this.totalOutflow,
     required this.withdrawableNow,
     required this.currency,
+    this.countryCode,
+    this.requiredPolicyAcceptancesMissing = 0,
+    this.policyBlocked = false,
+    this.policyBlockReason,
   });
 
   final double availableBalance;
@@ -847,6 +851,10 @@ class GteWalletOverview {
   final double totalOutflow;
   final double withdrawableNow;
   final GteLedgerUnit currency;
+  final String? countryCode;
+  final int requiredPolicyAcceptancesMissing;
+  final bool policyBlocked;
+  final String? policyBlockReason;
 
   factory GteWalletOverview.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -866,6 +874,15 @@ class GteWalletOverview {
           GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
       currency: _ledgerUnitFromString(
           GteJson.string(json, <String>['currency'], fallback: 'coin')),
+      countryCode: GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
+      requiredPolicyAcceptancesMissing: GteJson.integer(
+        json,
+        <String>['required_policy_acceptances_missing', 'requiredPolicyAcceptancesMissing'],
+      ),
+      policyBlocked:
+          GteJson.boolean(json, <String>['policy_blocked', 'policyBlocked']),
+      policyBlockReason: GteJson.stringOrNull(
+          json, <String>['policy_block_reason', 'policyBlockReason']),
     );
   }
 }
@@ -880,6 +897,11 @@ class GteWithdrawalEligibility {
     required this.requiresKyc,
     required this.requiresBankAccount,
     required this.pendingWithdrawals,
+    this.countryCode,
+    this.countryWithdrawalsEnabled = true,
+    this.missingRequiredPolicies = const <String>[],
+    this.policyBlocked = false,
+    this.policyBlockReason,
   });
 
   final double availableBalance;
@@ -890,6 +912,11 @@ class GteWithdrawalEligibility {
   final bool requiresKyc;
   final bool requiresBankAccount;
   final double pendingWithdrawals;
+  final String? countryCode;
+  final bool countryWithdrawalsEnabled;
+  final List<String> missingRequiredPolicies;
+  final bool policyBlocked;
+  final String? policyBlockReason;
 
   factory GteWithdrawalEligibility.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -911,6 +938,387 @@ class GteWithdrawalEligibility {
           json, <String>['requires_bank_account', 'requiresBankAccount']),
       pendingWithdrawals: GteJson.number(
           json, <String>['pending_withdrawals', 'pendingWithdrawals']),
+      countryCode: GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
+      countryWithdrawalsEnabled: GteJson.boolean(
+        json,
+        <String>['country_withdrawals_enabled', 'countryWithdrawalsEnabled'],
+        fallback: true,
+      ),
+      missingRequiredPolicies: GteJson.typedList(
+        json,
+        <String>['missing_required_policies', 'missingRequiredPolicies'],
+        (Object? value) => value?.toString() ?? '',
+      ).where((String value) => value.trim().isNotEmpty).toList(growable: false),
+      policyBlocked:
+          GteJson.boolean(json, <String>['policy_blocked', 'policyBlocked']),
+      policyBlockReason: GteJson.stringOrNull(
+          json, <String>['policy_block_reason', 'policyBlockReason']),
+    );
+  }
+}
+
+class GteWithdrawalQuote {
+  const GteWithdrawalQuote({
+    required this.grossAmount,
+    required this.feeAmount,
+    required this.netAmount,
+    required this.totalDebit,
+    required this.sourceScope,
+    required this.currencyCode,
+    required this.rateValue,
+    required this.rateDirection,
+    required this.estimatedFiatPayout,
+    required this.processorMode,
+    required this.payoutChannel,
+    required this.feeBps,
+    required this.minimumFee,
+    required this.eligibility,
+    this.blockedReason,
+  });
+
+  final double grossAmount;
+  final double feeAmount;
+  final double netAmount;
+  final double totalDebit;
+  final String sourceScope;
+  final String currencyCode;
+  final double rateValue;
+  final GteRateDirection rateDirection;
+  final double estimatedFiatPayout;
+  final String processorMode;
+  final String payoutChannel;
+  final int feeBps;
+  final double minimumFee;
+  final GteWithdrawalEligibility eligibility;
+  final String? blockedReason;
+
+  factory GteWithdrawalQuote.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'withdrawal quote');
+    return GteWithdrawalQuote(
+      grossAmount:
+          GteJson.number(json, <String>['gross_amount', 'grossAmount']),
+      feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
+      netAmount: GteJson.number(json, <String>['net_amount', 'netAmount']),
+      totalDebit:
+          GteJson.number(json, <String>['total_debit', 'totalDebit']),
+      sourceScope: GteJson.string(
+          json, <String>['source_scope', 'sourceScope'],
+          fallback: 'trade'),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      rateValue:
+          GteJson.number(json, <String>['rate_value', 'rateValue']),
+      rateDirection: _rateDirectionFromString(GteJson.string(
+          json, <String>['rate_direction', 'rateDirection'],
+          fallback: 'fiat_per_coin')),
+      estimatedFiatPayout: GteJson.number(
+          json, <String>['estimated_fiat_payout', 'estimatedFiatPayout']),
+      processorMode: GteJson.string(
+          json, <String>['processor_mode', 'processorMode'],
+          fallback: 'manual_bank_transfer'),
+      payoutChannel: GteJson.string(
+          json, <String>['payout_channel', 'payoutChannel'],
+          fallback: 'bank_transfer'),
+      feeBps: GteJson.integer(json, <String>['fee_bps', 'feeBps']),
+      minimumFee:
+          GteJson.number(json, <String>['minimum_fee', 'minimumFee']),
+      eligibility: GteWithdrawalEligibility.fromJson(
+        GteJson.value(json, <String>['eligibility']),
+      ),
+      blockedReason: GteJson.stringOrNull(
+          json, <String>['blocked_reason', 'blockedReason']),
+    );
+  }
+}
+
+class GteWithdrawalQuoteRequest {
+  const GteWithdrawalQuoteRequest({
+    required this.amountCoin,
+    this.sourceScope = 'trade',
+  });
+
+  final double amountCoin;
+  final String sourceScope;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'amount_coin': amountCoin,
+        'source_scope': sourceScope,
+      };
+}
+
+class GteWithdrawalReceipt {
+  const GteWithdrawalReceipt({
+    required this.withdrawal,
+    required this.grossAmount,
+    required this.feeAmount,
+    required this.netAmount,
+    required this.totalDebit,
+    required this.sourceScope,
+    required this.processorMode,
+    required this.payoutChannel,
+  });
+
+  final GteTreasuryWithdrawalRequest withdrawal;
+  final double grossAmount;
+  final double feeAmount;
+  final double netAmount;
+  final double totalDebit;
+  final String sourceScope;
+  final String processorMode;
+  final String payoutChannel;
+
+  factory GteWithdrawalReceipt.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'withdrawal receipt');
+    return GteWithdrawalReceipt(
+      withdrawal: GteTreasuryWithdrawalRequest.fromJson(
+        GteJson.value(json, <String>['withdrawal']),
+      ),
+      grossAmount:
+          GteJson.number(json, <String>['gross_amount', 'grossAmount']),
+      feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
+      netAmount: GteJson.number(json, <String>['net_amount', 'netAmount']),
+      totalDebit:
+          GteJson.number(json, <String>['total_debit', 'totalDebit']),
+      sourceScope: GteJson.string(
+          json, <String>['source_scope', 'sourceScope'],
+          fallback: 'trade'),
+      processorMode: GteJson.string(
+          json, <String>['processor_mode', 'processorMode'],
+          fallback: 'manual_bank_transfer'),
+      payoutChannel: GteJson.string(
+          json, <String>['payout_channel', 'payoutChannel'],
+          fallback: 'bank_transfer'),
+    );
+  }
+}
+
+
+
+class GtePolicyDocumentVersionSummary {
+  const GtePolicyDocumentVersionSummary({
+    required this.id,
+    required this.versionLabel,
+    required this.effectiveAt,
+    required this.publishedAt,
+    this.changelog,
+  });
+
+  final String id;
+  final String versionLabel;
+  final DateTime? effectiveAt;
+  final DateTime? publishedAt;
+  final String? changelog;
+
+  factory GtePolicyDocumentVersionSummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'policy document version');
+    return GtePolicyDocumentVersionSummary(
+      id: GteJson.string(json, <String>['id']),
+      versionLabel:
+          GteJson.string(json, <String>['version_label', 'versionLabel']),
+      effectiveAt: GteJson.dateTimeOrNull(
+          json, <String>['effective_at', 'effectiveAt']),
+      publishedAt: GteJson.dateTimeOrNull(
+          json, <String>['published_at', 'publishedAt']),
+      changelog: GteJson.stringOrNull(json, <String>['changelog']),
+    );
+  }
+}
+
+class GtePolicyDocumentSummary {
+  const GtePolicyDocumentSummary({
+    required this.id,
+    required this.documentKey,
+    required this.title,
+    required this.isMandatory,
+    required this.active,
+    this.latestVersion,
+  });
+
+  final String id;
+  final String documentKey;
+  final String title;
+  final bool isMandatory;
+  final bool active;
+  final GtePolicyDocumentVersionSummary? latestVersion;
+
+  factory GtePolicyDocumentSummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'policy document summary');
+    final Object? latestVersionPayload =
+        GteJson.value(json, <String>['latest_version', 'latestVersion']);
+    return GtePolicyDocumentSummary(
+      id: GteJson.string(json, <String>['id']),
+      documentKey:
+          GteJson.string(json, <String>['document_key', 'documentKey']),
+      title: GteJson.string(json, <String>['title']),
+      isMandatory:
+          GteJson.boolean(json, <String>['is_mandatory', 'isMandatory']),
+      active: GteJson.boolean(json, <String>['active'], fallback: true),
+      latestVersion: latestVersionPayload == null
+          ? null
+          : GtePolicyDocumentVersionSummary.fromJson(latestVersionPayload),
+    );
+  }
+}
+
+class GtePolicyDocumentDetail extends GtePolicyDocumentSummary {
+  const GtePolicyDocumentDetail({
+    required super.id,
+    required super.documentKey,
+    required super.title,
+    required super.isMandatory,
+    required super.active,
+    super.latestVersion,
+    this.bodyMarkdown,
+  });
+
+  final String? bodyMarkdown;
+
+  factory GtePolicyDocumentDetail.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'policy document detail');
+    final GtePolicyDocumentSummary summary =
+        GtePolicyDocumentSummary.fromJson(json);
+    return GtePolicyDocumentDetail(
+      id: summary.id,
+      documentKey: summary.documentKey,
+      title: summary.title,
+      isMandatory: summary.isMandatory,
+      active: summary.active,
+      latestVersion: summary.latestVersion,
+      bodyMarkdown:
+          GteJson.stringOrNull(json, <String>['body_markdown', 'bodyMarkdown']),
+    );
+  }
+}
+
+class GtePolicyAcceptanceSummary {
+  const GtePolicyAcceptanceSummary({
+    required this.documentKey,
+    required this.title,
+    required this.versionLabel,
+    required this.acceptedAt,
+  });
+
+  final String documentKey;
+  final String title;
+  final String versionLabel;
+  final DateTime? acceptedAt;
+
+  factory GtePolicyAcceptanceSummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'policy acceptance summary');
+    return GtePolicyAcceptanceSummary(
+      documentKey:
+          GteJson.string(json, <String>['document_key', 'documentKey']),
+      title: GteJson.string(json, <String>['title']),
+      versionLabel:
+          GteJson.string(json, <String>['version_label', 'versionLabel']),
+      acceptedAt:
+          GteJson.dateTimeOrNull(json, <String>['accepted_at', 'acceptedAt']),
+    );
+  }
+}
+
+class GtePolicyRequirementSummary {
+  const GtePolicyRequirementSummary({
+    required this.documentKey,
+    required this.title,
+    required this.versionLabel,
+    required this.isMandatory,
+    this.effectiveAt,
+  });
+
+  final String documentKey;
+  final String title;
+  final String versionLabel;
+  final bool isMandatory;
+  final DateTime? effectiveAt;
+
+  factory GtePolicyRequirementSummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'policy requirement summary');
+    return GtePolicyRequirementSummary(
+      documentKey:
+          GteJson.string(json, <String>['document_key', 'documentKey']),
+      title: GteJson.string(json, <String>['title']),
+      versionLabel:
+          GteJson.string(json, <String>['version_label', 'versionLabel']),
+      isMandatory:
+          GteJson.boolean(json, <String>['is_mandatory', 'isMandatory']),
+      effectiveAt: GteJson.dateTimeOrNull(
+          json, <String>['effective_at', 'effectiveAt']),
+    );
+  }
+}
+
+class GteComplianceStatus {
+  const GteComplianceStatus({
+    required this.countryCode,
+    required this.countryPolicyBucket,
+    required this.depositsEnabled,
+    required this.marketTradingEnabled,
+    required this.platformRewardWithdrawalsEnabled,
+    required this.requiredPolicyAcceptancesMissing,
+    required this.missingPolicyAcceptances,
+    required this.canDeposit,
+    required this.canWithdrawPlatformRewards,
+    required this.canTradeMarket,
+  });
+
+  final String countryCode;
+  final String countryPolicyBucket;
+  final bool depositsEnabled;
+  final bool marketTradingEnabled;
+  final bool platformRewardWithdrawalsEnabled;
+  final int requiredPolicyAcceptancesMissing;
+  final List<GtePolicyRequirementSummary> missingPolicyAcceptances;
+  final bool canDeposit;
+  final bool canWithdrawPlatformRewards;
+  final bool canTradeMarket;
+
+  bool get hasMissingRequiredPolicies => requiredPolicyAcceptancesMissing > 0;
+
+  factory GteComplianceStatus.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'compliance status');
+    return GteComplianceStatus(
+      countryCode:
+          GteJson.string(json, <String>['country_code', 'countryCode'], fallback: 'GLOBAL'),
+      countryPolicyBucket: GteJson.string(
+          json, <String>['country_policy_bucket', 'countryPolicyBucket'],
+          fallback: 'default'),
+      depositsEnabled:
+          GteJson.boolean(json, <String>['deposits_enabled', 'depositsEnabled'], fallback: true),
+      marketTradingEnabled: GteJson.boolean(
+          json, <String>['market_trading_enabled', 'marketTradingEnabled'],
+          fallback: true),
+      platformRewardWithdrawalsEnabled: GteJson.boolean(
+        json,
+        <String>['platform_reward_withdrawals_enabled', 'platformRewardWithdrawalsEnabled'],
+        fallback: true,
+      ),
+      requiredPolicyAcceptancesMissing: GteJson.integer(
+        json,
+        <String>['required_policy_acceptances_missing', 'requiredPolicyAcceptancesMissing'],
+      ),
+      missingPolicyAcceptances: GteJson.typedList(
+        json,
+        <String>['missing_policy_acceptances', 'missingPolicyAcceptances'],
+        GtePolicyRequirementSummary.fromJson,
+      ),
+      canDeposit:
+          GteJson.boolean(json, <String>['can_deposit', 'canDeposit'], fallback: true),
+      canWithdrawPlatformRewards: GteJson.boolean(
+        json,
+        <String>['can_withdraw_platform_rewards', 'canWithdrawPlatformRewards'],
+        fallback: true,
+      ),
+      canTradeMarket: GteJson.boolean(
+          json, <String>['can_trade_market', 'canTradeMarket'], fallback: true),
     );
   }
 }
@@ -1172,16 +1580,19 @@ class GteWithdrawalCreateRequest {
     required this.amountCoin,
     this.bankAccountId,
     this.notes,
+    this.sourceScope = 'trade',
   });
 
   final double amountCoin;
   final String? bankAccountId;
   final String? notes;
+  final String sourceScope;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'amount_coin': amountCoin,
         if (bankAccountId != null) 'bank_account_id': bankAccountId,
         if (notes != null) 'notes': notes,
+        'source_scope': sourceScope,
       };
 }
 

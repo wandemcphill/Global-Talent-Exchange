@@ -280,6 +280,8 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     amount_coin: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     amount_fiat: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+    fee_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
+    net_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rate_direction: Mapped[RateDirection] = mapped_column(
@@ -293,6 +295,9 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     bank_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     kyc_status_snapshot: Mapped[str] = mapped_column(String(32), nullable=False, default="unverified")
     kyc_tier_snapshot: Mapped[str] = mapped_column(String(32), nullable=False, default="unverified")
+    processor_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="manual_bank_transfer", server_default="manual_bank_transfer")
+    payout_channel: Mapped[str] = mapped_column(String(64), nullable=False, default="bank_transfer", server_default="bank_transfer")
+    source_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="trade", server_default="trade")
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

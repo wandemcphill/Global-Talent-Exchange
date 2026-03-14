@@ -9,6 +9,7 @@ from backend.app.common.enums.competition_format import CompetitionFormat
 from backend.app.common.enums.competition_visibility import CompetitionVisibility
 from backend.app.common.schemas.base import CommonSchema
 from backend.app.config.competition_constants import CUP_ALLOWED_PARTICIPANT_SIZES, USER_COMPETITION_MAX_PARTICIPANTS
+from backend.app.schemas.competition_lifecycle import CompetitionStructureRequest, CompetitionVisibilityRuleRequest
 
 _ONE_HUNDRED = Decimal("1")
 
@@ -27,11 +28,18 @@ class CompetitionCreateRequest(CommonSchema):
     capacity: int = Field(default=20, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
     creator_id: str = Field(min_length=1, max_length=36)
     creator_name: str | None = Field(default=None, min_length=1, max_length=120)
+    competition_type: str | None = Field(default=None, max_length=32)
+    source_type: str | None = Field(default=None, max_length=48)
+    source_id: str | None = Field(default=None, max_length=36)
     payout_structure: tuple[PayoutRuleRequest, ...] | None = None
     platform_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
     host_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
     rules_summary: str | None = Field(default=None, max_length=280)
     beginner_friendly: bool | None = None
+    scheduled_start_at: datetime | None = None
+    seed_method: str | None = Field(default=None, max_length=24)
+    structure: CompetitionStructureRequest | None = None
+    visibility_rules: tuple[CompetitionVisibilityRuleRequest, ...] | None = None
     created_at: datetime | None = None
 
     @model_validator(mode="after")
@@ -55,6 +63,11 @@ class CompetitionUpdateRequest(CommonSchema):
     host_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
     rules_summary: str | None = Field(default=None, max_length=280)
     beginner_friendly: bool | None = None
+    scheduled_start_at: datetime | None = None
+    competition_type: str | None = Field(default=None, max_length=32)
+    seed_method: str | None = Field(default=None, max_length=24)
+    structure: CompetitionStructureRequest | None = None
+    visibility_rules: tuple[CompetitionVisibilityRuleRequest, ...] | None = None
 
     @model_validator(mode="after")
     def validate_competition(self) -> "CompetitionUpdateRequest":

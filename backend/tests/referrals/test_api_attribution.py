@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_attribution_api_captures_creator_flow_and_invite_audit(referral_api) -> None:
-    app, client, users = referral_api
+    app, client, users, _session = referral_api
 
     app.state.current_user = users["creator"]
     profile_response = client.post(

@@ -6,6 +6,7 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import 'gte_policy_compliance_center_screen.dart';
 
 class GteWalletOverviewScreen extends StatefulWidget {
   const GteWalletOverviewScreen({
@@ -102,6 +103,43 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
+                if (overview.policyBlocked ||
+                    overview.requiredPolicyAcceptancesMissing > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: GteSurfacePanel(
+                      accentColor: Colors.orange,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('Compliance action needed',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 8),
+                          Text(
+                            overview.policyBlockReason ??
+                                'Complete required policy acceptances to unlock all wallet actions.',
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => GtePolicyComplianceCenterScreen(
+                                    controller: widget.controller,
+                                  ),
+                                ),
+                              );
+                              await _refresh();
+                            },
+                            icon: const Icon(Icons.gavel_outlined),
+                            label: Text(
+                              'Review ${overview.requiredPolicyAcceptancesMissing} pending item(s)',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 GteSurfacePanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,6 +204,35 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                 : 'Next eligibility: ${gteFormatDateTime(eligibility.nextEligibleAt)}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                          if (eligibility.policyBlocked) ...<Widget>[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                color: Colors.orange.withValues(alpha: 0.08),
+                                border: Border.all(
+                                  color: Colors.orange.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    eligibility.policyBlockReason ??
+                                        'Withdrawal is currently blocked by policy requirements.',
+                                  ),
+                                  if (eligibility.missingRequiredPolicies.isNotEmpty) ...<Widget>[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Pending: ${eligibility.missingRequiredPolicies.join(', ')}',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     );

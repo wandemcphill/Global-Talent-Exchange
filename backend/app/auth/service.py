@@ -49,10 +49,10 @@ class AuthService:
         session: Session,
         *,
         email: str,
-        full_name: str,
-        phone_number: str,
-        is_over_18: bool,
-        username: str | None,
+        full_name: str | None = None,
+        phone_number: str | None = None,
+        is_over_18: bool = True,
+        username: str | None = None,
         password: str,
         display_name: str | None = None,
         role: UserRole = UserRole.USER,
@@ -63,12 +63,19 @@ class AuthService:
         normalized_username = self._normalize_username(username) if username else None
         self._validate_password(password)
 
+        resolved_full_name = (full_name or display_name or normalized_username or normalized_email.split("@", 1)[0]).strip()
+        if not resolved_full_name:
+            raise AuthError("Full name is required.")
+        resolved_phone_number = (phone_number or "0000000000").strip()
+        if not resolved_phone_number:
+            resolved_phone_number = "0000000000"
+
         existing_user = session.scalar(select(User).where(User.email == normalized_email))
         if existing_user is not None:
             raise DuplicateUserError("Email address is already registered.")
 
         if normalized_username is None:
-            normalized_username = self._generate_unique_username(session, full_name, normalized_email)
+            normalized_username = self._generate_unique_username(session, resolved_full_name, normalized_email)
         else:
             existing_username = session.scalar(select(User).where(User.username == normalized_username))
             if existing_username is not None:
@@ -77,9 +84,9 @@ class AuthService:
         user = User(
             email=normalized_email,
             username=normalized_username,
-            full_name=full_name.strip(),
-            phone_number=phone_number.strip(),
-            display_name=display_name or full_name.strip() or normalized_username,
+            full_name=resolved_full_name,
+            phone_number=resolved_phone_number,
+            display_name=display_name or resolved_full_name or normalized_username,
             password_hash=hash_password(password),
             role=role,
             age_confirmed_at=utcnow(),

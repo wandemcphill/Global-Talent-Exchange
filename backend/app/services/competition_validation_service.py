@@ -143,6 +143,8 @@ class CompetitionValidationService:
         return {
             CompetitionStatus.LOCKED,
             CompetitionStatus.IN_PROGRESS,
+            CompetitionStatus.SEEDED,
+            CompetitionStatus.LIVE,
             CompetitionStatus.COMPLETED,
             CompetitionStatus.CANCELLED,
             CompetitionStatus.REFUNDED,

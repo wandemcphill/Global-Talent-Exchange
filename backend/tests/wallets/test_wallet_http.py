@@ -22,6 +22,7 @@ from backend.app.models.base import Base
 from backend.app.wallets.router import router
 from backend.app.wallets.service import LedgerPosting, WalletService
 from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
+from backend.app.models.user import KycStatus
 
 
 @pytest.fixture()
@@ -326,3 +327,62 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
     labels = {item["label"]: item["value"] for item in payload["insights"]}
     assert labels["Withdrawal rail"] == "Bank transfer"
     assert labels["E-game cash-out"] == "Enabled"
+
+
+def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("120"))
+
+    from backend.app.treasury.service import TreasuryService
+    treasury = TreasuryService()
+    treasury.create_or_update_user_bank_account(
+        session,
+        user=current_user,
+        bank_name="GT Bank",
+        account_number="0123456789",
+        account_name="Wallet HTTP",
+        bank_code="058",
+        currency_code="NGN",
+    )
+    treasury.submit_kyc(
+        session,
+        user=current_user,
+        nin="12345678901",
+        bvn=None,
+        address_line1="12 Marina",
+        address_line2=None,
+        city="Lagos",
+        state="Lagos",
+        country="Nigeria",
+        id_document_attachment_id=None,
+    )
+    current_user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+
+    quote_response = client.post(
+        "/api/wallets/withdrawals/quote",
+        json={"amount_coin": "20.0000", "source_scope": "trade"},
+    )
+    assert quote_response.status_code == 200, quote_response.text
+    quote_payload = quote_response.json()
+    assert Decimal(str(quote_payload["gross_amount"])) == Decimal("20.0000")
+    assert Decimal(str(quote_payload["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(quote_payload["total_debit"])) == Decimal("25.0000")
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={"amount_coin": "20.0000", "source_scope": "trade"},
+    )
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["source_scope"] == "trade"
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
+
+    receipt_response = client.get(f"/api/wallets/withdrawals/{payload['id']}/receipt")
+    assert receipt_response.status_code == 200, receipt_response.text
+    receipt = receipt_response.json()
+    assert receipt["withdrawal"]["id"] == payload["id"]
+    assert Decimal(str(receipt["gross_amount"])) == Decimal("20.0000")
+    assert Decimal(str(receipt["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(receipt["total_debit"])) == Decimal("25.0000")

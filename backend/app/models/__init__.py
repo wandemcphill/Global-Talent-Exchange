@@ -4,7 +4,9 @@ from backend.app.models.academy_player_progress import AcademyPlayerProgress
 from backend.app.models.academy_program import AcademyProgram
 from backend.app.models.academy_training_cycle import AcademyTrainingCycle
 from backend.app.models.analytics_event import AnalyticsEvent
+from backend.app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
 from backend.app.models.attachment import Attachment
+from backend.app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
 from backend.app.models.base import Base
 from backend.app.models.club_branding_asset import ClubBrandingAsset
 from backend.app.models.club_budget_snapshot import ClubBudgetSnapshot
@@ -14,6 +16,7 @@ from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
 from backend.app.models.club_dynasty_progress import ClubDynastyProgress
 from backend.app.models.club_finance_account import ClubFinanceAccount
 from backend.app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
+from backend.app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
 from backend.app.models.club_identity_theme import ClubIdentityTheme
 from backend.app.models.club_jersey_design import ClubJerseyDesign
 from backend.app.models.club_profile import ClubProfile
@@ -23,13 +26,58 @@ from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
 from backend.app.models.club_sponsorship_package import ClubSponsorshipPackage
 from backend.app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from backend.app.models.club_trophy import ClubTrophy
+from backend.app.models.competition import Competition, UserCompetition
+from backend.app.models.competition_autofill_rule import CompetitionAutofillRule
+from backend.app.models.competition_entry import CompetitionEntry
+from backend.app.models.competition_invite import CompetitionInvite
+from backend.app.models.competition_match import CompetitionMatch
+from backend.app.models.competition_match_event import CompetitionMatchEvent
+from backend.app.models.competition_participant import CompetitionParticipant
+from backend.app.models.competition_playoff import CompetitionPlayoff
+from backend.app.models.competition_prize_rule import CompetitionPrizeRule
+from backend.app.models.competition_reward import CompetitionReward
+from backend.app.models.competition_reward_pool import CompetitionRewardPool
+from backend.app.models.competition_round import CompetitionRound
+from backend.app.models.competition_rule_set import CompetitionRuleSet
+from backend.app.models.competition_schedule_job import CompetitionScheduleJob
+from backend.app.models.competition_seed_rule import CompetitionSeedRule
+from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
+from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
 from backend.app.models.creator_campaign import CreatorCampaign
 from backend.app.models.creator_profile import CreatorProfile
+from backend.app.models.community_engine import CompetitionWatchlist, LiveThread, LiveThreadMessage, MessageVisibility, PrivateMessage, PrivateMessageParticipant, PrivateMessageThread, PrivateMessageThreadStatus, LiveThreadStatus
+from backend.app.models.discovery_engine import FeaturedRail, SavedSearch
 from backend.app.models.dispute import Dispute, DisputeMessage, DisputeStatus
+from backend.app.models.economy_config import GiftCatalogItem, ServicePricingRule
+from backend.app.models.economy_burn_event import EconomyBurnEvent
+from backend.app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from backend.app.models.gift_combo_event import GiftComboEvent
+from backend.app.models.gift_combo_rule import GiftComboRule
+from backend.app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+from backend.app.models.market_topup import MarketTopup, MarketTopupStatus
 from backend.app.models.player_career_entry import PlayerCareerEntry
 from backend.app.models.player_contract import PlayerContract
+from backend.app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
 from backend.app.models.player_injury_case import PlayerInjuryCase
 from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
+from backend.app.models.player_cards import (
+    PlayerAlias,
+    PlayerMoniker,
+    PlayerCard,
+    PlayerCardTier,
+    PlayerCardSupplyBatch,
+    PlayerCardHolding,
+    PlayerCardHistory,
+    PlayerCardOwnerHistory,
+    PlayerCardEffect,
+    PlayerCardFormBuff,
+    PlayerCardMomentum,
+    PlayerCardListing,
+    PlayerCardSale,
+    PlayerCardWatchlist,
+    PlayerStatsSnapshot,
+    PlayerMarketValueSnapshot,
+)
 from backend.app.models.referral_attribution import ReferralAttribution
 from backend.app.models.referral_event import ReferralEvent
 from backend.app.models.referral_reward import ReferralReward
@@ -63,7 +111,22 @@ from backend.app.models.treasury import (
     UserBankAccount,
 )
 from backend.app.models.user import KycStatus, User, UserRole
+from backend.app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
 from backend.app.models.notification_record import NotificationRecord
+from backend.app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
+from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from backend.app.models.revenue_share_rule import RevenueShareRule
+from backend.app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
+from backend.app.models.sponsorship_engine import SponsorshipLead
+from backend.app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
+from backend.app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
+from backend.app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
+from backend.app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
+from backend.app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
+from backend.app.models.story_feed import StoryFeedItem
+from backend.app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
+from backend.app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, HostedCompetitionSettlementStatus, HostedCompetitionStanding, HostedCompetitionStatus, UserHostedCompetition, UserHostedCompetitionParticipant
+from backend.app.models.integrity import IntegrityIncident, IntegrityScore
 from backend.app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
@@ -76,6 +139,7 @@ from backend.app.models.wallet import (
     PayoutRequest,
     PayoutStatus,
 )
+from backend.app.models.withdrawal_review import WithdrawalReview
 from backend.app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
 from backend.app.models.youth_prospect import YouthProspect
 from backend.app.models.youth_prospect_report import YouthProspectReport
@@ -87,7 +151,13 @@ __all__ = [
     "AcademyProgram",
     "AcademyTrainingCycle",
     "AnalyticsEvent",
+    "AdminCalendarRule",
+    "AdminFeatureFlag",
+    "AdminRewardRule",
     "Attachment",
+    "CalendarEvent",
+    "CalendarSeason",
+    "CompetitionLifecycleRun",
     "Base",
     "ClubBrandingAsset",
     "ClubBudgetSnapshot",
@@ -97,6 +167,10 @@ __all__ = [
     "ClubDynastyProgress",
     "ClubFinanceAccount",
     "ClubFinanceLedgerEntry",
+    "ClubFacility",
+    "ClubStadium",
+    "ClubSupporterHolding",
+    "ClubSupporterToken",
     "ClubIdentityTheme",
     "ClubJerseyDesign",
     "ClubProfile",
@@ -106,11 +180,50 @@ __all__ = [
     "ClubSponsorshipPackage",
     "ClubSponsorshipPayout",
     "ClubTrophy",
+    "Competition",
+    "UserCompetition",
+    "CompetitionAutofillRule",
+    "CompetitionEntry",
+    "CompetitionInvite",
+    "CompetitionMatch",
+    "CompetitionMatchEvent",
+    "CompetitionParticipant",
+    "CompetitionPlayoff",
+    "CompetitionPrizeRule",
+    "CompetitionReward",
+    "CompetitionRewardPool",
+    "CompetitionRound",
+    "CompetitionRuleSet",
+    "CompetitionScheduleJob",
+    "CompetitionSeedRule",
+    "CompetitionVisibilityRule",
+    "CompetitionWalletLedger",
     "CreatorCampaign",
     "CreatorProfile",
+    "CompetitionWatchlist",
+    "LiveThread",
+    "LiveThreadMessage",
+    "LiveThreadStatus",
+    "MessageVisibility",
+    "PrivateMessage",
+    "PrivateMessageParticipant",
+    "PrivateMessageThread",
+    "PrivateMessageThreadStatus",
     "Dispute",
+    "FeaturedRail",
     "DisputeMessage",
     "DisputeStatus",
+    "GiftCatalogItem",
+    "EconomyBurnEvent",
+    "FancoinPurchaseOrder",
+    "PurchaseOrderStatus",
+    "GiftComboEvent",
+    "GiftComboRule",
+    "NotificationPreference",
+    "NotificationSubscription",
+    "PlatformAnnouncement",
+    "GiftTransaction",
+    "GiftTransactionStatus",
     "KycStatus",
     "LedgerAccount",
     "LedgerAccountKind",
@@ -122,16 +235,43 @@ __all__ = [
     "PaymentStatus",
     "PayoutRequest",
     "PayoutStatus",
+    "MarketTopup",
+    "MarketTopupStatus",
+    "WithdrawalReview",
     "PlayerCareerEntry",
     "PlayerContract",
+    "PlayerImportItem",
+    "PlayerImportItemStatus",
+    "PlayerImportJob",
+    "PlayerImportJobStatus",
     "PlayerInjuryCase",
     "PlayerLifecycleEvent",
+    "PlayerAlias",
+    "PlayerMoniker",
+    "PlayerCard",
+    "PlayerCardTier",
+    "PlayerCardSupplyBatch",
+    "PlayerCardHolding",
+    "PlayerCardHistory",
+    "PlayerCardOwnerHistory",
+    "PlayerCardEffect",
+    "PlayerCardFormBuff",
+    "PlayerCardMomentum",
+    "PlayerCardListing",
+    "PlayerCardSale",
+    "PlayerCardWatchlist",
+    "PlayerStatsSnapshot",
+    "PlayerMarketValueSnapshot",
     "ReferralAttribution",
     "ReferralEvent",
     "ReferralReward",
     "ReferralRewardLedger",
     "ScoutAssignment",
     "ScoutingRegion",
+    "ServicePricingRule",
+    "RevenueShareRule",
+    "SupporterTokenStatus",
+    "SavedSearch",
     "ShareCode",
     "ManagerAuditLog",
     "ManagerCatalogEntry",
@@ -157,6 +297,50 @@ __all__ = [
     "User",
     "UserRole",
     "NotificationRecord",
+    "CountryFeaturePolicy",
+    "PolicyAcceptanceRecord",
+    "PolicyDocument",
+    "PolicyDocumentVersion",
+    "RewardSettlement",
+    "RewardSettlementStatus",
+    "AmlCase",
+    "AuditLog",
+    "FraudCase",
+    "RiskCaseStatus",
+    "RiskSeverity",
+    "SystemEvent",
+    "SystemEventSeverity",
+    "SponsorshipLead",
+    "CreatorCampaignMetricSnapshot",
+    "GovernanceProposal",
+    "GovernanceProposalScope",
+    "GovernanceProposalStatus",
+    "GovernanceVote",
+    "GovernanceVoteChoice",
+    "ModerationPriority",
+    "ModerationReport",
+    "ModerationReportStatus",
+    "ModerationResolutionAction",
+    "MatchRevenueSnapshot",
+    "MatchView",
+    "PremiumVideoPurchase",
+    "NationalTeamCompetition",
+    "NationalTeamEntry",
+    "NationalTeamManagerHistory",
+    "NationalTeamSquadMember",
+    "StoryFeedItem",
+    "DailyChallenge",
+    "DailyChallengeClaim",
+    "DailyChallengeStatus",
+    "CompetitionTemplate",
+    "HostedCompetitionSettlement",
+    "HostedCompetitionSettlementStatus",
+    "HostedCompetitionStanding",
+    "HostedCompetitionStatus",
+    "UserHostedCompetition",
+    "UserHostedCompetitionParticipant",
+    "IntegrityIncident",
+    "IntegrityScore",
     "YouthPipelineSnapshot",
     "YouthProspect",
     "YouthProspectReport",

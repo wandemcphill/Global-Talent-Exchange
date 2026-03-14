@@ -20,6 +20,7 @@ from backend.app.models.treasury import (
     TreasuryWithdrawalStatus,
 )
 from backend.app.models.user import KycStatus, User
+from backend.app.models.withdrawal_review import WithdrawalReview
 from backend.app.treasury.schemas import (
     AdminDepositView,
     AdminDisputeMessageView,
@@ -42,6 +43,7 @@ from backend.app.treasury.schemas import (
     UserBankAccountCreate,
     UserBankAccountUpdate,
     UserBankAccountView,
+    WithdrawalReviewView,
     WithdrawalRequestView,
 )
 from backend.app.treasury.service import TreasuryConflictError, TreasuryNotFoundError, TreasuryService
@@ -669,6 +671,22 @@ def update_withdrawal_status(
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return WithdrawalRequestView.model_validate(withdrawal)
+
+
+@admin_router.get("/withdrawals/{withdrawal_id}/reviews", response_model=list[WithdrawalReviewView])
+def list_withdrawal_reviews(
+    request: Request,
+    withdrawal_id: str,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> list[WithdrawalReviewView]:
+    _require_permission(request, actor, "manage_treasury_withdrawals")
+    reviews = session.scalars(
+        select(WithdrawalReview)
+        .where(WithdrawalReview.withdrawal_request_id == withdrawal_id)
+        .order_by(WithdrawalReview.created_at.desc())
+    ).all()
+    return [WithdrawalReviewView.model_validate(item) for item in reviews]
 
 
 @admin_router.get("/kyc", response_model=AdminQueueView)

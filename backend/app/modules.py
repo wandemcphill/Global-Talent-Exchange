@@ -5,9 +5,13 @@ from fastapi import APIRouter
 from backend.app.academy.api.router import router as academy_router
 from backend.app.analytics.router import admin_router as analytics_admin_router, router as analytics_router
 from backend.app.attachments.router import router as attachments_router
+from backend.app.calendar_engine.router import admin_router as calendar_engine_admin_router, router as calendar_engine_router
 from backend.app.admin.router import router as admin_router
 from backend.app.admin_access.router import router as admin_access_router
 from backend.app.admin_godmode.router import router as admin_godmode_router
+from backend.app.admin_engine.router import admin_router as admin_engine_admin_router, router as admin_engine_router
+from backend.app.economy.router import admin_router as admin_economy_router, router as economy_router
+from backend.app.gift_engine.router import router as gift_engine_router
 from backend.app.auth.router import router as auth_router
 from backend.app.champions_league.api.router import router as champions_league_router
 from backend.app.clubs.router import router as clubs_router
@@ -29,16 +33,35 @@ from backend.app.market.router import router as market_router
 from backend.app.manager_market.router import router as manager_market_router
 from backend.app.match_engine.api.router import router as match_engine_router
 from backend.app.notifications.router import notifications_router
+from backend.app.player_cards.router import router as player_cards_router
 from backend.app.players.router import router as players_router
+from backend.app.policies.router import admin_router as admin_policies_router, router as policies_router
 from backend.app.routes.player_lifecycle import router as player_lifecycle_router
 from backend.app.portfolios.router import router as portfolios_router
 from backend.app.realtime.router import router as realtime_router
+from backend.app.reward_engine.router import admin_router as reward_engine_admin_router, router as reward_engine_router
+from backend.app.daily_challenge_engine.router import router as daily_challenge_router
+from backend.app.hosted_competition_engine.router import admin_router as hosted_competition_admin_router, router as hosted_competition_router
+from backend.app.moderation.router import admin_router as moderation_admin_router, router as moderation_router
+from backend.app.national_team_engine.router import admin_router as national_team_admin_router, router as national_team_router
+from backend.app.story_feed_engine.router import admin_router as story_feed_admin_router, router as story_feed_router
+from backend.app.integrity_engine.router import admin_router as integrity_admin_router, router as integrity_router
 from backend.app.replay_archive.router import router as replay_archive_router
 from backend.app.replay_archive.service import ensure_replay_archive
 from backend.app.surveillance.router import router as surveillance_router
 from backend.app.users.router import router as users_router
 from backend.app.value_engine.router import router as value_engine_router
 from backend.app.wallets.router import router as wallets_router
+from backend.app.media_engine.router import admin_router as media_engine_admin_router, router as media_engine_router
+from backend.app.club_infra_engine.router import admin_router as club_infra_admin_router, router as club_infra_router
+from backend.app.community_engine.router import router as community_engine_router
+from backend.app.discovery_engine.router import admin_router as discovery_admin_router, router as discovery_router
+from backend.app.player_import_engine.router import admin_router as player_import_admin_router, router as player_import_router
+from backend.app.risk_ops_engine.router import admin_router as risk_ops_admin_router, router as risk_ops_router
+from backend.app.sponsorship_engine.router import admin_router as sponsorship_admin_router, router as sponsorship_router
+from backend.app.creator_campaign_engine.router import admin_router as creator_campaign_admin_router, router as creator_campaign_router
+from backend.app.governance_engine.router import admin_router as governance_admin_router, router as governance_router
+from backend.app.dispute_engine.router import admin_router as dispute_admin_router, router as dispute_router
 from backend.app.world_super_cup.api.router import router as world_super_cup_router
 from backend.app.treasury.router import router as treasury_router
 
@@ -54,14 +77,131 @@ def _initialize_replay_archive(app, _context) -> None:
     ensure_replay_archive(app)
 
 
+def _seed_policy_documents(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.policies.service import PolicyService
+
+        service = PolicyService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+
+
+def _seed_economy_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.economy.service import EconomyConfigService
+
+        service = EconomyConfigService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+
+
+def _seed_calendar_engine_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.calendar_engine.service import CalendarEngineService
+
+        service = CalendarEngineService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+def _seed_daily_challenges(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.daily_challenge_engine.service import DailyChallengeService
+
+        service = DailyChallengeService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+def _seed_hosted_competitions(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.hosted_competition_engine.service import HostedCompetitionService
+
+        service = HostedCompetitionService(session)
+        service.seed_defaults()
+        session.commit()
+
+def _seed_discovery_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.discovery_engine.service import DiscoveryEngineService
+
+        service = DiscoveryEngineService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+
+
+def _seed_sponsorship_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.sponsorship_engine.service import SponsorshipEngineService
+
+        service = SponsorshipEngineService(session)
+        service.seed_defaults()
+        session.commit()
+
+def _seed_admin_engine_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.admin_engine.service import AdminEngineService
+
+        service = AdminEngineService(session)
+        service.seed_defaults()
+        session.commit()
+
+
 DOMAIN_MODULES = (
     DomainModule(name="health", router=health_router),
     DomainModule(name="admin", router=admin_router),
     DomainModule(name="admin_access", router=admin_access_router),
     DomainModule(name="admin_godmode", router=admin_godmode_router),
+    DomainModule(name="admin_engine", router=admin_engine_router, on_startup=(_seed_admin_engine_defaults,)),
+    DomainModule(name="admin_engine_admin", router=admin_engine_admin_router),
+    DomainModule(name="economy", router=economy_router, on_startup=(_seed_economy_defaults,)),
+    DomainModule(name="economy_admin", router=admin_economy_router),
+    DomainModule(name="gift_engine", router=gift_engine_router),
+    DomainModule(name="reward_engine", router=reward_engine_router),
+    DomainModule(name="reward_engine_admin", router=reward_engine_admin_router),
+    DomainModule(name="daily_challenge_engine", router=daily_challenge_router, on_startup=(_seed_daily_challenges,)),
+    DomainModule(name="hosted_competition_engine", router=hosted_competition_router, on_startup=(_seed_hosted_competitions,)),
+    DomainModule(name="hosted_competition_engine_admin", router=hosted_competition_admin_router),
+    DomainModule(name="moderation", router=moderation_router),
+    DomainModule(name="moderation_admin", router=moderation_admin_router),
+    DomainModule(name="national_team_engine", router=national_team_router),
+    DomainModule(name="national_team_engine_admin", router=national_team_admin_router),
+    DomainModule(name="story_feed_engine", router=story_feed_router),
+    DomainModule(name="story_feed_engine_admin", router=story_feed_admin_router),
+    DomainModule(name="integrity_engine", router=integrity_router),
+    DomainModule(name="integrity_engine_admin", router=integrity_admin_router),
     DomainModule(name="auth", router=auth_router),
     DomainModule(name="wallets", router=wallets_router),
+    DomainModule(name="media_engine", router=media_engine_router),
+    DomainModule(name="media_engine_admin", router=media_engine_admin_router),
+    DomainModule(name="club_infra", router=club_infra_router),
+    DomainModule(name="club_infra_admin", router=club_infra_admin_router),
+    DomainModule(name="player_import", router=player_import_router),
+    DomainModule(name="community_engine", router=community_engine_router),
+    DomainModule(name="discovery_engine", router=discovery_router, on_startup=(_seed_discovery_defaults,)),
+    DomainModule(name="discovery_engine_admin", router=discovery_admin_router),
+    DomainModule(name="player_import_admin", router=player_import_admin_router),
+    DomainModule(name="risk_ops_engine", router=risk_ops_router),
+    DomainModule(name="risk_ops_engine_admin", router=risk_ops_admin_router),
+    DomainModule(name="sponsorship_engine", router=sponsorship_router, on_startup=(_seed_sponsorship_defaults,)),
+    DomainModule(name="sponsorship_engine_admin", router=sponsorship_admin_router),
+    DomainModule(name="creator_campaign_engine", router=creator_campaign_router),
+    DomainModule(name="creator_campaign_engine_admin", router=creator_campaign_admin_router),
+    DomainModule(name="governance_engine", router=governance_router),
+    DomainModule(name="governance_engine_admin", router=governance_admin_router),
+    DomainModule(name="dispute_engine", router=dispute_router),
+    DomainModule(name="dispute_engine_admin", router=dispute_admin_router),
+    DomainModule(name="policies", router=policies_router, on_startup=(_seed_policy_documents,)),
+    DomainModule(name="admin_policies", router=admin_policies_router),
     DomainModule(name="treasury", router=treasury_router),
+    DomainModule(name="calendar_engine", router=calendar_engine_router, on_startup=(_seed_calendar_engine_defaults,)),
+    DomainModule(name="calendar_engine_admin", router=calendar_engine_admin_router),
     DomainModule(name="attachments", router=attachments_router),
     DomainModule(name="analytics", router=analytics_router),
     DomainModule(name="admin_analytics", router=analytics_admin_router),
@@ -77,6 +217,7 @@ DOMAIN_MODULES = (
     DomainModule(name="admin_referrals", router=admin_referrals_router),
     DomainModule(name="market", router=market_router),
     DomainModule(name="manager_market", router=manager_market_router),
+    DomainModule(name="player_cards", router=player_cards_router),
     DomainModule(name="ingestion", router=ingestion_router),
     DomainModule(name="value_engine", router=value_engine_router),
     DomainModule(name="surveillance", router=surveillance_router),

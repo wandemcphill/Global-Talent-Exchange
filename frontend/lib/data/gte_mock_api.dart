@@ -54,7 +54,13 @@ class GteMockApi implements GteApiRepository {
             List<GteNotification>.of(_seedNotifications, growable: true),
         _attachments = <GteAttachment>[],
         _analyticsEvents =
-            List<GteAnalyticsEvent>.of(_seedAnalyticsEvents, growable: true);
+            List<GteAnalyticsEvent>.of(_seedAnalyticsEvents, growable: true),
+        _policyDocuments = List<GtePolicyDocumentDetail>.of(
+            _seedPolicyDocuments,
+            growable: true),
+        _policyAcceptances = List<GtePolicyAcceptanceSummary>.of(
+            _seedPolicyAcceptances,
+            growable: true);
 
   final Duration latency;
   final List<PlayerSnapshot> _catalog;
@@ -79,6 +85,8 @@ class GteMockApi implements GteApiRepository {
   GteTreasurySettings _treasurySettings;
   final List<GteAttachment> _attachments;
   final List<GteAnalyticsEvent> _analyticsEvents;
+  final List<GtePolicyDocumentDetail> _policyDocuments;
+  final List<GtePolicyAcceptanceSummary> _policyAcceptances;
 
   int _orderSequence = _seedOrders.length;
   int _ledgerSequence = _seedWalletLedger.length;
@@ -134,6 +142,98 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<void> logout() async {}
+
+
+  @override
+  Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
+    bool mandatoryOnly = false,
+  }) async {
+    await _delay();
+    final Iterable<GtePolicyDocumentDetail> docs = mandatoryOnly
+        ? _policyDocuments.where((GtePolicyDocumentDetail doc) => doc.isMandatory)
+        : _policyDocuments;
+    return docs
+        .map(
+          (GtePolicyDocumentDetail doc) => GtePolicyDocumentSummary(
+            id: doc.id,
+            documentKey: doc.documentKey,
+            title: doc.title,
+            isMandatory: doc.isMandatory,
+            active: doc.active,
+            latestVersion: doc.latestVersion,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<GtePolicyDocumentDetail> fetchPolicyDocument(
+    String documentKey, {
+    String? versionLabel,
+  }) async {
+    await _delay();
+    return _policyDocuments.firstWhere(
+      (GtePolicyDocumentDetail doc) => doc.documentKey == documentKey,
+      orElse: () => throw StateError('Unknown policy document: $documentKey'),
+    );
+  }
+
+  @override
+  Future<GteComplianceStatus> fetchComplianceStatus() async {
+    await _delay();
+    final List<GtePolicyRequirementSummary> missing =
+        await fetchPolicyRequirements();
+    final bool canDeposit = missing.isEmpty;
+    return GteComplianceStatus(
+      countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
+      countryPolicyBucket: 'regulated_market_disabled',
+      depositsEnabled: true,
+      marketTradingEnabled: canDeposit,
+      platformRewardWithdrawalsEnabled: canDeposit,
+      requiredPolicyAcceptancesMissing: missing.length,
+      missingPolicyAcceptances: missing,
+      canDeposit: true,
+      canWithdrawPlatformRewards: canDeposit,
+      canTradeMarket: canDeposit,
+    );
+  }
+
+  @override
+  Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() async {
+    await _delay();
+    return _currentMissingPolicyRequirements();
+  }
+
+  @override
+  Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() async {
+    await _delay();
+    return List<GtePolicyAcceptanceSummary>.of(_policyAcceptances,
+        growable: false);
+  }
+
+  @override
+  Future<GtePolicyAcceptanceSummary> acceptPolicyDocument(
+    String documentKey,
+    String versionLabel,
+  ) async {
+    await _delay();
+    final GtePolicyDocumentDetail document = await fetchPolicyDocument(documentKey);
+    final int existingIndex = _policyAcceptances.indexWhere(
+      (GtePolicyAcceptanceSummary item) => item.documentKey == documentKey,
+    );
+    final GtePolicyAcceptanceSummary acceptance = GtePolicyAcceptanceSummary(
+      documentKey: documentKey,
+      title: document.title,
+      versionLabel: versionLabel,
+      acceptedAt: _nextTimestamp(),
+    );
+    if (existingIndex >= 0) {
+      _policyAcceptances[existingIndex] = acceptance;
+    } else {
+      _policyAcceptances.add(acceptance);
+    }
+    return acceptance;
+  }
 
   @override
   Future<List<PlayerSnapshot>> fetchPlayers({int limit = 20}) async {
@@ -447,6 +547,76 @@ class GteMockApi implements GteApiRepository {
   Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() async {
     await _delay();
     return _computeWithdrawalEligibility();
+  }
+
+  @override
+  Future<GteWithdrawalQuote> fetchWithdrawalQuote(
+      GteWithdrawalQuoteRequest request) async {
+    await _delay();
+    final GteWithdrawalEligibility eligibility = _computeWithdrawalEligibility();
+    final double feeBps = 1000;
+    final double minimumFee = 5;
+    final double feeAmount =
+        math.max(request.amountCoin * feeBps / 10000, minimumFee);
+    final double totalDebit = request.amountCoin + feeAmount;
+    final double rateValue = _treasurySettings.withdrawalRateValue;
+    final double estimatedFiat = _treasurySettings.withdrawalRateDirection ==
+            GteRateDirection.fiatPerCoin
+        ? request.amountCoin * rateValue
+        : request.amountCoin / math.max(rateValue, 0.0001);
+    String? blockedReason;
+    if (eligibility.policyBlocked) {
+      blockedReason = eligibility.policyBlockReason ??
+          'Policy acceptance required before withdrawal is enabled.';
+    } else if (eligibility.requiresKyc) {
+      blockedReason = 'KYC required before withdrawals are enabled.';
+    } else if (eligibility.requiresBankAccount) {
+      blockedReason = 'Bank account required before withdrawals are enabled.';
+    } else if (request.amountCoin > eligibility.withdrawableNow) {
+      blockedReason = 'Withdrawal exceeds available balance.';
+    }
+    return GteWithdrawalQuote(
+      grossAmount: request.amountCoin,
+      feeAmount: feeAmount,
+      netAmount: request.amountCoin,
+      totalDebit: totalDebit,
+      sourceScope: request.sourceScope,
+      currencyCode: _treasurySettings.currencyCode,
+      rateValue: rateValue,
+      rateDirection: _treasurySettings.withdrawalRateDirection,
+      estimatedFiatPayout: estimatedFiat,
+      processorMode: _treasurySettings.withdrawalMode == GtePaymentMode.manual
+          ? 'manual_bank_transfer'
+          : 'automatic_gateway',
+      payoutChannel: 'bank_transfer',
+      feeBps: feeBps,
+      minimumFee: minimumFee,
+      eligibility: eligibility,
+      blockedReason: blockedReason,
+    );
+  }
+
+  @override
+  Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(
+      String withdrawalId) async {
+    await _delay();
+    final GteTreasuryWithdrawalRequest withdrawal = _withdrawalRequests
+        .firstWhere((GteTreasuryWithdrawalRequest item) => item.id == withdrawalId,
+            orElse: () => _withdrawalRequests.isNotEmpty
+                ? _withdrawalRequests.first
+                : _buildWithdrawalFixture(withdrawalId));
+    return GteWithdrawalReceipt(
+      withdrawal: withdrawal,
+      grossAmount: withdrawal.amountCoin,
+      feeAmount: withdrawal.feeAmount,
+      netAmount: withdrawal.amountCoin,
+      totalDebit: withdrawal.totalDebit,
+      sourceScope: 'trade',
+      processorMode: _treasurySettings.withdrawalMode == GtePaymentMode.manual
+          ? 'manual_bank_transfer'
+          : 'automatic_gateway',
+      payoutChannel: 'bank_transfer',
+    );
   }
 
   @override
@@ -1707,6 +1877,7 @@ class GteMockApi implements GteApiRepository {
       return sum + entry.amount.abs();
     });
     final GteWithdrawalEligibility eligibility = _computeWithdrawalEligibility();
+    final List<GtePolicyRequirementSummary> missing = _currentMissingPolicyRequirements();
     return GteWalletOverview(
       availableBalance: _walletSummary.availableBalance,
       pendingDeposits: pendingDeposits,
@@ -1715,7 +1886,32 @@ class GteMockApi implements GteApiRepository {
       totalOutflow: totalOutflow,
       withdrawableNow: eligibility.withdrawableNow,
       currency: _walletSummary.currency,
+      countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
+      requiredPolicyAcceptancesMissing: missing.length,
+      policyBlocked: missing.isNotEmpty,
+      policyBlockReason: missing.isEmpty
+          ? null
+          : 'Accept the latest required policy documents to unlock full wallet access.',
     );
+  }
+
+  List<GtePolicyRequirementSummary> _currentMissingPolicyRequirements() {
+    final Set<String> acceptedKeys = _policyAcceptances
+        .map((GtePolicyAcceptanceSummary item) => item.documentKey)
+        .toSet();
+    return _policyDocuments
+        .where((GtePolicyDocumentDetail doc) =>
+            doc.isMandatory && !acceptedKeys.contains(doc.documentKey))
+        .map(
+          (GtePolicyDocumentDetail doc) => GtePolicyRequirementSummary(
+            documentKey: doc.documentKey,
+            title: doc.title,
+            versionLabel: doc.latestVersion?.versionLabel ?? 'v1.0',
+            isMandatory: doc.isMandatory,
+            effectiveAt: doc.latestVersion?.effectiveAt,
+          ),
+        )
+        .toList(growable: false);
   }
 
   GteWithdrawalEligibility _computeWithdrawalEligibility() {
@@ -1767,6 +1963,12 @@ class GteMockApi implements GteApiRepository {
         .fold<double>(0, (double sum, GteTreasuryWithdrawalRequest withdrawal) {
       return sum + withdrawal.amountCoin;
     });
+    final List<GtePolicyRequirementSummary> missing =
+        _currentMissingPolicyRequirements();
+    if (missing.isNotEmpty) {
+      withdrawable = 0;
+      remainingAllowance = 0;
+    }
     return GteWithdrawalEligibility(
       availableBalance: available,
       withdrawableNow: withdrawable,
@@ -1776,6 +1978,14 @@ class GteMockApi implements GteApiRepository {
       requiresKyc: requiresKyc,
       requiresBankAccount: requiresBankAccount,
       pendingWithdrawals: pendingWithdrawals,
+      countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
+      countryWithdrawalsEnabled: true,
+      missingRequiredPolicies:
+          missing.map((GtePolicyRequirementSummary item) => item.documentKey).toList(growable: false),
+      policyBlocked: missing.isNotEmpty,
+      policyBlockReason: missing.isEmpty
+          ? null
+          : 'Policy acceptance required before withdrawal is enabled.',
     );
   }
 
@@ -2038,6 +2248,72 @@ String _kycStatusToString(GteKycStatus status) {
       return 'rejected';
   }
 }
+
+
+final List<GtePolicyDocumentDetail> _seedPolicyDocuments =
+    <GtePolicyDocumentDetail>[
+  GtePolicyDocumentDetail(
+    id: 'policy-terms',
+    documentKey: 'terms_and_conditions',
+    title: 'Terms & Conditions',
+    isMandatory: true,
+    active: true,
+    latestVersion: GtePolicyDocumentVersionSummary(
+      id: 'policy-terms-v1',
+      versionLabel: 'v1.0',
+      effectiveAt: DateTime.utc(2026, 3, 1),
+      publishedAt: DateTime.utc(2026, 3, 1),
+      changelog: 'Initial public release.',
+    ),
+    bodyMarkdown: '''# Terms & Conditions
+
+GTEX is a rules-driven football competition and exchange platform. Use of wallet, competition, and reward surfaces is subject to market rules, integrity controls, and local availability.''',
+  ),
+  GtePolicyDocumentDetail(
+    id: 'policy-privacy',
+    documentKey: 'privacy_policy',
+    title: 'Privacy Policy',
+    isMandatory: true,
+    active: true,
+    latestVersion: GtePolicyDocumentVersionSummary(
+      id: 'policy-privacy-v1',
+      versionLabel: 'v1.0',
+      effectiveAt: DateTime.utc(2026, 3, 1),
+      publishedAt: DateTime.utc(2026, 3, 1),
+      changelog: 'Initial public release.',
+    ),
+    bodyMarkdown: '''# Privacy Policy
+
+We collect account, KYC, payment proof, and gameplay telemetry needed to operate GTEX, detect abuse, and satisfy moderation, anti-fraud, and regional controls.''',
+  ),
+  GtePolicyDocumentDetail(
+    id: 'policy-withdrawal',
+    documentKey: 'withdrawal_policy',
+    title: 'Withdrawal Policy',
+    isMandatory: true,
+    active: true,
+    latestVersion: GtePolicyDocumentVersionSummary(
+      id: 'policy-withdrawal-v1',
+      versionLabel: 'v1.0',
+      effectiveAt: DateTime.utc(2026, 3, 1),
+      publishedAt: DateTime.utc(2026, 3, 1),
+      changelog: 'Clarifies KYC, bank account, and regional restrictions.',
+    ),
+    bodyMarkdown: '''# Withdrawal Policy
+
+Withdrawals depend on KYC state, verified bank details, active policy acceptance, treasury review, and regional feature flags.''',
+  ),
+];
+
+final List<GtePolicyAcceptanceSummary> _seedPolicyAcceptances =
+    <GtePolicyAcceptanceSummary>[
+  GtePolicyAcceptanceSummary(
+    documentKey: 'terms_and_conditions',
+    title: 'Terms & Conditions',
+    versionLabel: 'v1.0',
+    acceptedAt: DateTime.utc(2026, 3, 2, 10),
+  ),
+];
 
 const GteAuthSession _fixtureSession = GteAuthSession(
   accessToken: 'fixture-demo-token',

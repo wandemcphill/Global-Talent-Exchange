@@ -88,12 +88,55 @@ class GteExchangeApiClient {
 
   Future<void> logout() => repository.logout();
 
+  Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
+    bool mandatoryOnly = false,
+  }) {
+    return repository.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly);
+  }
+
+  Future<GtePolicyDocumentDetail> fetchPolicyDocument(
+    String documentKey, {
+    String? versionLabel,
+  }) {
+    return repository.fetchPolicyDocument(documentKey,
+        versionLabel: versionLabel);
+  }
+
+  Future<GteComplianceStatus> fetchComplianceStatus() {
+    return repository.fetchComplianceStatus();
+  }
+
+  Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() {
+    return repository.fetchPolicyRequirements();
+  }
+
+  Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() {
+    return repository.fetchMyPolicyAcceptances();
+  }
+
+  Future<GtePolicyAcceptanceSummary> acceptPolicyDocument(
+    String documentKey,
+    String versionLabel,
+  ) {
+    return repository.acceptPolicyDocument(documentKey, versionLabel);
+  }
+
   Future<GteWalletOverview> fetchWalletOverview() {
     return repository.fetchWalletOverview();
   }
 
   Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() {
     return repository.fetchWithdrawalEligibility();
+  }
+
+  Future<GteWithdrawalQuote> fetchWithdrawalQuote(
+    GteWithdrawalQuoteRequest request,
+  ) {
+    return repository.fetchWithdrawalQuote(request);
+  }
+
+  Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(String withdrawalId) {
+    return repository.fetchWithdrawalReceipt(withdrawalId);
   }
 
   Future<GteDepositRequest> createDepositRequest(

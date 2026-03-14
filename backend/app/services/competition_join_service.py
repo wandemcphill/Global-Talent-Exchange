@@ -35,7 +35,7 @@ class CompetitionJoinService:
     ) -> JoinDecision:
         if already_joined:
             return JoinDecision(eligible=True, reason="already_joined", requires_invite=False)
-        if status is not CompetitionStatus.OPEN_FOR_JOIN:
+        if status not in {CompetitionStatus.OPEN, CompetitionStatus.OPEN_FOR_JOIN}:
             return JoinDecision(eligible=False, reason="competition_not_open", requires_invite=False)
         if participant_count >= capacity:
             return JoinDecision(eligible=False, reason="competition_full", requires_invite=False)

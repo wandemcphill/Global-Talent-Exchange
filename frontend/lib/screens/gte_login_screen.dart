@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
 import 'gte_signup_screen.dart';
+import 'wallet/gte_policy_compliance_center_screen.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
@@ -53,15 +55,110 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                   animation: widget.controller,
                   builder: (BuildContext context, Widget? child) {
                     if (widget.controller.isAuthenticated) {
-                      return GteStatePanel(
-                        title: 'Mission confirmed',
-                        message:
-                            'Active session for ${widget.controller.session!.user.username}. The exchange floor, e-game arena, and control tower are now unlocked for this account.',
-                        actionLabel: 'Enter GTEX',
-                        onAction: () {
-                          Navigator.of(context).pop(true);
-                        },
-                        icon: Icons.verified_user_outlined,
+                      final GteComplianceStatus? compliance =
+                          widget.controller.complianceStatus;
+                      final bool blocked =
+                          compliance?.hasMissingRequiredPolicies ?? false;
+                      return SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            GteStatePanel(
+                              title: 'Mission confirmed',
+                              message:
+                                  'Active session for ${widget.controller.session!.user.username}. The exchange floor, e-game arena, and control tower are now unlocked for this account.',
+                              actionLabel: 'Enter GTEX',
+                              onAction: () {
+                                Navigator.of(context).pop(true);
+                              },
+                              icon: Icons.verified_user_outlined,
+                            ),
+                            const SizedBox(height: 16),
+                            if (widget.controller.isLoadingCompliance)
+                              const GteSurfacePanel(
+                                child: Text(
+                                  'Loading compliance status...',
+                                ),
+                              )
+                            else if (widget.controller.complianceError != null)
+                              GteStatePanel(
+                                title: 'Compliance status unavailable',
+                                message: widget.controller.complianceError!,
+                                icon: Icons.warning_amber_outlined,
+                                actionLabel: 'Retry',
+                                onAction: widget.controller.refreshCompliance,
+                              )
+                            else if (compliance != null)
+                              GteSurfacePanel(
+                                accentColor: blocked
+                                    ? GteShellTheme.accentWarm
+                                    : GteShellTheme.accentCapital,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      blocked
+                                          ? 'Compliance action required'
+                                          : 'Compliance status',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      blocked
+                                          ? 'Complete the required policy acceptances to unlock deposits, withdrawals, and trading.'
+                                          : 'All required policies are accepted. Wallet actions are cleared to proceed.',
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      children: <Widget>[
+                                        _SignalPill(
+                                          label: 'Country ${compliance.countryCode}',
+                                        ),
+                                        _SignalPill(
+                                          label: compliance.marketTradingEnabled
+                                              ? 'Trading enabled'
+                                              : 'Trading blocked',
+                                        ),
+                                        _SignalPill(
+                                          label: compliance.depositsEnabled
+                                              ? 'Deposits enabled'
+                                              : 'Deposits blocked',
+                                        ),
+                                      ],
+                                    ),
+                                    if (blocked) ...<Widget>[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Missing: ${compliance.requiredPolicyAcceptancesMissing} item(s)',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      FilledButton.tonalIcon(
+                                        onPressed: () async {
+                                          await Navigator.of(context).push(
+                                            MaterialPageRoute<void>(
+                                              builder: (_) =>
+                                                  GtePolicyComplianceCenterScreen(
+                                                controller: widget.controller,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        icon: const Icon(Icons.gavel_outlined),
+                                        label: const Text('Open compliance center'),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
                       );
                     }
 

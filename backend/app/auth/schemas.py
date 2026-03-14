@@ -30,9 +30,9 @@ PROTECTED_PROFILE_FIELDS = frozenset(
 
 class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=320)
-    full_name: str = Field(min_length=2, max_length=160)
-    phone_number: str = Field(min_length=6, max_length=32)
-    is_over_18: bool = Field(default=False)
+    full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    phone_number: str | None = Field(default=None, min_length=6, max_length=32)
+    is_over_18: bool = Field(default=True)
     username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
 
@@ -58,19 +58,19 @@ class RegisterRequest(BaseModel):
 
     @field_validator("full_name")
     @classmethod
-    def normalize_full_name(cls, value: str) -> str:
+    def normalize_full_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         candidate = value.strip()
-        if not candidate:
-            raise ValueError("Full name is required.")
-        return candidate
+        return candidate or None
 
     @field_validator("phone_number")
     @classmethod
-    def normalize_phone_number(cls, value: str) -> str:
+    def normalize_phone_number(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         candidate = value.strip()
-        if not candidate:
-            raise ValueError("Phone number is required.")
-        return candidate
+        return candidate or None
 
 
 

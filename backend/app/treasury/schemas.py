@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -167,11 +168,64 @@ class WithdrawalEligibilityView(BaseModel):
     requires_kyc: bool
     requires_bank_account: bool
     pending_withdrawals: Decimal = Decimal("0.0000")
+    country_code: str = "GLOBAL"
+    country_withdrawals_enabled: bool = True
+    missing_required_policies: list[str] = []
+    policy_blocked: bool = False
+    policy_block_reason: str | None = None
 
+
+
+
+class WithdrawalSourceScope(str, Enum):
+    TRADE = "trade"
+    COMPETITION = "competition"
+
+
+class WithdrawalQuoteRequest(BaseModel):
+    amount_coin: Decimal
+    source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+
+    @field_validator("amount_coin")
+    @classmethod
+    def validate_amount(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("Withdrawal amount must be positive.")
+        return value
+
+
+class WithdrawalQuoteView(BaseModel):
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    total_debit: Decimal
+    source_scope: WithdrawalSourceScope
+    currency_code: str
+    rate_value: Decimal
+    rate_direction: RateDirection
+    estimated_fiat_payout: Decimal
+    processor_mode: str
+    payout_channel: str
+    fee_bps: int
+    minimum_fee: Decimal
+    eligibility: WithdrawalEligibilityView
+    blocked_reason: str | None = None
+
+
+class WithdrawalReceiptView(BaseModel):
+    withdrawal: WithdrawalRequestView
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    total_debit: Decimal
+    source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+    processor_mode: str = "manual_bank_transfer"
+    payout_channel: str = "bank_transfer"
 
 class WithdrawalRequestCreate(BaseModel):
     amount_coin: Decimal
     bank_account_id: str | None = None
+    source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
     notes: str | None = Field(default=None, max_length=255)
 
     @field_validator("amount_coin")
@@ -203,6 +257,10 @@ class WithdrawalRequestView(BaseModel):
     kyc_tier_snapshot: str
     fee_amount: Decimal
     total_debit: Decimal
+    source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+    net_amount: Decimal = Decimal("0.0000")
+    processor_mode: str = "manual_bank_transfer"
+    payout_channel: str = "bank_transfer"
     notes: str | None
     created_at: datetime
     reviewed_at: datetime | None
@@ -211,6 +269,25 @@ class WithdrawalRequestView(BaseModel):
     paid_at: datetime | None
     rejected_at: datetime | None
     cancelled_at: datetime | None
+
+
+class WithdrawalReviewView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    withdrawal_request_id: str
+    payout_request_id: str | None
+    reviewer_user_id: str | None
+    status_from: str
+    status_to: str
+    processor_mode: str | None = None
+    payout_channel: str | None = None
+    source_scope: str | None = None
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    notes: str | None
+    created_at: datetime
 
 
 class KycProfileView(BaseModel):
