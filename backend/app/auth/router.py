@@ -518,6 +518,7 @@ def request_account_recovery(
         user, recovery_code = service.prepare_account_recovery(session, email=payload.email)
         session.commit()
     except AuthError as exc:
+        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

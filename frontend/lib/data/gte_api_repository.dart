@@ -382,6 +382,128 @@ abstract class GteApiRepository {
   );
 
 
+  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility();
+
+  Future<GteDepositRequest> createDepositRequest(GteDepositCreateRequest request);
+
+  Future<GteDepositRequest> submitDepositRequest(
+      String depositId, GteDepositSubmitRequest request);
+
+  Future<List<GteDepositRequest>> listDepositRequests();
+
+  Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
+      GteWithdrawalCreateRequest request);
+
+  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests();
+
+  Future<GteKycProfile> fetchKycProfile();
+
+  Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request);
+
+  Future<List<GteUserBankAccount>> listUserBankAccounts();
+
+  Future<GteUserBankAccount> createUserBankAccount(
+      GteUserBankAccountCreate request);
+
+  Future<GteUserBankAccount> updateUserBankAccount(
+      String bankAccountId, GteUserBankAccountUpdate request);
+
+  Future<List<GteDispute>> listDisputes();
+
+  Future<GteDispute> openDispute(GteDisputeCreateRequest request);
+
+  Future<GteDispute> fetchDispute(String disputeId);
+
+  Future<GteDisputeMessage> sendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request);
+
+  Future<List<GteNotification>> listNotifications({int limit = 20});
+
+  Future<void> markNotificationRead(String notificationId);
+
+  Future<void> markAllNotificationsRead();
+
+  Future<GteAttachment> uploadAttachment(
+    String filename,
+    List<int> bytes, {
+    String? contentType,
+  });
+
+  Future<GteAnalyticsEvent> trackAnalyticsEvent(
+    String name, {
+    Map<String, Object?> metadata = const <String, Object?>{},
+  });
+
+  Future<GteAnalyticsSummary> fetchAnalyticsSummary();
+
+  Future<GteAnalyticsFunnel> fetchAnalyticsFunnel();
+
+  Future<GteTreasuryDashboard> fetchTreasuryDashboard();
+
+  Future<GteTreasurySettings> fetchTreasurySettings();
+
+  Future<GteTreasurySettings> updateTreasurySettings(
+      GteTreasurySettingsUpdate request);
+
+  Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts();
+
+  Future<GteTreasuryBankAccount> createTreasuryBankAccount(
+      GteTreasuryBankAccountCreate request);
+
+  Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
+      String accountId, GteTreasuryBankAccountUpdate request);
+
+  Future<GteAdminQueuePage<GteAdminDeposit>> fetchAdminDeposits({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
+      {String? adminNotes});
+
+  Future<GteDepositRequest> adminRejectDeposit(String depositId,
+      {String? adminNotes});
+
+  Future<GteDepositRequest> adminReviewDeposit(String depositId,
+      {String? adminNotes});
+
+  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteTreasuryWithdrawalRequest> adminUpdateWithdrawalStatus(
+    String withdrawalId, {
+    required GteWithdrawalStatus status,
+    String? adminNotes,
+  });
+
+  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteKycProfile> adminReviewKyc(
+      String profileId, GteKycReviewRequest request);
+
+  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteDispute> fetchAdminDispute(String disputeId);
+
+  Future<GteDisputeMessage> adminSendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request);
+
   Future<GtePortfolioView> fetchPortfolio();
 
   Future<GtePortfolioSummary> fetchPortfolioSummary();

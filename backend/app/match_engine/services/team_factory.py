@@ -559,6 +559,7 @@ class SyntheticSquadFactory:
         clutch_bonus = max(-4, min(8, (personality_clutch - 50) // 5))
         big_match_bonus = max(-3, min(6, ((personality_clutch - 50) + (personality_confidence - 50)) // 10))
         if assigned_role is PlayerRole.GOALKEEPER:
+            recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
                 player_id=player.id,
                 player_name=player.full_name,
@@ -592,6 +593,7 @@ class SyntheticSquadFactory:
                 leadership=self._clamp(overall + 4),
             )
         if assigned_role is PlayerRole.DEFENDER:
+            recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
                 player_id=player.id,
                 player_name=player.full_name,
@@ -625,6 +627,7 @@ class SyntheticSquadFactory:
                 leadership=self._clamp(overall + 3),
             )
         if assigned_role is PlayerRole.MIDFIELDER:
+            recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
                 player_id=player.id,
                 player_name=player.full_name,
@@ -657,6 +660,7 @@ class SyntheticSquadFactory:
                 injury_risk=22,
                 leadership=self._clamp(overall + 4),
             )
+        recent_form = self._managed_recent_form(player)
         return MatchPlayerInput(
             player_id=player.id,
             player_name=player.full_name,

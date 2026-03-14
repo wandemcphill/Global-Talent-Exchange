@@ -57,6 +57,16 @@ class MatchNarrativeContext:
     clash_resolved: bool
 
 
+@dataclass(frozen=True, slots=True)
+class MatchNarrativeContext:
+    favorite_side: str
+    upset_probability: float
+    stage_pressure: float
+    rivalry_intensity: float
+    home_advantage_note: str
+    clash_resolved: bool
+
+
 class MatchEventGenerator:
     def __init__(
         self,
