@@ -32,6 +32,12 @@ from app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalSta
 from app.models.wallet import LedgerUnit, PayoutRequest
 from app.wallets.service import WalletService
 
+from backend.app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from backend.app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from backend.app.models.wallet import PayoutRequest
+from backend.app.wallets.service import WalletService
+
 router = APIRouter(prefix="/api/creators", tags=["creators"])
 alias_router = APIRouter(prefix="/creators", tags=["creators"])
 

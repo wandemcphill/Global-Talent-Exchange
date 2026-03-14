@@ -155,6 +155,43 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
+                if (overview.policyBlocked ||
+                    overview.requiredPolicyAcceptancesMissing > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: GteSurfacePanel(
+                      accentColor: Colors.orange,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text('Compliance action needed',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          const SizedBox(height: 8),
+                          Text(
+                            overview.policyBlockReason ??
+                                'Complete required policy acceptances to unlock all wallet actions.',
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => GtePolicyComplianceCenterScreen(
+                                    controller: widget.controller,
+                                  ),
+                                ),
+                              );
+                              await _refresh();
+                            },
+                            icon: const Icon(Icons.gavel_outlined),
+                            label: Text(
+                              'Review ${overview.requiredPolicyAcceptancesMissing} pending item(s)',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 GteSurfacePanel(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

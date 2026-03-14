@@ -384,6 +384,11 @@ abstract class GteApiRepository {
 
   Future<GteWithdrawalEligibility> fetchWithdrawalEligibility();
 
+  Future<GteWithdrawalQuote> fetchWithdrawalQuote(
+      GteWithdrawalQuoteRequest request);
+
+  Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(String withdrawalId);
+
   Future<GteDepositRequest> createDepositRequest(GteDepositCreateRequest request);
 
   Future<GteDepositRequest> submitDepositRequest(
@@ -717,6 +722,117 @@ class GteReliableApiRepository implements GteApiRepository {
     }, () => fixtures.acceptPolicyDocument(documentKey, versionLabel));
   }
 
+
+  @override
+  Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
+    bool mandatoryOnly = false,
+  }) {
+    return _withFallback<List<GtePolicyDocumentSummary>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request(
+            'GET',
+            '/policies/documents',
+            query: <String, Object?>{'mandatory_only': mandatoryOnly},
+          ),
+          label: 'policy documents',
+        );
+        return payload
+            .map(GtePolicyDocumentSummary.fromJson)
+            .toList(growable: false);
+      },
+      () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly),
+    );
+  }
+
+  @override
+  Future<GtePolicyDocumentDetail> fetchPolicyDocument(
+    String documentKey, {
+    String? versionLabel,
+  }) {
+    return _withFallback<GtePolicyDocumentDetail>(
+      () async => GtePolicyDocumentDetail.fromJson(
+        await _request(
+          'GET',
+          '/policies/documents/$documentKey',
+          query: <String, Object?>{if (versionLabel != null) 'version_label': versionLabel},
+        ),
+      ),
+      () => fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
+    );
+  }
+
+  @override
+  Future<GteComplianceStatus> fetchComplianceStatus() {
+    return _withFallback<GteComplianceStatus>(
+      () async => GteComplianceStatus.fromJson(
+        await _request('GET', '/policies/me/compliance', requiresAuth: true),
+      ),
+      fixtures.fetchComplianceStatus,
+    );
+  }
+
+  @override
+  Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() {
+    return _withFallback<List<GtePolicyRequirementSummary>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/policies/me/requirements', requiresAuth: true),
+          label: 'policy requirements',
+        );
+        return payload
+            .map(GtePolicyRequirementSummary.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.fetchPolicyRequirements,
+    );
+  }
+
+  @override
+  Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() {
+    return _withFallback<List<GtePolicyAcceptanceSummary>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/policies/me/acceptances', requiresAuth: true),
+          label: 'policy acceptances',
+        );
+        return payload
+            .map(GtePolicyAcceptanceSummary.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.fetchMyPolicyAcceptances,
+    );
+  }
+
+  @override
+  Future<GtePolicyAcceptanceSummary> acceptPolicyDocument(
+    String documentKey,
+    String versionLabel,
+  ) {
+    return _withFallback<GtePolicyAcceptanceSummary>(
+      () async {
+        final Map<String, Object?> payload = GteJson.map(
+          await _request(
+            'POST',
+            '/policies/acceptances',
+            body: <String, Object?>{
+              'document_key': documentKey,
+              'version_label': versionLabel,
+            },
+            requiresAuth: true,
+          ),
+          label: 'policy acceptance response',
+        );
+        return GtePolicyAcceptanceSummary(
+          documentKey: GteJson.string(payload, <String>['document_key', 'documentKey']),
+          title: documentKey,
+          versionLabel: GteJson.string(payload, <String>['version_label', 'versionLabel']),
+          acceptedAt: GteJson.dateTimeOrNull(payload, <String>['accepted_at', 'acceptedAt']),
+        );
+      },
+      () => fixtures.acceptPolicyDocument(documentKey, versionLabel),
+    );
+  }
 
   @override
   Future<List<PlayerSnapshot>> fetchPlayers({int limit = 20}) {

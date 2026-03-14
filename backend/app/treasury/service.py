@@ -621,6 +621,8 @@ class TreasuryService:
             raise TreasuryConflictError(str(exc)) from exc
 
         reference = self._generate_reference(session, prefix="WDL", model=TreasuryWithdrawalRequest)
+        processor_mode = "manual_bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "automatic_gateway"
+        payout_channel = "bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "gateway"
         withdrawal = TreasuryWithdrawalRequest(
             payout_request_id=result.payout_request.id,
             user_id=user.id,

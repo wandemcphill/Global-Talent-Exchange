@@ -59,6 +59,10 @@ from app.schemas.competition_lifecycle import (
 )
 from app.schemas.competition_requests import (
     CompetitionCreateRequest,
+    CompetitionInviteCreateRequest,
+    CompetitionJoinRequest,
+    CompetitionLeaveRequest,
+    CompetitionPublishRequest,
     CompetitionUpdateRequest,
     validate_format_capacity_for_update,
 )
@@ -1624,6 +1628,7 @@ class CompetitionOrchestrator:
             uses=invite.uses,
             note=(invite.metadata_json or {}).get("note"),
         )
+        visibility_rules = self._build_visibility_rules(competition.id, payload.visibility_rules)
 
     def _validate_against_thread_a_domain(self, payload: CompetitionCreateRequest) -> None:
         if payload.capacity < USER_COMPETITION_MIN_PARTICIPANTS:

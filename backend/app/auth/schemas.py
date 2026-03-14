@@ -76,17 +76,15 @@ class RegisterRequest(BaseModel):
     @classmethod
     def normalize_full_name(cls, value: str) -> str:
         candidate = value.strip()
-        if not candidate:
-            raise ValueError("Full name is required.")
-        return candidate
+        return candidate or None
 
     @field_validator("phone_number")
     @classmethod
-    def normalize_phone_number(cls, value: str) -> str:
+    def normalize_phone_number(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         candidate = value.strip()
-        if not candidate:
-            raise ValueError("Phone number is required.")
-        return candidate
+        return candidate or None
 
 
     @field_validator("phone_number")

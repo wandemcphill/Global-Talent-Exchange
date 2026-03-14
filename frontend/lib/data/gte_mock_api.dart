@@ -159,6 +159,98 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<void> logout() async {}
 
+
+  @override
+  Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
+    bool mandatoryOnly = false,
+  }) async {
+    await _delay();
+    final Iterable<GtePolicyDocumentDetail> docs = mandatoryOnly
+        ? _policyDocuments.where((GtePolicyDocumentDetail doc) => doc.isMandatory)
+        : _policyDocuments;
+    return docs
+        .map(
+          (GtePolicyDocumentDetail doc) => GtePolicyDocumentSummary(
+            id: doc.id,
+            documentKey: doc.documentKey,
+            title: doc.title,
+            isMandatory: doc.isMandatory,
+            active: doc.active,
+            latestVersion: doc.latestVersion,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<GtePolicyDocumentDetail> fetchPolicyDocument(
+    String documentKey, {
+    String? versionLabel,
+  }) async {
+    await _delay();
+    return _policyDocuments.firstWhere(
+      (GtePolicyDocumentDetail doc) => doc.documentKey == documentKey,
+      orElse: () => throw StateError('Unknown policy document: $documentKey'),
+    );
+  }
+
+  @override
+  Future<GteComplianceStatus> fetchComplianceStatus() async {
+    await _delay();
+    final List<GtePolicyRequirementSummary> missing =
+        await fetchPolicyRequirements();
+    final bool canDeposit = missing.isEmpty;
+    return GteComplianceStatus(
+      countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
+      countryPolicyBucket: 'regulated_market_disabled',
+      depositsEnabled: true,
+      marketTradingEnabled: canDeposit,
+      platformRewardWithdrawalsEnabled: canDeposit,
+      requiredPolicyAcceptancesMissing: missing.length,
+      missingPolicyAcceptances: missing,
+      canDeposit: true,
+      canWithdrawPlatformRewards: canDeposit,
+      canTradeMarket: canDeposit,
+    );
+  }
+
+  @override
+  Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() async {
+    await _delay();
+    return _currentMissingPolicyRequirements();
+  }
+
+  @override
+  Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() async {
+    await _delay();
+    return List<GtePolicyAcceptanceSummary>.of(_policyAcceptances,
+        growable: false);
+  }
+
+  @override
+  Future<GtePolicyAcceptanceSummary> acceptPolicyDocument(
+    String documentKey,
+    String versionLabel,
+  ) async {
+    await _delay();
+    final GtePolicyDocumentDetail document = await fetchPolicyDocument(documentKey);
+    final int existingIndex = _policyAcceptances.indexWhere(
+      (GtePolicyAcceptanceSummary item) => item.documentKey == documentKey,
+    );
+    final GtePolicyAcceptanceSummary acceptance = GtePolicyAcceptanceSummary(
+      documentKey: documentKey,
+      title: document.title,
+      versionLabel: versionLabel,
+      acceptedAt: _nextTimestamp(),
+    );
+    if (existingIndex >= 0) {
+      _policyAcceptances[existingIndex] = acceptance;
+    } else {
+      _policyAcceptances.add(acceptance);
+    }
+    return acceptance;
+  }
+
   @override
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
     bool mandatoryOnly = false,

@@ -1,5 +1,10 @@
 # Global Talent Exchange
 
+See also:
+- `API_DOCUMENTATION.md`
+- `DEPLOYMENT_GUIDE.md`
+- `ADMIN_SETUP_GUIDE.md`
+
 Local backend workflow for SQLite demos, seeded exchange liquidity, deterministic simulation ticks, and repeatable verification.
 
 ## Local setup
