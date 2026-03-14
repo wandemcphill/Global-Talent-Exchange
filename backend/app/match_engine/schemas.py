@@ -37,6 +37,26 @@ class MatchPlayerInput(CommonSchema):
     goalkeeping: int = Field(default=1, ge=1, le=100)
     discipline: int = Field(default=70, ge=1, le=100)
     fitness: int = Field(default=70, ge=1, le=100)
+    shirt_number: int | None = Field(default=None, ge=1, le=99)
+    display_name: str | None = Field(default=None, min_length=1, max_length=32)
+    position_archetype: str | None = Field(default=None, min_length=2, max_length=32)
+    pace: int | None = Field(default=None, ge=1, le=100)
+    composure: int | None = Field(default=None, ge=1, le=100)
+    decision_making: int | None = Field(default=None, ge=1, le=100)
+    positioning: int | None = Field(default=None, ge=1, le=100)
+    off_ball_movement: int | None = Field(default=None, ge=1, le=100)
+    aerial_ability: int | None = Field(default=None, ge=1, le=100)
+    technique: int | None = Field(default=None, ge=1, le=100)
+    stamina_curve: int | None = Field(default=None, ge=1, le=100)
+    consistency: int | None = Field(default=None, ge=1, le=100)
+    clutch_factor: int | None = Field(default=None, ge=1, le=100)
+    big_match_temperament: int | None = Field(default=None, ge=1, le=100)
+    recent_form: int | None = Field(default=None, ge=1, le=100)
+    morale: int | None = Field(default=None, ge=1, le=100)
+    motivation: int | None = Field(default=None, ge=1, le=100)
+    fatigue_load: int | None = Field(default=None, ge=0, le=100)
+    injury_risk: int | None = Field(default=None, ge=0, le=100)
+    leadership: int | None = Field(default=None, ge=1, le=100)
 
 
 class TeamTacticalPlanInput(CommonSchema):
@@ -53,6 +73,9 @@ class TeamTacticalPlanInput(CommonSchema):
         min_length=1,
     )
     max_substitutions: int = Field(default=5, ge=1, le=5)
+    tactical_quality: int = Field(default=60, ge=1, le=100)
+    adaptability: int = Field(default=60, ge=1, le=100)
+    game_management: int = Field(default=60, ge=1, le=100)
 
     @model_validator(mode="after")
     def validate_tactics(self) -> TeamTacticalPlanInput:
@@ -64,12 +87,55 @@ class TeamTacticalPlanInput(CommonSchema):
         return self
 
 
+class MatchKitIdentityInput(CommonSchema):
+    kit_type: str = Field(default="home", min_length=2, max_length=24)
+    primary_color: str = Field(default="#123C73", min_length=4, max_length=16)
+    secondary_color: str = Field(default="#F5F7FA", min_length=4, max_length=16)
+    accent_color: str = Field(default="#E2A400", min_length=4, max_length=16)
+    shorts_color: str = Field(default="#0C1F3F", min_length=4, max_length=16)
+    socks_color: str = Field(default="#F5F7FA", min_length=4, max_length=16)
+    pattern_type: str = Field(default="solid", min_length=3, max_length=24)
+    collar_style: str = Field(default="crew", min_length=3, max_length=24)
+    sleeve_style: str = Field(default="short", min_length=3, max_length=24)
+    badge_placement: str = Field(default="left_chest", min_length=3, max_length=32)
+    front_text: str | None = Field(default=None, max_length=20)
+
+
+class MatchTeamIdentityInput(CommonSchema):
+    club_name: str | None = Field(default=None, min_length=1, max_length=120)
+    short_club_code: str | None = Field(default=None, min_length=2, max_length=8)
+    badge_url: str | None = Field(default=None, max_length=255)
+    badge_shape: str = Field(default="shield", min_length=3, max_length=24)
+    badge_initials: str = Field(default="FC", min_length=1, max_length=6)
+    badge_primary_color: str = Field(default="#123C73", min_length=4, max_length=16)
+    badge_secondary_color: str = Field(default="#F5F7FA", min_length=4, max_length=16)
+    badge_accent_color: str = Field(default="#E2A400", min_length=4, max_length=16)
+    home_kit: MatchKitIdentityInput | None = None
+    away_kit: MatchKitIdentityInput | None = None
+    goalkeeper_kit: MatchKitIdentityInput | None = None
+
+
+class MatchClubContextInput(CommonSchema):
+    club_tier: int = Field(default=60, ge=1, le=100)
+    competition_tier: int = Field(default=60, ge=1, le=100)
+    team_chemistry: int = Field(default=62, ge=1, le=100)
+    recent_form: int = Field(default=58, ge=1, le=100)
+    morale: int = Field(default=60, ge=1, le=100)
+    motivation: int = Field(default=60, ge=1, le=100)
+    fatigue_load: int = Field(default=36, ge=0, le=100)
+    travel_load: int = Field(default=28, ge=0, le=100)
+    rivalry_intensity: int = Field(default=0, ge=0, le=100)
+    schedule_pressure: int = Field(default=34, ge=0, le=100)
+
+
 class MatchTeamInput(CommonSchema):
     team_id: str = Field(min_length=1)
     team_name: str = Field(min_length=1)
     formation: str = Field(default="4-3-3", min_length=5)
     tactics: TeamTacticalPlanInput = Field(default_factory=TeamTacticalPlanInput)
     manager_profile: dict[str, Any] | None = None
+    club_context: MatchClubContextInput = Field(default_factory=MatchClubContextInput)
+    identity: MatchTeamIdentityInput | None = None
     starters: list[MatchPlayerInput] = Field(min_length=11, max_length=11)
     bench: list[MatchPlayerInput] = Field(default_factory=list, max_length=12)
 
@@ -133,6 +199,66 @@ class MatchTeamStrengthView(CommonSchema):
     depth: float
     discipline: float
     fitness: float
+    chemistry: float
+    tactical_cohesion: float
+    recent_form: float
+    morale: float
+    motivation: float
+    fatigue_load: float
+    coach_quality: float
+    tactical_quality: float
+    adaptability: float
+    upset_resistance: float
+    upset_punch: float
+
+
+class MatchBadgeVisualView(CommonSchema):
+    badge_url: str | None = None
+    shape: str
+    initials: str
+    primary_color: str
+    secondary_color: str
+    accent_color: str
+
+
+class MatchKitVisualView(CommonSchema):
+    kit_type: str
+    primary_color: str
+    secondary_color: str
+    accent_color: str
+    shorts_color: str
+    socks_color: str
+    pattern_type: str
+    collar_style: str
+    sleeve_style: str
+    badge_placement: str
+    front_text: str | None = None
+
+
+class MatchPlayerVisualView(CommonSchema):
+    player_id: str
+    display_name: str
+    shirt_name: str
+    shirt_number: int | None = Field(default=None, ge=1, le=99)
+    role: PlayerRole
+
+
+class MatchTeamVisualIdentityView(CommonSchema):
+    team_id: str
+    team_name: str
+    short_club_code: str
+    badge: MatchBadgeVisualView
+    selected_kit: MatchKitVisualView
+    alternate_kit: MatchKitVisualView
+    goalkeeper_kit: MatchKitVisualView
+    player_visuals: list[MatchPlayerVisualView] = Field(default_factory=list)
+    clash_adjusted: bool = False
+
+
+class MatchVisualIdentityView(CommonSchema):
+    home_team: MatchTeamVisualIdentityView
+    away_team: MatchTeamVisualIdentityView
+    clash_resolved: bool = False
 
 
 class MatchEventView(CommonSchema):
@@ -201,6 +327,9 @@ class MatchTeamStatsView(CommonSchema):
     injuries: int = Field(ge=0)
     substitutions: int = Field(ge=0)
     possession: int = Field(ge=0, le=100)
+    big_chances: int = Field(ge=0)
+    woodwork: int = Field(ge=0)
+    tactical_swings: int = Field(ge=0)
     strength: MatchTeamStrengthView
 
 
@@ -254,6 +383,17 @@ class MatchFinalSummaryView(CommonSchema):
     highlight_package: list[MatchHighlightClipView] = Field(default_factory=list)
     manager_influence_notes: list[str] = Field(default_factory=list)
     injury_report: list[MatchInjuryReportView] = Field(default_factory=list)
+    upset_probability: float = Field(default=0.0, ge=0.0, le=1.0)
+    upset_reason_codes: list[str] = Field(default_factory=list)
+    home_advantage_note: str = ""
+    manager_influence_score_home: float = 0.0
+    manager_influence_score_away: float = 0.0
+    tactical_battle_summary: str = ""
+    form_motivation_summary: str = ""
+    momentum_swings: list[str] = Field(default_factory=list)
+    turning_points: list[str] = Field(default_factory=list)
+    key_matchups: list[str] = Field(default_factory=list)
+    tactical_impact_notes: list[str] = Field(default_factory=list)
     status: MatchStatus
     competition_type: MatchCompetitionType
     stage: str
@@ -294,6 +434,7 @@ class MatchReplayPayloadView(CommonSchema):
     highlight_package: list[MatchHighlightClipView] = Field(default_factory=list)
     manager_influence_notes: list[str] = Field(default_factory=list)
     injury_report: list[MatchInjuryReportView] = Field(default_factory=list)
+    visual_identity: MatchVisualIdentityView | None = None
     status: MatchStatus
     summary: MatchFinalSummaryView
     timeline: MatchEventTimelineView

@@ -66,7 +66,253 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<GteAuthSession> register({
+    required String fullName,
+    required String phoneNumber,
+    required String email,
+    required String password,
+    required bool isOver18,
+    String? username,
+  }) {
+    return repository.register(
+      GteAuthRegisterRequest(
+        email: email,
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        isOver18: isOver18,
+        username: username,
+        password: password,
+      ),
+    );
+  }
+
   Future<void> logout() => repository.logout();
+
+  Future<GteWalletOverview> fetchWalletOverview() {
+    return repository.fetchWalletOverview();
+  }
+
+  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() {
+    return repository.fetchWithdrawalEligibility();
+  }
+
+  Future<GteDepositRequest> createDepositRequest(
+      GteDepositCreateRequest request) {
+    return repository.createDepositRequest(request);
+  }
+
+  Future<GteDepositRequest> submitDepositRequest(
+      String depositId, GteDepositSubmitRequest request) {
+    return repository.submitDepositRequest(depositId, request);
+  }
+
+  Future<List<GteDepositRequest>> listDepositRequests() {
+    return repository.listDepositRequests();
+  }
+
+  Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
+      GteWithdrawalCreateRequest request) {
+    return repository.createWithdrawalRequest(request);
+  }
+
+  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests() {
+    return repository.listWithdrawalRequests();
+  }
+
+  Future<GteKycProfile> fetchKycProfile() {
+    return repository.fetchKycProfile();
+  }
+
+  Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request) {
+    return repository.submitKycProfile(request);
+  }
+
+  Future<List<GteUserBankAccount>> listUserBankAccounts() {
+    return repository.listUserBankAccounts();
+  }
+
+  Future<GteUserBankAccount> createUserBankAccount(
+      GteUserBankAccountCreate request) {
+    return repository.createUserBankAccount(request);
+  }
+
+  Future<GteUserBankAccount> updateUserBankAccount(
+      String bankAccountId, GteUserBankAccountUpdate request) {
+    return repository.updateUserBankAccount(bankAccountId, request);
+  }
+
+  Future<List<GteDispute>> listDisputes() {
+    return repository.listDisputes();
+  }
+
+  Future<GteDispute> openDispute(GteDisputeCreateRequest request) {
+    return repository.openDispute(request);
+  }
+
+  Future<GteDispute> fetchDispute(String disputeId) {
+    return repository.fetchDispute(disputeId);
+  }
+
+  Future<GteDisputeMessage> sendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request) {
+    return repository.sendDisputeMessage(disputeId, request);
+  }
+
+  Future<List<GteNotification>> listNotifications({int limit = 20}) {
+    return repository.listNotifications(limit: limit);
+  }
+
+  Future<void> markNotificationRead(String notificationId) {
+    return repository.markNotificationRead(notificationId);
+  }
+
+  Future<void> markAllNotificationsRead() {
+    return repository.markAllNotificationsRead();
+  }
+
+  Future<GteAttachment> uploadAttachment(
+    String filename,
+    List<int> bytes, {
+    String? contentType,
+  }) {
+    return repository.uploadAttachment(filename, bytes, contentType: contentType);
+  }
+
+  Future<GteAnalyticsEvent> trackAnalyticsEvent(
+    String name, {
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) {
+    return repository.trackAnalyticsEvent(name, metadata: metadata);
+  }
+
+  Future<GteAnalyticsSummary> fetchAnalyticsSummary() {
+    return repository.fetchAnalyticsSummary();
+  }
+
+  Future<GteAnalyticsFunnel> fetchAnalyticsFunnel() {
+    return repository.fetchAnalyticsFunnel();
+  }
+
+  Future<GteTreasuryDashboard> fetchTreasuryDashboard() {
+    return repository.fetchTreasuryDashboard();
+  }
+
+  Future<GteTreasurySettings> fetchTreasurySettings() {
+    return repository.fetchTreasurySettings();
+  }
+
+  Future<GteTreasurySettings> updateTreasurySettings(
+      GteTreasurySettingsUpdate request) {
+    return repository.updateTreasurySettings(request);
+  }
+
+  Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts() {
+    return repository.listTreasuryBankAccounts();
+  }
+
+  Future<GteTreasuryBankAccount> createTreasuryBankAccount(
+      GteTreasuryBankAccountCreate request) {
+    return repository.createTreasuryBankAccount(request);
+  }
+
+  Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
+      String accountId, GteTreasuryBankAccountUpdate request) {
+    return repository.updateTreasuryBankAccount(accountId, request);
+  }
+
+  Future<GteAdminQueuePage<GteAdminDeposit>> fetchAdminDeposits({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return repository.fetchAdminDeposits(
+      limit: limit,
+      offset: offset,
+      status: status,
+      query: query,
+    );
+  }
+
+  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
+      {String? adminNotes}) {
+    return repository.adminConfirmDeposit(depositId, adminNotes: adminNotes);
+  }
+
+  Future<GteDepositRequest> adminRejectDeposit(String depositId,
+      {String? adminNotes}) {
+    return repository.adminRejectDeposit(depositId, adminNotes: adminNotes);
+  }
+
+  Future<GteDepositRequest> adminReviewDeposit(String depositId,
+      {String? adminNotes}) {
+    return repository.adminReviewDeposit(depositId, adminNotes: adminNotes);
+  }
+
+  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return repository.fetchAdminWithdrawals(
+      limit: limit,
+      offset: offset,
+      status: status,
+      query: query,
+    );
+  }
+
+  Future<GteTreasuryWithdrawalRequest> adminUpdateWithdrawalStatus(
+    String withdrawalId, {
+    required GteWithdrawalStatus status,
+    String? adminNotes,
+  }) {
+    return repository.adminUpdateWithdrawalStatus(withdrawalId,
+        status: status, adminNotes: adminNotes);
+  }
+
+  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return repository.fetchAdminKyc(
+      limit: limit,
+      offset: offset,
+      status: status,
+      query: query,
+    );
+  }
+
+  Future<GteKycProfile> adminReviewKyc(
+      String profileId, GteKycReviewRequest request) {
+    return repository.adminReviewKyc(profileId, request);
+  }
+
+  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return repository.fetchAdminDisputes(
+      limit: limit,
+      offset: offset,
+      status: status,
+      query: query,
+    );
+  }
+
+  Future<GteDispute> fetchAdminDispute(String disputeId) {
+    return repository.fetchAdminDispute(disputeId);
+  }
+
+  Future<GteDisputeMessage> adminSendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request) {
+    return repository.adminSendDisputeMessage(disputeId, request);
+  }
 
   Future<GteMarketPlayerListView> fetchPlayers({
     GteMarketPlayersQuery query = const GteMarketPlayersQuery(),

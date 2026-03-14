@@ -26,6 +26,54 @@ enum GteLedgerUnit {
   unknown,
 }
 
+enum GtePaymentMode {
+  manual,
+  automatic,
+}
+
+enum GteRateDirection {
+  fiatPerCoin,
+  coinPerFiat,
+}
+
+enum GteDepositStatus {
+  awaitingPayment,
+  paymentSubmitted,
+  underReview,
+  confirmed,
+  rejected,
+  expired,
+  disputed,
+}
+
+enum GteWithdrawalStatus {
+  draft,
+  pendingKyc,
+  pendingReview,
+  approved,
+  rejected,
+  processing,
+  paid,
+  disputed,
+  cancelled,
+}
+
+enum GteKycStatus {
+  unverified,
+  pending,
+  partialVerifiedNoId,
+  fullyVerified,
+  rejected,
+}
+
+enum GteDisputeStatus {
+  open,
+  awaitingUser,
+  awaitingAdmin,
+  resolved,
+  closed,
+}
+
 class GteParsingException implements FormatException {
   const GteParsingException(this.messageText, [this.sourceText]);
 
@@ -425,21 +473,27 @@ class GteAuthLoginRequest {
 class GteAuthRegisterRequest {
   const GteAuthRegisterRequest({
     required this.email,
-    required this.username,
+    required this.fullName,
+    required this.phoneNumber,
+    required this.isOver18,
+    this.username,
     required this.password,
-    this.displayName,
   });
 
   final String email;
-  final String username;
+  final String fullName;
+  final String phoneNumber;
+  final bool isOver18;
+  final String? username;
   final String password;
-  final String? displayName;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'email': email,
-        'username': username,
+        'full_name': fullName,
+        'phone_number': phoneNumber,
+        'is_over_18': isOver18,
+        if (username != null) 'username': username,
         'password': password,
-        if (displayName != null) 'display_name': displayName,
       };
 }
 
@@ -448,19 +502,25 @@ class GteCurrentUser {
     required this.id,
     required this.email,
     required this.username,
+    required this.fullName,
+    required this.phoneNumber,
     required this.displayName,
     required this.role,
     this.kycStatus,
     this.isActive = true,
+    this.ageConfirmedAt,
   });
 
   final String id;
   final String email;
   final String username;
+  final String? fullName;
+  final String? phoneNumber;
   final String? displayName;
   final String role;
   final String? kycStatus;
   final bool isActive;
+  final DateTime? ageConfirmedAt;
 
   factory GteCurrentUser.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'current user');
@@ -468,6 +528,9 @@ class GteCurrentUser {
       id: GteJson.string(json, <String>['id']),
       email: GteJson.string(json, <String>['email']),
       username: GteJson.string(json, <String>['username']),
+      fullName: GteJson.stringOrNull(json, <String>['full_name', 'fullName']),
+      phoneNumber:
+          GteJson.stringOrNull(json, <String>['phone_number', 'phoneNumber']),
       displayName:
           GteJson.stringOrNull(json, <String>['display_name', 'displayName']),
       role: GteJson.string(json, <String>['role'], fallback: 'user'),
@@ -475,6 +538,8 @@ class GteCurrentUser {
           GteJson.stringOrNull(json, <String>['kyc_status', 'kycStatus']),
       isActive: GteJson.boolean(json, <String>['is_active', 'isActive'],
           fallback: true),
+      ageConfirmedAt: GteJson.dateTimeOrNull(
+          json, <String>['age_confirmed_at', 'ageConfirmedAt']),
     );
   }
 }
@@ -760,6 +825,1492 @@ class GteWalletLedgerPage {
       total: GteJson.integer(json, <String>['total']),
       items: GteJson.typedList(
           json, <String>['items'], GteWalletLedgerEntry.fromJson),
+    );
+  }
+}
+
+class GteWalletOverview {
+  const GteWalletOverview({
+    required this.availableBalance,
+    required this.pendingDeposits,
+    required this.pendingWithdrawals,
+    required this.totalInflow,
+    required this.totalOutflow,
+    required this.withdrawableNow,
+    required this.currency,
+  });
+
+  final double availableBalance;
+  final double pendingDeposits;
+  final double pendingWithdrawals;
+  final double totalInflow;
+  final double totalOutflow;
+  final double withdrawableNow;
+  final GteLedgerUnit currency;
+
+  factory GteWalletOverview.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'wallet overview');
+    return GteWalletOverview(
+      availableBalance:
+          GteJson.number(json, <String>['available_balance', 'availableBalance']),
+      pendingDeposits:
+          GteJson.number(json, <String>['pending_deposits', 'pendingDeposits']),
+      pendingWithdrawals: GteJson.number(
+          json, <String>['pending_withdrawals', 'pendingWithdrawals']),
+      totalInflow:
+          GteJson.number(json, <String>['total_inflow', 'totalInflow']),
+      totalOutflow:
+          GteJson.number(json, <String>['total_outflow', 'totalOutflow']),
+      withdrawableNow:
+          GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
+      currency: _ledgerUnitFromString(
+          GteJson.string(json, <String>['currency'], fallback: 'coin')),
+    );
+  }
+}
+
+class GteWithdrawalEligibility {
+  const GteWithdrawalEligibility({
+    required this.availableBalance,
+    required this.withdrawableNow,
+    required this.remainingAllowance,
+    required this.nextEligibleAt,
+    required this.kycStatus,
+    required this.requiresKyc,
+    required this.requiresBankAccount,
+    required this.pendingWithdrawals,
+  });
+
+  final double availableBalance;
+  final double withdrawableNow;
+  final double remainingAllowance;
+  final DateTime? nextEligibleAt;
+  final GteKycStatus kycStatus;
+  final bool requiresKyc;
+  final bool requiresBankAccount;
+  final double pendingWithdrawals;
+
+  factory GteWithdrawalEligibility.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'withdrawal eligibility');
+    return GteWithdrawalEligibility(
+      availableBalance:
+          GteJson.number(json, <String>['available_balance', 'availableBalance']),
+      withdrawableNow:
+          GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
+      remainingAllowance: GteJson.number(
+          json, <String>['remaining_allowance', 'remainingAllowance']),
+      nextEligibleAt: GteJson.dateTimeOrNull(
+          json, <String>['next_eligible_at', 'nextEligibleAt']),
+      kycStatus: _kycStatusFromString(GteJson.string(
+          json, <String>['kyc_status', 'kycStatus'], fallback: 'unverified')),
+      requiresKyc:
+          GteJson.boolean(json, <String>['requires_kyc', 'requiresKyc']),
+      requiresBankAccount: GteJson.boolean(
+          json, <String>['requires_bank_account', 'requiresBankAccount']),
+      pendingWithdrawals: GteJson.number(
+          json, <String>['pending_withdrawals', 'pendingWithdrawals']),
+    );
+  }
+}
+
+class GteDepositRequest {
+  const GteDepositRequest({
+    required this.id,
+    required this.reference,
+    required this.status,
+    required this.amountFiat,
+    required this.amountCoin,
+    required this.currencyCode,
+    required this.rateValue,
+    required this.rateDirection,
+    required this.bankName,
+    required this.bankAccountNumber,
+    required this.bankAccountName,
+    required this.bankCode,
+    required this.payerName,
+    required this.senderBank,
+    required this.transferReference,
+    required this.proofAttachmentId,
+    required this.adminNotes,
+    required this.createdAt,
+    required this.submittedAt,
+    required this.reviewedAt,
+    required this.confirmedAt,
+    required this.rejectedAt,
+    required this.expiresAt,
+  });
+
+  final String id;
+  final String reference;
+  final GteDepositStatus status;
+  final double amountFiat;
+  final double amountCoin;
+  final String currencyCode;
+  final double rateValue;
+  final GteRateDirection rateDirection;
+  final String bankName;
+  final String bankAccountNumber;
+  final String bankAccountName;
+  final String? bankCode;
+  final String? payerName;
+  final String? senderBank;
+  final String? transferReference;
+  final String? proofAttachmentId;
+  final String? adminNotes;
+  final DateTime? createdAt;
+  final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final DateTime? confirmedAt;
+  final DateTime? rejectedAt;
+  final DateTime? expiresAt;
+
+  factory GteDepositRequest.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'deposit request');
+    return GteDepositRequest(
+      id: GteJson.string(json, <String>['id']),
+      reference: GteJson.string(json, <String>['reference']),
+      status: _depositStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'awaiting_payment')),
+      amountFiat:
+          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      amountCoin:
+          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
+      rateDirection: _rateDirectionFromString(
+          GteJson.string(json, <String>['rate_direction', 'rateDirection'],
+              fallback: 'fiat_per_coin')),
+      bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
+      bankAccountNumber: GteJson.string(
+          json, <String>['bank_account_number', 'bankAccountNumber']),
+      bankAccountName: GteJson.string(
+          json, <String>['bank_account_name', 'bankAccountName']),
+      bankCode:
+          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      payerName:
+          GteJson.stringOrNull(json, <String>['payer_name', 'payerName']),
+      senderBank:
+          GteJson.stringOrNull(json, <String>['sender_bank', 'senderBank']),
+      transferReference: GteJson.stringOrNull(
+          json, <String>['transfer_reference', 'transferReference']),
+      proofAttachmentId: GteJson.stringOrNull(
+          json, <String>['proof_attachment_id', 'proofAttachmentId']),
+      adminNotes:
+          GteJson.stringOrNull(json, <String>['admin_notes', 'adminNotes']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      submittedAt:
+          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
+      reviewedAt:
+          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
+      confirmedAt:
+          GteJson.dateTimeOrNull(json, <String>['confirmed_at', 'confirmedAt']),
+      rejectedAt:
+          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
+      expiresAt:
+          GteJson.dateTimeOrNull(json, <String>['expires_at', 'expiresAt']),
+    );
+  }
+}
+
+class GteDepositCreateRequest {
+  const GteDepositCreateRequest({
+    required this.amount,
+    required this.inputUnit,
+  });
+
+  final double amount;
+  final String inputUnit;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'amount': amount,
+        'input_unit': inputUnit,
+      };
+}
+
+class GteDepositSubmitRequest {
+  const GteDepositSubmitRequest({
+    this.payerName,
+    this.senderBank,
+    this.transferReference,
+    this.proofAttachmentId,
+  });
+
+  final String? payerName;
+  final String? senderBank;
+  final String? transferReference;
+  final String? proofAttachmentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        if (payerName != null) 'payer_name': payerName,
+        if (senderBank != null) 'sender_bank': senderBank,
+        if (transferReference != null) 'transfer_reference': transferReference,
+        if (proofAttachmentId != null)
+          'proof_attachment_id': proofAttachmentId,
+      };
+}
+
+class GteTreasuryWithdrawalRequest {
+  const GteTreasuryWithdrawalRequest({
+    required this.id,
+    required this.payoutRequestId,
+    required this.reference,
+    required this.status,
+    required this.unit,
+    required this.amountCoin,
+    required this.amountFiat,
+    required this.currencyCode,
+    required this.rateValue,
+    required this.rateDirection,
+    required this.bankName,
+    required this.bankAccountNumber,
+    required this.bankAccountName,
+    required this.bankCode,
+    required this.kycStatusSnapshot,
+    required this.kycTierSnapshot,
+    required this.feeAmount,
+    required this.totalDebit,
+    required this.notes,
+    required this.createdAt,
+    required this.reviewedAt,
+    required this.approvedAt,
+    required this.processedAt,
+    required this.paidAt,
+    required this.rejectedAt,
+    required this.cancelledAt,
+  });
+
+  final String id;
+  final String payoutRequestId;
+  final String reference;
+  final GteWithdrawalStatus status;
+  final GteLedgerUnit unit;
+  final double amountCoin;
+  final double amountFiat;
+  final String currencyCode;
+  final double rateValue;
+  final GteRateDirection rateDirection;
+  final String bankName;
+  final String bankAccountNumber;
+  final String bankAccountName;
+  final String? bankCode;
+  final String kycStatusSnapshot;
+  final String kycTierSnapshot;
+  final double feeAmount;
+  final double totalDebit;
+  final String? notes;
+  final DateTime? createdAt;
+  final DateTime? reviewedAt;
+  final DateTime? approvedAt;
+  final DateTime? processedAt;
+  final DateTime? paidAt;
+  final DateTime? rejectedAt;
+  final DateTime? cancelledAt;
+
+  factory GteTreasuryWithdrawalRequest.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'withdrawal request');
+    return GteTreasuryWithdrawalRequest(
+      id: GteJson.string(json, <String>['id']),
+      payoutRequestId:
+          GteJson.string(json, <String>['payout_request_id', 'payoutRequestId']),
+      reference: GteJson.string(json, <String>['reference']),
+      status: _withdrawalStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'pending_review')),
+      unit: _ledgerUnitFromString(
+          GteJson.string(json, <String>['unit'], fallback: 'coin')),
+      amountCoin:
+          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      amountFiat:
+          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
+      rateDirection: _rateDirectionFromString(
+          GteJson.string(json, <String>['rate_direction', 'rateDirection'],
+              fallback: 'fiat_per_coin')),
+      bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
+      bankAccountNumber: GteJson.string(
+          json, <String>['bank_account_number', 'bankAccountNumber']),
+      bankAccountName: GteJson.string(
+          json, <String>['bank_account_name', 'bankAccountName']),
+      bankCode:
+          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      kycStatusSnapshot: GteJson.string(
+          json, <String>['kyc_status_snapshot', 'kycStatusSnapshot'],
+          fallback: 'unverified'),
+      kycTierSnapshot: GteJson.string(
+          json, <String>['kyc_tier_snapshot', 'kycTierSnapshot'],
+          fallback: 'unverified'),
+      feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
+      totalDebit:
+          GteJson.number(json, <String>['total_debit', 'totalDebit']),
+      notes: GteJson.stringOrNull(json, <String>['notes']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      reviewedAt:
+          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
+      approvedAt:
+          GteJson.dateTimeOrNull(json, <String>['approved_at', 'approvedAt']),
+      processedAt:
+          GteJson.dateTimeOrNull(json, <String>['processed_at', 'processedAt']),
+      paidAt: GteJson.dateTimeOrNull(json, <String>['paid_at', 'paidAt']),
+      rejectedAt:
+          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
+      cancelledAt:
+          GteJson.dateTimeOrNull(json, <String>['cancelled_at', 'cancelledAt']),
+    );
+  }
+}
+
+class GteWithdrawalCreateRequest {
+  const GteWithdrawalCreateRequest({
+    required this.amountCoin,
+    this.bankAccountId,
+    this.notes,
+  });
+
+  final double amountCoin;
+  final String? bankAccountId;
+  final String? notes;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'amount_coin': amountCoin,
+        if (bankAccountId != null) 'bank_account_id': bankAccountId,
+        if (notes != null) 'notes': notes,
+      };
+}
+
+class GteUserBankAccount {
+  const GteUserBankAccount({
+    required this.id,
+    required this.currencyCode,
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    required this.bankCode,
+    required this.isActive,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String currencyCode;
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+  final String? bankCode;
+  final bool isActive;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory GteUserBankAccount.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'user bank account');
+    return GteUserBankAccount(
+      id: GteJson.string(json, <String>['id']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
+      accountNumber: GteJson.string(
+          json, <String>['account_number', 'accountNumber']),
+      accountName:
+          GteJson.string(json, <String>['account_name', 'accountName']),
+      bankCode:
+          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      isActive:
+          GteJson.boolean(json, <String>['is_active', 'isActive']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      updatedAt:
+          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+    );
+  }
+}
+
+class GteUserBankAccountCreate {
+  const GteUserBankAccountCreate({
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    this.bankCode,
+    this.currencyCode = 'NGN',
+    this.setActive = true,
+  });
+
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+  final String? bankCode;
+  final String currencyCode;
+  final bool setActive;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'bank_name': bankName,
+        'account_number': accountNumber,
+        'account_name': accountName,
+        if (bankCode != null) 'bank_code': bankCode,
+        'currency_code': currencyCode,
+        'set_active': setActive,
+      };
+}
+
+class GteUserBankAccountUpdate {
+  const GteUserBankAccountUpdate({
+    this.bankName,
+    this.accountNumber,
+    this.accountName,
+    this.bankCode,
+    this.currencyCode,
+    this.isActive,
+  });
+
+  final String? bankName;
+  final String? accountNumber;
+  final String? accountName;
+  final String? bankCode;
+  final String? currencyCode;
+  final bool? isActive;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        if (bankName != null) 'bank_name': bankName,
+        if (accountNumber != null) 'account_number': accountNumber,
+        if (accountName != null) 'account_name': accountName,
+        if (bankCode != null) 'bank_code': bankCode,
+        if (currencyCode != null) 'currency_code': currencyCode,
+        if (isActive != null) 'is_active': isActive,
+      };
+}
+
+class GteKycProfile {
+  const GteKycProfile({
+    required this.id,
+    required this.status,
+    required this.nin,
+    required this.bvn,
+    required this.addressLine1,
+    required this.addressLine2,
+    required this.city,
+    required this.state,
+    required this.country,
+    required this.idDocumentAttachmentId,
+    required this.submittedAt,
+    required this.reviewedAt,
+    required this.rejectionReason,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final GteKycStatus status;
+  final String? nin;
+  final String? bvn;
+  final String? addressLine1;
+  final String? addressLine2;
+  final String? city;
+  final String? state;
+  final String? country;
+  final String? idDocumentAttachmentId;
+  final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final String? rejectionReason;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory GteKycProfile.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'kyc profile');
+    return GteKycProfile(
+      id: GteJson.string(json, <String>['id']),
+      status: _kycStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'unverified')),
+      nin: GteJson.stringOrNull(json, <String>['nin']),
+      bvn: GteJson.stringOrNull(json, <String>['bvn']),
+      addressLine1:
+          GteJson.stringOrNull(json, <String>['address_line1', 'addressLine1']),
+      addressLine2:
+          GteJson.stringOrNull(json, <String>['address_line2', 'addressLine2']),
+      city: GteJson.stringOrNull(json, <String>['city']),
+      state: GteJson.stringOrNull(json, <String>['state']),
+      country: GteJson.stringOrNull(json, <String>['country']),
+      idDocumentAttachmentId: GteJson.stringOrNull(
+          json, <String>['id_document_attachment_id', 'idDocumentAttachmentId']),
+      submittedAt:
+          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
+      reviewedAt:
+          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
+      rejectionReason: GteJson.stringOrNull(
+          json, <String>['rejection_reason', 'rejectionReason']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      updatedAt:
+          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+    );
+  }
+}
+
+class GteKycSubmitRequest {
+  const GteKycSubmitRequest({
+    this.nin,
+    this.bvn,
+    required this.addressLine1,
+    this.addressLine2,
+    this.city,
+    this.state,
+    this.country = 'Nigeria',
+    this.idDocumentAttachmentId,
+  });
+
+  final String? nin;
+  final String? bvn;
+  final String addressLine1;
+  final String? addressLine2;
+  final String? city;
+  final String? state;
+  final String? country;
+  final String? idDocumentAttachmentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        if (nin != null) 'nin': nin,
+        if (bvn != null) 'bvn': bvn,
+        'address_line1': addressLine1,
+        if (addressLine2 != null) 'address_line2': addressLine2,
+        if (city != null) 'city': city,
+        if (state != null) 'state': state,
+        if (country != null) 'country': country,
+        if (idDocumentAttachmentId != null)
+          'id_document_attachment_id': idDocumentAttachmentId,
+      };
+}
+
+class GteKycReviewRequest {
+  const GteKycReviewRequest({
+    required this.status,
+    this.rejectionReason,
+  });
+
+  final GteKycStatus status;
+  final String? rejectionReason;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'status': _kycStatusToString(status),
+        if (rejectionReason != null) 'rejection_reason': rejectionReason,
+      };
+}
+
+class GteDisputeMessage {
+  const GteDisputeMessage({
+    required this.id,
+    required this.senderUserId,
+    required this.senderRole,
+    required this.message,
+    required this.attachmentId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String? senderUserId;
+  final String senderRole;
+  final String message;
+  final String? attachmentId;
+  final DateTime? createdAt;
+
+  factory GteDisputeMessage.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'dispute message');
+    return GteDisputeMessage(
+      id: GteJson.string(json, <String>['id']),
+      senderUserId: GteJson.stringOrNull(
+          json, <String>['sender_user_id', 'senderUserId']),
+      senderRole:
+          GteJson.string(json, <String>['sender_role', 'senderRole'],
+              fallback: 'user'),
+      message: GteJson.string(json, <String>['message']),
+      attachmentId:
+          GteJson.stringOrNull(json, <String>['attachment_id', 'attachmentId']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+    );
+  }
+}
+
+class GteDispute {
+  const GteDispute({
+    required this.id,
+    required this.status,
+    required this.reference,
+    required this.resourceType,
+    required this.resourceId,
+    required this.subject,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.lastMessageAt,
+    required this.userId,
+    required this.userEmail,
+    required this.userFullName,
+    required this.userPhoneNumber,
+    required this.messages,
+  });
+
+  final String id;
+  final GteDisputeStatus status;
+  final String reference;
+  final String resourceType;
+  final String resourceId;
+  final String? subject;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? lastMessageAt;
+  final String userId;
+  final String userEmail;
+  final String? userFullName;
+  final String? userPhoneNumber;
+  final List<GteDisputeMessage> messages;
+
+  factory GteDispute.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'dispute');
+    return GteDispute(
+      id: GteJson.string(json, <String>['id']),
+      status: _disputeStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'open')),
+      reference: GteJson.string(json, <String>['reference']),
+      resourceType:
+          GteJson.string(json, <String>['resource_type', 'resourceType']),
+      resourceId:
+          GteJson.string(json, <String>['resource_id', 'resourceId']),
+      subject: GteJson.stringOrNull(json, <String>['subject']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      updatedAt:
+          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+      lastMessageAt: GteJson.dateTimeOrNull(
+          json, <String>['last_message_at', 'lastMessageAt']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      userEmail:
+          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userFullName:
+          GteJson.stringOrNull(json, <String>['user_full_name', 'userFullName']),
+      userPhoneNumber: GteJson.stringOrNull(
+          json, <String>['user_phone_number', 'userPhoneNumber']),
+      messages: GteJson.typedList(
+          json, <String>['messages'], GteDisputeMessage.fromJson),
+    );
+  }
+}
+
+class GteDisputeCreateRequest {
+  const GteDisputeCreateRequest({
+    required this.resourceType,
+    required this.resourceId,
+    required this.reference,
+    this.subject,
+    required this.message,
+    this.attachmentId,
+  });
+
+  final String resourceType;
+  final String resourceId;
+  final String reference;
+  final String? subject;
+  final String message;
+  final String? attachmentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'resource_type': resourceType,
+        'resource_id': resourceId,
+        'reference': reference,
+        if (subject != null) 'subject': subject,
+        'message': message,
+        if (attachmentId != null) 'attachment_id': attachmentId,
+      };
+}
+
+class GteDisputeMessageRequest {
+  const GteDisputeMessageRequest({
+    required this.message,
+    this.attachmentId,
+  });
+
+  final String message;
+  final String? attachmentId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'message': message,
+        if (attachmentId != null) 'attachment_id': attachmentId,
+      };
+}
+
+class GteNotification {
+  const GteNotification({
+    required this.notificationId,
+    required this.userId,
+    required this.topic,
+    required this.templateKey,
+    required this.resourceId,
+    required this.fixtureId,
+    required this.competitionId,
+    required this.message,
+    required this.metadata,
+    required this.createdAt,
+    required this.readAt,
+    required this.isRead,
+  });
+
+  final String notificationId;
+  final String userId;
+  final String? topic;
+  final String? templateKey;
+  final String? resourceId;
+  final String? fixtureId;
+  final String? competitionId;
+  final String? message;
+  final Map<String, Object?> metadata;
+  final DateTime? createdAt;
+  final DateTime? readAt;
+  final bool isRead;
+
+  factory GteNotification.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'notification');
+    final Map<String, Object?> metadataJson = GteJson.map(
+      GteJson.value(json, <String>['metadata']) ?? const <String, Object?>{},
+      label: 'notification metadata',
+    );
+    return GteNotification(
+      notificationId:
+          GteJson.string(json, <String>['notification_id', 'notificationId']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      topic: GteJson.stringOrNull(json, <String>['topic']),
+      templateKey:
+          GteJson.stringOrNull(json, <String>['template_key', 'templateKey']),
+      resourceId:
+          GteJson.stringOrNull(json, <String>['resource_id', 'resourceId']),
+      fixtureId:
+          GteJson.stringOrNull(json, <String>['fixture_id', 'fixtureId']),
+      competitionId: GteJson.stringOrNull(
+          json, <String>['competition_id', 'competitionId']),
+      message: GteJson.stringOrNull(json, <String>['message']),
+      metadata: metadataJson,
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      readAt: GteJson.dateTimeOrNull(json, <String>['read_at', 'readAt']),
+      isRead: GteJson.boolean(json, <String>['is_read', 'isRead'],
+          fallback: false),
+    );
+  }
+}
+
+class GteAttachment {
+  const GteAttachment({
+    required this.id,
+    required this.filename,
+    required this.contentType,
+    required this.sizeBytes,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String filename;
+  final String contentType;
+  final int sizeBytes;
+  final DateTime? createdAt;
+
+  factory GteAttachment.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'attachment');
+    return GteAttachment(
+      id: GteJson.string(json, <String>['id']),
+      filename: GteJson.string(json, <String>['filename']),
+      contentType:
+          GteJson.string(json, <String>['content_type', 'contentType']),
+      sizeBytes:
+          GteJson.integer(json, <String>['size_bytes', 'sizeBytes']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+    );
+  }
+}
+
+class GteTreasuryBankAccount {
+  const GteTreasuryBankAccount({
+    required this.id,
+    required this.currencyCode,
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    required this.bankCode,
+    required this.isActive,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String currencyCode;
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+  final String? bankCode;
+  final bool isActive;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory GteTreasuryBankAccount.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'treasury bank account');
+    return GteTreasuryBankAccount(
+      id: GteJson.string(json, <String>['id']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
+      accountNumber: GteJson.string(
+          json, <String>['account_number', 'accountNumber']),
+      accountName:
+          GteJson.string(json, <String>['account_name', 'accountName']),
+      bankCode:
+          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      isActive:
+          GteJson.boolean(json, <String>['is_active', 'isActive']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      updatedAt:
+          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+    );
+  }
+}
+
+class GteTreasurySettings {
+  const GteTreasurySettings({
+    required this.id,
+    required this.settingsKey,
+    required this.currencyCode,
+    required this.depositRateValue,
+    required this.depositRateDirection,
+    required this.withdrawalRateValue,
+    required this.withdrawalRateDirection,
+    required this.minDeposit,
+    required this.maxDeposit,
+    required this.minWithdrawal,
+    required this.maxWithdrawal,
+    required this.depositMode,
+    required this.withdrawalMode,
+    required this.maintenanceMessage,
+    required this.whatsappNumber,
+    required this.activeBankAccount,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String settingsKey;
+  final String currencyCode;
+  final double depositRateValue;
+  final GteRateDirection depositRateDirection;
+  final double withdrawalRateValue;
+  final GteRateDirection withdrawalRateDirection;
+  final double minDeposit;
+  final double maxDeposit;
+  final double minWithdrawal;
+  final double maxWithdrawal;
+  final GtePaymentMode depositMode;
+  final GtePaymentMode withdrawalMode;
+  final String? maintenanceMessage;
+  final String? whatsappNumber;
+  final GteTreasuryBankAccount? activeBankAccount;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory GteTreasurySettings.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'treasury settings');
+    return GteTreasurySettings(
+      id: GteJson.string(json, <String>['id']),
+      settingsKey:
+          GteJson.string(json, <String>['settings_key', 'settingsKey']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      depositRateValue: GteJson.number(
+          json, <String>['deposit_rate_value', 'depositRateValue']),
+      depositRateDirection: _rateDirectionFromString(GteJson.string(
+          json, <String>['deposit_rate_direction', 'depositRateDirection'],
+          fallback: 'fiat_per_coin')),
+      withdrawalRateValue: GteJson.number(
+          json, <String>['withdrawal_rate_value', 'withdrawalRateValue']),
+      withdrawalRateDirection: _rateDirectionFromString(GteJson.string(
+          json,
+          <String>['withdrawal_rate_direction', 'withdrawalRateDirection'],
+          fallback: 'fiat_per_coin')),
+      minDeposit:
+          GteJson.number(json, <String>['min_deposit', 'minDeposit']),
+      maxDeposit:
+          GteJson.number(json, <String>['max_deposit', 'maxDeposit']),
+      minWithdrawal:
+          GteJson.number(json, <String>['min_withdrawal', 'minWithdrawal']),
+      maxWithdrawal:
+          GteJson.number(json, <String>['max_withdrawal', 'maxWithdrawal']),
+      depositMode: _paymentModeFromString(
+          GteJson.string(json, <String>['deposit_mode', 'depositMode'],
+              fallback: 'manual')),
+      withdrawalMode: _paymentModeFromString(
+          GteJson.string(json, <String>['withdrawal_mode', 'withdrawalMode'],
+              fallback: 'manual')),
+      maintenanceMessage: GteJson.stringOrNull(
+          json, <String>['maintenance_message', 'maintenanceMessage']),
+      whatsappNumber:
+          GteJson.stringOrNull(json, <String>['whatsapp_number', 'whatsappNumber']),
+      activeBankAccount: GteJson.value(json, <String>['active_bank_account']) == null
+          ? null
+          : GteTreasuryBankAccount.fromJson(
+              GteJson.value(json, <String>['active_bank_account'])),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      updatedAt:
+          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+    );
+  }
+}
+
+class GteTreasurySettingsUpdate {
+  const GteTreasurySettingsUpdate({
+    this.currencyCode,
+    this.depositRateValue,
+    this.depositRateDirection,
+    this.withdrawalRateValue,
+    this.withdrawalRateDirection,
+    this.minDeposit,
+    this.maxDeposit,
+    this.minWithdrawal,
+    this.maxWithdrawal,
+    this.depositMode,
+    this.withdrawalMode,
+    this.maintenanceMessage,
+    this.whatsappNumber,
+    this.activeBankAccountId,
+  });
+
+  final String? currencyCode;
+  final double? depositRateValue;
+  final GteRateDirection? depositRateDirection;
+  final double? withdrawalRateValue;
+  final GteRateDirection? withdrawalRateDirection;
+  final double? minDeposit;
+  final double? maxDeposit;
+  final double? minWithdrawal;
+  final double? maxWithdrawal;
+  final GtePaymentMode? depositMode;
+  final GtePaymentMode? withdrawalMode;
+  final String? maintenanceMessage;
+  final String? whatsappNumber;
+  final String? activeBankAccountId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        if (currencyCode != null) 'currency_code': currencyCode,
+        if (depositRateValue != null) 'deposit_rate_value': depositRateValue,
+        if (depositRateDirection != null)
+          'deposit_rate_direction': _rateDirectionToString(depositRateDirection!),
+        if (withdrawalRateValue != null)
+          'withdrawal_rate_value': withdrawalRateValue,
+        if (withdrawalRateDirection != null)
+          'withdrawal_rate_direction':
+              _rateDirectionToString(withdrawalRateDirection!),
+        if (minDeposit != null) 'min_deposit': minDeposit,
+        if (maxDeposit != null) 'max_deposit': maxDeposit,
+        if (minWithdrawal != null) 'min_withdrawal': minWithdrawal,
+        if (maxWithdrawal != null) 'max_withdrawal': maxWithdrawal,
+        if (depositMode != null) 'deposit_mode': depositMode!.name,
+        if (withdrawalMode != null) 'withdrawal_mode': withdrawalMode!.name,
+        if (maintenanceMessage != null)
+          'maintenance_message': maintenanceMessage,
+        if (whatsappNumber != null) 'whatsapp_number': whatsappNumber,
+        if (activeBankAccountId != null)
+          'active_bank_account_id': activeBankAccountId,
+      };
+}
+
+class GteTreasuryBankAccountCreate {
+  const GteTreasuryBankAccountCreate({
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    this.bankCode,
+    this.currencyCode = 'NGN',
+    this.isActive = true,
+  });
+
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+  final String? bankCode;
+  final String currencyCode;
+  final bool isActive;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'bank_name': bankName,
+        'account_number': accountNumber,
+        'account_name': accountName,
+        if (bankCode != null) 'bank_code': bankCode,
+        'currency_code': currencyCode,
+        'is_active': isActive,
+      };
+}
+
+class GteTreasuryBankAccountUpdate {
+  const GteTreasuryBankAccountUpdate({
+    this.bankName,
+    this.accountNumber,
+    this.accountName,
+    this.bankCode,
+    this.currencyCode,
+    this.isActive,
+  });
+
+  final String? bankName;
+  final String? accountNumber;
+  final String? accountName;
+  final String? bankCode;
+  final String? currencyCode;
+  final bool? isActive;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        if (bankName != null) 'bank_name': bankName,
+        if (accountNumber != null) 'account_number': accountNumber,
+        if (accountName != null) 'account_name': accountName,
+        if (bankCode != null) 'bank_code': bankCode,
+        if (currencyCode != null) 'currency_code': currencyCode,
+        if (isActive != null) 'is_active': isActive,
+      };
+}
+
+class GteTreasuryDashboard {
+  const GteTreasuryDashboard({
+    required this.totalUsers,
+    required this.activeUsers,
+    required this.pendingDeposits,
+    required this.pendingWithdrawals,
+    required this.pendingKyc,
+    required this.openDisputes,
+    required this.depositsConfirmedToday,
+    required this.withdrawalsPaidToday,
+    required this.walletLiability,
+    required this.pendingTreasuryExposure,
+  });
+
+  final int totalUsers;
+  final int activeUsers;
+  final int pendingDeposits;
+  final int pendingWithdrawals;
+  final int pendingKyc;
+  final int openDisputes;
+  final int depositsConfirmedToday;
+  final int withdrawalsPaidToday;
+  final double walletLiability;
+  final double pendingTreasuryExposure;
+
+  factory GteTreasuryDashboard.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'treasury dashboard');
+    return GteTreasuryDashboard(
+      totalUsers:
+          GteJson.integer(json, <String>['total_users', 'totalUsers']),
+      activeUsers:
+          GteJson.integer(json, <String>['active_users', 'activeUsers']),
+      pendingDeposits:
+          GteJson.integer(json, <String>['pending_deposits', 'pendingDeposits']),
+      pendingWithdrawals: GteJson.integer(
+          json, <String>['pending_withdrawals', 'pendingWithdrawals']),
+      pendingKyc:
+          GteJson.integer(json, <String>['pending_kyc', 'pendingKyc']),
+      openDisputes:
+          GteJson.integer(json, <String>['open_disputes', 'openDisputes']),
+      depositsConfirmedToday: GteJson.integer(
+          json, <String>['deposits_confirmed_today', 'depositsConfirmedToday']),
+      withdrawalsPaidToday: GteJson.integer(
+          json, <String>['withdrawals_paid_today', 'withdrawalsPaidToday']),
+      walletLiability:
+          GteJson.number(json, <String>['wallet_liability', 'walletLiability']),
+      pendingTreasuryExposure: GteJson.number(json,
+          <String>['pending_treasury_exposure', 'pendingTreasuryExposure']),
+    );
+  }
+}
+
+class GteAdminDeposit {
+  const GteAdminDeposit({
+    required this.id,
+    required this.reference,
+    required this.status,
+    required this.amountFiat,
+    required this.amountCoin,
+    required this.currencyCode,
+    required this.payerName,
+    required this.senderBank,
+    required this.transferReference,
+    required this.createdAt,
+    required this.submittedAt,
+    required this.reviewedAt,
+    required this.confirmedAt,
+    required this.rejectedAt,
+    required this.adminNotes,
+    required this.userId,
+    required this.userEmail,
+    required this.userFullName,
+    required this.userPhoneNumber,
+  });
+
+  final String id;
+  final String reference;
+  final GteDepositStatus status;
+  final double amountFiat;
+  final double amountCoin;
+  final String currencyCode;
+  final String? payerName;
+  final String? senderBank;
+  final String? transferReference;
+  final DateTime? createdAt;
+  final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final DateTime? confirmedAt;
+  final DateTime? rejectedAt;
+  final String? adminNotes;
+  final String userId;
+  final String userEmail;
+  final String? userFullName;
+  final String? userPhoneNumber;
+
+  factory GteAdminDeposit.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'admin deposit');
+    return GteAdminDeposit(
+      id: GteJson.string(json, <String>['id']),
+      reference: GteJson.string(json, <String>['reference']),
+      status: _depositStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'awaiting_payment')),
+      amountFiat:
+          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      amountCoin:
+          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      payerName:
+          GteJson.stringOrNull(json, <String>['payer_name', 'payerName']),
+      senderBank:
+          GteJson.stringOrNull(json, <String>['sender_bank', 'senderBank']),
+      transferReference: GteJson.stringOrNull(
+          json, <String>['transfer_reference', 'transferReference']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      submittedAt:
+          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
+      reviewedAt:
+          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
+      confirmedAt:
+          GteJson.dateTimeOrNull(json, <String>['confirmed_at', 'confirmedAt']),
+      rejectedAt:
+          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
+      adminNotes:
+          GteJson.stringOrNull(json, <String>['admin_notes', 'adminNotes']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      userEmail:
+          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userFullName: GteJson.stringOrNull(
+          json, <String>['user_full_name', 'userFullName']),
+      userPhoneNumber: GteJson.stringOrNull(
+          json, <String>['user_phone_number', 'userPhoneNumber']),
+    );
+  }
+}
+
+class GteAdminWithdrawal {
+  const GteAdminWithdrawal({
+    required this.id,
+    required this.reference,
+    required this.status,
+    required this.amountCoin,
+    required this.amountFiat,
+    required this.currencyCode,
+    required this.bankName,
+    required this.bankAccountNumber,
+    required this.bankAccountName,
+    required this.createdAt,
+    required this.reviewedAt,
+    required this.approvedAt,
+    required this.processedAt,
+    required this.paidAt,
+    required this.rejectedAt,
+    required this.cancelledAt,
+    required this.userId,
+    required this.userEmail,
+    required this.userFullName,
+    required this.userPhoneNumber,
+  });
+
+  final String id;
+  final String reference;
+  final GteWithdrawalStatus status;
+  final double amountCoin;
+  final double amountFiat;
+  final String currencyCode;
+  final String bankName;
+  final String bankAccountNumber;
+  final String bankAccountName;
+  final DateTime? createdAt;
+  final DateTime? reviewedAt;
+  final DateTime? approvedAt;
+  final DateTime? processedAt;
+  final DateTime? paidAt;
+  final DateTime? rejectedAt;
+  final DateTime? cancelledAt;
+  final String userId;
+  final String userEmail;
+  final String? userFullName;
+  final String? userPhoneNumber;
+
+  factory GteAdminWithdrawal.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'admin withdrawal');
+    return GteAdminWithdrawal(
+      id: GteJson.string(json, <String>['id']),
+      reference: GteJson.string(json, <String>['reference']),
+      status: _withdrawalStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'pending_review')),
+      amountCoin:
+          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      amountFiat:
+          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      currencyCode:
+          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
+      bankAccountNumber: GteJson.string(
+          json, <String>['bank_account_number', 'bankAccountNumber']),
+      bankAccountName: GteJson.string(
+          json, <String>['bank_account_name', 'bankAccountName']),
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      reviewedAt:
+          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
+      approvedAt:
+          GteJson.dateTimeOrNull(json, <String>['approved_at', 'approvedAt']),
+      processedAt:
+          GteJson.dateTimeOrNull(json, <String>['processed_at', 'processedAt']),
+      paidAt: GteJson.dateTimeOrNull(json, <String>['paid_at', 'paidAt']),
+      rejectedAt:
+          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
+      cancelledAt:
+          GteJson.dateTimeOrNull(json, <String>['cancelled_at', 'cancelledAt']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      userEmail:
+          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userFullName: GteJson.stringOrNull(
+          json, <String>['user_full_name', 'userFullName']),
+      userPhoneNumber: GteJson.stringOrNull(
+          json, <String>['user_phone_number', 'userPhoneNumber']),
+    );
+  }
+}
+
+class GteAdminKyc {
+  const GteAdminKyc({
+    required this.id,
+    required this.userId,
+    required this.status,
+    required this.nin,
+    required this.bvn,
+    required this.addressLine1,
+    required this.city,
+    required this.state,
+    required this.country,
+    required this.submittedAt,
+    required this.reviewedAt,
+    required this.rejectionReason,
+    required this.userEmail,
+    required this.userFullName,
+    required this.userPhoneNumber,
+  });
+
+  final String id;
+  final String userId;
+  final GteKycStatus status;
+  final String? nin;
+  final String? bvn;
+  final String? addressLine1;
+  final String? city;
+  final String? state;
+  final String? country;
+  final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final String? rejectionReason;
+  final String userEmail;
+  final String? userFullName;
+  final String? userPhoneNumber;
+
+  factory GteAdminKyc.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'admin kyc');
+    return GteAdminKyc(
+      id: GteJson.string(json, <String>['id']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      status: _kycStatusFromString(
+          GteJson.string(json, <String>['status'], fallback: 'unverified')),
+      nin: GteJson.stringOrNull(json, <String>['nin']),
+      bvn: GteJson.stringOrNull(json, <String>['bvn']),
+      addressLine1:
+          GteJson.stringOrNull(json, <String>['address_line1', 'addressLine1']),
+      city: GteJson.stringOrNull(json, <String>['city']),
+      state: GteJson.stringOrNull(json, <String>['state']),
+      country: GteJson.stringOrNull(json, <String>['country']),
+      submittedAt:
+          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
+      reviewedAt:
+          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
+      rejectionReason: GteJson.stringOrNull(
+          json, <String>['rejection_reason', 'rejectionReason']),
+      userEmail:
+          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userFullName: GteJson.stringOrNull(
+          json, <String>['user_full_name', 'userFullName']),
+      userPhoneNumber: GteJson.stringOrNull(
+          json, <String>['user_phone_number', 'userPhoneNumber']),
+    );
+  }
+}
+
+class GteAdminQueuePage<T> {
+  const GteAdminQueuePage({
+    required this.items,
+    required this.total,
+    required this.limit,
+    required this.offset,
+  });
+
+  final List<T> items;
+  final int total;
+  final int limit;
+  final int offset;
+
+  factory GteAdminQueuePage.fromJson(
+    Object? value,
+    T Function(Object? value) parser,
+  ) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'admin queue');
+    return GteAdminQueuePage<T>(
+      items: GteJson.typedList(json, <String>['items'], parser),
+      total: GteJson.integer(json, <String>['total']),
+      limit: GteJson.integer(json, <String>['limit'], fallback: 50),
+      offset: GteJson.integer(json, <String>['offset'], fallback: 0),
+    );
+  }
+}
+
+class GteAnalyticsEvent {
+  const GteAnalyticsEvent({
+    required this.id,
+    required this.name,
+    required this.userId,
+    required this.metadata,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String? userId;
+  final Map<String, Object?> metadata;
+  final DateTime? createdAt;
+
+  factory GteAnalyticsEvent.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'analytics event');
+    final Map<String, Object?> metadataJson = GteJson.map(
+      GteJson.value(json, <String>['metadata_json', 'metadata']) ??
+          const <String, Object?>{},
+      label: 'analytics metadata',
+    );
+    return GteAnalyticsEvent(
+      id: GteJson.string(json, <String>['id']),
+      name: GteJson.string(json, <String>['name']),
+      userId: GteJson.stringOrNull(json, <String>['user_id', 'userId']),
+      metadata: metadataJson,
+      createdAt:
+          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+    );
+  }
+}
+
+class GteAnalyticsSummaryItem {
+  const GteAnalyticsSummaryItem({
+    required this.name,
+    required this.count,
+  });
+
+  final String name;
+  final int count;
+
+  factory GteAnalyticsSummaryItem.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'analytics summary item');
+    return GteAnalyticsSummaryItem(
+      name: GteJson.string(json, <String>['name']),
+      count: GteJson.integer(json, <String>['count']),
+    );
+  }
+}
+
+class GteAnalyticsSummary {
+  const GteAnalyticsSummary({
+    required this.since,
+    required this.totals,
+  });
+
+  final DateTime? since;
+  final List<GteAnalyticsSummaryItem> totals;
+
+  factory GteAnalyticsSummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'analytics summary');
+    return GteAnalyticsSummary(
+      since: GteJson.dateTimeOrNull(json, <String>['since']),
+      totals: GteJson.typedList(
+          json, <String>['totals'], GteAnalyticsSummaryItem.fromJson),
+    );
+  }
+}
+
+class GteAnalyticsFunnelStep {
+  const GteAnalyticsFunnelStep({
+    required this.name,
+    required this.users,
+  });
+
+  final String name;
+  final int users;
+
+  factory GteAnalyticsFunnelStep.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'analytics funnel step');
+    return GteAnalyticsFunnelStep(
+      name: GteJson.string(json, <String>['name']),
+      users: GteJson.integer(json, <String>['users']),
+    );
+  }
+}
+
+class GteAnalyticsFunnel {
+  const GteAnalyticsFunnel({
+    required this.since,
+    required this.steps,
+  });
+
+  final DateTime? since;
+  final List<GteAnalyticsFunnelStep> steps;
+
+  factory GteAnalyticsFunnel.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'analytics funnel');
+    return GteAnalyticsFunnel(
+      since: GteJson.dateTimeOrNull(json, <String>['since']),
+      steps: GteJson.typedList(
+          json, <String>['steps'], GteAnalyticsFunnelStep.fromJson),
     );
   }
 }
@@ -1058,5 +2609,178 @@ GteLedgerUnit _ledgerUnitFromString(String value) {
       return GteLedgerUnit.coin;
     default:
       return GteLedgerUnit.unknown;
+  }
+}
+
+GtePaymentMode _paymentModeFromString(String value) {
+  return value.toLowerCase() == 'automatic'
+      ? GtePaymentMode.automatic
+      : GtePaymentMode.manual;
+}
+
+GteRateDirection _rateDirectionFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'coin_per_fiat':
+      return GteRateDirection.coinPerFiat;
+    case 'fiat_per_coin':
+    default:
+      return GteRateDirection.fiatPerCoin;
+  }
+}
+
+String _rateDirectionToString(GteRateDirection direction) {
+  switch (direction) {
+    case GteRateDirection.coinPerFiat:
+      return 'coin_per_fiat';
+    case GteRateDirection.fiatPerCoin:
+      return 'fiat_per_coin';
+  }
+}
+
+GteDepositStatus _depositStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'payment_submitted':
+      return GteDepositStatus.paymentSubmitted;
+    case 'under_review':
+      return GteDepositStatus.underReview;
+    case 'confirmed':
+      return GteDepositStatus.confirmed;
+    case 'rejected':
+      return GteDepositStatus.rejected;
+    case 'expired':
+      return GteDepositStatus.expired;
+    case 'disputed':
+      return GteDepositStatus.disputed;
+    case 'awaiting_payment':
+    default:
+      return GteDepositStatus.awaitingPayment;
+  }
+}
+
+String _depositStatusToString(GteDepositStatus status) {
+  switch (status) {
+    case GteDepositStatus.awaitingPayment:
+      return 'awaiting_payment';
+    case GteDepositStatus.paymentSubmitted:
+      return 'payment_submitted';
+    case GteDepositStatus.underReview:
+      return 'under_review';
+    case GteDepositStatus.confirmed:
+      return 'confirmed';
+    case GteDepositStatus.rejected:
+      return 'rejected';
+    case GteDepositStatus.expired:
+      return 'expired';
+    case GteDepositStatus.disputed:
+      return 'disputed';
+  }
+}
+
+GteWithdrawalStatus _withdrawalStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'draft':
+      return GteWithdrawalStatus.draft;
+    case 'pending_kyc':
+      return GteWithdrawalStatus.pendingKyc;
+    case 'approved':
+      return GteWithdrawalStatus.approved;
+    case 'rejected':
+      return GteWithdrawalStatus.rejected;
+    case 'processing':
+      return GteWithdrawalStatus.processing;
+    case 'paid':
+      return GteWithdrawalStatus.paid;
+    case 'disputed':
+      return GteWithdrawalStatus.disputed;
+    case 'cancelled':
+      return GteWithdrawalStatus.cancelled;
+    case 'pending_review':
+    default:
+      return GteWithdrawalStatus.pendingReview;
+  }
+}
+
+String _withdrawalStatusToString(GteWithdrawalStatus status) {
+  switch (status) {
+    case GteWithdrawalStatus.draft:
+      return 'draft';
+    case GteWithdrawalStatus.pendingKyc:
+      return 'pending_kyc';
+    case GteWithdrawalStatus.pendingReview:
+      return 'pending_review';
+    case GteWithdrawalStatus.approved:
+      return 'approved';
+    case GteWithdrawalStatus.rejected:
+      return 'rejected';
+    case GteWithdrawalStatus.processing:
+      return 'processing';
+    case GteWithdrawalStatus.paid:
+      return 'paid';
+    case GteWithdrawalStatus.disputed:
+      return 'disputed';
+    case GteWithdrawalStatus.cancelled:
+      return 'cancelled';
+  }
+}
+
+GteKycStatus _kycStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'pending':
+      return GteKycStatus.pending;
+    case 'partial_verified_no_id':
+      return GteKycStatus.partialVerifiedNoId;
+    case 'fully_verified':
+      return GteKycStatus.fullyVerified;
+    case 'rejected':
+      return GteKycStatus.rejected;
+    case 'unverified':
+    default:
+      return GteKycStatus.unverified;
+  }
+}
+
+String _kycStatusToString(GteKycStatus status) {
+  switch (status) {
+    case GteKycStatus.unverified:
+      return 'unverified';
+    case GteKycStatus.pending:
+      return 'pending';
+    case GteKycStatus.partialVerifiedNoId:
+      return 'partial_verified_no_id';
+    case GteKycStatus.fullyVerified:
+      return 'fully_verified';
+    case GteKycStatus.rejected:
+      return 'rejected';
+  }
+}
+
+GteDisputeStatus _disputeStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'awaiting_user':
+      return GteDisputeStatus.awaitingUser;
+    case 'awaiting_admin':
+      return GteDisputeStatus.awaitingAdmin;
+    case 'resolved':
+      return GteDisputeStatus.resolved;
+    case 'closed':
+      return GteDisputeStatus.closed;
+    case 'open':
+    default:
+      return GteDisputeStatus.open;
+  }
+}
+
+String _disputeStatusToString(GteDisputeStatus status) {
+  switch (status) {
+    case GteDisputeStatus.open:
+      return 'open';
+    case GteDisputeStatus.awaitingUser:
+      return 'awaiting_user';
+    case GteDisputeStatus.awaitingAdmin:
+      return 'awaiting_admin';
+    case GteDisputeStatus.resolved:
+      return 'resolved';
+    case GteDisputeStatus.closed:
+      return 'closed';
   }
 }

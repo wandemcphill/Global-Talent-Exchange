@@ -3,6 +3,8 @@ from backend.app.models.academy_player import AcademyPlayer
 from backend.app.models.academy_player_progress import AcademyPlayerProgress
 from backend.app.models.academy_program import AcademyProgram
 from backend.app.models.academy_training_cycle import AcademyTrainingCycle
+from backend.app.models.analytics_event import AnalyticsEvent
+from backend.app.models.attachment import Attachment
 from backend.app.models.base import Base
 from backend.app.models.club_branding_asset import ClubBrandingAsset
 from backend.app.models.club_budget_snapshot import ClubBudgetSnapshot
@@ -23,6 +25,7 @@ from backend.app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from backend.app.models.club_trophy import ClubTrophy
 from backend.app.models.creator_campaign import CreatorCampaign
 from backend.app.models.creator_profile import CreatorProfile
+from backend.app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from backend.app.models.player_career_entry import PlayerCareerEntry
 from backend.app.models.player_contract import PlayerContract
 from backend.app.models.player_injury_case import PlayerInjuryCase
@@ -46,7 +49,21 @@ from backend.app.models.manager_market import (
 )
 from backend.app.models.transfer_bid import TransferBid
 from backend.app.models.transfer_window import TransferWindow
+from backend.app.models.treasury import (
+    DepositRequest,
+    DepositStatus,
+    KycProfile,
+    PaymentMode,
+    RateDirection,
+    TreasuryAuditEvent,
+    TreasuryBankAccount,
+    TreasurySettings,
+    TreasuryWithdrawalRequest,
+    TreasuryWithdrawalStatus,
+    UserBankAccount,
+)
 from backend.app.models.user import KycStatus, User, UserRole
+from backend.app.models.notification_record import NotificationRecord
 from backend.app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
@@ -69,6 +86,8 @@ __all__ = [
     "AcademyPlayerProgress",
     "AcademyProgram",
     "AcademyTrainingCycle",
+    "AnalyticsEvent",
+    "Attachment",
     "Base",
     "ClubBrandingAsset",
     "ClubBudgetSnapshot",
@@ -89,6 +108,9 @@ __all__ = [
     "ClubTrophy",
     "CreatorCampaign",
     "CreatorProfile",
+    "Dispute",
+    "DisputeMessage",
+    "DisputeStatus",
     "KycStatus",
     "LedgerAccount",
     "LedgerAccountKind",
@@ -121,8 +143,20 @@ __all__ = [
     "ManagerTradeRecord",
     "TransferBid",
     "TransferWindow",
+    "DepositRequest",
+    "DepositStatus",
+    "KycProfile",
+    "PaymentMode",
+    "RateDirection",
+    "TreasuryAuditEvent",
+    "TreasuryBankAccount",
+    "TreasurySettings",
+    "TreasuryWithdrawalRequest",
+    "TreasuryWithdrawalStatus",
+    "UserBankAccount",
     "User",
     "UserRole",
+    "NotificationRecord",
     "YouthPipelineSnapshot",
     "YouthProspect",
     "YouthProspectReport",

@@ -36,7 +36,25 @@ class GteMockApi implements GteApiRepository {
               growable: false),
         ),
         _orders = List<GteOrderRecord>.of(_seedOrders, growable: true),
-        _portfolioSummary = _seedPortfolioSummary;
+        _portfolioSummary = _seedPortfolioSummary,
+        _treasurySettings = _seedTreasurySettings,
+        _treasuryBankAccounts = List<GteTreasuryBankAccount>.of(
+            _seedTreasuryBankAccounts,
+            growable: true),
+        _depositRequests =
+            List<GteDepositRequest>.of(_seedDeposits, growable: true),
+        _withdrawalRequests = List<GteTreasuryWithdrawalRequest>.of(
+            _seedWithdrawals,
+            growable: true),
+        _userBankAccounts = List<GteUserBankAccount>.of(_seedUserBankAccounts,
+            growable: true),
+        _kycProfile = _seedKycProfile,
+        _disputes = List<GteDispute>.of(_seedDisputes, growable: true),
+        _notifications =
+            List<GteNotification>.of(_seedNotifications, growable: true),
+        _attachments = <GteAttachment>[],
+        _analyticsEvents =
+            List<GteAnalyticsEvent>.of(_seedAnalyticsEvents, growable: true);
 
   final Duration latency;
   final List<PlayerSnapshot> _catalog;
@@ -51,9 +69,26 @@ class GteMockApi implements GteApiRepository {
   GtePortfolioSummary _portfolioSummary;
   final List<GteOrderRecord> _orders;
   final Set<String> _sessionOrderIds = <String>{};
+  final List<GteDepositRequest> _depositRequests;
+  final List<GteTreasuryWithdrawalRequest> _withdrawalRequests;
+  final List<GteUserBankAccount> _userBankAccounts;
+  GteKycProfile _kycProfile;
+  final List<GteDispute> _disputes;
+  final List<GteNotification> _notifications;
+  final List<GteTreasuryBankAccount> _treasuryBankAccounts;
+  GteTreasurySettings _treasurySettings;
+  final List<GteAttachment> _attachments;
+  final List<GteAnalyticsEvent> _analyticsEvents;
 
   int _orderSequence = _seedOrders.length;
   int _ledgerSequence = _seedWalletLedger.length;
+  int _depositSequence = _seedDeposits.length;
+  int _withdrawalSequence = _seedWithdrawals.length;
+  int _disputeSequence = _seedDisputes.length;
+  int _notificationSequence = _seedNotifications.length;
+  int _attachmentSequence = 0;
+  int _userBankSequence = _seedUserBankAccounts.length;
+  int _treasuryBankSequence = _seedTreasuryBankAccounts.length;
   DateTime _clock = DateTime.utc(2026, 3, 11, 12, 0);
 
   @override
@@ -65,16 +100,28 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteAuthSession> register(GteAuthRegisterRequest request) async {
     await _delay();
+    if (!request.isOver18) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'You must be 18 or older to create an account.',
+      );
+    }
+    final String fallbackUsername =
+        request.username ?? request.email.split('@').first;
+    final DateTime now = _nextTimestamp();
     return GteAuthSession(
-      accessToken: 'fixture-${request.username}-token',
+      accessToken: 'fixture-$fallbackUsername-token',
       tokenType: 'bearer',
       expiresIn: 3600,
       user: GteCurrentUser(
-        id: 'fixture-${request.username}',
+        id: 'fixture-$fallbackUsername',
         email: request.email,
-        username: request.username,
-        displayName: request.displayName,
+        username: fallbackUsername,
+        fullName: request.fullName,
+        phoneNumber: request.phoneNumber,
+        displayName: request.fullName,
         role: 'user',
+        ageConfirmedAt: now,
       ),
     );
   }
@@ -391,6 +438,1224 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
+  Future<GteWalletOverview> fetchWalletOverview() async {
+    await _delay();
+    return _buildWalletOverview();
+  }
+
+  @override
+  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() async {
+    await _delay();
+    return _computeWithdrawalEligibility();
+  }
+
+  @override
+  Future<GteDepositRequest> createDepositRequest(
+      GteDepositCreateRequest request) async {
+    await _delay();
+    final GteTreasuryBankAccount bank =
+        _treasurySettings.activeBankAccount ?? _treasuryBankAccounts.first;
+    final DateTime createdAt = _nextTimestamp();
+    final double rateValue = _treasurySettings.depositRateValue;
+    final bool fiatPerCoin =
+        _treasurySettings.depositRateDirection == GteRateDirection.fiatPerCoin;
+    double amountFiat = 0;
+    double amountCoin = 0;
+    if (request.inputUnit == 'coin') {
+      amountCoin = request.amount;
+      amountFiat = fiatPerCoin
+          ? request.amount * rateValue
+          : request.amount / math.max(rateValue, 0.0001);
+    } else {
+      amountFiat = request.amount;
+      amountCoin = fiatPerCoin
+          ? request.amount / math.max(rateValue, 0.0001)
+          : request.amount * rateValue;
+    }
+    final String reference = 'DEP-${++_depositSequence}';
+    final GteDepositRequest deposit = GteDepositRequest(
+      id: 'deposit-${_depositSequence}',
+      reference: reference,
+      status: GteDepositStatus.awaitingPayment,
+      amountFiat: amountFiat,
+      amountCoin: amountCoin,
+      currencyCode: _treasurySettings.currencyCode,
+      rateValue: rateValue,
+      rateDirection: _treasurySettings.depositRateDirection,
+      bankName: bank.bankName,
+      bankAccountNumber: bank.accountNumber,
+      bankAccountName: bank.accountName,
+      bankCode: bank.bankCode,
+      payerName: null,
+      senderBank: null,
+      transferReference: null,
+      proofAttachmentId: null,
+      adminNotes: null,
+      createdAt: createdAt,
+      submittedAt: null,
+      reviewedAt: null,
+      confirmedAt: null,
+      rejectedAt: null,
+      expiresAt: null,
+    );
+    _depositRequests.insert(0, deposit);
+    _pushNotification(
+      topic: 'deposit_request_created',
+      message: 'Deposit $reference created. Awaiting payment confirmation.',
+      resourceId: deposit.id,
+    );
+    return deposit;
+  }
+
+  @override
+  Future<GteDepositRequest> submitDepositRequest(
+      String depositId, GteDepositSubmitRequest request) async {
+    await _delay();
+    final int index =
+        _depositRequests.indexWhere((GteDepositRequest item) => item.id == depositId);
+    if (index == -1) {
+      throw StateError('Deposit not found');
+    }
+    final GteDepositRequest existing = _depositRequests[index];
+    final GteDepositRequest updated = GteDepositRequest(
+      id: existing.id,
+      reference: existing.reference,
+      status: GteDepositStatus.paymentSubmitted,
+      amountFiat: existing.amountFiat,
+      amountCoin: existing.amountCoin,
+      currencyCode: existing.currencyCode,
+      rateValue: existing.rateValue,
+      rateDirection: existing.rateDirection,
+      bankName: existing.bankName,
+      bankAccountNumber: existing.bankAccountNumber,
+      bankAccountName: existing.bankAccountName,
+      bankCode: existing.bankCode,
+      payerName: request.payerName ?? existing.payerName,
+      senderBank: request.senderBank ?? existing.senderBank,
+      transferReference: request.transferReference ?? existing.transferReference,
+      proofAttachmentId:
+          request.proofAttachmentId ?? existing.proofAttachmentId,
+      adminNotes: existing.adminNotes,
+      createdAt: existing.createdAt,
+      submittedAt: _nextTimestamp(),
+      reviewedAt: existing.reviewedAt,
+      confirmedAt: existing.confirmedAt,
+      rejectedAt: existing.rejectedAt,
+      expiresAt: existing.expiresAt,
+    );
+    _depositRequests[index] = updated;
+    _pushNotification(
+      topic: 'deposit_submitted',
+      message:
+          'Payment submitted for ${existing.reference}. The treasury team is reviewing it.',
+      resourceId: existing.id,
+    );
+    return updated;
+  }
+
+  @override
+  Future<List<GteDepositRequest>> listDepositRequests() async {
+    await _delay();
+    return List<GteDepositRequest>.of(_depositRequests, growable: false);
+  }
+
+  @override
+  Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
+      GteWithdrawalCreateRequest request) async {
+    await _delay();
+    final GteWithdrawalEligibility eligibility = _computeWithdrawalEligibility();
+    if (eligibility.requiresKyc || eligibility.requiresBankAccount) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'KYC and bank details are required before withdrawing.',
+      );
+    }
+    if (request.amountCoin > eligibility.withdrawableNow) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Insufficient withdrawable balance.',
+      );
+    }
+    final GteUserBankAccount bank =
+        _resolveBankAccount(request.bankAccountId);
+    final double rateValue = _treasurySettings.withdrawalRateValue;
+    final bool fiatPerCoin = _treasurySettings.withdrawalRateDirection ==
+        GteRateDirection.fiatPerCoin;
+    final double amountFiat = fiatPerCoin
+        ? request.amountCoin * rateValue
+        : request.amountCoin / math.max(rateValue, 0.0001);
+    final DateTime createdAt = _nextTimestamp();
+    final String reference = 'WDR-${++_withdrawalSequence}';
+    final GteTreasuryWithdrawalRequest withdrawal = GteTreasuryWithdrawalRequest(
+      id: 'withdrawal-${_withdrawalSequence}',
+      payoutRequestId: 'payout-${_withdrawalSequence}',
+      reference: reference,
+      status: GteWithdrawalStatus.pendingReview,
+      unit: GteLedgerUnit.coin,
+      amountCoin: request.amountCoin,
+      amountFiat: amountFiat,
+      currencyCode: _treasurySettings.currencyCode,
+      rateValue: rateValue,
+      rateDirection: _treasurySettings.withdrawalRateDirection,
+      bankName: bank.bankName,
+      bankAccountNumber: bank.accountNumber,
+      bankAccountName: bank.accountName,
+      bankCode: bank.bankCode,
+      kycStatusSnapshot: _kycStatusToString(_kycProfile.status),
+      kycTierSnapshot: _kycStatusToString(_kycProfile.status),
+      feeAmount: 0,
+      totalDebit: request.amountCoin,
+      notes: request.notes,
+      createdAt: createdAt,
+      reviewedAt: null,
+      approvedAt: null,
+      processedAt: null,
+      paidAt: null,
+      rejectedAt: null,
+      cancelledAt: null,
+    );
+    _withdrawalRequests.insert(0, withdrawal);
+    _walletSummary = GteWalletSummary(
+      availableBalance: _walletSummary.availableBalance - request.amountCoin,
+      reservedBalance: _walletSummary.reservedBalance + request.amountCoin,
+      totalBalance: _walletSummary.totalBalance,
+      currency: _walletSummary.currency,
+    );
+    _walletLedger.insert(
+      0,
+      GteWalletLedgerEntry(
+        id: 'ledger-${++_ledgerSequence}',
+        amount: -request.amountCoin,
+        reason: 'withdrawal_hold',
+        description: 'Withdrawal hold for $reference',
+        createdAt: createdAt,
+      ),
+    );
+    _pushNotification(
+      topic: 'withdrawal_requested',
+      message:
+          'Withdrawal $reference queued for review. Status: pending review.',
+      resourceId: withdrawal.id,
+    );
+    return withdrawal;
+  }
+
+  @override
+  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests() async {
+    await _delay();
+    return List<GteTreasuryWithdrawalRequest>.of(_withdrawalRequests,
+        growable: false);
+  }
+
+  @override
+  Future<GteKycProfile> fetchKycProfile() async {
+    await _delay();
+    return _kycProfile;
+  }
+
+  @override
+  Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request) async {
+    await _delay();
+    final DateTime now = _nextTimestamp();
+    _kycProfile = GteKycProfile(
+      id: _kycProfile.id,
+      status: GteKycStatus.pending,
+      nin: request.nin ?? _kycProfile.nin,
+      bvn: request.bvn ?? _kycProfile.bvn,
+      addressLine1: request.addressLine1,
+      addressLine2: request.addressLine2,
+      city: request.city,
+      state: request.state,
+      country: request.country,
+      idDocumentAttachmentId: request.idDocumentAttachmentId,
+      submittedAt: now,
+      reviewedAt: null,
+      rejectionReason: null,
+      createdAt: _kycProfile.createdAt,
+      updatedAt: now,
+    );
+    _pushNotification(
+      topic: 'kyc_submitted',
+      message: 'KYC submitted. Verification is now pending.',
+      resourceId: _kycProfile.id,
+    );
+    return _kycProfile;
+  }
+
+  @override
+  Future<List<GteUserBankAccount>> listUserBankAccounts() async {
+    await _delay();
+    return List<GteUserBankAccount>.of(_userBankAccounts, growable: false);
+  }
+
+  @override
+  Future<GteUserBankAccount> createUserBankAccount(
+      GteUserBankAccountCreate request) async {
+    await _delay();
+    if (request.setActive) {
+      for (int i = 0; i < _userBankAccounts.length; i++) {
+        final GteUserBankAccount account = _userBankAccounts[i];
+        _userBankAccounts[i] = GteUserBankAccount(
+          id: account.id,
+          currencyCode: account.currencyCode,
+          bankName: account.bankName,
+          accountNumber: account.accountNumber,
+          accountName: account.accountName,
+          bankCode: account.bankCode,
+          isActive: false,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+        );
+      }
+    }
+    final DateTime now = _nextTimestamp();
+    final GteUserBankAccount account = GteUserBankAccount(
+      id: 'user-bank-${++_userBankSequence}',
+      currencyCode: request.currencyCode,
+      bankName: request.bankName,
+      accountNumber: request.accountNumber,
+      accountName: request.accountName,
+      bankCode: request.bankCode,
+      isActive: request.setActive,
+      createdAt: now,
+      updatedAt: now,
+    );
+    _userBankAccounts.insert(0, account);
+    _pushNotification(
+      topic: 'bank_details_created',
+      message: 'Bank details saved for withdrawals.',
+      resourceId: account.id,
+    );
+    return account;
+  }
+
+  @override
+  Future<GteUserBankAccount> updateUserBankAccount(
+      String bankAccountId, GteUserBankAccountUpdate request) async {
+    await _delay();
+    final int index = _userBankAccounts
+        .indexWhere((GteUserBankAccount account) => account.id == bankAccountId);
+    if (index == -1) {
+      throw StateError('Bank account not found');
+    }
+    if (request.isActive == true) {
+      for (int i = 0; i < _userBankAccounts.length; i++) {
+        final GteUserBankAccount account = _userBankAccounts[i];
+        _userBankAccounts[i] = GteUserBankAccount(
+          id: account.id,
+          currencyCode: account.currencyCode,
+          bankName: account.bankName,
+          accountNumber: account.accountNumber,
+          accountName: account.accountName,
+          bankCode: account.bankCode,
+          isActive: account.id == bankAccountId,
+          createdAt: account.createdAt,
+          updatedAt: account.updatedAt,
+        );
+      }
+    }
+    final GteUserBankAccount existing = _userBankAccounts[index];
+    final DateTime now = _nextTimestamp();
+    final GteUserBankAccount updated = GteUserBankAccount(
+      id: existing.id,
+      currencyCode: request.currencyCode ?? existing.currencyCode,
+      bankName: request.bankName ?? existing.bankName,
+      accountNumber: request.accountNumber ?? existing.accountNumber,
+      accountName: request.accountName ?? existing.accountName,
+      bankCode: request.bankCode ?? existing.bankCode,
+      isActive: request.isActive ?? existing.isActive,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+    );
+    _userBankAccounts[index] = updated;
+    _pushNotification(
+      topic: 'bank_details_updated',
+      message: 'Bank details updated.',
+      resourceId: updated.id,
+    );
+    return updated;
+  }
+
+  @override
+  Future<List<GteDispute>> listDisputes() async {
+    await _delay();
+    return List<GteDispute>.of(_disputes, growable: false);
+  }
+
+  @override
+  Future<GteDispute> openDispute(GteDisputeCreateRequest request) async {
+    await _delay();
+    final DateTime now = _nextTimestamp();
+    final String disputeId = 'dispute-${++_disputeSequence}';
+    final GteDisputeMessage message = GteDisputeMessage(
+      id: 'dispute-msg-${_disputeSequence}-1',
+      senderUserId: _fixtureSession.user.id,
+      senderRole: 'user',
+      message: request.message,
+      attachmentId: request.attachmentId,
+      createdAt: now,
+    );
+    final GteDispute dispute = GteDispute(
+      id: disputeId,
+      status: GteDisputeStatus.open,
+      reference: request.reference,
+      resourceType: request.resourceType,
+      resourceId: request.resourceId,
+      subject: request.subject,
+      createdAt: now,
+      updatedAt: now,
+      lastMessageAt: now,
+      userId: _fixtureSession.user.id,
+      userEmail: _fixtureSession.user.email,
+      userFullName: _fixtureSession.user.fullName,
+      userPhoneNumber: _fixtureSession.user.phoneNumber,
+      messages: <GteDisputeMessage>[message],
+    );
+    _disputes.insert(0, dispute);
+    _pushNotification(
+      topic: 'dispute_opened',
+      message: 'Support dispute opened for ${request.reference}.',
+      resourceId: dispute.id,
+    );
+    return dispute;
+  }
+
+  @override
+  Future<GteDispute> fetchDispute(String disputeId) async {
+    await _delay();
+    return _disputes.firstWhere((GteDispute dispute) => dispute.id == disputeId);
+  }
+
+  @override
+  Future<GteDisputeMessage> sendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request) async {
+    await _delay();
+    final int index =
+        _disputes.indexWhere((GteDispute dispute) => dispute.id == disputeId);
+    if (index == -1) {
+      throw StateError('Dispute not found');
+    }
+    final DateTime now = _nextTimestamp();
+    final GteDisputeMessage message = GteDisputeMessage(
+      id: 'dispute-msg-${disputeId}-${now.millisecondsSinceEpoch}',
+      senderUserId: _fixtureSession.user.id,
+      senderRole: 'user',
+      message: request.message,
+      attachmentId: request.attachmentId,
+      createdAt: now,
+    );
+    final GteDispute existing = _disputes[index];
+    final GteDispute updated = GteDispute(
+      id: existing.id,
+      status: GteDisputeStatus.awaitingAdmin,
+      reference: existing.reference,
+      resourceType: existing.resourceType,
+      resourceId: existing.resourceId,
+      subject: existing.subject,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+      lastMessageAt: now,
+      userId: existing.userId,
+      userEmail: existing.userEmail,
+      userFullName: existing.userFullName,
+      userPhoneNumber: existing.userPhoneNumber,
+      messages: <GteDisputeMessage>[...existing.messages, message],
+    );
+    _disputes[index] = updated;
+    _pushNotification(
+      topic: 'dispute_opened',
+      message: 'Your message was sent to support.',
+      resourceId: updated.id,
+    );
+    return message;
+  }
+
+  @override
+  Future<List<GteNotification>> listNotifications({int limit = 20}) async {
+    await _delay();
+    final List<GteNotification> sorted = List<GteNotification>.of(
+        _notifications, growable: false)
+      ..sort((GteNotification a, GteNotification b) =>
+          (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    return sorted.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<void> markNotificationRead(String notificationId) async {
+    await _delay();
+    final int index = _notifications.indexWhere(
+        (GteNotification notification) =>
+            notification.notificationId == notificationId);
+    if (index == -1) {
+      return;
+    }
+    final GteNotification existing = _notifications[index];
+    if (existing.isRead) {
+      return;
+    }
+    _notifications[index] = GteNotification(
+      notificationId: existing.notificationId,
+      userId: existing.userId,
+      topic: existing.topic,
+      templateKey: existing.templateKey,
+      resourceId: existing.resourceId,
+      fixtureId: existing.fixtureId,
+      competitionId: existing.competitionId,
+      message: existing.message,
+      metadata: existing.metadata,
+      createdAt: existing.createdAt,
+      readAt: _nextTimestamp(),
+      isRead: true,
+    );
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() async {
+    await _delay();
+    for (int i = 0; i < _notifications.length; i++) {
+      final GteNotification existing = _notifications[i];
+      if (existing.isRead) {
+        continue;
+      }
+      _notifications[i] = GteNotification(
+        notificationId: existing.notificationId,
+        userId: existing.userId,
+        topic: existing.topic,
+        templateKey: existing.templateKey,
+        resourceId: existing.resourceId,
+        fixtureId: existing.fixtureId,
+        competitionId: existing.competitionId,
+        message: existing.message,
+        metadata: existing.metadata,
+        createdAt: existing.createdAt,
+        readAt: _nextTimestamp(),
+        isRead: true,
+      );
+    }
+  }
+
+  @override
+  Future<GteAttachment> uploadAttachment(
+    String filename,
+    List<int> bytes, {
+    String? contentType,
+  }) async {
+    await _delay();
+    final DateTime now = _nextTimestamp();
+    final GteAttachment attachment = GteAttachment(
+      id: 'attachment-${++_attachmentSequence}',
+      filename: filename,
+      contentType: contentType ?? 'application/octet-stream',
+      sizeBytes: bytes.length,
+      createdAt: now,
+    );
+    _attachments.add(attachment);
+    return attachment;
+  }
+
+  @override
+  Future<GteAnalyticsEvent> trackAnalyticsEvent(
+    String name, {
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) async {
+    await _delay();
+    final DateTime now = _nextTimestamp();
+    final GteAnalyticsEvent event = GteAnalyticsEvent(
+      id: 'evt-${_analyticsEvents.length + 1}',
+      name: name,
+      userId: _fixtureSession.user.id,
+      metadata: metadata,
+      createdAt: now,
+    );
+    _analyticsEvents.add(event);
+    return event;
+  }
+
+  @override
+  Future<GteAnalyticsSummary> fetchAnalyticsSummary() async {
+    await _delay();
+    final Map<String, int> counts = <String, int>{};
+    for (final GteAnalyticsEvent event in _analyticsEvents) {
+      counts[event.name] = (counts[event.name] ?? 0) + 1;
+    }
+    final List<GteAnalyticsSummaryItem> totals = counts.entries
+        .map((MapEntry<String, int> entry) => GteAnalyticsSummaryItem(
+              name: entry.key,
+              count: entry.value,
+            ))
+        .toList(growable: false);
+    return GteAnalyticsSummary(
+      since: _analyticsEvents.isEmpty ? _clock : _analyticsEvents.first.createdAt,
+      totals: totals,
+    );
+  }
+
+  @override
+  Future<GteAnalyticsFunnel> fetchAnalyticsFunnel() async {
+    await _delay();
+    return _seedAnalyticsFunnel;
+  }
+
+  @override
+  Future<GteTreasuryDashboard> fetchTreasuryDashboard() async {
+    await _delay();
+    final int pendingDeposits = _depositRequests
+        .where((GteDepositRequest deposit) =>
+            deposit.status == GteDepositStatus.awaitingPayment ||
+            deposit.status == GteDepositStatus.paymentSubmitted ||
+            deposit.status == GteDepositStatus.underReview)
+        .length;
+    final int pendingWithdrawals = _withdrawalRequests
+        .where((GteTreasuryWithdrawalRequest withdrawal) =>
+            withdrawal.status == GteWithdrawalStatus.pendingReview ||
+            withdrawal.status == GteWithdrawalStatus.processing ||
+            withdrawal.status == GteWithdrawalStatus.approved)
+        .length;
+    final int pendingKyc = _kycProfile.status == GteKycStatus.pending ? 1 : 0;
+    final int openDisputes = _disputes
+        .where((GteDispute dispute) => dispute.status != GteDisputeStatus.closed)
+        .length;
+    return GteTreasuryDashboard(
+      totalUsers: 12840,
+      activeUsers: 3210,
+      pendingDeposits: pendingDeposits,
+      pendingWithdrawals: pendingWithdrawals,
+      pendingKyc: pendingKyc,
+      openDisputes: openDisputes,
+      depositsConfirmedToday: 18,
+      withdrawalsPaidToday: 7,
+      walletLiability: _walletSummary.totalBalance,
+      pendingTreasuryExposure: pendingDeposits.toDouble(),
+    );
+  }
+
+  @override
+  Future<GteTreasurySettings> fetchTreasurySettings() async {
+    await _delay();
+    return _treasurySettings;
+  }
+
+  @override
+  Future<GteTreasurySettings> updateTreasurySettings(
+      GteTreasurySettingsUpdate request) async {
+    await _delay();
+    _treasurySettings = GteTreasurySettings(
+      id: _treasurySettings.id,
+      settingsKey: _treasurySettings.settingsKey,
+      currencyCode: request.currencyCode ?? _treasurySettings.currencyCode,
+      depositRateValue:
+          request.depositRateValue ?? _treasurySettings.depositRateValue,
+      depositRateDirection:
+          request.depositRateDirection ?? _treasurySettings.depositRateDirection,
+      withdrawalRateValue:
+          request.withdrawalRateValue ?? _treasurySettings.withdrawalRateValue,
+      withdrawalRateDirection: request.withdrawalRateDirection ??
+          _treasurySettings.withdrawalRateDirection,
+      minDeposit: request.minDeposit ?? _treasurySettings.minDeposit,
+      maxDeposit: request.maxDeposit ?? _treasurySettings.maxDeposit,
+      minWithdrawal: request.minWithdrawal ?? _treasurySettings.minWithdrawal,
+      maxWithdrawal: request.maxWithdrawal ?? _treasurySettings.maxWithdrawal,
+      depositMode: request.depositMode ?? _treasurySettings.depositMode,
+      withdrawalMode: request.withdrawalMode ?? _treasurySettings.withdrawalMode,
+      maintenanceMessage:
+          request.maintenanceMessage ?? _treasurySettings.maintenanceMessage,
+      whatsappNumber: request.whatsappNumber ?? _treasurySettings.whatsappNumber,
+      activeBankAccount: request.activeBankAccountId == null
+          ? _treasurySettings.activeBankAccount
+          : _treasuryBankAccounts.firstWhere(
+              (GteTreasuryBankAccount account) =>
+                  account.id == request.activeBankAccountId,
+              orElse: () => _treasuryBankAccounts.first,
+            ),
+      createdAt: _treasurySettings.createdAt,
+      updatedAt: _nextTimestamp(),
+    );
+    _pushNotification(
+      topic: 'treasury_settings_updated',
+      message: 'Treasury settings updated.',
+      resourceId: _treasurySettings.id,
+    );
+    return _treasurySettings;
+  }
+
+  @override
+  Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts() async {
+    await _delay();
+    return List<GteTreasuryBankAccount>.of(_treasuryBankAccounts,
+        growable: false);
+  }
+
+  @override
+  Future<GteTreasuryBankAccount> createTreasuryBankAccount(
+      GteTreasuryBankAccountCreate request) async {
+    await _delay();
+    final DateTime now = _nextTimestamp();
+    final GteTreasuryBankAccount account = GteTreasuryBankAccount(
+      id: 'treasury-bank-${++_treasuryBankSequence}',
+      currencyCode: request.currencyCode,
+      bankName: request.bankName,
+      accountNumber: request.accountNumber,
+      accountName: request.accountName,
+      bankCode: request.bankCode,
+      isActive: request.isActive,
+      createdAt: now,
+      updatedAt: now,
+    );
+    if (request.isActive) {
+      for (int i = 0; i < _treasuryBankAccounts.length; i++) {
+        final GteTreasuryBankAccount existing = _treasuryBankAccounts[i];
+        _treasuryBankAccounts[i] = GteTreasuryBankAccount(
+          id: existing.id,
+          currencyCode: existing.currencyCode,
+          bankName: existing.bankName,
+          accountNumber: existing.accountNumber,
+          accountName: existing.accountName,
+          bankCode: existing.bankCode,
+          isActive: false,
+          createdAt: existing.createdAt,
+          updatedAt: existing.updatedAt,
+        );
+      }
+    }
+    _treasuryBankAccounts.insert(0, account);
+    return account;
+  }
+
+  @override
+  Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
+      String accountId, GteTreasuryBankAccountUpdate request) async {
+    await _delay();
+    final int index = _treasuryBankAccounts.indexWhere(
+        (GteTreasuryBankAccount account) => account.id == accountId);
+    if (index == -1) {
+      throw StateError('Treasury bank account not found');
+    }
+    if (request.isActive == true) {
+      for (int i = 0; i < _treasuryBankAccounts.length; i++) {
+        final GteTreasuryBankAccount existing = _treasuryBankAccounts[i];
+        _treasuryBankAccounts[i] = GteTreasuryBankAccount(
+          id: existing.id,
+          currencyCode: existing.currencyCode,
+          bankName: existing.bankName,
+          accountNumber: existing.accountNumber,
+          accountName: existing.accountName,
+          bankCode: existing.bankCode,
+          isActive: existing.id == accountId,
+          createdAt: existing.createdAt,
+          updatedAt: existing.updatedAt,
+        );
+      }
+    }
+    final GteTreasuryBankAccount existing = _treasuryBankAccounts[index];
+    final DateTime now = _nextTimestamp();
+    final GteTreasuryBankAccount updated = GteTreasuryBankAccount(
+      id: existing.id,
+      currencyCode: request.currencyCode ?? existing.currencyCode,
+      bankName: request.bankName ?? existing.bankName,
+      accountNumber: request.accountNumber ?? existing.accountNumber,
+      accountName: request.accountName ?? existing.accountName,
+      bankCode: request.bankCode ?? existing.bankCode,
+      isActive: request.isActive ?? existing.isActive,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+    );
+    _treasuryBankAccounts[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteAdminDeposit>> fetchAdminDeposits({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) async {
+    await _delay();
+    Iterable<GteDepositRequest> items = _depositRequests;
+    if (status != null) {
+      final GteDepositStatus parsed = _depositStatusFromString(status);
+      items = items.where((GteDepositRequest deposit) =>
+          deposit.status == parsed);
+    }
+    if (query != null && query.isNotEmpty) {
+      final String needle = query.toLowerCase();
+      items = items.where((GteDepositRequest deposit) =>
+          deposit.reference.toLowerCase().contains(needle) ||
+          (deposit.payerName ?? '').toLowerCase().contains(needle) ||
+          (deposit.senderBank ?? '').toLowerCase().contains(needle));
+    }
+    final List<GteAdminDeposit> mapped = items
+        .skip(offset)
+        .take(limit)
+        .map((GteDepositRequest deposit) => GteAdminDeposit(
+              id: deposit.id,
+              reference: deposit.reference,
+              status: deposit.status,
+              amountFiat: deposit.amountFiat,
+              amountCoin: deposit.amountCoin,
+              currencyCode: deposit.currencyCode,
+              payerName: deposit.payerName,
+              senderBank: deposit.senderBank,
+              transferReference: deposit.transferReference,
+              createdAt: deposit.createdAt,
+              submittedAt: deposit.submittedAt,
+              reviewedAt: deposit.reviewedAt,
+              confirmedAt: deposit.confirmedAt,
+              rejectedAt: deposit.rejectedAt,
+              adminNotes: deposit.adminNotes,
+              userId: _fixtureSession.user.id,
+              userEmail: _fixtureSession.user.email,
+              userFullName: _fixtureSession.user.fullName,
+              userPhoneNumber: _fixtureSession.user.phoneNumber,
+            ))
+        .toList(growable: false);
+    return GteAdminQueuePage<GteAdminDeposit>(
+      items: mapped,
+      total: items.length,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
+      {String? adminNotes}) async {
+    await _delay();
+    final int index = _depositRequests
+        .indexWhere((GteDepositRequest deposit) => deposit.id == depositId);
+    if (index == -1) {
+      throw StateError('Deposit not found');
+    }
+    final GteDepositRequest existing = _depositRequests[index];
+    final DateTime now = _nextTimestamp();
+    final GteDepositRequest updated = GteDepositRequest(
+      id: existing.id,
+      reference: existing.reference,
+      status: GteDepositStatus.confirmed,
+      amountFiat: existing.amountFiat,
+      amountCoin: existing.amountCoin,
+      currencyCode: existing.currencyCode,
+      rateValue: existing.rateValue,
+      rateDirection: existing.rateDirection,
+      bankName: existing.bankName,
+      bankAccountNumber: existing.bankAccountNumber,
+      bankAccountName: existing.bankAccountName,
+      bankCode: existing.bankCode,
+      payerName: existing.payerName,
+      senderBank: existing.senderBank,
+      transferReference: existing.transferReference,
+      proofAttachmentId: existing.proofAttachmentId,
+      adminNotes: adminNotes ?? existing.adminNotes,
+      createdAt: existing.createdAt,
+      submittedAt: existing.submittedAt,
+      reviewedAt: now,
+      confirmedAt: now,
+      rejectedAt: null,
+      expiresAt: existing.expiresAt,
+    );
+    _depositRequests[index] = updated;
+    _walletSummary = GteWalletSummary(
+      availableBalance: _walletSummary.availableBalance + existing.amountCoin,
+      reservedBalance: _walletSummary.reservedBalance,
+      totalBalance: _walletSummary.totalBalance + existing.amountCoin,
+      currency: _walletSummary.currency,
+    );
+    _walletLedger.insert(
+      0,
+      GteWalletLedgerEntry(
+        id: 'ledger-${++_ledgerSequence}',
+        amount: existing.amountCoin,
+        reason: 'deposit_confirmed',
+        description: 'Deposit confirmed ${existing.reference}',
+        createdAt: now,
+      ),
+    );
+    _pushNotification(
+      topic: 'deposit_confirmed',
+      message: 'Deposit ${existing.reference} confirmed.',
+      resourceId: existing.id,
+    );
+    return updated;
+  }
+
+  @override
+  Future<GteDepositRequest> adminRejectDeposit(String depositId,
+      {String? adminNotes}) async {
+    await _delay();
+    final int index = _depositRequests
+        .indexWhere((GteDepositRequest deposit) => deposit.id == depositId);
+    if (index == -1) {
+      throw StateError('Deposit not found');
+    }
+    final GteDepositRequest existing = _depositRequests[index];
+    final DateTime now = _nextTimestamp();
+    final GteDepositRequest updated = GteDepositRequest(
+      id: existing.id,
+      reference: existing.reference,
+      status: GteDepositStatus.rejected,
+      amountFiat: existing.amountFiat,
+      amountCoin: existing.amountCoin,
+      currencyCode: existing.currencyCode,
+      rateValue: existing.rateValue,
+      rateDirection: existing.rateDirection,
+      bankName: existing.bankName,
+      bankAccountNumber: existing.bankAccountNumber,
+      bankAccountName: existing.bankAccountName,
+      bankCode: existing.bankCode,
+      payerName: existing.payerName,
+      senderBank: existing.senderBank,
+      transferReference: existing.transferReference,
+      proofAttachmentId: existing.proofAttachmentId,
+      adminNotes: adminNotes ?? existing.adminNotes,
+      createdAt: existing.createdAt,
+      submittedAt: existing.submittedAt,
+      reviewedAt: now,
+      confirmedAt: null,
+      rejectedAt: now,
+      expiresAt: existing.expiresAt,
+    );
+    _depositRequests[index] = updated;
+    _pushNotification(
+      topic: 'deposit_rejected',
+      message: 'Deposit ${existing.reference} rejected.',
+      resourceId: existing.id,
+    );
+    return updated;
+  }
+
+  @override
+  Future<GteDepositRequest> adminReviewDeposit(String depositId,
+      {String? adminNotes}) async {
+    await _delay();
+    final int index = _depositRequests
+        .indexWhere((GteDepositRequest deposit) => deposit.id == depositId);
+    if (index == -1) {
+      throw StateError('Deposit not found');
+    }
+    final GteDepositRequest existing = _depositRequests[index];
+    final DateTime now = _nextTimestamp();
+    final GteDepositRequest updated = GteDepositRequest(
+      id: existing.id,
+      reference: existing.reference,
+      status: GteDepositStatus.underReview,
+      amountFiat: existing.amountFiat,
+      amountCoin: existing.amountCoin,
+      currencyCode: existing.currencyCode,
+      rateValue: existing.rateValue,
+      rateDirection: existing.rateDirection,
+      bankName: existing.bankName,
+      bankAccountNumber: existing.bankAccountNumber,
+      bankAccountName: existing.bankAccountName,
+      bankCode: existing.bankCode,
+      payerName: existing.payerName,
+      senderBank: existing.senderBank,
+      transferReference: existing.transferReference,
+      proofAttachmentId: existing.proofAttachmentId,
+      adminNotes: adminNotes ?? existing.adminNotes,
+      createdAt: existing.createdAt,
+      submittedAt: existing.submittedAt,
+      reviewedAt: now,
+      confirmedAt: existing.confirmedAt,
+      rejectedAt: existing.rejectedAt,
+      expiresAt: existing.expiresAt,
+    );
+    _depositRequests[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) async {
+    await _delay();
+    Iterable<GteTreasuryWithdrawalRequest> items = _withdrawalRequests;
+    if (status != null) {
+      final GteWithdrawalStatus parsed = _withdrawalStatusFromString(status);
+      items = items.where(
+          (GteTreasuryWithdrawalRequest withdrawal) =>
+              withdrawal.status == parsed);
+    }
+    if (query != null && query.isNotEmpty) {
+      final String needle = query.toLowerCase();
+      items = items.where((GteTreasuryWithdrawalRequest withdrawal) =>
+          withdrawal.reference.toLowerCase().contains(needle) ||
+          withdrawal.bankAccountName.toLowerCase().contains(needle) ||
+          withdrawal.bankAccountNumber.contains(needle));
+    }
+    final List<GteAdminWithdrawal> mapped = items
+        .skip(offset)
+        .take(limit)
+        .map((GteTreasuryWithdrawalRequest withdrawal) => GteAdminWithdrawal(
+              id: withdrawal.id,
+              reference: withdrawal.reference,
+              status: withdrawal.status,
+              amountCoin: withdrawal.amountCoin,
+              amountFiat: withdrawal.amountFiat,
+              currencyCode: withdrawal.currencyCode,
+              bankName: withdrawal.bankName,
+              bankAccountNumber: withdrawal.bankAccountNumber,
+              bankAccountName: withdrawal.bankAccountName,
+              createdAt: withdrawal.createdAt,
+              reviewedAt: withdrawal.reviewedAt,
+              approvedAt: withdrawal.approvedAt,
+              processedAt: withdrawal.processedAt,
+              paidAt: withdrawal.paidAt,
+              rejectedAt: withdrawal.rejectedAt,
+              cancelledAt: withdrawal.cancelledAt,
+              userId: _fixtureSession.user.id,
+              userEmail: _fixtureSession.user.email,
+              userFullName: _fixtureSession.user.fullName,
+              userPhoneNumber: _fixtureSession.user.phoneNumber,
+            ))
+        .toList(growable: false);
+    return GteAdminQueuePage<GteAdminWithdrawal>(
+      items: mapped,
+      total: items.length,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<GteTreasuryWithdrawalRequest> adminUpdateWithdrawalStatus(
+    String withdrawalId, {
+    required GteWithdrawalStatus status,
+    String? adminNotes,
+  }) async {
+    await _delay();
+    final int index = _withdrawalRequests.indexWhere(
+        (GteTreasuryWithdrawalRequest withdrawal) =>
+            withdrawal.id == withdrawalId);
+    if (index == -1) {
+      throw StateError('Withdrawal not found');
+    }
+    final GteTreasuryWithdrawalRequest existing = _withdrawalRequests[index];
+    final DateTime now = _nextTimestamp();
+    final GteTreasuryWithdrawalRequest updated = GteTreasuryWithdrawalRequest(
+      id: existing.id,
+      payoutRequestId: existing.payoutRequestId,
+      reference: existing.reference,
+      status: status,
+      unit: existing.unit,
+      amountCoin: existing.amountCoin,
+      amountFiat: existing.amountFiat,
+      currencyCode: existing.currencyCode,
+      rateValue: existing.rateValue,
+      rateDirection: existing.rateDirection,
+      bankName: existing.bankName,
+      bankAccountNumber: existing.bankAccountNumber,
+      bankAccountName: existing.bankAccountName,
+      bankCode: existing.bankCode,
+      kycStatusSnapshot: existing.kycStatusSnapshot,
+      kycTierSnapshot: existing.kycTierSnapshot,
+      feeAmount: existing.feeAmount,
+      totalDebit: existing.totalDebit,
+      notes: existing.notes,
+      createdAt: existing.createdAt,
+      reviewedAt: status == GteWithdrawalStatus.pendingReview ||
+              status == GteWithdrawalStatus.approved
+          ? now
+          : existing.reviewedAt,
+      approvedAt:
+          status == GteWithdrawalStatus.approved ? now : existing.approvedAt,
+      processedAt: status == GteWithdrawalStatus.processing
+          ? now
+          : existing.processedAt,
+      paidAt:
+          status == GteWithdrawalStatus.paid ? now : existing.paidAt,
+      rejectedAt: status == GteWithdrawalStatus.rejected
+          ? now
+          : existing.rejectedAt,
+      cancelledAt: status == GteWithdrawalStatus.cancelled
+          ? now
+          : existing.cancelledAt,
+    );
+    _withdrawalRequests[index] = updated;
+    if (status == GteWithdrawalStatus.paid) {
+      _walletSummary = GteWalletSummary(
+        availableBalance: _walletSummary.availableBalance,
+        reservedBalance: math.max(
+            0, _walletSummary.reservedBalance - existing.amountCoin),
+        totalBalance: _walletSummary.totalBalance - existing.amountCoin,
+        currency: _walletSummary.currency,
+      );
+      _pushNotification(
+        topic: 'withdrawal_paid',
+        message: 'Withdrawal ${existing.reference} marked as paid.',
+        resourceId: existing.id,
+      );
+    } else if (status == GteWithdrawalStatus.rejected ||
+        status == GteWithdrawalStatus.cancelled) {
+      _walletSummary = GteWalletSummary(
+        availableBalance: _walletSummary.availableBalance + existing.amountCoin,
+        reservedBalance: math.max(
+            0, _walletSummary.reservedBalance - existing.amountCoin),
+        totalBalance: _walletSummary.totalBalance,
+        currency: _walletSummary.currency,
+      );
+      _pushNotification(
+        topic: 'withdrawal_rejected',
+        message: 'Withdrawal ${existing.reference} was rejected.',
+        resourceId: existing.id,
+      );
+    }
+    return updated;
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) async {
+    await _delay();
+    final List<GteAdminKyc> items = <GteAdminKyc>[
+      GteAdminKyc(
+        id: _kycProfile.id,
+        userId: _fixtureSession.user.id,
+        status: _kycProfile.status,
+        nin: _kycProfile.nin,
+        bvn: _kycProfile.bvn,
+        addressLine1: _kycProfile.addressLine1,
+        city: _kycProfile.city,
+        state: _kycProfile.state,
+        country: _kycProfile.country,
+        submittedAt: _kycProfile.submittedAt,
+        reviewedAt: _kycProfile.reviewedAt,
+        rejectionReason: _kycProfile.rejectionReason,
+        userEmail: _fixtureSession.user.email,
+        userFullName: _fixtureSession.user.fullName,
+        userPhoneNumber: _fixtureSession.user.phoneNumber,
+      ),
+    ];
+    return GteAdminQueuePage<GteAdminKyc>(
+      items: items,
+      total: items.length,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<GteKycProfile> adminReviewKyc(
+      String profileId, GteKycReviewRequest request) async {
+    await _delay();
+    if (profileId != _kycProfile.id) {
+      throw StateError('KYC profile not found');
+    }
+    final DateTime now = _nextTimestamp();
+    _kycProfile = GteKycProfile(
+      id: _kycProfile.id,
+      status: request.status,
+      nin: _kycProfile.nin,
+      bvn: _kycProfile.bvn,
+      addressLine1: _kycProfile.addressLine1,
+      addressLine2: _kycProfile.addressLine2,
+      city: _kycProfile.city,
+      state: _kycProfile.state,
+      country: _kycProfile.country,
+      idDocumentAttachmentId: _kycProfile.idDocumentAttachmentId,
+      submittedAt: _kycProfile.submittedAt,
+      reviewedAt: now,
+      rejectionReason: request.rejectionReason,
+      createdAt: _kycProfile.createdAt,
+      updatedAt: now,
+    );
+    _pushNotification(
+      topic: request.status == GteKycStatus.rejected
+          ? 'kyc_rejected'
+          : 'kyc_approved',
+      message: request.status == GteKycStatus.rejected
+          ? 'KYC rejected. Please review the notes.'
+          : 'KYC verified.',
+      resourceId: _kycProfile.id,
+    );
+    return _kycProfile;
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) async {
+    await _delay();
+    Iterable<GteDispute> items = _disputes;
+    if (status != null) {
+      final GteDisputeStatus parsed = _disputeStatusFromString(status);
+      items = items.where((GteDispute dispute) => dispute.status == parsed);
+    }
+    if (query != null && query.isNotEmpty) {
+      final String needle = query.toLowerCase();
+      items = items.where((GteDispute dispute) =>
+          dispute.reference.toLowerCase().contains(needle));
+    }
+    final List<GteDispute> paged =
+        items.skip(offset).take(limit).toList(growable: false);
+    return GteAdminQueuePage<GteDispute>(
+      items: paged,
+      total: items.length,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<GteDispute> fetchAdminDispute(String disputeId) async {
+    await _delay();
+    return _disputes.firstWhere((GteDispute dispute) => dispute.id == disputeId);
+  }
+
+  @override
+  Future<GteDisputeMessage> adminSendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request) async {
+    await _delay();
+    final int index =
+        _disputes.indexWhere((GteDispute dispute) => dispute.id == disputeId);
+    if (index == -1) {
+      throw StateError('Dispute not found');
+    }
+    final DateTime now = _nextTimestamp();
+    final GteDisputeMessage message = GteDisputeMessage(
+      id: 'dispute-admin-msg-${disputeId}-${now.millisecondsSinceEpoch}',
+      senderUserId: 'admin-1',
+      senderRole: 'admin',
+      message: request.message,
+      attachmentId: request.attachmentId,
+      createdAt: now,
+    );
+    final GteDispute existing = _disputes[index];
+    final GteDispute updated = GteDispute(
+      id: existing.id,
+      status: GteDisputeStatus.awaitingUser,
+      reference: existing.reference,
+      resourceType: existing.resourceType,
+      resourceId: existing.resourceId,
+      subject: existing.subject,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+      lastMessageAt: now,
+      userId: existing.userId,
+      userEmail: existing.userEmail,
+      userFullName: existing.userFullName,
+      userPhoneNumber: existing.userPhoneNumber,
+      messages: <GteDisputeMessage>[...existing.messages, message],
+    );
+    _disputes[index] = updated;
+    _pushNotification(
+      topic: 'dispute_reply',
+      message: 'Support replied to dispute ${existing.reference}.',
+      resourceId: existing.id,
+    );
+    return message;
+  }
+
+  @override
   Future<GtePortfolioView> fetchPortfolio() async {
     await _delay();
     return GtePortfolioView(
@@ -412,6 +1677,148 @@ class GteMockApi implements GteApiRepository {
   DateTime _nextTimestamp() {
     _clock = _clock.add(const Duration(seconds: 1));
     return _clock;
+  }
+
+  GteWalletOverview _buildWalletOverview() {
+    final double pendingDeposits = _depositRequests
+        .where((GteDepositRequest deposit) =>
+            deposit.status == GteDepositStatus.awaitingPayment ||
+            deposit.status == GteDepositStatus.paymentSubmitted ||
+            deposit.status == GteDepositStatus.underReview)
+        .fold<double>(0, (double sum, GteDepositRequest deposit) {
+      return sum + deposit.amountCoin;
+    });
+    final double pendingWithdrawals = _withdrawalRequests
+        .where((GteTreasuryWithdrawalRequest withdrawal) =>
+            withdrawal.status == GteWithdrawalStatus.pendingReview ||
+            withdrawal.status == GteWithdrawalStatus.processing ||
+            withdrawal.status == GteWithdrawalStatus.approved)
+        .fold<double>(0, (double sum, GteTreasuryWithdrawalRequest withdrawal) {
+      return sum + withdrawal.amountCoin;
+    });
+    final double totalInflow = _walletLedger
+        .where((GteWalletLedgerEntry entry) => entry.amount > 0)
+        .fold<double>(0, (double sum, GteWalletLedgerEntry entry) {
+      return sum + entry.amount;
+    });
+    final double totalOutflow = _walletLedger
+        .where((GteWalletLedgerEntry entry) => entry.amount < 0)
+        .fold<double>(0, (double sum, GteWalletLedgerEntry entry) {
+      return sum + entry.amount.abs();
+    });
+    final GteWithdrawalEligibility eligibility = _computeWithdrawalEligibility();
+    return GteWalletOverview(
+      availableBalance: _walletSummary.availableBalance,
+      pendingDeposits: pendingDeposits,
+      pendingWithdrawals: pendingWithdrawals,
+      totalInflow: totalInflow,
+      totalOutflow: totalOutflow,
+      withdrawableNow: eligibility.withdrawableNow,
+      currency: _walletSummary.currency,
+    );
+  }
+
+  GteWithdrawalEligibility _computeWithdrawalEligibility() {
+    final GteKycStatus status = _kycProfile.status;
+    final bool requiresKyc = status == GteKycStatus.unverified ||
+        status == GteKycStatus.pending ||
+        status == GteKycStatus.rejected;
+    final bool requiresBankAccount =
+        !_userBankAccounts.any((GteUserBankAccount account) => account.isActive);
+    final double available = _walletSummary.availableBalance;
+    double withdrawable = available;
+    double remainingAllowance = available;
+    DateTime? nextEligibleAt;
+    final DateTime now = _clock;
+    if (requiresKyc || requiresBankAccount) {
+      withdrawable = 0;
+      remainingAllowance = 0;
+    } else if (status == GteKycStatus.partialVerifiedNoId) {
+      final DateTime windowStart = now.subtract(const Duration(hours: 24));
+      final List<GteTreasuryWithdrawalRequest> recent = _withdrawalRequests
+          .where((GteTreasuryWithdrawalRequest withdrawal) =>
+              (withdrawal.createdAt ?? now).isAfter(windowStart) &&
+              (withdrawal.status == GteWithdrawalStatus.pendingReview ||
+                  withdrawal.status == GteWithdrawalStatus.processing ||
+                  withdrawal.status == GteWithdrawalStatus.approved ||
+                  withdrawal.status == GteWithdrawalStatus.paid))
+          .toList(growable: false);
+      final double recentTotal = recent.fold<double>(
+          0,
+          (double sum, GteTreasuryWithdrawalRequest withdrawal) =>
+              sum + withdrawal.amountCoin);
+      final double limit = available * 0.3;
+      remainingAllowance = math.max(0, limit - recentTotal);
+      withdrawable = math.min(available, remainingAllowance);
+      if (remainingAllowance <= 0 && recent.isNotEmpty) {
+        final DateTime earliest = recent
+            .map((GteTreasuryWithdrawalRequest withdrawal) =>
+                withdrawal.createdAt ?? now)
+            .reduce((DateTime left, DateTime right) =>
+                left.isBefore(right) ? left : right);
+        nextEligibleAt = earliest.add(const Duration(hours: 24));
+      }
+    }
+    final double pendingWithdrawals = _withdrawalRequests
+        .where((GteTreasuryWithdrawalRequest withdrawal) =>
+            withdrawal.status == GteWithdrawalStatus.pendingReview ||
+            withdrawal.status == GteWithdrawalStatus.processing ||
+            withdrawal.status == GteWithdrawalStatus.approved)
+        .fold<double>(0, (double sum, GteTreasuryWithdrawalRequest withdrawal) {
+      return sum + withdrawal.amountCoin;
+    });
+    return GteWithdrawalEligibility(
+      availableBalance: available,
+      withdrawableNow: withdrawable,
+      remainingAllowance: remainingAllowance,
+      nextEligibleAt: nextEligibleAt,
+      kycStatus: status,
+      requiresKyc: requiresKyc,
+      requiresBankAccount: requiresBankAccount,
+      pendingWithdrawals: pendingWithdrawals,
+    );
+  }
+
+  GteUserBankAccount _resolveBankAccount(String? bankAccountId) {
+    if (bankAccountId != null) {
+      return _userBankAccounts.firstWhere(
+          (GteUserBankAccount account) => account.id == bankAccountId);
+    }
+    final Iterable<GteUserBankAccount> active = _userBankAccounts
+        .where((GteUserBankAccount account) => account.isActive);
+    if (active.isNotEmpty) {
+      return active.first;
+    }
+    if (_userBankAccounts.isEmpty) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'No bank account on file.',
+      );
+    }
+    return _userBankAccounts.first;
+  }
+
+  void _pushNotification({
+    required String topic,
+    required String message,
+    String? resourceId,
+  }) {
+    final DateTime now = _nextTimestamp();
+    final GteNotification notification = GteNotification(
+      notificationId: 'note-${++_notificationSequence}',
+      userId: _fixtureSession.user.id,
+      topic: topic,
+      templateKey: null,
+      resourceId: resourceId,
+      fixtureId: null,
+      competitionId: null,
+      message: message,
+      metadata: const <String, Object?>{},
+      createdAt: now,
+      readAt: null,
+      isRead: false,
+    );
+    _notifications.insert(0, notification);
   }
 
   double? _referencePriceFor(String playerId, GteOrderSide side) {
@@ -557,6 +1964,81 @@ GteOrderBook _cloneOrderBook(GteOrderBook orderBook) {
   );
 }
 
+GteDepositStatus _depositStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'payment_submitted':
+      return GteDepositStatus.paymentSubmitted;
+    case 'under_review':
+      return GteDepositStatus.underReview;
+    case 'confirmed':
+      return GteDepositStatus.confirmed;
+    case 'rejected':
+      return GteDepositStatus.rejected;
+    case 'expired':
+      return GteDepositStatus.expired;
+    case 'disputed':
+      return GteDepositStatus.disputed;
+    case 'awaiting_payment':
+    default:
+      return GteDepositStatus.awaitingPayment;
+  }
+}
+
+GteWithdrawalStatus _withdrawalStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'draft':
+      return GteWithdrawalStatus.draft;
+    case 'pending_kyc':
+      return GteWithdrawalStatus.pendingKyc;
+    case 'approved':
+      return GteWithdrawalStatus.approved;
+    case 'rejected':
+      return GteWithdrawalStatus.rejected;
+    case 'processing':
+      return GteWithdrawalStatus.processing;
+    case 'paid':
+      return GteWithdrawalStatus.paid;
+    case 'disputed':
+      return GteWithdrawalStatus.disputed;
+    case 'cancelled':
+      return GteWithdrawalStatus.cancelled;
+    case 'pending_review':
+    default:
+      return GteWithdrawalStatus.pendingReview;
+  }
+}
+
+GteDisputeStatus _disputeStatusFromString(String value) {
+  switch (value.toLowerCase()) {
+    case 'awaiting_user':
+      return GteDisputeStatus.awaitingUser;
+    case 'awaiting_admin':
+      return GteDisputeStatus.awaitingAdmin;
+    case 'resolved':
+      return GteDisputeStatus.resolved;
+    case 'closed':
+      return GteDisputeStatus.closed;
+    case 'open':
+    default:
+      return GteDisputeStatus.open;
+  }
+}
+
+String _kycStatusToString(GteKycStatus status) {
+  switch (status) {
+    case GteKycStatus.unverified:
+      return 'unverified';
+    case GteKycStatus.pending:
+      return 'pending';
+    case GteKycStatus.partialVerifiedNoId:
+      return 'partial_verified_no_id';
+    case GteKycStatus.fullyVerified:
+      return 'fully_verified';
+    case GteKycStatus.rejected:
+      return 'rejected';
+  }
+}
+
 const GteAuthSession _fixtureSession = GteAuthSession(
   accessToken: 'fixture-demo-token',
   tokenType: 'bearer',
@@ -565,10 +2047,13 @@ const GteAuthSession _fixtureSession = GteAuthSession(
     id: 'demo-user',
     email: 'fan@demo.gte.local',
     username: 'demo_fan',
-    displayName: 'Demo Fan',
+    fullName: 'Ayo Martins',
+    phoneNumber: '+2347000000000',
+    displayName: 'Ayo Martins',
     role: 'user',
-    kycStatus: 'pending',
+    kycStatus: 'partial_verified_no_id',
     isActive: true,
+    ageConfirmedAt: DateTime.utc(2026, 3, 10, 8),
   ),
 );
 
@@ -1190,3 +2675,245 @@ final List<GteOrderRecord> _seedOrders = <GteOrderRecord>[
     ),
   ),
 ];
+
+final GteTreasuryBankAccount _seedTreasuryBankAccount =
+    GteTreasuryBankAccount(
+  id: 'treasury-bank-1',
+  currencyCode: 'NGN',
+  bankName: 'GTEX Treasury',
+  accountNumber: '0001234567',
+  accountName: 'GTEX Treasury Desk',
+  bankCode: 'GTB',
+  isActive: true,
+  createdAt: DateTime.utc(2026, 3, 10, 9),
+  updatedAt: DateTime.utc(2026, 3, 10, 9),
+);
+
+final List<GteTreasuryBankAccount> _seedTreasuryBankAccounts =
+    <GteTreasuryBankAccount>[
+  _seedTreasuryBankAccount,
+];
+
+final GteTreasurySettings _seedTreasurySettings = GteTreasurySettings(
+  id: 'treasury-settings-1',
+  settingsKey: 'default',
+  currencyCode: 'NGN',
+  depositRateValue: 900,
+  depositRateDirection: GteRateDirection.fiatPerCoin,
+  withdrawalRateValue: 880,
+  withdrawalRateDirection: GteRateDirection.fiatPerCoin,
+  minDeposit: 1000,
+  maxDeposit: 500000,
+  minWithdrawal: 2000,
+  maxWithdrawal: 500000,
+  depositMode: GtePaymentMode.manual,
+  withdrawalMode: GtePaymentMode.manual,
+  maintenanceMessage: null,
+  whatsappNumber: '+2347000000000',
+  activeBankAccount: _seedTreasuryBankAccount,
+  createdAt: DateTime.utc(2026, 3, 10, 9),
+  updatedAt: DateTime.utc(2026, 3, 10, 9),
+);
+
+final List<GteUserBankAccount> _seedUserBankAccounts = <GteUserBankAccount>[
+  GteUserBankAccount(
+    id: 'user-bank-1',
+    currencyCode: 'NGN',
+    bankName: 'Zenith Bank',
+    accountNumber: '0123456789',
+    accountName: 'Ayo Martins',
+    bankCode: 'ZENITH',
+    isActive: true,
+    createdAt: DateTime.utc(2026, 3, 10, 11),
+    updatedAt: DateTime.utc(2026, 3, 10, 11),
+  ),
+];
+
+final GteKycProfile _seedKycProfile = GteKycProfile(
+  id: 'kyc-1',
+  status: GteKycStatus.partialVerifiedNoId,
+  nin: 'NIN-4392901',
+  bvn: null,
+  addressLine1: '12 Adeola Odeku St',
+  addressLine2: null,
+  city: 'Lagos',
+  state: 'Lagos',
+  country: 'Nigeria',
+  idDocumentAttachmentId: null,
+  submittedAt: DateTime.utc(2026, 3, 10, 12),
+  reviewedAt: DateTime.utc(2026, 3, 10, 14),
+  rejectionReason: null,
+  createdAt: DateTime.utc(2026, 3, 10, 12),
+  updatedAt: DateTime.utc(2026, 3, 10, 14),
+);
+
+final List<GteDepositRequest> _seedDeposits = <GteDepositRequest>[
+  GteDepositRequest(
+    id: 'deposit-1',
+    reference: 'DEP-1001',
+    status: GteDepositStatus.paymentSubmitted,
+    amountFiat: 250000,
+    amountCoin: 277.78,
+    currencyCode: 'NGN',
+    rateValue: 900,
+    rateDirection: GteRateDirection.fiatPerCoin,
+    bankName: 'GTEX Treasury',
+    bankAccountNumber: '0001234567',
+    bankAccountName: 'GTEX Treasury Desk',
+    bankCode: 'GTB',
+    payerName: 'Ayo Martins',
+    senderBank: 'GTBank',
+    transferReference: 'TRX-8493',
+    proofAttachmentId: null,
+    adminNotes: null,
+    createdAt: DateTime.utc(2026, 3, 11, 8),
+    submittedAt: DateTime.utc(2026, 3, 11, 8, 5),
+    reviewedAt: null,
+    confirmedAt: null,
+    rejectedAt: null,
+    expiresAt: null,
+  ),
+  GteDepositRequest(
+    id: 'deposit-2',
+    reference: 'DEP-1000',
+    status: GteDepositStatus.confirmed,
+    amountFiat: 50000,
+    amountCoin: 55.56,
+    currencyCode: 'NGN',
+    rateValue: 900,
+    rateDirection: GteRateDirection.fiatPerCoin,
+    bankName: 'GTEX Treasury',
+    bankAccountNumber: '0001234567',
+    bankAccountName: 'GTEX Treasury Desk',
+    bankCode: 'GTB',
+    payerName: 'Ayo Martins',
+    senderBank: 'Access Bank',
+    transferReference: 'TRX-8390',
+    proofAttachmentId: null,
+    adminNotes: 'Matched transfer reference.',
+    createdAt: DateTime.utc(2026, 3, 10, 9),
+    submittedAt: DateTime.utc(2026, 3, 10, 9, 3),
+    reviewedAt: DateTime.utc(2026, 3, 10, 9, 10),
+    confirmedAt: DateTime.utc(2026, 3, 10, 9, 11),
+    rejectedAt: null,
+    expiresAt: null,
+  ),
+];
+
+final List<GteTreasuryWithdrawalRequest> _seedWithdrawals =
+    <GteTreasuryWithdrawalRequest>[
+  GteTreasuryWithdrawalRequest(
+    id: 'withdrawal-1',
+    payoutRequestId: 'payout-1',
+    reference: 'WDR-2001',
+    status: GteWithdrawalStatus.processing,
+    unit: GteLedgerUnit.coin,
+    amountCoin: 120,
+    amountFiat: 105600,
+    currencyCode: 'NGN',
+    rateValue: 880,
+    rateDirection: GteRateDirection.fiatPerCoin,
+    bankName: 'Zenith Bank',
+    bankAccountNumber: '0123456789',
+    bankAccountName: 'Ayo Martins',
+    bankCode: 'ZENITH',
+    kycStatusSnapshot: 'partial_verified_no_id',
+    kycTierSnapshot: 'partial_verified_no_id',
+    feeAmount: 0,
+    totalDebit: 120,
+    notes: 'Weekly payout',
+    createdAt: DateTime.utc(2026, 3, 11, 7),
+    reviewedAt: DateTime.utc(2026, 3, 11, 7, 10),
+    approvedAt: DateTime.utc(2026, 3, 11, 7, 12),
+    processedAt: DateTime.utc(2026, 3, 11, 7, 30),
+    paidAt: null,
+    rejectedAt: null,
+    cancelledAt: null,
+  ),
+];
+
+final List<GteDispute> _seedDisputes = <GteDispute>[
+  GteDispute(
+    id: 'dispute-1',
+    status: GteDisputeStatus.awaitingAdmin,
+    reference: 'DEP-1001',
+    resourceType: 'deposit',
+    resourceId: 'deposit-1',
+    subject: 'Deposit still pending',
+    createdAt: DateTime.utc(2026, 3, 11, 9),
+    updatedAt: DateTime.utc(2026, 3, 11, 9, 5),
+    lastMessageAt: DateTime.utc(2026, 3, 11, 9, 5),
+    userId: 'demo-user',
+    userEmail: 'fan@demo.gte.local',
+    userFullName: 'Ayo Martins',
+    userPhoneNumber: '+2347000000000',
+    messages: <GteDisputeMessage>[
+      GteDisputeMessage(
+        id: 'dispute-msg-1',
+        senderUserId: 'demo-user',
+        senderRole: 'user',
+        message: 'I paid 30 minutes ago, please confirm.',
+        attachmentId: null,
+        createdAt: DateTime.utc(2026, 3, 11, 9, 5),
+      ),
+    ],
+  ),
+];
+
+final List<GteNotification> _seedNotifications = <GteNotification>[
+  GteNotification(
+    notificationId: 'note-1',
+    userId: 'demo-user',
+    topic: 'deposit_submitted',
+    templateKey: null,
+    resourceId: 'deposit-1',
+    fixtureId: null,
+    competitionId: null,
+    message: 'Deposit DEP-1001 submitted. Pending review.',
+    metadata: const <String, Object?>{},
+    createdAt: DateTime.utc(2026, 3, 11, 8, 6),
+    readAt: null,
+    isRead: false,
+  ),
+  GteNotification(
+    notificationId: 'note-0',
+    userId: 'demo-user',
+    topic: 'wallet_credit',
+    templateKey: null,
+    resourceId: 'deposit-2',
+    fixtureId: null,
+    competitionId: null,
+    message: 'Deposit DEP-1000 confirmed. Wallet credited.',
+    metadata: const <String, Object?>{},
+    createdAt: DateTime.utc(2026, 3, 10, 9, 12),
+    readAt: DateTime.utc(2026, 3, 10, 9, 20),
+    isRead: true,
+  ),
+];
+
+final List<GteAnalyticsEvent> _seedAnalyticsEvents = <GteAnalyticsEvent>[
+  GteAnalyticsEvent(
+    id: 'evt-1',
+    name: 'signup_completed',
+    userId: 'demo-user',
+    metadata: const <String, Object?>{},
+    createdAt: DateTime.utc(2026, 3, 10, 8),
+  ),
+  GteAnalyticsEvent(
+    id: 'evt-2',
+    name: 'deposit_submitted',
+    userId: 'demo-user',
+    metadata: const <String, Object?>{},
+    createdAt: DateTime.utc(2026, 3, 11, 8, 6),
+  ),
+];
+
+final GteAnalyticsFunnel _seedAnalyticsFunnel = GteAnalyticsFunnel(
+  since: DateTime.utc(2026, 3, 1),
+  steps: const <GteAnalyticsFunnelStep>[
+    GteAnalyticsFunnelStep(name: 'signup_completed', users: 1200),
+    GteAnalyticsFunnelStep(name: 'deposit_submitted', users: 540),
+    GteAnalyticsFunnelStep(name: 'kyc_submitted', users: 210),
+    GteAnalyticsFunnelStep(name: 'withdrawal_requested', users: 78),
+  ],
+);

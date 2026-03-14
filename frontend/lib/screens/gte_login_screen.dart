@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../providers/gte_exchange_controller.dart';
+import 'gte_signup_screen.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
@@ -270,6 +271,22 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     widget.controller.isSigningIn ? 'Opening the gate...' : 'Enter GTEX now',
                                   ),
                                 ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton(
+                                onPressed: widget.controller.isSigningIn
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext context) =>
+                                                GteSignupScreen(
+                                              controller: widget.controller,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                child: const Text('Create a new account'),
                               ),
                             ],
                           ),

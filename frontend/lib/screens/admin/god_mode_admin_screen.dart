@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_feedback.dart';
 import '../../data/gte_api_repository.dart';
 import '../../widgets/gtex_branding.dart';
+import 'treasury_ops_screen.dart';
 
 class GodModeAdminScreen extends StatefulWidget {
   const GodModeAdminScreen({
@@ -267,6 +268,35 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
             _AdminHeroChip(label: 'Audit', value: 'ALWAYS ON'),
             _AdminHeroChip(label: 'Treasury', value: 'LIVE'),
           ],
+        ),
+        const SizedBox(height: 16),
+        _SectionCard(
+          title: 'Treasury Ops',
+          icon: Icons.account_balance_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'Open the dedicated treasury console for deposits, withdrawals, KYC, disputes, and rate settings.',
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) => GteTreasuryOpsScreen(
+                        baseUrl: widget.baseUrl,
+                        accessToken: widget.accessToken,
+                        backendMode: widget.backendMode,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Open Treasury Ops'),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         _SectionCard(

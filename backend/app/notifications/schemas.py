@@ -20,3 +20,5 @@ class NotificationView(BaseModel):
     message: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+    read_at: datetime | None = None
+    is_read: bool = False

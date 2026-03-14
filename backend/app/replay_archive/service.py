@@ -114,6 +114,7 @@ class ReplayArchiveService:
             home_club=ingest.home_club,
             away_club=ingest.away_club,
             scoreline=ingest.scoreline,
+            visual_identity=ingest.visual_identity,
             timeline=ingest.timeline,
             scorers=self._filter_timeline(ingest.timeline, event_types={"goals"}),
             assisters=self._filter_timeline(ingest.timeline, event_types={"assists"}),

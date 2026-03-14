@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 from decimal import Decimal
 from fastapi.routing import APIRoute
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_user, get_session
@@ -27,11 +28,20 @@ from backend.app.wallets.schemas import (
     WalletLedgerPageView,
     WalletSummaryView,
     WalletAdaptiveOverviewView,
-    WithdrawalRequestCreate,
-    WithdrawalRequestView,
+    WalletOverviewView,
 )
 from backend.app.wallets.service import LedgerError, WalletService
-from backend.app.models.wallet import PayoutStatus
+from backend.app.models.wallet import LedgerEntry, PayoutRequest, PayoutStatus
+from backend.app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from backend.app.treasury.schemas import (
+    DepositQuoteRequest,
+    DepositRequestView,
+    DepositSubmitRequest,
+    WithdrawalEligibilityView,
+    WithdrawalRequestCreate as TreasuryWithdrawalRequestCreate,
+    WithdrawalRequestView as TreasuryWithdrawalRequestView,
+)
+from backend.app.treasury.service import TreasuryConflictError, TreasuryService
 
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
@@ -48,6 +58,12 @@ def _build_wallet_service(request: Request | None) -> WalletService:
     if request is not None and hasattr(request.app.state, "event_publisher"):
         return WalletService(event_publisher=request.app.state.event_publisher)
     return WalletService()
+
+
+def _build_treasury_service(request: Request | None) -> TreasuryService:
+    if request is not None and hasattr(request.app.state, "event_publisher"):
+        return TreasuryService(wallet_service=WalletService(event_publisher=request.app.state.event_publisher))
+    return TreasuryService()
 
 
 def _load_admin_god_mode_state(request: Request | None) -> dict[str, object]:
@@ -164,12 +180,14 @@ def get_wallet_adaptive_overview(
     service = _build_wallet_service(request)
     overview = service.get_adaptive_overview(session, current_user)
     policy = _build_withdrawal_policy_snapshot(request)
+    treasury = _build_treasury_service(request)
+    settings = treasury.ensure_settings(session)
     overview["competition_reward_balance"] = service.competition_reward_balance(session, current_user)
     overview["competition_reward_withdrawable_balance"] = service.competition_reward_withdrawable_balance(session, current_user)
     overview.update(policy)
     insights = list(overview.get("insights") or [])
-    payout_mode = _selected_payout_mode(policy)
-    deposit_mode = _selected_deposit_mode(policy)
+    payout_mode = "bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "gateway"
+    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else "gateway"
     insights.append({
         "label": "Deposit rail",
         "value": "Bank transfer" if deposit_mode == "bank_transfer" else "Automatic gateway",
@@ -187,6 +205,117 @@ def get_wallet_adaptive_overview(
     })
     overview["insights"] = insights
     return WalletAdaptiveOverviewView(**overview)
+
+
+@wallet_router.get("/overview", response_model=WalletOverviewView)
+def get_wallet_overview(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> WalletOverviewView:
+    wallet_service = _build_wallet_service(request)
+    treasury_service = _build_treasury_service(request)
+    summary = wallet_service.get_wallet_summary(session, current_user)
+    account = wallet_service.get_user_account(session, current_user, summary.currency)
+    total_inflow = session.scalar(
+        select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+        .where(LedgerEntry.account_id == account.id, LedgerEntry.amount > 0)
+    )
+    total_outflow = session.scalar(
+        select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+        .where(LedgerEntry.account_id == account.id, LedgerEntry.amount < 0)
+    )
+    pending_deposits = session.scalar(
+        select(func.coalesce(func.sum(DepositRequest.amount_coin), 0))
+        .where(
+            DepositRequest.user_id == current_user.id,
+            DepositRequest.status.in_([
+                DepositStatus.AWAITING_PAYMENT,
+                DepositStatus.PAYMENT_SUBMITTED,
+                DepositStatus.UNDER_REVIEW,
+            ]),
+        )
+    )
+    pending_withdrawals = session.scalar(
+        select(func.coalesce(func.sum(TreasuryWithdrawalRequest.amount_coin), 0))
+        .where(
+            TreasuryWithdrawalRequest.user_id == current_user.id,
+            TreasuryWithdrawalRequest.status.in_([
+                TreasuryWithdrawalStatus.PENDING_REVIEW,
+                TreasuryWithdrawalStatus.APPROVED,
+                TreasuryWithdrawalStatus.PROCESSING,
+            ]),
+        )
+    )
+    eligibility = treasury_service.get_withdrawal_eligibility(session, current_user)
+    return WalletOverviewView(
+        available_balance=summary.available_balance,
+        pending_deposits=Decimal(pending_deposits or 0),
+        pending_withdrawals=Decimal(pending_withdrawals or 0),
+        total_inflow=Decimal(total_inflow or 0),
+        total_outflow=abs(Decimal(total_outflow or 0)),
+        withdrawable_now=eligibility.withdrawable_now,
+        currency=summary.currency,
+    )
+
+
+@wallet_router.post("/deposits", response_model=DepositRequestView, status_code=status.HTTP_201_CREATED)
+def create_deposit_request(
+    payload: DepositQuoteRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> DepositRequestView:
+    service = _build_treasury_service(request)
+    try:
+        deposit = service.create_deposit_request(
+            session,
+            user=current_user,
+            amount=payload.amount,
+            input_unit=payload.input_unit,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return DepositRequestView.model_validate(deposit)
+
+
+@wallet_router.post("/deposits/{deposit_id}/submit", response_model=DepositRequestView)
+def submit_deposit_request(
+    deposit_id: str,
+    payload: DepositSubmitRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> DepositRequestView:
+    service = _build_treasury_service(request)
+    try:
+        deposit = service.submit_deposit_request(
+            session,
+            user=current_user,
+            deposit_request_id=deposit_id,
+            payer_name=payload.payer_name,
+            sender_bank=payload.sender_bank,
+            transfer_reference=payload.transfer_reference,
+            proof_attachment_id=payload.proof_attachment_id,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return DepositRequestView.model_validate(deposit)
+
+
+@wallet_router.get("/deposits", response_model=list[DepositRequestView])
+def list_deposits(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> list[DepositRequestView]:
+    service = _build_treasury_service(request)
+    deposits = service.list_user_deposits(session, current_user)
+    return [DepositRequestView.model_validate(item) for item in deposits]
 
 
 @wallet_router.get("/ledger", response_model=WalletLedgerPageView)
@@ -230,97 +359,127 @@ def get_portfolio(
     )
 
 
-@wallet_router.get("/withdrawals", response_model=list[WithdrawalRequestView])
+@wallet_router.get("/withdrawals", response_model=list[TreasuryWithdrawalRequestView])
 def list_withdrawals(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     request: Request = None,
-) -> list[WithdrawalRequestView]:
-    service = _build_wallet_service(request)
-    items = service.list_payout_requests_for_user(session, current_user)
-    result: list[WithdrawalRequestView] = []
-    for item in items:
-        meta = service._parse_payout_meta(item.notes)
-        result.append(WithdrawalRequestView(
-            payout_request_id=item.id,
-            amount=item.amount,
-            fee_amount=Decimal(str(meta.get("fee_amount", "0.0000"))),
-            total_debit=Decimal(str(meta.get("total_debit", item.amount))),
-            unit=item.unit,
-            status=item.status,
-            source_scope=str(meta.get("source_scope", "trade")),
-            destination_reference=item.destination_reference,
-            processing_mode=str(meta.get("processor_mode", "manual_bank_transfer")),
-            payout_channel=str(meta.get("payout_channel", "bank_transfer")),
-            notes=item.notes,
-            requested_at=item.created_at,
-            updated_at=item.updated_at,
-        ))
+) -> list[TreasuryWithdrawalRequestView]:
+    wallet_service = _build_wallet_service(request)
+    rows = session.execute(
+        select(TreasuryWithdrawalRequest, PayoutRequest)
+        .join(PayoutRequest, TreasuryWithdrawalRequest.payout_request_id == PayoutRequest.id)
+        .where(TreasuryWithdrawalRequest.user_id == current_user.id)
+        .order_by(TreasuryWithdrawalRequest.created_at.desc())
+    ).all()
+    result: list[TreasuryWithdrawalRequestView] = []
+    for withdrawal, payout in rows:
+        meta = wallet_service._parse_payout_meta(payout.notes)
+        result.append(
+            TreasuryWithdrawalRequestView(
+                id=withdrawal.id,
+                payout_request_id=withdrawal.payout_request_id,
+                reference=withdrawal.reference,
+                status=withdrawal.status,
+                unit=withdrawal.unit,
+                amount_coin=withdrawal.amount_coin,
+                amount_fiat=withdrawal.amount_fiat,
+                currency_code=withdrawal.currency_code,
+                rate_value=withdrawal.rate_value,
+                rate_direction=withdrawal.rate_direction,
+                bank_name=withdrawal.bank_name,
+                bank_account_number=withdrawal.bank_account_number,
+                bank_account_name=withdrawal.bank_account_name,
+                bank_code=withdrawal.bank_code,
+                kyc_status_snapshot=withdrawal.kyc_status_snapshot,
+                kyc_tier_snapshot=withdrawal.kyc_tier_snapshot,
+                fee_amount=Decimal(str(meta.get("fee_amount", "0.0000"))),
+                total_debit=Decimal(str(meta.get("total_debit", payout.amount))),
+                notes=withdrawal.notes,
+                created_at=withdrawal.created_at,
+                reviewed_at=withdrawal.reviewed_at,
+                approved_at=withdrawal.approved_at,
+                processed_at=withdrawal.processed_at,
+                paid_at=withdrawal.paid_at,
+                rejected_at=withdrawal.rejected_at,
+                cancelled_at=withdrawal.cancelled_at,
+            )
+        )
     return result
 
 
-@wallet_router.post("/withdrawals", response_model=WithdrawalRequestView, status_code=status.HTTP_201_CREATED)
-def create_withdrawal_request(
-    payload: WithdrawalRequestCreate,
+@wallet_router.get("/withdrawals/eligibility", response_model=WithdrawalEligibilityView)
+def get_withdrawal_eligibility(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     request: Request = None,
-) -> WithdrawalRequestView:
-    service = _build_wallet_service(request)
-    policy = _build_withdrawal_policy_snapshot(request)
-    commissions = _commission_settings(request)
-    if payload.source_scope == "competition" and not bool(policy.get("egame_withdrawals_enabled", False)):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-game winnings are currently locked for direct withdrawal. They remain tradable inside the app.")
-    if payload.source_scope == "trade" and not bool(policy.get("trade_withdrawals_enabled", True)):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Trade withdrawals are temporarily disabled by admin policy.")
-    payout_channel = _selected_payout_mode(policy)
-    destination_reference = payload.destination_reference
-    if payout_channel == "bank_transfer":
-        destination_reference = _validate_bank_transfer_destination(payload.destination_reference)
+) -> WithdrawalEligibilityView:
+    service = _build_treasury_service(request)
+    eligibility = service.get_withdrawal_eligibility(session, current_user)
+    service.track_event(session, "withdrawal_started", user=current_user, metadata={})
+    return WithdrawalEligibilityView(
+        available_balance=eligibility.available_balance,
+        withdrawable_now=eligibility.withdrawable_now,
+        remaining_allowance=eligibility.remaining_allowance,
+        next_eligible_at=eligibility.next_eligible_at,
+        kyc_status=eligibility.kyc_status,
+        requires_kyc=eligibility.requires_kyc,
+        requires_bank_account=eligibility.requires_bank_account,
+        pending_withdrawals=eligibility.pending_withdrawals,
+    )
+
+
+@wallet_router.post("/withdrawals", response_model=TreasuryWithdrawalRequestView, status_code=status.HTTP_201_CREATED)
+def create_withdrawal_request(
+    payload: TreasuryWithdrawalRequestCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> TreasuryWithdrawalRequestView:
+    service = _build_treasury_service(request)
+    wallet_service = _build_wallet_service(request)
     try:
-        result = service.request_payout(
+        withdrawal = service.create_withdrawal_request(
             session,
             user=current_user,
-            amount=payload.amount,
-            destination_reference=destination_reference,
-            unit=payload.unit,
-            source_scope=payload.source_scope,
-            withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
-            minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
-            actor=current_user,
+            amount_coin=payload.amount_coin,
+            bank_account_id=payload.bank_account_id,
             notes=payload.notes,
-            extra_meta={
-                "processor_mode": str(policy.get("processor_mode", "manual_bank_transfer")),
-                "payout_channel": payout_channel,
-                "deposits_via_bank_transfer": bool(policy.get("deposits_via_bank_transfer", True)),
-                "payouts_via_bank_transfer": bool(policy.get("payouts_via_bank_transfer", True)),
-            },
         )
-        processor_mode = str(policy.get("processor_mode", "manual_bank_transfer"))
-        if payout_channel == "gateway" and processor_mode == "automatic_gateway":
-            result.payout_request.status = PayoutStatus.PROCESSING
-        else:
-            result.payout_request.status = PayoutStatus.REVIEWING
         session.commit()
-        session.refresh(result.payout_request)
-    except LedgerError as exc:
+        session.refresh(withdrawal)
+    except TreasuryConflictError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    return WithdrawalRequestView(
-        payout_request_id=result.payout_request.id,
-        amount=result.payout_request.amount,
-        fee_amount=result.fee_amount,
-        total_debit=result.total_debit,
-        unit=result.payout_request.unit,
-        status=result.payout_request.status,
-        source_scope=result.source_scope,
-        destination_reference=result.payout_request.destination_reference,
-        processing_mode=str(policy.get("processor_mode", "manual_bank_transfer")),
-        payout_channel=payout_channel,
-        notes=result.payout_request.notes,
-        requested_at=result.payout_request.created_at,
-        updated_at=result.payout_request.updated_at,
+    payout_request = session.get(PayoutRequest, withdrawal.payout_request_id)
+    meta = wallet_service._parse_payout_meta(payout_request.notes if payout_request else None)
+    return TreasuryWithdrawalRequestView(
+        id=withdrawal.id,
+        payout_request_id=withdrawal.payout_request_id,
+        reference=withdrawal.reference,
+        status=withdrawal.status,
+        unit=withdrawal.unit,
+        amount_coin=withdrawal.amount_coin,
+        amount_fiat=withdrawal.amount_fiat,
+        currency_code=withdrawal.currency_code,
+        rate_value=withdrawal.rate_value,
+        rate_direction=withdrawal.rate_direction,
+        bank_name=withdrawal.bank_name,
+        bank_account_number=withdrawal.bank_account_number,
+        bank_account_name=withdrawal.bank_account_name,
+        bank_code=withdrawal.bank_code,
+        kyc_status_snapshot=withdrawal.kyc_status_snapshot,
+        kyc_tier_snapshot=withdrawal.kyc_tier_snapshot,
+        fee_amount=Decimal(str(meta.get("fee_amount", "0.0000"))),
+        total_debit=Decimal(str(meta.get("total_debit", withdrawal.amount_coin))),
+        notes=withdrawal.notes,
+        created_at=withdrawal.created_at,
+        reviewed_at=withdrawal.reviewed_at,
+        approved_at=withdrawal.approved_at,
+        processed_at=withdrawal.processed_at,
+        paid_at=withdrawal.paid_at,
+        rejected_at=withdrawal.rejected_at,
+        cancelled_at=withdrawal.cancelled_at,
     )
 
 
@@ -333,7 +492,9 @@ def create_payment_event(
 ) -> PaymentEventView:
     service = _build_wallet_service(request)
     policy = _build_withdrawal_policy_snapshot(request)
-    deposit_mode = _selected_deposit_mode(policy)
+    treasury = _build_treasury_service(request)
+    settings = treasury.ensure_settings(session)
+    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
     if deposit_mode != "gateway":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

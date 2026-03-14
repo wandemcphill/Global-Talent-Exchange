@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from backend.app.match_engine.commentary.timeline import MatchCommentaryTimelineGenerator
 from backend.app.match_engine.schemas import (
+    MatchBadgeVisualView,
     MatchFinalSummaryView,
     MatchHighlightClipView,
     MatchInjuryReportView,
+    MatchKitVisualView,
     MatchPlayerReferenceView,
     MatchPlayerStatsView,
+    MatchPlayerVisualView,
     MatchReplayPayloadView,
     MatchSimulationRequest,
     MatchTeamStatsView,
     MatchTeamStrengthView,
+    MatchTeamVisualIdentityView,
+    MatchVisualIdentityView,
     PenaltyAttemptView,
     PenaltyShootoutView,
 )
@@ -48,6 +53,7 @@ class MatchSimulationService:
             highlight_package=summary.highlight_package,
             manager_influence_notes=summary.manager_influence_notes,
             injury_report=summary.injury_report,
+            visual_identity=self._build_visual_identity(result),
             status=result.status,
             summary=summary,
             timeline=timeline,
@@ -76,8 +82,19 @@ class MatchSimulationService:
             expected_goals_away=away_xg,
             key_highlights=self._key_highlights(result),
             highlight_package=self._highlight_package(result),
-            manager_influence_notes=self._manager_influence_notes(result),
+            manager_influence_notes=list(result.manager_influence_notes),
             injury_report=self._injury_report(result),
+            upset_probability=result.upset_probability,
+            upset_reason_codes=list(result.upset_reason_codes),
+            home_advantage_note=result.home_advantage_note,
+            manager_influence_score_home=round(result.home_stats.tactical_swings + (result.home_strength.coach_quality / 20.0), 2),
+            manager_influence_score_away=round(result.away_stats.tactical_swings + (result.away_strength.coach_quality / 20.0), 2),
+            tactical_battle_summary=result.tactical_battle_summary,
+            form_motivation_summary=result.form_motivation_summary,
+            momentum_swings=list(result.momentum_swings),
+            turning_points=list(result.turning_points),
+            key_matchups=list(result.key_matchups),
+            tactical_impact_notes=list(result.tactical_impact_notes),
             status=result.status,
             competition_type=result.competition_type,
             stage=result.stage,
@@ -145,7 +162,21 @@ class MatchSimulationService:
                 depth=strength.depth,
                 discipline=strength.discipline,
                 fitness=strength.fitness,
+                chemistry=strength.chemistry,
+                tactical_cohesion=strength.tactical_cohesion,
+                recent_form=strength.recent_form,
+                morale=strength.morale,
+                motivation=strength.motivation,
+                fatigue_load=strength.fatigue_load,
+                coach_quality=strength.coach_quality,
+                tactical_quality=strength.tactical_quality,
+                adaptability=strength.adaptability,
+                upset_resistance=strength.upset_resistance,
+                upset_punch=strength.upset_punch,
             ),
+            big_chances=team_stats.big_chances,
+            woodwork=team_stats.woodwork,
+            tactical_swings=team_stats.tactical_swings,
         )
 
     def _build_shootout(self, result: SimulationResult) -> PenaltyShootoutView | None:
@@ -227,10 +258,15 @@ class MatchSimulationService:
                 MatchEventType.RED_CARD,
                 MatchEventType.INJURY,
                 MatchEventType.SUBSTITUTION,
+                MatchEventType.DOUBLE_SAVE,
+                MatchEventType.TACTICAL_SWING,
+                MatchEventType.WOODWORK,
             }:
                 minute = f"{event.minute}+{event.added_time}" if event.added_time else str(event.minute)
                 actor = event.primary_player_name or event.team_name or 'Match event'
-                notable.append(f"{minute}' {actor}: {event.event_type.value.replace('_', ' ')}")
+                family = event.metadata.get("chance_family")
+                suffix = f" - {family}" if isinstance(family, str) else ""
+                notable.append(f"{minute}' {actor}: {event.event_type.value.replace('_', ' ')}{suffix}")
             if len(notable) >= 6:
                 break
         if not notable:
@@ -247,17 +283,22 @@ class MatchSimulationService:
                 MatchEventType.RED_CARD,
                 MatchEventType.INJURY,
                 MatchEventType.SUBSTITUTION,
+                MatchEventType.DOUBLE_SAVE,
+                MatchEventType.TACTICAL_SWING,
+                MatchEventType.WOODWORK,
             }:
                 continue
             start_second = min(cursor, max(0, result.seed % 5 + event.minute * 2))
-            duration = 24 if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL} else 16
+            duration = 24 if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.DOUBLE_SAVE} else 16
             title_actor = event.primary_player_name or event.team_name or 'Key moment'
+            family = event.metadata.get("chance_family")
+            suffix = f" - {family}" if isinstance(family, str) else ""
             clips.append(
                 MatchHighlightClipView(
-                    title=f"{title_actor} · {event.event_type.value.replace('_', ' ')}",
+                    title=f"{title_actor} - {event.event_type.value.replace('_', ' ')}{suffix}",
                     start_second=start_second,
                     end_second=start_second + duration,
-                    importance=5 if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL} else 4,
+                    importance=5 if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.DOUBLE_SAVE} else 4,
                     event_type=event.event_type,
                     team_name=event.team_name,
                 )
@@ -294,20 +335,75 @@ class MatchSimulationService:
             )
         return reports[:4]
 
-    def _manager_influence_notes(self, result: SimulationResult) -> list[str]:
-        notes: list[str] = []
-        if result.home_strength.depth - result.away_strength.depth >= 6:
-            notes.append(f"{result.home_team_name} carried the stronger bench depth, which helped sustain the tempo.")
-        elif result.away_strength.depth - result.home_strength.depth >= 6:
-            notes.append(f"{result.away_team_name} carried the stronger bench depth, which helped sustain the tempo.")
-        if result.home_strength.fitness - result.away_strength.fitness >= 6:
-            notes.append(f"{result.home_team_name} looked fresher in key phases and managed the game state better.")
-        elif result.away_strength.fitness - result.home_strength.fitness >= 6:
-            notes.append(f"{result.away_team_name} looked fresher in key phases and managed the game state better.")
-        if result.home_strength.attack - result.away_strength.defense >= 8:
-            notes.append(f"{result.home_team_name} found attacking lanes that the opposition could not fully seal.")
-        if result.away_strength.attack - result.home_strength.defense >= 8:
-            notes.append(f"{result.away_team_name} repeatedly threatened in transition and stretched the back line.")
-        if result.home_stats.injuries or result.away_stats.injuries:
-            notes.append('Injuries changed the tactical texture and substitution sequence of the match.')
-        return notes[:5]
+    def _build_visual_identity(self, result: SimulationResult) -> MatchVisualIdentityView:
+        def map_team(team) -> MatchTeamVisualIdentityView:
+            return MatchTeamVisualIdentityView(
+                team_id=team.team_id,
+                team_name=team.team_name,
+                short_club_code=team.short_club_code,
+                badge=MatchBadgeVisualView(
+                    badge_url=team.badge.badge_url,
+                    shape=team.badge.shape,
+                    initials=team.badge.initials,
+                    primary_color=team.badge.primary_color,
+                    secondary_color=team.badge.secondary_color,
+                    accent_color=team.badge.accent_color,
+                ),
+                selected_kit=MatchKitVisualView(
+                    kit_type=team.selected_kit.kit_type,
+                    primary_color=team.selected_kit.primary_color,
+                    secondary_color=team.selected_kit.secondary_color,
+                    accent_color=team.selected_kit.accent_color,
+                    shorts_color=team.selected_kit.shorts_color,
+                    socks_color=team.selected_kit.socks_color,
+                    pattern_type=team.selected_kit.pattern_type,
+                    collar_style=team.selected_kit.collar_style,
+                    sleeve_style=team.selected_kit.sleeve_style,
+                    badge_placement=team.selected_kit.badge_placement,
+                    front_text=team.selected_kit.front_text,
+                ),
+                alternate_kit=MatchKitVisualView(
+                    kit_type=team.alternate_kit.kit_type,
+                    primary_color=team.alternate_kit.primary_color,
+                    secondary_color=team.alternate_kit.secondary_color,
+                    accent_color=team.alternate_kit.accent_color,
+                    shorts_color=team.alternate_kit.shorts_color,
+                    socks_color=team.alternate_kit.socks_color,
+                    pattern_type=team.alternate_kit.pattern_type,
+                    collar_style=team.alternate_kit.collar_style,
+                    sleeve_style=team.alternate_kit.sleeve_style,
+                    badge_placement=team.alternate_kit.badge_placement,
+                    front_text=team.alternate_kit.front_text,
+                ),
+                goalkeeper_kit=MatchKitVisualView(
+                    kit_type=team.goalkeeper_kit.kit_type,
+                    primary_color=team.goalkeeper_kit.primary_color,
+                    secondary_color=team.goalkeeper_kit.secondary_color,
+                    accent_color=team.goalkeeper_kit.accent_color,
+                    shorts_color=team.goalkeeper_kit.shorts_color,
+                    socks_color=team.goalkeeper_kit.socks_color,
+                    pattern_type=team.goalkeeper_kit.pattern_type,
+                    collar_style=team.goalkeeper_kit.collar_style,
+                    sleeve_style=team.goalkeeper_kit.sleeve_style,
+                    badge_placement=team.goalkeeper_kit.badge_placement,
+                    front_text=team.goalkeeper_kit.front_text,
+                ),
+                player_visuals=[
+                    MatchPlayerVisualView(
+                        player_id=player.player_id,
+                        display_name=player.display_name,
+                        shirt_name=player.shirt_name,
+                        shirt_number=player.shirt_number,
+                        role=player.role,
+                    )
+                    for player in team.player_visuals
+                ],
+                clash_adjusted=team.clash_adjusted,
+            )
+
+        return MatchVisualIdentityView(
+            home_team=map_team(result.visual_identity.home_team),
+            away_team=map_team(result.visual_identity.away_team),
+            clash_resolved=result.visual_identity.clash_resolved,
+        )
+

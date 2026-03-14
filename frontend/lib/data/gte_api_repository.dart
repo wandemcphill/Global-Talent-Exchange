@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'gte_models.dart';
 
 enum GteBackendMode {
@@ -177,8 +180,132 @@ abstract class GteApiRepository {
 
   Future<GteWalletSummary> fetchWalletSummary();
 
+  Future<GteWalletOverview> fetchWalletOverview();
+
   Future<GteWalletLedgerPage> fetchWalletLedger(
       {int page = 1, int pageSize = 20});
+
+  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility();
+
+  Future<GteDepositRequest> createDepositRequest(GteDepositCreateRequest request);
+
+  Future<GteDepositRequest> submitDepositRequest(
+      String depositId, GteDepositSubmitRequest request);
+
+  Future<List<GteDepositRequest>> listDepositRequests();
+
+  Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
+      GteWithdrawalCreateRequest request);
+
+  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests();
+
+  Future<GteKycProfile> fetchKycProfile();
+
+  Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request);
+
+  Future<List<GteUserBankAccount>> listUserBankAccounts();
+
+  Future<GteUserBankAccount> createUserBankAccount(
+      GteUserBankAccountCreate request);
+
+  Future<GteUserBankAccount> updateUserBankAccount(
+      String bankAccountId, GteUserBankAccountUpdate request);
+
+  Future<List<GteDispute>> listDisputes();
+
+  Future<GteDispute> openDispute(GteDisputeCreateRequest request);
+
+  Future<GteDispute> fetchDispute(String disputeId);
+
+  Future<GteDisputeMessage> sendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request);
+
+  Future<List<GteNotification>> listNotifications({int limit = 20});
+
+  Future<void> markNotificationRead(String notificationId);
+
+  Future<void> markAllNotificationsRead();
+
+  Future<GteAttachment> uploadAttachment(
+    String filename,
+    List<int> bytes, {
+    String? contentType,
+  });
+
+  Future<GteAnalyticsEvent> trackAnalyticsEvent(
+    String name, {
+    Map<String, Object?> metadata = const <String, Object?>{},
+  });
+
+  Future<GteAnalyticsSummary> fetchAnalyticsSummary();
+
+  Future<GteAnalyticsFunnel> fetchAnalyticsFunnel();
+
+  Future<GteTreasuryDashboard> fetchTreasuryDashboard();
+
+  Future<GteTreasurySettings> fetchTreasurySettings();
+
+  Future<GteTreasurySettings> updateTreasurySettings(
+      GteTreasurySettingsUpdate request);
+
+  Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts();
+
+  Future<GteTreasuryBankAccount> createTreasuryBankAccount(
+      GteTreasuryBankAccountCreate request);
+
+  Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
+      String accountId, GteTreasuryBankAccountUpdate request);
+
+  Future<GteAdminQueuePage<GteAdminDeposit>> fetchAdminDeposits({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
+      {String? adminNotes});
+
+  Future<GteDepositRequest> adminRejectDeposit(String depositId,
+      {String? adminNotes});
+
+  Future<GteDepositRequest> adminReviewDeposit(String depositId,
+      {String? adminNotes});
+
+  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteTreasuryWithdrawalRequest> adminUpdateWithdrawalStatus(
+    String withdrawalId, {
+    required GteWithdrawalStatus status,
+    String? adminNotes,
+  });
+
+  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteKycProfile> adminReviewKyc(
+      String profileId, GteKycReviewRequest request);
+
+  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  });
+
+  Future<GteDispute> fetchAdminDispute(String disputeId);
+
+  Future<GteDisputeMessage> adminSendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request);
 
   Future<GtePortfolioView> fetchPortfolio();
 
@@ -421,6 +548,16 @@ class GteReliableApiRepository implements GteApiRepository {
   }
 
   @override
+  Future<GteWalletOverview> fetchWalletOverview() {
+    return _withFallback<GteWalletOverview>(
+      () async => GteWalletOverview.fromJson(
+        await _request('GET', '/api/wallets/overview', requiresAuth: true),
+      ),
+      fixtures.fetchWalletOverview,
+    );
+  }
+
+  @override
   Future<GteWalletLedgerPage> fetchWalletLedger(
       {int page = 1, int pageSize = 20}) {
     return _withFallback<GteWalletLedgerPage>(
@@ -433,6 +570,295 @@ class GteReliableApiRepository implements GteApiRepository {
         ),
       ),
       () => fixtures.fetchWalletLedger(page: page, pageSize: pageSize),
+    );
+  }
+
+  @override
+  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() {
+    return _withFallback<GteWithdrawalEligibility>(
+      () async => GteWithdrawalEligibility.fromJson(
+        await _request('GET', '/api/wallets/withdrawals/eligibility',
+            requiresAuth: true),
+      ),
+      fixtures.fetchWithdrawalEligibility,
+    );
+  }
+
+  @override
+  Future<GteDepositRequest> createDepositRequest(
+      GteDepositCreateRequest request) {
+    return _withFallback<GteDepositRequest>(
+      () async => GteDepositRequest.fromJson(
+        await _request('POST', '/api/wallets/deposits',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.createDepositRequest(request),
+    );
+  }
+
+  @override
+  Future<GteDepositRequest> submitDepositRequest(
+      String depositId, GteDepositSubmitRequest request) {
+    return _withFallback<GteDepositRequest>(
+      () async => GteDepositRequest.fromJson(
+        await _request(
+          'POST',
+          '/api/wallets/deposits/$depositId/submit',
+          body: request.toJson(),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.submitDepositRequest(depositId, request),
+    );
+  }
+
+  @override
+  Future<List<GteDepositRequest>> listDepositRequests() {
+    return _withFallback<List<GteDepositRequest>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/api/wallets/deposits', requiresAuth: true),
+          label: 'deposit list',
+        );
+        return payload
+            .map(GteDepositRequest.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.listDepositRequests,
+    );
+  }
+
+  @override
+  Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
+      GteWithdrawalCreateRequest request) {
+    return _withFallback<GteTreasuryWithdrawalRequest>(
+      () async => GteTreasuryWithdrawalRequest.fromJson(
+        await _request('POST', '/api/wallets/withdrawals',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.createWithdrawalRequest(request),
+    );
+  }
+
+  @override
+  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests() {
+    return _withFallback<List<GteTreasuryWithdrawalRequest>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/api/wallets/withdrawals', requiresAuth: true),
+          label: 'withdrawal list',
+        );
+        return payload
+            .map(GteTreasuryWithdrawalRequest.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.listWithdrawalRequests,
+    );
+  }
+
+  @override
+  Future<GteKycProfile> fetchKycProfile() {
+    return _withFallback<GteKycProfile>(
+      () async => GteKycProfile.fromJson(
+        await _request('GET', '/api/kyc', requiresAuth: true),
+      ),
+      fixtures.fetchKycProfile,
+    );
+  }
+
+  @override
+  Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request) {
+    return _withFallback<GteKycProfile>(
+      () async => GteKycProfile.fromJson(
+        await _request('POST', '/api/kyc',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.submitKycProfile(request),
+    );
+  }
+
+  @override
+  Future<List<GteUserBankAccount>> listUserBankAccounts() {
+    return _withFallback<List<GteUserBankAccount>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/api/bank-accounts', requiresAuth: true),
+          label: 'bank accounts',
+        );
+        return payload
+            .map(GteUserBankAccount.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.listUserBankAccounts,
+    );
+  }
+
+  @override
+  Future<GteUserBankAccount> createUserBankAccount(
+      GteUserBankAccountCreate request) {
+    return _withFallback<GteUserBankAccount>(
+      () async => GteUserBankAccount.fromJson(
+        await _request('POST', '/api/bank-accounts',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.createUserBankAccount(request),
+    );
+  }
+
+  @override
+  Future<GteUserBankAccount> updateUserBankAccount(
+      String bankAccountId, GteUserBankAccountUpdate request) {
+    return _withFallback<GteUserBankAccount>(
+      () async => GteUserBankAccount.fromJson(
+        await _request('PUT', '/api/bank-accounts/$bankAccountId',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.updateUserBankAccount(bankAccountId, request),
+    );
+  }
+
+  @override
+  Future<List<GteDispute>> listDisputes() {
+    return _withFallback<List<GteDispute>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/api/disputes', requiresAuth: true),
+          label: 'disputes',
+        );
+        return payload.map(GteDispute.fromJson).toList(growable: false);
+      },
+      fixtures.listDisputes,
+    );
+  }
+
+  @override
+  Future<GteDispute> openDispute(GteDisputeCreateRequest request) {
+    return _withFallback<GteDispute>(
+      () async => GteDispute.fromJson(
+        await _request('POST', '/api/disputes',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.openDispute(request),
+    );
+  }
+
+  @override
+  Future<GteDispute> fetchDispute(String disputeId) {
+    return _withFallback<GteDispute>(
+      () async => GteDispute.fromJson(
+        await _request('GET', '/api/disputes/$disputeId', requiresAuth: true),
+      ),
+      () => fixtures.fetchDispute(disputeId),
+    );
+  }
+
+  @override
+  Future<GteDisputeMessage> sendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request) {
+    return _withFallback<GteDisputeMessage>(
+      () async => GteDisputeMessage.fromJson(
+        await _request(
+          'POST',
+          '/api/disputes/$disputeId/messages',
+          body: request.toJson(),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.sendDisputeMessage(disputeId, request),
+    );
+  }
+
+  @override
+  Future<List<GteNotification>> listNotifications({int limit = 20}) {
+    return _withFallback<List<GteNotification>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/notifications/me',
+              query: <String, Object?>{'limit': limit}, requiresAuth: true),
+          label: 'notifications',
+        );
+        return payload
+            .map(GteNotification.fromJson)
+            .toList(growable: false);
+      },
+      () => fixtures.listNotifications(limit: limit),
+    );
+  }
+
+  @override
+  Future<void> markNotificationRead(String notificationId) {
+    return _withFallback<void>(
+      () async {
+        await _request('POST', '/notifications/$notificationId/read',
+            requiresAuth: true);
+      },
+      () => fixtures.markNotificationRead(notificationId),
+    );
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() {
+    return _withFallback<void>(
+      () async {
+        await _request('POST', '/notifications/read-all', requiresAuth: true);
+      },
+      fixtures.markAllNotificationsRead,
+    );
+  }
+
+  @override
+  Future<GteAttachment> uploadAttachment(
+    String filename,
+    List<int> bytes, {
+    String? contentType,
+  }) {
+    return _withFallback<GteAttachment>(
+      () async => _uploadAttachmentLive(
+        filename,
+        bytes,
+        contentType: contentType,
+      ),
+      () => fixtures.uploadAttachment(filename, bytes, contentType: contentType),
+    );
+  }
+
+  @override
+  Future<GteAnalyticsEvent> trackAnalyticsEvent(
+    String name, {
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) {
+    return _withFallback<GteAnalyticsEvent>(
+      () async => GteAnalyticsEvent.fromJson(
+        await _request(
+          'POST',
+          '/api/analytics/events',
+          body: <String, Object?>{'name': name, 'metadata': metadata},
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.trackAnalyticsEvent(name, metadata: metadata),
+    );
+  }
+
+  @override
+  Future<GteAnalyticsSummary> fetchAnalyticsSummary() {
+    return _withFallback<GteAnalyticsSummary>(
+      () async => GteAnalyticsSummary.fromJson(
+        await _request('GET', '/api/admin/analytics/summary',
+            requiresAuth: true),
+      ),
+      fixtures.fetchAnalyticsSummary,
+    );
+  }
+
+  @override
+  Future<GteAnalyticsFunnel> fetchAnalyticsFunnel() {
+    return _withFallback<GteAnalyticsFunnel>(
+      () async => GteAnalyticsFunnel.fromJson(
+        await _request('GET', '/api/admin/analytics/funnels',
+            requiresAuth: true),
+      ),
+      fixtures.fetchAnalyticsFunnel,
     );
   }
 
@@ -454,6 +880,377 @@ class GteReliableApiRepository implements GteApiRepository {
       ),
       fixtures.fetchPortfolioSummary,
     );
+  }
+
+  @override
+  Future<GteTreasuryDashboard> fetchTreasuryDashboard() {
+    return _withFallback<GteTreasuryDashboard>(
+      () async => GteTreasuryDashboard.fromJson(
+        await _request('GET', '/api/admin/treasury/dashboard',
+            requiresAuth: true),
+      ),
+      fixtures.fetchTreasuryDashboard,
+    );
+  }
+
+  @override
+  Future<GteTreasurySettings> fetchTreasurySettings() {
+    return _withFallback<GteTreasurySettings>(
+      () async => GteTreasurySettings.fromJson(
+        await _request('GET', '/api/admin/treasury/settings',
+            requiresAuth: true),
+      ),
+      fixtures.fetchTreasurySettings,
+    );
+  }
+
+  @override
+  Future<GteTreasurySettings> updateTreasurySettings(
+      GteTreasurySettingsUpdate request) {
+    return _withFallback<GteTreasurySettings>(
+      () async => GteTreasurySettings.fromJson(
+        await _request('PUT', '/api/admin/treasury/settings',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.updateTreasurySettings(request),
+    );
+  }
+
+  @override
+  Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts() {
+    return _withFallback<List<GteTreasuryBankAccount>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/api/admin/treasury/bank-accounts',
+              requiresAuth: true),
+          label: 'treasury bank accounts',
+        );
+        return payload
+            .map(GteTreasuryBankAccount.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.listTreasuryBankAccounts,
+    );
+  }
+
+  @override
+  Future<GteTreasuryBankAccount> createTreasuryBankAccount(
+      GteTreasuryBankAccountCreate request) {
+    return _withFallback<GteTreasuryBankAccount>(
+      () async => GteTreasuryBankAccount.fromJson(
+        await _request('POST', '/api/admin/treasury/bank-accounts',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.createTreasuryBankAccount(request),
+    );
+  }
+
+  @override
+  Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
+      String accountId, GteTreasuryBankAccountUpdate request) {
+    return _withFallback<GteTreasuryBankAccount>(
+      () async => GteTreasuryBankAccount.fromJson(
+        await _request('PUT', '/api/admin/treasury/bank-accounts/$accountId',
+            body: request.toJson(), requiresAuth: true),
+      ),
+      () => fixtures.updateTreasuryBankAccount(accountId, request),
+    );
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteAdminDeposit>> fetchAdminDeposits({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return _withFallback<GteAdminQueuePage<GteAdminDeposit>>(
+      () async => GteAdminQueuePage<GteAdminDeposit>.fromJson(
+        await _request(
+          'GET',
+          '/api/admin/treasury/deposits',
+          query: <String, Object?>{
+            'limit': limit,
+            'offset': offset,
+            if (status != null) 'status': status,
+            if (query != null && query.isNotEmpty) 'q': query,
+          },
+          requiresAuth: true,
+        ),
+        GteAdminDeposit.fromJson,
+      ),
+      () => fixtures.fetchAdminDeposits(
+        limit: limit,
+        offset: offset,
+        status: status,
+        query: query,
+      ),
+    );
+  }
+
+  @override
+  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
+      {String? adminNotes}) {
+    return _withFallback<GteDepositRequest>(
+      () async => GteDepositRequest.fromJson(
+        await _request(
+          'POST',
+          '/api/admin/treasury/deposits/$depositId/confirm',
+          body: adminNotes == null ? null : <String, Object?>{'admin_notes': adminNotes},
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.adminConfirmDeposit(depositId, adminNotes: adminNotes),
+    );
+  }
+
+  @override
+  Future<GteDepositRequest> adminRejectDeposit(String depositId,
+      {String? adminNotes}) {
+    return _withFallback<GteDepositRequest>(
+      () async => GteDepositRequest.fromJson(
+        await _request(
+          'POST',
+          '/api/admin/treasury/deposits/$depositId/reject',
+          body: adminNotes == null ? null : <String, Object?>{'admin_notes': adminNotes},
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.adminRejectDeposit(depositId, adminNotes: adminNotes),
+    );
+  }
+
+  @override
+  Future<GteDepositRequest> adminReviewDeposit(String depositId,
+      {String? adminNotes}) {
+    return _withFallback<GteDepositRequest>(
+      () async => GteDepositRequest.fromJson(
+        await _request(
+          'POST',
+          '/api/admin/treasury/deposits/$depositId/review',
+          body: adminNotes == null ? null : <String, Object?>{'admin_notes': adminNotes},
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.adminReviewDeposit(depositId, adminNotes: adminNotes),
+    );
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return _withFallback<GteAdminQueuePage<GteAdminWithdrawal>>(
+      () async => GteAdminQueuePage<GteAdminWithdrawal>.fromJson(
+        await _request(
+          'GET',
+          '/api/admin/treasury/withdrawals',
+          query: <String, Object?>{
+            'limit': limit,
+            'offset': offset,
+            if (status != null) 'status': status,
+            if (query != null && query.isNotEmpty) 'q': query,
+          },
+          requiresAuth: true,
+        ),
+        GteAdminWithdrawal.fromJson,
+      ),
+      () => fixtures.fetchAdminWithdrawals(
+        limit: limit,
+        offset: offset,
+        status: status,
+        query: query,
+      ),
+    );
+  }
+
+  @override
+  Future<GteTreasuryWithdrawalRequest> adminUpdateWithdrawalStatus(
+    String withdrawalId, {
+    required GteWithdrawalStatus status,
+    String? adminNotes,
+  }) {
+    return _withFallback<GteTreasuryWithdrawalRequest>(
+      () async => GteTreasuryWithdrawalRequest.fromJson(
+        await _request(
+          'POST',
+          '/api/admin/treasury/withdrawals/$withdrawalId/status',
+          body: <String, Object?>{
+            'status': _withdrawalStatusToString(status),
+            if (adminNotes != null) 'admin_notes': adminNotes,
+          },
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.adminUpdateWithdrawalStatus(withdrawalId,
+          status: status, adminNotes: adminNotes),
+    );
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return _withFallback<GteAdminQueuePage<GteAdminKyc>>(
+      () async => GteAdminQueuePage<GteAdminKyc>.fromJson(
+        await _request(
+          'GET',
+          '/api/admin/treasury/kyc',
+          query: <String, Object?>{
+            'limit': limit,
+            'offset': offset,
+            if (status != null) 'status': status,
+            if (query != null && query.isNotEmpty) 'q': query,
+          },
+          requiresAuth: true,
+        ),
+        GteAdminKyc.fromJson,
+      ),
+      () => fixtures.fetchAdminKyc(
+        limit: limit,
+        offset: offset,
+        status: status,
+        query: query,
+      ),
+    );
+  }
+
+  @override
+  Future<GteKycProfile> adminReviewKyc(
+      String profileId, GteKycReviewRequest request) {
+    return _withFallback<GteKycProfile>(
+      () async => GteKycProfile.fromJson(
+        await _request(
+          'POST',
+          '/api/admin/treasury/kyc/$profileId/review',
+          body: request.toJson(),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.adminReviewKyc(profileId, request),
+    );
+  }
+
+  @override
+  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
+    int limit = 50,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) {
+    return _withFallback<GteAdminQueuePage<GteDispute>>(
+      () async => GteAdminQueuePage<GteDispute>.fromJson(
+        await _request(
+          'GET',
+          '/api/admin/treasury/disputes',
+          query: <String, Object?>{
+            'limit': limit,
+            'offset': offset,
+            if (status != null) 'status': status,
+            if (query != null && query.isNotEmpty) 'q': query,
+          },
+          requiresAuth: true,
+        ),
+        GteDispute.fromJson,
+      ),
+      () => fixtures.fetchAdminDisputes(
+        limit: limit,
+        offset: offset,
+        status: status,
+        query: query,
+      ),
+    );
+  }
+
+  @override
+  Future<GteDispute> fetchAdminDispute(String disputeId) {
+    return _withFallback<GteDispute>(
+      () async => GteDispute.fromJson(
+        await _request('GET', '/api/admin/treasury/disputes/$disputeId',
+            requiresAuth: true),
+      ),
+      () => fixtures.fetchAdminDispute(disputeId),
+    );
+  }
+
+  @override
+  Future<GteDisputeMessage> adminSendDisputeMessage(
+      String disputeId, GteDisputeMessageRequest request) {
+    return _withFallback<GteDisputeMessage>(
+      () async => GteDisputeMessage.fromJson(
+        await _request(
+          'POST',
+          '/api/admin/treasury/disputes/$disputeId/messages',
+          body: request.toJson(),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.adminSendDisputeMessage(disputeId, request),
+    );
+  }
+
+  Future<GteAttachment> _uploadAttachmentLive(
+    String filename,
+    List<int> bytes, {
+    String? contentType,
+  }) async {
+    final Uri uri = config.uriFor('/api/attachments');
+    final String boundary =
+        '----gte-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+    final String resolvedContentType =
+        (contentType == null || contentType.isEmpty)
+            ? 'application/octet-stream'
+            : contentType;
+    final HttpClient client = HttpClient();
+    try {
+      final HttpClientRequest request = await client.postUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.contentTypeHeader,
+          'multipart/form-data; boundary=$boundary');
+      final String? token = await tokenStore.readToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers
+            .set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      }
+      request.add(utf8.encode(
+          '--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$filename\"\\r\\nContent-Type: $resolvedContentType\\r\\n\\r\\n'));
+      request.add(bytes);
+      request.add(utf8.encode('\\r\\n--$boundary--\\r\\n'));
+      final HttpClientResponse response = await request.close();
+      final String text = await response.transform(utf8.decoder).join();
+      final Object? decoded = text.trim().isEmpty ? null : jsonDecode(text);
+      if (response.statusCode >= 400) {
+        throw GteApiException(
+          type: _errorTypeFromStatusCode(response.statusCode),
+          message: _errorMessage(decoded),
+          statusCode: response.statusCode,
+          cause: decoded,
+        );
+      }
+      return GteAttachment.fromJson(decoded);
+    } on FormatException catch (error) {
+      throw GteApiException(
+        type: GteApiErrorType.parsing,
+        message: error.message,
+        cause: error,
+      );
+    } on GteApiException {
+      rethrow;
+    } catch (error) {
+      throw GteApiException(
+        type: GteApiErrorType.network,
+        message: 'Unable to reach the backend.',
+        cause: error,
+      );
+    } finally {
+      client.close(force: true);
+    }
   }
 
   Future<T> _withFallback<T>(

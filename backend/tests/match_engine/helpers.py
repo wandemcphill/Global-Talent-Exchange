@@ -113,6 +113,8 @@ def _build_player(
 ) -> MatchPlayerInput:
     variation = (shirt_number % 3) - 1
     resolved_overall = _clamp(base_overall + variation)
+    resolved_shirt_number = shirt_number if 1 <= shirt_number <= 99 else None
+    display_name = f"{team_id[:1].upper()}{shirt_number}" if resolved_shirt_number is not None else None
     if role is PlayerRole.GOALKEEPER:
         return MatchPlayerInput(
             player_id=f"{team_id}-p{shirt_number}",
@@ -125,6 +127,8 @@ def _build_player(
             goalkeeping=_clamp(base_overall + 10 + variation),
             discipline=_clamp(discipline),
             fitness=_clamp(fitness),
+            shirt_number=resolved_shirt_number,
+            display_name=display_name,
         )
     if role is PlayerRole.DEFENDER:
         return MatchPlayerInput(
@@ -138,6 +142,8 @@ def _build_player(
             goalkeeping=5,
             discipline=_clamp(discipline),
             fitness=_clamp(fitness),
+            shirt_number=resolved_shirt_number,
+            display_name=display_name,
         )
     if role is PlayerRole.MIDFIELDER:
         return MatchPlayerInput(
@@ -151,6 +157,8 @@ def _build_player(
             goalkeeping=5,
             discipline=_clamp(discipline),
             fitness=_clamp(fitness),
+            shirt_number=resolved_shirt_number,
+            display_name=display_name,
         )
     return MatchPlayerInput(
         player_id=f"{team_id}-p{shirt_number}",
@@ -163,6 +171,8 @@ def _build_player(
         goalkeeping=5,
         discipline=_clamp(discipline),
         fitness=_clamp(fitness),
+        shirt_number=resolved_shirt_number,
+        display_name=display_name,
     )
 
 

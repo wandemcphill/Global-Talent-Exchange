@@ -310,3 +310,13 @@ class WalletAdaptiveOverviewView(BaseModel):
     egame_withdrawals_enabled: bool = False
     trade_withdrawals_enabled: bool = True
     insights: list[WalletAdaptiveInsightView] = Field(default_factory=list)
+
+
+class WalletOverviewView(BaseModel):
+    available_balance: Decimal
+    pending_deposits: Decimal
+    pending_withdrawals: Decimal
+    total_inflow: Decimal
+    total_outflow: Decimal
+    withdrawable_now: Decimal
+    currency: LedgerUnit

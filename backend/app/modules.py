@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from backend.app.academy.api.router import router as academy_router
+from backend.app.analytics.router import admin_router as analytics_admin_router, router as analytics_router
+from backend.app.attachments.router import router as attachments_router
 from backend.app.admin.router import router as admin_router
 from backend.app.admin_access.router import router as admin_access_router
 from backend.app.admin_godmode.router import router as admin_godmode_router
@@ -38,6 +40,7 @@ from backend.app.users.router import router as users_router
 from backend.app.value_engine.router import router as value_engine_router
 from backend.app.wallets.router import router as wallets_router
 from backend.app.world_super_cup.api.router import router as world_super_cup_router
+from backend.app.treasury.router import router as treasury_router
 
 
 def _with_api_alias(router: APIRouter) -> APIRouter:
@@ -58,6 +61,10 @@ DOMAIN_MODULES = (
     DomainModule(name="admin_godmode", router=admin_godmode_router),
     DomainModule(name="auth", router=auth_router),
     DomainModule(name="wallets", router=wallets_router),
+    DomainModule(name="treasury", router=treasury_router),
+    DomainModule(name="attachments", router=attachments_router),
+    DomainModule(name="analytics", router=analytics_router),
+    DomainModule(name="admin_analytics", router=analytics_admin_router),
     DomainModule(name="players", router=players_router),
     DomainModule(name="player_lifecycle", router=player_lifecycle_router),
     DomainModule(name="clubs", router=clubs_router),

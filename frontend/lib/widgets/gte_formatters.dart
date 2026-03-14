@@ -3,6 +3,11 @@ String gteFormatCredits(double value) {
   return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} cr';
 }
 
+String gteFormatFiat(double value, {String currency = 'NGN'}) {
+  final bool wholeNumber = value == value.roundToDouble();
+  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} $currency';
+}
+
 String gteFormatNullableCredits(double? value) {
   if (value == null) {
     return '--';

@@ -645,6 +645,11 @@ class LocalMatchExecutionWorker:
                 "home_goals": replay_payload.summary.home_score,
                 "away_goals": replay_payload.summary.away_score,
             },
+            "visual_identity": (
+                replay_payload.visual_identity.model_dump(mode="json")
+                if replay_payload.visual_identity is not None
+                else None
+            ),
             "participant_user_ids": [
                 user_id
                 for user_id in (job.home_user_id, job.away_user_id)
@@ -714,6 +719,8 @@ class LocalMatchExecutionWorker:
         mapping = {
             MatchEventType.GOAL: "goals",
             MatchEventType.MISSED_CHANCE: "missed_chances",
+            MatchEventType.WOODWORK: "missed_chances",
+            MatchEventType.DOUBLE_SAVE: "missed_chances",
             MatchEventType.YELLOW_CARD: "yellow_cards",
             MatchEventType.RED_CARD: "red_cards",
             MatchEventType.SUBSTITUTION: "substitutions",

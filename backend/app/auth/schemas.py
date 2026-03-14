@@ -16,6 +16,9 @@ PROTECTED_PROFILE_FIELDS = frozenset(
         "is_active",
         "kyc_status",
         "last_login_at",
+        "full_name",
+        "phone_number",
+        "age_confirmed_at",
         "password",
         "password_hash",
         "role",
@@ -27,9 +30,11 @@ PROTECTED_PROFILE_FIELDS = frozenset(
 
 class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=320)
-    username: str = Field(min_length=3, max_length=64)
+    full_name: str = Field(min_length=2, max_length=160)
+    phone_number: str = Field(min_length=6, max_length=32)
+    is_over_18: bool = Field(default=False)
+    username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
-    display_name: str | None = Field(default=None, max_length=120)
 
     @field_validator("email")
     @classmethod
@@ -43,19 +48,30 @@ class RegisterRequest(BaseModel):
 
     @field_validator("username")
     @classmethod
-    def normalize_username(cls, value: str) -> str:
-        candidate = value.strip().lower()
-        if not candidate:
-            raise ValueError("Username is required.")
-        return candidate
-
-    @field_validator("display_name")
-    @classmethod
-    def normalize_display_name(cls, value: str | None) -> str | None:
+    def normalize_username(cls, value: str | None) -> str | None:
         if value is None:
             return None
+        candidate = value.strip().lower()
+        if not candidate:
+            return None
+        return candidate
+
+    @field_validator("full_name")
+    @classmethod
+    def normalize_full_name(cls, value: str) -> str:
         candidate = value.strip()
-        return candidate or None
+        if not candidate:
+            raise ValueError("Full name is required.")
+        return candidate
+
+    @field_validator("phone_number")
+    @classmethod
+    def normalize_phone_number(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("Phone number is required.")
+        return candidate
+
 
 
 class LoginRequest(BaseModel):
@@ -101,6 +117,9 @@ class CurrentUserResponse(BaseModel):
     id: str
     email: str
     username: str
+    full_name: str | None
+    phone_number: str | None
+    age_confirmed_at: datetime | None
     display_name: str | None
     avatar_url: str | None
     favourite_club: str | None

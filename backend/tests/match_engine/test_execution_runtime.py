@@ -109,6 +109,7 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
     assert latest_replay is not None
     assert latest_replay.competition_context.presentation_duration_minutes in {3, 4, 5}
     assert latest_replay.timeline
+    assert latest_replay.visual_identity is not None
 
     home_notifications = notifications.list_for_user("user-home", limit=20)
     template_keys = {item.template_key for item in home_notifications}

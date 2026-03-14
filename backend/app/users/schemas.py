@@ -13,6 +13,8 @@ class UserPublic(BaseModel):
     id: str
     email: str
     username: str
+    full_name: str | None
+    phone_number: str | None
     display_name: str | None
     role: UserRole
     kyc_status: KycStatus

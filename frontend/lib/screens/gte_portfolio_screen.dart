@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
@@ -11,6 +11,12 @@ import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
 import '../widgets/gte_wallet_summary_card.dart';
 import '../widgets/gtex_branding.dart';
+import 'notifications/gte_notifications_screen.dart';
+import 'support/gte_support_dispute_screens.dart';
+import 'wallet/gte_deposit_history_screen.dart';
+import 'wallet/gte_funding_flow_screen.dart';
+import 'wallet/gte_wallet_overview_screen.dart';
+import 'wallet/gte_withdrawal_flow_screen.dart';
 
 class GtePortfolioScreen extends StatelessWidget {
   const GtePortfolioScreen({
@@ -128,6 +134,8 @@ class GtePortfolioScreen extends StatelessWidget {
                 portfolioSummary: controller.portfolioSummary,
                 openOrderCount: controller.openOrders.length,
               ),
+              const SizedBox(height: 20),
+              _WalletActionPanel(controller: controller),
             ]
             else if (controller.isLoadingPortfolio)
               const _LoadingCard(title: 'Wallet summary')
@@ -315,7 +323,7 @@ class _HoldingsCard extends StatelessWidget {
                               Text(controller.playerLabel(holding.playerId), style: Theme.of(context).textTheme.titleLarge),
                               const SizedBox(height: 6),
                               Text(
-                                'Qty ${holding.quantity.toStringAsFixed(2)} • Avg ${gteFormatCredits(holding.averageCost)} • Mark ${gteFormatCredits(holding.currentPrice)}',
+                                'Qty ${holding.quantity.toStringAsFixed(2)} - Avg ${gteFormatCredits(holding.averageCost)} - Mark ${gteFormatCredits(holding.currentPrice)}',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ],
@@ -674,6 +682,109 @@ class _LoadingCard extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 16),
           const LinearProgressIndicator(),
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletActionPanel extends StatelessWidget {
+  const _WalletActionPanel({
+    required this.controller,
+  });
+
+  final GteExchangeController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      emphasized: true,
+      accentColor: GteShellTheme.accentCapital,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('Wallet actions',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          GteWalletOverviewScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Wallet overview'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          GteFundWalletScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add_card_outlined),
+                label: const Text('Fund wallet'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          GteWithdrawalEligibilityScreen(
+                              controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.payments_outlined),
+                label: const Text('Withdraw'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          GteDepositHistoryScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.history),
+                label: const Text('Deposit history'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          GteNotificationsScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.notifications_outlined),
+                label: const Text('Notifications'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (BuildContext context) =>
+                          GteDisputeHubScreen(controller: controller),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.support_agent_outlined),
+                label: const Text('Support'),
+              ),
+            ],
+          ),
         ],
       ),
     );
