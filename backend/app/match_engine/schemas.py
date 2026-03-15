@@ -633,6 +633,63 @@ class MatchEventTimelineView(CommonSchema):
     events: list[MatchEventView] = Field(default_factory=list)
 
 
+class MatchLiveFeedEventView(CommonSchema):
+    event_id: str
+    minute: int = Field(ge=0)
+    event_type: str
+    team_id: str | None = None
+    team_name: str | None = None
+    player_name: str | None = None
+    secondary_player_name: str | None = None
+    description: str | None = None
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    is_penalty: bool = False
+
+
+class MatchMediaAvailabilityView(CommonSchema):
+    halftime_analytics_available: bool = False
+    key_moments_available: bool = False
+    highlights_available: bool = False
+    replay_available: bool = False
+    archive_available: bool = False
+    download_available: bool = False
+
+
+class MatchLiveFeedView(CommonSchema):
+    match_id: str
+    home_team_name: str
+    away_team_name: str
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    status: MatchStatus
+    minute: int | None = Field(default=None, ge=0)
+    phase: str = Field(min_length=1)
+    timeline_events: list[MatchLiveFeedEventView] = Field(default_factory=list)
+    availability: MatchMediaAvailabilityView
+
+
+class MatchHighlightItemView(CommonSchema):
+    highlight_id: str
+    title: str
+    label: str | None = None
+    minute: int = Field(ge=0)
+    event_type: str
+    team_name: str | None = None
+    player_name: str | None = None
+    access_state: str = "available"
+    archive_available: bool = False
+    download_available: bool = False
+
+
+class MatchHighlightListView(CommonSchema):
+    match_id: str
+    highlights: list[MatchHighlightItemView] = Field(default_factory=list)
+    replay_available: bool = False
+    archive_available: bool = False
+    download_available: bool = False
+
+
 class MatchReplayPayloadView(CommonSchema):
     match_id: str
     seed: int = Field(ge=0)
