@@ -85,6 +85,14 @@ DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
         "active": True,
     },
     {
+        "service_key": "highlight-download",
+        "title": "Highlight Download",
+        "description": "Download a premium highlight clip or replay asset.",
+        "price_coin": Decimal("1.0000"),
+        "price_fancoin_equivalent": Decimal("100.0000"),
+        "active": True,
+    },
+    {
         "service_key": "fast-match-entry",
         "title": "Fast Match Entry",
         "description": "Jump into the casual fast-match lane with either GTex or Fan Coin parity.",

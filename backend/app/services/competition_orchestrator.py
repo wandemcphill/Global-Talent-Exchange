@@ -9,7 +9,6 @@ from secrets import token_hex
 from typing import Iterable
 
 from fastapi import Depends
-from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -59,10 +58,6 @@ from app.schemas.competition_lifecycle import (
 )
 from app.schemas.competition_requests import (
     CompetitionCreateRequest,
-    CompetitionInviteCreateRequest,
-    CompetitionJoinRequest,
-    CompetitionLeaveRequest,
-    CompetitionPublishRequest,
     CompetitionUpdateRequest,
     validate_format_capacity_for_update,
 )

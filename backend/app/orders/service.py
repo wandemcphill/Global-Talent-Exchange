@@ -92,7 +92,7 @@ class OrderService:
             quantity=normalized_quantity,
             filled_quantity=Decimal("0.0000"),
             max_price=normalized_max_price,
-            currency=LedgerUnit.CREDIT,
+            currency=LedgerUnit.COIN,
             reserved_amount=reserved_amount,
             status=OrderStatus.OPEN,
         )

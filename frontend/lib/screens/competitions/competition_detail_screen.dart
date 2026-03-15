@@ -531,4 +531,37 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
       ),
     );
   }
+
+  Future<void> _openLiveMatch(CompetitionSummary competition) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GteLiveMatchCenterScreen(
+          competition: competition,
+          isAuthenticated: widget.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openHalftime(CompetitionSummary competition) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GteHalftimeAnalyticsScreen(
+          competition: competition,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openHighlights(CompetitionSummary competition) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GteMatchHighlightsScreen(
+          competition: competition,
+          isAuthenticated: widget.isAuthenticated,
+        ),
+      ),
+    );
+  }
 }

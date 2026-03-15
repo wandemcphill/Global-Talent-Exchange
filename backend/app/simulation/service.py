@@ -812,6 +812,7 @@ class DemoMarketSimulationService:
                 LedgerPosting(account=platform_account, amount=-delta),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=f"simulation-rebalance-{account.code}",
             description="Simulation wallet rebalance",
             actor=actor,

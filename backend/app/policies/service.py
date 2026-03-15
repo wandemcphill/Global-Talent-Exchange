@@ -436,6 +436,10 @@ class PolicyService:
         if region_profile is not None:
             return self.normalize_country_code(region_profile.region_code)
 
+        region_profile = self.session.scalar(select(UserRegionProfile).where(UserRegionProfile.user_id == user.id))
+        if region_profile is not None:
+            return self.normalize_country_code(region_profile.region_code)
+
         profile = self.session.scalar(select(KycProfile).where(KycProfile.user_id == user.id))
         candidate = None
         if profile is not None:

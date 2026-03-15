@@ -312,6 +312,7 @@ class TeamVisualIdentity:
     badge: BadgeVisualIdentity
     selected_kit: KitVisualIdentity
     alternate_kit: KitVisualIdentity
+    third_kit: KitVisualIdentity | None = None
     goalkeeper_kit: KitVisualIdentity
     third_kit: KitVisualIdentity | None = None
     player_visuals: tuple[PlayerVisualIdentity, ...] = ()

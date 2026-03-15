@@ -22,6 +22,7 @@ import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/referrals/referral_hub_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
+import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';

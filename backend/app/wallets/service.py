@@ -576,6 +576,21 @@ class WalletService:
     def ensure_promo_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
         return self.ensure_rewards_pool_account(session, unit)
 
+    def ensure_promo_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
+        code = f"platform:{unit.value}:promo_pool"
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                code=code,
+                label=f"Platform {unit.value.capitalize()} Promo Pool",
+                unit=unit,
+                kind=LedgerAccountKind.SYSTEM,
+                allow_negative=False,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
     def get_position_account(self, session: Session, user: User, player_id: str) -> LedgerAccount:
         code = self._position_account_code(user.id, player_id)
         account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
