@@ -16,6 +16,7 @@ from backend.app.models.club_sponsorship_package import ClubSponsorshipPackage
 from backend.app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from backend.app.models.sponsorship_engine import SponsorshipLead
 from backend.app.models.user import User
+from backend.app.models.wallet import LedgerSourceTag
 from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
 from backend.app.story_feed_engine.service import StoryFeedService
 from backend.app.wallets.service import LedgerPosting, WalletService
@@ -230,6 +231,7 @@ class SponsorshipEngineService:
                 LedgerPosting(account=platform_account, amount=-credit_amount),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=f"sponsorship:{contract.id}:{payout.id}",
             description=f"Sponsorship payout for {contract.sponsor_name}",
             actor=actor,

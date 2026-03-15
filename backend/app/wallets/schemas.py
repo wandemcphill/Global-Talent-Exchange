@@ -6,7 +6,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
+from backend.app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
 
 
 class WalletAccountBalance(BaseModel):
@@ -167,7 +167,7 @@ class MarketTopupSourceScope(str, Enum):
 class MarketTopupQuoteRequest(BaseModel):
     amount: Decimal
     fee_bps: int = Field(default=0, ge=0, le=10_000)
-    unit: LedgerUnit = LedgerUnit.CREDIT
+    unit: LedgerUnit = LedgerUnit.COIN
 
     @field_validator("amount")
     @classmethod
@@ -175,6 +175,13 @@ class MarketTopupQuoteRequest(BaseModel):
         if value <= 0:
             raise ValueError("Topup amount must be positive.")
         return value
+
+
+class MarketTopupQuoteView(BaseModel):
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    unit: LedgerUnit
 
 
 class MarketTopupCreateRequest(MarketTopupQuoteRequest):
@@ -219,7 +226,7 @@ class WithdrawalRequestCreate(BaseModel):
     model_config = ConfigDict(title="WithdrawalRequestCreate")
 
     amount: Decimal
-    unit: LedgerUnit = LedgerUnit.CREDIT
+    unit: LedgerUnit = LedgerUnit.COIN
     destination_reference: str = Field(min_length=4, max_length=255)
     source_scope: str = Field(default="trade")
     notes: str | None = Field(default=None, max_length=255)
@@ -235,8 +242,8 @@ class WithdrawalRequestCreate(BaseModel):
     @classmethod
     def normalize_scope(cls, value: str) -> str:
         candidate = value.strip().lower()
-        if candidate not in {"trade", "competition"}:
-            raise ValueError("source_scope must be trade or competition")
+        if candidate not in {"trade", "competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"}:
+            raise ValueError("source_scope must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward")
         return candidate
 
 
@@ -323,6 +330,7 @@ class WalletLedgerEntryView(BaseModel):
                 "amount": "-50.0000",
                 "unit": "credit",
                 "reason": "withdrawal_hold",
+                "source_tag": "market_topup",
                 "reference": "ord-123",
                 "external_reference": None,
                 "description": "Reserved credits for open order",
@@ -337,6 +345,7 @@ class WalletLedgerEntryView(BaseModel):
     amount: Decimal
     unit: LedgerUnit
     reason: LedgerEntryReason
+    source_tag: LedgerSourceTag
     reference: str | None
     external_reference: str | None
     description: str | None

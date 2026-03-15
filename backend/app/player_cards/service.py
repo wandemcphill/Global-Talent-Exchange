@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from backend.app.admin_engine.service import AdminEngineService
 from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.ingestion.models import MarketSignal, Player
 from backend.app.integrity_engine.service import IntegrityEngineService
@@ -34,14 +35,14 @@ from backend.app.models.player_cards import (
 )
 from backend.app.models.risk_ops import SystemEventSeverity
 from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerUnit
+from backend.app.models.wallet import LedgerSourceTag, LedgerUnit
 from backend.app.players.read_models import PlayerSummaryReadModel
 from backend.app.risk_ops_engine.service import RiskOpsService
 from backend.app.wallets.service import LedgerPosting, WalletService
 
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-TRADE_FEE_RATE = Decimal("0.20")
+DEFAULT_TRADE_FEE_BPS = 2000
 
 
 class PlayerCardMarketError(ValueError):
@@ -115,6 +116,10 @@ class PlayerCardMarketService:
                 }
             )
         return results
+
+    def _active_trading_fee_bps(self) -> int:
+        rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
+        return int(rule.trading_fee_bps if rule is not None else DEFAULT_TRADE_FEE_BPS)
     def get_player_detail(self, *, player_id: str) -> dict[str, object]:
         player = self.session.get(Player, player_id)
         if player is None:
@@ -281,21 +286,22 @@ class PlayerCardMarketService:
             raise PlayerCardValidationError("Seller account was not found.")
 
         gross = self._normalize_amount(Decimal(listing.price_per_card_credits) * Decimal(quantity))
-        fee = self._normalize_amount(gross * TRADE_FEE_RATE)
+        fee_bps = self._active_trading_fee_bps()
+        fee = self._normalize_amount(gross * Decimal(fee_bps) / Decimal(10_000))
         seller_net = self._normalize_amount(gross - fee)
         settlement_reference = f"player-card-sale:{listing.listing_id}:{self._new_id('settle')}"
         if self._settlement_exists(settlement_reference):
             raise PlayerCardMarketError("This sale has already been settled.")
 
-        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
-        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.CREDIT)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
+        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.COIN)
+        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
         self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=buyer_account, amount=-gross),
-                LedgerPosting(account=seller_account, amount=seller_net),
-                LedgerPosting(account=platform_account, amount=fee),
+                LedgerPosting(account=buyer_account, amount=-gross, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
+                LedgerPosting(account=seller_account, amount=seller_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
+                LedgerPosting(account=platform_account, amount=fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
             ],
             reason=self.wallet_service.trade_settlement_reason,
             reference=settlement_reference,

@@ -31,12 +31,15 @@ from backend.app.models.treasury import (
 from backend.app.models.withdrawal_review import WithdrawalReview
 from backend.app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from backend.app.models.user import KycStatus, User
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit, PayoutRequest, PayoutStatus
+from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
 from backend.app.risk_ops_engine.service import RiskOpsService
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_WHATSAPP = "+2347000000000"
+WITHDRAWAL_RISK_AMOUNT_THRESHOLD = Decimal("5000.0000")
+WITHDRAWAL_RISK_FREQUENCY_THRESHOLD = 3
+WITHDRAWAL_RISK_WINDOW_HOURS = 24
 
 
 class TreasuryError(ValueError):
@@ -281,8 +284,8 @@ class TreasuryService:
         user = session.get(User, request.user_id)
         if user is None:
             raise TreasuryError("Deposit request references missing user.")
-        user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+        user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
         entries = self.wallet_service.append_transaction(
             session,
             postings=[
@@ -290,6 +293,7 @@ class TreasuryService:
                 LedgerPosting(account=platform_account, amount=-request.amount_coin),
             ],
             reason=LedgerEntryReason.DEPOSIT,
+            source_tag=LedgerSourceTag.MARKET_TOPUP,
             reference=request.reference,
             description="Manual bank transfer deposit confirmed.",
             external_reference=request.reference,
@@ -415,8 +419,29 @@ class TreasuryService:
             suffix = "" if len(missing) <= 3 else ", ..."
             raise TreasuryConflictError(f"Accept the latest required policies before making a deposit: {names}{suffix}")
 
+    def _assert_withdrawal_policy(self, session: Session, user: User, source_scope: str) -> None:
+        from backend.app.policies.service import PolicyService
+
+        policy_service = PolicyService(session)
+        country_policy = policy_service.get_country_policy_for_user(user=user)
+        scope = (source_scope or "trade").strip().lower()
+        allowed = {
+            "trade": country_policy.market_trading_enabled,
+            "competition": country_policy.platform_reward_withdrawals_enabled,
+            "user_hosted_gift": country_policy.user_hosted_gift_withdrawals_enabled,
+            "gtex_competition_gift": country_policy.gtex_competition_gift_withdrawals_enabled,
+            "national_reward": country_policy.national_reward_withdrawals_enabled,
+        }
+        if not allowed.get(scope, False):
+            raise TreasuryConflictError(f"Withdrawals are disabled for source scope '{scope}' in {country_policy.country_code}.")
+        missing = policy_service.list_missing_acceptances(user_id=user.id)
+        if missing:
+            names = ", ".join(version.document.title for version in missing[:3])
+            suffix = "" if len(missing) <= 3 else ", ..."
+            raise TreasuryConflictError(f"Accept the latest required policies before requesting withdrawals: {names}{suffix}")
+
     def get_withdrawal_eligibility(self, session: Session, user: User) -> WithdrawalEligibility:
-        summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
+        summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         available = Decimal(summary.available_balance)
         kyc_status = user.kyc_status
         country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(session, user)
@@ -521,6 +546,7 @@ class TreasuryService:
             raise TreasuryConflictError("Withdrawal amount exceeds available withdrawable balance.")
 
         bank_account = self._resolve_user_bank_account(session, user, bank_account_id)
+        self._assert_withdrawal_policy(session, user, source_scope)
         self._enforce_withdrawal_limits(settings, amount_coin)
         rate_value = Decimal(settings.withdrawal_rate_value)
         if rate_value <= Decimal("0.0000"):
@@ -533,17 +559,17 @@ class TreasuryService:
         )
         commissions = self._commission_settings()
         try:
-            result = self.wallet_service.request_payout(
-                session,
-                user=user,
-                amount=amount_coin,
-                destination_reference=f"bank:{bank_account.id}",
-                unit=LedgerUnit.CREDIT,
-                source_scope=source_scope,
-                withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
-                minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
-                actor=user,
-                notes=notes,
+                result = self.wallet_service.request_payout(
+                    session,
+                    user=user,
+                    amount=amount_coin,
+                    destination_reference=f"bank:{bank_account.id}",
+                    unit=LedgerUnit.COIN,
+                    source_scope=source_scope,
+                    withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
+                    minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
+                    actor=user,
+                    notes=notes,
                 extra_meta={
                     "processor_mode": "manual_bank_transfer",
                     "payout_channel": "bank_transfer",
@@ -561,7 +587,7 @@ class TreasuryService:
             user_id=user.id,
             reference=reference,
             status=TreasuryWithdrawalStatus.PENDING_REVIEW,
-            unit=LedgerUnit.CREDIT,
+            unit=LedgerUnit.COIN,
             amount_coin=amount_coin,
             amount_fiat=amount_fiat,
             fee_amount=result.fee_amount,
@@ -654,6 +680,41 @@ class TreasuryService:
             payout_request.status = PayoutStatus.REVIEWING
 
         request.reviewed_at = now
+        review = WithdrawalReview(
+            withdrawal_request_id=request.id,
+            payout_request_id=request.payout_request_id,
+            reviewer_user_id=actor.id,
+            status_from=previous.value,
+            status_to=status.value,
+            processor_mode=request.processor_mode,
+            payout_channel=request.payout_channel,
+            source_scope=request.source_scope,
+            gross_amount=request.amount_coin,
+            fee_amount=request.fee_amount,
+            net_amount=request.net_amount,
+            notes=admin_notes,
+            metadata_json={
+                "payout_status": payout_request.status.value if payout_request else None,
+            },
+        )
+        session.add(review)
+        if status == TreasuryWithdrawalStatus.DISPUTED:
+            RiskOpsService(session).create_system_event(
+                actor_user_id=actor.id,
+                event_key=f"withdrawal-disputed-{request.id}",
+                event_type="finance_alert",
+                severity=SystemEventSeverity.CRITICAL,
+                title="Withdrawal marked as disputed",
+                body="Withdrawal has been marked disputed and should be reviewed.",
+                subject_type="treasury_withdrawal",
+                subject_id=request.id,
+                metadata_json={
+                    "withdrawal_id": request.id,
+                    "reference": request.reference,
+                    "user_id": request.user_id,
+                    "amount_fiat": str(request.amount_fiat),
+                },
+            )
         session.flush()
         self._audit(
             session,
@@ -985,6 +1046,44 @@ class TreasuryService:
 
     def _commission_settings(self) -> dict[str, Any]:
         return dict(DEFAULT_COMMISSION_SETTINGS)
+
+    def _flag_withdrawal_risk(self, session: Session, withdrawal: TreasuryWithdrawalRequest) -> None:
+        amount_signal = Decimal(str(withdrawal.amount_fiat or withdrawal.amount_coin or 0))
+        risk_service = RiskOpsService(session)
+        if amount_signal >= WITHDRAWAL_RISK_AMOUNT_THRESHOLD:
+            risk_service.create_aml_case(
+                actor_user_id=None,
+                user_id=withdrawal.user_id,
+                trigger_source="withdrawal_request",
+                title="Large withdrawal request",
+                description="Withdrawal request exceeded large-value threshold.",
+                severity=RiskSeverity.HIGH,
+                amount_signal=amount_signal,
+                country_code=None,
+                metadata_json={"withdrawal_id": withdrawal.id},
+            )
+        window_start = utcnow() - timedelta(hours=WITHDRAWAL_RISK_WINDOW_HOURS)
+        recent_count = session.scalar(
+            select(func.count()).select_from(TreasuryWithdrawalRequest).where(
+                TreasuryWithdrawalRequest.user_id == withdrawal.user_id,
+                TreasuryWithdrawalRequest.created_at >= window_start,
+            )
+        )
+        if int(recent_count or 0) >= WITHDRAWAL_RISK_FREQUENCY_THRESHOLD:
+            risk_service.create_system_event(
+                actor_user_id=None,
+                event_key=f"withdrawal-frequency-{withdrawal.user_id}-{withdrawal.id}",
+                event_type="finance_alert",
+                severity=SystemEventSeverity.WARNING,
+                title="High frequency withdrawal requests",
+                body="User submitted multiple withdrawal requests within 24 hours.",
+                subject_type="treasury_withdrawal",
+                subject_id=withdrawal.id,
+                metadata_json={
+                    "user_id": withdrawal.user_id,
+                    "recent_count": int(recent_count or 0),
+                },
+            )
 
     def _enforce_deposit_limits(self, settings: TreasurySettings, amount_coin: Decimal) -> None:
         if settings.min_deposit and amount_coin < Decimal(settings.min_deposit):

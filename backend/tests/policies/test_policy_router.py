@@ -97,6 +97,17 @@ def test_policy_requirements_and_compliance_status(client, demo_seed, demo_user_
     assert compliance["required_policy_acceptances_missing"] >= 1
 
 
+def test_region_profile_exposes_policy_state(client, demo_seed, demo_user_credentials) -> None:
+    headers = _login(client, email=demo_user_credentials["email"], password=demo_user_credentials["password"])
+    response = client.get("/policies/me/region", headers=headers)
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["current_region"] == payload["region_code"]
+    assert "next_change_eligible_at" in payload
+    assert "permanent_change_used" in payload
+    assert "locked" in payload
+
+
 def test_admin_can_upsert_country_feature_policy(client) -> None:
     headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
     response = client.post(

@@ -15,8 +15,9 @@ from backend.app.models.economy_config import GiftCatalogItem
 from backend.app.models.gift_combo_event import GiftComboEvent
 from backend.app.models.gift_combo_rule import GiftComboRule
 from backend.app.models.gift_transaction import GiftTransaction
+from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
+from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal('0.0001')
@@ -30,10 +31,13 @@ class GiftEngineError(ValueError):
 class GiftEngineService:
     session: Session
     wallet_service: WalletService | None = None
+    event_publisher: EventPublisher | None = None
 
     def __post_init__(self) -> None:
+        if self.event_publisher is None:
+            self.event_publisher = InMemoryEventPublisher()
         if self.wallet_service is None:
-            self.wallet_service = WalletService()
+            self.wallet_service = WalletService(event_publisher=self.event_publisher)
 
     def _normalize_amount(self, amount: Decimal | int | float | str) -> Decimal:
         return Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
@@ -85,12 +89,27 @@ class GiftEngineService:
                 return rule, count
         return None, 0
 
-    def send_gift(self, *, sender: User, recipient_user_id: str, gift_key: str, quantity: Decimal, note: str | None = None) -> GiftTransaction:
+    def send_gift(
+        self,
+        *,
+        sender: User,
+        recipient_user_id: str,
+        gift_key: str,
+        quantity: Decimal,
+        note: str | None = None,
+        source_scope: str = "user_hosted",
+    ) -> GiftTransaction:
         recipient = self.session.get(User, recipient_user_id)
         if recipient is None or not recipient.is_active:
             raise GiftEngineError('Recipient user was not found.')
         if recipient.id == sender.id:
             raise GiftEngineError('Users cannot send gifts to themselves.')
+
+        normalized_scope = (source_scope or "user_hosted").strip().lower()
+        if normalized_scope in {"gtex", "gtex_platform", "gtex_competition"}:
+            normalized_scope = "gtex_competition"
+        if normalized_scope not in {"user_hosted", "gtex_competition"}:
+            raise GiftEngineError("Gift source scope must be user_hosted or gtex_competition.")
 
         gift = self.session.scalar(select(GiftCatalogItem).where(GiftCatalogItem.key == gift_key, GiftCatalogItem.active.is_(True)))
         if gift is None:
@@ -128,26 +147,34 @@ class GiftEngineService:
             platform_rake = self._normalize_amount(platform_rake - combo_bonus)
             recipient_net = self._normalize_amount(recipient_net + combo_bonus)
 
-        sender_account = self.wallet_service.get_user_account(self.session, sender, LedgerUnit.CREDIT)
-        recipient_account = self.wallet_service.get_user_account(self.session, recipient, LedgerUnit.CREDIT)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+        ledger_unit = LedgerUnit.CREDIT if normalized_scope == "user_hosted" else LedgerUnit.COIN
+        income_tag = (
+            LedgerSourceTag.USER_HOSTED_GIFT_INCOME_FANCOIN
+            if normalized_scope == "user_hosted"
+            else LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+        )
+        sender_account = self.wallet_service.get_user_account(self.session, sender, ledger_unit)
+        recipient_account = self.wallet_service.get_user_account(self.session, recipient, ledger_unit)
+        platform_account = self.wallet_service.ensure_platform_account(self.session, ledger_unit)
 
         if self.wallet_service.get_balance(self.session, sender_account) < gross_amount:
-            raise InsufficientBalanceError('Available FanCoin balance is lower than the gift total.')
+            unit_label = "FanCoin" if ledger_unit == LedgerUnit.CREDIT else "market balance"
+            raise InsufficientBalanceError(f"Available {unit_label} balance is lower than the gift total.")
 
         postings = [
-            LedgerPosting(account=sender_account, amount=-gross_amount),
-            LedgerPosting(account=recipient_account, amount=recipient_net),
-            LedgerPosting(account=platform_account, amount=platform_rake),
+            LedgerPosting(account=sender_account, amount=-gross_amount, source_tag=income_tag),
+            LedgerPosting(account=recipient_account, amount=recipient_net, source_tag=income_tag),
+            LedgerPosting(account=platform_account, amount=platform_rake, source_tag=income_tag),
         ]
         if burn_amount > Decimal("0.0000"):
-            burn_account = self.wallet_service.ensure_platform_burn_account(self.session, LedgerUnit.CREDIT)
-            postings.append(LedgerPosting(account=burn_account, amount=burn_amount))
+            burn_account = self.wallet_service.ensure_platform_burn_account(self.session, ledger_unit)
+            postings.append(LedgerPosting(account=burn_account, amount=burn_amount, source_tag=LedgerSourceTag.GIFT_RAKE_BURN))
 
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=income_tag,
             reference=f'gift:{gift.key}:{sender.id}:{recipient.id}',
             description=f'Gift {gift.display_name} x{normalized_quantity} sent by {sender.username}',
             external_reference=f'gift:{gift.key}:{sender.id}:{recipient.id}',
@@ -162,7 +189,8 @@ class GiftEngineService:
             gross_amount=gross_amount,
             platform_rake_amount=platform_rake,
             recipient_net_amount=recipient_net,
-            ledger_unit=LedgerUnit.CREDIT,
+            source_scope=normalized_scope,
+            ledger_unit=ledger_unit,
             ledger_transaction_id=entries[0].transaction_id if entries else None,
             note=note,
         )
@@ -194,6 +222,22 @@ class GiftEngineService:
                 bonus_amount=combo_bonus,
             )
             self.session.add(combo_event)
+        self.event_publisher.publish(
+            DomainEvent(
+                name="gift_sent",
+                payload={
+                    "gift_transaction_id": transaction.id,
+                    "sender_user_id": sender.id,
+                    "recipient_user_id": recipient.id,
+                    "gift_key": gift.key,
+                    "quantity": str(normalized_quantity),
+                    "gross_amount": str(gross_amount),
+                    "ledger_unit": ledger_unit.value,
+                    "source_scope": normalized_scope,
+                    "transaction_id": entries[0].transaction_id if entries else None,
+                },
+            )
+        )
         return transaction
 
     def list_transactions_for_user(self, *, user: User, limit: int = 50) -> list[GiftTransaction]:

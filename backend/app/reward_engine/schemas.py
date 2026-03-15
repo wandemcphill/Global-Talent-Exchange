@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from backend.app.models.wallet import LedgerUnit
+
 
 class RewardSettlementRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=36)
@@ -35,3 +37,17 @@ class RewardEngineSummaryView(BaseModel):
     total_rewards: Decimal
     total_platform_fee: Decimal
     settlements: list[RewardSettlementView]
+
+
+class PromoPoolCreditRequest(BaseModel):
+    amount: Decimal = Field(gt=0)
+    unit: LedgerUnit = LedgerUnit.COIN
+    reference: str | None = Field(default=None, max_length=64)
+    note: str | None = Field(default=None, max_length=255)
+
+
+class PromoPoolCreditView(BaseModel):
+    transaction_id: str | None
+    amount: Decimal
+    unit: LedgerUnit
+    reference: str

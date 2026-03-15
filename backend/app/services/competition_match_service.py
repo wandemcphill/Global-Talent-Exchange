@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Iterable
 
@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.common.enums.match_status import MatchStatus
+from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.models.competition_match import CompetitionMatch
 from backend.app.models.competition_match_event import CompetitionMatchEvent
 from backend.app.models.competition_participant import CompetitionParticipant
@@ -17,6 +18,7 @@ from backend.app.models.competition_rule_set import CompetitionRuleSet
 @dataclass(slots=True)
 class CompetitionMatchService:
     session: Session
+    event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
 
     def record_event(
         self,
@@ -77,6 +79,21 @@ class CompetitionMatchService:
         match.completed_at = datetime.now(timezone.utc)
         self._apply_match_result(match=match, rule_set=rule_set)
         self.session.flush()
+        self.event_publisher.publish(
+            DomainEvent(
+                name="match_completed",
+                payload={
+                    "match_id": match.id,
+                    "competition_id": match.competition_id,
+                    "home_club_id": match.home_club_id,
+                    "away_club_id": match.away_club_id,
+                    "home_score": match.home_score,
+                    "away_score": match.away_score,
+                    "winner_club_id": match.winner_club_id,
+                    "decided_by_penalties": match.decided_by_penalties,
+                },
+            )
+        )
         return match
 
     def _apply_match_result(self, *, match: CompetitionMatch, rule_set: CompetitionRuleSet) -> None:

@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.base import generate_uuid, utcnow
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerUnit, PaymentEvent, PaymentStatus, PayoutRequest, PayoutStatus
+from backend.app.models.wallet import LedgerAccount, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus, PayoutRequest, PayoutStatus
 from backend.app.players.read_models import PlayerSummaryReadModel
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from backend.app.observability.audit_service import AuditTrailService
 
 from .schemas import (
     AdminRoleCatalogUpdate,
@@ -220,6 +221,14 @@ class AdminGodModeService:
             summary="Updated bounded commission settings.",
             payload=updated,
         )
+        with app.state.session_factory() as audit_session:
+            self._log_admin_override(
+                session=audit_session,
+                actor=actor,
+                action_key="admin.commissions.updated",
+                detail="Commission settings override applied.",
+                metadata={"reason": payload.reason},
+            )
         return CommissionSettingsView.model_validate(updated)
 
     def get_payment_rails(self, app: FastAPI) -> PaymentRailsPayload:
@@ -248,6 +257,14 @@ class AdminGodModeService:
             summary="Updated payment rail switches and maintenance messages.",
             payload={"rails": updated_rails, "reason": payload.reason},
         )
+        with app.state.session_factory() as audit_session:
+            self._log_admin_override(
+                session=audit_session,
+                actor=actor,
+                action_key="admin.payment_rails.updated",
+                detail="Payment rail switches updated.",
+                metadata={"reason": payload.reason},
+            )
         return PaymentRailsPayload(
             rails=[PaymentRailView.model_validate(item) for item in updated_rails],
             reason=payload.reason,
@@ -273,6 +290,14 @@ class AdminGodModeService:
             summary="Updated withdrawal processor and e-game cash-out controls.",
             payload=updated,
         )
+        with app.state.session_factory() as audit_session:
+            self._log_admin_override(
+                session=audit_session,
+                actor=actor,
+                action_key="admin.withdrawal_controls.updated",
+                detail="Withdrawal controls updated.",
+                metadata={"reason": payload.reason},
+            )
         return WithdrawalControlView.model_validate(updated)
 
     def get_competition_controls(self, app: FastAPI) -> CompetitionControlView:
@@ -474,6 +499,7 @@ class AdminGodModeService:
                 reference=reference,
                 description="God mode liquidity buyback.",
                 external_reference=reference,
+                source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
             )
             self.wallet_service.credit_trade_proceeds(
                 session,
@@ -482,6 +508,8 @@ class AdminGodModeService:
                 reference=reference,
                 description="Liquidity desk credited user for buyback.",
                 external_reference=reference,
+                unit=LedgerUnit.COIN,
+                source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
             )
         else:
             self.wallet_service.credit_position_units(
@@ -492,6 +520,7 @@ class AdminGodModeService:
                 reference=reference,
                 description="Liquidity desk inventory sale to user.",
                 external_reference=reference,
+                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
             self.wallet_service.settle_available_funds(
                 session,
@@ -500,6 +529,8 @@ class AdminGodModeService:
                 reference=reference,
                 description="Liquidity desk debited user for inventory sale.",
                 external_reference=reference,
+                unit=LedgerUnit.COIN,
+                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
 
         action = {
@@ -527,6 +558,14 @@ class AdminGodModeService:
             summary=f"Executed bounded liquidity intervention for player {payload.player_id}.",
             payload=action,
         )
+        with app.state.session_factory() as audit_session:
+            self._log_admin_override(
+                session=audit_session,
+                actor=actor,
+                action_key="admin.liquidity.executed",
+                detail="Liquidity intervention executed.",
+                metadata=action,
+            )
         return LiquidityInterventionView.model_validate(action)
 
     def list_withdrawals(self, session: Session) -> list[WithdrawalAdminView]:
@@ -625,6 +664,14 @@ class AdminGodModeService:
             summary=f"Moved payout request {payout_request_id} to {payload.status}.",
             payload={"payout_request_id": payout_request_id, "status": payload.status, "notes": payload.notes},
         )
+        with app.state.session_factory() as audit_session:
+            self._log_admin_override(
+                session=audit_session,
+                actor=actor,
+                action_key="admin.withdrawal.updated",
+                detail="Withdrawal status updated.",
+                metadata={"payout_request_id": payout_request_id, "status": payload.status},
+            )
         user = session.get(User, request.user_id)
         return self._withdrawal_view(request, user)
 
@@ -652,6 +699,7 @@ class AdminGodModeService:
                 LedgerPosting(account=treasury_sink, amount=payload.amount),
             ],
             reason=self.wallet_service.trade_settlement_reason,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=reference,
             description=f"Treasury withdrawal to {payload.destination_reference}",
             external_reference=reference,
@@ -675,6 +723,13 @@ class AdminGodModeService:
             actor=actor,
             summary="Executed treasury withdrawal.",
             payload=record,
+        )
+        self._log_admin_override(
+            session=session,
+            actor=actor,
+            action_key="admin.treasury.withdrawal",
+            detail="Treasury withdrawal executed.",
+            metadata=record,
         )
         return TreasuryWithdrawalView.model_validate(record)
 
@@ -741,6 +796,22 @@ class AdminGodModeService:
 
     def _audit_path(self, app: FastAPI) -> Path:
         return app.state.settings.config_root / AUDIT_LOG_FILE
+
+    def _log_admin_override(
+        self,
+        *,
+        session: Session,
+        actor: User,
+        action_key: str,
+        detail: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        AuditTrailService(session).log_admin_override(
+            actor_user_id=actor.id,
+            action_key=action_key,
+            detail=detail,
+            metadata=metadata,
+        )
 
     def _load_state(self, app: FastAPI) -> dict[str, Any]:
         path = self._state_path(app)

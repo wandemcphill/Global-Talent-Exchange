@@ -16,11 +16,13 @@ SMOKE_DEMO_PLAYER_COUNT = 12
 @pytest.fixture(scope="module")
 def test_settings(tmp_path_factory: pytest.TempPathFactory):
     database_path = tmp_path_factory.mktemp("gte-app") / "gte_app.db"
+    media_root = tmp_path_factory.mktemp("gte-media")
     database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
     return load_settings(
         environ={
             **os.environ,
             "GTE_DATABASE_URL": database_url,
+            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
         }
     )
 

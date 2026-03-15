@@ -222,9 +222,13 @@ class _GteWithdrawalRequestScreenState
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
   bool _isSubmitting = false;
+  bool _isQuoting = false;
   String? _error;
+  String? _quoteError;
+  GteWithdrawalQuote? _quote;
   List<GteUserBankAccount> _accounts = const <GteUserBankAccount>[];
   String? _selectedBankId;
+  String _sourceScope = 'trade';
 
   @override
   void initState() {
@@ -267,6 +271,13 @@ class _GteWithdrawalRequestScreenState
       });
       return;
     }
+    if (_quote == null || _quote?.blockedReason != null) {
+      setState(() {
+        _error = _quote?.blockedReason ??
+            'Generate a withdrawal quote before submitting.';
+      });
+      return;
+    }
     if (_selectedBankId == null) {
       setState(() {
         _error = 'Add a bank account to continue.';
@@ -283,6 +294,7 @@ class _GteWithdrawalRequestScreenState
         GteWithdrawalCreateRequest(
           amountCoin: amount,
           bankAccountId: _selectedBankId,
+          sourceScope: _sourceScope,
           notes:
               _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
         ),
@@ -290,12 +302,18 @@ class _GteWithdrawalRequestScreenState
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Withdrawal ${request.reference} submitted.'),
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) => GteWithdrawalReceiptScreen(
+            controller: widget.controller,
+            withdrawalId: request.id,
+            reference: request.reference,
+          ),
         ),
       );
-      Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -307,6 +325,50 @@ class _GteWithdrawalRequestScreenState
       if (mounted) {
         setState(() {
           _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _requestQuote() async {
+    final double? amount = double.tryParse(_amountController.text.trim());
+    if (amount == null || amount <= 0) {
+      setState(() {
+        _quoteError = 'Enter a valid amount to preview a quote.';
+        _quote = null;
+      });
+      return;
+    }
+    setState(() {
+      _isQuoting = true;
+      _quoteError = null;
+    });
+    try {
+      final GteWithdrawalQuote quote =
+          await widget.controller.api.fetchWithdrawalQuote(
+        GteWithdrawalQuoteRequest(
+          amountCoin: amount,
+          sourceScope: _sourceScope,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _quote = quote;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _quoteError = AppFeedback.messageFor(error);
+        _quote = null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isQuoting = false;
         });
       }
     }
@@ -336,6 +398,40 @@ class _GteWithdrawalRequestScreenState
                       ?.copyWith(fontSize: 28),
                 ),
                 const SizedBox(height: 14),
+                Text('Withdrawal source',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    ChoiceChip(
+                      label: const Text('Trade balance'),
+                      selected: _sourceScope == 'trade',
+                      onSelected: _isSubmitting
+                          ? null
+                          : (_) {
+                              setState(() {
+                                _sourceScope = 'trade';
+                                _quote = null;
+                              });
+                            },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Competition rewards'),
+                      selected: _sourceScope == 'competition',
+                      onSelected: _isSubmitting
+                          ? null
+                          : (_) {
+                              setState(() {
+                                _sourceScope = 'competition';
+                                _quote = null;
+                              });
+                            },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: _amountController,
                   keyboardType:
@@ -345,6 +441,95 @@ class _GteWithdrawalRequestScreenState
                     prefixIcon: Icon(Icons.payments_outlined),
                   ),
                 ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: _isQuoting ? null : _requestQuote,
+                    icon: const Icon(Icons.receipt_long_outlined),
+                    label: Text(
+                      _isQuoting ? 'Generating quote...' : 'Preview quote',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isQuoting) ...<Widget>[
+            const SizedBox(height: 16),
+            const GteSurfacePanel(
+              child: Text('Generating withdrawal quote...'),
+            ),
+          ] else if (_quoteError != null) ...<Widget>[
+            const SizedBox(height: 16),
+            GteStatePanel(
+              title: 'Quote unavailable',
+              message: _quoteError!,
+              icon: Icons.warning_amber_outlined,
+              actionLabel: 'Retry',
+              onAction: _requestQuote,
+            ),
+          ] else if (_quote != null) ...<Widget>[
+            const SizedBox(height: 16),
+            GteSurfacePanel(
+              accentColor: _quote?.blockedReason != null
+                  ? GteShellTheme.accentWarm
+                  : GteShellTheme.accentCapital,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('Withdrawal quote',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: <Widget>[
+                      _QuoteMetric(
+                        label: 'Gross',
+                        value: gteFormatCredits(_quote!.grossAmount),
+                      ),
+                      _QuoteMetric(
+                        label: 'Fee',
+                        value: gteFormatCredits(_quote!.feeAmount),
+                      ),
+                      _QuoteMetric(
+                        label: 'Total debit',
+                        value: gteFormatCredits(_quote!.totalDebit),
+                      ),
+                      _QuoteMetric(
+                        label: 'Est. payout',
+                        value: gteFormatFiat(
+                          _quote!.estimatedFiatPayout,
+                          currency: _quote!.currencyCode,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Processor: ${_quote!.processorMode.replaceAll('_', ' ')} • Channel: ${_quote!.payoutChannel.replaceAll('_', ' ')}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (_quote!.blockedReason != null) ...<Widget>[
+                    const SizedBox(height: 12),
+                    GteStatePanel(
+                      title: 'Withdrawal blocked',
+                      message: _quote!.blockedReason!,
+                      icon: Icons.block_outlined,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          GteSurfacePanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('Payout destination',
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 if (_accounts.isEmpty)
                   GteStatePanel(
@@ -405,8 +590,9 @@ class _GteWithdrawalRequestScreenState
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed:
-                        _isSubmitting || _selectedBankId == null ? null : _submit,
+                    onPressed: _isSubmitting || _selectedBankId == null
+                        ? null
+                        : _submit,
                     child: Text(_isSubmitting ? 'Submitting...' : 'Submit'),
                   ),
                 ),
@@ -414,6 +600,159 @@ class _GteWithdrawalRequestScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class GteWithdrawalReceiptScreen extends StatefulWidget {
+  const GteWithdrawalReceiptScreen({
+    super.key,
+    required this.controller,
+    required this.withdrawalId,
+    this.reference,
+  });
+
+  final GteExchangeController controller;
+  final String withdrawalId;
+  final String? reference;
+
+  @override
+  State<GteWithdrawalReceiptScreen> createState() =>
+      _GteWithdrawalReceiptScreenState();
+}
+
+class _GteWithdrawalReceiptScreenState
+    extends State<GteWithdrawalReceiptScreen> {
+  late Future<GteWithdrawalReceipt> _receiptFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _receiptFuture =
+        widget.controller.api.fetchWithdrawalReceipt(widget.withdrawalId);
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _receiptFuture =
+          widget.controller.api.fetchWithdrawalReceipt(widget.withdrawalId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Withdrawal receipt'),
+        actions: <Widget>[
+          IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: FutureBuilder<GteWithdrawalReceipt>(
+        future: _receiptFuture,
+        builder:
+            (BuildContext context, AsyncSnapshot<GteWithdrawalReceipt> snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData) {
+            return GteStatePanel(
+              title: 'Receipt unavailable',
+              message: 'We could not load this withdrawal receipt.',
+              icon: Icons.receipt_long_outlined,
+              actionLabel: 'Retry',
+              onAction: _refresh,
+            );
+          }
+          final GteWithdrawalReceipt receipt = snapshot.data!;
+          final GteTreasuryWithdrawalRequest withdrawal = receipt.withdrawal;
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: <Widget>[
+                GteSurfacePanel(
+                  emphasized: true,
+                  accentColor: GteShellTheme.accentCapital,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        widget.reference ?? withdrawal.reference,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Status: ${gteFormatOrderStatus(_withdrawalStatusLabel(withdrawal.status))}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          _QuoteMetric(
+                            label: 'Gross',
+                            value: gteFormatCredits(receipt.grossAmount),
+                          ),
+                          _QuoteMetric(
+                            label: 'Fee',
+                            value: gteFormatCredits(receipt.feeAmount),
+                          ),
+                          _QuoteMetric(
+                            label: 'Total debit',
+                            value: gteFormatCredits(receipt.totalDebit),
+                          ),
+                          _QuoteMetric(
+                            label: 'Fiat payout',
+                            value: gteFormatFiat(
+                              withdrawal.amountFiat,
+                              currency: withdrawal.currencyCode,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                GteSurfacePanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('Payout destination',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${withdrawal.bankName} • ${withdrawal.bankAccountNumber}',
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        withdrawal.bankAccountName,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Processor: ${receipt.processorMode.replaceAll('_', ' ')}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        'Channel: ${receipt.payoutChannel.replaceAll('_', ' ')}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Created ${gteFormatDateTime(withdrawal.createdAt)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -506,21 +845,42 @@ class _GteWithdrawalHistoryScreenState
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(
-                              builder: (BuildContext context) =>
-                                  GteDisputeCreateScreen(
-                                controller: widget.controller,
-                                reference: withdrawal.reference,
-                                resourceId: withdrawal.id,
-                                resourceType: 'withdrawal',
-                              ),
-                            ),
-                          );
-                        },
-                        child: const Text('Open dispute'),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(context).push<void>(
+                                MaterialPageRoute<void>(
+                                  builder: (BuildContext context) =>
+                                      GteWithdrawalReceiptScreen(
+                                    controller: widget.controller,
+                                    withdrawalId: withdrawal.id,
+                                    reference: withdrawal.reference,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('View receipt'),
+                          ),
+                          OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(context).push<void>(
+                                MaterialPageRoute<void>(
+                                  builder: (BuildContext context) =>
+                                      GteDisputeCreateScreen(
+                                    controller: widget.controller,
+                                    reference: withdrawal.reference,
+                                    resourceId: withdrawal.id,
+                                    resourceType: 'withdrawal',
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('Open dispute'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -529,6 +889,37 @@ class _GteWithdrawalHistoryScreenState
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _QuoteMetric extends StatelessWidget {
+  const _QuoteMetric({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withValues(alpha: 0.04),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
+        ],
       ),
     );
   }

@@ -33,6 +33,7 @@ class RegisterRequest(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
     phone_number: str | None = Field(default=None, min_length=6, max_length=32)
     is_over_18: bool = Field(default=True)
+    region_code: str = Field(min_length=2, max_length=8)
     username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
 
@@ -71,6 +72,14 @@ class RegisterRequest(BaseModel):
             return None
         candidate = value.strip()
         return candidate or None
+
+    @field_validator("region_code")
+    @classmethod
+    def normalize_region_code(cls, value: str) -> str:
+        candidate = value.strip().upper()
+        if not candidate:
+            raise ValueError("Region code is required.")
+        return candidate
 
 
 
@@ -124,6 +133,7 @@ class CurrentUserResponse(BaseModel):
     avatar_url: str | None
     favourite_club: str | None
     nationality: str | None
+    region_code: str | None = None
     preferred_position: str | None
     role: UserRole
     kyc_status: KycStatus

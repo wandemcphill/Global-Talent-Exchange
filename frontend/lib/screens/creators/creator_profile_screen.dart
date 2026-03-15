@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../controllers/creator_controller.dart';
 import '../../models/creator_models.dart';
+import '../../widgets/creators/creator_finance_summary_card.dart';
 import '../../widgets/creators/creator_header_card.dart';
 import '../../widgets/creators/creator_stats_card.dart';
 import '../../widgets/gte_state_panel.dart';
@@ -81,6 +82,8 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                   growthSummary: profile.growthSummary,
                   rewardSummary: profile.rewardSummary,
                 ),
+                const SizedBox(height: 16),
+                CreatorFinanceSummaryCard(summary: profile.financeSummary),
                 const SizedBox(height: 16),
                 GteSurfacePanel(
                   child: Column(

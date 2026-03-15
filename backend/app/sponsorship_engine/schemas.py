@@ -119,3 +119,27 @@ class SponsorshipSettlementView(BaseModel):
     credited_amount: Decimal
     currency: str
     destination_user_id: str
+
+
+class SponsorshipPlacementRequest(BaseModel):
+    home_club_id: str | None = None
+    away_club_id: str | None = None
+    competition_id: str | None = None
+    stage_name: str | None = None
+    region_code: str | None = None
+    surfaces: list[str] | None = None
+
+
+class SponsorshipPlacementView(BaseModel):
+    surface: str
+    sponsor_name: str
+    campaign_code: str
+    source: str
+    asset_type: str | None
+    creative_url: str | None
+    fallback: bool
+    metadata: dict[str, Any]
+
+
+class SponsorshipPlacementResponse(BaseModel):
+    placements: list[SponsorshipPlacementView]

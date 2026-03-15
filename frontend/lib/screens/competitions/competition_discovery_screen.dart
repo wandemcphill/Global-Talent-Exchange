@@ -261,7 +261,14 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
 
   Future<void> _openCompetition(String competitionId) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (BuildContext context) => CompetitionDetailScreen(controller: _controller, competitionId: competitionId)),
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => CompetitionDetailScreen(
+          controller: _controller,
+          competitionId: competitionId,
+          isAuthenticated: widget.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
+        ),
+      ),
     );
   }
 

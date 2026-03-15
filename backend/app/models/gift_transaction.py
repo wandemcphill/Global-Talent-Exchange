@@ -31,6 +31,7 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     platform_rake_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     recipient_net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    source_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="user_hosted", server_default="user_hosted")
     ledger_unit: Mapped[LedgerUnit] = mapped_column(Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False, default=LedgerUnit.CREDIT)
     ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)

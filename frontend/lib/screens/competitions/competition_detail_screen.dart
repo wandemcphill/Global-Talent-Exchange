@@ -3,6 +3,9 @@ import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/screens/competitions/competition_join_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
+import 'package:gte_frontend/screens/competitions/gte_halftime_analytics_screen.dart';
+import 'package:gte_frontend/screens/competitions/gte_live_match_center_screen.dart';
+import 'package:gte_frontend/screens/competitions/gte_match_highlights_screen.dart';
 import 'package:gte_frontend/widgets/competitions/competition_financial_breakdown_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_payout_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_status_badge.dart';
@@ -17,10 +20,14 @@ class CompetitionDetailScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.competitionId,
+    this.isAuthenticated = false,
+    this.onOpenLogin,
   });
 
   final CompetitionController controller;
   final String competitionId;
+  final bool isAuthenticated;
+  final VoidCallback? onOpenLogin;
 
   @override
   State<CompetitionDetailScreen> createState() => _CompetitionDetailScreenState();
@@ -84,7 +91,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                 ? 'Paid entries have begun. Entry fee, platform service fee, host fee, and payout settings are now locked for participant safety.'
                 : competition.isFreeToJoin
                     ? 'This community competition is free to join, so no fee lock is required.'
-                    : 'Once the first paid entry clears, fee settings lock to protect participants.';
+                : 'Once the first paid entry clears, fee settings lock to protect participants.';
+            final bool isGtexCompetition =
+                competition.creatorLabel.toLowerCase().contains('gtex');
 
             return RefreshIndicator(
               onRefresh: () => widget.controller.openCompetition(widget.competitionId),
@@ -190,6 +199,113 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  const GtexSectionHeader(
+                    eyebrow: 'MATCH CENTER',
+                    title: 'Watch live, manage tactics, and collect highlights.',
+                    description:
+                        'Spectator modes stay obvious and the match keeps moving while you browse tactics and stats.',
+                    accent: GteShellTheme.accentArena,
+                  ),
+                  const SizedBox(height: 12),
+                  GteSurfacePanel(
+                    accentColor: GteShellTheme.accentArena,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Live match control',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Free 2D commentary, premium key-moment video, and tactical controls stay live throughout the match.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: <Widget>[
+                            FilledButton.icon(
+                              onPressed: () => _openLiveMatch(competition),
+                              icon: const Icon(Icons.live_tv_outlined),
+                              label: const Text('Open live match'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _openHalftime(competition),
+                              icon: const Icon(Icons.analytics_outlined),
+                              label: const Text('Halftime analytics'),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () => _openHighlights(competition),
+                              icon: const Icon(Icons.play_circle_outline),
+                              label: const Text('Highlights'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Standard highlights expire 10 minutes after the final whistle.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  GteSurfacePanel(
+                    accentColor: GteShellTheme.accentWarm,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Icon(Icons.verified_outlined,
+                            color: GteShellTheme.accentWarm),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            isGtexCompetition
+                                ? 'GTEX competition rewards are funded by GTEX promotional pools. Outcomes follow published rules, not betting odds.'
+                                : 'Creator-hosted competitions disclose their own prize pool in the arena economics below. GTEX promotional pools fund platform-run competitions.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GteSurfacePanel(
+                    accentColor: GteShellTheme.accentCommunity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Gifting & fan support',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Send FanCoin support to creators and squads without touching market balances.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: widget.isAuthenticated
+                              ? () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Fan support queued.'),
+                                    ),
+                                  );
+                                }
+                              : widget.onOpenLogin,
+                          icon: const Icon(Icons.card_giftcard_outlined),
+                          label: Text(widget.isAuthenticated
+                              ? 'Send FanCoin support'
+                              : 'Sign in to support'),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   const GtexSectionHeader(
                     eyebrow: 'ARENA ECONOMICS',
@@ -281,6 +397,39 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
       MaterialPageRoute<void>(
         builder: (BuildContext context) => CompetitionShareScreen(
           controller: widget.controller,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openLiveMatch(CompetitionSummary competition) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GteLiveMatchCenterScreen(
+          competition: competition,
+          isAuthenticated: widget.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openHalftime(CompetitionSummary competition) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GteHalftimeAnalyticsScreen(
+          competition: competition,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openHighlights(CompetitionSummary competition) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GteMatchHighlightsScreen(
+          competition: competition,
+          isAuthenticated: widget.isAuthenticated,
         ),
       ),
     );

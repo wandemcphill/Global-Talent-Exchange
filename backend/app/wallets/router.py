@@ -8,12 +8,15 @@ from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
+from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
 from backend.app.admin_godmode.service import (
+    AdminGodModeService,
     DEFAULT_COMMISSION_SETTINGS,
     DEFAULT_WITHDRAWAL_CONTROLS,
 )
 from backend.app.models.user import User
+from backend.app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from backend.app.models.market_topup import MarketTopup, MarketTopupStatus
 from backend.app.policies.service import PolicyService
 from backend.app.orders.router import (
     api_router as orders_api_router,
@@ -24,6 +27,18 @@ from backend.app.wallets.schemas import (
     PaymentEventCreate,
     PaymentEventView,
     PortfolioSnapshotView,
+    PurchaseOrderCreateRequest,
+    PurchaseOrderQuoteRequest,
+    PurchaseOrderQuoteView,
+    PurchaseOrderSourceScope,
+    PurchaseOrderStatusUpdate,
+    PurchaseOrderView,
+    MarketTopupCreateRequest,
+    MarketTopupQuoteRequest,
+    MarketTopupQuoteView,
+    MarketTopupSourceScope,
+    MarketTopupStatusUpdate,
+    MarketTopupView,
     WalletAccountBalance,
     WalletLedgerEntryView,
     WalletLedgerPageView,
@@ -32,7 +47,10 @@ from backend.app.wallets.schemas import (
     WalletOverviewView,
 )
 from backend.app.wallets.service import LedgerError, WalletService
+from backend.app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
+from backend.app.wallets.providers import get_provider_adapter
 from backend.app.models.wallet import LedgerEntry, PayoutRequest, PayoutStatus
+from backend.app.risk_ops_engine.service import RiskOpsService
 from backend.app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
 from backend.app.treasury.schemas import (
     DepositQuoteRequest,
@@ -51,6 +69,7 @@ from backend.app.treasury.service import TreasuryConflictError, TreasuryService
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
 api_router = APIRouter(prefix="/api")
+admin_router = APIRouter(prefix="/api/admin/wallets", tags=["admin-wallets"])
 
 
 def _api_operation_id(route: APIRoute) -> str:
@@ -71,13 +90,37 @@ def _build_treasury_service(request: Request | None) -> TreasuryService:
     return TreasuryService()
 
 
+def _build_wallet_rail_service(request: Request | None, session: Session) -> WalletRailService:
+    event_publisher = None
+    if request is not None and hasattr(request.app.state, "event_publisher"):
+        event_publisher = request.app.state.event_publisher
+    return WalletRailService(session=session, wallet_service=_build_wallet_service(request), event_publisher=event_publisher)
+
+
+def _require_payment_rails_permission(request: Request, actor: User) -> None:
+    service = AdminGodModeService(wallet_service=WalletService())
+    state = service._load_state(request.app)
+    profile = service.resolve_profile(actor, state)
+    service._assert_has_permission(profile, "manage_payment_rails")
+
+
 
 
 def _build_withdrawal_view(withdrawal: TreasuryWithdrawalRequest, payout: PayoutRequest | None, wallet_service: WalletService) -> TreasuryWithdrawalRequestView:
     meta = wallet_service._parse_payout_meta(payout.notes if payout else None)
-    gross_amount = Decimal(str(meta.get("requested_net_amount", withdrawal.amount_coin)))
-    fee_amount = Decimal(str(meta.get("fee_amount", "0.0000")))
-    source_scope = str(meta.get("source_scope", "trade"))
+    gross_amount = Decimal(withdrawal.amount_coin)
+    fee_amount = Decimal(withdrawal.fee_amount or 0)
+    if fee_amount <= Decimal("0.0000"):
+        fee_amount = Decimal(str(meta.get("fee_amount", "0.0000")))
+    net_amount = Decimal(withdrawal.net_amount or 0)
+    if net_amount <= Decimal("0.0000"):
+        net_amount = Decimal(str(meta.get("requested_net_amount", gross_amount)))
+    source_scope = str(withdrawal.source_scope or meta.get("source_scope", "trade"))
+    processor_mode = str(withdrawal.processor_mode or meta.get("processor_mode", "manual_bank_transfer"))
+    payout_channel = str(withdrawal.payout_channel or meta.get("payout_channel", "bank_transfer"))
+    total_debit = gross_amount + fee_amount
+    if meta.get("total_debit") is not None:
+        total_debit = Decimal(str(meta.get("total_debit")))
     return TreasuryWithdrawalRequestView(
         id=withdrawal.id,
         payout_request_id=withdrawal.payout_request_id,
@@ -96,11 +139,11 @@ def _build_withdrawal_view(withdrawal: TreasuryWithdrawalRequest, payout: Payout
         kyc_status_snapshot=withdrawal.kyc_status_snapshot,
         kyc_tier_snapshot=withdrawal.kyc_tier_snapshot,
         fee_amount=fee_amount,
-        total_debit=Decimal(str(meta.get("total_debit", payout.amount if payout else withdrawal.amount_coin))),
+        total_debit=total_debit,
         source_scope=WithdrawalSourceScope(source_scope),
-        net_amount=gross_amount,
-        processor_mode=str(meta.get("processor_mode", "manual_bank_transfer")),
-        payout_channel=str(meta.get("payout_channel", "bank_transfer")),
+        net_amount=net_amount,
+        processor_mode=processor_mode,
+        payout_channel=payout_channel,
         notes=withdrawal.notes,
         created_at=withdrawal.created_at,
         reviewed_at=withdrawal.reviewed_at,
@@ -236,6 +279,39 @@ def _selected_payout_mode(policy: dict[str, object]) -> str:
     if processor_mode == "manual_bank_transfer" or bool(policy.get("payouts_via_bank_transfer", True)):
         return "bank_transfer"
     return "gateway"
+
+
+def _require_gateway_deposit(
+    *,
+    request: Request | None,
+    session: Session,
+    user: User,
+) -> tuple[TreasurySettings, str, str]:
+    treasury = _build_treasury_service(request)
+    settings = treasury.ensure_settings(session)
+    policy = _build_withdrawal_policy_snapshot(request)
+    policy_service = PolicyService(session)
+    compliance_policy = policy_service.get_country_policy_for_user(user=user)
+    missing_policies = policy_service.list_missing_acceptances(user_id=user.id)
+    deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
+    if not compliance_policy.deposits_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Deposits are currently disabled for country policy '{compliance_policy.country_code}'.",
+        )
+    if missing_policies:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accept the latest required policies before using automatic gateway deposits.",
+        )
+    if deposit_mode != "gateway":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Automatic gateway deposits are disabled. Admin has selected manual bank transfer as the active funding rail.",
+        )
+    processor_mode = "automatic_gateway"
+    payout_channel = "gateway"
+    return settings, processor_mode, payout_channel
 
 
 @wallet_router.get("/accounts", response_model=list[WalletAccountBalance])
@@ -439,6 +515,129 @@ def list_deposits(
     return [DepositRequestView.model_validate(item) for item in deposits]
 
 
+@wallet_router.post("/purchase-orders/quote", response_model=PurchaseOrderQuoteView)
+def create_purchase_order_quote(
+    payload: PurchaseOrderQuoteRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> PurchaseOrderQuoteView:
+    try:
+        get_provider_adapter(payload.provider_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    settings, processor_mode, payout_channel = _require_gateway_deposit(request=request, session=session, user=current_user)
+    rail_service = _build_wallet_rail_service(request, session)
+    try:
+        quote = rail_service.quote_purchase_order(
+            settings=settings,
+            amount=payload.amount,
+            input_unit=payload.input_unit,
+            provider_key=payload.provider_key,
+            source_scope=payload.source_scope.value,
+            unit=payload.unit,
+            processor_mode=processor_mode,
+            payout_channel=payout_channel,
+        )
+    except WalletRailConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except WalletRailError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return PurchaseOrderQuoteView(
+        amount_fiat=quote.amount_fiat,
+        gross_amount=quote.gross_amount,
+        fee_amount=quote.fee_amount,
+        net_amount=quote.net_amount,
+        currency_code=quote.currency_code,
+        rate_value=quote.rate_value,
+        rate_direction=quote.rate_direction.value if hasattr(quote.rate_direction, "value") else str(quote.rate_direction),
+        unit=quote.unit,
+        processor_mode=quote.processor_mode,
+        payout_channel=quote.payout_channel,
+        provider_key=quote.provider_key,
+        source_scope=PurchaseOrderSourceScope(quote.source_scope),
+    )
+
+
+@wallet_router.post("/purchase-orders", response_model=PurchaseOrderView, status_code=status.HTTP_201_CREATED)
+def create_purchase_order(
+    payload: PurchaseOrderCreateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> PurchaseOrderView:
+    try:
+        get_provider_adapter(payload.provider_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    settings, processor_mode, payout_channel = _require_gateway_deposit(request=request, session=session, user=current_user)
+    rail_service = _build_wallet_rail_service(request, session)
+    try:
+        order = rail_service.create_purchase_order(
+            user=current_user,
+            settings=settings,
+            amount=payload.amount,
+            input_unit=payload.input_unit,
+            provider_key=payload.provider_key,
+            source_scope=payload.source_scope.value,
+            unit=payload.unit,
+            processor_mode=processor_mode,
+            payout_channel=payout_channel,
+            provider_reference=payload.provider_reference,
+            notes=payload.notes,
+        )
+        session.commit()
+        session.refresh(order)
+    except WalletRailConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except WalletRailError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return PurchaseOrderView.model_validate(order)
+
+
+@wallet_router.get("/purchase-orders", response_model=list[PurchaseOrderView])
+def list_purchase_orders(
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> list[PurchaseOrderView]:
+    rail_service = _build_wallet_rail_service(request, session)
+    orders = rail_service.list_purchase_orders_for_user(user=current_user, limit=limit)
+    return [PurchaseOrderView.model_validate(order) for order in orders]
+
+
+@wallet_router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderView)
+def get_purchase_order(
+    order_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> PurchaseOrderView:
+    order = session.scalar(
+        select(FancoinPurchaseOrder).where(FancoinPurchaseOrder.id == order_id, FancoinPurchaseOrder.user_id == current_user.id)
+    )
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase order not found.")
+    return PurchaseOrderView.model_validate(order)
+
+
+@wallet_router.get("/market-topups", response_model=list[MarketTopupView])
+def list_market_topups(
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[MarketTopupView]:
+    topups = session.scalars(
+        select(MarketTopup)
+        .where(MarketTopup.user_id == current_user.id)
+        .order_by(MarketTopup.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [MarketTopupView.model_validate(item) for item in topups]
+
+
 @wallet_router.get("/ledger", response_model=WalletLedgerPageView)
 def list_wallet_ledger(
     page: int = Query(default=1, ge=1),
@@ -495,7 +694,6 @@ def list_withdrawals(
     ).all()
     result: list[TreasuryWithdrawalRequestView] = []
     for withdrawal, payout in rows:
-        meta = wallet_service._parse_payout_meta(payout.notes)
         result.append(_build_withdrawal_view(withdrawal, payout, wallet_service))
     return result
 
@@ -552,14 +750,13 @@ def get_withdrawal_receipt(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Withdrawal receipt not found.")
     withdrawal, payout = row
-    meta = wallet_service._parse_payout_meta(payout.notes if payout else None)
     view = _build_withdrawal_view(withdrawal, payout, wallet_service)
     return WithdrawalReceiptView(
         withdrawal=view,
-        gross_amount=Decimal(str(meta.get("requested_net_amount", withdrawal.amount_coin))),
-        fee_amount=Decimal(str(meta.get("fee_amount", "0.0000"))),
-        net_amount=Decimal(str(meta.get("requested_net_amount", withdrawal.amount_coin))),
-        total_debit=Decimal(str(meta.get("total_debit", payout.amount if payout else withdrawal.amount_coin))),
+        gross_amount=withdrawal.amount_coin,
+        fee_amount=view.fee_amount,
+        net_amount=view.net_amount,
+        total_debit=view.total_debit,
         source_scope=view.source_scope,
         processor_mode=view.processor_mode,
         payout_channel=view.payout_channel,
@@ -596,6 +793,201 @@ def create_withdrawal_request(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     payout_request = session.get(PayoutRequest, withdrawal.payout_request_id)
     return _build_withdrawal_view(withdrawal, payout_request, wallet_service)
+
+
+@wallet_router.post("/providers/{provider_key}/webhook")
+async def handle_provider_webhook(
+    provider_key: str,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> dict[str, object]:
+    try:
+        adapter = get_provider_adapter(provider_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        payload = {}
+    event = adapter.parse_webhook(payload, headers=dict(request.headers))
+    rail_service = _build_wallet_rail_service(request, session)
+    if event is None:
+        return {"status": "ignored"}
+    order = rail_service.handle_provider_event(event=event)
+    session.commit()
+    return {
+        "status": "ok",
+        "purchase_order_id": order.id if order else None,
+        "order_status": order.status.value if order is not None and hasattr(order.status, "value") else (str(order.status) if order else None),
+    }
+
+
+@admin_router.get("/purchase-orders", response_model=list[PurchaseOrderView])
+def list_admin_purchase_orders(
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    request: Request = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    provider_key: str | None = Query(default=None),
+    user_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[PurchaseOrderView]:
+    _require_payment_rails_permission(request, actor)
+    query = select(FancoinPurchaseOrder)
+    if status_filter:
+        try:
+            status_value = PurchaseOrderStatus(status_filter)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        query = query.where(FancoinPurchaseOrder.status == status_value)
+    if provider_key:
+        query = query.where(FancoinPurchaseOrder.provider_key == provider_key)
+    if user_id:
+        query = query.where(FancoinPurchaseOrder.user_id == user_id)
+    orders = session.scalars(
+        query.order_by(FancoinPurchaseOrder.created_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return [PurchaseOrderView.model_validate(order) for order in orders]
+
+
+@admin_router.post("/purchase-orders/{order_id}/status", response_model=PurchaseOrderView)
+def update_purchase_order_status(
+    order_id: str,
+    payload: PurchaseOrderStatusUpdate,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> PurchaseOrderView:
+    _require_payment_rails_permission(request, actor)
+    order = session.get(FancoinPurchaseOrder, order_id)
+    if order is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase order not found.")
+    try:
+        status_value = PurchaseOrderStatus(payload.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    rail_service = _build_wallet_rail_service(request, session)
+    order = rail_service.apply_purchase_order_status(order=order, status=status_value, actor=actor, notes=payload.notes)
+    RiskOpsService(session).log_audit(
+        actor_user_id=actor.id,
+        action_key="wallet.purchase_order.status_changed",
+        resource_type="purchase_order",
+        resource_id=order.id,
+        detail=f"Purchase order set to {status_value.value}.",
+        metadata_json={"status": status_value.value, "reference": order.reference},
+    )
+    session.commit()
+    session.refresh(order)
+    return PurchaseOrderView.model_validate(order)
+
+
+@admin_router.post("/market-topups/quote", response_model=MarketTopupQuoteView)
+def quote_market_topup(
+    payload: MarketTopupQuoteRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> MarketTopupQuoteView:
+    _require_payment_rails_permission(request, actor)
+    rail_service = _build_wallet_rail_service(request, session)
+    try:
+        quote = rail_service.quote_market_topup(amount=payload.amount, fee_bps=payload.fee_bps, unit=payload.unit)
+    except WalletRailError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MarketTopupQuoteView(
+        gross_amount=quote.gross_amount,
+        fee_amount=quote.fee_amount,
+        net_amount=quote.net_amount,
+        unit=quote.unit,
+    )
+
+
+@admin_router.post("/market-topups", response_model=MarketTopupView, status_code=status.HTTP_201_CREATED)
+def create_market_topup(
+    payload: MarketTopupCreateRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> MarketTopupView:
+    _require_payment_rails_permission(request, actor)
+    user = session.get(User, payload.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found.")
+    rail_service = _build_wallet_rail_service(request, session)
+    try:
+        topup = rail_service.create_market_topup(
+            user=user,
+            amount=payload.amount,
+            fee_bps=payload.fee_bps,
+            unit=payload.unit,
+            source_scope=payload.source_scope.value,
+            notes=payload.notes,
+            requested_by=actor,
+        )
+        session.commit()
+        session.refresh(topup)
+    except WalletRailError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return MarketTopupView.model_validate(topup)
+
+
+@admin_router.get("/market-topups", response_model=list[MarketTopupView])
+def list_admin_market_topups(
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    request: Request = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    user_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[MarketTopupView]:
+    _require_payment_rails_permission(request, actor)
+    query = select(MarketTopup)
+    if status_filter:
+        try:
+            status_value = MarketTopupStatus(status_filter)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        query = query.where(MarketTopup.status == status_value)
+    if user_id:
+        query = query.where(MarketTopup.user_id == user_id)
+    topups = session.scalars(
+        query.order_by(MarketTopup.created_at.desc()).limit(limit).offset(offset)
+    ).all()
+    return [MarketTopupView.model_validate(item) for item in topups]
+
+
+@admin_router.post("/market-topups/{topup_id}/status", response_model=MarketTopupView)
+def update_market_topup_status(
+    topup_id: str,
+    payload: MarketTopupStatusUpdate,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> MarketTopupView:
+    _require_payment_rails_permission(request, actor)
+    topup = session.get(MarketTopup, topup_id)
+    if topup is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Market topup not found.")
+    try:
+        status_value = MarketTopupStatus(payload.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    rail_service = _build_wallet_rail_service(request, session)
+    topup = rail_service.apply_market_topup_status(topup=topup, status=status_value, actor=actor, notes=payload.notes)
+    RiskOpsService(session).log_audit(
+        actor_user_id=actor.id,
+        action_key="wallet.market_topup.status_changed",
+        resource_type="market_topup",
+        resource_id=topup.id,
+        detail=f"Market topup set to {status_value.value}.",
+        metadata_json={"status": status_value.value, "reference": topup.reference},
+    )
+    session.commit()
+    session.refresh(topup)
+    return MarketTopupView.model_validate(topup)
 
 
 @wallet_router.post("/payment-events", response_model=PaymentEventView, status_code=status.HTTP_201_CREATED)
@@ -647,6 +1039,7 @@ def create_payment_event(
 
 
 router.include_router(wallet_router)
+router.include_router(admin_router)
 router.include_router(orders_legacy_router)
 router.include_router(orders_api_router, generate_unique_id_function=_api_operation_id)
 api_router.include_router(wallet_router, generate_unique_id_function=_api_operation_id)

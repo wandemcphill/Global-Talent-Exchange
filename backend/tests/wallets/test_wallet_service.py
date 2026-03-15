@@ -11,6 +11,7 @@ from backend.app.auth.service import AuthService
 from backend.app.models import Base, LedgerEntry, LedgerEntryReason, LedgerUnit, PaymentStatus
 from backend.app.wallets.service import (
     InsufficientBalanceError,
+    LedgerError,
     LedgerPosting,
     UnbalancedTransactionError,
     WalletService,
@@ -160,5 +161,33 @@ def test_request_competition_payout_requires_reward_balance(session) -> None:
             withdrawal_fee_bps=1000,
             minimum_fee=Decimal("0.0000"),
             source_scope="competition",
+            actor=user,
+        )
+
+
+def test_request_payout_rejects_unknown_source_scope(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.CREDIT)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("25")),
+            LedgerPosting(account=platform_account, amount=Decimal("-25")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-scope",
+        actor=user,
+    )
+    with pytest.raises(LedgerError, match="Withdrawal source must be trade or competition"):
+        service.request_payout(
+            session,
+            user=user,
+            amount=Decimal("5"),
+            destination_reference="bank:0012345678",
+            withdrawal_fee_bps=1000,
+            minimum_fee=Decimal("0.0000"),
+            source_scope="bonus",
             actor=user,
         )

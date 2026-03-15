@@ -25,18 +25,46 @@ class TacticalStyle(StrEnum):
     ATTACKING = "attacking"
 
 
+class MatchSpectatorMode(StrEnum):
+    FREE_2D_COMMENTARY = "free_2d_commentary"
+    PAID_LIVE_KEY_MOMENT_VIDEO = "paid_live_key_moment_video"
+
+
+class MatchHighlightProfile(StrEnum):
+    BORING_DRAW = "boring_draw"
+    NORMAL = "normal"
+    HIGH_DRAMA = "high_drama"
+    ELITE_FINAL = "elite_final"
+
+
 class MatchEventType(StrEnum):
     KICKOFF = "kickoff"
+    POSSESSION_SWING = "possession_swing"
+    DANGEROUS_ATTACK = "dangerous_attack"
+    SHOT = "shot"
+    SHOT_ON_TARGET = "shot_on_target"
     MISSED_CHANCE = "missed_chance"
+    MISSED_BIG_CHANCE = "missed_big_chance"
     SAVE = "save"
+    GOALKEEPER_SAVE = "goalkeeper_save"
     GOAL = "goal"
     WOODWORK = "woodwork"
     DOUBLE_SAVE = "double_save"
+    COUNTER_ATTACK = "counter_attack"
+    TACTICAL_FOUL = "tactical_foul"
+    PENALTY_AWARDED = "penalty_awarded"
+    PENALTY_SCORED = "penalty_scored"
+    PENALTY_MISSED = "penalty_missed"
+    SET_PIECE_CHANCE = "set_piece_chance"
+    DEFENSIVE_ERROR = "defensive_error"
     YELLOW_CARD = "yellow_card"
     RED_CARD = "red_card"
     INJURY = "injury"
+    FATIGUE_EVENT = "fatigue_event"
     SUBSTITUTION = "substitution"
+    SUBSTITUTION_IMPACT = "substitution_impact"
     TACTICAL_SWING = "tactical_swing"
+    TACTICAL_CHANGE = "tactical_change"
     HALFTIME = "halftime"
     FULLTIME = "fulltime"
     PENALTY_GOAL = "penalty_goal"
@@ -213,6 +241,12 @@ class TacticalPlan:
     yellow_card_substitution_minute: int
     yellow_card_replacement_roles: tuple[PlayerRole, ...]
     max_substitutions: int
+    defensive_line: int = 50
+    width: int = 50
+    mentality: TacticalStyle = TacticalStyle.BALANCED
+    set_piece_emphasis: int = 50
+    player_instructions: dict[str, Any] | None = None
+    game_state_adjustments: dict[str, Any] | None = None
     tactical_quality: int = 60
     adaptability: int = 60
     game_management: int = 60
@@ -260,6 +294,7 @@ class TeamVisualIdentity:
     badge: BadgeVisualIdentity
     selected_kit: KitVisualIdentity
     alternate_kit: KitVisualIdentity
+    third_kit: KitVisualIdentity | None = None
     goalkeeper_kit: KitVisualIdentity
     player_visuals: tuple[PlayerVisualIdentity, ...] = ()
     clash_adjusted: bool = False

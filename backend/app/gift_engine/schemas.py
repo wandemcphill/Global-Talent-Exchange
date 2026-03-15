@@ -11,6 +11,7 @@ class GiftSendRequest(BaseModel):
     gift_key: str = Field(min_length=2, max_length=64)
     quantity: Decimal = Field(default=Decimal('1.0000'), gt=0, le=1000)
     note: str | None = Field(default=None, max_length=500)
+    source_scope: str = Field(default="user_hosted", max_length=32)
 
 
 class GiftTransactionView(BaseModel):
@@ -24,6 +25,7 @@ class GiftTransactionView(BaseModel):
     gross_amount: Decimal
     platform_rake_amount: Decimal
     recipient_net_amount: Decimal
+    source_scope: str
     ledger_unit: str
     ledger_transaction_id: str | None = None
     note: str | None = None

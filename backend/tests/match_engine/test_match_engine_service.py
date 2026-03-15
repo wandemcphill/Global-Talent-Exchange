@@ -2,9 +2,22 @@ from __future__ import annotations
 
 from backend.app.common.enums.match_status import MatchStatus
 from backend.app.config.competition_constants import MATCH_PRESENTATION_MAX_MINUTES, MATCH_PRESENTATION_MIN_MINUTES
-from backend.app.match_engine.schemas import MatchKitIdentityInput, MatchTeamIdentityInput
+from backend.app.match_engine.schemas import (
+    MatchKitIdentityInput,
+    MatchSubstitutionRequestInput,
+    MatchTacticalAdjustmentInput,
+    MatchTacticalChangeInput,
+    MatchTeamIdentityInput,
+)
 from backend.app.match_engine.services.match_simulation_service import MatchSimulationService
-from backend.app.match_engine.simulation.models import MatchCompetitionType, MatchEventType, PlayerRole, TacticalStyle
+from backend.app.match_engine.simulation.models import (
+    MatchCompetitionType,
+    MatchEventType,
+    MatchHighlightProfile,
+    MatchSpectatorMode,
+    PlayerRole,
+    TacticalStyle,
+)
 from backend.tests.match_engine.helpers import build_request, build_team
 
 
@@ -41,14 +54,22 @@ def test_replay_payload_contains_valid_key_moments_and_standard_duration() -> No
 
     player_event_types = {
         MatchEventType.MISSED_CHANCE,
+        MatchEventType.MISSED_BIG_CHANCE,
         MatchEventType.SAVE,
+        MatchEventType.GOALKEEPER_SAVE,
+        MatchEventType.SHOT,
+        MatchEventType.SHOT_ON_TARGET,
         MatchEventType.GOAL,
         MatchEventType.YELLOW_CARD,
+        MatchEventType.TACTICAL_FOUL,
         MatchEventType.RED_CARD,
         MatchEventType.INJURY,
         MatchEventType.SUBSTITUTION,
         MatchEventType.PENALTY_GOAL,
         MatchEventType.PENALTY_MISS,
+        MatchEventType.PENALTY_SCORED,
+        MatchEventType.PENALTY_MISSED,
+        MatchEventType.PENALTY_AWARDED,
     }
     for event in payload.timeline.events:
         assert event.commentary
@@ -354,3 +375,130 @@ def test_woodwork_and_double_save_events_surface() -> None:
 
     assert any(event.event_type is MatchEventType.WOODWORK for event in payload_woodwork.timeline.events)
     assert any(event.event_type is MatchEventType.DOUBLE_SAVE for event in payload_double_save.timeline.events)
+
+
+def test_tactical_change_affects_possession() -> None:
+    service = MatchSimulationService()
+    home = build_team("tactic-home", "Tactic Home", 80)
+    away = build_team("tactic-away", "Tactic Away", 80)
+    base_request = build_request(seed=22, home_team=home, away_team=away)
+    base_summary = service.build_summary(base_request)
+
+    change = MatchTacticalChangeInput(
+        change_id="home-press",
+        team_id=home.team_id,
+        requested_minute=30,
+        adjustment=MatchTacticalAdjustmentInput(
+            tempo=85,
+            pressing=88,
+            mentality=TacticalStyle.ATTACKING,
+        ),
+    )
+    changed_request = base_request.model_copy(update={"tactical_changes": [change]})
+    changed_summary = service.build_summary(changed_request)
+
+    assert base_summary.home_stats.possession != changed_summary.home_stats.possession
+
+
+def test_substitution_request_applies_after_delay() -> None:
+    service = MatchSimulationService()
+    home = build_team("sub-home", "Sub Home", 79)
+    away = build_team("sub-away", "Sub Away", 79)
+    change = MatchTacticalChangeInput(
+        change_id="sub-request",
+        team_id=home.team_id,
+        requested_minute=60,
+        substitution=MatchSubstitutionRequestInput(
+            outgoing_player_id=home.starters[1].player_id,
+            incoming_player_id=home.bench[0].player_id,
+            urgency="normal",
+            reason="fresh_legs",
+        ),
+    )
+    request = build_request(seed=19, home_team=home, away_team=away).model_copy(update={"tactical_changes": [change]})
+    payload = service.build_replay_payload(request)
+
+    sub_event = next(
+        event
+        for event in payload.timeline.events
+        if event.event_type is MatchEventType.SUBSTITUTION and event.metadata.get("change_id") == "sub-request"
+    )
+    assert sub_event.minute >= 61
+
+
+def test_halftime_analytics_and_spectator_package() -> None:
+    service = MatchSimulationService()
+    payload = service.build_replay_payload(build_request(seed=14))
+
+    assert payload.halftime_analytics is not None
+    assert 60 <= payload.halftime_analytics.duration_seconds <= 120
+    assert payload.spectator_package is not None
+    assert payload.spectator_package.can_pause is False
+    assert payload.spectator_package.continuous_stream_available is False
+    assert payload.spectator_package.free_mode is MatchSpectatorMode.FREE_2D_COMMENTARY
+    assert payload.spectator_package.paid_mode is MatchSpectatorMode.PAID_LIVE_KEY_MOMENT_VIDEO
+    assert set(payload.spectator_package.modes) == {
+        MatchSpectatorMode.FREE_2D_COMMENTARY,
+        MatchSpectatorMode.PAID_LIVE_KEY_MOMENT_VIDEO,
+    }
+
+
+def test_highlight_profiles_and_access_rules() -> None:
+    service = MatchSimulationService()
+    defensive_home = build_team("def-home", "Def Home", 74, style=TacticalStyle.DEFENSIVE, pressing=40, tempo=40)
+    defensive_away = build_team("def-away", "Def Away", 74, style=TacticalStyle.DEFENSIVE, pressing=40, tempo=40)
+    boring_payload = _find_payload(
+        service,
+        lambda seed: build_request(seed=seed, home_team=defensive_home, away_team=defensive_away),
+        lambda payload: payload.summary.highlight_profile is MatchHighlightProfile.BORING_DRAW,
+        seeds=range(1, 200),
+    )
+    assert 90 <= boring_payload.summary.highlight_runtime_seconds <= 180
+    assert boring_payload.summary.highlight_access is not None
+    assert boring_payload.summary.highlight_access.archive_mode is False
+    assert boring_payload.summary.highlight_access.expires_after_seconds == 600
+
+    final_payload = service.build_replay_payload(
+        build_request(seed=8, competition_type=MatchCompetitionType.CUP, is_final=True, requires_winner=True)
+    )
+    assert final_payload.summary.highlight_profile is MatchHighlightProfile.ELITE_FINAL
+    assert 420 <= final_payload.summary.highlight_runtime_seconds <= 600
+    assert final_payload.summary.highlight_access is not None
+    assert final_payload.summary.highlight_access.archive_mode is True
+    assert final_payload.summary.highlight_access.expires_after_seconds is None
+
+
+def test_key_moment_video_available() -> None:
+    service = MatchSimulationService()
+    payload = service.build_replay_payload(build_request(seed=33))
+    assert payload.key_moments
+
+
+def test_third_kit_resolves_clash() -> None:
+    service = MatchSimulationService()
+    home_identity = MatchTeamIdentityInput(
+        club_name="Primary Clash",
+        short_club_code="PCL",
+        home_kit=MatchKitIdentityInput(primary_color="#111111", secondary_color="#333333", accent_color="#444444", front_text="PCL"),
+        away_kit=MatchKitIdentityInput(kit_type="away", primary_color="#111111", secondary_color="#333333", accent_color="#444444", front_text="PCL"),
+    )
+    away_identity = MatchTeamIdentityInput(
+        club_name="Alt Clash",
+        short_club_code="ACL",
+        home_kit=MatchKitIdentityInput(primary_color="#111111", secondary_color="#333333", accent_color="#555555", front_text="ACL"),
+        away_kit=MatchKitIdentityInput(kit_type="away", primary_color="#111111", secondary_color="#333333", accent_color="#666666", front_text="ACL"),
+        third_kit=MatchKitIdentityInput(
+            kit_type="third",
+            primary_color="#f7fafc",
+            secondary_color="#111827",
+            accent_color="#22c55e",
+            front_text="ACL",
+        ),
+    )
+    home_team = build_team("clash-home", "Primary Clash", 79).model_copy(update={"identity": home_identity})
+    away_team = build_team("clash-away", "Alt Clash", 79).model_copy(update={"identity": away_identity})
+
+    payload = service.build_replay_payload(build_request(seed=12, home_team=home_team, away_team=away_team))
+
+    assert payload.visual_identity is not None
+    assert payload.visual_identity.away_team.selected_kit.kit_type == "third"

@@ -276,7 +276,7 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     unit: Mapped[LedgerUnit] = mapped_column(
         Enum(LedgerUnit, name="ledger_unit", native_enum=False),
         nullable=False,
-        default=LedgerUnit.CREDIT,
+        default=LedgerUnit.COIN,
     )
     amount_coin: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     amount_fiat: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)

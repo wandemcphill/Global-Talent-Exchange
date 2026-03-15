@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
+from backend.app.models.base import utcnow
 from backend.app.models.user import User
 from backend.app.policies.schemas import (
+    AdminRegionOverrideRequest,
     CountryFeaturePolicyAdminSummary,
     CountryFeaturePolicyResponse,
     CountryFeaturePolicyUpsertRequest,
@@ -17,9 +19,12 @@ from backend.app.policies.schemas import (
     PolicyDocumentVersionSummary,
     PolicyDocumentVersionUpsertRequest,
     PolicyRequirementSummary,
+    UserRegionProfileView,
+    UserRegionUpdateRequest,
     UserComplianceStatus,
 )
 from backend.app.policies.service import PolicyService
+from backend.app.risk_ops_engine.service import RiskOpsService
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 admin_router = APIRouter(prefix="/admin/policies", tags=["admin-policies"])
@@ -36,7 +41,8 @@ def _map_version(version) -> PolicyDocumentVersionSummary:
 
 
 def _map_summary(document) -> PolicyDocumentSummary:
-    latest_version = next((version for version in document.versions if version.is_published), None)
+    now = utcnow()
+    latest_version = next((version for version in document.versions if version.is_published and version.effective_at <= now), None)
     return PolicyDocumentSummary(
         id=document.id,
         document_key=document.document_key,
@@ -44,6 +50,25 @@ def _map_summary(document) -> PolicyDocumentSummary:
         is_mandatory=document.is_mandatory,
         active=document.active,
         latest_version=_map_version(latest_version) if latest_version else None,
+    )
+
+
+def _map_region_profile(profile, *, override_metadata: dict | None = None) -> UserRegionProfileView:
+    now = utcnow()
+    locked = bool(profile.permanent_locked or (profile.locked_until and now < profile.locked_until))
+    next_change_eligible_at = None if profile.permanent_locked else profile.locked_until
+    return UserRegionProfileView(
+        region_code=profile.region_code,
+        current_region=profile.region_code,
+        selected_at=profile.selected_at,
+        last_changed_at=profile.last_changed_at,
+        locked_until=profile.locked_until,
+        change_count=profile.change_count,
+        permanent_locked=profile.permanent_locked,
+        next_change_eligible_at=next_change_eligible_at,
+        permanent_change_used=bool(profile.permanent_locked or (profile.change_count or 0) >= 1),
+        locked=locked,
+        override_metadata=override_metadata,
     )
 
 
@@ -152,6 +177,34 @@ def list_my_policy_requirements(
     ]
 
 
+@router.get("/me/region", response_model=UserRegionProfileView)
+def get_my_region(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> UserRegionProfileView:
+    service = PolicyService(session)
+    profile = service.ensure_user_region_profile(
+        user=current_user,
+        region_code=service.resolve_country_code_for_user(user=current_user),
+    )
+    return _map_region_profile(profile)
+
+
+@router.post("/me/region", response_model=UserRegionProfileView)
+def update_my_region(
+    payload: UserRegionUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> UserRegionProfileView:
+    service = PolicyService(session)
+    try:
+        profile = service.change_user_region(user=current_user, region_code=payload.region_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    return _map_region_profile(profile)
+
+
 @router.get("/me/compliance", response_model=UserComplianceStatus)
 def get_my_compliance_status(
     current_user: User = Depends(get_current_user),
@@ -187,11 +240,23 @@ def get_my_compliance_status(
 @admin_router.post("/documents", response_model=PolicyDocumentDetail)
 def admin_upsert_policy_document(
     payload: PolicyDocumentVersionUpsertRequest,
-    _: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
 ) -> PolicyDocumentDetail:
     service = PolicyService(session)
     version = service.upsert_document_version(payload=payload)
+    RiskOpsService(session).log_audit(
+        actor_user_id=actor.id,
+        action_key="policy.document.version.upserted",
+        resource_type="policy_document",
+        resource_id=version.document.id if version.document else None,
+        detail=f"Policy document {payload.document_key} {payload.version_label} upserted.",
+        metadata_json={
+            "document_key": payload.document_key,
+            "version_label": payload.version_label,
+            "is_published": bool(payload.is_published),
+        },
+    )
     session.commit()
     document = version.document
     return PolicyDocumentDetail(
@@ -217,11 +282,76 @@ def admin_list_country_policies(
 @admin_router.post("/country-policies", response_model=CountryFeaturePolicyAdminSummary)
 def admin_upsert_country_policy(
     payload: CountryFeaturePolicyUpsertRequest,
-    _: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
 ) -> CountryFeaturePolicyAdminSummary:
     service = PolicyService(session)
     policy = service.upsert_country_policy(payload=payload)
+    RiskOpsService(session).log_audit(
+        actor_user_id=actor.id,
+        action_key="policy.country.upserted",
+        resource_type="country_policy",
+        resource_id=policy.id,
+        detail=f"Country policy {policy.country_code}:{policy.bucket_type} upserted.",
+        metadata_json={
+            "country_code": policy.country_code,
+            "bucket_type": policy.bucket_type,
+        },
+    )
     session.commit()
     session.refresh(policy)
     return CountryFeaturePolicyAdminSummary.model_validate(policy, from_attributes=True)
+
+
+@admin_router.post("/documents/versions", response_model=PolicyDocumentDetail)
+def admin_upsert_policy_document_version(
+    payload: PolicyDocumentVersionUpsertRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PolicyDocumentDetail:
+    service = PolicyService(session)
+    version = service.upsert_document_version(payload=payload)
+    RiskOpsService(session).log_audit(
+        actor_user_id=actor.id,
+        action_key="policy.document.version.upserted",
+        resource_type="policy_document",
+        resource_id=version.document.id if version.document else None,
+        detail=f"Policy document {payload.document_key} {payload.version_label} upserted.",
+        metadata_json={
+            "document_key": payload.document_key,
+            "version_label": payload.version_label,
+            "is_published": bool(payload.is_published),
+        },
+    )
+    session.commit()
+    version = service.get_document(payload.document_key, version_label=payload.version_label, include_unpublished=True)
+    document = version.document
+    return PolicyDocumentDetail(
+        id=document.id,
+        document_key=document.document_key,
+        title=document.title,
+        is_mandatory=document.is_mandatory,
+        active=document.active,
+        latest_version=_map_version(version),
+        body_markdown=version.body_markdown,
+    )
+
+
+@admin_router.post("/regions/override", response_model=UserRegionProfileView)
+def admin_override_region(
+    payload: AdminRegionOverrideRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> UserRegionProfileView:
+    service = PolicyService(session)
+    profile = service.override_user_region(
+        user_id=payload.user_id,
+        region_code=payload.region_code,
+        actor_user_id=actor.id,
+        reason=payload.reason,
+    )
+    session.commit()
+    return _map_region_profile(
+        profile,
+        override_metadata={"actor_user_id": actor.id, "reason": payload.reason, "overridden_at": utcnow().isoformat()},
+    )

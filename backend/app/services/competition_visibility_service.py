@@ -43,7 +43,7 @@ class CompetitionVisibilityService:
 
         ordered_rules = sorted((rule for rule in rules if rule.enabled), key=lambda rule: rule.priority)
         for rule in ordered_rules:
-            decision = self._evaluate_rule(rule, club_id=club_id, context=context)
+            decision = self._evaluate_rule(rule, club_id=club_id, context=context, invite_valid=invite_valid)
             if not decision.allowed:
                 return decision
 
@@ -55,6 +55,7 @@ class CompetitionVisibilityService:
         *,
         club_id: str,
         context: dict[str, Any],
+        invite_valid: bool,
     ) -> VisibilityDecision:
         payload = rule.rule_payload or {}
         if rule.rule_type == "allowlist_clubs":
@@ -75,7 +76,7 @@ class CompetitionVisibilityService:
             allowed = int(rank) <= int(threshold)
             return VisibilityDecision(allowed=allowed, reason=None if allowed else "rank_too_low")
         if rule.rule_type == "requires_invite":
-            return VisibilityDecision(allowed=False, reason="invite_required", requires_invite=True)
+            return VisibilityDecision(allowed=invite_valid, reason=None if invite_valid else "invite_required", requires_invite=True)
 
         return VisibilityDecision(allowed=False, reason="visibility_rule_unhandled")
 

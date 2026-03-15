@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PolicyDocumentVersionSummary(BaseModel):
@@ -45,6 +45,32 @@ class PolicyAcceptanceSummary(BaseModel):
     title: str
     version_label: str
     accepted_at: datetime
+
+
+class UserRegionUpdateRequest(BaseModel):
+    region_code: str = Field(min_length=2, max_length=8)
+
+
+class UserRegionProfileView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    region_code: str
+    current_region: str
+    selected_at: datetime
+    last_changed_at: datetime
+    locked_until: datetime | None
+    change_count: int
+    permanent_locked: bool
+    next_change_eligible_at: datetime | None = None
+    permanent_change_used: bool = False
+    locked: bool = False
+    override_metadata: dict | None = None
+
+
+class AdminRegionOverrideRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=36)
+    region_code: str = Field(min_length=2, max_length=8)
+    reason: str | None = Field(default=None, max_length=255)
 
 
 class PolicyDocumentVersionUpsertRequest(BaseModel):

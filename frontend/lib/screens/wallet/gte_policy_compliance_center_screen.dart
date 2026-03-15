@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../data/gte_models.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../widgets/gte_formatters.dart';
+import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import '../onboarding/gte_region_selection_screen.dart';
 
 class GtePolicyComplianceCenterScreen extends StatefulWidget {
   const GtePolicyComplianceCenterScreen({
@@ -202,20 +204,44 @@ class _GtePolicyComplianceCenterScreenState
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => GteRegionSelectionScreen(
+                                controller: widget.controller,
+                                currentCountry: bundle.compliance.countryCode,
+                              ),
+                            ),
+                          );
+                          await _refresh();
+                        },
+                        icon: const Icon(Icons.public_outlined),
+                        label: const Text('Select region'),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 18),
                 GteSurfacePanel(
+                  accentColor: bundle.compliance.hasMissingRequiredPolicies
+                      ? GteShellTheme.accentWarm
+                      : GteShellTheme.accentCommunity,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Required actions',
+                      Text('Mandatory acceptances',
                           style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Text(
+                        bundle.compliance.missingPolicyAcceptances.isEmpty
+                            ? 'Nothing pending. Your compliance board is clean.'
+                            : 'Complete the required policy acceptances to unlock deposits, withdrawals, and trading.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                       const SizedBox(height: 12),
-                      if (bundle.compliance.missingPolicyAcceptances.isEmpty)
-                        const Text('Nothing pending. Your compliance board is clean.')
-                      else
+                      if (bundle.compliance.missingPolicyAcceptances.isNotEmpty)
                         ...bundle.compliance.missingPolicyAcceptances.map(
                           (GtePolicyRequirementSummary item) => Padding(
                             padding: const EdgeInsets.only(bottom: 10),
@@ -226,7 +252,7 @@ class _GtePolicyComplianceCenterScreenState
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    '${item.title} (${item.versionLabel})',
+                                    '${item.title} • ${item.versionLabel}',
                                   ),
                                 ),
                               ],

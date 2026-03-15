@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
 from backend.app.models.reward_settlement import RewardSettlement
 from backend.app.models.user import User
-from backend.app.reward_engine.schemas import RewardEngineSummaryView, RewardSettlementRequest, RewardSettlementView
+from backend.app.reward_engine.schemas import PromoPoolCreditRequest, PromoPoolCreditView, RewardEngineSummaryView, RewardSettlementRequest, RewardSettlementView
 from backend.app.reward_engine.service import RewardEngineError, RewardEngineService
 
 router = APIRouter(prefix='/reward-engine', tags=['reward-engine'])
@@ -49,6 +49,28 @@ def settle_reward(payload: RewardSettlementRequest, actor: User = Depends(get_cu
     session.commit()
     session.refresh(item)
     return _map_settlement(item)
+
+
+@admin_router.post('/promo-pool/credits', response_model=PromoPoolCreditView)
+def credit_promo_pool(payload: PromoPoolCreditRequest, actor: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> PromoPoolCreditView:
+    service = RewardEngineService(session)
+    try:
+        transaction_id, reference = service.credit_promo_pool(
+            actor=actor,
+            amount=payload.amount,
+            unit=payload.unit,
+            reference=payload.reference,
+            note=payload.note,
+        )
+    except RewardEngineError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    return PromoPoolCreditView(
+        transaction_id=transaction_id,
+        amount=payload.amount,
+        unit=payload.unit,
+        reference=reference,
+    )
 
 
 @router.get('/me/settlements', response_model=list[RewardSettlementView])

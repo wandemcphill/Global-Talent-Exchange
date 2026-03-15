@@ -10,6 +10,7 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import 'gte_policy_compliance_center_screen.dart';
 
 class GteFundWalletScreen extends StatefulWidget {
   const GteFundWalletScreen({
@@ -30,12 +31,33 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.refreshCompliance();
+  }
+
+  @override
   void dispose() {
     _amountController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    final GteComplianceStatus? compliance =
+        widget.controller.complianceStatus;
+    if (widget.controller.isLoadingCompliance && compliance == null) {
+      setState(() {
+        _error = 'Compliance status is still loading. Please retry.';
+      });
+      return;
+    }
+    if (compliance != null && !compliance.canDeposit) {
+      setState(() {
+        _error =
+            'Deposits are blocked until compliance requirements are completed.';
+      });
+      return;
+    }
     final double? amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
       setState(() {
@@ -84,11 +106,49 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final GteComplianceStatus? compliance =
+        widget.controller.complianceStatus;
+    final bool blocked = compliance != null && !compliance.canDeposit;
     return Scaffold(
       appBar: AppBar(title: const Text('Fund wallet')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
+          if (blocked) ...<Widget>[
+            GteSurfacePanel(
+              accentColor: GteShellTheme.accentWarm,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Compliance action required',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    compliance?.requiredPolicyAcceptancesMissing == null
+                        ? 'Complete required policy acceptances to unlock deposits.'
+                        : 'Complete ${compliance!.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => GtePolicyComplianceCenterScreen(
+                            controller: widget.controller,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.gavel_outlined),
+                    label: const Text('Open compliance center'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           GteSurfacePanel(
             emphasized: true,
             accentColor: GteShellTheme.accentCapital,

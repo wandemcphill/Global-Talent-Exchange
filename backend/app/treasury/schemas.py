@@ -180,6 +180,9 @@ class WithdrawalEligibilityView(BaseModel):
 class WithdrawalSourceScope(str, Enum):
     TRADE = "trade"
     COMPETITION = "competition"
+    USER_HOSTED_GIFT = "user_hosted_gift"
+    GTEX_COMPETITION_GIFT = "gtex_competition_gift"
+    NATIONAL_REWARD = "national_reward"
 
 
 class WithdrawalQuoteRequest(BaseModel):

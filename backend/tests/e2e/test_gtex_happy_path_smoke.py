@@ -28,6 +28,16 @@ from backend.app.models.club_profile import ClubProfile
 from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
 from backend.app.models.club_trophy import ClubTrophy
 from backend.app.models.club_trophy_cabinet import ClubTrophyCabinet
+from backend.app.models.competition import Competition
+from backend.app.models.competition_entry import CompetitionEntry
+from backend.app.models.competition_invite import CompetitionInvite
+from backend.app.models.competition_participant import CompetitionParticipant
+from backend.app.models.competition_prize_rule import CompetitionPrizeRule
+from backend.app.models.competition_reward_pool import CompetitionRewardPool
+from backend.app.models.competition_rule_set import CompetitionRuleSet
+from backend.app.models.competition_seed_rule import CompetitionSeedRule
+from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
+from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
 from backend.app.models.user import KycStatus, User, UserRole
 from backend.app.notifications.service import NotificationCenter
 from backend.app.replay_archive.persistence import InMemoryReplayArchiveRepository
@@ -60,6 +70,16 @@ def test_gtex_happy_path_smoke() -> None:
             ClubJerseyDesign.__table__,
             ClubIdentityTheme.__table__,
             ClubShowcaseSnapshot.__table__,
+            Competition.__table__,
+            CompetitionRuleSet.__table__,
+            CompetitionPrizeRule.__table__,
+            CompetitionRewardPool.__table__,
+            CompetitionSeedRule.__table__,
+            CompetitionVisibilityRule.__table__,
+            CompetitionInvite.__table__,
+            CompetitionEntry.__table__,
+            CompetitionParticipant.__table__,
+            CompetitionWalletLedger.__table__,
         ],
     )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -80,7 +100,7 @@ def test_gtex_happy_path_smoke() -> None:
     app = FastAPI()
     app.include_router(clubs_router)
     app.include_router(competitions_router)
-    orchestrator = CompetitionOrchestrator()
+    orchestrator = CompetitionOrchestrator(session)
     app.dependency_overrides[get_competition_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_current_user] = lambda: session.get(User, "user-owner")

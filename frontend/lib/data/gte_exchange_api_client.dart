@@ -480,6 +480,13 @@ class GteExchangeApiClient {
   Future<GteWalletSummary> fetchWalletSummary() =>
       repository.fetchWalletSummary();
 
+  Future<GteWalletLedgerPage> fetchWalletLedger({
+    int page = 1,
+    int pageSize = 20,
+  }) {
+    return repository.fetchWalletLedger(page: page, pageSize: pageSize);
+  }
+
   Future<GtePortfolioView> fetchPortfolio() => repository.fetchPortfolio();
 
   Future<GtePortfolioSummary> fetchPortfolioSummary() =>

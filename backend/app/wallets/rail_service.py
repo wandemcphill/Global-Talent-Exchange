@@ -17,9 +17,10 @@ from backend.app.models.market_topup import MarketTopup, MarketTopupStatus
 from backend.app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from backend.app.models.treasury import PaymentMode, RateDirection, TreasurySettings
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
+from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from backend.app.risk_ops_engine.service import RiskOpsService
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from backend.app.wallets.providers.base import ProviderEvent, ProviderEventType
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 RISK_AMOUNT_THRESHOLD = Decimal("5000.0000")
@@ -198,6 +199,7 @@ class WalletRailService:
             self.session,
             postings=postings,
             reason=LedgerEntryReason.DEPOSIT,
+            source_tag=LedgerSourceTag.FANCOIN_PURCHASE,
             reference=order.reference,
             description=f"FanCoin purchase via {order.provider_key}",
             external_reference=order.provider_reference,
@@ -235,6 +237,8 @@ class WalletRailService:
         actor: User | None = None,
         notes: str | None = None,
     ) -> FancoinPurchaseOrder:
+        if order.status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED} and order.reversed_at:
+            return order
         if order.ledger_transaction_id is None:
             order.status = status
             order.notes = notes or order.notes
@@ -254,6 +258,7 @@ class WalletRailService:
                     LedgerPosting(account=platform_account, amount=order.net_amount),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
                 reference=f"purchase-reversal:{order.id}",
                 description=f"Reverse FanCoin purchase {order.reference}",
                 external_reference=order.provider_reference,
@@ -304,6 +309,96 @@ class WalletRailService:
         self.session.flush()
         return order
 
+    def handle_provider_event(self, *, event: ProviderEvent) -> FancoinPurchaseOrder | None:
+        order: FancoinPurchaseOrder | None = None
+        if event.purchase_order_reference:
+            order = self.session.scalar(
+                select(FancoinPurchaseOrder).where(FancoinPurchaseOrder.reference == event.purchase_order_reference)
+            )
+        if order is None and event.provider_reference:
+            order = self.session.scalar(
+                select(FancoinPurchaseOrder).where(FancoinPurchaseOrder.provider_reference == event.provider_reference)
+            )
+        if order is None:
+            self._create_system_event(
+                event_key=f"purchase-order-webhook-miss-{event.provider_key}-{event.provider_reference or event.purchase_order_reference or 'unknown'}",
+                severity=SystemEventSeverity.WARNING,
+                title="Purchase order webhook did not match an order",
+                body="Provider webhook could not be matched to an existing purchase order.",
+                subject_type="purchase_order",
+                subject_id=event.purchase_order_reference or event.provider_reference or "unknown",
+                metadata={
+                    "provider_key": event.provider_key,
+                    "provider_reference": event.provider_reference,
+                    "event_id": event.event_id,
+                },
+            )
+            return None
+        if order.provider_key != event.provider_key:
+            self._create_system_event(
+                event_key=f"purchase-order-provider-mismatch-{order.id}",
+                severity=SystemEventSeverity.WARNING,
+                title="Purchase order provider mismatch",
+                body="Webhook provider did not match the recorded purchase order provider key.",
+                subject_type="purchase_order",
+                subject_id=order.id,
+                metadata={
+                    "expected_provider": order.provider_key,
+                    "received_provider": event.provider_key,
+                    "provider_reference": event.provider_reference,
+                },
+            )
+            return order
+        if event.event_id and order.provider_event_id == event.event_id and order.status in {
+            PurchaseOrderStatus.SETTLED,
+            PurchaseOrderStatus.REFUNDED,
+            PurchaseOrderStatus.CHARGEBACK,
+            PurchaseOrderStatus.REVERSED,
+        }:
+            return order
+        if event.event_id:
+            order.provider_event_id = event.event_id
+        if event.provider_reference and not order.provider_reference:
+            order.provider_reference = event.provider_reference
+        if event.raw_payload:
+            payload = dict(order.raw_payload or {})
+            payload["last_event"] = event.raw_payload
+            payload["last_event_type"] = event.event_type.value
+            payload["last_event_id"] = event.event_id
+            order.raw_payload = payload
+        if event.amount is not None and order.amount_fiat and event.amount != order.amount_fiat:
+            self._create_system_event(
+                event_key=f"purchase-order-amount-mismatch-{order.id}-{event.event_id or 'event'}",
+                severity=SystemEventSeverity.WARNING,
+                title="Purchase order amount mismatch",
+                body="Provider webhook amount did not match the recorded purchase order amount.",
+                subject_type="purchase_order",
+                subject_id=order.id,
+                metadata={
+                    "expected_amount": str(order.amount_fiat),
+                    "received_amount": str(event.amount),
+                    "provider_reference": event.provider_reference,
+                },
+            )
+        target_status = self._map_provider_event(event.event_type)
+        if target_status is None:
+            return order
+        order = self.apply_purchase_order_status(order=order, status=target_status, actor=None, notes=f"Webhook {event.event_type.value}")
+        RiskOpsService(self.session).log_audit(
+            actor_user_id=None,
+            action_key="wallet.purchase_order.webhook",
+            resource_type="purchase_order",
+            resource_id=order.id,
+            detail=f"Webhook {event.event_type.value} received for purchase order.",
+            metadata_json={
+                "provider_key": event.provider_key,
+                "provider_reference": event.provider_reference,
+                "event_id": event.event_id,
+                "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+            },
+        )
+        return order
+
     def list_purchase_orders_for_user(self, *, user: User, limit: int = 50) -> list[FancoinPurchaseOrder]:
         return self.session.scalars(
             select(FancoinPurchaseOrder)
@@ -311,6 +406,22 @@ class WalletRailService:
             .order_by(FancoinPurchaseOrder.created_at.desc())
             .limit(limit)
         ).all()
+
+    def _map_provider_event(self, event_type: ProviderEventType) -> PurchaseOrderStatus | None:
+        mapping = {
+            ProviderEventType.CREATED: PurchaseOrderStatus.REVIEWING,
+            ProviderEventType.AUTHORIZED: PurchaseOrderStatus.PROCESSING,
+            ProviderEventType.PENDING: PurchaseOrderStatus.PROCESSING,
+            ProviderEventType.CAPTURED: PurchaseOrderStatus.SETTLED,
+            ProviderEventType.SETTLED: PurchaseOrderStatus.SETTLED,
+            ProviderEventType.FAILED: PurchaseOrderStatus.FAILED,
+            ProviderEventType.CANCELLED: PurchaseOrderStatus.CANCELLED,
+            ProviderEventType.REFUNDED: PurchaseOrderStatus.REFUNDED,
+            ProviderEventType.CHARGEBACK: PurchaseOrderStatus.CHARGEBACK,
+            ProviderEventType.REVERSED: PurchaseOrderStatus.REVERSED,
+            ProviderEventType.DISPUTED: PurchaseOrderStatus.DISPUTED,
+        }
+        return mapping.get(event_type)
 
     def quote_market_topup(self, *, amount: Decimal, fee_bps: int, unit: LedgerUnit) -> MarketTopupQuote:
         gross_amount = self._normalize_amount(amount)
@@ -411,6 +522,7 @@ class WalletRailService:
             self.session,
             postings=postings,
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.MARKET_TOPUP,
             reference=topup.reference,
             description="Market topup credited",
             external_reference=topup.reference,
@@ -571,4 +683,3 @@ class WalletRailService:
             subject_id=subject_id,
             metadata_json=metadata,
         )
-

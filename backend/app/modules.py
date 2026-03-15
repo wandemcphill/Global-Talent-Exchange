@@ -26,6 +26,7 @@ from backend.app.routes.clubs import router as canonical_clubs_router
 from backend.app.routes.club_ops import router as club_ops_router
 from backend.app.core.health import router as health_router
 from backend.app.core.module import DomainModule
+from backend.app.observability.router import admin_router as ops_admin_router, router as observability_router
 from backend.app.fast_cups.api.router import router as fast_cups_router
 from backend.app.ingestion.router import router as ingestion_router
 from backend.app.leagues.router import router as leagues_router
@@ -64,6 +65,7 @@ from backend.app.governance_engine.router import admin_router as governance_admi
 from backend.app.dispute_engine.router import admin_router as dispute_admin_router, router as dispute_router
 from backend.app.world_super_cup.api.router import router as world_super_cup_router
 from backend.app.treasury.router import router as treasury_router
+from backend.app.integrations.payments.router import router as payments_router
 
 
 def _with_api_alias(router: APIRouter) -> APIRouter:
@@ -155,6 +157,8 @@ def _seed_admin_engine_defaults(app, context) -> None:
 
 DOMAIN_MODULES = (
     DomainModule(name="health", router=health_router),
+    DomainModule(name="observability", router=observability_router),
+    DomainModule(name="admin_ops", router=ops_admin_router),
     DomainModule(name="admin", router=admin_router),
     DomainModule(name="admin_access", router=admin_access_router),
     DomainModule(name="admin_godmode", router=admin_godmode_router),
@@ -178,6 +182,7 @@ DOMAIN_MODULES = (
     DomainModule(name="integrity_engine_admin", router=integrity_admin_router),
     DomainModule(name="auth", router=auth_router),
     DomainModule(name="wallets", router=wallets_router),
+    DomainModule(name="payments", router=payments_router),
     DomainModule(name="media_engine", router=media_engine_router),
     DomainModule(name="media_engine_admin", router=media_engine_admin_router),
     DomainModule(name="club_infra", router=club_infra_router),

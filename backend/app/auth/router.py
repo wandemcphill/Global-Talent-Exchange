@@ -48,6 +48,7 @@ def register_user(
             full_name=payload.full_name,
             phone_number=payload.phone_number,
             is_over_18=payload.is_over_18,
+            region_code=payload.region_code,
             username=payload.username,
             password=payload.password,
             display_name=payload.full_name,

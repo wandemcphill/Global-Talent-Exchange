@@ -17,7 +17,7 @@ from backend.app.market.service import MarketEngine
 from backend.app.matching.models import TradeExecution
 from backend.app.matching.service import MatchingService
 from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerUnit
+from backend.app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from backend.app.orders.models import Order, OrderSide, OrderStatus
 from backend.app.orders.service import OrderService
 from backend.app.players.read_models import PlayerSummaryReadModel
@@ -748,6 +748,7 @@ class DemoMarketSimulationService:
                 LedgerPosting(account=platform_account, amount=-delta),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=f"simulation-rebalance-{account.code}",
             description="Simulation wallet rebalance",
             actor=actor,

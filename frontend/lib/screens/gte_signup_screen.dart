@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_feedback.dart';
+import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
 import '../widgets/gtex_branding.dart';
+import 'wallet/gte_policy_compliance_center_screen.dart';
 
 class GteSignupScreen extends StatefulWidget {
   const GteSignupScreen({
@@ -88,6 +90,40 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
         _localError = widget.controller.authError;
       });
       return;
+    }
+    final GteComplianceStatus? compliance =
+        widget.controller.complianceStatus;
+    if (compliance != null && compliance.hasMissingRequiredPolicies) {
+      final bool? openCompliance = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Compliance step required'),
+            content: Text(
+              'You have ${compliance.requiredPolicyAcceptancesMissing} policy items to accept before deposits, withdrawals, and trading are enabled.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Later'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Review now'),
+              ),
+            ],
+          );
+        },
+      );
+      if (openCompliance == true && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GtePolicyComplianceCenterScreen(
+              controller: widget.controller,
+            ),
+          ),
+        );
+      }
     }
     await widget.controller.api.trackAnalyticsEvent('signup_completed');
     Navigator.of(context).pop(true);

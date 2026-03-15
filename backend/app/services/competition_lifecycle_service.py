@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.app.common.enums.competition_format import CompetitionFormat
 from backend.app.common.enums.competition_status import CompetitionStatus
 from backend.app.common.enums.match_status import MatchStatus
+from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.models.competition import Competition
 from backend.app.models.competition_match import CompetitionMatch
 from backend.app.models.competition_participant import CompetitionParticipant
@@ -38,10 +39,11 @@ class CompetitionLifecycleService:
     match_service: CompetitionMatchService = field(init=False)
     reward_service: CompetitionRewardService = field(default_factory=CompetitionRewardService)
     visibility_service: CompetitionVisibilityService = field(default_factory=CompetitionVisibilityService)
+    event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
 
     def __post_init__(self) -> None:
         self.schedule_service = CompetitionScheduleService(self.session)
-        self.match_service = CompetitionMatchService(self.session)
+        self.match_service = CompetitionMatchService(self.session, event_publisher=self.event_publisher)
 
     def seed_competition(
         self,
@@ -193,10 +195,11 @@ class CompetitionLifecycleService:
             ).all()
         )
         if not reward_pools:
+            pool_type = "promo_pool" if self._is_platform_competition(competition.source_type) else "entry_fee"
             reward_pools.append(
                 CompetitionRewardPool(
                     competition_id=competition.id,
-                    pool_type="entry_fee",
+                    pool_type=pool_type,
                     currency=competition.currency,
                     amount_minor=competition.net_prize_pool_minor,
                     status="planned",
@@ -204,6 +207,11 @@ class CompetitionLifecycleService:
                 )
             )
             self.session.add(reward_pools[-1])
+        is_platform = self._is_platform_competition(competition.source_type)
+        if is_platform and any(pool.pool_type != "promo_pool" for pool in reward_pools):
+            raise ValueError("GTEX-hosted competitions must use promo_pool reward pools.")
+        if not is_platform and any(pool.pool_type == "promo_pool" for pool in reward_pools):
+            raise ValueError("User-hosted competitions cannot use promo_pool reward pools.")
         rewards: list = []
         for pool in reward_pools:
             rewards.extend(
@@ -232,7 +240,25 @@ class CompetitionLifecycleService:
             published_by_user_id=competition.host_user_id,
         )
         self.session.flush()
+        self.event_publisher.publish(
+            DomainEvent(
+                name="competition_settled",
+                payload={
+                    "competition_id": competition.id,
+                    "settled": settle,
+                    "reward_pool_ids": [pool.id for pool in reward_pools],
+                    "reward_pool_types": [pool.pool_type for pool in reward_pools],
+                },
+            )
+        )
         return reward_pools
+
+    @staticmethod
+    def _is_platform_competition(source_type: str | None) -> bool:
+        if source_type is None:
+            return False
+        normalized = source_type.strip().lower()
+        return normalized in {"gtex", "platform", "gtex_platform", "gtex_competition", "gtex_hosted"}
 
     def record_match_event(
         self,

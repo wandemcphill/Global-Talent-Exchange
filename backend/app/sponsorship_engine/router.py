@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
@@ -10,12 +10,17 @@ from backend.app.sponsorship_engine.schemas import (
     SponsorshipDashboardView,
     SponsorshipLeadCreateRequest,
     SponsorshipLeadView,
+    SponsorshipPlacementRequest,
+    SponsorshipPlacementResponse,
+    SponsorshipPlacementView,
     SponsorshipPackageView,
     SponsorshipPayoutView,
     SponsorshipReviewRequest,
     SponsorshipSettlementView,
 )
 from backend.app.sponsorship_engine.service import SponsorshipEngineError, SponsorshipEngineService
+from backend.app.services.sponsorship_placement_service import SponsorshipPlacementService
+from backend.app.analytics.service import AnalyticsService
 
 router = APIRouter(prefix="/sponsorship", tags=["sponsorship"])
 admin_router = APIRouter(prefix="/admin/sponsorship", tags=["admin-sponsorship"])
@@ -32,6 +37,38 @@ def _raise(exc: SponsorshipEngineError) -> None:
 @router.get("/packages", response_model=list[SponsorshipPackageView])
 def list_packages(service: SponsorshipEngineService = Depends(get_service)) -> list[SponsorshipPackageView]:
     return [SponsorshipPackageView.model_validate(item) for item in service.list_packages(active_only=True)]
+
+
+@router.post("/placements", response_model=SponsorshipPlacementResponse)
+def resolve_placements(
+    payload: SponsorshipPlacementRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> SponsorshipPlacementResponse:
+    service = SponsorshipPlacementService(session=session, settings=request.app.state.settings, analytics=AnalyticsService())
+    placements = service.resolve_placements(
+        home_club_id=payload.home_club_id,
+        away_club_id=payload.away_club_id,
+        competition_id=payload.competition_id,
+        stage_name=payload.stage_name,
+        region_code=payload.region_code,
+        surfaces=tuple(payload.surfaces) if payload.surfaces else None,
+    )
+    return SponsorshipPlacementResponse(
+        placements=[
+            SponsorshipPlacementView(
+                surface=item.surface,
+                sponsor_name=item.sponsor_name,
+                campaign_code=item.campaign_code,
+                source=item.source,
+                asset_type=item.asset_type,
+                creative_url=item.creative_url,
+                fallback=item.fallback,
+                metadata=item.metadata,
+            )
+            for item in placements
+        ]
+    )
 
 
 @router.get("/clubs/{club_id}/contracts", response_model=list[SponsorshipContractView])

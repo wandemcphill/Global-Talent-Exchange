@@ -93,6 +93,8 @@ class SystemStatusService:
             "supply_tiers.toml": (config_root / "supply_tiers.toml").exists(),
             "liquidity_bands.toml": (config_root / "liquidity_bands.toml").exists(),
             "value_engine_weighting.toml": (config_root / "value_engine_weighting.toml").exists(),
+            "media_storage.toml": (config_root / "media_storage.toml").exists(),
+            "sponsorship_inventory.toml": (config_root / "sponsorship_inventory.toml").exists(),
             "frontend_android_folder": (frontend_root / "android").exists(),
             "frontend_android_wrapper_jar": (frontend_root / "android/gradle/wrapper/gradle-wrapper.jar").exists(),
             "backend_requirements_txt": (backend_root / "requirements.txt").exists(),

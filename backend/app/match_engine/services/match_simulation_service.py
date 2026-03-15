@@ -20,6 +20,14 @@ from backend.app.match_engine.schemas import (
     PenaltyShootoutView,
 )
 from backend.app.match_engine.services.replay_builder import ReplayEventLogBuilder
+from backend.app.match_engine.services.experience_layers import (
+    MatchControlLogBuilder,
+    MatchHalftimeAnalyticsBuilder,
+    MatchHighlightBuilder,
+    MatchPresentationBuilder,
+    MatchReplayContractBuilder,
+    HighlightBundle,
+)
 from backend.app.match_engine.simulation.event_generator import MatchEventGenerator
 from backend.app.match_engine.simulation.models import MatchEventType, SimulationResult
 
@@ -31,15 +39,42 @@ class MatchSimulationService:
         event_generator: MatchEventGenerator | None = None,
         commentary_generator: MatchCommentaryTimelineGenerator | None = None,
         replay_builder: ReplayEventLogBuilder | None = None,
+        highlight_builder: MatchHighlightBuilder | None = None,
+        halftime_builder: MatchHalftimeAnalyticsBuilder | None = None,
+        presentation_builder: MatchPresentationBuilder | None = None,
+        replay_contract_builder: MatchReplayContractBuilder | None = None,
+        control_log_builder: MatchControlLogBuilder | None = None,
     ) -> None:
         self.event_generator = event_generator or MatchEventGenerator()
         self.commentary_generator = commentary_generator or MatchCommentaryTimelineGenerator()
         self.replay_builder = replay_builder or ReplayEventLogBuilder()
+        self.highlight_builder = highlight_builder or MatchHighlightBuilder()
+        self.halftime_builder = halftime_builder or MatchHalftimeAnalyticsBuilder()
+        self.presentation_builder = presentation_builder or MatchPresentationBuilder()
+        self.replay_contract_builder = replay_contract_builder or MatchReplayContractBuilder()
+        self.control_log_builder = control_log_builder or MatchControlLogBuilder()
 
     def build_replay_payload(self, request: MatchSimulationRequest) -> MatchReplayPayloadView:
         result = self.event_generator.simulate(request)
         timeline = self.commentary_generator.build(result)
-        summary = self._build_summary(result, presentation_duration_seconds=timeline.presentation_duration_seconds)
+        highlight_bundle = self.highlight_builder.build(result)
+        halftime_analytics = self.halftime_builder.build(
+            result,
+            requested_duration_seconds=request.competition.halftime_duration_seconds,
+        )
+        spectator_package = self.presentation_builder.build_spectator_package(result)
+        scene_contract = self.presentation_builder.build_scene_contract(result)
+        broadcast_presentation = self.presentation_builder.build_broadcast_presentation(result)
+        replay_download = self.replay_contract_builder.build_download_contract(result)
+        sync_contract = self.replay_contract_builder.build_sync_contract(result)
+        tactical_log = self.control_log_builder.build_tactical_log(result)
+        substitution_log = self.control_log_builder.build_substitution_log(result)
+        critical_snapshots = self.control_log_builder.build_critical_snapshots(result)
+        summary = self._build_summary(
+            result,
+            presentation_duration_seconds=timeline.presentation_duration_seconds,
+            highlight_bundle=highlight_bundle,
+        )
         replay_log = self.replay_builder.build(result)
         return MatchReplayPayloadView(
             match_id=result.match_id,
@@ -51,8 +86,21 @@ class MatchSimulationService:
             expected_goals_away=summary.expected_goals_away,
             key_highlights=summary.key_highlights,
             highlight_package=summary.highlight_package,
+            highlight_profile=summary.highlight_profile,
+            highlight_runtime_seconds=summary.highlight_runtime_seconds,
+            highlight_access=summary.highlight_access,
+            key_moments=highlight_bundle.key_moments,
             manager_influence_notes=summary.manager_influence_notes,
             injury_report=summary.injury_report,
+            halftime_analytics=halftime_analytics,
+            spectator_package=spectator_package,
+            scene_assembly=scene_contract,
+            broadcast_presentation=broadcast_presentation,
+            replay_download=replay_download,
+            sync_contract=sync_contract,
+            tactical_change_log=tactical_log,
+            substitution_log=substitution_log,
+            critical_snapshots=critical_snapshots,
             visual_identity=self._build_visual_identity(result),
             status=result.status,
             summary=summary,
@@ -67,11 +115,23 @@ class MatchSimulationService:
     def build_summary(self, request: MatchSimulationRequest) -> MatchFinalSummaryView:
         result = self.event_generator.simulate(request)
         timeline = self.commentary_generator.build(result)
-        return self._build_summary(result, presentation_duration_seconds=timeline.presentation_duration_seconds)
+        highlight_bundle = self.highlight_builder.build(result)
+        return self._build_summary(
+            result,
+            presentation_duration_seconds=timeline.presentation_duration_seconds,
+            highlight_bundle=highlight_bundle,
+        )
 
-    def _build_summary(self, result: SimulationResult, *, presentation_duration_seconds: int) -> MatchFinalSummaryView:
+    def _build_summary(
+        self,
+        result: SimulationResult,
+        *,
+        presentation_duration_seconds: int,
+        highlight_bundle: HighlightBundle | None = None,
+    ) -> MatchFinalSummaryView:
         home_prob, draw_prob, away_prob = self._probability_triplet(result)
         home_xg, away_xg = self._expected_goals(result)
+        bundle = highlight_bundle or self.highlight_builder.build(result)
         return MatchFinalSummaryView(
             match_id=result.match_id,
             seed=result.seed,
@@ -81,7 +141,10 @@ class MatchSimulationService:
             expected_goals_home=home_xg,
             expected_goals_away=away_xg,
             key_highlights=self._key_highlights(result),
-            highlight_package=self._highlight_package(result),
+            highlight_package=bundle.clips,
+            highlight_profile=bundle.profile,
+            highlight_runtime_seconds=bundle.runtime_seconds,
+            highlight_access=bundle.access,
             manager_influence_notes=list(result.manager_influence_notes),
             injury_report=self._injury_report(result),
             upset_probability=result.upset_probability,
@@ -255,12 +318,18 @@ class MatchSimulationService:
             if event.event_type in {
                 MatchEventType.GOAL,
                 MatchEventType.PENALTY_GOAL,
+                MatchEventType.PENALTY_SCORED,
+                MatchEventType.PENALTY_MISSED,
                 MatchEventType.RED_CARD,
                 MatchEventType.INJURY,
                 MatchEventType.SUBSTITUTION,
                 MatchEventType.DOUBLE_SAVE,
+                MatchEventType.GOALKEEPER_SAVE,
                 MatchEventType.TACTICAL_SWING,
+                MatchEventType.TACTICAL_CHANGE,
+                MatchEventType.SUBSTITUTION_IMPACT,
                 MatchEventType.WOODWORK,
+                MatchEventType.MISSED_BIG_CHANCE,
             }:
                 minute = f"{event.minute}+{event.added_time}" if event.added_time else str(event.minute)
                 actor = event.primary_player_name or event.team_name or 'Match event'
@@ -374,6 +443,23 @@ class MatchSimulationService:
                     sleeve_style=team.alternate_kit.sleeve_style,
                     badge_placement=team.alternate_kit.badge_placement,
                     front_text=team.alternate_kit.front_text,
+                ),
+                third_kit=(
+                    MatchKitVisualView(
+                        kit_type=team.third_kit.kit_type,
+                        primary_color=team.third_kit.primary_color,
+                        secondary_color=team.third_kit.secondary_color,
+                        accent_color=team.third_kit.accent_color,
+                        shorts_color=team.third_kit.shorts_color,
+                        socks_color=team.third_kit.socks_color,
+                        pattern_type=team.third_kit.pattern_type,
+                        collar_style=team.third_kit.collar_style,
+                        sleeve_style=team.third_kit.sleeve_style,
+                        badge_placement=team.third_kit.badge_placement,
+                        front_text=team.third_kit.front_text,
+                    )
+                    if team.third_kit is not None
+                    else None
                 ),
                 goalkeeper_kit=MatchKitVisualView(
                     kit_type=team.goalkeeper_kit.kit_type,

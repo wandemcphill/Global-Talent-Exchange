@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.ingestion.models import MarketSignal
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason
+from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason, LedgerUnit
 from backend.app.players.read_models import PlayerSummaryReadModel
 from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
 from backend.app.wallets.service import WalletService
@@ -143,7 +143,7 @@ class PortfolioService:
             )
 
         holdings.sort(key=lambda item: (-item.market_value, item.player_id))
-        wallet_summary = self.wallet_service.get_wallet_summary(session, user)
+        wallet_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         return PortfolioSnapshot(
             holdings=holdings,
             summary=PortfolioSummary(

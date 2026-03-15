@@ -51,7 +51,7 @@ class MarketTopup(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     unit: Mapped[LedgerUnit] = mapped_column(
         Enum(LedgerUnit, name="ledger_unit", native_enum=False),
         nullable=False,
-        default=LedgerUnit.CREDIT,
+        default=LedgerUnit.COIN,
     )
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     fee_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))

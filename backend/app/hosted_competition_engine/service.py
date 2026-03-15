@@ -19,7 +19,7 @@ from backend.app.models.hosted_competition import (
     UserHostedCompetitionParticipant,
 )
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerUnit
+from backend.app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from backend.app.story_feed_engine.service import StoryFeedService
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
@@ -165,8 +165,8 @@ class HostedCompetitionService:
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=user_account, amount=-amount),
-                LedgerPosting(account=escrow_account, amount=amount),
+                LedgerPosting(account=user_account, amount=-amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
+                LedgerPosting(account=escrow_account, amount=amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
             ],
             reason=LedgerEntryReason.COMPETITION_ENTRY,
             reference=f'hosted-entry:{competition.id}:{user.id}',
@@ -360,7 +360,13 @@ class HostedCompetitionService:
             if user is None:
                 raise HostedCompetitionError('A placement referenced a missing user.')
             recipient_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.CREDIT)
-            postings.append(LedgerPosting(account=recipient_account, amount=payout_amount))
+            postings.append(
+                LedgerPosting(
+                    account=recipient_account,
+                    amount=payout_amount,
+                    source_tag=LedgerSourceTag.USER_HOSTED_GIFT_INCOME_FANCOIN,
+                )
+            )
             total_prize_paid += payout_amount
             standing = standings_by_user[user_id]
             standing.final_rank = rank
@@ -378,11 +384,33 @@ class HostedCompetitionService:
                 settled_by_user_id=actor.id,
             ))
         platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
-        postings.append(LedgerPosting(account=platform_account, amount=platform_fee))
+        if platform_fee > Decimal('0.0000'):
+            postings.append(
+                LedgerPosting(
+                    account=platform_account,
+                    amount=platform_fee,
+                    source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+                )
+            )
         total_outgoing = self._normalize_amount(total_prize_paid + platform_fee)
         if total_outgoing > escrow_balance:
             raise HostedCompetitionError('Settlement exceeds available escrow balance.')
-        postings.append(LedgerPosting(account=escrow_account, amount=-total_outgoing))
+        if total_prize_paid > Decimal('0.0000'):
+            postings.append(
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=-total_prize_paid,
+                    source_tag=LedgerSourceTag.USER_HOSTED_GIFT_INCOME_FANCOIN,
+                )
+            )
+        if platform_fee > Decimal('0.0000'):
+            postings.append(
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=-platform_fee,
+                    source_tag=LedgerSourceTag.HOSTING_FEE_SPEND,
+                )
+            )
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -13,6 +13,8 @@ from backend.app.models.policy import (
 )
 from backend.app.core.config import BACKEND_ROOT
 from backend.app.models.base import utcnow
+from backend.app.models.user_region import UserRegionProfile
+from backend.app.observability.audit_service import AuditTrailService
 
 DEFAULT_POLICY_DOCUMENTS: tuple[tuple[str, str, bool], ...] = (
     ("terms-and-conditions", "Terms & Conditions", True),
@@ -21,11 +23,15 @@ DEFAULT_POLICY_DOCUMENTS: tuple[tuple[str, str, bool], ...] = (
     ("anti-fraud-policy", "Anti-Fraud Policy", True),
     ("community-guidelines", "Community Guidelines", True),
     ("competition-rules", "Competition Rules", True),
+    ("spectator-match-viewing-terms", "Spectator / Match Viewing Terms", True),
+    ("user-hosted-competition-rules", "User-Hosted Competition Rules", True),
+    ("national-team-competition-rules", "National Team Competition Rules", True),
     ("rewards-promotional-pools-policy", "Rewards Funded by GTEX Promotional Pools Policy", True),
     ("fancoin-terms", "FanCoin Terms", True),
     ("marketplace-rules", "Player Card Marketplace Rules", True),
     ("withdrawal-policy", "Withdrawal Policy", True),
     ("refund-chargeback-policy", "Refund / Chargeback Policy", True),
+    ("responsible-play-fair-play-statement", "Responsible Play / Fair Play Statement", True),
     ("app-store-compliance-disclosure", "App Store / Play Store Compliance Disclosure", False),
     ("data-usage-consent-disclosure", "Data Usage / Consent Disclosure", True),
     ("content-moderation-reporting-policy", "Content Moderation and Reporting Policy", True),
@@ -44,7 +50,7 @@ DEFAULT_COUNTRY_POLICIES: tuple[dict[str, object], ...] = (
         "user_hosted_gift_withdrawals_enabled": False,
         "gtex_competition_gift_withdrawals_enabled": False,
         "national_reward_withdrawals_enabled": False,
-        "one_time_region_change_after_days": 180,
+        "one_time_region_change_after_days": 365,
         "active": True,
     },
     {
@@ -56,10 +62,12 @@ DEFAULT_COUNTRY_POLICIES: tuple[dict[str, object], ...] = (
         "user_hosted_gift_withdrawals_enabled": False,
         "gtex_competition_gift_withdrawals_enabled": False,
         "national_reward_withdrawals_enabled": False,
-        "one_time_region_change_after_days": 180,
+        "one_time_region_change_after_days": 365,
         "active": True,
     },
 )
+
+REGION_CHANGE_LOCK_DAYS = 365
 
 
 @dataclass(slots=True)
@@ -130,6 +138,8 @@ class PolicyService:
             statement = statement.where(PolicyDocumentVersion.version_label == version_label)
         else:
             statement = statement.order_by(desc(PolicyDocumentVersion.published_at))
+            if not include_unpublished:
+                statement = statement.where(PolicyDocumentVersion.effective_at <= utcnow())
         if not include_unpublished:
             statement = statement.where(PolicyDocumentVersion.is_published.is_(True))
         version = self.session.scalars(statement.limit(1)).first()
@@ -218,6 +228,15 @@ class PolicyService:
             version.effective_at = payload.effective_at or version.effective_at
             version.published_at = payload.published_at or version.published_at
             version.is_published = payload.is_published
+        if payload.is_published:
+            self.session.flush()
+            for other in self.session.scalars(
+                select(PolicyDocumentVersion).where(
+                    PolicyDocumentVersion.policy_document_id == document.id,
+                    PolicyDocumentVersion.id != version.id,
+                )
+            ).all():
+                other.is_published = False
         self.session.flush()
         return version
 
@@ -282,8 +301,12 @@ class PolicyService:
             ).all()
         }
         missing: list[PolicyDocumentVersion] = []
+        now = utcnow()
         for document in documents:
-            latest_version = next((version for version in document.versions if version.is_published), None)
+            latest_version = next(
+                (version for version in document.versions if version.is_published and version.effective_at <= now),
+                None,
+            )
             if latest_version is None:
                 continue
             if latest_version.id not in accepted_version_ids:
@@ -293,8 +316,87 @@ class PolicyService:
     def has_user_accepted_required_documents(self, *, user_id: str) -> bool:
         return not self.list_missing_acceptances(user_id=user_id)
 
+    def get_user_region_profile(self, *, user_id: str) -> UserRegionProfile | None:
+        return self.session.scalar(select(UserRegionProfile).where(UserRegionProfile.user_id == user_id))
+
+    def ensure_user_region_profile(self, *, user, region_code: str | None = None) -> UserRegionProfile:
+        profile = self.get_user_region_profile(user_id=user.id)
+        if profile is not None:
+            return profile
+        normalized = self.normalize_country_code(region_code)
+        now = utcnow()
+        profile = UserRegionProfile(
+            user_id=user.id,
+            region_code=normalized,
+            selected_at=now,
+            last_changed_at=now,
+            locked_until=now + timedelta(days=REGION_CHANGE_LOCK_DAYS),
+            change_count=0,
+            permanent_locked=False,
+        )
+        self.session.add(profile)
+        self.session.flush()
+        return profile
+
+    def change_user_region(self, *, user, region_code: str) -> UserRegionProfile:
+        normalized = self.normalize_country_code(region_code)
+        profile = self.ensure_user_region_profile(user=user, region_code=normalized)
+        if profile.region_code == normalized:
+            return profile
+        if profile.permanent_locked or profile.change_count >= 1:
+            raise ValueError("Region is permanently locked after the one-time change.")
+        if profile.locked_until and utcnow() < profile.locked_until:
+            raise ValueError(f"Region cannot be changed until {profile.locked_until.date().isoformat()}.")
+        profile.region_code = normalized
+        profile.change_count += 1
+        profile.last_changed_at = utcnow()
+        profile.permanent_locked = True
+        self.session.flush()
+        return profile
+
+    def override_user_region(
+        self,
+        *,
+        user_id: str,
+        region_code: str,
+        actor_user_id: str | None,
+        reason: str | None = None,
+    ) -> UserRegionProfile:
+        normalized = self.normalize_country_code(region_code)
+        profile = self.get_user_region_profile(user_id=user_id)
+        now = utcnow()
+        if profile is None:
+            profile = UserRegionProfile(
+                user_id=user_id,
+                region_code=normalized,
+                selected_at=now,
+                last_changed_at=now,
+                locked_until=now + timedelta(days=REGION_CHANGE_LOCK_DAYS),
+                change_count=0,
+                permanent_locked=False,
+            )
+            self.session.add(profile)
+        profile.region_code = normalized
+        profile.last_changed_at = now
+        profile.change_count = max(int(profile.change_count or 0), 1)
+        profile.permanent_locked = True
+        if profile.locked_until is None:
+            profile.locked_until = profile.selected_at + timedelta(days=REGION_CHANGE_LOCK_DAYS)
+        AuditTrailService(self.session).log_admin_override(
+            actor_user_id=actor_user_id,
+            action_key="policy.region.override",
+            detail="Admin override applied to user region profile.",
+            metadata={"user_id": user_id, "region_code": normalized, "reason": reason or ""},
+        )
+        self.session.flush()
+        return profile
+
     def resolve_country_code_for_user(self, *, user) -> str:
         from backend.app.models.treasury import KycProfile
+
+        region_profile = self.session.scalar(select(UserRegionProfile).where(UserRegionProfile.user_id == user.id))
+        if region_profile is not None:
+            return self.normalize_country_code(region_profile.region_code)
 
         profile = self.session.scalar(select(KycProfile).where(KycProfile.user_id == user.id))
         candidate = None

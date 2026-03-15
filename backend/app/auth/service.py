@@ -10,6 +10,7 @@ from backend.app.admin_godmode.service import AdminGodModeService
 from backend.app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
 from backend.app.models.base import generate_uuid, utcnow
 from backend.app.models.user import User, UserRole
+from backend.app.policies.service import PolicyService
 from backend.app.wallets.service import WalletService
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
@@ -52,6 +53,7 @@ class AuthService:
         full_name: str | None = None,
         phone_number: str | None = None,
         is_over_18: bool = True,
+        region_code: str | None = None,
         username: str | None = None,
         password: str,
         display_name: str | None = None,
@@ -94,6 +96,7 @@ class AuthService:
         session.add(user)
         session.flush()
         self.wallet_service.ensure_default_accounts(session, user)
+        PolicyService(session).ensure_user_region_profile(user=user, region_code=region_code)
         session.flush()
         return user
 
@@ -152,6 +155,7 @@ class AuthService:
 
     def get_current_user_profile(self, session: Session, user: User) -> CurrentUserResponse:
         profile_fields = self._get_profile_fields(session, user.id)
+        region_code = PolicyService(session).resolve_country_code_for_user(user=user)
         return CurrentUserResponse(
             id=user.id,
             email=user.email,
@@ -163,6 +167,7 @@ class AuthService:
             avatar_url=profile_fields["avatar_url"],
             favourite_club=profile_fields["favourite_club"],
             nationality=profile_fields["nationality"],
+            region_code=region_code,
             preferred_position=profile_fields["preferred_position"],
             role=user.role,
             kyc_status=user.kyc_status,

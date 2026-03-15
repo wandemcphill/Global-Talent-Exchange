@@ -19,9 +19,11 @@ import 'package:gte_frontend/screens/gte_exchange_player_detail_screen.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
+import 'package:gte_frontend/screens/community/community_hub_screen.dart';
 import 'package:gte_frontend/screens/referrals/referral_hub_screen.dart';
 import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
+import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
@@ -350,6 +352,30 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                           icon: const Icon(Icons.sports_soccer_outlined),
                         ),
                       ),
+                      if (<String>{'admin', 'super_admin'}.contains(widget.controller.session?.user.role.toLowerCase() ?? 'user'))
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: IconButton(
+                            tooltip: 'Admin command center',
+                            onPressed: () {
+                              final session = widget.controller.session;
+                              if (session == null) {
+                                return;
+                              }
+                              Navigator.of(context).push<void>(
+                                MaterialPageRoute<void>(
+                                  builder: (BuildContext context) =>
+                                      AdminCommandCenterScreen(
+                                    baseUrl: widget.apiBaseUrl,
+                                    accessToken: session.accessToken,
+                                    backendMode: widget.backendMode,
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.dashboard_customize_outlined),
+                          ),
+                        ),
                       if (<String>{'admin', 'super_admin'}.contains(widget.controller.session?.user.role.toLowerCase() ?? 'user'))
                         Padding(
                           padding: const EdgeInsets.only(right: 8),

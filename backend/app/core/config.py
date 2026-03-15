@@ -20,6 +20,8 @@ LIQUIDITY_BANDS_FILE = "liquidity_bands.toml"
 IMAGE_POLICY_FILE = "image_policy.toml"
 VALUE_ENGINE_WEIGHTING_FILE = "value_engine_weighting.toml"
 SUSPICION_THRESHOLDS_FILE = "suspicion_thresholds.toml"
+MEDIA_STORAGE_FILE = "media_storage.toml"
+SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -195,6 +197,43 @@ class ImagePolicyConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaStorageConfig:
+    storage_root: Path
+    cdn_base_url: str | None
+    download_base_url: str
+    highlight_temp_prefix: str
+    highlight_archive_prefix: str
+    highlight_export_prefix: str
+    highlight_temp_ttl_hours: int
+    highlight_archive_ttl_days: int
+    download_expiry_minutes: int
+    download_rate_limit_count: int
+    download_rate_limit_window_minutes: int
+    watermark_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SponsorshipCampaignConfig:
+    code: str
+    name: str
+    sponsor_name: str
+    priority: int
+    is_internal: bool
+    surfaces: tuple[str, ...]
+    region_codes: tuple[str, ...]
+    competition_ids: tuple[str, ...]
+    stage_names: tuple[str, ...]
+    creative_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SponsorshipInventoryConfig:
+    default_campaign: str
+    surfaces: tuple[str, ...]
+    campaigns: tuple[SponsorshipCampaignConfig, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class SuspicionThresholdsConfig:
     player_min_suspicious_events: int
     player_min_suspicious_share: float
@@ -276,6 +315,9 @@ class Settings:
     database_url: str
     redis_url: str | None
     auth_secret: str
+    media_signing_secret: str
+    crypto_deposit_enabled: bool
+    crypto_provider_key: str
     run_migration_check: bool
     default_ingestion_provider: str
     provider_timeout_seconds: int
@@ -286,6 +328,8 @@ class Settings:
     supply_tiers: SupplyTiersConfig
     liquidity_bands: LiquidityBandsConfig
     image_policy: ImagePolicyConfig
+    media_storage: MediaStorageConfig
+    sponsorship_inventory: SponsorshipInventoryConfig
     suspicion_thresholds: SuspicionThresholdsConfig
     value_engine_weighting: ValueEngineWeightingConfig
 
@@ -305,6 +349,132 @@ def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
         holder_concentration_share=0.40,
         circular_trade_min_cycle_length=3,
         circular_trade_min_repetitions=1,
+    )
+
+
+def _default_media_storage_config(config_root: Path) -> MediaStorageConfig:
+    storage_root = BACKEND_ROOT / "storage"
+    return MediaStorageConfig(
+        storage_root=storage_root,
+        cdn_base_url=None,
+        download_base_url="/media-engine/downloads",
+        highlight_temp_prefix="media/highlights/temp",
+        highlight_archive_prefix="media/highlights/archive",
+        highlight_export_prefix="media/exports",
+        highlight_temp_ttl_hours=72,
+        highlight_archive_ttl_days=365,
+        download_expiry_minutes=15,
+        download_rate_limit_count=5,
+        download_rate_limit_window_minutes=10,
+        watermark_enabled=True,
+    )
+
+
+def load_media_storage_config(config_root: Path, environ: Mapping[str, str]) -> MediaStorageConfig:
+    document = _load_optional_toml_document(config_root / MEDIA_STORAGE_FILE) or {}
+    defaults = _default_media_storage_config(config_root)
+
+    raw_root = environ.get("GTE_MEDIA_STORAGE_ROOT") or document.get("storage_root")
+    if raw_root:
+        path = Path(str(raw_root))
+        if not path.is_absolute():
+            path = (PROJECT_ROOT / path).resolve()
+        storage_root = path
+    else:
+        storage_root = defaults.storage_root
+
+    cdn_base_url = environ.get("GTE_MEDIA_CDN_BASE_URL") or document.get("cdn_base_url") or defaults.cdn_base_url
+    download_base_url = environ.get("GTE_MEDIA_DOWNLOAD_BASE_URL") or document.get("download_base_url") or defaults.download_base_url
+
+    watermark_enabled_value = document.get("watermark_enabled")
+    if watermark_enabled_value is None:
+        watermark_enabled_value = defaults.watermark_enabled
+
+    return MediaStorageConfig(
+        storage_root=storage_root,
+        cdn_base_url=str(cdn_base_url) if cdn_base_url else None,
+        download_base_url=str(download_base_url),
+        highlight_temp_prefix=str(document.get("highlight_temp_prefix", defaults.highlight_temp_prefix)),
+        highlight_archive_prefix=str(document.get("highlight_archive_prefix", defaults.highlight_archive_prefix)),
+        highlight_export_prefix=str(document.get("highlight_export_prefix", defaults.highlight_export_prefix)),
+        highlight_temp_ttl_hours=int(document.get("highlight_temp_ttl_hours", defaults.highlight_temp_ttl_hours)),
+        highlight_archive_ttl_days=int(document.get("highlight_archive_ttl_days", defaults.highlight_archive_ttl_days)),
+        download_expiry_minutes=int(document.get("download_expiry_minutes", defaults.download_expiry_minutes)),
+        download_rate_limit_count=int(document.get("download_rate_limit_count", defaults.download_rate_limit_count)),
+        download_rate_limit_window_minutes=int(document.get("download_rate_limit_window_minutes", defaults.download_rate_limit_window_minutes)),
+        watermark_enabled=bool(watermark_enabled_value),
+    )
+
+
+def _default_sponsorship_inventory_config() -> SponsorshipInventoryConfig:
+    surfaces = (
+        "stadium_board",
+        "tunnel_walkout",
+        "replay_sting",
+        "halftime_overlay",
+        "lineup_strip",
+        "finals_trophy_backdrop",
+    )
+    return SponsorshipInventoryConfig(
+        default_campaign="gtex_internal",
+        surfaces=surfaces,
+        campaigns=(
+            SponsorshipCampaignConfig(
+                code="gtex_internal",
+                name="GTEX Internal Promo",
+                sponsor_name="GTEX",
+                priority=0,
+                is_internal=True,
+                surfaces=surfaces,
+                region_codes=(),
+                competition_ids=(),
+                stage_names=(),
+                creative_url=None,
+            ),
+        ),
+    )
+
+
+def load_sponsorship_inventory_config(config_root: Path) -> SponsorshipInventoryConfig:
+    document = _load_optional_toml_document(config_root / SPONSORSHIP_INVENTORY_FILE)
+    defaults = _default_sponsorship_inventory_config()
+    if not document:
+        return defaults
+
+    raw_surfaces = document.get("surfaces")
+    if raw_surfaces is None:
+        raw_surfaces = list(defaults.surfaces)
+    surfaces = _coerce_string_tuple(raw_surfaces, name="surfaces")
+    campaigns_raw = _require_array(document.get("campaigns", []), name="campaigns")
+    campaigns: list[SponsorshipCampaignConfig] = []
+    for item in campaigns_raw:
+        table = _require_table(item, name="campaigns[]")
+        code = _catalog_code(str(table.get("name") or table.get("code") or ""), table.get("code"))
+        campaigns.append(
+            SponsorshipCampaignConfig(
+                code=code,
+                name=str(table.get("name") or code),
+                sponsor_name=str(table.get("sponsor_name") or "GTEX"),
+                priority=int(table.get("priority", 0)),
+                is_internal=bool(table.get("internal", False)),
+                surfaces=_coerce_string_tuple(table.get("surfaces", list(surfaces)), name="campaigns[].surfaces"),
+                region_codes=_coerce_string_tuple(table.get("region_codes", []), name="campaigns[].region_codes"),
+                competition_ids=_coerce_string_tuple(table.get("competition_ids", []), name="campaigns[].competition_ids"),
+                stage_names=_coerce_string_tuple(table.get("stage_names", []), name="campaigns[].stage_names"),
+                creative_url=str(table.get("creative_url") or "") or None,
+            )
+        )
+    if not campaigns:
+        return defaults
+    if len({campaign.code for campaign in campaigns}) != len(campaigns):
+        raise ValueError("Sponsorship campaign codes must be unique.")
+    default_code = str(document.get("default_campaign") or defaults.default_campaign)
+    if default_code not in {campaign.code for campaign in campaigns}:
+        default_code = campaigns[0].code
+    return SponsorshipInventoryConfig(
+        default_campaign=default_code,
+        surfaces=surfaces,
+        campaigns=tuple(campaigns),
     )
 
 
@@ -763,6 +933,9 @@ def load_settings(
         database_url=resolved_environ.get("GTE_DATABASE_URL", DEFAULT_DATABASE_URL),
         redis_url=resolved_environ.get("GTE_REDIS_URL"),
         auth_secret=resolved_environ.get("GTE_AUTH_SECRET", "gte-dev-secret-change-me"),
+        media_signing_secret=resolved_environ.get("GTE_MEDIA_SIGNING_SECRET", "gte-media-secret-change-me"),
+        crypto_deposit_enabled=_get_bool(resolved_environ, "GTE_CRYPTO_DEPOSIT_ENABLED", False),
+        crypto_provider_key=resolved_environ.get("GTE_CRYPTO_PROVIDER_KEY", "crypto_fiat"),
         run_migration_check=_get_bool(resolved_environ, "GTE_RUN_MIGRATION_CHECK", True),
         default_ingestion_provider=resolved_environ.get("GTE_INGESTION_PROVIDER", "mock"),
         provider_timeout_seconds=_get_int(resolved_environ, "GTE_PROVIDER_TIMEOUT_SECONDS", 20),
@@ -773,6 +946,8 @@ def load_settings(
         supply_tiers=load_supply_tiers_config(resolved_config_root),
         liquidity_bands=load_liquidity_bands_config(resolved_config_root),
         image_policy=load_image_policy_config(resolved_config_root),
+        media_storage=load_media_storage_config(resolved_config_root, resolved_environ),
+        sponsorship_inventory=load_sponsorship_inventory_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
     )

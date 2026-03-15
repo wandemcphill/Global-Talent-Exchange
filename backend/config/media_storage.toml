@@ -1,0 +1,12 @@
+storage_root = "backend/storage"
+cdn_base_url = ""
+download_base_url = "/media-engine/downloads"
+highlight_temp_prefix = "media/highlights/temp"
+highlight_archive_prefix = "media/highlights/archive"
+highlight_export_prefix = "media/exports"
+highlight_temp_ttl_hours = 72
+highlight_archive_ttl_days = 365
+download_expiry_minutes = 15
+download_rate_limit_count = 5
+download_rate_limit_window_minutes = 10
+watermark_enabled = true

@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/features/competitions_hub/data/competition_hub_curator.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart';
 import 'package:gte_frontend/widgets/competitions/competition_status_badge.dart';
 import 'package:gte_frontend/widgets/competitions/competition_visibility_chip.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
@@ -312,6 +315,14 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
         .take(2)
         .toList(growable: false);
+    final List<CompetitionSummary> gtexCompetitions = competitions
+        .where(_isGtexCompetition)
+        .take(4)
+        .toList(growable: false);
+    final List<CompetitionSummary> creatorCompetitions = competitions
+        .where((CompetitionSummary item) => !_isGtexCompetition(item))
+        .take(4)
+        .toList(growable: false);
 
     return <Widget>[
       GteSurfacePanel(
@@ -361,6 +372,46 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         ),
       ),
       const SizedBox(height: 20),
+      GteSurfacePanel(
+        accentColor: GteShellTheme.accentArena,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Host your own competition',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create a creator competition, publish transparent rules, and share invite codes for private joins.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: _openCreateCompetition,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Host competition'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    AppFeedback.showSuccess(
+                      context,
+                      'Invite codes are generated from the competition detail share screen.',
+                    );
+                  },
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Invite/join flow'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
       if (liveBoard.isNotEmpty) ...<Widget>[
         const _ArenaSectionHeader(
           eyebrow: 'MATCHDAY BOARD',
@@ -399,6 +450,46 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         )
       else
         ...<Widget>[
+          if (gtexCompetitions.isNotEmpty) ...<Widget>[
+            const _ArenaSectionHeader(
+              eyebrow: 'GTEX COMPETITIONS',
+              title: 'Platform-run fixtures and promo pools',
+              description:
+                  'GTEX competitions are funded by promotional pools and follow published rules.',
+            ),
+            const SizedBox(height: 12),
+            ...gtexCompetitions.map(
+              (CompetitionSummary item) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _CompetitionCard(
+                  competition: item,
+                  contextLabel: 'GTEX competition',
+                  onOpen: () => _openCompetition(item.id),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
+          if (creatorCompetitions.isNotEmpty) ...<Widget>[
+            const _ArenaSectionHeader(
+              eyebrow: 'CREATOR-HOSTED',
+              title: 'User-hosted competitions',
+              description:
+                  'Creator competitions use published rules, transparent payouts, and invite-driven joins.',
+            ),
+            const SizedBox(height: 12),
+            ...creatorCompetitions.map(
+              (CompetitionSummary item) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _CompetitionCard(
+                  competition: item,
+                  contextLabel: 'Creator-hosted',
+                  onOpen: () => _openCompetition(item.id),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           if (replayLane.isNotEmpty) ...<Widget>[
             const _ArenaSectionHeader(
               eyebrow: 'REPLAY LANE',
@@ -604,6 +695,23 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         builder: (BuildContext context) => CompetitionDetailScreen(
           controller: widget.controller,
           competitionId: competitionId,
+          isAuthenticated: widget.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
+        ),
+      ),
+    );
+  }
+
+  bool _isGtexCompetition(CompetitionSummary item) {
+    final String label = item.creatorLabel.toLowerCase();
+    return label.contains('gtex') || label.contains('exchange');
+  }
+
+  Future<void> _openCreateCompetition() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => CompetitionCreateScreen(
+          controller: widget.controller,
         ),
       ),
     );

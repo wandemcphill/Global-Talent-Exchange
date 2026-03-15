@@ -33,6 +33,7 @@ def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
         gross_amount=item.gross_amount,
         platform_rake_amount=item.platform_rake_amount,
         recipient_net_amount=item.recipient_net_amount,
+        source_scope=item.source_scope,
         ledger_unit=item.ledger_unit.value,
         ledger_transaction_id=item.ledger_transaction_id,
         note=item.note,
@@ -69,6 +70,7 @@ def send_gift(payload: GiftSendRequest, current_user: User = Depends(get_current
             gift_key=payload.gift_key,
             quantity=payload.quantity,
             note=payload.note,
+            source_scope=payload.source_scope,
         )
     except GiftEngineError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

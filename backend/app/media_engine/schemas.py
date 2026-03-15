@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -57,3 +59,29 @@ class MatchRevenueSnapshotView(BaseModel):
     home_club_share_coin: Decimal
     away_club_share_coin: Decimal
     metadata_json: dict[str, object]
+
+
+class MediaAssetView(BaseModel):
+    storage_key: str
+    content_type: str
+    size_bytes: int
+    metadata: dict[str, Any]
+    expires_at: datetime | None = None
+
+
+class MediaDownloadRequest(BaseModel):
+    storage_key: str = Field(min_length=3)
+    match_key: str | None = None
+    download_kind: str = Field(default="highlight")
+    premium_required: bool = True
+    watermark_label: str | None = None
+    watermark_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MediaDownloadResponse(BaseModel):
+    storage_key: str
+    download_url: str
+    expires_at: datetime
+    content_type: str
+    filename: str
+    metadata: dict[str, Any]

@@ -111,6 +111,7 @@ from backend.app.models.treasury import (
     UserBankAccount,
 )
 from backend.app.models.user import KycStatus, User, UserRole
+from backend.app.models.user_region import UserRegionProfile
 from backend.app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
 from backend.app.models.notification_record import NotificationRecord
 from backend.app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
@@ -132,6 +133,7 @@ from backend.app.models.wallet import (
     LedgerAccountKind,
     LedgerEntry,
     LedgerEntryReason,
+    LedgerSourceTag,
     LedgerUnit,
     PaymentEvent,
     PaymentProvider,
@@ -229,6 +231,7 @@ __all__ = [
     "LedgerAccountKind",
     "LedgerEntry",
     "LedgerEntryReason",
+    "LedgerSourceTag",
     "LedgerUnit",
     "PaymentEvent",
     "PaymentProvider",
@@ -294,6 +297,7 @@ __all__ = [
     "TreasuryWithdrawalRequest",
     "TreasuryWithdrawalStatus",
     "UserBankAccount",
+    "UserRegionProfile",
     "User",
     "UserRole",
     "NotificationRecord",

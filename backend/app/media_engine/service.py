@@ -8,9 +8,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.economy.service import EconomyConfigService
 from backend.app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
 from backend.app.models.user import User
+from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
 class MediaEngineError(ValueError):
@@ -20,6 +23,14 @@ class MediaEngineError(ValueError):
 @dataclass(slots=True)
 class MediaEngineService:
     session: Session
+    wallet_service: WalletService | None = None
+    event_publisher: EventPublisher | None = None
+
+    def __post_init__(self) -> None:
+        if self.event_publisher is None:
+            self.event_publisher = InMemoryEventPublisher()
+        if self.wallet_service is None:
+            self.wallet_service = WalletService(event_publisher=self.event_publisher)
 
     def record_view(self, *, actor: User, match_key: str, competition_key: str | None, watch_seconds: int, premium_unlocked: bool) -> MatchView:
         item = MatchView(
@@ -54,6 +65,37 @@ class MediaEngineService:
         )
         self.session.add(purchase)
         self.session.flush()
+        charge_amount = purchase.price_fancoin_equivalent
+        if charge_amount and Decimal(charge_amount) > Decimal("0.0000"):
+            user_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
+            platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+            try:
+                self.wallet_service.append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(account=user_account, amount=-Decimal(charge_amount), source_tag=LedgerSourceTag.VIDEO_VIEW_SPEND),
+                        LedgerPosting(account=platform_account, amount=Decimal(charge_amount), source_tag=LedgerSourceTag.MATCH_VIEW_REVENUE),
+                    ],
+                    reason=LedgerEntryReason.ADJUSTMENT,
+                    reference=f"premium-video:{purchase.id}",
+                    description="Premium video purchase",
+                    actor=actor,
+                )
+            except InsufficientBalanceError as exc:
+                raise MediaEngineError("Insufficient FanCoin balance for premium video purchase.") from exc
+        if self.event_publisher is not None:
+            self.event_publisher.publish(
+                DomainEvent(
+                    name="premium_video_purchased",
+                    payload={
+                        "purchase_id": purchase.id,
+                        "user_id": actor.id,
+                        "match_key": purchase.match_key,
+                        "competition_key": purchase.competition_key,
+                        "price_fancoin": str(purchase.price_fancoin_equivalent),
+                    },
+                )
+            )
         return purchase
 
     def list_purchases(self, *, actor: User) -> list[PremiumVideoPurchase]:

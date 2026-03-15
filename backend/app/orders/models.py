@@ -58,7 +58,7 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             values_callable=lambda enum_type: [member.value for member in enum_type],
         ),
         nullable=False,
-        default=LedgerUnit.CREDIT,
+        default=LedgerUnit.COIN,
     )
     reserved_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))
     status: Mapped[OrderStatus] = mapped_column(

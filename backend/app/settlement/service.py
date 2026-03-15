@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerEntry
+from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerSourceTag, LedgerUnit
 from backend.app.orders.models import Order, OrderStatus
 from backend.app.risk.service import RiskControlService, TradeSide
 from backend.app.wallets.service import WalletService
@@ -74,6 +74,8 @@ class SettlementService:
                 amount=gross_amount,
                 reference=reference,
                 description=f"Reserve funds for settlement {execution.execution_id}",
+                unit=LedgerUnit.COIN,
+                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
         return self.wallet_service.reserve_position_units(
             session,
@@ -82,6 +84,7 @@ class SettlementService:
             quantity=quantity,
             reference=reference,
             description=f"Reserve units for settlement {execution.execution_id}",
+            source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
         )
 
     def settle_order_execution(
@@ -149,6 +152,8 @@ class SettlementService:
                     reference=reference,
                     description=f"Settle buy execution {execution.execution_id}",
                     external_reference=execution.execution_id,
+                    unit=LedgerUnit.COIN,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
                 )
                 if use_reserved_balance
                 else self.wallet_service.settle_available_funds(
@@ -158,6 +163,8 @@ class SettlementService:
                     reference=reference,
                     description=f"Settle buy execution {execution.execution_id}",
                     external_reference=execution.execution_id,
+                    unit=LedgerUnit.COIN,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
                 )
             )
             position_entries = self.wallet_service.credit_position_units(
@@ -168,6 +175,7 @@ class SettlementService:
                 reference=reference,
                 description=f"Receive units for execution {execution.execution_id}",
                 external_reference=execution.execution_id,
+                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
             self._release_buy_remainder_if_needed(
                 session,
@@ -184,6 +192,7 @@ class SettlementService:
                     reference=reference,
                     description=f"Settle sell execution {execution.execution_id}",
                     external_reference=execution.execution_id,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
                 )
                 if use_reserved_balance
                 else self.wallet_service.settle_available_position_units(
@@ -194,6 +203,7 @@ class SettlementService:
                     reference=reference,
                     description=f"Settle sell execution {execution.execution_id}",
                     external_reference=execution.execution_id,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
                 )
             )
             cash_entries = self.wallet_service.credit_trade_proceeds(
@@ -203,6 +213,8 @@ class SettlementService:
                 reference=reference,
                 description=f"Credit sell execution {execution.execution_id}",
                 external_reference=execution.execution_id,
+                unit=LedgerUnit.COIN,
+                source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
             )
 
         if order is not None and self._is_order_fully_settled(session, order=order):
@@ -245,6 +257,8 @@ class SettlementService:
             amount=remaining_reserved_amount,
             reference=order.id,
             description=f"Release unused reserve for order {order.id}",
+            unit=LedgerUnit.COIN,
+            source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
         )
 
     def _is_order_fully_settled(

@@ -22,6 +22,7 @@ from backend.app.models.user import User, UserRole
 from backend.app.models.wallet import (
     LedgerAccount,
     LedgerEntryReason,
+    LedgerSourceTag,
     LedgerUnit,
     PaymentEvent,
     PaymentProvider,
@@ -413,6 +414,7 @@ class DemoBootstrapService:
                 LedgerPosting(account=platform_account, amount=-delta),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=reference,
             description="Demo bootstrap balance reconciliation",
             actor=user,
@@ -660,6 +662,8 @@ class DemoBootstrapService:
                     reference=external_reference,
                     description="Demo bootstrap reset seeded position proceeds",
                     external_reference=external_reference,
+                    unit=LedgerUnit.COIN,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
                 )
                 wallet_service.settle_available_position_units(
                     session,
@@ -669,6 +673,7 @@ class DemoBootstrapService:
                     reference=external_reference,
                     description="Demo bootstrap reset seeded position units",
                     external_reference=external_reference,
+                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
                 )
 
     def _seed_demo_holdings(
@@ -702,6 +707,8 @@ class DemoBootstrapService:
                 reference=reference,
                 description="Demo bootstrap portfolio acquisition cash leg",
                 external_reference=reference,
+                unit=LedgerUnit.COIN,
+                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
             wallet_service.credit_position_units(
                 session,
@@ -711,6 +718,7 @@ class DemoBootstrapService:
                 reference=reference,
                 description="Demo bootstrap portfolio acquisition asset leg",
                 external_reference=reference,
+                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
             holdings.append(
                 DemoHoldingSummary(
@@ -732,7 +740,7 @@ class DemoBootstrapService:
         required_amount: Decimal,
         reference: str,
     ) -> None:
-        available_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
+        available_account = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
         available_balance = wallet_service.get_balance(session, available_account)
         if available_balance >= required_amount:
             return
@@ -740,7 +748,7 @@ class DemoBootstrapService:
             session,
             wallet_service=wallet_service,
             user=user,
-            unit=LedgerUnit.CREDIT,
+            unit=LedgerUnit.COIN,
             target_balance=required_amount,
             reference=reference,
         )

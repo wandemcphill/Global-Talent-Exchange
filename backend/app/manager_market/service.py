@@ -22,8 +22,9 @@ from backend.app.models.manager_market import (
     ManagerTradeListing,
     ManagerTradeRecord,
 )
+from backend.app.admin_engine.service import AdminEngineService
 from backend.app.models.user import User
-from backend.app.models.wallet import LedgerUnit
+from backend.app.models.wallet import LedgerSourceTag, LedgerUnit
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 from .schemas import (
@@ -78,6 +79,10 @@ class ManagerMarketService:
         items = session.scalars(stmt.order_by(ManagerCatalogEntry.display_name.asc()).limit(limit)).all()
         total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         return ManagerCatalogPage(items=[self._catalog_item(row) for row in items], total=int(total))
+
+    def _active_trading_fee_bps(self, session: Session) -> int:
+        rule = next(iter(AdminEngineService(session).list_reward_rules(active_only=True)), None)
+        return int(rule.trading_fee_bps if rule is not None else 2000)
 
     def filter_metadata(self, app: FastAPI, session: Session) -> ManagerFilterMetadataView:
         self._bootstrap_db(app, session)
@@ -204,20 +209,21 @@ class ManagerMarketService:
             raise ManagerMarketError("Seller account no longer exists.")
 
         gross = Decimal(listing.asking_price_credits)
-        fee = (gross * Decimal("0.40")).quantize(Decimal("0.0001"))
+        fee_bps = self._active_trading_fee_bps(session)
+        fee = (gross * Decimal(fee_bps) / Decimal(10_000)).quantize(Decimal("0.0001"))
         seller_net = gross - fee
         settlement_reference = f"manager-trade:{listing_id}"
         self._ensure_trade_not_already_settled(session, settlement_reference)
 
-        buyer_account = self.wallet_service.get_user_account(session, buyer, LedgerUnit.CREDIT)
-        seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.CREDIT)
-        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+        buyer_account = self.wallet_service.get_user_account(session, buyer, LedgerUnit.COIN)
+        seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.COIN)
+        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
         self.wallet_service.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=buyer_account, amount=-gross),
-                LedgerPosting(account=seller_account, amount=seller_net),
-                LedgerPosting(account=platform_account, amount=fee),
+                LedgerPosting(account=buyer_account, amount=-gross, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
+                LedgerPosting(account=seller_account, amount=seller_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
+                LedgerPosting(account=platform_account, amount=fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
             ],
             reason=self.wallet_service.trade_settlement_reason,
             reference=settlement_reference,
@@ -272,17 +278,18 @@ class ManagerMarketService:
         self._ensure_trade_not_already_settled(session, settlement_reference)
 
         if cash_adjustment_credits > 0:
-            buyer_account = self.wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-            seller_account = self.wallet_service.get_user_account(session, requested_owner, LedgerUnit.CREDIT)
-            platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
-            fee = (cash_adjustment_credits * Decimal("0.40")).quantize(Decimal("0.0001"))
+            buyer_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+            seller_account = self.wallet_service.get_user_account(session, requested_owner, LedgerUnit.COIN)
+            platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+            fee_bps = self._active_trading_fee_bps(session)
+            fee = (cash_adjustment_credits * Decimal(fee_bps) / Decimal(10_000)).quantize(Decimal("0.0001"))
             seller_net = cash_adjustment_credits - fee
             self.wallet_service.append_transaction(
                 session,
                 postings=[
-                    LedgerPosting(account=buyer_account, amount=-cash_adjustment_credits),
-                    LedgerPosting(account=seller_account, amount=seller_net),
-                    LedgerPosting(account=platform_account, amount=fee),
+                    LedgerPosting(account=buyer_account, amount=-cash_adjustment_credits, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
+                    LedgerPosting(account=seller_account, amount=seller_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
+                    LedgerPosting(account=platform_account, amount=fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
                 ],
                 reason=self.wallet_service.trade_settlement_reason,
                 reference=settlement_reference,
