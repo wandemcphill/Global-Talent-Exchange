@@ -96,6 +96,12 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
+  void _reload() {
+    setState(() {
+      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+    });
+  }
+
   Future<void> _openHalftime() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
