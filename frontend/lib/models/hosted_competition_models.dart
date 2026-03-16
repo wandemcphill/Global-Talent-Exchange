@@ -58,7 +58,7 @@ class HostedCompetitionTemplate {
       participants: GteJson.integer(json, <String>['participants'], fallback: 0),
       viewingMode: GteJson.string(json, <String>['viewing_mode', 'viewingMode'], fallback: 'standard'),
       giftRules: GteJson.map(
-          json, <String>['gift_rules', 'giftRules'],
+          json, keys: <String>['gift_rules', 'giftRules'],
           fallback: const <String, Object?>{}),
       seedingMethod:
           GteJson.string(json, <String>['seeding_method', 'seedingMethod'], fallback: 'balanced'),
@@ -75,7 +75,7 @@ class HostedCompetitionTemplate {
           json, <String>['platform_fee_bps', 'platformFeeBps'],
           fallback: 0),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       active: GteJson.boolean(json, <String>['active'], fallback: true),
     );
@@ -152,7 +152,7 @@ class HostedCompetition {
           json, <String>['platform_fee_amount', 'platformFeeAmount'],
           fallback: 0),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
@@ -195,7 +195,7 @@ class HostedCompetitionParticipant {
           json, <String>['payout_eligible', 'payoutEligible'],
           fallback: false),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }
@@ -257,7 +257,7 @@ class HostedCompetitionStanding {
           json, <String>['payout_amount', 'payoutAmount'],
           fallback: 0),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),

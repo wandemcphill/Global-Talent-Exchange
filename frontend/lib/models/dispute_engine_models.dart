@@ -49,7 +49,7 @@ class DisputeEngineCase {
       status: GteJson.string(json, <String>['status'], fallback: 'open'),
       subject: GteJson.stringOrNull(json, <String>['subject']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),

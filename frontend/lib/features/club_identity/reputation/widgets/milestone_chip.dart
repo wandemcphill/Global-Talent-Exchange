@@ -17,7 +17,7 @@ class MilestoneChip extends StatelessWidget {
     final Color tone =
         positive ? GteShellTheme.accentWarm : GteShellTheme.negative;
     final String deltaLabel = positive ? '+${milestone.delta}' : '${milestone.delta}';
-    final String? metaLabel = milestone.season == null
+    final String metaLabel = milestone.season == null
         ? deltaLabel
         : 'S${milestone.season} - $deltaLabel';
     return Container(

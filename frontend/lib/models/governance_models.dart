@@ -79,7 +79,7 @@ class GovernanceProposal {
       resultSummary:
           GteJson.stringOrNull(json, <String>['result_summary', 'resultSummary']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
@@ -135,7 +135,7 @@ class GovernanceVote {
           json, <String>['is_proxy_vote', 'isProxyVote'],
           fallback: false),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
@@ -193,6 +193,20 @@ class GovernanceOverview {
   final int clubsWithTokens;
   final List<String> eligibleClubIds;
   final int recentVoteCount;
+
+  int get votingPower => eligibleClubIds.length;
+
+  int get activeVotes => recentVoteCount;
+
+  int get openProposals => openProposalCount;
+
+  int get participationRate {
+    if (openProposalCount <= 0) {
+      return 0;
+    }
+    final double rate = (recentVoteCount / openProposalCount) * 100;
+    return rate.clamp(0, 100).round();
+  }
 
   factory GovernanceOverview.fromJson(Object? value) {
     final Map<String, Object?> json =

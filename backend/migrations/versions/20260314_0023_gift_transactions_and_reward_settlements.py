@@ -23,6 +23,7 @@ def upgrade() -> None:
         sa.Column("gross_amount", sa.Numeric(18, 4), nullable=False),
         sa.Column("platform_rake_amount", sa.Numeric(18, 4), nullable=False),
         sa.Column("recipient_net_amount", sa.Numeric(18, 4), nullable=False),
+        sa.Column("source_scope", sa.String(length=32), nullable=False, server_default=sa.text("'user_hosted'")),
         sa.Column("ledger_unit", sa.String(length=16), nullable=False),
         sa.Column("ledger_transaction_id", sa.String(length=36), nullable=True),
         sa.Column("note", sa.Text(), nullable=True),

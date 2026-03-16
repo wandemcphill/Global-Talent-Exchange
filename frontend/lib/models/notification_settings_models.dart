@@ -53,7 +53,7 @@ class NotificationPreference {
       quietHoursEnd: GteJson.stringOrNull(
           json, <String>['quiet_hours_end', 'quietHoursEnd']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }
@@ -116,7 +116,7 @@ class NotificationSubscription {
       label: GteJson.string(json, <String>['label']),
       active: GteJson.boolean(json, <String>['active'], fallback: true),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }
@@ -132,6 +132,7 @@ class PlatformAnnouncement {
     required this.severity,
     required this.active,
     required this.deliverAsNotification,
+    required this.publishedAt,
     required this.metadata,
   });
 
@@ -143,6 +144,7 @@ class PlatformAnnouncement {
   final String severity;
   final bool active;
   final bool deliverAsNotification;
+  final DateTime? publishedAt;
   final Map<String, Object?> metadata;
 
   factory PlatformAnnouncement.fromJson(Object? value) {
@@ -160,8 +162,10 @@ class PlatformAnnouncement {
       deliverAsNotification: GteJson.boolean(
           json, <String>['deliver_as_notification', 'deliverAsNotification'],
           fallback: true),
+      publishedAt: GteJson.dateTimeOrNull(
+          json, <String>['published_at', 'publishedAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }

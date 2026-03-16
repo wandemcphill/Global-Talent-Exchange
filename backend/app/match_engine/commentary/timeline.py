@@ -103,11 +103,14 @@ class MatchCommentaryTimelineGenerator:
             seconds.append(max(raw_second, seconds[-1] + minimum_gap))
         seconds.append(duration)
 
-        if seconds[-1] > duration:
-            scale = duration / seconds[-1]
+        if max(seconds[:-1], default=0) >= duration or any(previous >= current for previous, current in zip(seconds, seconds[1:])):
+            scale = duration / max(seconds)
             rescaled = [0]
-            for second in seconds[1:-1]:
-                rescaled.append(max(round(second * scale), rescaled[-1] + 1))
+            for index, second in enumerate(seconds[1:-1], start=1):
+                remaining_slots = len(seconds) - index - 1
+                minimum_second = rescaled[-1] + 1
+                maximum_second = duration - remaining_slots
+                rescaled.append(min(max(round(second * scale), minimum_second), maximum_second))
             rescaled.append(duration)
             seconds = rescaled
         return seconds

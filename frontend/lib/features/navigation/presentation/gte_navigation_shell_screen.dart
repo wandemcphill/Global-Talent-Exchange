@@ -182,6 +182,13 @@ class _ShellHeaderCopy {
           detail: 'This route is designed to feel cinematic and alive, not like the market wearing football boots.',
           chips: <String>['Live now', 'Up next', 'Replay lane'],
         );
+      case GtePrimaryDestination.community:
+        return const _ShellHeaderCopy(
+          eyebrow: 'COMMUNITY GRID',
+          title: 'Signals, governance, and creator activity stay social without losing structure.',
+          detail: 'Community surfaces keep discovery, moderation, and governance in one lane instead of scattering them across the shell.',
+          chips: <String>['Discovery', 'Threads', 'Governance'],
+        );
       case GtePrimaryDestination.club:
         return const _ShellHeaderCopy(
           eyebrow: 'CLUB SYSTEMS',
@@ -264,13 +271,18 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
+    final EdgeInsets topSectionPadding = compactViewport
+        ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
+        : const EdgeInsets.fromLTRB(20, 12, 20, 0);
+    final double sectionGap = compactViewport ? 0 : 8;
     return Container(
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          toolbarHeight: 82,
-          titleSpacing: 16,
+          toolbarHeight: compactViewport ? 72 : 82,
+          titleSpacing: compactViewport ? 12 : 16,
           title: Row(
             children: <Widget>[
               const GtexLogoMark(size: 38, compact: true),
@@ -441,7 +453,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             return Column(
               children: <Widget>[
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  padding: topSectionPadding,
                   child: _ShellRouteHeader(
                     route: _route,
                     isAuthenticated: widget.controller.isAuthenticated,
@@ -450,10 +462,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  padding: topSectionPadding,
                   child: _buildModeSyncCard(),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: sectionGap),
                 Expanded(
                   child: PageStorage(
                     bucket: _pageStorageBucket,
@@ -497,6 +509,35 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                               destination: _route.effectiveCompetitionDestination,
                             ),
                           ),
+                        ),
+                        CommunityHubScreen(
+                          key: const PageStorageKey<String>('community-hub'),
+                          controller: widget.controller,
+                          baseUrl: widget.apiBaseUrl,
+                          backendMode: widget.backendMode,
+                          onOpenAdmin:
+                              <String>{'admin', 'super_admin'}.contains(
+                                    widget.controller.session?.user.role
+                                            .toLowerCase() ??
+                                        'user',
+                                  )
+                                  ? () {
+                                      final session = widget.controller.session;
+                                      if (session == null) {
+                                        return;
+                                      }
+                                      Navigator.of(context).push<void>(
+                                        MaterialPageRoute<void>(
+                                          builder: (BuildContext context) =>
+                                              AdminCommandCenterScreen(
+                                            baseUrl: widget.apiBaseUrl,
+                                            accessToken: session.accessToken,
+                                            backendMode: widget.backendMode,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  : null,
                         ),
                         ClubHubScreen(
                           key: ValueKey<String>('club-${_clubInitialTab.id}-$_clubHostSeed'),
@@ -590,6 +631,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return CreatorController(
       api: CreatorApi.standard(
         baseUrl: widget.apiBaseUrl,
+        accessToken: widget.controller.session?.accessToken,
         mode: widget.backendMode,
       ),
     );
@@ -713,6 +755,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           accent: accent,
           isRefreshing: _competitionController.isLoadingDiscovery,
           onRefresh: _competitionController.loadDiscovery,
+        );
+      case GtePrimaryDestination.community:
+        return GteSyncStatusCard(
+          title: 'Community network',
+          status: widget.controller.isAuthenticated
+              ? 'Discovery, creator, and governance surfaces are available.'
+              : 'Community is in preview mode. Sign in to unlock participation rails.',
+          syncedAt: widget.controller.marketSyncedAt,
+          accent: accent,
+          isRefreshing: widget.controller.isBootstrapping,
+          onRefresh: widget.controller.bootstrap,
         );
       case GtePrimaryDestination.club:
         return GteSyncStatusCard(

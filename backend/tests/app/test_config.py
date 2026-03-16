@@ -160,6 +160,45 @@ def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None
         """,
     )
     _write_config(
+        tmp_path / "regen_generation.toml",
+        """
+        academy_intakes_per_season = 1
+        academy_intake_min_players = 2
+        academy_intake_max_players = 4
+        starter_regen_count = 2
+        starter_age_min = 25
+        starter_age_max = 30
+        starter_gsi_min = 50
+        starter_gsi_max = 68
+        seasonal_supply_cap_ratio = 0.03
+        base_elite_probability = 0.02
+        max_elite_probability = 0.11
+        default_active_player_base = 50000
+        market_fee_bps_default = 4400
+        market_fee_bps_min = 4000
+        market_fee_bps_max = 5000
+        ecosystem_target_regen_share = 0.18
+        elite_regen_share_cap = 0.07
+        demand_cooling_floor = 0.60
+        regen_lifecycle_growth_months = 8
+        regen_lifecycle_peak_months = 20
+        regen_lifecycle_decline_months = 29
+        regen_lifecycle_retirement_months = 35
+        player_lifecycle_growth_max_age = 22
+        player_lifecycle_peak_max_age = 28
+        player_lifecycle_decline_max_age = 33
+        default_country_code = "NG"
+
+        [[country_tuning]]
+        country_code = "NG"
+        academy_quality_bias = 1.08
+        elite_probability_boost = 0.02
+        urban_bias = 0.10
+        default_regions = ["Lagos", "Enugu", "Kano"]
+        default_cities = ["Lagos", "Enugu", "Kano"]
+        """,
+    )
+    _write_config(
         tmp_path / "suspicion_thresholds.toml",
         """
         player_min_suspicious_events = 12
@@ -189,6 +228,14 @@ def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None
     assert settings.liquidity_bands.bands[0].code == "entry"
     assert settings.liquidity_bands.bands[-1].max_price_credits is None
     assert settings.image_policy.default_variant == "card"
+    assert settings.regen_generation.starter_regen_count == 2
+    assert settings.regen_generation.seasonal_supply_cap_ratio == 0.03
+    assert settings.regen_generation.market_fee_bps_default == 4400
+    assert settings.regen_generation.ecosystem_target_regen_share == 0.18
+    assert settings.regen_generation.regen_lifecycle_growth_months == 8
+    assert settings.regen_generation.regen_lifecycle_retirement_months == 35
+    assert settings.regen_generation.player_lifecycle_peak_max_age == 28
+    assert settings.regen_generation.country_tuning[0].country_code == "NG"
     assert settings.suspicion_thresholds.player_min_suspicious_events == 12
     assert settings.suspicion_thresholds.holder_concentration_share == 0.55
     assert settings.value_engine_weighting.baseline_eur_per_credit == 95_000

@@ -32,6 +32,12 @@ class _GteHalftimeAnalyticsScreenState
     _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
   }
 
+  void _reload() {
+    setState(() {
+      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -60,13 +66,15 @@ class _GteHalftimeAnalyticsScreenState
               );
             }
             if (!snapshot.hasData) {
-              return const Padding(
-                padding: EdgeInsets.all(20),
+              return Padding(
+                padding: const EdgeInsets.all(20),
                 child: GteStatePanel(
                   title: 'Halftime analytics unavailable',
                   message:
                       'Unable to load the halftime dashboard right now.',
                   icon: Icons.warning_amber_outlined,
+                  actionLabel: 'Retry',
+                  onAction: _reload,
                 ),
               );
             }
@@ -75,6 +83,23 @@ class _GteHalftimeAnalyticsScreenState
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               children: <Widget>[
+                if (!match.halftimeAnalyticsAvailable) ...<Widget>[
+                  GteSurfacePanel(
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(Icons.info_outline, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Live halftime analytics are not available yet. Showing a fallback snapshot.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 GteSurfacePanel(
                   accentColor: GteShellTheme.accentArena,
                   emphasized: true,

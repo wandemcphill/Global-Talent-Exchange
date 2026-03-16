@@ -1,5 +1,9 @@
 import 'dart:math';
 
+import '../app/gte_app_config.dart';
+import 'gte_api_repository.dart';
+import 'gte_exchange_api_client.dart';
+import 'gte_models.dart';
 import '../models/competition_models.dart';
 
 enum LiveMatchPhase {
@@ -85,6 +89,10 @@ class LiveMatchHighlightClip {
 
 class LiveMatchSnapshot {
   const LiveMatchSnapshot({
+    this.matchId,
+    this.halftimeAnalyticsAvailable = false,
+    this.highlightsAvailable = false,
+    this.keyMomentsAvailable = false,
     required this.homeTeam,
     required this.awayTeam,
     required this.homeScore,
@@ -104,6 +112,10 @@ class LiveMatchSnapshot {
     required this.premiumHighlightExpiresAt,
   });
 
+  final String? matchId;
+  final bool halftimeAnalyticsAvailable;
+  final bool highlightsAvailable;
+  final bool keyMomentsAvailable;
   final String homeTeam;
   final String awayTeam;
   final int homeScore;
@@ -133,7 +145,399 @@ Future<LiveMatchSnapshot> loadLiveMatchSnapshot(
   CompetitionSummary competition,
 ) async {
   await Future<void>.delayed(const Duration(milliseconds: 350));
-  return LiveMatchFixtures.buildSnapshot(competition);
+  final LiveMatchSnapshot fallback = LiveMatchFixtures.buildSnapshot(competition);
+  if (_matchApiConfig.backendMode == GteBackendMode.fixture) {
+    return fallback;
+  }
+  try {
+    final Map<String, Object?> livePayload =
+        await _matchApiClient.fetchMatchLiveFeed(competition.id);
+    LiveMatchSnapshot merged =
+        _mergeLiveFeedSnapshot(fallback, livePayload, competition);
+    try {
+      final Map<String, Object?> highlightPayload =
+          await _matchApiClient.fetchMatchHighlights(competition.id);
+      merged = _mergeHighlightsSnapshot(merged, highlightPayload, competition);
+    } catch (_) {
+      return merged;
+    }
+    return merged;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+final GteAppConfig _matchApiConfig = GteAppConfig.fromEnvironment();
+final GteExchangeApiClient _matchApiClient = GteExchangeApiClient.standard(
+  baseUrl: _matchApiConfig.apiBaseUrl,
+  mode: _matchApiConfig.backendMode,
+);
+
+LiveMatchSnapshot _mergeLiveFeedSnapshot(
+  LiveMatchSnapshot fallback,
+  Map<String, Object?> payload,
+  CompetitionSummary competition,
+) {
+  final String matchId =
+      GteJson.string(payload, <String>['match_id'], fallback: competition.id);
+  final String homeTeam =
+      GteJson.string(payload, <String>['home_team_name', 'homeTeamName']);
+  final String awayTeam =
+      GteJson.string(payload, <String>['away_team_name', 'awayTeamName']);
+  final int homeScore =
+      _requireInt(payload, <String>['home_score', 'homeScore'], 'home_score');
+  final int awayScore =
+      _requireInt(payload, <String>['away_score', 'awayScore'], 'away_score');
+  final String status = GteJson.string(payload, <String>['status']);
+  final String phaseLabel = GteJson.string(payload, <String>['phase']);
+  final int? minute = _optionalInt(payload, <String>['minute']);
+  final LiveMatchPhase phase =
+      _phaseFromLiveFeed(phaseLabel, status, minute ?? fallback.minute);
+  final List<LiveMatchEvent> commentary = _mapLiveFeedEvents(
+    payload,
+    fallback: fallback,
+  );
+  final List<LiveMatchEvent> substitutions = commentary
+      .where((LiveMatchEvent event) =>
+          event.type == LiveMatchEventType.substitution)
+      .toList(growable: false);
+  final List<LiveMatchEvent> cards = commentary
+      .where((LiveMatchEvent event) => event.type == LiveMatchEventType.card)
+      .toList(growable: false);
+
+  final Map<String, Object?> availability = GteJson.map(
+    GteJson.value(payload, <String>['availability']) ??
+        const <String, Object?>{},
+    label: 'match availability',
+  );
+  final bool halftimeAvailable = GteJson.boolean(
+    availability,
+    <String>['halftime_analytics_available', 'halftimeAnalyticsAvailable'],
+    fallback: false,
+  );
+  final bool highlightsAvailable = GteJson.boolean(
+    availability,
+    <String>['highlights_available', 'highlightsAvailable'],
+    fallback: commentary.isNotEmpty,
+  );
+  final bool keyMomentsAvailable = GteJson.boolean(
+    availability,
+    <String>['key_moments_available', 'keyMomentsAvailable'],
+    fallback: commentary.isNotEmpty,
+  );
+
+  final DateTime now = DateTime.now().toUtc();
+  final DateTime premiumExpiry = now.add(const Duration(hours: 3));
+  final List<LiveMatchHighlightClip> keyMoments = keyMomentsAvailable
+      ? _keyMomentsFromEvents(commentary, matchId, premiumExpiry)
+      : const <LiveMatchHighlightClip>[];
+
+  return LiveMatchSnapshot(
+    matchId: matchId,
+    halftimeAnalyticsAvailable: halftimeAvailable,
+    highlightsAvailable: highlightsAvailable,
+    keyMomentsAvailable: keyMomentsAvailable,
+    homeTeam: homeTeam,
+    awayTeam: awayTeam,
+    homeScore: homeScore,
+    awayScore: awayScore,
+    minute: minute ?? fallback.minute,
+    phase: phase,
+    momentum: fallback.momentum,
+    commentary: commentary,
+    homeLineup: fallback.homeLineup,
+    awayLineup: fallback.awayLineup,
+    substitutions: substitutions,
+    cards: cards,
+    tacticalSuggestions: fallback.tacticalSuggestions,
+    keyMoments: keyMoments,
+    highlights: highlightsAvailable
+        ? fallback.highlights
+        : const <LiveMatchHighlightClip>[],
+    standardHighlightExpiresAt: fallback.standardHighlightExpiresAt,
+    premiumHighlightExpiresAt: fallback.premiumHighlightExpiresAt,
+  );
+}
+
+LiveMatchSnapshot _mergeHighlightsSnapshot(
+  LiveMatchSnapshot base,
+  Map<String, Object?> payload,
+  CompetitionSummary competition,
+) {
+  final List<Object?> rawHighlights = GteJson.list(
+    GteJson.value(payload, <String>['highlights']) ?? const <Object?>[],
+    label: 'highlights',
+  );
+  final DateTime now = DateTime.now().toUtc();
+  final DateTime standardExpiry = now.add(const Duration(minutes: 10));
+  final DateTime premiumExpiry = now.add(const Duration(hours: 3));
+
+  final List<LiveMatchHighlightClip> highlights = <LiveMatchHighlightClip>[];
+  final List<LiveMatchHighlightClip> keyMoments = <LiveMatchHighlightClip>[];
+
+  for (int index = 0; index < rawHighlights.length; index += 1) {
+    final Map<String, Object?> item =
+        GteJson.map(rawHighlights[index], label: 'highlight item');
+    final String highlightId = GteJson.string(
+      item,
+      <String>['highlight_id', 'highlightId'],
+      fallback: '${competition.id}-clip-$index',
+    );
+    final String title =
+        GteJson.string(item, <String>['title'], fallback: 'Highlight');
+    final String eventType =
+        GteJson.string(item, <String>['event_type', 'eventType'], fallback: '');
+    final int minute = GteJson.integer(item, <String>['minute'], fallback: 0);
+    final String accessState = GteJson.string(
+      item,
+      <String>['access_state', 'accessState'],
+      fallback: 'available',
+    );
+    final bool archiveAvailable = GteJson.boolean(
+      item,
+      <String>['archive_available', 'archiveAvailable'],
+      fallback: false,
+    );
+    final bool downloadAvailable = GteJson.boolean(
+      item,
+      <String>['download_available', 'downloadAvailable'],
+      fallback: false,
+    );
+    final bool isKeyMoment = _isKeyMoment(eventType);
+    final bool isPremium = isKeyMoment || accessState != 'available';
+    final LiveMatchHighlightClip clip = LiveMatchHighlightClip(
+      id: highlightId,
+      title: title,
+      minute: minute,
+      durationLabel: '${isKeyMoment ? 18 : 22} sec',
+      isPremium: isPremium,
+      isArchived: archiveAvailable,
+      expiresAt: isPremium ? premiumExpiry : standardExpiry,
+      downloadEligible: downloadAvailable,
+    );
+    if (isKeyMoment) {
+      keyMoments.add(clip);
+    } else {
+      highlights.add(clip);
+    }
+  }
+
+  return LiveMatchSnapshot(
+    matchId: base.matchId,
+    halftimeAnalyticsAvailable: base.halftimeAnalyticsAvailable,
+    highlightsAvailable: highlights.isNotEmpty,
+    keyMomentsAvailable: keyMoments.isNotEmpty,
+    homeTeam: base.homeTeam,
+    awayTeam: base.awayTeam,
+    homeScore: base.homeScore,
+    awayScore: base.awayScore,
+    minute: base.minute,
+    phase: base.phase,
+    momentum: base.momentum,
+    commentary: base.commentary,
+    homeLineup: base.homeLineup,
+    awayLineup: base.awayLineup,
+    substitutions: base.substitutions,
+    cards: base.cards,
+    tacticalSuggestions: base.tacticalSuggestions,
+    keyMoments: keyMoments,
+    highlights: highlights,
+    standardHighlightExpiresAt: standardExpiry,
+    premiumHighlightExpiresAt: premiumExpiry,
+  );
+}
+
+int _requireInt(Map<String, Object?> payload, List<String> keys, String label) {
+  if (GteJson.value(payload, keys) == null) {
+    throw GteParsingException('Missing required $label', payload);
+  }
+  return GteJson.integer(payload, keys);
+}
+
+int? _optionalInt(Map<String, Object?> payload, List<String> keys) {
+  if (GteJson.value(payload, keys) == null) {
+    return null;
+  }
+  return GteJson.integer(payload, keys);
+}
+
+LiveMatchPhase _phaseFromLiveFeed(
+  String phase,
+  String status,
+  int minute,
+) {
+  final String normalizedPhase = phase.trim().toLowerCase();
+  final String normalizedStatus = status.trim().toLowerCase();
+  if (normalizedPhase == 'scheduled' || normalizedStatus == 'scheduled') {
+    return LiveMatchPhase.preMatch;
+  }
+  if (normalizedPhase == 'paused') {
+    return LiveMatchPhase.halftime;
+  }
+  if (normalizedPhase == 'fulltime' || normalizedStatus == 'completed') {
+    return LiveMatchPhase.fullTime;
+  }
+  if (minute >= 45) {
+    return LiveMatchPhase.secondHalf;
+  }
+  return LiveMatchPhase.firstHalf;
+}
+
+List<LiveMatchEvent> _mapLiveFeedEvents(
+  Map<String, Object?> payload, {
+  required LiveMatchSnapshot fallback,
+}) {
+  final List<Object?> rawEvents = GteJson.list(
+    GteJson.value(payload, <String>['timeline_events', 'timelineEvents']) ??
+        const <Object?>[],
+    label: 'timeline events',
+  );
+  return rawEvents.map((Object? rawEvent) {
+    final Map<String, Object?> json =
+        GteJson.map(rawEvent, label: 'timeline event');
+    final String eventType =
+        GteJson.string(json, <String>['event_type', 'eventType'], fallback: '');
+    final int minute = GteJson.integer(json, <String>['minute'], fallback: 0);
+    final String? teamName = GteJson.stringOrNull(
+      json,
+      <String>['team_name', 'teamName', 'club_name', 'clubName'],
+    );
+    final String? playerName =
+        GteJson.stringOrNull(json, <String>['player_name', 'playerName']);
+    final String? secondaryPlayerName = GteJson.stringOrNull(
+      json,
+      <String>['secondary_player_name', 'secondaryPlayerName'],
+    );
+    final String? description =
+        GteJson.stringOrNull(json, <String>['description', 'commentary']);
+    final int homeScore = GteJson.integer(
+      json,
+      <String>['home_score', 'homeScore'],
+      fallback: fallback.homeScore,
+    );
+    final int awayScore = GteJson.integer(
+      json,
+      <String>['away_score', 'awayScore'],
+      fallback: fallback.awayScore,
+    );
+    final bool isKeyMoment = _isKeyMoment(eventType);
+    final LiveMatchEventType mappedType = _mapEventType(eventType);
+    final String resolvedTeamName = teamName ?? '';
+    final String title = _eventTitle(eventType, playerName, teamName);
+    final String detail = description ??
+        _eventDetail(
+          eventType,
+          playerName,
+          secondaryPlayerName,
+          resolvedTeamName,
+          homeScore,
+          awayScore,
+        );
+    return LiveMatchEvent(
+      minute: minute,
+      title: title,
+      detail: detail,
+      team: teamName ?? '',
+      type: mappedType,
+      isKeyMoment: isKeyMoment,
+    );
+  }).toList(growable: false);
+}
+
+LiveMatchEventType _mapEventType(String eventType) {
+  switch (eventType) {
+    case 'goals':
+    case 'penalties':
+      return LiveMatchEventType.goal;
+    case 'yellow_cards':
+    case 'red_cards':
+      return LiveMatchEventType.card;
+    case 'substitutions':
+      return LiveMatchEventType.substitution;
+    default:
+      return LiveMatchEventType.incident;
+  }
+}
+
+bool _isKeyMoment(String eventType) {
+  return eventType == 'goals' ||
+      eventType == 'penalties' ||
+      eventType == 'red_cards';
+}
+
+String _eventTitle(String eventType, String? playerName, String? teamName) {
+  final String label = _eventLabel(eventType);
+  if (playerName != null && playerName.isNotEmpty) {
+    return '$label - $playerName';
+  }
+  if (teamName != null && teamName.isNotEmpty) {
+    return '$label - $teamName';
+  }
+  return label;
+}
+
+String _eventDetail(
+  String eventType,
+  String? playerName,
+  String? secondaryPlayerName,
+  String teamName,
+  int homeScore,
+  int awayScore,
+) {
+  final String label = _eventLabel(eventType);
+  final String resolvedTeam = teamName.isNotEmpty ? teamName : 'the match';
+  if (playerName != null && secondaryPlayerName != null) {
+    return '$playerName with support from $secondaryPlayerName for $resolvedTeam.';
+  }
+  if (playerName != null) {
+    return '$playerName for $resolvedTeam. $label (${homeScore}-${awayScore}).';
+  }
+  return '$label for $resolvedTeam.';
+}
+
+String _eventLabel(String eventType) {
+  switch (eventType) {
+    case 'goals':
+      return 'Goal';
+    case 'assists':
+      return 'Assist';
+    case 'missed_chances':
+      return 'Chance';
+    case 'yellow_cards':
+      return 'Yellow card';
+    case 'red_cards':
+      return 'Red card';
+    case 'substitutions':
+      return 'Substitution';
+    case 'injuries':
+      return 'Injury';
+    case 'penalties':
+      return 'Penalty';
+    default:
+      return 'Match moment';
+  }
+}
+
+List<LiveMatchHighlightClip> _keyMomentsFromEvents(
+  List<LiveMatchEvent> events,
+  String matchId,
+  DateTime expiry,
+) {
+  final List<LiveMatchEvent> keyMoments =
+      events.where((LiveMatchEvent event) => event.isKeyMoment).toList();
+  return keyMoments.asMap().entries.map((MapEntry<int, LiveMatchEvent> entry) {
+    final LiveMatchEvent event = entry.value;
+    return LiveMatchHighlightClip(
+      id: '$matchId-key-${entry.key}',
+      title: event.title,
+      minute: event.minute,
+      durationLabel: '${18 + entry.key * 3} sec',
+      isPremium: true,
+      isArchived: false,
+      expiresAt: expiry,
+      downloadEligible: false,
+    );
+  }).toList(growable: false);
 }
 
 class LiveMatchFixtures {
@@ -166,8 +570,14 @@ class LiveMatchFixtures {
     final DateTime now = DateTime.now().toUtc();
     final DateTime standardExpiry = now.add(const Duration(minutes: 10));
     final DateTime premiumExpiry = now.add(const Duration(hours: 3));
+    final List<LiveMatchHighlightClip> highlights =
+        _buildHighlights(competition, commentary, standardExpiry, premiumExpiry);
 
     return LiveMatchSnapshot(
+      matchId: competition.id,
+      halftimeAnalyticsAvailable: false,
+      highlightsAvailable: highlights.isNotEmpty,
+      keyMomentsAvailable: keyMoments.isNotEmpty,
       homeTeam: homeTeam,
       awayTeam: awayTeam,
       homeScore: homeScore,
@@ -182,7 +592,7 @@ class LiveMatchFixtures {
       cards: cards,
       tacticalSuggestions: _buildSuggestions(rng),
       keyMoments: keyMoments,
-      highlights: _buildHighlights(competition, commentary, standardExpiry, premiumExpiry),
+      highlights: highlights,
       standardHighlightExpiresAt: standardExpiry,
       premiumHighlightExpiresAt: premiumExpiry,
     );

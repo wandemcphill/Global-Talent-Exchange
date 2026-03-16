@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -68,6 +68,14 @@ DEFAULT_COUNTRY_POLICIES: tuple[dict[str, object], ...] = (
 )
 
 REGION_CHANGE_LOCK_DAYS = 365
+
+
+def _coerce_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 @dataclass(slots=True)
@@ -304,7 +312,11 @@ class PolicyService:
         now = utcnow()
         for document in documents:
             latest_version = next(
-                (version for version in document.versions if version.is_published and version.effective_at <= now),
+                (
+                    version
+                    for version in document.versions
+                    if version.is_published and (_coerce_utc(version.effective_at) or now) <= now
+                ),
                 None,
             )
             if latest_version is None:
@@ -345,8 +357,9 @@ class PolicyService:
             return profile
         if profile.permanent_locked or profile.change_count >= 1:
             raise ValueError("Region is permanently locked after the one-time change.")
-        if profile.locked_until and utcnow() < profile.locked_until:
-            raise ValueError(f"Region cannot be changed until {profile.locked_until.date().isoformat()}.")
+        locked_until = _coerce_utc(profile.locked_until)
+        if locked_until and utcnow() < locked_until:
+            raise ValueError(f"Region cannot be changed until {locked_until.date().isoformat()}.")
         profile.region_code = normalized
         profile.change_count += 1
         profile.last_changed_at = utcnow()

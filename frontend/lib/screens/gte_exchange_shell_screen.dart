@@ -50,7 +50,11 @@ class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
   void initState() {
     super.initState();
     _creatorController = CreatorController(
-      api: CreatorApi.standard(baseUrl: widget.apiBaseUrl, mode: widget.backendMode),
+      api: CreatorApi.standard(
+        baseUrl: widget.apiBaseUrl,
+        accessToken: widget.controller.session?.accessToken,
+        mode: widget.backendMode,
+      ),
     );
     _referralController = ReferralController(
       api: ReferralApi.standard(baseUrl: widget.apiBaseUrl, mode: widget.backendMode),

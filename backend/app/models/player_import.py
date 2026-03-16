@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from sqlalchemy import Enum as SqlEnum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Enum as SqlEnum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -34,7 +34,7 @@ class PlayerImportJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     imported_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     failed_items: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class PlayerImportItem(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -49,8 +49,8 @@ class PlayerImportItem(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     nationality_code: Mapped[str | None] = mapped_column(String(12), nullable=True)
     age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[PlayerImportItemStatus] = mapped_column(SqlEnum(PlayerImportItemStatus, name="playerimportitemstatus"), nullable=False, default=PlayerImportItemStatus.VALID)
-    validation_errors_json: Mapped[list[str]] = mapped_column(nullable=False, default=list)
-    payload_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    validation_errors_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    payload_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     linked_player_id: Mapped[str | None] = mapped_column(ForeignKey("ingestion_players.id", ondelete="SET NULL"), nullable=True, index=True)
 
 

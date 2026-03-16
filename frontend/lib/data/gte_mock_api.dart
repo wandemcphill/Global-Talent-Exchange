@@ -554,10 +554,10 @@ class GteMockApi implements GteApiRepository {
       GteWithdrawalQuoteRequest request) async {
     await _delay();
     final GteWithdrawalEligibility eligibility = _computeWithdrawalEligibility();
-    final double feeBps = 1000;
+    final int feeBps = 1000;
     final double minimumFee = 5;
     final double feeAmount =
-        math.max(request.amountCoin * feeBps / 10000, minimumFee);
+        math.max(request.amountCoin * feeBps.toDouble() / 10000, minimumFee);
     final double totalDebit = request.amountCoin + feeAmount;
     final double rateValue = _treasurySettings.withdrawalRateValue;
     final double estimatedFiat = _treasurySettings.withdrawalRateDirection ==
@@ -601,10 +601,12 @@ class GteMockApi implements GteApiRepository {
       String withdrawalId) async {
     await _delay();
     final GteTreasuryWithdrawalRequest withdrawal = _withdrawalRequests
-        .firstWhere((GteTreasuryWithdrawalRequest item) => item.id == withdrawalId,
-            orElse: () => _withdrawalRequests.isNotEmpty
-                ? _withdrawalRequests.first
-                : _buildWithdrawalFixture(withdrawalId));
+        .firstWhere(
+          (GteTreasuryWithdrawalRequest item) => item.id == withdrawalId,
+          orElse: () => _withdrawalRequests.isNotEmpty
+              ? _withdrawalRequests.first
+              : _buildWithdrawalFixture(withdrawalId),
+        );
     return GteWithdrawalReceipt(
       withdrawal: withdrawal,
       grossAmount: withdrawal.amountCoin,
@@ -1849,6 +1851,40 @@ class GteMockApi implements GteApiRepository {
     return _clock;
   }
 
+  GteTreasuryWithdrawalRequest _buildWithdrawalFixture(String withdrawalId) {
+    final DateTime createdAt = _nextTimestamp();
+    final GteUserBankAccount? bank =
+        _userBankAccounts.isNotEmpty ? _userBankAccounts.first : null;
+    return GteTreasuryWithdrawalRequest(
+      id: withdrawalId,
+      payoutRequestId: 'payout-$withdrawalId',
+      reference: 'WDR-FIXTURE',
+      status: GteWithdrawalStatus.pendingReview,
+      unit: GteLedgerUnit.coin,
+      amountCoin: 0,
+      amountFiat: 0,
+      currencyCode: _treasurySettings.currencyCode,
+      rateValue: _treasurySettings.withdrawalRateValue,
+      rateDirection: _treasurySettings.withdrawalRateDirection,
+      bankName: bank?.bankName ?? 'Unknown bank',
+      bankAccountNumber: bank?.accountNumber ?? '0000000000',
+      bankAccountName: bank?.accountName ?? 'Unknown account',
+      bankCode: bank?.bankCode,
+      kycStatusSnapshot: _kycProfile.status.name,
+      kycTierSnapshot: _kycProfile.status.name,
+      feeAmount: 0,
+      totalDebit: 0,
+      notes: 'Generated fallback withdrawal fixture.',
+      createdAt: createdAt,
+      reviewedAt: null,
+      approvedAt: null,
+      processedAt: null,
+      paidAt: null,
+      rejectedAt: null,
+      cancelledAt: null,
+    );
+  }
+
   GteWalletOverview _buildWalletOverview() {
     final double pendingDeposits = _depositRequests
         .where((GteDepositRequest deposit) =>
@@ -2315,7 +2351,7 @@ final List<GtePolicyAcceptanceSummary> _seedPolicyAcceptances =
   ),
 ];
 
-const GteAuthSession _fixtureSession = GteAuthSession(
+final GteAuthSession _fixtureSession = GteAuthSession(
   accessToken: 'fixture-demo-token',
   tokenType: 'bearer',
   expiresIn: 3600,

@@ -16,6 +16,7 @@ from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
 from backend.app.models.club_dynasty_progress import ClubDynastyProgress
 from backend.app.models.club_finance_account import ClubFinanceAccount
 from backend.app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
+from backend.app.models.club_hall_of_fame import ClubHallOfFameEntry
 from backend.app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
 from backend.app.models.club_identity_theme import ClubIdentityTheme
 from backend.app.models.club_jersey_design import ClubJerseyDesign
@@ -116,6 +117,48 @@ from backend.app.models.notification_center import NotificationPreference, Notif
 from backend.app.models.notification_record import NotificationRecord
 from backend.app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
 from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from backend.app.models.regen import (
+    AcademyCandidate,
+    AcademyIntakeBatch,
+    CurrencyConversionQuote,
+    MajorTransferAnnouncement,
+    RegenDemandSignal,
+    RegenGenerationEvent,
+    RegenBigClubApproach,
+    RegenLineageProfile,
+    RegenMarketActivity,
+    RegenContractOffer,
+    RegenAward,
+    RegenDiscoveryBadge,
+    RegenLegacyRecord,
+    RegenOnboardingFlag,
+    RegenOfferVisibilityState,
+    RegenOriginMetadata,
+    RegenPersonalityProfile,
+    RegenProfile,
+    RegenRelationshipTag,
+    RegenRecommendationItem,
+    RegenScoutReport,
+    RegenTeamDynamicsEffect,
+    RegenTransferFeeRule,
+    RegenTransferPressureState,
+    RegenTwinsGroup,
+    RegenUnsettlingEvent,
+    RegenValueSnapshot,
+    RegenVisualProfile,
+    TransferHeadlineMediaRecord,
+)
+from backend.app.models.scouting_intelligence import (
+    AcademySupplySignal,
+    HiddenPotentialEstimate,
+    ManagerScoutingProfile,
+    PlayerLifecycleProfile,
+    ScoutMission,
+    ScoutReport,
+    ScoutingNetwork,
+    ScoutingNetworkAssignment,
+    TalentDiscoveryBadge,
+)
 from backend.app.models.revenue_share_rule import RevenueShareRule
 from backend.app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
 from backend.app.models.sponsorship_engine import SponsorshipLead
@@ -307,6 +350,38 @@ __all__ = [
     "PolicyDocumentVersion",
     "RewardSettlement",
     "RewardSettlementStatus",
+    "AcademyCandidate",
+    "AcademyIntakeBatch",
+    "CurrencyConversionQuote",
+    "MajorTransferAnnouncement",
+    "RegenDemandSignal",
+    "RegenGenerationEvent",
+    "RegenBigClubApproach",
+    "RegenMarketActivity",
+    "RegenContractOffer",
+    "RegenOnboardingFlag",
+    "RegenOfferVisibilityState",
+    "RegenOriginMetadata",
+    "RegenPersonalityProfile",
+    "RegenProfile",
+    "RegenRecommendationItem",
+    "RegenScoutReport",
+    "RegenTeamDynamicsEffect",
+    "RegenTransferFeeRule",
+    "RegenTransferPressureState",
+    "RegenUnsettlingEvent",
+    "RegenValueSnapshot",
+    "RegenVisualProfile",
+    "TransferHeadlineMediaRecord",
+    "AcademySupplySignal",
+    "HiddenPotentialEstimate",
+    "ManagerScoutingProfile",
+    "PlayerLifecycleProfile",
+    "ScoutMission",
+    "ScoutReport",
+    "ScoutingNetwork",
+    "ScoutingNetworkAssignment",
+    "TalentDiscoveryBadge",
     "AmlCase",
     "AuditLog",
     "FraudCase",

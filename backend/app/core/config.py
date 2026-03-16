@@ -22,6 +22,7 @@ VALUE_ENGINE_WEIGHTING_FILE = "value_engine_weighting.toml"
 SUSPICION_THRESHOLDS_FILE = "suspicion_thresholds.toml"
 MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
+REGEN_GENERATION_FILE = "regen_generation.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -234,6 +235,59 @@ class SponsorshipInventoryConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RegenCountryTuningConfig:
+    country_code: str
+    academy_quality_bias: float
+    elite_probability_boost: float
+    urban_bias: float
+    default_regions: tuple[str, ...]
+    default_cities: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RegenGenerationConfig:
+    academy_intakes_per_season: int
+    academy_intake_min_players: int
+    academy_intake_max_players: int
+    starter_regen_count: int
+    starter_age_min: int
+    starter_age_max: int
+    starter_gsi_min: int
+    starter_gsi_max: int
+    seasonal_supply_cap_ratio: float
+    base_elite_probability: float
+    max_elite_probability: float
+    default_active_player_base: int
+    market_fee_bps_default: int
+    market_fee_bps_min: int
+    market_fee_bps_max: int
+    ecosystem_target_regen_share: float
+    elite_regen_share_cap: float
+    demand_cooling_floor: float
+    regen_lifecycle_growth_months: int
+    regen_lifecycle_peak_months: int
+    regen_lifecycle_decline_months: int
+    regen_lifecycle_retirement_months: int
+    player_lifecycle_growth_max_age: int
+    player_lifecycle_peak_max_age: int
+    player_lifecycle_decline_max_age: int
+    lineage_base_probability: float
+    lineage_legend_probability: float
+    lineage_owner_probability: float
+    lineage_retired_regen_probability: float
+    lineage_hometown_probability: float
+    twin_probability: float
+    owner_son_lifetime_cap: int
+    owner_son_rival_club_chance: float
+    owner_son_paid_request_base_cost: int
+    owner_son_paid_request_name_cost: int
+    owner_son_paid_request_customization_cost: int
+    owner_son_paid_request_limit: int
+    default_country_code: str
+    country_tuning: tuple[RegenCountryTuningConfig, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class SuspicionThresholdsConfig:
     player_min_suspicious_events: int
     player_min_suspicious_share: float
@@ -330,6 +384,7 @@ class Settings:
     image_policy: ImagePolicyConfig
     media_storage: MediaStorageConfig
     sponsorship_inventory: SponsorshipInventoryConfig
+    regen_generation: RegenGenerationConfig
     suspicion_thresholds: SuspicionThresholdsConfig
     value_engine_weighting: ValueEngineWeightingConfig
 
@@ -349,6 +404,75 @@ def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
         holder_concentration_share=0.40,
         circular_trade_min_cycle_length=3,
         circular_trade_min_repetitions=1,
+    )
+
+
+def _default_regen_generation_config() -> RegenGenerationConfig:
+    return RegenGenerationConfig(
+        academy_intakes_per_season=1,
+        academy_intake_min_players=2,
+        academy_intake_max_players=4,
+        starter_regen_count=2,
+        starter_age_min=25,
+        starter_age_max=30,
+        starter_gsi_min=50,
+        starter_gsi_max=68,
+        seasonal_supply_cap_ratio=0.025,
+        base_elite_probability=0.01,
+        max_elite_probability=0.12,
+        default_active_player_base=100_000,
+        market_fee_bps_default=4500,
+        market_fee_bps_min=4000,
+        market_fee_bps_max=5000,
+        ecosystem_target_regen_share=0.20,
+        elite_regen_share_cap=0.08,
+        demand_cooling_floor=0.55,
+        regen_lifecycle_growth_months=9,
+        regen_lifecycle_peak_months=21,
+        regen_lifecycle_decline_months=30,
+        regen_lifecycle_retirement_months=36,
+        player_lifecycle_growth_max_age=23,
+        player_lifecycle_peak_max_age=29,
+        player_lifecycle_decline_max_age=34,
+        lineage_base_probability=0.004,
+        lineage_legend_probability=0.55,
+        lineage_owner_probability=0.15,
+        lineage_retired_regen_probability=0.20,
+        lineage_hometown_probability=0.10,
+        twin_probability=0.002,
+        owner_son_lifetime_cap=3,
+        owner_son_rival_club_chance=0.12,
+        owner_son_paid_request_base_cost=125,
+        owner_son_paid_request_name_cost=25,
+        owner_son_paid_request_customization_cost=35,
+        owner_son_paid_request_limit=1,
+        default_country_code="NG",
+        country_tuning=(
+            RegenCountryTuningConfig(
+                country_code="NG",
+                academy_quality_bias=1.05,
+                elite_probability_boost=0.015,
+                urban_bias=0.10,
+                default_regions=("Lagos", "Enugu", "Kano"),
+                default_cities=("Lagos", "Enugu", "Kano"),
+            ),
+            RegenCountryTuningConfig(
+                country_code="GH",
+                academy_quality_bias=1.02,
+                elite_probability_boost=0.008,
+                urban_bias=0.06,
+                default_regions=("Greater Accra", "Ashanti"),
+                default_cities=("Accra", "Kumasi"),
+            ),
+            RegenCountryTuningConfig(
+                country_code="MA",
+                academy_quality_bias=1.01,
+                elite_probability_boost=0.006,
+                urban_bias=0.05,
+                default_regions=("Casablanca-Settat", "Rabat-Sale-Kenitra"),
+                default_cities=("Casablanca", "Rabat"),
+            ),
+        ),
     )
 
 
@@ -476,6 +600,208 @@ def load_sponsorship_inventory_config(config_root: Path) -> SponsorshipInventory
         surfaces=surfaces,
         campaigns=tuple(campaigns),
     )
+
+
+def load_regen_generation_config(config_root: Path) -> RegenGenerationConfig:
+    document = _load_optional_toml_document(config_root / REGEN_GENERATION_FILE)
+    defaults = _default_regen_generation_config()
+    if not document:
+        return defaults
+
+    country_documents = _require_array(document.get("country_tuning", []), name="country_tuning")
+    country_tuning = tuple(
+        RegenCountryTuningConfig(
+            country_code=str(_require_table(item, name="country_tuning[]").get("country_code", "")).strip().upper(),
+            academy_quality_bias=float(_require_table(item, name="country_tuning[]").get("academy_quality_bias", 1.0)),
+            elite_probability_boost=float(
+                _require_table(item, name="country_tuning[]").get("elite_probability_boost", 0.0)
+            ),
+            urban_bias=float(_require_table(item, name="country_tuning[]").get("urban_bias", 0.0)),
+            default_regions=_coerce_string_tuple(
+                _require_table(item, name="country_tuning[]").get("default_regions", []),
+                name="country_tuning[].default_regions",
+            ),
+            default_cities=_coerce_string_tuple(
+                _require_table(item, name="country_tuning[]").get("default_cities", []),
+                name="country_tuning[].default_cities",
+            ),
+        )
+        for item in country_documents
+    ) or defaults.country_tuning
+
+    config = RegenGenerationConfig(
+        academy_intakes_per_season=int(
+            document.get("academy_intakes_per_season", defaults.academy_intakes_per_season)
+        ),
+        academy_intake_min_players=int(
+            document.get("academy_intake_min_players", defaults.academy_intake_min_players)
+        ),
+        academy_intake_max_players=int(
+            document.get("academy_intake_max_players", defaults.academy_intake_max_players)
+        ),
+        starter_regen_count=int(document.get("starter_regen_count", defaults.starter_regen_count)),
+        starter_age_min=int(document.get("starter_age_min", defaults.starter_age_min)),
+        starter_age_max=int(document.get("starter_age_max", defaults.starter_age_max)),
+        starter_gsi_min=int(document.get("starter_gsi_min", defaults.starter_gsi_min)),
+        starter_gsi_max=int(document.get("starter_gsi_max", defaults.starter_gsi_max)),
+        seasonal_supply_cap_ratio=float(
+            document.get("seasonal_supply_cap_ratio", defaults.seasonal_supply_cap_ratio)
+        ),
+        base_elite_probability=float(document.get("base_elite_probability", defaults.base_elite_probability)),
+        max_elite_probability=float(document.get("max_elite_probability", defaults.max_elite_probability)),
+        default_active_player_base=int(
+            document.get("default_active_player_base", defaults.default_active_player_base)
+        ),
+        market_fee_bps_default=int(document.get("market_fee_bps_default", defaults.market_fee_bps_default)),
+        market_fee_bps_min=int(document.get("market_fee_bps_min", defaults.market_fee_bps_min)),
+        market_fee_bps_max=int(document.get("market_fee_bps_max", defaults.market_fee_bps_max)),
+        ecosystem_target_regen_share=float(
+            document.get("ecosystem_target_regen_share", defaults.ecosystem_target_regen_share)
+        ),
+        elite_regen_share_cap=float(document.get("elite_regen_share_cap", defaults.elite_regen_share_cap)),
+        demand_cooling_floor=float(document.get("demand_cooling_floor", defaults.demand_cooling_floor)),
+        regen_lifecycle_growth_months=int(
+            document.get("regen_lifecycle_growth_months", defaults.regen_lifecycle_growth_months)
+        ),
+        regen_lifecycle_peak_months=int(
+            document.get("regen_lifecycle_peak_months", defaults.regen_lifecycle_peak_months)
+        ),
+        regen_lifecycle_decline_months=int(
+            document.get("regen_lifecycle_decline_months", defaults.regen_lifecycle_decline_months)
+        ),
+        regen_lifecycle_retirement_months=int(
+            document.get("regen_lifecycle_retirement_months", defaults.regen_lifecycle_retirement_months)
+        ),
+        player_lifecycle_growth_max_age=int(
+            document.get("player_lifecycle_growth_max_age", defaults.player_lifecycle_growth_max_age)
+        ),
+        player_lifecycle_peak_max_age=int(
+            document.get("player_lifecycle_peak_max_age", defaults.player_lifecycle_peak_max_age)
+        ),
+        player_lifecycle_decline_max_age=int(
+            document.get("player_lifecycle_decline_max_age", defaults.player_lifecycle_decline_max_age)
+        ),
+        lineage_base_probability=float(
+            document.get("lineage_base_probability", defaults.lineage_base_probability)
+        ),
+        lineage_legend_probability=float(
+            document.get("lineage_legend_probability", defaults.lineage_legend_probability)
+        ),
+        lineage_owner_probability=float(
+            document.get("lineage_owner_probability", defaults.lineage_owner_probability)
+        ),
+        lineage_retired_regen_probability=float(
+            document.get("lineage_retired_regen_probability", defaults.lineage_retired_regen_probability)
+        ),
+        lineage_hometown_probability=float(
+            document.get("lineage_hometown_probability", defaults.lineage_hometown_probability)
+        ),
+        twin_probability=float(document.get("twin_probability", defaults.twin_probability)),
+        owner_son_lifetime_cap=int(document.get("owner_son_lifetime_cap", defaults.owner_son_lifetime_cap)),
+        owner_son_rival_club_chance=float(
+            document.get("owner_son_rival_club_chance", defaults.owner_son_rival_club_chance)
+        ),
+        owner_son_paid_request_base_cost=int(
+            document.get("owner_son_paid_request_base_cost", defaults.owner_son_paid_request_base_cost)
+        ),
+        owner_son_paid_request_name_cost=int(
+            document.get("owner_son_paid_request_name_cost", defaults.owner_son_paid_request_name_cost)
+        ),
+        owner_son_paid_request_customization_cost=int(
+            document.get(
+                "owner_son_paid_request_customization_cost",
+                defaults.owner_son_paid_request_customization_cost,
+            )
+        ),
+        owner_son_paid_request_limit=int(
+            document.get("owner_son_paid_request_limit", defaults.owner_son_paid_request_limit)
+        ),
+        default_country_code=str(document.get("default_country_code", defaults.default_country_code)).strip().upper(),
+        country_tuning=country_tuning,
+    )
+    if config.academy_intakes_per_season <= 0:
+        raise ValueError("Regen config academy_intakes_per_season must be greater than zero.")
+    if config.academy_intake_min_players <= 0:
+        raise ValueError("Regen config academy_intake_min_players must be greater than zero.")
+    if config.academy_intake_max_players < config.academy_intake_min_players:
+        raise ValueError(
+            "Regen config academy_intake_max_players must be greater than or equal to academy_intake_min_players."
+        )
+    if config.starter_regen_count <= 0:
+        raise ValueError("Regen config starter_regen_count must be greater than zero.")
+    if config.starter_age_max < config.starter_age_min:
+        raise ValueError("Regen config starter_age_max must be greater than or equal to starter_age_min.")
+    if config.starter_gsi_max < config.starter_gsi_min:
+        raise ValueError("Regen config starter_gsi_max must be greater than or equal to starter_gsi_min.")
+    if config.regen_lifecycle_growth_months <= 0:
+        raise ValueError("Regen config regen_lifecycle_growth_months must be greater than zero.")
+    if config.regen_lifecycle_peak_months < config.regen_lifecycle_growth_months:
+        raise ValueError(
+            "Regen config regen_lifecycle_peak_months must be greater than or equal to regen_lifecycle_growth_months."
+        )
+    if config.regen_lifecycle_decline_months < config.regen_lifecycle_peak_months:
+        raise ValueError(
+            "Regen config regen_lifecycle_decline_months must be greater than or equal to regen_lifecycle_peak_months."
+        )
+    if config.regen_lifecycle_retirement_months < config.regen_lifecycle_decline_months:
+        raise ValueError(
+            "Regen config regen_lifecycle_retirement_months must be greater than or equal to regen_lifecycle_decline_months."
+        )
+    if config.player_lifecycle_peak_max_age < config.player_lifecycle_growth_max_age:
+        raise ValueError(
+            "Regen config player_lifecycle_peak_max_age must be greater than or equal to player_lifecycle_growth_max_age."
+        )
+    if config.player_lifecycle_decline_max_age < config.player_lifecycle_peak_max_age:
+        raise ValueError(
+            "Regen config player_lifecycle_decline_max_age must be greater than or equal to player_lifecycle_peak_max_age."
+        )
+    if not 0 < config.seasonal_supply_cap_ratio <= 1:
+        raise ValueError("Regen config seasonal_supply_cap_ratio must be between 0 and 1.")
+    if not 0 <= config.base_elite_probability <= 1:
+        raise ValueError("Regen config base_elite_probability must be between 0 and 1.")
+    if not 0 <= config.max_elite_probability <= 1:
+        raise ValueError("Regen config max_elite_probability must be between 0 and 1.")
+    if config.base_elite_probability > config.max_elite_probability:
+        raise ValueError("Regen config base_elite_probability must not exceed max_elite_probability.")
+    if config.default_active_player_base <= 0:
+        raise ValueError("Regen config default_active_player_base must be greater than zero.")
+    if not 0 <= config.market_fee_bps_min <= config.market_fee_bps_default <= config.market_fee_bps_max <= 10_000:
+        raise ValueError(
+            "Regen config market fee bps must satisfy 0 <= min <= default <= max <= 10000."
+        )
+    if not 0 < config.ecosystem_target_regen_share < 1:
+        raise ValueError("Regen config ecosystem_target_regen_share must be between 0 and 1.")
+    if not 0 < config.elite_regen_share_cap < 1:
+        raise ValueError("Regen config elite_regen_share_cap must be between 0 and 1.")
+    if not 0 < config.demand_cooling_floor <= 1:
+        raise ValueError("Regen config demand_cooling_floor must be between 0 and 1.")
+    if not 0 <= config.lineage_base_probability <= 1:
+        raise ValueError("Regen config lineage_base_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_legend_probability <= 1:
+        raise ValueError("Regen config lineage_legend_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_owner_probability <= 1:
+        raise ValueError("Regen config lineage_owner_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_retired_regen_probability <= 1:
+        raise ValueError("Regen config lineage_retired_regen_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_hometown_probability <= 1:
+        raise ValueError("Regen config lineage_hometown_probability must be between 0 and 1.")
+    if not 0 <= config.twin_probability <= 1:
+        raise ValueError("Regen config twin_probability must be between 0 and 1.")
+    if config.owner_son_lifetime_cap < 0:
+        raise ValueError("Regen config owner_son_lifetime_cap must be zero or greater.")
+    if not 0 <= config.owner_son_rival_club_chance <= 1:
+        raise ValueError("Regen config owner_son_rival_club_chance must be between 0 and 1.")
+    if config.owner_son_paid_request_base_cost < 0:
+        raise ValueError("Regen config owner_son_paid_request_base_cost must be zero or greater.")
+    if config.owner_son_paid_request_name_cost < 0:
+        raise ValueError("Regen config owner_son_paid_request_name_cost must be zero or greater.")
+    if config.owner_son_paid_request_customization_cost < 0:
+        raise ValueError("Regen config owner_son_paid_request_customization_cost must be zero or greater.")
+    if config.owner_son_paid_request_limit <= 0:
+        raise ValueError("Regen config owner_son_paid_request_limit must be greater than zero.")
+    if len({item.country_code for item in config.country_tuning}) != len(config.country_tuning):
+        raise ValueError("Regen config country_tuning country codes must be unique.")
+    return config
 
 
 def _default_price_band_limits() -> tuple[PriceBandLimit, ...]:
@@ -948,6 +1274,7 @@ def load_settings(
         image_policy=load_image_policy_config(resolved_config_root),
         media_storage=load_media_storage_config(resolved_config_root, resolved_environ),
         sponsorship_inventory=load_sponsorship_inventory_config(resolved_config_root),
+        regen_generation=load_regen_generation_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
     )

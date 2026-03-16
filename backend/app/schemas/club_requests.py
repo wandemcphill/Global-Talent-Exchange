@@ -20,6 +20,9 @@ class ClubCreateRequest(CommonSchema):
     secondary_color: str = Field(min_length=3, max_length=16)
     accent_color: str = Field(min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
+    country_code: str | None = Field(default=None, max_length=8)
+    region_name: str | None = Field(default=None, max_length=120)
+    city_name: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility = ClubIdentityVisibility.PUBLIC
     founded_at: date | None = None
@@ -33,6 +36,9 @@ class ClubUpdateRequest(CommonSchema):
     secondary_color: str | None = Field(default=None, min_length=3, max_length=16)
     accent_color: str | None = Field(default=None, min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
+    country_code: str | None = Field(default=None, max_length=8)
+    region_name: str | None = Field(default=None, max_length=120)
+    city_name: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility | None = None
     founded_at: date | None = None

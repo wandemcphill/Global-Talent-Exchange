@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Boolean, Enum as SqlEnum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Enum as SqlEnum, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -52,7 +52,7 @@ class ClubSupporterToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     influence_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     status: Mapped[SupporterTokenStatus] = mapped_column(SqlEnum(SupporterTokenStatus, name="supportertokenstatus"), nullable=False, default=SupporterTokenStatus.ACTIVE)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class ClubSupporterHolding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -64,7 +64,7 @@ class ClubSupporterHolding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     token_balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     influence_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_founding_supporter: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 __all__ = ["ClubStadium", "ClubFacility", "ClubSupporterToken", "ClubSupporterHolding", "SupporterTokenStatus"]

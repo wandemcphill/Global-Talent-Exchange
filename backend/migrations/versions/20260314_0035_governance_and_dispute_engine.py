@@ -82,62 +82,8 @@ def upgrade() -> None:
     op.create_index(op.f("ix_governance_votes_proposal_id"), "governance_votes", ["proposal_id"], unique=False)
     op.create_index(op.f("ix_governance_votes_voter_user_id"), "governance_votes", ["voter_user_id"], unique=False)
 
-    op.create_table(
-        "disputes",
-        sa.Column("user_id", sa.String(length=36), nullable=False),
-        sa.Column("admin_user_id", sa.String(length=36), nullable=True),
-        sa.Column("resource_type", sa.String(length=64), nullable=False),
-        sa.Column("resource_id", sa.String(length=64), nullable=False),
-        sa.Column("reference", sa.String(length=64), nullable=False),
-        sa.Column("status", dispute_status, nullable=False),
-        sa.Column("subject", sa.String(length=120), nullable=True),
-        sa.Column("metadata_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("last_message_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.ForeignKeyConstraint(["admin_user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_disputes_status", "disputes", ["status"], unique=False)
-    op.create_index("ix_disputes_user_id", "disputes", ["user_id"], unique=False)
-    op.create_index("ix_disputes_reference", "disputes", ["reference"], unique=False)
-    op.create_index("ix_disputes_resource", "disputes", ["resource_type", "resource_id"], unique=False)
-    op.create_index("ix_disputes_created_at", "disputes", ["created_at"], unique=False)
-
-    op.create_table(
-        "dispute_messages",
-        sa.Column("dispute_id", sa.String(length=36), nullable=False),
-        sa.Column("sender_user_id", sa.String(length=36), nullable=True),
-        sa.Column("sender_role", sa.String(length=32), nullable=False),
-        sa.Column("message", sa.Text(), nullable=False),
-        sa.Column("attachment_id", sa.String(length=36), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.ForeignKeyConstraint(["attachment_id"], ["attachments.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["dispute_id"], ["disputes.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["sender_user_id"], ["users.id"], ondelete="SET NULL"),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_dispute_messages_dispute_id", "dispute_messages", ["dispute_id"], unique=False)
-    op.create_index("ix_dispute_messages_created_at", "dispute_messages", ["created_at"], unique=False)
-
 
 def downgrade() -> None:
-    op.drop_index("ix_dispute_messages_created_at", table_name="dispute_messages")
-    op.drop_index("ix_dispute_messages_dispute_id", table_name="dispute_messages")
-    op.drop_table("dispute_messages")
-
-    op.drop_index("ix_disputes_created_at", table_name="disputes")
-    op.drop_index("ix_disputes_resource", table_name="disputes")
-    op.drop_index("ix_disputes_reference", table_name="disputes")
-    op.drop_index("ix_disputes_user_id", table_name="disputes")
-    op.drop_index("ix_disputes_status", table_name="disputes")
-    op.drop_table("disputes")
-
     op.drop_index(op.f("ix_governance_votes_voter_user_id"), table_name="governance_votes")
     op.drop_index(op.f("ix_governance_votes_proposal_id"), table_name="governance_votes")
     op.drop_index(op.f("ix_governance_votes_club_id"), table_name="governance_votes")

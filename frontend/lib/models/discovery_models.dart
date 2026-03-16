@@ -29,7 +29,7 @@ class DiscoveryItem {
       subtitle: GteJson.string(json, <String>['subtitle'], fallback: ''),
       railKey: GteJson.stringOrNull(json, <String>['rail_key', 'railKey']),
       score: GteJson.number(json, <String>['score'], fallback: 0),
-      metadata: GteJson.map(json, <String>['metadata'], fallback: const <String, Object?>{}),
+      metadata: GteJson.map(json, keys: <String>['metadata'], fallback: const <String, Object?>{}),
     );
   }
 }
@@ -72,7 +72,7 @@ class FeaturedRail {
       subtitle: GteJson.string(json, <String>['subtitle'], fallback: ''),
       displayOrder: GteJson.integer(json, <String>['display_order', 'displayOrder'], fallback: 0),
       active: GteJson.boolean(json, <String>['active'], fallback: true),
-      metadata: GteJson.map(json, <String>['metadata_json', 'metadataJson', 'metadata'], fallback: const <String, Object?>{}),
+      metadata: GteJson.map(json, keys: <String>['metadata_json', 'metadataJson', 'metadata'], fallback: const <String, Object?>{}),
     );
   }
 }
@@ -103,7 +103,7 @@ class SavedSearch {
       alertsEnabled: GteJson.boolean(
           json, <String>['alerts_enabled', 'alertsEnabled'],
           fallback: false),
-      metadata: GteJson.map(json, <String>['metadata_json', 'metadataJson', 'metadata'], fallback: const <String, Object?>{}),
+      metadata: GteJson.map(json, keys: <String>['metadata_json', 'metadataJson', 'metadata'], fallback: const <String, Object?>{}),
     );
   }
 }

@@ -435,6 +435,20 @@ class GteExchangeApiClient {
     }
   }
 
+  Future<Map<String, Object?>> fetchMatchLiveFeed(String matchKey) async {
+    return GteJson.map(
+      await _sendPublicGet('/api/match-engine/live-feed/$matchKey'),
+      label: 'match live feed',
+    );
+  }
+
+  Future<Map<String, Object?>> fetchMatchHighlights(String matchKey) async {
+    return GteJson.map(
+      await _sendPublicGet('/api/match-engine/highlights/$matchKey'),
+      label: 'match highlights',
+    );
+  }
+
   Future<GteMarketCandles> fetchCandles(
     String playerId, {
     String interval = '1h',
@@ -615,6 +629,19 @@ class GteExchangeApiClient {
         footballTruthValueCredits: profile.snapshot.marketCredits.toDouble(),
         marketSignalValueCredits: profile.snapshot.marketCredits.toDouble(),
         publishedCardValueCredits: profile.snapshot.marketCredits.toDouble(),
+        scoutingSignalValueCredits: null,
+        egameSignalValueCredits: null,
+        confidenceScore: null,
+        confidenceTier: null,
+        trend7dPct: normalizedMovement,
+        trend30dPct: null,
+        trendDirection: normalizedMovement > 0
+            ? 'up'
+            : normalizedMovement < 0
+                ? 'down'
+                : 'flat',
+        trendConfidence: null,
+        movementTags: const <String>[],
       ),
       trend: GteMarketPlayerTrend(
         trendScore: profile.snapshot.gsi.toDouble(),
@@ -624,6 +651,16 @@ class GteExchangeApiClient {
         previousGlobalScoutingIndex: null,
         globalScoutingIndexMovementPct: null,
         drivers: List<String>.from(profile.snapshot.recentHighlights),
+        trend7dPct: normalizedMovement,
+        trend30dPct: null,
+        trendDirection: normalizedMovement > 0
+            ? 'up'
+            : normalizedMovement < 0
+                ? 'down'
+                : 'flat',
+        trendConfidence: null,
+        confidenceTier: null,
+        movementTags: const <String>[],
       ),
     );
   }

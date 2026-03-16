@@ -17,6 +17,7 @@ class GteShellTheme {
   static const Color textMuted = Color(0xFF9EADC8);
   static const Color positive = Color(0xFF73F7AF);
   static const Color negative = Color(0xFFFF8B8B);
+  static const Color warning = Color(0xFFFFC56A);
 
   static ThemeData build() {
     const ColorScheme colorScheme = ColorScheme.dark(

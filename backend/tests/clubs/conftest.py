@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from backend.app.auth.dependencies import get_current_admin, get_current_user
 from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
 from backend.app.db import get_session
+from backend.app.ingestion.models import Country, Player, PlayerVerification
 from backend.app.models.base import Base
 from backend.app.models.club_branding_asset import ClubBrandingAsset
 from backend.app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
@@ -19,8 +20,54 @@ from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
 from backend.app.models.club_dynasty_milestone import ClubDynastyMilestone
 from backend.app.models.club_dynasty_progress import ClubDynastyProgress
 from backend.app.models.club_identity_theme import ClubIdentityTheme
+from backend.app.models.club_infra import ClubFacility
 from backend.app.models.club_jersey_design import ClubJerseyDesign
 from backend.app.models.club_profile import ClubProfile
+from backend.app.models.player_cards import (
+    PlayerCard,
+    PlayerCardHolding,
+    PlayerCardHistory,
+    PlayerCardListing,
+    PlayerCardOwnerHistory,
+    PlayerCardSale,
+    PlayerCardTier,
+)
+from backend.app.models.player_career_entry import PlayerCareerEntry
+from backend.app.models.player_contract import PlayerContract
+from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
+from backend.app.models.regen import (
+    AcademyCandidate,
+    AcademyIntakeBatch,
+    RegenAward,
+    RegenDemandSignal,
+    RegenDiscoveryBadge,
+    RegenGenerationEvent,
+    RegenLineageProfile,
+    RegenMarketActivity,
+    RegenLegacyRecord,
+    RegenOnboardingFlag,
+    RegenOriginMetadata,
+    RegenPersonalityProfile,
+    RegenProfile,
+    RegenRelationshipTag,
+    RegenRecommendationItem,
+    RegenScoutReport,
+    RegenTransferFeeRule,
+    RegenTwinsGroup,
+    RegenValueSnapshot,
+    RegenVisualProfile,
+)
+from backend.app.models.scouting_intelligence import (
+    AcademySupplySignal,
+    HiddenPotentialEstimate,
+    ManagerScoutingProfile,
+    PlayerLifecycleProfile,
+    ScoutMission,
+    ScoutReport,
+    ScoutingNetwork,
+    ScoutingNetworkAssignment,
+    TalentDiscoveryBadge,
+)
 from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
 from backend.app.models.club_trophy import ClubTrophy
 from backend.app.models.club_trophy_cabinet import ClubTrophyCabinet
@@ -41,6 +88,7 @@ def session() -> Iterator[Session]:
         tables=[
             User.__table__,
             ClubProfile.__table__,
+            ClubFacility.__table__,
             ClubReputationProfile.__table__,
             ReputationEventLog.__table__,
             ReputationSnapshot.__table__,
@@ -54,6 +102,48 @@ def session() -> Iterator[Session]:
             ClubCosmeticPurchase.__table__,
             ClubIdentityTheme.__table__,
             ClubShowcaseSnapshot.__table__,
+            Country.__table__,
+            Player.__table__,
+            PlayerVerification.__table__,
+            PlayerCardTier.__table__,
+            PlayerCard.__table__,
+            PlayerCardHistory.__table__,
+            PlayerCardHolding.__table__,
+            PlayerCardListing.__table__,
+            PlayerCardOwnerHistory.__table__,
+            PlayerCardSale.__table__,
+            PlayerContract.__table__,
+            PlayerCareerEntry.__table__,
+            PlayerLifecycleEvent.__table__,
+            AcademyIntakeBatch.__table__,
+            AcademyCandidate.__table__,
+            RegenAward.__table__,
+            RegenValueSnapshot.__table__,
+            RegenMarketActivity.__table__,
+            RegenScoutReport.__table__,
+            RegenRecommendationItem.__table__,
+            RegenDemandSignal.__table__,
+            RegenDiscoveryBadge.__table__,
+            RegenOnboardingFlag.__table__,
+            RegenTransferFeeRule.__table__,
+            RegenProfile.__table__,
+            RegenPersonalityProfile.__table__,
+            RegenOriginMetadata.__table__,
+            RegenGenerationEvent.__table__,
+            RegenLineageProfile.__table__,
+            RegenRelationshipTag.__table__,
+            RegenLegacyRecord.__table__,
+            RegenTwinsGroup.__table__,
+            RegenVisualProfile.__table__,
+            ManagerScoutingProfile.__table__,
+            ScoutingNetwork.__table__,
+            ScoutingNetworkAssignment.__table__,
+            ScoutMission.__table__,
+            ScoutReport.__table__,
+            HiddenPotentialEstimate.__table__,
+            AcademySupplySignal.__table__,
+            PlayerLifecycleProfile.__table__,
+            TalentDiscoveryBadge.__table__,
         ],
     )
     session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -67,7 +157,7 @@ def session() -> Iterator[Session]:
                     display_name="Owner",
                     password_hash="x",
                     role=UserRole.USER,
-                    kyc_status=KycStatus.VERIFIED,
+                    kyc_status=KycStatus.FULLY_VERIFIED,
                 ),
                 User(
                     id="user-admin",
@@ -76,7 +166,7 @@ def session() -> Iterator[Session]:
                     display_name="Admin",
                     password_hash="x",
                     role=UserRole.ADMIN,
-                    kyc_status=KycStatus.VERIFIED,
+                    kyc_status=KycStatus.FULLY_VERIFIED,
                 ),
                 User(
                     id="user-other",
@@ -85,7 +175,7 @@ def session() -> Iterator[Session]:
                     display_name="Other",
                     password_hash="x",
                     role=UserRole.USER,
-                    kyc_status=KycStatus.VERIFIED,
+                    kyc_status=KycStatus.FULLY_VERIFIED,
                 ),
             ]
         )

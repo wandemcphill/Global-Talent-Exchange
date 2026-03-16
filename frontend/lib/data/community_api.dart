@@ -275,13 +275,18 @@ class CommunityApi {
 
 class _CommunityFixtures {
   _CommunityFixtures({
-    required this._digest,
-    required this._watchlist,
-    required this._liveThreads,
-    required this._threadMessages,
-    required this._privateThreads,
-    required this._privateMessages,
-  });
+    required CommunityDigest digest,
+    required List<CommunityWatchlistItem> watchlist,
+    required List<LiveThread> liveThreads,
+    required Map<String, List<LiveThreadMessage>> threadMessages,
+    required List<PrivateMessageThread> privateThreads,
+    required Map<String, List<PrivateMessage>> privateMessages,
+  })  : _digest = digest,
+        _watchlist = watchlist,
+        _liveThreads = liveThreads,
+        _threadMessages = threadMessages,
+        _privateThreads = privateThreads,
+        _privateMessages = privateMessages;
 
   CommunityDigest _digest;
   final List<CommunityWatchlistItem> _watchlist;
@@ -346,7 +351,7 @@ class _CommunityFixtures {
         metadata: const <String, Object?>{},
         createdAt: DateTime.parse('2026-03-12T10:00:00Z'),
         updatedAt: DateTime.parse('2026-03-13T18:10:00Z'),
-        participants: const <PrivateMessageParticipant>[
+        participants: <PrivateMessageParticipant>[
           PrivateMessageParticipant(
             id: 'pm-part-1',
             threadId: 'pm-1',
@@ -388,12 +393,12 @@ class _CommunityFixtures {
       unreadHintCount: 2,
     );
     return _CommunityFixtures(
-      _digest: digest,
-      _watchlist: watchlist,
-      _liveThreads: threads,
-      _threadMessages: messages,
-      _privateThreads: privateThreads,
-      _privateMessages: privateMessages,
+      digest: digest,
+      watchlist: watchlist,
+      liveThreads: threads,
+      threadMessages: messages,
+      privateThreads: privateThreads,
+      privateMessages: privateMessages,
     );
   }
 

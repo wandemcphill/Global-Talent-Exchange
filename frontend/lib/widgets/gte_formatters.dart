@@ -33,6 +33,10 @@ String gteFormatDateTime(DateTime? value) {
   return '${utc.year}-$month-$day $hour:$minute UTC';
 }
 
+String gteFormatDate(DateTime? value) {
+  return gteFormatDateTime(value);
+}
+
 String gteFormatOrderStatus(String rawStatus) {
   final String spaced =
       rawStatus.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {

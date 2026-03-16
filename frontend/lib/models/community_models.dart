@@ -83,7 +83,7 @@ class CommunityWatchlistItem {
           json, <String>['notify_on_launch', 'notifyOnLaunch'],
           fallback: true),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
@@ -134,7 +134,7 @@ class LiveThread {
       lastMessageAt: GteJson.dateTimeOrNull(
           json, <String>['last_message_at', 'lastMessageAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
@@ -180,7 +180,7 @@ class LiveThreadMessage {
       replyCount: GteJson.integer(json, <String>['reply_count', 'replyCount'], fallback: 0),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }
@@ -218,7 +218,7 @@ class PrivateMessageParticipant {
           json, <String>['last_read_at', 'lastReadAt']),
       joinedAt: GteJson.dateTime(json, <String>['joined_at', 'joinedAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }
@@ -262,7 +262,7 @@ class PrivateMessageThread {
       lastMessageAt: GteJson.dateTimeOrNull(
           json, <String>['last_message_at', 'lastMessageAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
@@ -303,7 +303,7 @@ class PrivateMessage {
       body: GteJson.string(json, <String>['body']),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }

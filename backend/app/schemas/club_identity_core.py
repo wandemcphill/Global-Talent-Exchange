@@ -25,6 +25,9 @@ class ClubProfileCore(_ClubOrmSchema):
     secondary_color: str
     accent_color: str
     home_venue_name: str | None = None
+    country_code: str | None = None
+    region_name: str | None = None
+    city_name: str | None = None
     description: str | None = None
     visibility: ClubIdentityVisibility
     founded_at: date | None = None

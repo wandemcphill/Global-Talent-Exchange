@@ -72,7 +72,7 @@ class AdminCalendarRule {
       active: GteJson.boolean(json, <String>['active'], fallback: true),
       priority: GteJson.integer(json, <String>['priority'], fallback: 100),
       config: GteJson.map(
-          json, <String>['config_json', 'configJson', 'config'],
+          json, keys: <String>['config_json', 'configJson', 'config'],
           fallback: const <String, Object?>{}),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
     );

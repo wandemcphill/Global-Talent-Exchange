@@ -559,17 +559,17 @@ class TreasuryService:
         )
         commissions = self._commission_settings()
         try:
-                result = self.wallet_service.request_payout(
-                    session,
-                    user=user,
-                    amount=amount_coin,
-                    destination_reference=f"bank:{bank_account.id}",
-                    unit=LedgerUnit.COIN,
-                    source_scope=source_scope,
-                    withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
-                    minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
-                    actor=user,
-                    notes=notes,
+            result = self.wallet_service.request_payout(
+                session,
+                user=user,
+                amount=amount_coin,
+                destination_reference=f"bank:{bank_account.id}",
+                unit=LedgerUnit.COIN,
+                source_scope=source_scope,
+                withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
+                minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
+                actor=user,
+                notes=notes,
                 extra_meta={
                     "processor_mode": "manual_bank_transfer",
                     "payout_channel": "bank_transfer",

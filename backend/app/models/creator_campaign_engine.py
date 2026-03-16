@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import Date, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -31,7 +31,7 @@ class CreatorCampaignMetricSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     rewards_generated: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     reward_volume_minor: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     competition_entries: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 __all__ = ["CreatorCampaignMetricSnapshot"]

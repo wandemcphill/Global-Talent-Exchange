@@ -273,7 +273,7 @@ class _GteDepositInstructionsScreenState
     final List<int> bytes = file.bytes ??
         await File(file.path!).readAsBytes();
     final GteAttachment attachment = await widget.controller.api
-        .uploadAttachment(file.name, bytes, contentType: file.mimeType);
+        .uploadAttachment(file.name, bytes);
     if (!mounted) {
       return;
     }

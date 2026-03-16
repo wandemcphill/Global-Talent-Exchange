@@ -31,6 +31,7 @@ from backend.app.services.club_finance_service import ClubFinanceService, ClubOp
 from backend.app.services.club_ops_admin_service import ClubOpsAdminService, get_club_ops_admin_service
 from backend.app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
 from backend.app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
+from backend.app.services.regen_service import RegenService
 from backend.app.services.scout_assignment_service import ScoutAssignmentService, get_scout_assignment_service
 from backend.app.services.scouting_service import ScoutingService, get_scouting_service
 from backend.app.services.sponsorship_catalog_service import SponsorshipCatalogService, get_sponsorship_catalog_service
@@ -73,6 +74,7 @@ def build_club_ops_services() -> dict[str, object]:
         pipeline_service=pipeline,
         academy_service=academy,
     )
+    regen = RegenService(store=store)
     analytics = ClubOpsAnalyticsService(store=store, finance_service=finance)
     admin = ClubOpsAdminService(store=store, finance_service=finance, analytics_service=analytics)
     return {
@@ -91,6 +93,7 @@ def build_club_ops_services() -> dict[str, object]:
         "prospect": prospect,
         "pipeline": pipeline,
         "scouting": scouting,
+        "regen": regen,
         "analytics": analytics,
         "admin": admin,
         "admin_user": SimpleNamespace(id="admin-1", role="admin", is_admin=True),

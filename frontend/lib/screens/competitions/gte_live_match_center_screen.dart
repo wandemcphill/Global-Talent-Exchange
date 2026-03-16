@@ -49,6 +49,12 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
   }
 
+  void _reload() {
+    setState(() {
+      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+    });
+  }
+
   Future<void> _openHalftime() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -110,13 +116,15 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               );
             }
             if (!snapshot.hasData) {
-              return const Padding(
-                padding: EdgeInsets.all(20),
+              return Padding(
+                padding: const EdgeInsets.all(20),
                 child: GteStatePanel(
                   title: 'Live match unavailable',
                   message:
                       'Unable to load the match stream right now. Please retry.',
                   icon: Icons.warning_amber_outlined,
+                  actionLabel: 'Retry',
+                  onAction: _reload,
                 ),
               );
             }
@@ -395,6 +403,22 @@ class _CommentaryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<LiveMatchEvent> events = match.commentary.reversed.take(6).toList();
+    if (events.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '2D commentary feed',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'No live commentary yet. Check back after kickoff.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -480,6 +504,31 @@ class _KeyMomentPanel extends StatelessWidget {
             FilledButton(
               onPressed: onOpenLogin,
               child: const Text('Unlock with Arena Pass'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (match.keyMoments.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withValues(alpha: 0.04),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Key-moment video',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'No premium key moments yet. The stream will populate as the match progresses.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -38,7 +38,7 @@ class SponsorshipLead(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     asset_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted", server_default="submitted")
     proposal_note: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     reviewed_by_user_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),

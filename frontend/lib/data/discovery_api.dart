@@ -306,7 +306,7 @@ class _DiscoveryFixtures {
         title: 'Result for "$query" ${index + 1}',
         subtitle: index.isEven ? 'Story lane' : 'Market lane',
         railKey: 'search',
-        score: 60 + random.nextInt(40),
+        score: (60 + random.nextInt(40)).toDouble(),
         metadata: const <String, Object?>{'source': 'fixture'},
       ),
     );

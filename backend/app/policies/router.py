@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -40,9 +42,24 @@ def _map_version(version) -> PolicyDocumentVersionSummary:
     )
 
 
+def _coerce_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _map_summary(document) -> PolicyDocumentSummary:
     now = utcnow()
-    latest_version = next((version for version in document.versions if version.is_published and version.effective_at <= now), None)
+    latest_version = next(
+        (
+            version
+            for version in document.versions
+            if version.is_published and (_coerce_utc(version.effective_at) or now) <= now
+        ),
+        None,
+    )
     return PolicyDocumentSummary(
         id=document.id,
         document_key=document.document_key,
@@ -55,14 +72,15 @@ def _map_summary(document) -> PolicyDocumentSummary:
 
 def _map_region_profile(profile, *, override_metadata: dict | None = None) -> UserRegionProfileView:
     now = utcnow()
-    locked = bool(profile.permanent_locked or (profile.locked_until and now < profile.locked_until))
-    next_change_eligible_at = None if profile.permanent_locked else profile.locked_until
+    locked_until = _coerce_utc(profile.locked_until)
+    locked = bool(profile.permanent_locked or (locked_until and now < locked_until))
+    next_change_eligible_at = None if profile.permanent_locked else locked_until
     return UserRegionProfileView(
         region_code=profile.region_code,
         current_region=profile.region_code,
         selected_at=profile.selected_at,
         last_changed_at=profile.last_changed_at,
-        locked_until=profile.locked_until,
+        locked_until=locked_until,
         change_count=profile.change_count,
         permanent_locked=profile.permanent_locked,
         next_change_eligible_at=next_change_eligible_at,

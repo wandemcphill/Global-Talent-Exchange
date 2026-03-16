@@ -378,6 +378,8 @@ class WalletService:
 
         user_account = self.get_user_account(session, user, unit)
         escrow_account = self.get_user_escrow_account(session, user, unit)
+        net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
+        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
         fee_amount = self._normalize_amount(max((normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)))
         total_debit = self._normalize_amount(normalized_amount + fee_amount)
         available_balance = self.get_balance(session, user_account)
@@ -389,14 +391,22 @@ class WalletService:
                 raise InsufficientBalanceError("Competition reward balance is lower than the requested e-game withdrawal.")
 
         reference = f"payout-request:{generate_uuid()}"
+        postings = [
+            LedgerPosting(account=user_account, amount=-normalized_amount, source_tag=net_tag),
+            LedgerPosting(account=escrow_account, amount=normalized_amount, source_tag=net_tag),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.extend(
+                [
+                    LedgerPosting(account=user_account, amount=-fee_amount, source_tag=fee_tag),
+                    LedgerPosting(account=escrow_account, amount=fee_amount, source_tag=fee_tag),
+                ]
+            )
         entries = self.append_transaction(
             session,
-            postings=[
-                LedgerPosting(account=user_account, amount=-total_debit),
-                LedgerPosting(account=escrow_account, amount=total_debit),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.WITHDRAWAL_HOLD,
-            source_tag=LedgerSourceTag.WITHDRAWAL_FEE_BURN,
+            source_tag=net_tag,
             reference=reference,
             description=f"Withdrawal hold for {source_scope} payout to {destination_reference}",
             external_reference=reference,
@@ -448,16 +458,30 @@ class WalletService:
         escrow_account = self.get_user_escrow_account(session, user, payout_request.unit)
         platform_account = self.ensure_platform_account(session, payout_request.unit)
         meta = self._parse_payout_meta(payout_request.notes)
-        total_debit = self._normalize_amount(meta.get("total_debit", payout_request.amount))
+        net_amount = self._normalize_amount(payout_request.amount)
+        total_debit = self._normalize_amount(meta.get("total_debit", net_amount))
+        fee_amount = self._normalize_amount(meta.get("fee_amount", total_debit - net_amount))
+        net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
+        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
+        if fee_amount < Decimal("0.0000"):
+            fee_amount = Decimal("0.0000")
         reference = f"payout-settlement:{payout_request.id}"
+        postings = [
+            LedgerPosting(account=escrow_account, amount=-net_amount, source_tag=net_tag),
+            LedgerPosting(account=platform_account, amount=net_amount, source_tag=net_tag),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.extend(
+                [
+                    LedgerPosting(account=escrow_account, amount=-fee_amount, source_tag=fee_tag),
+                    LedgerPosting(account=platform_account, amount=fee_amount, source_tag=fee_tag),
+                ]
+            )
         entries = self.append_transaction(
             session,
-            postings=[
-                LedgerPosting(account=escrow_account, amount=-total_debit),
-                LedgerPosting(account=platform_account, amount=total_debit),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.WITHDRAWAL_SETTLEMENT,
-            source_tag=LedgerSourceTag.WITHDRAWAL_FEE_BURN,
+            source_tag=net_tag,
             reference=reference,
             description=f"Withdrawal settled to {payout_request.destination_reference}",
             external_reference=reference,
@@ -475,16 +499,30 @@ class WalletService:
         escrow_account = self.get_user_escrow_account(session, user, payout_request.unit)
         user_account = self.get_user_account(session, user, payout_request.unit)
         meta = self._parse_payout_meta(payout_request.notes)
-        total_debit = self._normalize_amount(meta.get("total_debit", payout_request.amount))
+        net_amount = self._normalize_amount(payout_request.amount)
+        total_debit = self._normalize_amount(meta.get("total_debit", net_amount))
+        fee_amount = self._normalize_amount(meta.get("fee_amount", total_debit - net_amount))
+        net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
+        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
+        if fee_amount < Decimal("0.0000"):
+            fee_amount = Decimal("0.0000")
         reference = f"payout-release:{payout_request.id}"
+        postings = [
+            LedgerPosting(account=escrow_account, amount=-net_amount, source_tag=net_tag),
+            LedgerPosting(account=user_account, amount=net_amount, source_tag=net_tag),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.extend(
+                [
+                    LedgerPosting(account=escrow_account, amount=-fee_amount, source_tag=fee_tag),
+                    LedgerPosting(account=user_account, amount=fee_amount, source_tag=fee_tag),
+                ]
+            )
         entries = self.append_transaction(
             session,
-            postings=[
-                LedgerPosting(account=escrow_account, amount=-total_debit),
-                LedgerPosting(account=user_account, amount=total_debit),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.WITHDRAWAL_FEE_BURN,
+            source_tag=net_tag,
             reference=reference,
             description=f"Withdrawal released back to user after {failure_reason or 'cancel'}",
             external_reference=reference,
@@ -586,9 +624,7 @@ class WalletService:
         transaction_id = generate_uuid()
         entries: list[LedgerEntry] = []
         for posting in normalized_postings:
-            resolved_tag = posting.source_tag or source_tag
-            if resolved_tag is None:
-                raise LedgerError("Ledger source tag is required for all wallet postings.")
+            resolved_tag = posting.source_tag or source_tag or LedgerSourceTag.ADMIN_ADJUSTMENT
             entries.append(
                 LedgerEntry(
                     transaction_id=transaction_id,

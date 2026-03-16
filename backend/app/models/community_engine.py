@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -39,7 +39,7 @@ class CompetitionWatchlist(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     competition_type: Mapped[str] = mapped_column(String(80), nullable=False, default="general")
     notify_on_story: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notify_on_launch: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class LiveThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -52,7 +52,7 @@ class LiveThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     status: Mapped[LiveThreadStatus] = mapped_column(SqlEnum(LiveThreadStatus, name="livethreadstatus"), nullable=False, default=LiveThreadStatus.OPEN)
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class LiveThreadMessage(Base, UUIDPrimaryKeyMixin):
@@ -65,7 +65,7 @@ class LiveThreadMessage(Base, UUIDPrimaryKeyMixin):
     like_count: Mapped[int] = mapped_column(nullable=False, default=0)
     reply_count: Mapped[int] = mapped_column(nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class PrivateMessageThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -76,7 +76,7 @@ class PrivateMessageThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     status: Mapped[PrivateMessageThreadStatus] = mapped_column(SqlEnum(PrivateMessageThreadStatus, name="privatemessagethreadstatus"), nullable=False, default=PrivateMessageThreadStatus.ACTIVE)
     subject: Mapped[str] = mapped_column(String(180), nullable=False, default="")
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class PrivateMessageParticipant(Base, UUIDPrimaryKeyMixin):
@@ -90,7 +90,7 @@ class PrivateMessageParticipant(Base, UUIDPrimaryKeyMixin):
     is_muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class PrivateMessage(Base, UUIDPrimaryKeyMixin):
@@ -100,4 +100,4 @@ class PrivateMessage(Base, UUIDPrimaryKeyMixin):
     sender_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)

@@ -171,45 +171,44 @@ class GtexHeroBanner extends StatelessWidget {
               left: -22,
               child: _GlowOrb(size: 168, color: GteShellTheme.accentWarm.withValues(alpha: 0.12)),
             ),
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.all(0),
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    final bool stacked = constraints.maxWidth < 900;
-                    final Widget main = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        GtexSectionBadge(label: eyebrow, color: accent),
-                        const SizedBox(height: 18),
-                        Text(title, style: Theme.of(context).textTheme.displaySmall),
-                        const SizedBox(height: 12),
-                        Text(description, style: Theme.of(context).textTheme.bodyLarge),
-                        const SizedBox(height: 18),
-                        Wrap(spacing: 10, runSpacing: 10, children: chips),
-                        if (actions.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 20),
-                          Wrap(spacing: 12, runSpacing: 12, children: actions),
-                        ],
+            Padding(
+              padding: const EdgeInsets.all(0),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool stacked = constraints.maxWidth < 900;
+                  final Widget main = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      GtexSectionBadge(label: eyebrow, color: accent),
+                      const SizedBox(height: 18),
+                      Text(title, style: Theme.of(context).textTheme.displaySmall),
+                      const SizedBox(height: 12),
+                      Text(description, style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 18),
+                      Wrap(spacing: 10, runSpacing: 10, children: chips),
+                      if (actions.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 20),
+                        Wrap(spacing: 12, runSpacing: 12, children: actions),
                       ],
-                    );
-                    final Widget right = sidePanel ?? _DefaultSignalPanel(accent: accent);
-                    if (stacked) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[main, const SizedBox(height: 18), right],
-                      );
-                    }
-                    return Row(
+                    ],
+                  );
+                  final Widget right =
+                      sidePanel ?? _DefaultSignalPanel(accent: accent);
+                  if (stacked) {
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Expanded(flex: 6, child: main),
-                        const SizedBox(width: 20),
-                        Expanded(flex: 4, child: right),
-                      ],
+                      children: <Widget>[main, const SizedBox(height: 18), right],
                     );
-                  },
-                ),
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(flex: 6, child: main),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 4, child: right),
+                    ],
+                  );
+                },
               ),
             ),
           ],

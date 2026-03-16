@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SqlEnum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Enum as SqlEnum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -33,7 +33,7 @@ class DailyChallenge(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         default=DailyChallengeStatus.ACTIVE,
     )
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class DailyChallengeClaim(Base, UUIDPrimaryKeyMixin):
@@ -48,5 +48,5 @@ class DailyChallengeClaim(Base, UUIDPrimaryKeyMixin):
     reward_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
     reward_unit: Mapped[str] = mapped_column(String(16), nullable=False, default='credit')
     reward_settlement_id: Mapped[str | None] = mapped_column(ForeignKey("reward_settlements.id", ondelete="SET NULL"), nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     claimed_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

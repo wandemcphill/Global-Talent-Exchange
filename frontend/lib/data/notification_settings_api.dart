@@ -241,6 +241,7 @@ class _NotificationFixtures {
           severity: 'info',
           active: true,
           deliverAsNotification: true,
+          publishedAt: DateTime.parse('2026-01-15T09:30:00Z'),
           metadata: const <String, Object?>{},
         ),
       ],
@@ -290,6 +291,7 @@ class _NotificationFixtures {
       severity: 'info',
       active: true,
       deliverAsNotification: true,
+      publishedAt: DateTime.now().toUtc(),
       metadata: const <String, Object?>{},
     );
     _announcements.insert(0, created);

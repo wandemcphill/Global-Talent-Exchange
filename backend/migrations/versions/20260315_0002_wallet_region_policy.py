@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = "20260315_0002"
@@ -38,25 +39,38 @@ ledger_source_tag = sa.Enum(
 
 
 def upgrade() -> None:
-    ledger_source_tag.create(op.get_bind(), checkfirst=True)
-    op.add_column(
-        "ledger_entries",
-        sa.Column(
-            "source_tag",
-            ledger_source_tag,
-            nullable=False,
-            server_default="admin_adjustment",
-        ),
-    )
-    op.add_column(
-        "gift_transactions",
-        sa.Column(
-            "source_scope",
-            sa.String(length=32),
-            nullable=False,
-            server_default="user_hosted",
-        ),
-    )
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    existing_tables = set(inspector.get_table_names())
+
+    ledger_source_tag.create(bind, checkfirst=True)
+    ledger_entry_columns = {
+        column["name"] for column in inspector.get_columns("ledger_entries")
+    }
+    if "source_tag" not in ledger_entry_columns:
+        op.add_column(
+            "ledger_entries",
+            sa.Column(
+                "source_tag",
+                ledger_source_tag,
+                nullable=False,
+                server_default="admin_adjustment",
+            ),
+        )
+    if "gift_transactions" in existing_tables:
+        gift_transaction_columns = {
+            column["name"] for column in inspector.get_columns("gift_transactions")
+        }
+        if "source_scope" not in gift_transaction_columns:
+            op.add_column(
+                "gift_transactions",
+                sa.Column(
+                    "source_scope",
+                    sa.String(length=32),
+                    nullable=False,
+                    server_default="user_hosted",
+                ),
+            )
     op.create_table(
         "user_region_profiles",
         sa.Column("id", sa.String(length=36), primary_key=True),
@@ -80,6 +94,18 @@ def downgrade() -> None:
     op.drop_index("ix_user_region_profiles_region_code", table_name="user_region_profiles")
     op.drop_index("ix_user_region_profiles_user_id", table_name="user_region_profiles")
     op.drop_table("user_region_profiles")
-    op.drop_column("gift_transactions", "source_scope")
-    op.drop_column("ledger_entries", "source_tag")
-    ledger_source_tag.drop(op.get_bind(), checkfirst=True)
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    existing_tables = set(inspector.get_table_names())
+    if "gift_transactions" in existing_tables:
+        gift_transaction_columns = {
+            column["name"] for column in inspector.get_columns("gift_transactions")
+        }
+        if "source_scope" in gift_transaction_columns:
+            op.drop_column("gift_transactions", "source_scope")
+    ledger_entry_columns = {
+        column["name"] for column in inspector.get_columns("ledger_entries")
+    }
+    if "source_tag" in ledger_entry_columns:
+        op.drop_column("ledger_entries", "source_tag")
+    ledger_source_tag.drop(bind, checkfirst=True)

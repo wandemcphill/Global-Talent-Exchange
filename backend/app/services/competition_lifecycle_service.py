@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Iterable
 
 from sqlalchemy import select
@@ -12,15 +13,21 @@ from backend.app.common.enums.competition_status import CompetitionStatus
 from backend.app.common.enums.match_status import MatchStatus
 from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.models.competition import Competition
+from backend.app.models.club_profile import ClubProfile
+from backend.app.models.competition_entry import CompetitionEntry
 from backend.app.models.competition_match import CompetitionMatch
 from backend.app.models.competition_participant import CompetitionParticipant
 from backend.app.models.competition_playoff import CompetitionPlayoff
 from backend.app.models.competition_prize_rule import CompetitionPrizeRule
+from backend.app.models.competition_reward import CompetitionReward
 from backend.app.models.competition_reward_pool import CompetitionRewardPool
 from backend.app.models.competition_round import CompetitionRound
 from backend.app.models.competition_rule_set import CompetitionRuleSet
 from backend.app.models.competition_schedule_job import CompetitionScheduleJob
 from backend.app.models.competition_seed_rule import CompetitionSeedRule
+from backend.app.models.user import User
+from backend.app.models.wallet import LedgerUnit
+from backend.app.reward_engine.service import RewardEngineError, RewardEngineService
 from backend.app.services.competition_fixture_service import CompetitionFixtureService, FixtureBuildResult
 from backend.app.services.competition_match_service import CompetitionMatchService
 from backend.app.services.competition_reward_service import CompetitionRewardService
@@ -212,19 +219,31 @@ class CompetitionLifecycleService:
             raise ValueError("GTEX-hosted competitions must use promo_pool reward pools.")
         if not is_platform and any(pool.pool_type == "promo_pool" for pool in reward_pools):
             raise ValueError("User-hosted competitions cannot use promo_pool reward pools.")
-        rewards: list = []
-        for pool in reward_pools:
-            rewards.extend(
-                self.reward_service.build_rewards(
-                    competition_id=competition.id,
-                    pool=pool,
-                    prize_rule=prize_rule,
-                    standings=standings,
-                    settle=settle,
+        rewards = list(
+            self.session.scalars(
+                select(CompetitionReward)
+                .where(CompetitionReward.competition_id == competition.id)
+                .order_by(CompetitionReward.placement.asc(), CompetitionReward.created_at.asc())
+            ).all()
+        )
+        if not rewards:
+            rewards = []
+            for pool in reward_pools:
+                rewards.extend(
+                    self.reward_service.build_rewards(
+                        competition_id=competition.id,
+                        pool=pool,
+                        prize_rule=prize_rule,
+                        standings=standings,
+                        settle=settle,
+                    )
                 )
-            )
+        for pool in reward_pools:
             pool.status = "settled" if settle else "planned"
-        self.session.add_all(rewards)
+        if rewards:
+            self.session.add_all(rewards)
+        if settle and is_platform:
+            self._settle_platform_rewards(competition, rewards)
         competition.status = CompetitionStatus.SETTLED.value if settle else CompetitionStatus.COMPLETED.value
         competition.completed_at = competition.completed_at or datetime.now(timezone.utc)
         competition.settled_at = datetime.now(timezone.utc) if settle else None
@@ -259,6 +278,89 @@ class CompetitionLifecycleService:
             return False
         normalized = source_type.strip().lower()
         return normalized in {"gtex", "platform", "gtex_platform", "gtex_competition", "gtex_hosted"}
+
+    @staticmethod
+    def _minor_to_decimal(amount_minor: int) -> Decimal:
+        return (Decimal(amount_minor) / Decimal("10000")).quantize(Decimal("0.0001"))
+
+    def _resolve_reward_user(self, participant: CompetitionParticipant) -> User | None:
+        if participant.entry_id:
+            entry = self.session.get(CompetitionEntry, participant.entry_id)
+            if entry and entry.user_id:
+                user = self.session.get(User, entry.user_id)
+                if user is not None:
+                    return user
+        user = self.session.get(User, participant.club_id)
+        if user is not None:
+            return user
+        club = self.session.get(ClubProfile, participant.club_id)
+        if club is None:
+            return None
+        return self.session.get(User, club.owner_user_id)
+
+    def _settle_platform_rewards(self, competition: Competition, rewards: list[CompetitionReward]) -> None:
+        if not rewards:
+            return
+        reward_engine = RewardEngineService(self.session, event_publisher=self.event_publisher)
+        actor = self.session.get(User, competition.host_user_id) if competition.host_user_id else None
+        settlements: list[tuple[CompetitionReward, User, Decimal]] = []
+        now = datetime.now(timezone.utc)
+        for reward in rewards:
+            if reward.ledger_transaction_id:
+                if reward.status != "settled":
+                    reward.status = "settled"
+                reward.settled_at = reward.settled_at or now
+                continue
+            amount = self._minor_to_decimal(reward.amount_minor)
+            if amount <= Decimal("0.0000"):
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "zero_amount"}
+                continue
+            participant = self.session.get(CompetitionParticipant, reward.participant_id) if reward.participant_id else None
+            if participant is None:
+                reward.status = "pending"
+                reward.settled_at = None
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "missing_participant"}
+                continue
+            user = self._resolve_reward_user(participant)
+            if user is None:
+                reward.status = "pending"
+                reward.settled_at = None
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "missing_user"}
+                continue
+            settlements.append((reward, user, amount))
+        if not settlements:
+            return
+        total_gross = sum(amount for _, _, amount in settlements)
+        promo_pool_account = reward_engine.wallet_service.ensure_promo_pool_account(self.session, LedgerUnit.COIN)
+        promo_pool_balance = reward_engine.wallet_service.get_balance(self.session, promo_pool_account)
+        if promo_pool_balance < total_gross:
+            raise RewardEngineError("Promo pool balance is lower than the reward amount.")
+        for reward, user, amount in settlements:
+            try:
+                settlement = reward_engine.settle_reward(
+                    actor=actor or user,
+                    user_id=user.id,
+                    competition_key=competition.id,
+                    title=competition.name,
+                    gross_amount=amount,
+                    reward_source="gtex_promotional_pool",
+                    note=f"Competition placement #{reward.placement}" if reward.placement else None,
+                )
+            except RewardEngineError as exc:
+                if "Promo pool balance" in str(exc):
+                    raise
+                reward.status = "pending"
+                reward.settled_at = None
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_error": str(exc)}
+                continue
+            reward.ledger_transaction_id = settlement.ledger_transaction_id
+            reward.status = "settled"
+            reward.settled_at = now
+            reward.metadata_json = {
+                **(reward.metadata_json or {}),
+                "reward_settlement_id": settlement.id,
+                "reward_source": settlement.reward_source,
+            }
 
     def record_match_event(
         self,

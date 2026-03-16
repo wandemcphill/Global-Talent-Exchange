@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 import math
 
@@ -31,7 +31,7 @@ class SchedulePreview:
 @dataclass(slots=True)
 class CompetitionScheduleService:
     session: Session
-    scheduler: CompetitionScheduler = CompetitionScheduler()
+    scheduler: CompetitionScheduler = field(default_factory=CompetitionScheduler)
 
     def preview(
         self,
@@ -260,11 +260,8 @@ class CompetitionScheduleService:
             return requested_dates, warnings
 
         warnings.append("Schedule avoided calendar blackout windows.")
-        if not filtered:
-            return requested_dates, warnings
-
         spacing_days = 7 if competition.format == CompetitionFormat.LEAGUE.value else 2
-        cursor = max(filtered)
+        cursor = max(filtered) if filtered else max(requested_dates)
         while len(filtered) < len(requested_dates):
             cursor = cursor + timedelta(days=spacing_days)
             if cursor in blocked:

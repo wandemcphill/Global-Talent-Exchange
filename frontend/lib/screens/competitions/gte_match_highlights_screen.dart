@@ -39,6 +39,13 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
     });
   }
 
+  void _reload() {
+    setState(() {
+      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+      _now = DateTime.now().toUtc();
+    });
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
@@ -73,13 +80,15 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
               );
             }
             if (!snapshot.hasData) {
-              return const Padding(
-                padding: EdgeInsets.all(20),
+              return Padding(
+                padding: const EdgeInsets.all(20),
                 child: GteStatePanel(
                   title: 'Highlights unavailable',
                   message:
                       'Unable to load the highlight archive right now.',
                   icon: Icons.warning_amber_outlined,
+                  actionLabel: 'Retry',
+                  onAction: _reload,
                 ),
               );
             }
@@ -142,13 +151,19 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),
-                      ...match.highlights.map(
-                        (LiveMatchHighlightClip clip) => _HighlightTile(
-                          clip: clip,
-                          now: _now,
-                          isAuthenticated: widget.isAuthenticated,
+                      if (match.highlights.isEmpty)
+                        Text(
+                          'No highlights yet. Clips will appear after the first key moments.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      else
+                        ...match.highlights.map(
+                          (LiveMatchHighlightClip clip) => _HighlightTile(
+                            clip: clip,
+                            now: _now,
+                            isAuthenticated: widget.isAuthenticated,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -167,13 +182,19 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),
-                      ...match.keyMoments.map(
-                        (LiveMatchHighlightClip clip) => _HighlightTile(
-                          clip: clip,
-                          now: _now,
-                          isAuthenticated: widget.isAuthenticated,
+                      if (match.keyMoments.isEmpty)
+                        Text(
+                          'Premium key moments will appear once the match produces its first major incidents.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      else
+                        ...match.keyMoments.map(
+                          (LiveMatchHighlightClip clip) => _HighlightTile(
+                            clip: clip,
+                            now: _now,
+                            isAuthenticated: widget.isAuthenticated,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

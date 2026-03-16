@@ -1,7 +1,7 @@
 """player card marketplace
 
-Revision ID: 20260314_0036
-Revises: 20260314_0035
+Revision ID: 20260314_0036b
+Revises: 20260314_0036
 Create Date: 2026-03-14 18:05:00
 """
 from __future__ import annotations
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "20260314_0036"
-down_revision = "20260314_0035"
+revision = "20260314_0036b"
+down_revision = "20260314_0036"
 branch_labels = None
 depends_on = None
 

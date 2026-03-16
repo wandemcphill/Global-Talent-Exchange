@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from sqlalchemy import Boolean, Enum as SqlEnum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Enum as SqlEnum, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -50,7 +50,7 @@ class GovernanceProposal(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     abstain_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     unique_voter_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class GovernanceVote(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -67,7 +67,7 @@ class GovernanceVote(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     influence_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_proxy_vote: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 __all__ = [

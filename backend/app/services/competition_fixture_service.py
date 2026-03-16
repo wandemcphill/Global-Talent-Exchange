@@ -14,6 +14,7 @@ from backend.app.models.competition_participant import CompetitionParticipant
 from backend.app.models.competition_playoff import CompetitionPlayoff
 from backend.app.models.competition_round import CompetitionRound
 from backend.app.models.competition_rule_set import CompetitionRuleSet
+from backend.app.models.base import generate_uuid
 
 
 @dataclass(slots=True)
@@ -95,6 +96,7 @@ class CompetitionFixtureService:
         for round_number, matchups in enumerate(rounds, start=1):
             match_date, window, slot_sequence = round_slots.get(round_number, (None, None, 1))
             round_entry = CompetitionRound(
+                id=generate_uuid(),
                 competition_id=competition.id,
                 round_number=round_number,
                 stage="league",
@@ -106,6 +108,7 @@ class CompetitionFixtureService:
             for home_id, away_id in matchups:
                 matches.append(
                     CompetitionMatch(
+                        id=generate_uuid(),
                         competition_id=competition.id,
                         round_id=round_entry.id,
                         round_number=round_number,
@@ -146,6 +149,7 @@ class CompetitionFixtureService:
             for round_number, matchups in enumerate(group_rounds, start=1):
                 match_date, window, slot_sequence = round_slots.get(round_number, (None, None, 1))
                 round_entry = CompetitionRound(
+                    id=generate_uuid(),
                     competition_id=competition.id,
                     round_number=round_number,
                     stage="group",
@@ -158,6 +162,7 @@ class CompetitionFixtureService:
                 for home_id, away_id in matchups:
                     matches.append(
                         CompetitionMatch(
+                            id=generate_uuid(),
                             competition_id=competition.id,
                             round_id=round_entry.id,
                             round_number=round_number,
@@ -193,6 +198,7 @@ class CompetitionFixtureService:
         round_slots = self._round_slots(competition.id, round_number, schedule_plan)
         match_date, window, slot_sequence = round_slots.get(round_number, (None, None, 1))
         round_entry = CompetitionRound(
+            id=generate_uuid(),
             competition_id=competition.id,
             round_number=round_number,
             stage=stage,
@@ -206,6 +212,7 @@ class CompetitionFixtureService:
             if home_id is None or away_id is None:
                 continue
             match = CompetitionMatch(
+                id=generate_uuid(),
                 competition_id=competition.id,
                 round_id=round_entry.id,
                 round_number=round_number,
@@ -221,6 +228,7 @@ class CompetitionFixtureService:
             matches.append(match)
             playoffs.append(
                 CompetitionPlayoff(
+                    id=generate_uuid(),
                     competition_id=competition.id,
                     round_id=round_entry.id,
                     slot_index=slot_index,

@@ -96,19 +96,34 @@ class GteParsingException implements FormatException {
 class GteJson {
   const GteJson._();
 
-  static Map<String, Object?> map(Object? value, {String label = 'payload'}) {
-    if (value is Map<String, Object?>) {
-      return value;
+  static Map<String, Object?> map(
+    Object? value, {
+    List<String>? keys,
+    String label = 'payload',
+    Map<String, Object?> fallback = const <String, Object?>{},
+  }) {
+    Object? source = value;
+    String resolvedLabel = label;
+    if (keys != null) {
+      final Map<String, Object?> container =
+          _tryMap(value) ?? fallback;
+      source = GteJson.value(container, keys);
+      resolvedLabel = keys.join(' / ');
+      if (source == null) {
+        return fallback;
+      }
     }
-    if (value is Map) {
-      return value.map(
-        (Object? key, Object? entryValue) => MapEntry<String, Object?>(
-          key.toString(),
-          entryValue,
-        ),
-      );
+    final Map<String, Object?>? parsed = _tryMap(source);
+    if (parsed != null) {
+      return parsed;
     }
-    throw GteParsingException('Expected $label to be a JSON object.', value);
+    if (keys != null) {
+      return fallback;
+    }
+    throw GteParsingException(
+      'Expected $resolvedLabel to be a JSON object.',
+      source,
+    );
   }
 
   static List<Object?> list(Object? value, {String label = 'payload'}) {
@@ -181,6 +196,20 @@ class GteJson {
     return int.tryParse(rawValue.toString()) ?? fallback;
   }
 
+  static int? integerOrNull(Map<String, Object?> json, List<String> keys) {
+    final Object? rawValue = value(json, keys);
+    if (rawValue == null) {
+      return null;
+    }
+    if (rawValue is int) {
+      return rawValue;
+    }
+    if (rawValue is num) {
+      return rawValue.toInt();
+    }
+    return int.tryParse(rawValue.toString());
+  }
+
   static double number(
     Map<String, Object?> json,
     List<String> keys, {
@@ -230,6 +259,20 @@ class GteJson {
     return DateTime.tryParse(rawValue.toString())?.toUtc();
   }
 
+  static DateTime dateTime(
+    Map<String, Object?> json,
+    List<String> keys,
+  ) {
+    final DateTime? parsed = dateTimeOrNull(json, keys);
+    if (parsed != null) {
+      return parsed;
+    }
+    throw GteParsingException(
+      'Missing or invalid date field: ${keys.join(' / ')}.',
+      json,
+    );
+  }
+
   static List<T> typedList<T>(
     Map<String, Object?> json,
     List<String> keys,
@@ -246,6 +289,19 @@ class GteJson {
 
   static Map<String, Object?> decodeObject(String body) {
     return map(jsonDecode(body));
+  }
+
+  static Map<String, Object?>? _tryMap(Object? value) {
+    if (value is Map<String, Object?>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.map(
+        (Object? key, Object? entryValue) =>
+            MapEntry<String, Object?>(key.toString(), entryValue),
+      );
+    }
+    return null;
   }
 }
 

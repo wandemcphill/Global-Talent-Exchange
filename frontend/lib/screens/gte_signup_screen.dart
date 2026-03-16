@@ -145,11 +145,11 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                   animation: widget.controller,
                   builder: (BuildContext context, Widget? child) {
                     final bool isSubmitting = widget.controller.isSigningIn;
+                    final String? authError = widget.controller.authError;
                     final String? error = _localError ??
-                        (widget.controller.authError == null
+                        (authError == null
                             ? null
-                            : AppFeedback.messageFor(
-                                widget.controller.authError));
+                            : AppFeedback.messageFor(authError));
                     return LayoutBuilder(
                       builder:
                           (BuildContext context, BoxConstraints constraints) {

@@ -1246,7 +1246,7 @@ class GteReliableApiRepository implements GteApiRepository {
           'POST',
           '/api/admin/treasury/withdrawals/$withdrawalId/status',
           body: <String, Object?>{
-            'status': _withdrawalStatusToString(status),
+            'status': _serializeWithdrawalStatus(status),
             if (adminNotes != null) 'admin_notes': adminNotes,
           },
           requiresAuth: true,
@@ -1658,5 +1658,28 @@ String _orderStatusQueryValue(GteOrderStatus status) {
       return 'rejected';
     case GteOrderStatus.unknown:
       return 'unknown';
+  }
+}
+
+String _serializeWithdrawalStatus(GteWithdrawalStatus status) {
+  switch (status) {
+    case GteWithdrawalStatus.draft:
+      return 'draft';
+    case GteWithdrawalStatus.pendingKyc:
+      return 'pending_kyc';
+    case GteWithdrawalStatus.pendingReview:
+      return 'pending_review';
+    case GteWithdrawalStatus.approved:
+      return 'approved';
+    case GteWithdrawalStatus.rejected:
+      return 'rejected';
+    case GteWithdrawalStatus.processing:
+      return 'processing';
+    case GteWithdrawalStatus.paid:
+      return 'paid';
+    case GteWithdrawalStatus.disputed:
+      return 'disputed';
+    case GteWithdrawalStatus.cancelled:
+      return 'cancelled';
   }
 }

@@ -408,6 +408,12 @@ class AdminWithdrawalView(BaseModel):
     status: TreasuryWithdrawalStatus
     amount_coin: Decimal
     amount_fiat: Decimal
+    fee_amount: Decimal
+    total_debit: Decimal
+    net_amount: Decimal
+    source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+    processor_mode: str = "manual_bank_transfer"
+    payout_channel: str = "bank_transfer"
     currency_code: str
     bank_name: str
     bank_account_number: str

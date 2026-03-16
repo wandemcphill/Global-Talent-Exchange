@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -24,7 +24,7 @@ class NotificationPreference(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     quiet_hours_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     quiet_hours_start: Mapped[str | None] = mapped_column(String(5), nullable=True)
     quiet_hours_end: Mapped[str | None] = mapped_column(String(5), nullable=True)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class NotificationSubscription(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -38,7 +38,7 @@ class NotificationSubscription(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     subscription_type: Mapped[str] = mapped_column(String(48), nullable=False, default="general")
     label: Mapped[str] = mapped_column(String(180), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class PlatformAnnouncement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -51,5 +51,5 @@ class PlatformAnnouncement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     severity: Mapped[str] = mapped_column(String(24), nullable=False, default="info")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     deliver_as_notification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     published_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)

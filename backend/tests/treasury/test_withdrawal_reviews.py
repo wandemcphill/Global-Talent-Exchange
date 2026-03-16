@@ -59,8 +59,8 @@ def _seed_policy(session) -> None:
 
 def _seed_balance(session, *, user, amount: Decimal) -> None:
     wallet_service = WalletService()
-    user_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
     wallet_service.append_transaction(
         session,
         postings=[

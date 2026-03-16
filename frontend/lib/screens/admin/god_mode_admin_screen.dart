@@ -258,7 +258,7 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        const GtexHeroBanner(
+        GtexHeroBanner(
           eyebrow: 'CONTROL TOWER',
           title: 'Admin should feel powerful, visible, and fenced in by integrity.',
           description: 'This surface controls liquidity, payments, withdrawals, competition levers, and audit visibility. High-risk actions stay behind deliberate confirmation rails.',
@@ -1056,6 +1056,48 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _AdminHeroChip extends StatelessWidget {
+  const _AdminHeroChip({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white70,
+                  letterSpacing: 0.6,
+                ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class GodModeAdminApi {
   GodModeAdminApi({
     required this.baseUrl,
@@ -1614,17 +1656,36 @@ class AuditEvent {
     required this.eventType,
     required this.summary,
     required this.createdAt,
+    required this.payload,
   });
 
   final String eventType;
   final String summary;
   final String createdAt;
+  final Map<String, Object?> payload;
 
   factory AuditEvent.fromJson(Map<String, Object?> json) => AuditEvent(
         eventType: (json['event_type'] ?? '').toString(),
         summary: (json['summary'] ?? '').toString(),
         createdAt: (json['created_at'] ?? '').toString(),
+        payload: _auditPayload(json),
       );
+}
+
+Map<String, Object?> _auditPayload(Map<String, Object?> json) {
+  for (final String key in <String>[
+    'payload',
+    'payload_json',
+    'metadata',
+    'metadata_json',
+  ]) {
+    final Object? value = json[key];
+    if (value == null) {
+      continue;
+    }
+    return _map(value);
+  }
+  return const <String, Object?>{};
 }
 
 Map<String, Object?> _map(Object? value) {

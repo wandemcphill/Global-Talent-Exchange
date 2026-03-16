@@ -91,7 +91,7 @@ class NationalTeamEntry {
       squadSize:
           GteJson.integer(json, <String>['squad_size', 'squadSize'], fallback: 0),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),

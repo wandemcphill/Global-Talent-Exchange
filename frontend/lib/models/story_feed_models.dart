@@ -46,7 +46,7 @@ class StoryFeedItem {
       featured: GteJson.boolean(json, <String>['featured'], fallback: false),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       metadata: GteJson.map(
-          json, <String>['metadata_json', 'metadataJson', 'metadata'],
+          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
     );
   }

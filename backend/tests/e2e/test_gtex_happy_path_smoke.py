@@ -92,7 +92,7 @@ def test_gtex_happy_path_smoke() -> None:
             display_name="Owner",
             password_hash="x",
             role=UserRole.USER,
-            kyc_status=KycStatus.VERIFIED,
+            kyc_status=KycStatus.FULLY_VERIFIED,
         )
     )
     session.commit()

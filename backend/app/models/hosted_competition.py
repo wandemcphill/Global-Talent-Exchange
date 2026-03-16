@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -42,13 +42,13 @@ class CompetitionTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     cup_or_league: Mapped[str] = mapped_column(String(24), nullable=False, default='cup')
     participants: Mapped[int] = mapped_column(nullable=False, default=8)
     viewing_mode: Mapped[str] = mapped_column(String(40), nullable=False, default='standard')
-    gift_rules: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    gift_rules: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     seeding_method: Mapped[str] = mapped_column(String(40), nullable=False, default='random')
     is_user_hostable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
     platform_fee_bps: Mapped[int] = mapped_column(nullable=False, default=1000)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -68,7 +68,7 @@ class UserHostedCompetition(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
     platform_fee_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class UserHostedCompetitionParticipant(Base, UUIDPrimaryKeyMixin):
@@ -82,7 +82,7 @@ class UserHostedCompetitionParticipant(Base, UUIDPrimaryKeyMixin):
     joined_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
     payout_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class HostedCompetitionStanding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -101,7 +101,7 @@ class HostedCompetitionStanding(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     goals_for: Mapped[int] = mapped_column(nullable=False, default=0)
     goals_against: Mapped[int] = mapped_column(nullable=False, default=0)
     payout_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal('0.0000'))
-    metadata_json: Mapped[dict[str, object]] = mapped_column(nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class HostedCompetitionSettlement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -117,4 +117,3 @@ class HostedCompetitionSettlement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     note: Mapped[str] = mapped_column(Text, nullable=False, default='')
     settled_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-
