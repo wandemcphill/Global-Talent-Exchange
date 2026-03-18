@@ -414,10 +414,8 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         )
         .take(2)
         .toList(growable: false);
-    final List<CompetitionSummary> gtexCompetitions = competitions
-        .where(_isGtexCompetition)
-        .take(4)
-        .toList(growable: false);
+    final List<CompetitionSummary> gtexCompetitions =
+        competitions.where(_isGtexCompetition).take(4).toList(growable: false);
     final List<CompetitionSummary> creatorCompetitions = competitions
         .where((CompetitionSummary item) => !_isGtexCompetition(item))
         .take(4)
@@ -987,6 +985,75 @@ class _ArenaRoutePanel extends StatelessWidget {
           Text(
             'Predictions unlock once a live-match route sends a match id.',
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArenaRoutePanel extends StatelessWidget {
+  const _ArenaRoutePanel({
+    required this.onOpenStreamerTournaments,
+    required this.onOpenFanPredictions,
+    required this.onOpenNationsCup,
+    required this.onOpenWorldSimulation,
+    required this.onOpenTransferCenter,
+  });
+
+  final VoidCallback onOpenStreamerTournaments;
+  final VoidCallback onOpenFanPredictions;
+  final VoidCallback onOpenNationsCup;
+  final VoidCallback onOpenWorldSimulation;
+  final VoidCallback onOpenTransferCenter;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentArena,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Arena extensions',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'These routes open tournament, prediction, national-team, world, and transfer shells without disturbing the arena tab model.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onOpenStreamerTournaments,
+                icon: const Icon(Icons.live_tv_outlined),
+                label: const Text('Streamer tournaments'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenFanPredictions,
+                icon: const Icon(Icons.insights_outlined),
+                label: const Text('Fan predictions'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenNationsCup,
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Nations cup'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenWorldSimulation,
+                icon: const Icon(Icons.public_outlined),
+                label: const Text('World simulation'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenTransferCenter,
+                icon: const Icon(Icons.event_note_outlined),
+                label: const Text('Transfer center'),
+              ),
+            ],
           ),
         ],
       ),

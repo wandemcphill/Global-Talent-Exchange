@@ -102,6 +102,19 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     });
   }
 
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
+    );
+  }
+
   Future<void> _openHalftime() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(

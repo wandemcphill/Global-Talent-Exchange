@@ -4,6 +4,8 @@ import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/controllers/regen_universe_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -452,6 +454,66 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       return;
     }
     widget.exchangeController.loadOrders();
+  }
+
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
+    );
+  }
+
+  Future<void> _openCurrentClubFeatureRoute(
+    GteAppRouteData Function(String clubId, String? clubName) buildRoute, {
+    required String title,
+    required String message,
+  }) async {
+    final String? clubId = widget.navigationDependencies?.currentClubId?.trim();
+    if (clubId == null || clubId.isEmpty) {
+      await _showRouteRequirementDialog(
+        title: title,
+        message: message,
+      );
+      return;
+    }
+    await _openFeatureRoute(
+      buildRoute(clubId, widget.navigationDependencies?.currentClubName),
+    );
+  }
+
+  Future<void> _openFanPredictionFallback() {
+    return _showRouteRequirementDialog(
+      title: 'Canonical match id required',
+      message:
+          'Fan prediction routes stay match-scoped. Open from a live match context or enter a canonical backend match id after the route mounts.',
+    );
+  }
+
+  Future<void> _showRouteRequirementDialog({
+    required String title,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   _HomeIdentity _deriveIdentity() {
@@ -2734,4 +2796,183 @@ String _spotsLabel(CompetitionSummary competition) {
     return 'Full';
   }
   return '$remaining left';
+}
+
+class _HomeExpansionLanesPanel extends StatelessWidget {
+  const _HomeExpansionLanesPanel({
+    required this.isAdmin,
+    required this.onOpenStreamerTournaments,
+    required this.onOpenFanPredictions,
+    required this.onOpenNationsCup,
+    required this.onOpenWorld,
+    required this.onOpenTransferCenter,
+    required this.onOpenPlayerCards,
+    required this.onOpenCreatorShareMarket,
+    required this.onOpenClubSaleMarket,
+    required this.onOpenCreatorStadium,
+    required this.onOpenFinanceAdmin,
+    required this.onOpenGiftStabilizer,
+  });
+
+  final bool isAdmin;
+  final VoidCallback onOpenStreamerTournaments;
+  final VoidCallback onOpenFanPredictions;
+  final VoidCallback onOpenNationsCup;
+  final VoidCallback onOpenWorld;
+  final VoidCallback onOpenTransferCenter;
+  final VoidCallback onOpenPlayerCards;
+  final VoidCallback onOpenCreatorShareMarket;
+  final VoidCallback onOpenClubSaleMarket;
+  final VoidCallback onOpenCreatorStadium;
+  final VoidCallback onOpenFinanceAdmin;
+  final VoidCallback onOpenGiftStabilizer;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Expansion lanes',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Deep-link surfaces stay discoverable from home without expanding the six shell destinations.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          _HomeRouteGroup(
+            title: 'Arena',
+            actions: <Widget>[
+              _HomeRouteButton(
+                label: 'Streamer tournaments',
+                icon: Icons.live_tv_outlined,
+                onPressed: onOpenStreamerTournaments,
+              ),
+              _HomeRouteButton(
+                label: 'Fan predictions',
+                icon: Icons.insights_outlined,
+                onPressed: onOpenFanPredictions,
+              ),
+              _HomeRouteButton(
+                label: 'Nations cup',
+                icon: Icons.flag_outlined,
+                onPressed: onOpenNationsCup,
+              ),
+              _HomeRouteButton(
+                label: 'World simulation',
+                icon: Icons.public_outlined,
+                onPressed: onOpenWorld,
+              ),
+              _HomeRouteButton(
+                label: 'Transfer center',
+                icon: Icons.event_note_outlined,
+                onPressed: onOpenTransferCenter,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _HomeRouteGroup(
+            title: 'Market',
+            actions: <Widget>[
+              _HomeRouteButton(
+                label: 'Player cards',
+                icon: Icons.style_outlined,
+                onPressed: onOpenPlayerCards,
+              ),
+              _HomeRouteButton(
+                label: 'Creator shares',
+                icon: Icons.candlestick_chart_outlined,
+                onPressed: onOpenCreatorShareMarket,
+              ),
+              _HomeRouteButton(
+                label: 'Club sale market',
+                icon: Icons.storefront_outlined,
+                onPressed: onOpenClubSaleMarket,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _HomeRouteGroup(
+            title: 'Club / Creator',
+            actions: <Widget>[
+              _HomeRouteButton(
+                label: 'Creator stadium',
+                icon: Icons.stadium_outlined,
+                onPressed: onOpenCreatorStadium,
+              ),
+            ],
+          ),
+          if (isAdmin) ...<Widget>[
+            const SizedBox(height: 14),
+            _HomeRouteGroup(
+              title: 'Admin',
+              actions: <Widget>[
+                _HomeRouteButton(
+                  label: 'League finance',
+                  icon: Icons.account_balance_outlined,
+                  onPressed: onOpenFinanceAdmin,
+                ),
+                _HomeRouteButton(
+                  label: 'Gift stabilizer',
+                  icon: Icons.tune_outlined,
+                  onPressed: onOpenGiftStabilizer,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeRouteGroup extends StatelessWidget {
+  const _HomeRouteGroup({
+    required this.title,
+    required this.actions,
+  });
+
+  final String title;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: actions,
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeRouteButton extends StatelessWidget {
+  const _HomeRouteButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.tonalIcon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
+    );
+  }
 }

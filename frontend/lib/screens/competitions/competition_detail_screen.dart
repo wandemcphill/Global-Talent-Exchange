@@ -539,8 +539,22 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
           competition: competition,
           isAuthenticated: widget.isAuthenticated,
           onOpenLogin: widget.onOpenLogin,
+          navigationDependencies: widget.navigationDependencies,
         ),
       ),
+    );
+  }
+
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
     );
   }
 

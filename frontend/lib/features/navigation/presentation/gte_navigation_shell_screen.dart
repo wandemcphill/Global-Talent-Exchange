@@ -743,6 +743,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         widget.controller.isAuthenticated) {
       widget.controller.refreshAccount();
     }
+    return true;
   }
 
   void _openCoachMarket() {
