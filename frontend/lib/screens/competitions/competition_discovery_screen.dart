@@ -162,7 +162,7 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
-                  height: 196,
+                  height: 320,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: featured.length,
@@ -331,10 +331,11 @@ class _FeaturedArenaCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: <Widget>[
               CompetitionStatusBadge(status: competition.status),
-              const Spacer(),
               CompetitionVisibilityChip(visibility: competition.visibility),
             ],
           ),

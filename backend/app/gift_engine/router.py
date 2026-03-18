@@ -73,7 +73,8 @@ def send_gift(payload: GiftSendRequest, current_user: User = Depends(get_current
             source_scope=payload.source_scope,
         )
     except GiftEngineError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        status_code = status.HTTP_409_CONFLICT if exc.reason == "spending_controls_blocked" else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     session.commit()

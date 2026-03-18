@@ -10,6 +10,9 @@ class SponsorshipSurface(StrEnum):
     HALFTIME_OVERLAY = "halftime_overlay"
     LINEUP_STRIP = "lineup_strip"
     FINALS_TROPHY_BACKDROP = "finals_trophy_backdrop"
+    CLUB_PAGE = "club_page"
+    MATCH_INTRO = "match_intro"
+    HIGHLIGHT_OVERLAY = "highlight_overlay"
 
 
 __all__ = ["SponsorshipSurface"]

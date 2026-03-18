@@ -695,7 +695,7 @@ class WalletService:
     def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
         from backend.app.portfolio.service import PortfolioService
 
-        summary = self.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+        summary = self.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
         portfolio_snapshot = PortfolioService(wallet_service=self).build_for_user(session, user)
         return PortfolioSnapshot(
             user_id=user.id,

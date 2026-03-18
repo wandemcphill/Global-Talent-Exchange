@@ -18,6 +18,7 @@ from backend.app.models.risk_ops import AuditLog
 from backend.app.models.user import User
 from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from backend.app.risk_ops_engine.service import RiskOpsService
+from backend.app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService
 from backend.app.services.signing_service import SignatureError, SignedTokenService
 from backend.app.services.storage_media_service import MediaAssetDescriptor, MediaStorageService
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
@@ -157,6 +158,9 @@ class MediaAccessService:
     ) -> None:
         if download_kind != "highlight":
             return
+        creator_access = self._creator_access(actor=actor, match_key=match_key)
+        if creator_access is not None and creator_access.season_pass is not None:
+            return
         pricing = {item.service_key: item for item in EconomyConfigService(self.session).list_service_pricing(active_only=False)}
         rule = pricing.get("highlight-download") or pricing.get("premium-video-view")
         if rule is None:
@@ -223,7 +227,26 @@ class MediaAccessService:
                 PremiumVideoPurchase.match_key == match_key,
             )
         )
-        return purchase is not None
+        if purchase is not None:
+            return True
+        creator_access = self._creator_access(actor=actor, match_key=match_key)
+        if creator_access is None:
+            return False
+        return creator_access.purchase is not None or creator_access.season_pass is not None
+
+    def _creator_access(self, *, actor: User, match_key: str | None):
+        if not match_key:
+            return None
+        try:
+            access = CreatorBroadcastService(self.session, wallet_service=self.wallet_service).access_for_match(
+                actor=actor,
+                match_id=match_key,
+            )
+        except CreatorBroadcastError:
+            return None
+        if not access.has_access:
+            return None
+        return access
 
     def _enforce_rate_limit(self, user_id: str) -> None:
         window_start = _utcnow() - timedelta(minutes=self.settings.media_storage.download_rate_limit_window_minutes)

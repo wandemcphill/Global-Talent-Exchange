@@ -42,12 +42,27 @@ class StoryFeedService:
         self.session.flush()
         return item
 
-    def list_feed(self, *, limit: int = 50, story_type: str | None = None, country_code: str | None = None) -> list[StoryFeedItem]:
+    def list_feed(
+        self,
+        *,
+        limit: int = 50,
+        story_type: str | None = None,
+        country_code: str | None = None,
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        featured_only: bool = False,
+    ) -> list[StoryFeedItem]:
         stmt = select(StoryFeedItem)
         if story_type:
             stmt = stmt.where(StoryFeedItem.story_type == story_type.strip().lower())
         if country_code:
             stmt = stmt.where(StoryFeedItem.country_code == country_code.strip().upper())
+        if subject_type:
+            stmt = stmt.where(StoryFeedItem.subject_type == subject_type.strip().lower())
+        if subject_id:
+            stmt = stmt.where(StoryFeedItem.subject_id == subject_id)
+        if featured_only:
+            stmt = stmt.where(StoryFeedItem.featured.is_(True))
         stmt = stmt.order_by(StoryFeedItem.featured.desc(), StoryFeedItem.created_at.desc()).limit(limit)
         return list(self.session.scalars(stmt).all())
 

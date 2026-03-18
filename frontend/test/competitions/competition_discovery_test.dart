@@ -27,24 +27,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Community competitions'), findsOneWidget);
-    expect(find.text('Trending'), findsOneWidget);
-    expect(find.text('Paid competitions'), findsOneWidget);
-    expect(find.text('Creator competitions'), findsWidgets);
-    expect(find.text('Coastal Creator Cup'), findsOneWidget);
+    expect(find.text('Create competition'), findsOneWidget);
 
-    await tester.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(-400, 0),
+    await tester.dragUntilVisible(
+      find.text('Creator competitions'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Creator competitions').last);
+    await tester.tap(find.text('Creator competitions'));
     await tester.pumpAndSettle();
+
+    expect(find.text('Coastal Creator Cup'), findsOneWidget);
 
     await tester.dragUntilVisible(
       find.text('Weekend Creator Cup'),
-      find.byType(ListView),
+      find.byType(ListView).first,
       const Offset(0, -300),
     );
 

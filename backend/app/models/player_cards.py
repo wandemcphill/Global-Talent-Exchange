@@ -183,7 +183,11 @@ class PlayerCardMomentum(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class PlayerCardListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "player_card_listings"
-    __table_args__ = (Index("ix_player_card_listings_player_card_id", "player_card_id"),)
+    __table_args__ = (
+        Index("ix_player_card_listings_player_card_id", "player_card_id"),
+        Index("ix_player_card_listings_status_price", "status", "price_per_card_credits"),
+        Index("ix_player_card_listings_status_negotiable", "status", "is_negotiable"),
+    )
 
     listing_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
     player_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("player_cards.id", ondelete="CASCADE"), nullable=False)
@@ -191,7 +195,9 @@ class PlayerCardListing(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     price_per_card_credits: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="open", server_default="open", index=True)
+    is_negotiable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    integrity_context_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
@@ -214,6 +220,7 @@ class PlayerCardSale(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     seller_net_credits: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="settled", server_default="settled", index=True)
     settlement_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    integrity_flags_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 

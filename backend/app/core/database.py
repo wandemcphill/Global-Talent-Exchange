@@ -104,7 +104,8 @@ def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, .
     database_engine = engine or get_engine()
     config = build_alembic_config(str(database_engine.url))
     script = ScriptDirectory.from_config(config)
-    target_heads = tuple(sorted(script.get_heads()))
+    target_head = script.get_current_head()
+    target_heads = (target_head,) if target_head is not None else tuple()
 
     with database_engine.connect() as connection:
         current_heads = tuple(sorted(MigrationContext.configure(connection).get_current_heads()))

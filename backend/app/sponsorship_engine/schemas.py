@@ -143,3 +143,132 @@ class SponsorshipPlacementView(BaseModel):
 
 class SponsorshipPlacementResponse(BaseModel):
     placements: list[SponsorshipPlacementView]
+
+
+class SponsorOfferCreateRequest(BaseModel):
+    code: str = Field(min_length=2, max_length=64)
+    offer_name: str = Field(min_length=2, max_length=120)
+    sponsor_name: str = Field(min_length=2, max_length=120)
+    category: str = Field(min_length=2, max_length=64)
+    base_value_minor: int = Field(ge=0)
+    currency: str = Field(default="USD", min_length=3, max_length=12)
+    default_duration_months: int = Field(default=3, ge=1, le=24)
+    approved_surfaces_json: list[str] = Field(default_factory=list)
+    creative_url: str | None = None
+    category_enabled: bool = True
+    is_active: bool = True
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class SponsorOfferView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    code: str
+    offer_name: str
+    sponsor_name: str
+    category: str
+    base_value_minor: int
+    currency: str
+    default_duration_months: int
+    approved_surfaces_json: list[str]
+    creative_url: str | None
+    category_enabled: bool
+    is_active: bool
+    metadata_json: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class SponsorOfferRuleUpsertRequest(BaseModel):
+    min_fan_count: int = Field(default=0, ge=0)
+    min_reputation_score: int = Field(default=0, ge=0)
+    min_club_valuation: Decimal = Field(default=Decimal("0.00"), ge=0)
+    min_media_popularity: int = Field(default=0, ge=0)
+    min_competition_count: int = Field(default=0, ge=0)
+    min_rivalry_visibility: int = Field(default=0, ge=0)
+    required_prestige_tier: str | None = None
+    competition_allowlist_json: list[str] = Field(default_factory=list)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    is_active: bool = True
+
+
+class SponsorOfferRuleView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    sponsor_offer_id: str
+    min_fan_count: int
+    min_reputation_score: int
+    min_club_valuation: Decimal
+    min_media_popularity: int
+    min_competition_count: int
+    min_rivalry_visibility: int
+    required_prestige_tier: str | None
+    competition_allowlist_json: list[str]
+    metadata_json: dict[str, Any]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class ClubSponsorAssignmentRequest(BaseModel):
+    club_id: str
+    start_at: datetime | None = None
+    duration_months: int | None = Field(default=None, ge=1, le=24)
+    contract_value_minor: int | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=12)
+
+
+class ClubSponsorView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    club_id: str
+    sponsor_offer_id: str
+    contract_id: str | None
+    sponsor_name: str
+    category: str
+    status: str
+    contract_value_minor: int
+    currency: str
+    duration_months: int
+    start_at: datetime
+    end_at: datetime
+    approved_surfaces_json: list[str]
+    creative_url: str | None
+    analytics_json: dict[str, Any]
+    metadata_json: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class SponsorEligibilityMetricsView(BaseModel):
+    club_id: str
+    fan_count: int
+    reputation_score: int
+    prestige_tier: str
+    club_valuation: float
+    media_popularity: int
+    competition_count: int
+    rivalry_visibility: int
+
+
+class SponsorEligibilityView(BaseModel):
+    offer: SponsorOfferView
+    club_metrics: SponsorEligibilityMetricsView
+    eligible: bool
+    unmet_rules: list[str]
+
+
+class SponsorCategoryToggleRequest(BaseModel):
+    enabled: bool
+
+
+class SponsorshipOfferAnalyticsView(BaseModel):
+    offer_count: int
+    active_offer_count: int
+    assignment_count: int
+    active_sponsor_count: int
+    render_event_count: int
+    placements_by_surface: dict[str, int]

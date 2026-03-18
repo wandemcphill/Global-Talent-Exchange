@@ -31,7 +31,20 @@ def _map_calendar_rule(item) -> AdminCalendarRuleView:
 
 
 def _map_reward_rule(item) -> AdminRewardRuleView:
-    return AdminRewardRuleView.model_validate(item, from_attributes=True)
+    return AdminRewardRuleView(
+        id=item.id,
+        rule_key=item.rule_key,
+        title=item.title,
+        description=item.description,
+        trading_fee_bps=item.trading_fee_bps,
+        gift_platform_rake_bps=item.gift_platform_rake_bps,
+        withdrawal_fee_bps=item.withdrawal_fee_bps,
+        minimum_withdrawal_fee_credits=item.minimum_withdrawal_fee_credits,
+        competition_platform_fee_bps=item.competition_platform_fee_bps,
+        stability_controls=AdminEngineService.normalize_stability_controls(item.stability_controls_json),
+        active=item.active,
+        updated_at=item.updated_at,
+    )
 
 
 @router.get("/bootstrap", response_model=CompetitionScheduleBootstrapView)

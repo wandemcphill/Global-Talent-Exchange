@@ -50,6 +50,7 @@ class AdminRewardRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     withdrawal_fee_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=1000, server_default="1000")
     minimum_withdrawal_fee_credits: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False, default=5, server_default="5.0000")
     competition_platform_fee_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=1000, server_default="1000")
+    stability_controls_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     updated_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

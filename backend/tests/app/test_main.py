@@ -104,6 +104,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/admin/config/supply-tiers" in paths
     assert "/admin/config/liquidity-bands" in paths
     assert "/admin/config/suspicion-thresholds" in paths
+    assert "/admin/config/player-card-market-integrity" in paths
     assert "/admin/config/value-controls" in paths
     assert "/wallets/accounts" in paths
     assert "/wallets/payment-events" in paths
@@ -160,6 +161,13 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/clubs/{club_id}/eras" in paths
     assert "/api/leaderboards/dynasties" in paths
     assert "/api/clubs/{club_id}/identity" in paths
+    assert "/api/clubs/{club_id}/valuation" in paths
+    assert "/api/clubs/sale-market/listings" in paths
+    assert "/api/clubs/{club_id}/sale-market" in paths
+    assert "/api/clubs/{club_id}/sale-market/listing" in paths
+    assert "/api/clubs/{club_id}/sale-market/inquiries" in paths
+    assert "/api/clubs/{club_id}/sale-market/offers" in paths
+    assert "/api/clubs/{club_id}/sale-market/transfer" in paths
     assert "/api/clubs/{club_id}/jerseys" in paths
     assert "/api/clubs/{club_id}/badge" in paths
     assert "/api/creators/profile" in paths

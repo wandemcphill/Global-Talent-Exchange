@@ -192,7 +192,8 @@ class CompetitionFixtureService:
         clubs = [participant.club_id for participant in sorted(participants, key=lambda item: item.seed or 9999)]
         if len(clubs) <= 1:
             return FixtureBuildResult(rounds=[], matches=[], playoffs=[])
-        bracket_size = rule_set.knockout_bracket_size or self._next_power_of_two(len(clubs))
+        configured_bracket_size = rule_set.knockout_bracket_size or self._next_power_of_two(len(clubs))
+        bracket_size = configured_bracket_size if round_number <= 1 else self._next_power_of_two(len(clubs))
         pairings = self._knockout_pairings(clubs, bracket_size)
 
         round_slots = self._round_slots(competition.id, round_number, schedule_plan)

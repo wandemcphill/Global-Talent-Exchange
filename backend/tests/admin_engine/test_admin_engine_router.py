@@ -46,11 +46,24 @@ def test_admin_can_upsert_feature_flag_and_reward_rule(client) -> None:
             "withdrawal_fee_bps": 1000,
             "minimum_withdrawal_fee_credits": "5.0000",
             "competition_platform_fee_bps": 1200,
+            "stability_controls": {
+                "creator_match_gift": {
+                    "max_amount": "80.0000",
+                    "daily_sender_limit": "400.0000",
+                    "daily_recipient_limit": "900.0000",
+                    "daily_pair_limit": "160.0000",
+                    "cooldown_seconds": 5,
+                    "burst_window_seconds": 60,
+                    "burst_max_count": 4,
+                    "review_threshold_bps": 8000,
+                }
+            },
             "active": True,
         },
     )
     assert reward_response.status_code == 200, reward_response.text
     assert reward_response.json()["competition_platform_fee_bps"] == 1200
+    assert reward_response.json()["stability_controls"]["creator_match_gift"]["max_amount"] == "80.0000"
 
 
 def test_admin_schedule_preview_pauses_league_on_world_cup_date(client) -> None:

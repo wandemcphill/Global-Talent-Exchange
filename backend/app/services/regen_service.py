@@ -469,7 +469,12 @@ class RegenGenerationEngine:
             rng=rng,
             lineage_selection=lineage_selection,
         )
+        customization = self._owner_customization(lineage_selection)
+        if customization.get("name"):
+            display_name = self._apply_custom_name(str(customization["name"]), used_names, rng)
         primary_position = rng.choice(_PRIMARY_POSITIONS)
+        if customization.get("position"):
+            primary_position = str(customization["position"])
         secondary_pool = _SECONDARY_POSITIONS[primary_position]
         secondary_positions = () if not secondary_pool else (secondary_pool[rng.randrange(len(secondary_pool))],)
         current_ability, potential = (
@@ -508,6 +513,8 @@ class RegenGenerationEngine:
                 "related_legend_type": lineage_selection.related_legend_type,
                 "related_legend_ref_id": lineage_selection.related_legend_ref_id,
                 "lineage_country_code": lineage_selection.lineage_country_code,
+                "lineage_region_name": lineage_selection.lineage_region_name,
+                "lineage_city_name": lineage_selection.lineage_city_name,
                 "lineage_hometown_code": lineage_selection.lineage_hometown_code,
                 "lineage_tier": lineage_selection.lineage_tier,
                 "is_owner_son": lineage_selection.is_owner_son,
@@ -519,6 +526,8 @@ class RegenGenerationEngine:
             }
             if lineage_selection.metadata:
                 lineage_metadata.update(lineage_selection.metadata)
+            if customization:
+                lineage_metadata["customization"] = dict(customization)
             relationship_tags = list(lineage_selection.tags)
         metadata = {
             "decision_traits": decision_traits,
@@ -535,6 +544,8 @@ class RegenGenerationEngine:
                 "kit_style": _KIT_STYLES[int(visual_seed[2], 16) % len(_KIT_STYLES)],
             },
         }
+        if customization.get("hairstyle"):
+            metadata["visual_profile"]["hair_profile"] = str(customization["hairstyle"])
         if lineage_metadata:
             metadata["lineage"] = lineage_metadata
         if relationship_tags:
@@ -878,6 +889,69 @@ class RegenGenerationEngine:
             tags=("hometown_hero", "lineage"),
             metadata={"hometown_code": hometown_code},
         )
+
+    def _owner_customization(self, lineage_selection: LineageSelection | None) -> dict[str, object]:
+        if lineage_selection is None or not lineage_selection.is_owner_son:
+            return {}
+        metadata = lineage_selection.metadata or {}
+        if not isinstance(metadata, dict):
+            return {}
+        if not metadata.get("paid_request"):
+            return {}
+        customization = metadata.get("customization")
+        if not isinstance(customization, dict):
+            return {}
+        return self._sanitize_owner_customization(customization)
+
+    @staticmethod
+    def _sanitize_owner_customization(customization: dict[str, object]) -> dict[str, object]:
+        sanitized: dict[str, object] = {}
+        raw_name = customization.get("name")
+        if isinstance(raw_name, str):
+            trimmed = " ".join(raw_name.split())
+            if trimmed:
+                sanitized["name"] = trimmed
+        raw_position = customization.get("position")
+        if isinstance(raw_position, str):
+            position = raw_position.strip().upper()
+            if position in _PRIMARY_POSITIONS:
+                sanitized["position"] = position
+        raw_foot = customization.get("favorite_foot")
+        if isinstance(raw_foot, str):
+            foot = raw_foot.strip().lower()
+            if foot in {"left", "right", "both"}:
+                sanitized["favorite_foot"] = foot
+        raw_height = customization.get("height_cm")
+        if raw_height is not None:
+            try:
+                height_cm = int(raw_height)
+            except (TypeError, ValueError):
+                height_cm = None
+            if height_cm is not None and 145 <= height_cm <= 210:
+                sanitized["height_cm"] = height_cm
+        raw_hairstyle = customization.get("hairstyle")
+        if isinstance(raw_hairstyle, str):
+            hairstyle = raw_hairstyle.strip().lower()
+            if hairstyle in _HAIR_PROFILES:
+                sanitized["hairstyle"] = hairstyle
+        return sanitized
+
+    @staticmethod
+    def _apply_custom_name(name: str, used_names: set[str], rng: random.Random) -> str:
+        desired = " ".join(name.split())
+        if not desired:
+            return name
+        if desired not in used_names:
+            used_names.add(desired)
+            return desired
+        for _ in range(20):
+            candidate = f"{desired} {rng.randint(2, 99)}"
+            if candidate not in used_names:
+                used_names.add(candidate)
+                return candidate
+        candidate = f"{desired} {rng.randint(100, 999)}"
+        used_names.add(candidate)
+        return candidate
 
     @staticmethod
     def _adjust_range(base: AbilityRangeView, rng: random.Random, *, min_value: int = 30, max_value: int = 99) -> AbilityRangeView:

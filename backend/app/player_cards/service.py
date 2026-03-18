@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.admin_engine.service import AdminEngineService
 from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from backend.app.football_events_engine.service import RealWorldFootballEventService
 from backend.app.ingestion.models import MarketSignal, Player
 from backend.app.integrity_engine.service import IntegrityEngineService
 from backend.app.models.base import generate_uuid
@@ -124,6 +125,7 @@ class PlayerCardMarketService:
         player = self.session.get(Player, player_id)
         if player is None:
             raise PlayerCardNotFoundError("Player was not found.")
+        real_world_impact = RealWorldFootballEventService(self.session).get_player_impact(player.id)
 
         tiers = {tier.id: tier for tier in self.session.scalars(select(PlayerCardTier)).all()}
         cards = list(self.session.scalars(select(PlayerCard).where(PlayerCard.player_id == player.id)).all())
@@ -167,6 +169,11 @@ class PlayerCardMarketService:
             "momentum": self._momentum_payload(momentum) if momentum else None,
             "latest_stats_snapshot": self._stats_payload(latest_stats) if latest_stats else None,
             "latest_market_snapshot": self._market_snapshot_payload(latest_market_snapshot) if latest_market_snapshot else None,
+            "real_world_flags": [self._trending_flag_payload(flag) for flag in real_world_impact.active_flags],
+            "real_world_form_modifiers": [self._player_form_modifier_payload(item) for item in real_world_impact.active_form_modifiers],
+            "demand_signals": [self._demand_signal_payload(item) for item in real_world_impact.active_demand_signals],
+            "recommendation_priority_delta": real_world_impact.recommendation_priority_delta,
+            "market_buzz_score": real_world_impact.market_buzz_score,
         }
     def list_inventory(self, *, actor: User) -> list[dict[str, object]]:
         stmt = (
@@ -293,9 +300,9 @@ class PlayerCardMarketService:
         if self._settlement_exists(settlement_reference):
             raise PlayerCardMarketError("This sale has already been settled.")
 
-        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
-        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.COIN)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
+        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
+        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.CREDIT)
+        platform_account = self.wallet_service.ensure_platform_burn_account(self.session, LedgerUnit.CREDIT)
         self.wallet_service.append_transaction(
             self.session,
             postings=[
@@ -347,8 +354,8 @@ class PlayerCardMarketService:
         self._record_market_signal(card.player_id, sale, actor, seller)
         self._record_market_snapshot(card.player_id)
         self._update_momentum(card.player_id)
-        self._run_integrity_checks(card, sale)
         self.session.flush()
+        self._run_integrity_checks(card, sale)
 
         self._publish_event(
             "player_card.sale.completed",
@@ -823,6 +830,59 @@ class PlayerCardMarketService:
             "expires_at": buff.expires_at,
             "source": buff.source,
             "metadata_json": buff.metadata_json,
+        }
+
+    def _trending_flag_payload(self, flag) -> dict[str, object]:
+        return {
+            "id": flag.id,
+            "player_id": flag.player_id,
+            "event_id": flag.event_id,
+            "flag_type": flag.flag_type,
+            "flag_label": flag.flag_label,
+            "trend_score": float(flag.trend_score),
+            "priority": flag.priority,
+            "status": flag.status,
+            "started_at": flag.started_at,
+            "expires_at": flag.expires_at,
+            "source": flag.source,
+            "metadata_json": flag.metadata_json,
+        }
+
+    def _player_form_modifier_payload(self, modifier) -> dict[str, object]:
+        return {
+            "id": modifier.id,
+            "player_id": modifier.player_id,
+            "event_id": modifier.event_id,
+            "modifier_type": modifier.modifier_type,
+            "modifier_label": modifier.modifier_label,
+            "modifier_score": float(modifier.modifier_score),
+            "gameplay_effect_value": float(modifier.gameplay_effect_value),
+            "market_effect_value": float(modifier.market_effect_value),
+            "recommendation_effect_value": float(modifier.recommendation_effect_value),
+            "visible_to_users": modifier.visible_to_users,
+            "status": modifier.status,
+            "started_at": modifier.started_at,
+            "expires_at": modifier.expires_at,
+            "source": modifier.source,
+            "metadata_json": modifier.metadata_json,
+        }
+
+    def _demand_signal_payload(self, signal) -> dict[str, object]:
+        return {
+            "id": signal.id,
+            "player_id": signal.player_id,
+            "event_id": signal.event_id,
+            "signal_type": signal.signal_type,
+            "signal_label": signal.signal_label,
+            "demand_score": float(signal.demand_score),
+            "scouting_interest_delta": float(signal.scouting_interest_delta),
+            "recommendation_priority_delta": float(signal.recommendation_priority_delta),
+            "market_buzz_score": float(signal.market_buzz_score),
+            "status": signal.status,
+            "started_at": signal.started_at,
+            "expires_at": signal.expires_at,
+            "source": signal.source,
+            "metadata_json": signal.metadata_json,
         }
 
     def _momentum_payload(self, momentum: PlayerCardMomentum) -> dict[str, object]:

@@ -276,6 +276,25 @@ class RegenBootstrapService:
                 )
             )
             lineage_payload = generated.metadata.get("lineage") if isinstance(generated.metadata, dict) else None
+            customization_payload = (
+                lineage_payload.get("customization")
+                if isinstance(lineage_payload, dict)
+                else None
+            )
+            if isinstance(customization_payload, dict):
+                raw_foot = customization_payload.get("favorite_foot")
+                if isinstance(raw_foot, str):
+                    normalized_foot = raw_foot.strip().lower()
+                    if normalized_foot in {"left", "right", "both"}:
+                        player.preferred_foot = normalized_foot
+                raw_height = customization_payload.get("height_cm")
+                if raw_height is not None:
+                    try:
+                        height_cm = int(raw_height)
+                    except (TypeError, ValueError):
+                        height_cm = None
+                    if height_cm is not None and 145 <= height_cm <= 210:
+                        player.height_cm = height_cm
             if lineage_payload:
                 self.session.add(
                     RegenLineageProfile(

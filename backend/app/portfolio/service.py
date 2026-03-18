@@ -162,6 +162,10 @@ class PortfolioService:
         return self.build_for_user(session, user).summary
 
     def _load_settled_executions(self, session: Session, user: User) -> list[SettledExecution]:
+        user_cash_account_codes = {
+            f"user:{user.id}:credit",
+            f"user:{user.id}:coin",
+        }
         rows = session.execute(
             select(LedgerEntry, LedgerAccount)
             .join(LedgerAccount, LedgerAccount.id == LedgerEntry.account_id)
@@ -170,7 +174,7 @@ class PortfolioService:
                 LedgerEntry.external_reference.is_not(None),
                 or_(
                     LedgerAccount.code.like(f"position:{user.id}:%"),
-                    LedgerAccount.code.like(f"user:{user.id}:credit%"),
+                    LedgerAccount.code.in_(user_cash_account_codes),
                 ),
             )
             .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
@@ -191,7 +195,7 @@ class PortfolioService:
                 if account.code.startswith("position:"):
                     asset_entry = entry
                     asset_account = account
-                elif account.code.startswith(f"user:{user.id}:credit"):
+                elif account.code in user_cash_account_codes:
                     cash_entry = entry
 
             if asset_entry is None or asset_account is None or cash_entry is None:

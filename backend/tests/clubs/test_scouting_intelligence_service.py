@@ -6,7 +6,13 @@ from sqlalchemy import select
 
 from backend.app.ingestion.models import Player
 from backend.app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
-from backend.app.models.scouting_intelligence import HiddenPotentialEstimate, ScoutMission, ScoutingNetwork, TalentDiscoveryBadge
+from backend.app.models.scouting_intelligence import (
+    HiddenPotentialEstimate,
+    ScoutMission,
+    ScoutReport,
+    ScoutingNetwork,
+    TalentDiscoveryBadge,
+)
 from backend.app.schemas.club_requests import ClubCreateRequest
 from backend.app.services.club_branding_service import ClubBrandingService
 from backend.app.services.scouting_intelligence_service import (
@@ -210,6 +216,71 @@ def test_scout_mission_execution_persists_reports_and_hidden_potential(session) 
     assert session.scalar(select(ScoutMission).where(ScoutMission.id == mission.id)).status == "completed"
 
 
+def test_scout_mission_completion_is_idempotent(session) -> None:
+    club = _create_club(session, slug="thread-a-idempotent")
+    regen = _starter_regens(session, club.id)[0]
+    regen.birth_region = "lagos"
+    regen.birth_city = "lagos"
+    _set_profile_window(
+        session,
+        regen,
+        age=18,
+        current_min=68,
+        current_max=72,
+        potential_min=88,
+        potential_max=93,
+        position="ST",
+    )
+    service = ScoutingIntelligenceService(session)
+    manager = service.upsert_manager_profile(
+        ManagerProfileUpsert(
+            club_id=club.id,
+            manager_code="mgr-balance",
+            manager_name="Chief Scout",
+            persona_code="balanced",
+        )
+    )
+    network = service.create_network(
+        ScoutingNetworkCreate(
+            club_id=club.id,
+            manager_profile_id=manager.id,
+            network_name="Retry Safe Radar",
+            region_code="ng",
+            region_name="Nigeria",
+            specialty_code="wonderkid",
+            quality_tier="advanced",
+            weekly_cost_coin=950,
+        )
+    )
+    mission = service.create_mission(
+        ScoutMissionCreate(
+            club_id=club.id,
+            network_id=network.id,
+            manager_profile_id=manager.id,
+            mission_name="Retry once",
+            mission_type="deep_talent_search",
+            target_position="ST",
+            target_region="lagos",
+            target_age_max=20,
+            talent_type="wonderkid",
+        )
+    )
+
+    first_completion = service.complete_mission(mission.id, limit=1)
+    second_completion = service.complete_mission(mission.id, limit=1)
+
+    persisted_reports = session.scalars(
+        select(ScoutReport).where(ScoutReport.mission_id == mission.id).order_by(ScoutReport.created_at.asc())
+    ).all()
+    persisted_estimates = session.scalars(
+        select(HiddenPotentialEstimate).where(HiddenPotentialEstimate.mission_id == mission.id)
+    ).all()
+
+    assert first_completion.reports[0].id == second_completion.reports[0].id
+    assert len(persisted_reports) == 1
+    assert len(persisted_estimates) == 1
+
+
 def test_hidden_potential_uncertainty_and_accuracy_improve_with_better_scouts(session) -> None:
     club = _create_club(session, slug="thread-a-uncertainty")
     regen = _starter_regens(session, club.id)[0]
@@ -223,6 +294,9 @@ def test_hidden_potential_uncertainty_and_accuracy_improve_with_better_scouts(se
         potential_max=94,
         position="ST",
     )
+    # Scout report accuracy is seeded from the regen public id; pin it so this comparison stays deterministic.
+    regen.regen_id = "rgn-thread-a-scout-seed"
+    session.flush()
     service = ScoutingIntelligenceService(session)
     manager = service.upsert_manager_profile(
         ManagerProfileUpsert(

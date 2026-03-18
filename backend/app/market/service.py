@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
+from backend.app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
 from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.market.models import (
     Listing,
@@ -809,6 +810,10 @@ class MarketPlayerTrendProfile:
     previous_global_scouting_index: float | None
     global_scouting_index_movement_pct: float | None
     drivers: tuple[str, ...]
+    active_real_world_flags: tuple[str, ...] = ()
+    recommendation_priority_delta: float = 0.0
+    market_buzz_score: float = 0.0
+    temporary_form_boost: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -849,6 +854,7 @@ class MarketPlayerQueryService:
     repository: SqlAlchemyMarketPlayerRepository | None = None
     market_engine: MarketEngine | None = None
     today: date | None = None
+    _real_world_impact_cache: dict[str, PlayerRealWorldImpact] = field(init=False, default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if self.repository is None:
@@ -915,6 +921,7 @@ class MarketPlayerQueryService:
         player = record.player
         summary_payload = self._summary_payload(record)
         breakdown_payload = self._breakdown_payload(record)
+        real_world_impact = self._real_world_impact(player.id)
 
         return MarketPlayerDetail(
             player_id=player.id,
@@ -988,6 +995,10 @@ class MarketPlayerQueryService:
                 previous_global_scouting_index=self._previous_global_scouting_index(record),
                 global_scouting_index_movement_pct=self._global_scouting_index_movement_pct(record),
                 drivers=self._drivers(record),
+                active_real_world_flags=real_world_impact.active_flag_codes,
+                recommendation_priority_delta=real_world_impact.recommendation_priority_delta,
+                market_buzz_score=real_world_impact.market_buzz_score,
+                temporary_form_boost=real_world_impact.gameplay_effect_total,
             ),
         )
 
@@ -1405,6 +1416,7 @@ class MarketPlayerQueryService:
         market_interest = float(record.summary.market_interest_score) if record.summary is not None else 0.0
         discovery_trend = self._trend_score(record) or 0.0
         book_signal = float(snapshot.best_bid is not None) + float(snapshot.best_ask is not None)
+        real_world_impact = self._real_world_impact(record.player.id)
         return round(
             (snapshot.volume_24h * 5.0)
             + abs(snapshot.day_change_percent)
@@ -1412,7 +1424,21 @@ class MarketPlayerQueryService:
             + (discovery_trend / 10.0)
             + book_signal,
             4,
+        ) + round(
+            (len(real_world_impact.active_flag_codes) * 2.0)
+            + max(real_world_impact.market_buzz_score, 0.0)
+            + max(real_world_impact.recommendation_priority_delta, 0.0)
+            + max(real_world_impact.market_effect_total, 0.0),
+            4,
         )
+
+    def _real_world_impact(self, player_id: str) -> PlayerRealWorldImpact:
+        cached = self._real_world_impact_cache.get(player_id)
+        if cached is not None:
+            return cached
+        impact = RealWorldFootballEventService(self.session).get_player_impact(player_id)
+        self._real_world_impact_cache[player_id] = impact
+        return impact
 
     def _supply_tier_payload(self, record: MarketPlayerRecord) -> dict[str, Any] | None:
         summary_payload = self._summary_payload(record)

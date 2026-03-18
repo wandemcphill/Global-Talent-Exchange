@@ -160,7 +160,7 @@ def test_sale_execution_fee_and_owner_history(session):
 
     seller_account = wallet.get_user_account(session, seller, LedgerUnit.CREDIT)
     buyer_account = wallet.get_user_account(session, buyer, LedgerUnit.CREDIT)
-    platform_account = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+    platform_account = wallet.ensure_platform_burn_account(session, LedgerUnit.CREDIT)
 
     seller_balance = wallet.get_balance(session, seller_account)
     buyer_balance = wallet.get_balance(session, buyer_account)

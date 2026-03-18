@@ -12,6 +12,7 @@ from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
 from backend.app.common.enums.sponsorship_surface import SponsorshipSurface
 from backend.app.common.enums.sponsorship_status import SponsorshipStatus
 from backend.app.core.config import Settings, SponsorshipCampaignConfig
+from backend.app.models.club_sponsor import ClubSponsor
 from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
 
 
@@ -58,11 +59,14 @@ class SponsorshipPlacementService:
         surfaces: tuple[str, ...] | None = None,
     ) -> list[SponsorshipPlacement]:
         requested_surfaces = surfaces or self.settings.sponsorship_inventory.surfaces
-        contracts = self._load_active_contracts(tuple(filter(None, (home_club_id, away_club_id))))
+        club_ids = tuple(filter(None, (home_club_id, away_club_id)))
+        club_sponsors = self._load_active_club_sponsors(club_ids)
+        contracts = self._load_active_contracts(club_ids)
         placements: list[SponsorshipPlacement] = []
         for surface in requested_surfaces:
             placement = self._resolve_surface(
                 surface=surface,
+                club_sponsors=club_sponsors,
                 contracts=contracts,
                 competition_id=competition_id,
                 stage_name=stage_name,
@@ -76,12 +80,25 @@ class SponsorshipPlacementService:
         self,
         *,
         surface: str,
+        club_sponsors: dict[str, ClubSponsor],
         contracts: dict[SponsorshipSurface, ClubSponsorshipContract],
         competition_id: str | None,
         stage_name: str | None,
         region_code: str | None,
     ) -> SponsorshipPlacement:
         surface_enum = SponsorshipSurface(surface)
+        sponsor = club_sponsors.get(surface_enum.value)
+        if sponsor is not None:
+            return SponsorshipPlacement(
+                surface=surface_enum.value,
+                sponsor_name=sponsor.sponsor_name,
+                campaign_code=f"club-sponsor:{sponsor.id}",
+                source="club_sponsor",
+                asset_type=sponsor.category,
+                creative_url=sponsor.creative_url,
+                fallback=False,
+                metadata={"club_id": sponsor.club_id, "club_sponsor_id": sponsor.id, "offer_id": sponsor.sponsor_offer_id},
+            )
         contract = contracts.get(surface_enum)
         if contract is not None:
             return SponsorshipPlacement(
@@ -135,6 +152,25 @@ class SponsorshipPlacementService:
                     resolved[surface] = contract
         return resolved
 
+    def _load_active_club_sponsors(self, club_ids: tuple[str, ...]) -> dict[str, ClubSponsor]:
+        if not club_ids:
+            return {}
+        now = _utcnow()
+        rows = self.session.scalars(
+            select(ClubSponsor).where(
+                ClubSponsor.club_id.in_(club_ids),
+                ClubSponsor.status == "active",
+                ClubSponsor.start_at <= now,
+                ClubSponsor.end_at >= now,
+            )
+        ).all()
+        resolved: dict[str, ClubSponsor] = {}
+        for sponsor in sorted(rows, key=lambda item: item.contract_value_minor, reverse=True):
+            for surface in sponsor.approved_surfaces_json or ():
+                if surface not in resolved:
+                    resolved[str(surface)] = sponsor
+        return resolved
+
     def _select_campaign(
         self,
         *,
@@ -184,7 +220,7 @@ class SponsorshipPlacementService:
             return
         self.analytics.track_event(
             self.session,
-            name="sponsorship.placement.selected",
+            name="club_sponsor.rendered" if placement.source == "club_sponsor" else "sponsorship.placement.selected",
             user_id=None,
             metadata={
                 "surface": placement.surface,

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.admin_engine.service import AdminEngineService
 from backend.app.economy.service import EconomyConfigService
-from backend.app.models.base import utcnow
+from backend.app.models.base import generate_uuid, utcnow
 from backend.app.models.economy_burn_event import EconomyBurnEvent
 from backend.app.models.economy_config import GiftCatalogItem
 from backend.app.models.gift_combo_event import GiftComboEvent
@@ -18,13 +18,17 @@ from backend.app.models.gift_transaction import GiftTransaction
 from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from backend.app.models.user import User
 from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from backend.app.services.spending_control_service import SpendingControlService, SpendingControlViolation
 from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal('0.0001')
 
 
 class GiftEngineError(ValueError):
-    pass
+    def __init__(self, detail: str, *, reason: str | None = None) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.reason = reason or detail
 
 
 @dataclass(slots=True)
@@ -161,6 +165,25 @@ class GiftEngineService:
             unit_label = "FanCoin" if ledger_unit == LedgerUnit.CREDIT else "market balance"
             raise InsufficientBalanceError(f"Available {unit_label} balance is lower than the gift total.")
 
+        control_reference = f"gift-control:{gift.key}:{sender.id}:{recipient.id}:{generate_uuid()}"
+        try:
+            control_evaluation = SpendingControlService(self.session).evaluate_gift(
+                event_type="gift_send",
+                control_scope=f"{normalized_scope}_gift",
+                reference_key=control_reference,
+                amount=gross_amount,
+                ledger_unit=ledger_unit,
+                actor_user_id=sender.id,
+                target_user_id=recipient.id,
+                metadata_json={
+                    "gift_key": gift.key,
+                    "quantity": str(normalized_quantity),
+                    "source_scope": normalized_scope,
+                },
+            )
+        except SpendingControlViolation as exc:
+            raise GiftEngineError(exc.detail, reason="spending_controls_blocked") from exc
+
         postings = [
             LedgerPosting(account=sender_account, amount=-gross_amount, source_tag=income_tag),
             LedgerPosting(account=recipient_account, amount=recipient_net, source_tag=income_tag),
@@ -196,6 +219,15 @@ class GiftEngineService:
         )
         self.session.add(transaction)
         self.session.flush()
+        SpendingControlService(self.session).record_evaluation(
+            control_evaluation,
+            entity_id=transaction.id,
+            ledger_transaction_id=entries[0].transaction_id if entries else None,
+            metadata_json={
+                "gift_transaction_id": transaction.id,
+                "combo_rule_key": combo_rule.rule_key if combo_rule is not None else None,
+            },
+        )
         if burn_amount > Decimal("0.0000"):
             burn_event = EconomyBurnEvent(
                 user_id=sender.id,

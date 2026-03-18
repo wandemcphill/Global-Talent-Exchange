@@ -7,9 +7,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
+from backend.app.admin_engine.schemas import AdminRewardRuleStabilityControls
 from backend.app.auth.service import AuthService
-from backend.app.gift_engine.service import GiftEngineService
+from backend.app.gift_engine.service import GiftEngineError, GiftEngineService
 from backend.app.models import (
+    AdminRewardRule,
     Base,
     GiftCatalogItem,
     GiftComboEvent,
@@ -18,6 +20,8 @@ from backend.app.models import (
     LedgerEntryReason,
     LedgerUnit,
     RevenueShareRule,
+    SpendingControlAuditEvent,
+    SpendingControlDecision,
 )
 from backend.app.wallets.service import LedgerPosting, WalletService
 
@@ -127,3 +131,93 @@ def test_gift_combo_applies_bonus(session) -> None:
     refreshed = session.get(GiftTransaction, second_tx.id)
     assert refreshed is not None
     assert refreshed.recipient_net_amount == Decimal("75.0000")
+
+
+def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> None:
+    sender = _create_user(session, email="spender@example.com", username="spender")
+    recipient = _create_user(session, email="receiver@example.com", username="receiver")
+
+    session.add(
+        GiftCatalogItem(
+            key="flare",
+            display_name="Flare",
+            fancoin_price=Decimal("130.0000"),
+            active=True,
+        )
+    )
+    session.add(
+        AdminRewardRule(
+            rule_key="tight-gift-controls",
+            title="Tight Gift Controls",
+            description="Limit rapid high-value user hosted gifts.",
+            trading_fee_bps=2000,
+            gift_platform_rake_bps=3000,
+            withdrawal_fee_bps=1000,
+            minimum_withdrawal_fee_credits=Decimal("5.0000"),
+            competition_platform_fee_bps=1000,
+            stability_controls_json=AdminRewardRuleStabilityControls(
+                user_hosted_gift={
+                    "max_amount": "200.0000",
+                    "daily_sender_limit": "150.0000",
+                    "daily_recipient_limit": "500.0000",
+                    "daily_pair_limit": "150.0000",
+                    "cooldown_seconds": 0,
+                    "burst_window_seconds": 300,
+                    "burst_max_count": 5,
+                    "review_threshold_bps": 8000,
+                }
+            ).model_dump(mode="json"),
+            active=True,
+        )
+    )
+    session.commit()
+
+    wallet_service = WalletService()
+    sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.CREDIT)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=sender_account, amount=Decimal("400.0000")),
+            LedgerPosting(account=platform_account, amount=Decimal("-400.0000")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-tight-gifts",
+        actor=sender,
+    )
+    session.commit()
+
+    service = GiftEngineService(session)
+    first_tx = service.send_gift(
+        sender=sender,
+        recipient_user_id=recipient.id,
+        gift_key="flare",
+        quantity=Decimal("1.0000"),
+    )
+    session.commit()
+
+    with pytest.raises(GiftEngineError, match="daily sender limit"):
+        service.send_gift(
+            sender=sender,
+            recipient_user_id=recipient.id,
+            gift_key="flare",
+            quantity=Decimal("0.2000"),
+        )
+
+    audits = session.scalars(
+        select(SpendingControlAuditEvent)
+        .where(SpendingControlAuditEvent.entity_id == first_tx.id)
+        .order_by(SpendingControlAuditEvent.created_at.asc())
+    ).all()
+    assert len(audits) == 1
+    assert audits[0].decision == SpendingControlDecision.REVIEW
+    assert audits[0].primary_reason_code == "daily_sender_limit_near"
+
+    blocked = session.scalar(
+        select(SpendingControlAuditEvent)
+        .where(SpendingControlAuditEvent.decision == SpendingControlDecision.BLOCKED)
+        .order_by(SpendingControlAuditEvent.created_at.desc())
+    )
+    assert blocked is not None
+    assert blocked.control_scope == "user_hosted_gift"
+    assert blocked.primary_reason_code == "daily_sender_limit_exceeded"

@@ -4,6 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from backend.app.competitions.creator_league_router import router as creator_league_router
 from backend.app.common.enums.competition_format import CompetitionFormat
 from backend.app.schemas.competition_lifecycle import (
     CompetitionAdvanceRequest,
@@ -43,6 +44,7 @@ from backend.app.services.competition_orchestrator import (
 )
 
 router = APIRouter(prefix="/api/competitions", tags=["competitions"])
+router.include_router(creator_league_router)
 
 
 @router.post("", response_model=CompetitionSummaryView, status_code=status.HTTP_201_CREATED)

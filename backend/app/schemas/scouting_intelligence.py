@@ -22,6 +22,14 @@ class ManagerScoutingProfileView(CommonSchema):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class ManagerScoutingProfileUpsertRequest(CommonSchema):
+    manager_code: str = Field(min_length=2, max_length=64)
+    manager_name: str = Field(min_length=2, max_length=160)
+    persona_code: str = Field(min_length=2, max_length=48)
+    preferred_system: str | None = Field(default=None, max_length=64)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 class ScoutingNetworkView(CommonSchema):
     id: str
     club_id: str
@@ -39,6 +47,19 @@ class ScoutingNetworkView(CommonSchema):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class ScoutingNetworkCreateRequest(CommonSchema):
+    manager_profile_id: str | None = Field(default=None, min_length=1, max_length=36)
+    network_name: str = Field(min_length=2, max_length=160)
+    region_code: str = Field(min_length=2, max_length=64)
+    region_name: str = Field(min_length=2, max_length=160)
+    specialty_code: str = Field(min_length=2, max_length=64)
+    quality_tier: str = Field(min_length=2, max_length=32)
+    weekly_cost_coin: int = Field(ge=0)
+    scout_identity: str | None = Field(default=None, max_length=120)
+    report_cadence_days: int = Field(default=7, ge=1, le=90)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 class ScoutingNetworkAssignmentView(CommonSchema):
     id: str
     network_id: str
@@ -53,6 +74,20 @@ class ScoutingNetworkAssignmentView(CommonSchema):
     starts_on: date
     ends_on: date | None = None
     status: str
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class ScoutingNetworkAssignmentCreateRequest(CommonSchema):
+    network_id: str = Field(min_length=1, max_length=36)
+    assignment_name: str = Field(min_length=2, max_length=160)
+    assignment_scope: str = Field(default="region", min_length=2, max_length=48)
+    territory_code: str | None = Field(default=None, max_length=64)
+    focus_position: str | None = Field(default=None, max_length=32)
+    age_band_min: int | None = Field(default=None, ge=0, le=60)
+    age_band_max: int | None = Field(default=None, ge=0, le=60)
+    budget_profile: str | None = Field(default=None, max_length=48)
+    starts_on: date | None = None
+    ends_on: date | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
@@ -75,6 +110,24 @@ class ScoutMissionView(CommonSchema):
     include_academy: bool
     system_profile: str | None = None
     completed_at: datetime | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class ScoutMissionCreateRequest(CommonSchema):
+    network_id: str = Field(min_length=1, max_length=36)
+    manager_profile_id: str | None = Field(default=None, min_length=1, max_length=36)
+    mission_name: str = Field(min_length=2, max_length=180)
+    mission_type: str = Field(default="standard_assignment", min_length=2, max_length=48)
+    target_position: str | None = Field(default=None, max_length=32)
+    target_region: str | None = Field(default=None, max_length=120)
+    target_age_min: int | None = Field(default=None, ge=0, le=60)
+    target_age_max: int | None = Field(default=None, ge=0, le=60)
+    budget_limit_coin: int | None = Field(default=None, ge=0)
+    affordability_tier: str | None = Field(default=None, max_length=48)
+    mission_duration_days: int | None = Field(default=None, ge=1, le=180)
+    talent_type: str = Field(default="balanced", min_length=2, max_length=48)
+    include_academy: bool = True
+    system_profile: str | None = Field(default=None, max_length=64)
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
@@ -172,15 +225,32 @@ class CompletedScoutMissionView(CommonSchema):
     awarded_badges: tuple[TalentDiscoveryBadgeView, ...] = Field(default_factory=tuple)
 
 
+class ScoutingPlanningView(CommonSchema):
+    club_id: str
+    refreshed_at: datetime
+    manager_profiles: tuple[ManagerScoutingProfileView, ...] = Field(default_factory=tuple)
+    networks: tuple[ScoutingNetworkView, ...] = Field(default_factory=tuple)
+    assignments: tuple[ScoutingNetworkAssignmentView, ...] = Field(default_factory=tuple)
+    missions: tuple[ScoutMissionView, ...] = Field(default_factory=tuple)
+    academy_supply_signals: tuple[AcademySupplySignalView, ...] = Field(default_factory=tuple)
+    lifecycle_profiles: tuple[PlayerLifecycleProfileView, ...] = Field(default_factory=tuple)
+    badges: tuple[TalentDiscoveryBadgeView, ...] = Field(default_factory=tuple)
+
+
 __all__ = [
     "AcademySupplySignalView",
     "CompletedScoutMissionView",
     "HiddenPotentialEstimateView",
+    "ManagerScoutingProfileUpsertRequest",
     "ManagerScoutingProfileView",
     "PlayerLifecycleProfileView",
+    "ScoutMissionCreateRequest",
     "ScoutMissionView",
     "ScoutReportView",
+    "ScoutingNetworkAssignmentCreateRequest",
     "ScoutingNetworkAssignmentView",
+    "ScoutingNetworkCreateRequest",
     "ScoutingNetworkView",
+    "ScoutingPlanningView",
     "TalentDiscoveryBadgeView",
 ]

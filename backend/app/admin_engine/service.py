@@ -11,6 +11,7 @@ from backend.app.admin_engine.schemas import (
     AdminCalendarRuleUpsertRequest,
     AdminFeatureFlagUpsertRequest,
     AdminRewardRuleUpsertRequest,
+    AdminRewardRuleStabilityControls,
 )
 from backend.app.competition_engine.scheduler import CompetitionScheduler
 from backend.app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
@@ -77,6 +78,7 @@ DEFAULT_REWARD_RULES: tuple[dict[str, object], ...] = (
         "withdrawal_fee_bps": 1000,
         "minimum_withdrawal_fee_credits": Decimal("5.0000"),
         "competition_platform_fee_bps": 1000,
+        "stability_controls_json": AdminRewardRuleStabilityControls().model_dump(mode="json"),
         "active": True,
     },
 )
@@ -85,6 +87,19 @@ DEFAULT_REWARD_RULES: tuple[dict[str, object], ...] = (
 @dataclass(slots=True)
 class AdminEngineService:
     session: Session
+
+    @staticmethod
+    def normalize_stability_controls(
+        payload: AdminRewardRuleStabilityControls | dict[str, object] | None = None,
+    ) -> AdminRewardRuleStabilityControls:
+        return AdminRewardRuleStabilityControls.model_validate(payload or {})
+
+    @classmethod
+    def normalize_stability_controls_payload(
+        cls,
+        payload: AdminRewardRuleStabilityControls | dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return cls.normalize_stability_controls(payload).model_dump(mode="json")
 
     def seed_defaults(self) -> None:
         self._seed_feature_flags()
@@ -159,6 +174,14 @@ class AdminEngineService:
             statement = statement.where(AdminRewardRule.active.is_(True))
         return list(self.session.scalars(statement).all())
 
+    def get_active_reward_rule(self) -> AdminRewardRule | None:
+        return next(iter(self.list_reward_rules(active_only=True)), None)
+
+    def get_active_stability_controls(self) -> AdminRewardRuleStabilityControls:
+        rule = self.get_active_reward_rule()
+        payload = None if rule is None else rule.stability_controls_json
+        return self.normalize_stability_controls(payload)
+
     def upsert_reward_rule(self, *, actor: User, payload: AdminRewardRuleUpsertRequest) -> AdminRewardRule:
         record = self.session.scalar(select(AdminRewardRule).where(AdminRewardRule.rule_key == payload.rule_key))
         if record is None:
@@ -171,6 +194,7 @@ class AdminEngineService:
         record.withdrawal_fee_bps = payload.withdrawal_fee_bps
         record.minimum_withdrawal_fee_credits = payload.minimum_withdrawal_fee_credits
         record.competition_platform_fee_bps = payload.competition_platform_fee_bps
+        record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)
         record.active = payload.active
         record.updated_by_user_id = actor.id
         self.session.flush()

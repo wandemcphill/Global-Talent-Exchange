@@ -45,9 +45,25 @@ def list_seasons(active_only: bool = Query(default=False), session: Session = De
 def list_events(
     active_only: bool = Query(default=False),
     as_of: date | None = Query(default=None),
+    source_type: str | None = Query(default=None),
+    source_id: str | None = Query(default=None),
+    family: str | None = Query(default=None),
+    visibility: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
     session: Session = Depends(get_session),
 ) -> list[CalendarEventView]:
-    return [CalendarEventView.model_validate(item, from_attributes=True) for item in CalendarEngineService(session).list_events(active_only=active_only, as_of=as_of)]
+    return [
+        CalendarEventView.model_validate(item, from_attributes=True)
+        for item in CalendarEngineService(session).list_events(
+            active_only=active_only,
+            as_of=as_of,
+            source_type=source_type,
+            source_id=source_id,
+            family=family,
+            visibility=visibility,
+            status=status_filter,
+        )
+    ]
 
 
 @router.get("/pause-status", response_model=PauseStatusView)

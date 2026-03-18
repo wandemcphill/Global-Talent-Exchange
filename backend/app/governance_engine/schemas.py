@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -93,6 +94,82 @@ class GovernanceVoteResponse(BaseModel):
     proposal: GovernanceProposalView
     vote: GovernanceVoteView
     summary: str
+
+
+class GovernanceClubPolicyView(BaseModel):
+    governance_mode: str
+    vote_weight_model: str
+    anti_takeover_enabled: bool
+    max_holder_bps: int
+    owner_approval_threshold_bps: int
+    proposal_share_threshold: int
+    quorum_share_bps: int
+    shareholder_rights_preserved_on_sale: bool
+
+
+class GovernanceClubRecentProposalView(BaseModel):
+    id: str
+    title: str
+    status: GovernanceProposalStatus
+    yes_weight: int
+    no_weight: int
+    abstain_weight: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class GovernanceClubTransferView(BaseModel):
+    transfer_id: str
+    seller_user_id: str
+    buyer_user_id: str
+    executed_sale_price: Decimal
+    created_at: datetime
+    metadata_json: dict[str, object] = Field(default_factory=dict)
+
+
+class GovernanceClubOwnershipHistoryView(BaseModel):
+    transfer_count: int
+    last_transfer_id: str | None = None
+    last_transfer_at: datetime | None = None
+    shareholder_continuity_transfers: int
+    recent_transfers: list[GovernanceClubTransferView] = Field(default_factory=list)
+
+
+class GovernanceClubDynastySnapshotView(BaseModel):
+    dynasty_score: int
+    dynasty_level: int
+    dynasty_title: str
+    seasons_completed: int
+    last_season_label: str | None = None
+    ownership_eras: int
+    shareholder_continuity_transfers: int
+    showcase_summary_json: dict[str, object] = Field(default_factory=dict)
+
+
+class GovernanceClubPanelResponse(BaseModel):
+    club_id: str
+    current_owner_user_id: str
+    market_id: str | None = None
+    market_status: str
+    governance_unit: str
+    viewer_is_owner: bool
+    viewer_share_count: int
+    viewer_vote_weight: int
+    viewer_ownership_bps: int
+    viewer_can_create_proposals: bool
+    viewer_can_vote: bool
+    viewer_eligibility_reason: str | None = None
+    viewer_owner_approval_required: bool
+    total_governance_shares: int
+    quorum_share_weight: int
+    anti_takeover_cap_share_count: int
+    shareholder_count: int
+    open_proposal_count: int
+    ownership_eras: int
+    policy: GovernanceClubPolicyView
+    recent_proposals: list[GovernanceClubRecentProposalView] = Field(default_factory=list)
+    ownership_history: GovernanceClubOwnershipHistoryView
+    dynasty_snapshot: GovernanceClubDynastySnapshotView
 
 
 class GovernanceOverviewResponse(BaseModel):

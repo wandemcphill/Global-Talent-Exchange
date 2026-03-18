@@ -1,6 +1,6 @@
 """regen lineage, awards, hall of fame, and legacy records
 
-Revision ID: 20260315_0006
+Revision ID: 20260315_0006b
 Revises: 20260315_0005
 Create Date: 2026-03-15 23:15:00.000000
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "20260315_0006"
+revision = "20260315_0006b"
 down_revision = "20260315_0005"
 branch_labels = None
 depends_on = None

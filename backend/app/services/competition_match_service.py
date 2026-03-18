@@ -50,6 +50,12 @@ class CompetitionMatchService:
         )
         self.session.add(event)
         self.session.flush()
+        try:
+            from backend.app.club_social.service import ClubSocialError, ClubSocialService
+
+            ClubSocialService(self.session).record_reaction_from_match_event(event=event)
+        except ClubSocialError:
+            pass
         return event
 
     def complete_match(
@@ -79,6 +85,18 @@ class CompetitionMatchService:
         match.completed_at = datetime.now(timezone.utc)
         self._apply_match_result(match=match, rule_set=rule_set)
         self.session.flush()
+        try:
+            from backend.app.club_social.service import ClubSocialError, ClubSocialService
+
+            ClubSocialService(self.session).record_match_outcome_from_match(match=match)
+        except ClubSocialError:
+            pass
+        try:
+            from backend.app.fan_predictions.service import FanPredictionService
+
+            FanPredictionService(self.session).attempt_match_settlement(match_id=match.id)
+        except ValueError:
+            pass
         self.event_publisher.publish(
             DomainEvent(
                 name="match_completed",

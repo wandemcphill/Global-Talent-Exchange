@@ -1,6 +1,7 @@
 # Global Talent Exchange
 
 See also:
+- `Docs/README.md`
 - `API_DOCUMENTATION.md`
 - `DEPLOYMENT_GUIDE.md`
 - `ADMIN_SETUP_GUIDE.md`
@@ -16,14 +17,30 @@ Commands below assume:
 - SQLite for local development
 - no Redis server is required for local boot
 
-This repo does not currently include a pinned dependency manifest. If you are starting from a clean virtual environment, install the runtime and test packages explicitly:
+Use the checked-in backend dependency manifest when you are starting from a clean virtual environment:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
-python -m pip install fastapi "uvicorn[standard]" sqlalchemy alembic pydantic pytest anyio redis
+python -m pip install -r backend/requirements.txt
 ```
+
+## Frontend quick start
+
+Flutter commands are run from `frontend/`. The app reads `GTE_API_BASE_URL` and `GTE_BACKEND_MODE` from `--dart-define`; `frontend/.env.example` is a reference file and is not auto-loaded by Flutter.
+
+```powershell
+cd frontend
+flutter pub get
+flutter analyze
+flutter test
+flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=liveThenFixture
+```
+
+If the Android wrapper is incomplete, regenerate it locally with `flutter create . --platforms=android`.
+
+For the full local setup, smoke-test matrix, migration freeze notes, and Android file-lock recovery steps, use the canonical docs in `Docs/`.
 
 ## Fast path
 
@@ -134,6 +151,8 @@ python backend/scripts/dev.py simulation-ticks --count 3 --start-tick 2
 If you run tick commands from a separate terminal, restart `runserver --demo-simulation` afterwards so the in-memory ticker projection replays the new database state.
 
 ## Migrations
+
+Coordination note: the current merge-lane migration head is expected to be `20260316_0008`. Parallel threads should inspect and apply migrations only; do not create or rewrite files under `backend/migrations/versions/*` unless migration work is explicitly assigned.
 
 Wrapper:
 

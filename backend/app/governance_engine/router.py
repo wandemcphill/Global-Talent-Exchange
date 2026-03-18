@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
 from backend.app.governance_engine.schemas import (
+    GovernanceClubPanelResponse,
     GovernanceOverviewResponse,
     GovernanceProposalCreateRequest,
     GovernanceProposalDetailResponse,
@@ -40,6 +41,20 @@ def list_proposals(club_id: str | None = None, session: Session = Depends(get_se
 def my_governance_overview(user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> GovernanceOverviewResponse:
     data = GovernanceEngineService(session).overview_for_user(user=user)
     return GovernanceOverviewResponse(**data)
+
+
+@router.get("/clubs/{club_id}/panel", response_model=GovernanceClubPanelResponse)
+def get_club_governance_panel(
+    club_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> GovernanceClubPanelResponse:
+    service = GovernanceEngineService(session)
+    try:
+        payload = service.build_club_panel(club_id=club_id, user=user)
+    except GovernanceEngineError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return GovernanceClubPanelResponse(**payload)
 
 
 @router.post("/proposals", response_model=GovernanceProposalView)

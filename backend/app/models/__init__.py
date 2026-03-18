@@ -8,6 +8,15 @@ from backend.app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, 
 from backend.app.models.attachment import Attachment
 from backend.app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
 from backend.app.models.base import Base
+from backend.app.models.card_access import (
+    CardLoanContract,
+    CardLoanListing,
+    CardLoanNegotiation,
+    CardMarketplaceAuditEvent,
+    CardSwapExecution,
+    CardSwapListing,
+    StarterSquadRental,
+)
 from backend.app.models.club_branding_asset import ClubBrandingAsset
 from backend.app.models.club_budget_snapshot import ClubBudgetSnapshot
 from backend.app.models.club_cashflow_summary import ClubCashflowSummary
@@ -21,7 +30,31 @@ from backend.app.models.club_infra import ClubFacility, ClubStadium, ClubSupport
 from backend.app.models.club_identity_theme import ClubIdentityTheme
 from backend.app.models.club_jersey_design import ClubJerseyDesign
 from backend.app.models.club_profile import ClubProfile
+from backend.app.models.club_sale import (
+    ClubSaleAuditEvent,
+    ClubSaleInquiry,
+    ClubSaleInquiryStatus,
+    ClubSaleListing,
+    ClubSaleListingStatus,
+    ClubSaleOffer,
+    ClubSaleOfferStatus,
+    ClubSaleTransfer,
+    ClubSaleTransferStatus,
+    ClubValuationSnapshot,
+)
 from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from backend.app.models.club_social import (
+    ChallengeShareEvent,
+    ClubChallenge,
+    ClubChallengeLink,
+    ClubChallengeResponse,
+    ClubIdentityMetrics,
+    MatchReactionEvent,
+    RivalryMatchHistory,
+    RivalryProfile,
+)
+from backend.app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
+from backend.app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
 from backend.app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
 from backend.app.models.club_sponsorship_package import ClubSponsorshipPackage
@@ -45,7 +78,68 @@ from backend.app.models.competition_seed_rule import CompetitionSeedRule
 from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
 from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
 from backend.app.models.creator_campaign import CreatorCampaign
+from backend.app.models.creator_monetization import (
+    CreatorBroadcastModeConfig,
+    CreatorBroadcastPurchase,
+    CreatorMatchGiftEvent,
+    CreatorRevenueSettlement,
+    CreatorSeasonPass,
+    CreatorStadiumControl,
+    CreatorStadiumPlacement,
+    CreatorStadiumPricing,
+    CreatorStadiumProfile,
+    CreatorStadiumTicketPurchase,
+)
+from backend.app.models.creator_share_market import (
+    CreatorClubShareDistribution,
+    CreatorClubShareHolding,
+    CreatorClubShareMarket,
+    CreatorClubShareMarketControl,
+    CreatorClubSharePayout,
+    CreatorClubSharePurchase,
+)
+from backend.app.models.creator_fan_engagement import (
+    CreatorClubFollow,
+    CreatorFanCompetition,
+    CreatorFanCompetitionEntry,
+    CreatorFanCompetitionStatus,
+    CreatorFanGroup,
+    CreatorFanGroupMembership,
+    CreatorFanWallEvent,
+    CreatorMatchChatMessage,
+    CreatorMatchChatMessageVisibility,
+    CreatorMatchChatRoom,
+    CreatorMatchChatRoomStatus,
+    CreatorMatchTacticalAdvice,
+    CreatorRivalrySignalOutput,
+    CreatorRivalrySignalStatus,
+    CreatorRivalrySignalSurface,
+    CreatorTacticalAdviceStatus,
+    CreatorTacticalAdviceType,
+)
+from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier, CreatorLeagueTier
+from backend.app.models.creator_application import CreatorApplication
+from backend.app.models.creator_card import CreatorCard, CreatorCardListing, CreatorCardLoan, CreatorCardSale, CreatorCardSwap
 from backend.app.models.creator_profile import CreatorProfile
+from backend.app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
+from backend.app.models.streamer_tournament import (
+    StreamerTournament,
+    StreamerTournamentApprovalStatus,
+    StreamerTournamentEntry,
+    StreamerTournamentEntryStatus,
+    StreamerTournamentInvite,
+    StreamerTournamentInviteStatus,
+    StreamerTournamentPolicy,
+    StreamerTournamentQualificationType,
+    StreamerTournamentReward,
+    StreamerTournamentRewardGrant,
+    StreamerTournamentRewardGrantStatus,
+    StreamerTournamentRewardType,
+    StreamerTournamentRiskSignal,
+    StreamerTournamentRiskStatus,
+    StreamerTournamentStatus,
+    StreamerTournamentType,
+)
 from backend.app.models.community_engine import CompetitionWatchlist, LiveThread, LiveThreadMessage, MessageVisibility, PrivateMessage, PrivateMessageParticipant, PrivateMessageThread, PrivateMessageThreadStatus, LiveThreadStatus
 from backend.app.models.discovery_engine import FeaturedRail, SavedSearch
 from backend.app.models.dispute import Dispute, DisputeMessage, DisputeStatus
@@ -78,6 +172,14 @@ from backend.app.models.player_cards import (
     PlayerCardWatchlist,
     PlayerStatsSnapshot,
     PlayerMarketValueSnapshot,
+)
+from backend.app.models.real_world_football import (
+    EventEffectRule,
+    EventIngestionJob,
+    PlayerDemandSignal,
+    PlayerFormModifier,
+    RealWorldFootballEvent,
+    TrendingPlayerFlag,
 )
 from backend.app.models.referral_attribution import ReferralAttribution
 from backend.app.models.referral_event import ReferralEvent
@@ -116,7 +218,28 @@ from backend.app.models.user_region import UserRegionProfile
 from backend.app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
 from backend.app.models.notification_record import NotificationRecord
 from backend.app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
+from backend.app.models.fan_prediction import (
+    FanPredictionFixture,
+    FanPredictionFixtureStatus,
+    FanPredictionLeaderboardScope,
+    FanPredictionOutcome,
+    FanPredictionRewardGrant,
+    FanPredictionRewardType,
+    FanPredictionSubmission,
+    FanPredictionSubmissionStatus,
+    FanPredictionTokenLedger,
+    FanPredictionTokenReason,
+)
+from backend.app.models.fan_war import (
+    CountryCreatorAssignment,
+    FanWarPoint,
+    FanWarProfile,
+    FanbaseRanking,
+    NationsCupEntry,
+    NationsCupFanMetric,
+)
 from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from backend.app.models.spending_control import SpendingControlAuditEvent, SpendingControlDecision
 from backend.app.models.regen import (
     AcademyCandidate,
     AcademyIntakeBatch,
@@ -164,6 +287,7 @@ from backend.app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseSt
 from backend.app.models.sponsorship_engine import SponsorshipLead
 from backend.app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
 from backend.app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
+from backend.app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
 from backend.app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
 from backend.app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
 from backend.app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
@@ -204,6 +328,12 @@ __all__ = [
     "CalendarSeason",
     "CompetitionLifecycleRun",
     "Base",
+    "CardLoanContract",
+    "CardLoanListing",
+    "CardLoanNegotiation",
+    "CardMarketplaceAuditEvent",
+    "CardSwapExecution",
+    "CardSwapListing",
     "ClubBrandingAsset",
     "ClubBudgetSnapshot",
     "ClubCashflowSummary",
@@ -219,7 +349,26 @@ __all__ = [
     "ClubIdentityTheme",
     "ClubJerseyDesign",
     "ClubProfile",
+    "ClubSaleAuditEvent",
+    "ClubSaleInquiry",
+    "ClubSaleInquiryStatus",
+    "ClubSaleListing",
+    "ClubSaleListingStatus",
+    "ClubSaleOffer",
+    "ClubSaleOfferStatus",
+    "ClubSaleTransfer",
+    "ClubSaleTransferStatus",
+    "ClubValuationSnapshot",
     "ClubShowcaseSnapshot",
+    "ChallengeShareEvent",
+    "ClubChallenge",
+    "ClubChallengeLink",
+    "ClubChallengeResponse",
+    "ClubIdentityMetrics",
+    "MatchReactionEvent",
+    "RivalryMatchHistory",
+    "RivalryProfile",
+    "ClubSponsor",
     "ClubSponsorshipAsset",
     "ClubSponsorshipContract",
     "ClubSponsorshipPackage",
@@ -244,7 +393,64 @@ __all__ = [
     "CompetitionVisibilityRule",
     "CompetitionWalletLedger",
     "CreatorCampaign",
+    "CreatorBroadcastModeConfig",
+    "CreatorBroadcastPurchase",
+    "CreatorClubShareDistribution",
+    "CreatorMatchGiftEvent",
+    "CreatorClubShareHolding",
+    "CreatorClubShareMarket",
+    "CreatorClubShareMarketControl",
+    "CreatorClubSharePayout",
+    "CreatorClubSharePurchase",
+    "CreatorRevenueSettlement",
+    "CreatorSeasonPass",
+    "CreatorLeagueConfig",
+    "CreatorLeagueSeason",
+    "CreatorLeagueSeasonTier",
+    "CreatorLeagueTier",
+    "CreatorApplication",
+    "CreatorCard",
+    "CreatorCardListing",
+    "CreatorCardLoan",
+    "CreatorCardSale",
+    "CreatorCardSwap",
+    "CreatorClubFollow",
+    "CreatorFanCompetition",
+    "CreatorFanCompetitionEntry",
+    "CreatorFanCompetitionStatus",
+    "CreatorFanGroup",
+    "CreatorFanGroupMembership",
+    "CreatorFanWallEvent",
+    "CreatorMatchChatMessage",
+    "CreatorMatchChatMessageVisibility",
+    "CreatorMatchChatRoom",
+    "CreatorMatchChatRoomStatus",
+    "CreatorMatchTacticalAdvice",
+    "CreatorClubProvisioning",
     "CreatorProfile",
+    "CreatorRegen",
+    "CreatorRivalrySignalOutput",
+    "CreatorRivalrySignalStatus",
+    "CreatorRivalrySignalSurface",
+    "StreamerTournament",
+    "StreamerTournamentApprovalStatus",
+    "StreamerTournamentEntry",
+    "StreamerTournamentEntryStatus",
+    "StreamerTournamentInvite",
+    "StreamerTournamentInviteStatus",
+    "StreamerTournamentPolicy",
+    "StreamerTournamentQualificationType",
+    "StreamerTournamentReward",
+    "StreamerTournamentRewardGrant",
+    "StreamerTournamentRewardGrantStatus",
+    "StreamerTournamentRewardType",
+    "StreamerTournamentRiskSignal",
+    "StreamerTournamentRiskStatus",
+    "StreamerTournamentStatus",
+    "StreamerTournamentType",
+    "CreatorSquad",
+    "CreatorTacticalAdviceStatus",
+    "CreatorTacticalAdviceType",
     "CompetitionWatchlist",
     "LiveThread",
     "LiveThreadMessage",
@@ -308,6 +514,15 @@ __all__ = [
     "PlayerCardWatchlist",
     "PlayerStatsSnapshot",
     "PlayerMarketValueSnapshot",
+    "EventEffectRule",
+    "EventIngestionJob",
+    "PlayerDemandSignal",
+    "PlayerFormModifier",
+    "RealWorldFootballEvent",
+    "TrendingPlayerFlag",
+    "SponsorOffer",
+    "SponsorOfferRule",
+    "StarterSquadRental",
     "ReferralAttribution",
     "ReferralEvent",
     "ReferralReward",
@@ -348,8 +563,26 @@ __all__ = [
     "PolicyAcceptanceRecord",
     "PolicyDocument",
     "PolicyDocumentVersion",
+    "FanPredictionFixture",
+    "FanPredictionFixtureStatus",
+    "FanPredictionLeaderboardScope",
+    "FanPredictionOutcome",
+    "FanPredictionRewardGrant",
+    "FanPredictionRewardType",
+    "FanPredictionSubmission",
+    "FanPredictionSubmissionStatus",
+    "FanPredictionTokenLedger",
+    "FanPredictionTokenReason",
+    "CountryCreatorAssignment",
+    "FanWarPoint",
+    "FanWarProfile",
+    "FanbaseRanking",
+    "NationsCupEntry",
+    "NationsCupFanMetric",
     "RewardSettlement",
     "RewardSettlementStatus",
+    "SpendingControlAuditEvent",
+    "SpendingControlDecision",
     "AcademyCandidate",
     "AcademyIntakeBatch",
     "CurrencyConversionQuote",
@@ -396,6 +629,8 @@ __all__ = [
     "GovernanceProposalStatus",
     "GovernanceVote",
     "GovernanceVoteChoice",
+    "HighlightShareExport",
+    "HighlightShareTemplate",
     "ModerationPriority",
     "ModerationReport",
     "ModerationReportStatus",

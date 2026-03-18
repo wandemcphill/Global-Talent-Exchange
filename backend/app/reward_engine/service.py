@@ -14,13 +14,17 @@ from backend.app.models.economy_burn_event import EconomyBurnEvent
 from backend.app.models.reward_settlement import RewardSettlement
 from backend.app.models.user import User
 from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from backend.app.services.spending_control_service import SpendingControlService, SpendingControlViolation
 from backend.app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal('0.0001')
 
 
 class RewardEngineError(ValueError):
-    pass
+    def __init__(self, detail: str, *, reason: str | None = None) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.reason = reason or detail
 
 
 @dataclass(slots=True)
@@ -52,10 +56,10 @@ class RewardEngineService:
     def settle_reward(self, *, actor: User, user_id: str, competition_key: str, title: str, gross_amount: Decimal, reward_source: str = 'gtex_promotional_pool', note: str | None = None) -> RewardSettlement:
         user = self.session.get(User, user_id)
         if user is None or not user.is_active:
-            raise RewardEngineError('Reward recipient user was not found.')
+            raise RewardEngineError('Reward recipient user was not found.', reason="recipient_not_found")
         normalized_gross = self._normalize_amount(gross_amount)
         if normalized_gross <= Decimal('0.0000'):
-            raise RewardEngineError('Reward amount must be positive.')
+            raise RewardEngineError('Reward amount must be positive.', reason="reward_amount_invalid")
         economy_service = EconomyConfigService(self.session)
         split = economy_service.compute_revenue_split(
             scope="competition_reward",
@@ -72,7 +76,25 @@ class RewardEngineService:
         promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, ledger_unit)
         promo_pool_balance = self.wallet_service.get_balance(self.session, promo_pool_account)
         if promo_pool_balance < normalized_gross:
-            raise RewardEngineError("Promo pool balance is lower than the reward amount.")
+            raise RewardEngineError("Promo pool balance is lower than the reward amount.", reason="promo_pool_insufficient")
+        control_reference = f"reward-control:{competition_key}:{user.id}:{generate_uuid()}"
+        try:
+            control_evaluation = SpendingControlService(self.session).evaluate_reward(
+                reference_key=control_reference,
+                amount=normalized_gross,
+                ledger_unit=ledger_unit,
+                actor_user_id=actor.id,
+                target_user_id=user.id,
+                competition_key=competition_key,
+                reward_source=reward_source,
+                metadata_json={
+                    "title": title,
+                    "competition_key": competition_key,
+                    "reward_source": reward_source,
+                },
+            )
+        except SpendingControlViolation as exc:
+            raise RewardEngineError(exc.detail, reason="spending_controls_blocked") from exc
         postings = [
             LedgerPosting(account=user_account, amount=net_amount, source_tag=source_tag),
             LedgerPosting(account=platform_account, amount=fee_amount, source_tag=source_tag),
@@ -106,6 +128,12 @@ class RewardEngineService:
         )
         self.session.add(settlement)
         self.session.flush()
+        SpendingControlService(self.session).record_evaluation(
+            control_evaluation,
+            entity_id=settlement.id,
+            ledger_transaction_id=entries[0].transaction_id if entries else None,
+            metadata_json={"reward_settlement_id": settlement.id},
+        )
         if burn_amount > Decimal("0.0000"):
             burn_event = EconomyBurnEvent(
                 user_id=user.id,

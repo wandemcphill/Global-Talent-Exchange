@@ -216,6 +216,24 @@ def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None
         circular_trade_min_repetitions = 2
         """,
     )
+    _write_config(
+        tmp_path / "player_card_market_integrity.toml",
+        """
+        sale_reference_lookback_days = 10
+        minimum_reference_sales = 3
+        listing_price_floor_ratio = 0.65
+        listing_price_ceiling_ratio = 1.55
+        relist_cooldown_minutes = 45
+        pair_trade_lookback_hours = 72
+        pair_trade_alert_threshold = 4
+        asset_churn_window_hours = 12
+        asset_churn_alert_threshold = 5
+        circular_trade_window_hours = 18
+        price_spike_alert_ratio = 2.2
+        volume_cluster_window_minutes = 30
+        volume_cluster_trade_threshold = 7
+        """,
+    )
 
     settings = load_settings(environ={}, config_root=tmp_path)
 
@@ -238,6 +256,9 @@ def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None
     assert settings.regen_generation.country_tuning[0].country_code == "NG"
     assert settings.suspicion_thresholds.player_min_suspicious_events == 12
     assert settings.suspicion_thresholds.holder_concentration_share == 0.55
+    assert settings.player_card_market_integrity.sale_reference_lookback_days == 10
+    assert settings.player_card_market_integrity.listing_price_ceiling_ratio == 1.55
+    assert settings.player_card_market_integrity.volume_cluster_trade_threshold == 7
     assert settings.value_engine_weighting.baseline_eur_per_credit == 95_000
     assert settings.value_engine_weighting.big_moment_bonus == 21.0
     assert settings.value_engine_weighting.market_signal_cap == 0.16

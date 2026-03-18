@@ -29,6 +29,7 @@ from backend.app.schemas.scouting_intelligence import (
     ScoutMissionView,
     ScoutReportView,
     ScoutingNetworkAssignmentView,
+    ScoutingPlanningView,
     ScoutingNetworkView,
     TalentDiscoveryBadgeView,
 )
@@ -177,9 +178,12 @@ class ScoutingIntelligenceService:
         return self._to_manager_profile_view(profile)
 
     def create_network(self, payload: ScoutingNetworkCreate) -> ScoutingNetworkView:
+        manager_profile_id = None
+        if payload.manager_profile_id is not None:
+            manager_profile_id = self._manager_profile_for_club(payload.manager_profile_id, payload.club_id).id
         network = ScoutingNetwork(
             club_id=payload.club_id,
-            manager_profile_id=payload.manager_profile_id,
+            manager_profile_id=manager_profile_id,
             network_name=payload.network_name,
             region_code=payload.region_code,
             region_name=payload.region_name,
@@ -196,12 +200,14 @@ class ScoutingIntelligenceService:
         return self._to_network_view(network)
 
     def assign_network(self, payload: ScoutingNetworkAssignmentCreate) -> ScoutingNetworkAssignmentView:
+        self._validate_age_band(payload.age_band_min, payload.age_band_max, error_code="assignment_age_band_invalid")
+        network = self._network_for_club(payload.network_id, payload.club_id)
         assignment = ScoutingNetworkAssignment(
             network_id=payload.network_id,
             club_id=payload.club_id,
             assignment_name=payload.assignment_name,
             assignment_scope=payload.assignment_scope,
-            territory_code=payload.territory_code,
+            territory_code=payload.territory_code or network.region_code,
             focus_position=payload.focus_position,
             age_band_min=payload.age_band_min,
             age_band_max=payload.age_band_max,
@@ -215,15 +221,20 @@ class ScoutingIntelligenceService:
         return self._to_assignment_view(assignment)
 
     def create_mission(self, payload: ScoutMissionCreate) -> ScoutMissionView:
+        self._validate_age_band(payload.target_age_min, payload.target_age_max, error_code="mission_age_band_invalid")
         mission_type = self._normalize_mission_type(payload.mission_type)
+        network = self._network_for_club(payload.network_id, payload.club_id)
+        manager_profile_id = payload.manager_profile_id or network.manager_profile_id
+        if manager_profile_id is not None:
+            manager_profile_id = self._manager_profile_for_club(manager_profile_id, payload.club_id).id
         mission = ScoutMission(
             club_id=payload.club_id,
             network_id=payload.network_id,
-            manager_profile_id=payload.manager_profile_id,
+            manager_profile_id=manager_profile_id,
             mission_name=payload.mission_name,
             mission_type=mission_type,
             target_position=payload.target_position,
-            target_region=payload.target_region,
+            target_region=payload.target_region or network.region_code,
             target_age_min=payload.target_age_min,
             target_age_max=payload.target_age_max,
             budget_limit_coin=payload.budget_limit_coin,
@@ -237,6 +248,167 @@ class ScoutingIntelligenceService:
         self.session.add(mission)
         self.session.flush()
         return self._to_mission_view(mission)
+
+    def list_manager_profiles(self, club_id: str) -> tuple[ManagerScoutingProfileView, ...]:
+        profiles = self.session.scalars(
+            select(ManagerScoutingProfile)
+            .where(ManagerScoutingProfile.club_id == club_id)
+            .order_by(ManagerScoutingProfile.manager_name.asc(), ManagerScoutingProfile.created_at.asc())
+        ).all()
+        return tuple(self._to_manager_profile_view(profile) for profile in profiles)
+
+    def list_academy_supply_signals(
+        self,
+        club_id: str,
+        *,
+        refresh: bool = False,
+    ) -> tuple[AcademySupplySignalView, ...]:
+        signals = []
+        if not refresh:
+            signals = self.session.scalars(
+                select(AcademySupplySignal)
+                .where(AcademySupplySignal.club_id == club_id)
+                .order_by(AcademySupplySignal.visibility_score.desc(), AcademySupplySignal.created_at.desc())
+            ).all()
+        if refresh or not signals:
+            return self.refresh_academy_supply_signals(club_id)
+        return tuple(self._to_academy_signal_view(signal) for signal in signals)
+
+    def list_talent_discovery_badges(
+        self,
+        club_id: str,
+        *,
+        mission_id: str | None = None,
+        limit: int | None = None,
+    ) -> tuple[TalentDiscoveryBadgeView, ...]:
+        badges = self.session.scalars(
+            select(TalentDiscoveryBadge)
+            .where(TalentDiscoveryBadge.club_id == club_id)
+            .order_by(TalentDiscoveryBadge.awarded_at.desc(), TalentDiscoveryBadge.id.desc())
+        ).all()
+        if mission_id is not None:
+            badges = [
+                badge
+                for badge in badges
+                if str((badge.metadata_json or {}).get("mission_id")) == mission_id
+            ]
+        if limit is not None:
+            badges = badges[: max(limit, 1)]
+        return tuple(self._to_badge_view(badge) for badge in badges)
+
+    def list_player_lifecycle_profiles(
+        self,
+        club_id: str,
+        *,
+        player_ids: tuple[str, ...] = (),
+        sync_current_roster: bool = False,
+        limit: int | None = None,
+    ) -> tuple[PlayerLifecycleProfileView, ...]:
+        resolved_player_ids: list[str] = []
+        seen_player_ids: set[str] = set()
+
+        def _track_player(player_id: str) -> None:
+            if player_id and player_id not in seen_player_ids:
+                seen_player_ids.add(player_id)
+                resolved_player_ids.append(player_id)
+
+        for player_id in player_ids:
+            _track_player(player_id)
+        if sync_current_roster:
+            roster_statement = (
+                select(Player.id)
+                .where(Player.current_club_profile_id == club_id)
+                .order_by(Player.full_name.asc(), Player.id.asc())
+            )
+            if limit is not None:
+                roster_statement = roster_statement.limit(max(limit, 1))
+            for player_id in self.session.scalars(roster_statement).all():
+                _track_player(player_id)
+
+        for player_id in resolved_player_ids:
+            self.sync_player_lifecycle_profile(player_id)
+
+        statement = select(PlayerLifecycleProfile)
+        if resolved_player_ids:
+            statement = statement.where(PlayerLifecycleProfile.player_id.in_(resolved_player_ids))
+        else:
+            statement = statement.where(PlayerLifecycleProfile.club_id == club_id)
+        statement = statement.order_by(
+            PlayerLifecycleProfile.market_desirability.desc(),
+            PlayerLifecycleProfile.age_years.asc(),
+            PlayerLifecycleProfile.updated_at.desc(),
+        )
+        if limit is not None:
+            statement = statement.limit(max(limit, 1))
+        profiles = self.session.scalars(statement).all()
+        return tuple(self._to_lifecycle_profile_view(profile) for profile in profiles)
+
+    def build_planning_dashboard(
+        self,
+        club_id: str,
+        *,
+        roster_limit: int = 12,
+    ) -> ScoutingPlanningView:
+        networks = self.session.scalars(
+            select(ScoutingNetwork)
+            .where(ScoutingNetwork.club_id == club_id)
+            .order_by(ScoutingNetwork.active.desc(), ScoutingNetwork.created_at.desc())
+        ).all()
+        assignments = self.session.scalars(
+            select(ScoutingNetworkAssignment)
+            .where(ScoutingNetworkAssignment.club_id == club_id)
+            .order_by(ScoutingNetworkAssignment.status.asc(), ScoutingNetworkAssignment.starts_on.desc())
+        ).all()
+        missions = self.session.scalars(
+            select(ScoutMission)
+            .where(ScoutMission.club_id == club_id)
+            .order_by(ScoutMission.created_at.desc(), ScoutMission.id.desc())
+            .limit(max(roster_limit, 10))
+        ).all()
+        return ScoutingPlanningView(
+            club_id=club_id,
+            refreshed_at=_utcnow(),
+            manager_profiles=self.list_manager_profiles(club_id),
+            networks=tuple(self._to_network_view(network) for network in networks),
+            assignments=tuple(self._to_assignment_view(assignment) for assignment in assignments),
+            missions=tuple(self._to_mission_view(mission) for mission in missions),
+            academy_supply_signals=self.list_academy_supply_signals(club_id, refresh=True),
+            lifecycle_profiles=self.list_player_lifecycle_profiles(
+                club_id,
+                sync_current_roster=True,
+                limit=max(roster_limit, 1),
+            ),
+            badges=self.list_talent_discovery_badges(club_id, limit=max(roster_limit, 1)),
+        )
+
+    def get_completed_mission(
+        self,
+        mission_id: str,
+        *,
+        club_id: str | None = None,
+    ) -> CompletedScoutMissionView:
+        mission = self.session.get(ScoutMission, mission_id)
+        if mission is None or (club_id is not None and mission.club_id != club_id):
+            raise ValueError("mission_not_found")
+        reports = self.session.scalars(
+            select(ScoutReport)
+            .where(ScoutReport.mission_id == mission_id)
+            .order_by(ScoutReport.recommendation_rank.asc(), ScoutReport.created_at.asc())
+        ).all()
+        hidden_potential_estimates = self.session.scalars(
+            select(HiddenPotentialEstimate)
+            .where(HiddenPotentialEstimate.mission_id == mission_id)
+            .order_by(HiddenPotentialEstimate.created_at.asc(), HiddenPotentialEstimate.id.asc())
+        ).all()
+        return CompletedScoutMissionView(
+            mission=self._to_mission_view(mission),
+            reports=tuple(self._to_report_view(report) for report in reports),
+            hidden_potential_estimates=tuple(
+                self._to_hidden_potential_view(estimate) for estimate in hidden_potential_estimates
+            ),
+            academy_supply_signals=self.list_academy_supply_signals(mission.club_id),
+            awarded_badges=self.list_talent_discovery_badges(mission.club_id, mission_id=mission.id),
+        )
 
     def refresh_academy_supply_signals(self, club_id: str) -> tuple[AcademySupplySignalView, ...]:
         batches = self.session.scalars(
@@ -348,10 +520,19 @@ class ScoutingIntelligenceService:
         mission = self.session.get(ScoutMission, mission_id)
         if mission is None:
             raise ValueError("mission_not_found")
+        existing_report_id = self.session.scalar(
+            select(ScoutReport.id).where(ScoutReport.mission_id == mission.id).limit(1)
+        )
+        if mission.status == "completed" or existing_report_id is not None:
+            return self.get_completed_mission(mission.id, club_id=mission.club_id)
         network = self.session.get(ScoutingNetwork, mission.network_id)
         if network is None:
             raise ValueError("network_not_found")
+        if network.club_id != mission.club_id:
+            raise ValueError("network_club_mismatch")
         manager = self.session.get(ManagerScoutingProfile, mission.manager_profile_id) if mission.manager_profile_id else None
+        if manager is not None and manager.club_id != mission.club_id:
+            raise ValueError("manager_profile_club_mismatch")
         mission.status = "in_progress"
         academy_signals = self.refresh_academy_supply_signals(mission.club_id) if mission.include_academy else ()
         candidates = self._mission_candidates(mission)
@@ -432,13 +613,7 @@ class ScoutingIntelligenceService:
             "academy_signal_count": len(academy_signals),
         }
         self.session.flush()
-        return CompletedScoutMissionView(
-            mission=self._to_mission_view(mission),
-            reports=tuple(reports),
-            hidden_potential_estimates=tuple(estimates),
-            academy_supply_signals=academy_signals,
-            awarded_badges=tuple(badges),
-        )
+        return self.get_completed_mission(mission.id, club_id=mission.club_id)
 
     def _mission_candidates(self, mission: ScoutMission) -> list[dict[str, object]]:
         filters = RegenSearchFilters(
@@ -702,6 +877,32 @@ class ScoutingIntelligenceService:
             return 0.0
         upside = max(future_potential - current_ability, 0)
         return ((upside * 55) + (future_potential * 8)) / max(value_hint_coin, 1)
+
+    def _validate_age_band(
+        self,
+        minimum: int | None,
+        maximum: int | None,
+        *,
+        error_code: str,
+    ) -> None:
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(error_code)
+
+    def _manager_profile_for_club(self, manager_profile_id: str, club_id: str) -> ManagerScoutingProfile:
+        profile = self.session.get(ManagerScoutingProfile, manager_profile_id)
+        if profile is None:
+            raise ValueError("manager_profile_not_found")
+        if profile.club_id != club_id:
+            raise ValueError("manager_profile_club_mismatch")
+        return profile
+
+    def _network_for_club(self, network_id: str, club_id: str) -> ScoutingNetwork:
+        network = self.session.get(ScoutingNetwork, network_id)
+        if network is None:
+            raise ValueError("network_not_found")
+        if network.club_id != club_id:
+            raise ValueError("network_club_mismatch")
+        return network
 
     def _to_manager_profile_view(self, profile: ManagerScoutingProfile) -> ManagerScoutingProfileView:
         return ManagerScoutingProfileView(

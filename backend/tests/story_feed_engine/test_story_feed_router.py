@@ -40,6 +40,8 @@ def test_admin_can_publish_manual_story_and_digest_surfaces_it(client) -> None:
             "story_type": "featured_update",
             "title": "Transfer window heating up",
             "body": "Several clubs are circling academy standouts this week.",
+            "subject_type": "club_sale_transfer",
+            "subject_id": "club_transfer_demo",
             "country_code": "NG",
             "featured": True,
         },
@@ -52,3 +54,9 @@ def test_admin_can_publish_manual_story_and_digest_surfaces_it(client) -> None:
     assert digest_response.status_code == 200, digest_response.text
     digest = digest_response.json()
     assert any(item["story_type"] == "featured_update" for item in digest["feature_stories"])
+
+    filtered_response = client.get("/story-feed?subject_type=club_sale_transfer&subject_id=club_transfer_demo&featured_only=true")
+    assert filtered_response.status_code == 200, filtered_response.text
+    filtered_payload = filtered_response.json()
+    assert len(filtered_payload) == 1
+    assert filtered_payload[0]["subject_id"] == "club_transfer_demo"

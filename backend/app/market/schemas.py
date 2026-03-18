@@ -199,6 +199,10 @@ class MarketPlayerTrendProfileView(BaseModel):
     previous_global_scouting_index: float | None
     global_scouting_index_movement_pct: float | None
     drivers: tuple[str, ...]
+    active_real_world_flags: tuple[str, ...] = ()
+    recommendation_priority_delta: float = 0.0
+    market_buzz_score: float = 0.0
+    temporary_form_boost: float = 0.0
 
 
 class MarketPlayerDetailView(BaseModel):

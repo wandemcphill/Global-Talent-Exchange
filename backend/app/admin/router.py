@@ -24,6 +24,7 @@ from backend.app.value_engine.schemas import (
 
 from .schemas import (
     LiquidityBandConfigPayload,
+    PlayerCardMarketIntegrityPayload,
     SupplyTierConfigPayload,
     SuspicionThresholdsPayload,
     ValueControlsPayload,
@@ -127,6 +128,28 @@ def update_suspicion_thresholds(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return SuspicionThresholdsPayload.model_validate(settings.suspicion_thresholds)
+
+
+@router.get("/player-card-market-integrity", response_model=PlayerCardMarketIntegrityPayload)
+def get_player_card_market_integrity(
+    request: Request,
+    _: User = Depends(get_current_admin),
+) -> PlayerCardMarketIntegrityPayload:
+    return PlayerCardMarketIntegrityPayload.model_validate(request.app.state.settings.player_card_market_integrity)
+
+
+@router.put("/player-card-market-integrity", response_model=PlayerCardMarketIntegrityPayload)
+def update_player_card_market_integrity(
+    payload: PlayerCardMarketIntegrityPayload,
+    request: Request,
+    service: ConfigAdminService = Depends(get_config_admin_service),
+    _: User = Depends(get_current_admin),
+) -> PlayerCardMarketIntegrityPayload:
+    try:
+        settings = service.update_player_card_market_integrity(request.app, payload.to_domain())
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return PlayerCardMarketIntegrityPayload.model_validate(settings.player_card_market_integrity)
 
 
 @router.get("/value-controls", response_model=ValueControlsPayload)

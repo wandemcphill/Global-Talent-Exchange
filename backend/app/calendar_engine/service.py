@@ -99,12 +99,33 @@ class CalendarEngineService:
             raise CalendarEngineError("Calendar event key already exists.") from exc
         return event
 
-    def list_events(self, *, active_only: bool = False, as_of: date | None = None, limit: int = 200) -> list[CalendarEvent]:
+    def list_events(
+        self,
+        *,
+        active_only: bool = False,
+        as_of: date | None = None,
+        source_type: str | None = None,
+        source_id: str | None = None,
+        family: str | None = None,
+        visibility: str | None = None,
+        status: str | None = None,
+        limit: int = 200,
+    ) -> list[CalendarEvent]:
         stmt = select(CalendarEvent)
         if active_only:
             stmt = stmt.where(CalendarEvent.status.in_(("scheduled", "live")))
         if as_of is not None:
             stmt = stmt.where(CalendarEvent.starts_on <= as_of, CalendarEvent.ends_on >= as_of)
+        if source_type:
+            stmt = stmt.where(CalendarEvent.source_type == source_type.strip().lower())
+        if source_id:
+            stmt = stmt.where(CalendarEvent.source_id == source_id)
+        if family:
+            stmt = stmt.where(CalendarEvent.family == family.strip().lower())
+        if visibility:
+            stmt = stmt.where(CalendarEvent.visibility == visibility.strip().lower())
+        if status:
+            stmt = stmt.where(CalendarEvent.status == status.strip().lower())
         stmt = stmt.order_by(CalendarEvent.starts_on.asc(), CalendarEvent.created_at.desc()).limit(limit)
         return list(self.session.scalars(stmt).all())
 
@@ -148,7 +169,7 @@ class CalendarEngineService:
         age_band: str,
         exclusive_windows: bool,
         pause_other_gtx_competitions: bool,
-        actor: User,
+        actor: User | None,
         metadata_json: dict,
     ) -> CalendarEvent:
         event = self.session.scalar(select(CalendarEvent).where(CalendarEvent.event_key == event_key))
@@ -170,7 +191,7 @@ class CalendarEngineService:
                 visibility="public",
                 status="scheduled",
                 metadata_json=metadata_json,
-                created_by_user_id=actor.id,
+                created_by_user_id=actor.id if actor is not None else None,
             )
             self.session.add(event)
         else:
@@ -182,6 +203,49 @@ class CalendarEngineService:
             event.exclusive_windows = exclusive_windows
             event.pause_other_gtx_competitions = pause_other_gtx_competitions
             event.metadata_json = metadata_json
+        self.session.flush()
+        return event
+
+    def upsert_sourced_event(
+        self,
+        *,
+        event_key: str,
+        title: str,
+        description: str | None,
+        source_type: str,
+        source_id: str,
+        starts_on: date,
+        ends_on: date,
+        family: str,
+        age_band: str = "senior",
+        visibility: str = "public",
+        status: str = "live",
+        exclusive_windows: bool = False,
+        pause_other_gtx_competitions: bool = False,
+        metadata_json: dict | None = None,
+        actor: User | None = None,
+    ) -> CalendarEvent:
+        if ends_on < starts_on:
+            raise CalendarEngineError("Event end date cannot be earlier than start date.")
+        event = self._upsert_source_event(
+            event_key=event_key.strip().lower(),
+            title=title.strip(),
+            description=description.strip() if description else None,
+            source_type=source_type.strip().lower(),
+            source_id=source_id,
+            starts_on=starts_on,
+            ends_on=ends_on,
+            family=family.strip().lower(),
+            age_band=age_band.strip().lower(),
+            exclusive_windows=exclusive_windows,
+            pause_other_gtx_competitions=pause_other_gtx_competitions,
+            actor=actor,
+            metadata_json=dict(metadata_json or {}),
+        )
+        event.visibility = visibility.strip().lower()
+        event.status = status.strip().lower()
+        if actor is not None and event.created_by_user_id is None:
+            event.created_by_user_id = actor.id
         self.session.flush()
         return event
 

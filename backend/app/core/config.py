@@ -20,6 +20,7 @@ LIQUIDITY_BANDS_FILE = "liquidity_bands.toml"
 IMAGE_POLICY_FILE = "image_policy.toml"
 VALUE_ENGINE_WEIGHTING_FILE = "value_engine_weighting.toml"
 SUSPICION_THRESHOLDS_FILE = "suspicion_thresholds.toml"
+PLAYER_CARD_MARKET_INTEGRITY_FILE = "player_card_market_integrity.toml"
 MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 REGEN_GENERATION_FILE = "regen_generation.toml"
@@ -305,6 +306,23 @@ class SuspicionThresholdsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class PlayerCardMarketIntegrityConfig:
+    sale_reference_lookback_days: int
+    minimum_reference_sales: int
+    listing_price_floor_ratio: float
+    listing_price_ceiling_ratio: float
+    relist_cooldown_minutes: int
+    pair_trade_lookback_hours: int
+    pair_trade_alert_threshold: int
+    asset_churn_window_hours: int
+    asset_churn_alert_threshold: int
+    circular_trade_window_hours: int
+    price_spike_alert_ratio: float
+    volume_cluster_window_minutes: int
+    volume_cluster_trade_threshold: int
+
+
+@dataclass(frozen=True, slots=True)
 class ValueEngineWeightingConfig:
     config_version: str
     baseline_eur_per_credit: int
@@ -386,6 +404,7 @@ class Settings:
     sponsorship_inventory: SponsorshipInventoryConfig
     regen_generation: RegenGenerationConfig
     suspicion_thresholds: SuspicionThresholdsConfig
+    player_card_market_integrity: PlayerCardMarketIntegrityConfig
     value_engine_weighting: ValueEngineWeightingConfig
 
 
@@ -473,6 +492,24 @@ def _default_regen_generation_config() -> RegenGenerationConfig:
                 default_cities=("Casablanca", "Rabat"),
             ),
         ),
+    )
+
+
+def _default_player_card_market_integrity_config() -> PlayerCardMarketIntegrityConfig:
+    return PlayerCardMarketIntegrityConfig(
+        sale_reference_lookback_days=14,
+        minimum_reference_sales=2,
+        listing_price_floor_ratio=0.60,
+        listing_price_ceiling_ratio=1.80,
+        relist_cooldown_minutes=30,
+        pair_trade_lookback_hours=168,
+        pair_trade_alert_threshold=3,
+        asset_churn_window_hours=24,
+        asset_churn_alert_threshold=6,
+        circular_trade_window_hours=24,
+        price_spike_alert_ratio=2.50,
+        volume_cluster_window_minutes=60,
+        volume_cluster_trade_threshold=12,
     )
 
 
@@ -1019,6 +1056,82 @@ def load_suspicion_thresholds_config(config_root: Path) -> SuspicionThresholdsCo
     return thresholds
 
 
+def load_player_card_market_integrity_config(config_root: Path) -> PlayerCardMarketIntegrityConfig:
+    document = _load_optional_toml_document(config_root / PLAYER_CARD_MARKET_INTEGRITY_FILE)
+    defaults = _default_player_card_market_integrity_config()
+    if document is None:
+        return defaults
+
+    config = PlayerCardMarketIntegrityConfig(
+        sale_reference_lookback_days=int(
+            document.get("sale_reference_lookback_days", defaults.sale_reference_lookback_days)
+        ),
+        minimum_reference_sales=int(document.get("minimum_reference_sales", defaults.minimum_reference_sales)),
+        listing_price_floor_ratio=float(
+            document.get("listing_price_floor_ratio", defaults.listing_price_floor_ratio)
+        ),
+        listing_price_ceiling_ratio=float(
+            document.get("listing_price_ceiling_ratio", defaults.listing_price_ceiling_ratio)
+        ),
+        relist_cooldown_minutes=int(document.get("relist_cooldown_minutes", defaults.relist_cooldown_minutes)),
+        pair_trade_lookback_hours=int(
+            document.get("pair_trade_lookback_hours", defaults.pair_trade_lookback_hours)
+        ),
+        pair_trade_alert_threshold=int(
+            document.get("pair_trade_alert_threshold", defaults.pair_trade_alert_threshold)
+        ),
+        asset_churn_window_hours=int(
+            document.get("asset_churn_window_hours", defaults.asset_churn_window_hours)
+        ),
+        asset_churn_alert_threshold=int(
+            document.get("asset_churn_alert_threshold", defaults.asset_churn_alert_threshold)
+        ),
+        circular_trade_window_hours=int(
+            document.get("circular_trade_window_hours", defaults.circular_trade_window_hours)
+        ),
+        price_spike_alert_ratio=float(
+            document.get("price_spike_alert_ratio", defaults.price_spike_alert_ratio)
+        ),
+        volume_cluster_window_minutes=int(
+            document.get("volume_cluster_window_minutes", defaults.volume_cluster_window_minutes)
+        ),
+        volume_cluster_trade_threshold=int(
+            document.get("volume_cluster_trade_threshold", defaults.volume_cluster_trade_threshold)
+        ),
+    )
+    if config.sale_reference_lookback_days <= 0:
+        raise ValueError("Player card market integrity sale_reference_lookback_days must be greater than zero.")
+    if config.minimum_reference_sales <= 0:
+        raise ValueError("Player card market integrity minimum_reference_sales must be greater than zero.")
+    if not 0 < config.listing_price_floor_ratio <= 1:
+        raise ValueError("Player card market integrity listing_price_floor_ratio must be between 0 and 1.")
+    if config.listing_price_ceiling_ratio < 1:
+        raise ValueError("Player card market integrity listing_price_ceiling_ratio must be at least 1.")
+    if config.listing_price_ceiling_ratio <= config.listing_price_floor_ratio:
+        raise ValueError(
+            "Player card market integrity listing_price_ceiling_ratio must exceed listing_price_floor_ratio."
+        )
+    if config.relist_cooldown_minutes < 0:
+        raise ValueError("Player card market integrity relist_cooldown_minutes must be greater than or equal to zero.")
+    if config.pair_trade_lookback_hours <= 0:
+        raise ValueError("Player card market integrity pair_trade_lookback_hours must be greater than zero.")
+    if config.pair_trade_alert_threshold <= 1:
+        raise ValueError("Player card market integrity pair_trade_alert_threshold must be greater than one.")
+    if config.asset_churn_window_hours <= 0:
+        raise ValueError("Player card market integrity asset_churn_window_hours must be greater than zero.")
+    if config.asset_churn_alert_threshold <= 1:
+        raise ValueError("Player card market integrity asset_churn_alert_threshold must be greater than one.")
+    if config.circular_trade_window_hours <= 0:
+        raise ValueError("Player card market integrity circular_trade_window_hours must be greater than zero.")
+    if config.price_spike_alert_ratio <= 1:
+        raise ValueError("Player card market integrity price_spike_alert_ratio must be greater than one.")
+    if config.volume_cluster_window_minutes <= 0:
+        raise ValueError("Player card market integrity volume_cluster_window_minutes must be greater than zero.")
+    if config.volume_cluster_trade_threshold <= 1:
+        raise ValueError("Player card market integrity volume_cluster_trade_threshold must be greater than one.")
+    return config
+
+
 def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightingConfig:
     document = _load_toml_document(config_root / VALUE_ENGINE_WEIGHTING_FILE)
     ftv_msv_blend_weights = _require_table(
@@ -1276,6 +1389,7 @@ def load_settings(
         sponsorship_inventory=load_sponsorship_inventory_config(resolved_config_root),
         regen_generation=load_regen_generation_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
+        player_card_market_integrity=load_player_card_market_integrity_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
     )
 
