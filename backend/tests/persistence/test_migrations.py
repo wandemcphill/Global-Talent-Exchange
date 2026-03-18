@@ -45,6 +45,38 @@ def _migration_graph_heads() -> set[str]:
     return heads
 
 
+def _migration_graph_heads() -> set[str]:
+    versions_dir = BACKEND_ROOT / "migrations" / "versions"
+    revisions: set[str] = set()
+    down_revisions: set[str] = set()
+
+    for path in versions_dir.glob("*.py"):
+        module = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        revision: str | None = None
+        down_revision: str | tuple[str, ...] | None = None
+        for node in module.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for target in node.targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                if target.id == "revision":
+                    revision = ast.literal_eval(node.value)
+                elif target.id == "down_revision":
+                    down_revision = ast.literal_eval(node.value)
+        if revision is None:
+            continue
+        revisions.add(revision)
+        if isinstance(down_revision, str):
+            down_revisions.add(down_revision)
+        elif isinstance(down_revision, tuple):
+            down_revisions.update(item for item in down_revision if item)
+
+    heads = revisions - down_revisions
+    assert len(heads) == 1
+    return heads
+
+
 def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'persistence-migrations.db').as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})

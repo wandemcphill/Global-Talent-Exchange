@@ -418,6 +418,24 @@ def _seed_regen_universe_preseeded_national_u17_pool(app, context) -> None:
     _run_startup_seed(context, seed_name="regen_universe_preseeded_national_u17_pool", seed_action=_seed)
 
 
+def _seed_football_event_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.football_events_engine.service import RealWorldFootballEventService
+
+        service = RealWorldFootballEventService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+def _seed_world_simulation_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from backend.app.world_simulation.service import FootballWorldService
+
+        service = FootballWorldService(session)
+        service.seed_defaults()
+        session.commit()
+
+
 DOMAIN_MODULES = (
     _module("health"),
     _module("observability", router_path="app.observability.router:router"),

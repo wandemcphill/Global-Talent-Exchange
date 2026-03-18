@@ -35,6 +35,8 @@ void main() {
 
     expect(find.text('Create competition'), findsOneWidget);
 
+    expect(find.text('Coastal Creator Cup'), findsOneWidget);
+
     await tester.dragUntilVisible(
       find.text('Creator competitions'),
       find.byType(ListView).first,
