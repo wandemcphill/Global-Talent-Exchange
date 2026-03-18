@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:gte_frontend/data/competition_api.dart';
+import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
@@ -41,9 +43,13 @@ class GteNavigationDependencies {
   const GteNavigationDependencies({
     required this.apiBaseUrl,
     this.backendMode = GteBackendMode.liveThenFixture,
-    this.currentUserId = 'guest-user',
-    this.currentUserName,
-    this.isAuthenticated = false,
+    String currentUserId = 'guest-user',
+    String? currentUserName,
+    String? currentUserRole,
+    String? currentClubId,
+    String? currentClubName,
+    String? accessToken,
+    bool isAuthenticated = false,
     this.onOpenLogin,
     this.competitionApi,
     this.trophyCabinetRepository,
@@ -52,14 +58,31 @@ class GteNavigationDependencies {
     this.clubIdentityRepository,
     this.resolveWorldSuperCupCompetitionId,
     this.hasIdentitySetup,
-  });
+    this.currentUserIdProvider,
+    this.currentUserNameProvider,
+    this.currentUserRoleProvider,
+    this.currentClubIdProvider,
+    this.currentClubNameProvider,
+    this.accessTokenProvider,
+    this.isAuthenticatedProvider,
+  })  : _currentUserId = currentUserId,
+        _currentUserName = currentUserName,
+        _currentUserRole = currentUserRole,
+        _currentClubId = currentClubId,
+        _currentClubName = currentClubName,
+        _accessToken = accessToken,
+        _isAuthenticated = isAuthenticated;
 
   final String apiBaseUrl;
   final GteBackendMode backendMode;
-  final String currentUserId;
-  final String? currentUserName;
-  final bool isAuthenticated;
-  final VoidCallback? onOpenLogin;
+  final String _currentUserId;
+  final String? _currentUserName;
+  final String? _currentUserRole;
+  final String? _currentClubId;
+  final String? _currentClubName;
+  final String? _accessToken;
+  final bool _isAuthenticated;
+  final Future<bool> Function(BuildContext context)? onOpenLogin;
   final CompetitionApi? competitionApi;
   final TrophyCabinetRepository? trophyCabinetRepository;
   final DynastyRepository? dynastyRepository;
@@ -68,6 +91,34 @@ class GteNavigationDependencies {
   final FutureOr<String?> Function()? resolveWorldSuperCupCompetitionId;
   final FutureOr<bool> Function(String clubId, ClubIdentityDto? identity)?
       hasIdentitySetup;
+  final String Function()? currentUserIdProvider;
+  final String? Function()? currentUserNameProvider;
+  final String? Function()? currentUserRoleProvider;
+  final String? Function()? currentClubIdProvider;
+  final String? Function()? currentClubNameProvider;
+  final String? Function()? accessTokenProvider;
+  final bool Function()? isAuthenticatedProvider;
+
+  String get currentUserId => currentUserIdProvider?.call() ?? _currentUserId;
+
+  String? get currentUserName =>
+      currentUserNameProvider?.call() ?? _currentUserName;
+
+  String? get currentUserRole =>
+      currentUserRoleProvider?.call() ?? _currentUserRole;
+
+  String? get currentClubId => currentClubIdProvider?.call() ?? _currentClubId;
+
+  String? get currentClubName =>
+      currentClubNameProvider?.call() ?? _currentClubName;
+
+  String? get accessToken => accessTokenProvider?.call() ?? _accessToken;
+
+  bool get isAuthenticated =>
+      isAuthenticatedProvider?.call() ?? _isAuthenticated;
+
+  bool get isAdminRole => <String>{'admin', 'super_admin'}
+      .contains((currentUserRole ?? '').trim().toLowerCase());
 
   CompetitionApi createCompetitionApi() {
     return competitionApi ??
@@ -103,6 +154,20 @@ class GteNavigationDependencies {
           baseUrl: apiBaseUrl,
           mode: backendMode,
         );
+  }
+
+  GteAuthedApi createAuthedApi({
+    String? overrideAccessToken,
+  }) {
+    return GteAuthedApi(
+      config: GteRepositoryConfig(
+        baseUrl: apiBaseUrl,
+        mode: backendMode,
+      ),
+      transport: GteHttpTransport(),
+      accessToken: overrideAccessToken ?? accessToken,
+      mode: backendMode,
+    );
   }
 }
 

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/screens/competitions/competition_join_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
@@ -22,15 +25,18 @@ class CompetitionDetailScreen extends StatefulWidget {
     required this.competitionId,
     this.isAuthenticated = false,
     this.onOpenLogin,
+    this.navigationDependencies,
   });
 
   final CompetitionController controller;
   final String competitionId;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
-  State<CompetitionDetailScreen> createState() => _CompetitionDetailScreenState();
+  State<CompetitionDetailScreen> createState() =>
+      _CompetitionDetailScreenState();
 }
 
 class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
@@ -62,7 +68,8 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                 child: GteStatePanel(
                   eyebrow: 'LIVE MATCH CENTER',
                   title: 'Loading matchday brief',
-                  message: 'Arena economics, rules, and joinability are being lined up for a cleaner competition detail view.',
+                  message:
+                      'Arena economics, rules, and joinability are being lined up for a cleaner competition detail view.',
                   icon: Icons.live_tv_outlined,
                   accentColor: GteShellTheme.accentArena,
                   isLoading: true,
@@ -91,12 +98,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                 ? 'Paid entries have begun. Entry fee, platform service fee, host fee, and payout settings are now locked for participant safety.'
                 : competition.isFreeToJoin
                     ? 'This community competition is free to join, so no fee lock is required.'
-                : 'Once the first paid entry clears, fee settings lock to protect participants.';
+                    : 'Once the first paid entry clears, fee settings lock to protect participants.';
             final bool isGtexCompetition =
                 competition.creatorLabel.toLowerCase().contains('gtex');
 
             return RefreshIndicator(
-              onRefresh: () => widget.controller.openCompetition(widget.competitionId),
+              onRefresh: () =>
+                  widget.controller.openCompetition(widget.competitionId),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -116,13 +124,15 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                                 children: <Widget>[
                                   Text(
                                     competition.name,
-                                    style:
-                                        Theme.of(context).textTheme.headlineSmall,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall,
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     '${competition.safeFormatLabel} • Creator competition by ${competition.creatorLabel}',
-                                    style: Theme.of(context).textTheme.bodyMedium,
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
                                   ),
                                 ],
                               ),
@@ -131,7 +141,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        const GtexSectionBadge(label: 'MATCHDAY BRIEF', color: GteShellTheme.accentArena),
+                        const GtexSectionBadge(
+                            label: 'MATCHDAY BRIEF',
+                            color: GteShellTheme.accentArena),
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 10,
@@ -200,9 +212,51 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  if (widget.navigationDependencies != null) ...<Widget>[
+                    GteSurfacePanel(
+                      accentColor: GteShellTheme.accentArena,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Competition extensions',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'World context routes from the competition id directly. Match-scoped prediction and stadium routes resolve in the live match center once a canonical match id is available.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: <Widget>[
+                              FilledButton.tonalIcon(
+                                onPressed: () => _openFeatureRoute(
+                                  WorldCompetitionContextRouteData(
+                                    competitionId: competition.id,
+                                  ),
+                                ),
+                                icon: const Icon(Icons.public_outlined),
+                                label: const Text('World context'),
+                              ),
+                              FilledButton.tonalIcon(
+                                onPressed: () => _openLiveMatch(competition),
+                                icon: const Icon(Icons.live_tv_outlined),
+                                label: const Text('Open live match center'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
                   const GtexSectionHeader(
                     eyebrow: 'MATCH CENTER',
-                    title: 'Watch live, manage tactics, and collect highlights.',
+                    title:
+                        'Watch live, manage tactics, and collect highlights.',
                     description:
                         'Spectator modes stay obvious and the match keeps moving while you browse tactics and stats.',
                     accent: GteShellTheme.accentArena,
@@ -309,8 +363,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                   const SizedBox(height: 20),
                   const GtexSectionHeader(
                     eyebrow: 'ARENA ECONOMICS',
-                    title: 'The stake, fee split, and payout path should feel transparent at a glance.',
-                    description: 'Competition detail now treats joinability, payout clarity, and participant protection as first-class match-center information.',
+                    title:
+                        'The stake, fee split, and payout path should feel transparent at a glance.',
+                    description:
+                        'Competition detail now treats joinability, payout clarity, and participant protection as first-class match-center information.',
                     accent: GteShellTheme.accentArena,
                   ),
                   const SizedBox(height: 14),
@@ -335,8 +391,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                   const SizedBox(height: 16),
                   const GtexSectionHeader(
                     eyebrow: 'RULES AND INTEGRITY',
-                    title: 'Published rules, not hidden odds, drive the outcome.',
-                    description: 'The live match center should stay cinematic without becoming fuzzy. This block keeps the competition logic explicit and participant-safe.',
+                    title:
+                        'Published rules, not hidden odds, drive the outcome.',
+                    description:
+                        'The live match center should stay cinematic without becoming fuzzy. This block keeps the competition logic explicit and participant-safe.',
                     accent: GteShellTheme.accentArena,
                   ),
                   const SizedBox(height: 14),
@@ -409,8 +467,22 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
           competition: competition,
           isAuthenticated: widget.isAuthenticated,
           onOpenLogin: widget.onOpenLogin,
+          navigationDependencies: widget.navigationDependencies,
         ),
       ),
+    );
+  }
+
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
     );
   }
 

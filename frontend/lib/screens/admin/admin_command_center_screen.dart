@@ -3,6 +3,9 @@ import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/admin_engine_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/policy_admin_api.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/admin_engine_models.dart';
 import 'package:gte_frontend/models/policy_admin_models.dart';
 import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
@@ -104,12 +107,17 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         newPassword: _newPassword.text.trim(),
         confirmNewPassword: _confirmPassword.text.trim(),
       );
+      if (!mounted) {
+        return;
+      }
       _currentPassword.clear();
       _newPassword.clear();
       _confirmPassword.clear();
       AppFeedback.showSuccess(context, 'Admin password updated.');
     } catch (error) {
-      AppFeedback.showError(context, 'Unable to change password.');
+      if (mounted) {
+        AppFeedback.showError(context, 'Unable to change password.');
+      }
     } finally {
       if (mounted) {
         setState(() => _savingPassword = false);
@@ -191,6 +199,24 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  _AdminRoutePanel(
+                    onOpenCreatorLeagueFinance: () => _openRoute(
+                      const CreatorLeagueFinancialReportRouteData(),
+                    ),
+                    onOpenCreatorLeagueSettlements: () => _openRoute(
+                      const CreatorLeagueSettlementsRouteData(),
+                    ),
+                    onOpenCreatorShareControls: () => _openRoute(
+                      const CreatorShareMarketAdminControlRouteData(),
+                    ),
+                    onOpenCreatorStadiumControls: () => _openRoute(
+                      const CreatorStadiumAdminControlRouteData(),
+                    ),
+                    onOpenGiftStabilizer: () => _openRoute(
+                      const GiftStabilizerRouteData(),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   const GtexSectionHeader(
                     eyebrow: 'FEES + REWARD POOLS',
                     title: 'Tune fees, reward pools, and payout policies.',
@@ -262,7 +288,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                           children: <Widget>[
                             FilledButton.tonalIcon(
                               onPressed: () => _openGodMode(),
-                              icon: const Icon(Icons.admin_panel_settings_outlined),
+                              icon: const Icon(
+                                  Icons.admin_panel_settings_outlined),
                               label: const Text('Open God Mode'),
                             ),
                             OutlinedButton.icon(
@@ -284,8 +311,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
                         Text(
-                          'Document publishing and versioning require the admin policy endpoint to be wired.',
-                          style: Theme.of(context).textTheme.bodySmall),
+                            'Document publishing and versioning require the admin policy endpoint to be wired.',
+                            style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(height: 12),
                         FilledButton.tonalIcon(
                           onPressed: null,
@@ -425,36 +452,42 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           child: ListView(
             shrinkWrap: true,
             children: <Widget>[
-              Text('Edit reward rule', style: Theme.of(context).textTheme.titleLarge),
+              Text('Edit reward rule',
+                  style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
               TextField(
                 controller: trading,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Trading fee (bps)'),
+                decoration:
+                    const InputDecoration(labelText: 'Trading fee (bps)'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: gift,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Gift platform rake (bps)'),
+                decoration: const InputDecoration(
+                    labelText: 'Gift platform rake (bps)'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: withdrawal,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Withdrawal fee (bps)'),
+                decoration:
+                    const InputDecoration(labelText: 'Withdrawal fee (bps)'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: minFee,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Min withdrawal fee'),
+                decoration:
+                    const InputDecoration(labelText: 'Min withdrawal fee'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: competition,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Competition fee (bps)'),
+                decoration:
+                    const InputDecoration(labelText: 'Competition fee (bps)'),
               ),
               const SizedBox(height: 16),
               FilledButton(
@@ -464,15 +497,17 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     ruleKey: rule.ruleKey,
                     title: rule.title,
                     description: rule.description,
-                    tradingFeeBps: int.tryParse(trading.text) ?? rule.tradingFeeBps,
+                    tradingFeeBps:
+                        int.tryParse(trading.text) ?? rule.tradingFeeBps,
                     giftPlatformRakeBps:
                         int.tryParse(gift.text) ?? rule.giftPlatformRakeBps,
                     withdrawalFeeBps:
                         int.tryParse(withdrawal.text) ?? rule.withdrawalFeeBps,
-                    minimumWithdrawalFeeCredits:
-                        double.tryParse(minFee.text) ?? rule.minimumWithdrawalFeeCredits,
-                    competitionPlatformFeeBps:
-                        int.tryParse(competition.text) ?? rule.competitionPlatformFeeBps,
+                    minimumWithdrawalFeeCredits: double.tryParse(minFee.text) ??
+                        rule.minimumWithdrawalFeeCredits,
+                    competitionPlatformFeeBps: int.tryParse(competition.text) ??
+                        rule.competitionPlatformFeeBps,
+                    stabilityControls: rule.stabilityControls,
                     active: rule.active,
                   );
                   await _refresh();
@@ -642,6 +677,28 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       ),
     );
   }
+
+  Future<void> _openRoute(GteAppRouteData route) {
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: _routeDependencies(),
+    );
+  }
+
+  GteNavigationDependencies _routeDependencies() {
+    final String accessToken = widget.accessToken.trim();
+    final bool hasAdminSession = accessToken.isNotEmpty;
+    return GteNavigationDependencies(
+      apiBaseUrl: widget.baseUrl,
+      backendMode: widget.backendMode,
+      currentUserId: hasAdminSession ? 'admin-user' : 'guest-user',
+      currentUserName: hasAdminSession ? 'Admin' : null,
+      currentUserRole: hasAdminSession ? 'admin' : null,
+      accessToken: hasAdminSession ? accessToken : null,
+      isAuthenticated: hasAdminSession,
+    );
+  }
 }
 
 class _AdminCommandBundle {
@@ -690,16 +747,126 @@ class _RewardRuleCard extends StatelessWidget {
                 GteMetricChip(
                     label: 'Trading fee', value: '${rule.tradingFeeBps} bps'),
                 GteMetricChip(
-                    label: 'Withdraw fee', value: '${rule.withdrawalFeeBps} bps'),
+                    label: 'Withdraw fee',
+                    value: '${rule.withdrawalFeeBps} bps'),
                 GteMetricChip(
                     label: 'Competition fee',
                     value: '${rule.competitionPlatformFeeBps} bps'),
                 GteMetricChip(
-                    label: 'Gift rake', value: '${rule.giftPlatformRakeBps} bps'),
+                    label: 'Gift rake',
+                    value: '${rule.giftPlatformRakeBps} bps'),
+                GteMetricChip(
+                    label: 'Fan entry cap',
+                    value:
+                        '${rule.stabilityControls.fanPrediction.dailyEntryCap}'),
+                GteMetricChip(
+                    label: 'Viewer purchase cap',
+                    value: rule.stabilityControls.creatorViewerPurchase.dailyCap
+                        .toStringAsFixed(0)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Gift stability controls',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                GteMetricChip(
+                  label: 'User gifts',
+                  value:
+                      '${rule.stabilityControls.userHostedGift.maxGiftValue.toStringAsFixed(0)} max',
+                ),
+                GteMetricChip(
+                  label: 'GTEX gifts',
+                  value:
+                      '${rule.stabilityControls.gtexCompetitionGift.maxGiftValue.toStringAsFixed(0)} max',
+                ),
+                GteMetricChip(
+                  label: 'Creator gifts',
+                  value:
+                      '${rule.stabilityControls.creatorMatchGift.maxGiftValue.toStringAsFixed(0)} max',
+                ),
+                GteMetricChip(
+                  label: 'Reward cooldown',
+                  value: '${rule.stabilityControls.reward.cooldownSeconds}s',
+                ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AdminRoutePanel extends StatelessWidget {
+  const _AdminRoutePanel({
+    required this.onOpenCreatorLeagueFinance,
+    required this.onOpenCreatorLeagueSettlements,
+    required this.onOpenCreatorShareControls,
+    required this.onOpenCreatorStadiumControls,
+    required this.onOpenGiftStabilizer,
+  });
+
+  final VoidCallback onOpenCreatorLeagueFinance;
+  final VoidCallback onOpenCreatorLeagueSettlements;
+  final VoidCallback onOpenCreatorShareControls;
+  final VoidCallback onOpenCreatorStadiumControls;
+  final VoidCallback onOpenGiftStabilizer;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentAdmin,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Command routes',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Finance, creator-control, and stabilizer surfaces mount through deep links so admin navigation stays compact.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onOpenCreatorLeagueFinance,
+                icon: const Icon(Icons.account_balance_outlined),
+                label: const Text('League finance'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenCreatorLeagueSettlements,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('Settlements'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenCreatorShareControls,
+                icon: const Icon(Icons.candlestick_chart_outlined),
+                label: const Text('Creator shares'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenCreatorStadiumControls,
+                icon: const Icon(Icons.stadium_outlined),
+                label: const Text('Stadium controls'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenGiftStabilizer,
+                icon: const Icon(Icons.tune_outlined),
+                label: const Text('Gift stabilizer'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -726,7 +893,7 @@ class _PolicyCard extends StatelessWidget {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    '${policy.countryCode} • ${policy.bucketType}',
+                    '${policy.countryCode} â€¢ ${policy.bucketType}',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -749,8 +916,7 @@ class _PolicyCard extends StatelessWidget {
                     value:
                         policy.platformRewardWithdrawalsEnabled ? 'On' : 'Off'),
                 GteMetricChip(
-                    label: 'Active',
-                    value: policy.active ? 'Yes' : 'No'),
+                    label: 'Active', value: policy.active ? 'Yes' : 'No'),
               ],
             ),
           ],

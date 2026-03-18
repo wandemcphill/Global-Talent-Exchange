@@ -10,7 +10,7 @@ class AdminEngineApi {
   });
 
   final GteAuthedApi client;
-  final _AdminEngineFixtures fixtures;
+  final AdminEngineFixtures fixtures;
 
   factory AdminEngineApi.standard({
     required String baseUrl,
@@ -24,7 +24,7 @@ class AdminEngineApi {
         accessToken: accessToken,
         mode: mode,
       ),
-      fixtures: _AdminEngineFixtures.seed(),
+      fixtures: AdminEngineFixtures.seed(),
     );
   }
 
@@ -39,7 +39,7 @@ class AdminEngineApi {
         accessToken: 'fixture-token',
         mode: GteBackendMode.fixture,
       ),
-      fixtures: _AdminEngineFixtures.seed(),
+      fixtures: AdminEngineFixtures.seed(),
     );
   }
 
@@ -145,6 +145,7 @@ class AdminEngineApi {
     int withdrawalFeeBps = 1000,
     double minimumWithdrawalFeeCredits = 5,
     int competitionPlatformFeeBps = 1000,
+    AdminRewardRuleStabilityControls? stabilityControls,
     bool active = true,
   }) {
     return client.withFallback<AdminRewardRule>(
@@ -161,6 +162,9 @@ class AdminEngineApi {
             'withdrawal_fee_bps': withdrawalFeeBps,
             'minimum_withdrawal_fee_credits': minimumWithdrawalFeeCredits,
             'competition_platform_fee_bps': competitionPlatformFeeBps,
+            'stability_controls': (stabilityControls ??
+                    const AdminRewardRuleStabilityControls.defaults())
+                .toJson(),
             'active': active,
           },
         );
@@ -171,15 +175,16 @@ class AdminEngineApi {
   }
 }
 
-class _AdminEngineFixtures {
-  _AdminEngineFixtures(this._featureFlags, this._calendarRules, this._rewardRules);
+class AdminEngineFixtures {
+  AdminEngineFixtures(
+      this._featureFlags, this._calendarRules, this._rewardRules);
 
   final List<AdminFeatureFlag> _featureFlags;
   final List<AdminCalendarRule> _calendarRules;
   final List<AdminRewardRule> _rewardRules;
 
-  static _AdminEngineFixtures seed() {
-    return _AdminEngineFixtures(
+  static AdminEngineFixtures seed() {
+    return AdminEngineFixtures(
       <AdminFeatureFlag>[
         AdminFeatureFlag(
           id: 'flag-1',
@@ -215,6 +220,7 @@ class _AdminEngineFixtures {
           withdrawalFeeBps: 1000,
           minimumWithdrawalFeeCredits: 5,
           competitionPlatformFeeBps: 1000,
+          stabilityControls: const AdminRewardRuleStabilityControls.defaults(),
           active: true,
           updatedAt: DateTime.parse('2026-03-12T00:00:00Z'),
         ),
@@ -282,6 +288,7 @@ class _AdminEngineFixtures {
       withdrawalFeeBps: 1000,
       minimumWithdrawalFeeCredits: 5,
       competitionPlatformFeeBps: 1000,
+      stabilityControls: const AdminRewardRuleStabilityControls.defaults(),
       active: true,
       updatedAt: DateTime.now().toUtc(),
     );

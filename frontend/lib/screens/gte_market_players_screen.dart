@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../features/app_routes/gte_navigation_helpers.dart';
+import '../features/app_routes/gte_route_data.dart';
+import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../data/gte_exchange_models.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_formatters.dart';
@@ -16,11 +19,13 @@ class GteMarketPlayersScreen extends StatefulWidget {
     required this.controller,
     required this.onOpenPlayer,
     required this.onOpenLogin,
+    this.navigationDependencies,
   });
 
   final GteExchangeController controller;
   final ValueChanged<String> onOpenPlayer;
   final VoidCallback onOpenLogin;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
   State<GteMarketPlayersScreen> createState() => _GteMarketPlayersScreenState();
@@ -35,7 +40,8 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController(text: widget.controller.marketSearch);
+    _searchController =
+        TextEditingController(text: widget.controller.marketSearch);
     _searchController.addListener(_handleSearchChanged);
   }
 
@@ -58,12 +64,19 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
           children: <Widget>[
             GtexHeroBanner(
               eyebrow: 'TRADING FLOOR',
-              title: 'A football asset terminal built for speed, conviction, and clean execution.',
-              description: 'Trade mode stays dense and analytical. Quotes, movement, liquidity signals, and player profiles take center stage while the e-game arena lives on a different wavelength.',
+              title:
+                  'A football asset terminal built for speed, conviction, and clean execution.',
+              description:
+                  'Trade mode stays dense and analytical. Quotes, movement, liquidity signals, and player profiles take center stage while the e-game arena lives on a different wavelength.',
               accent: GteShellTheme.accent,
               chips: <Widget>[
-                GteMetricChip(label: 'Visible', value: _filteredPlayers.length.toString()),
-                GteMetricChip(label: 'Tape size', value: (widget.controller.marketPage?.total ?? 0).toString()),
+                GteMetricChip(
+                    label: 'Visible',
+                    value: _filteredPlayers.length.toString()),
+                GteMetricChip(
+                    label: 'Tape size',
+                    value:
+                        (widget.controller.marketPage?.total ?? 0).toString()),
                 GteMetricChip(
                   label: 'Session',
                   value: widget.controller.isAuthenticated ? 'LIVE' : 'PREVIEW',
@@ -73,7 +86,8 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               ],
               actions: <Widget>[
                 FilledButton.tonalIcon(
-                  onPressed: widget.controller.isLoadingMarket ? null : _refresh,
+                  onPressed:
+                      widget.controller.isLoadingMarket ? null : _refresh,
                   icon: const Icon(Icons.refresh),
                   label: const Text('Refresh tape'),
                 ),
@@ -103,7 +117,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                               icon: const Icon(Icons.close),
                             ),
                           IconButton(
-                            onPressed: widget.controller.isLoadingMarket ? null : _refresh,
+                            onPressed: widget.controller.isLoadingMarket
+                                ? null
+                                : _refresh,
                             icon: const Icon(Icons.search),
                           ),
                         ],
@@ -117,7 +133,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                       Expanded(
                         child: _MiniTerminalTile(
                           label: 'Execution',
-                          value: widget.controller.isAuthenticated ? 'ARMED' : 'LOGIN',
+                          value: widget.controller.isAuthenticated
+                              ? 'ARMED'
+                              : 'LOGIN',
                           accent: GteShellTheme.accent,
                         ),
                       ),
@@ -125,7 +143,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                       Expanded(
                         child: _MiniTerminalTile(
                           label: 'Wallet link',
-                          value: widget.controller.walletSummary == null ? 'PENDING' : 'SYNCED',
+                          value: widget.controller.walletSummary == null
+                              ? 'PENDING'
+                              : 'SYNCED',
                           accent: GteShellTheme.accentWarm,
                         ),
                       ),
@@ -137,27 +157,33 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             const SizedBox(height: 20),
             GtexSignalStrip(
               title: 'Desk pulse',
-              subtitle: 'Trade mode keeps a tighter heartbeat than the arena. These signals tell you whether the tape is rising, cooling, or just waiting for better liquidity.',
+              subtitle:
+                  'Trade mode keeps a tighter heartbeat than the arena. These signals tell you whether the tape is rising, cooling, or just waiting for better liquidity.',
               accent: GteShellTheme.accent,
               tiles: <Widget>[
                 GtexSignalTile(
                   label: 'Momentum bias',
                   value: _deskBiasLabel(widget.controller.players),
-                  caption: 'A quick read on whether more visible assets are being bid up or leaning into softer offers.',
+                  caption:
+                      'A quick read on whether more visible assets are being bid up or leaning into softer offers.',
                   icon: Icons.trending_up_rounded,
                   color: GteShellTheme.accent,
                 ),
                 GtexSignalTile(
                   label: 'Coverage',
                   value: '${widget.controller.players.length} TRACKED',
-                  caption: 'What you see on this tape is scan-first. Thin books stay visible instead of being airbrushed away.',
+                  caption:
+                      'What you see on this tape is scan-first. Thin books stay visible instead of being airbrushed away.',
                   icon: Icons.view_kanban_outlined,
                   color: GteShellTheme.accentWarm,
                 ),
                 GtexSignalTile(
                   label: 'Execution posture',
-                  value: widget.controller.isAuthenticated ? 'ORDER ENTRY READY' : 'SCOUT MODE',
-                  caption: 'Sign-in unlocks order tickets, wallet linkage, and portfolio-aware confirmation flows.',
+                  value: widget.controller.isAuthenticated
+                      ? 'ORDER ENTRY READY'
+                      : 'SCOUT MODE',
+                  caption:
+                      'Sign-in unlocks order tickets, wallet linkage, and portfolio-aware confirmation flows.',
                   icon: Icons.bolt_outlined,
                   color: const Color(0xFF8DD9FF),
                 ),
@@ -174,11 +200,30 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               isRefreshing: widget.controller.isLoadingMarket,
               onRefresh: _refresh,
             ),
+            if (widget.navigationDependencies != null) ...<Widget>[
+              const SizedBox(height: 20),
+              _MarketRoutePanel(
+                onOpenPlayerCards: () => _openFeatureRoute(
+                  const PlayerCardsBrowseRouteData(),
+                ),
+                onOpenCreatorShareMarket: _openCreatorShareMarketRoute,
+                onOpenClubSaleMarket: () => _openFeatureRoute(
+                  widget.navigationDependencies!.currentClubId == null
+                      ? const ClubSaleMarketListingsRouteData()
+                      : ClubSaleMarketDetailRouteData(
+                          clubId: widget.navigationDependencies!.currentClubId!,
+                          clubName:
+                              widget.navigationDependencies!.currentClubName,
+                        ),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             const GtexSectionHeader(
               eyebrow: 'MARKET LENS',
               title: 'Focus the tape before you dive into individual assets.',
-              description: 'The lens bar keeps the trading floor tight. Filter for risers, dips, or high-interest names without drifting into arena-style browsing.',
+              description:
+                  'The lens bar keeps the trading floor tight. Filter for risers, dips, or high-interest names without drifting into arena-style browsing.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -194,8 +239,10 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             const SizedBox(height: 20),
             const GtexSectionHeader(
               eyebrow: 'DESK CONTEXT',
-              title: 'Read the tape before you place conviction behind a click.',
-              description: 'These notes keep the trading floor honest about liquidity, execution posture, and how much of the price is truly tradable right now.',
+              title:
+                  'Read the tape before you place conviction behind a click.',
+              description:
+                  'These notes keep the trading floor honest about liquidity, execution posture, and how much of the price is truly tradable right now.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
@@ -205,19 +252,24 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               children: <Widget>[
                 _DeskSignalCard(
                   title: 'Tape mood',
-                  body: widget.controller.players.isEmpty ? 'Waiting for price feed.' : 'Quotes are flowing and the desk is scan-ready.',
+                  body: widget.controller.players.isEmpty
+                      ? 'Waiting for price feed.'
+                      : 'Quotes are flowing and the desk is scan-ready.',
                 ),
                 _DeskSignalCard(
                   title: 'Liquidity note',
-                  body: 'Thin books stay visible instead of being disguised. You can see where conviction is real.',
+                  body:
+                      'Thin books stay visible instead of being disguised. You can see where conviction is real.',
                 ),
                 _DeskSignalCard(
                   title: 'Execution policy',
-                  body: 'Guests can scout the tape. Signed-in users get order entry, wallet context, and portfolio sync.',
+                  body:
+                      'Guests can scout the tape. Signed-in users get order entry, wallet context, and portfolio sync.',
                 ),
               ],
             ),
-            if (widget.controller.marketError != null && widget.controller.players.isNotEmpty) ...<Widget>[
+            if (widget.controller.marketError != null &&
+                widget.controller.players.isNotEmpty) ...<Widget>[
               const SizedBox(height: 20),
               GteSurfacePanel(
                 child: Row(
@@ -241,31 +293,38 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             const SizedBox(height: 20),
             GtexSectionHeader(
               eyebrow: 'PRICE BOARD',
-              title: _filteredPlayers.isEmpty ? 'The board needs another look.' : 'Scan the board and pick your next entry.',
+              title: _filteredPlayers.isEmpty
+                  ? 'The board needs another look.'
+                  : 'Scan the board and pick your next entry.',
               description: _filteredPlayers.isEmpty
                   ? 'When the market is thin, the app keeps the state explicit instead of pretending the tape is full. Refresh, widen the lens, or clear the search to keep moving.'
                   : 'Trading cards stay compact, signal-rich, and execution-aware so the floor feels different from the live match center.',
               accent: GteShellTheme.accent,
             ),
             const SizedBox(height: 14),
-            if (widget.controller.isLoadingMarket && widget.controller.players.isEmpty)
+            if (widget.controller.isLoadingMarket &&
+                widget.controller.players.isEmpty)
               const GteSurfacePanel(
                 accentColor: GteShellTheme.accent,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    GtexSectionBadge(label: 'LOADING TAPE', color: GteShellTheme.accent),
+                    GtexSectionBadge(
+                        label: 'LOADING TAPE', color: GteShellTheme.accent),
                     SizedBox(height: 14),
                     LinearProgressIndicator(),
                     SizedBox(height: 14),
-                    Text('Refreshing player discovery, liquidity hints, and the latest visible movement so the board opens with a clean snapshot.'),
+                    Text(
+                        'Refreshing player discovery, liquidity hints, and the latest visible movement so the board opens with a clean snapshot.'),
                   ],
                 ),
               )
-            else if (widget.controller.marketError != null && widget.controller.players.isEmpty)
+            else if (widget.controller.marketError != null &&
+                widget.controller.players.isEmpty)
               GteStatePanel(
                 title: 'Market unavailable',
-                message: 'The trading floor could not confirm a fresh board. ${widget.controller.marketError!}',
+                message:
+                    'The trading floor could not confirm a fresh board. ${widget.controller.marketError!}',
                 actionLabel: 'Retry board',
                 onAction: _refresh,
                 icon: Icons.warning_amber_rounded,
@@ -276,7 +335,9 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 message: _searchController.text.trim().isEmpty
                     ? 'This lens is currently quiet. Switch the market lens or pull to refresh the board.'
                     : 'No players matched "${_searchController.text.trim()}" in the ${_lensLabel(_selectedLens).toLowerCase()} view.',
-                actionLabel: _searchController.text.trim().isEmpty ? 'Reset lens' : 'Clear search',
+                actionLabel: _searchController.text.trim().isEmpty
+                    ? 'Reset lens'
+                    : 'Clear search',
                 onAction: () {
                   if (_searchController.text.trim().isNotEmpty) {
                     _searchController.clear();
@@ -306,7 +367,8 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
               Center(
                 child: FilledButton.tonal(
                   onPressed: () {
-                    widget.controller.loadMarket(search: _searchController.text, reset: false);
+                    widget.controller.loadMarket(
+                        search: _searchController.text, reset: false);
                   },
                   child: const Text('Load more from tape'),
                 ),
@@ -318,16 +380,22 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     );
   }
 
-
   List<GteMarketPlayerListItem> get _filteredPlayers {
     final List<GteMarketPlayerListItem> players = widget.controller.players;
     switch (_selectedLens) {
       case _MarketLens.risers:
-        return players.where((GteMarketPlayerListItem player) => player.movementPct > 0).toList(growable: false);
+        return players
+            .where((GteMarketPlayerListItem player) => player.movementPct > 0)
+            .toList(growable: false);
       case _MarketLens.fallers:
-        return players.where((GteMarketPlayerListItem player) => player.movementPct < 0).toList(growable: false);
+        return players
+            .where((GteMarketPlayerListItem player) => player.movementPct < 0)
+            .toList(growable: false);
       case _MarketLens.highInterest:
-        return players.where((GteMarketPlayerListItem player) => player.marketInterestScore >= 70).toList(growable: false);
+        return players
+            .where((GteMarketPlayerListItem player) =>
+                player.marketInterestScore >= 70)
+            .toList(growable: false);
       case _MarketLens.all:
         return players;
     }
@@ -353,7 +421,60 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
   }
 
   Future<void> _refresh() {
-    return widget.controller.loadMarket(search: _searchController.text, reset: true);
+    return widget.controller
+        .loadMarket(search: _searchController.text, reset: true);
+  }
+
+  Future<void> _openCreatorShareMarketRoute() async {
+    final String? clubId = widget.navigationDependencies?.currentClubId?.trim();
+    if (clubId == null || clubId.isEmpty) {
+      await _showRouteRequirementDialog(
+        title: 'Club selection required',
+        message:
+            'Creator-share market routes are club-scoped and stay blocked until the session exposes a canonical current club id.',
+      );
+      return;
+    }
+    await _openFeatureRoute(
+      CreatorShareMarketClubRouteData(
+        clubId: clubId,
+        clubName: widget.navigationDependencies?.currentClubName,
+      ),
+    );
+  }
+
+  Future<void> _showRouteRequirementDialog({
+    required String title,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
+    );
   }
 }
 
@@ -361,7 +482,8 @@ String _deskBiasLabel(List<GteMarketPlayerListItem> players) {
   if (players.isEmpty) {
     return 'WAITING';
   }
-  final int risers = players.where((GteMarketPlayerListItem player) => player.isRising).length;
+  final int risers =
+      players.where((GteMarketPlayerListItem player) => player.isRising).length;
   final int fallers = players.length - risers;
   if (risers == fallers) {
     return 'BALANCED';
@@ -369,6 +491,60 @@ String _deskBiasLabel(List<GteMarketPlayerListItem> players) {
   return risers > fallers ? 'RISK ON' : 'COOLING';
 }
 
+class _MarketRoutePanel extends StatelessWidget {
+  const _MarketRoutePanel({
+    required this.onOpenPlayerCards,
+    required this.onOpenCreatorShareMarket,
+    required this.onOpenClubSaleMarket,
+  });
+
+  final VoidCallback onOpenPlayerCards;
+  final VoidCallback onOpenCreatorShareMarket;
+  final VoidCallback onOpenClubSaleMarket;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Market extensions',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Card, creator-share, and club-sale deep links sit beside the trading floor instead of becoming new shell tabs.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onOpenPlayerCards,
+                icon: const Icon(Icons.style_outlined),
+                label: const Text('Player cards'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenCreatorShareMarket,
+                icon: const Icon(Icons.candlestick_chart_outlined),
+                label: const Text('Creator shares'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenClubSaleMarket,
+                icon: const Icon(Icons.storefront_outlined),
+                label: const Text('Club sale market'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _MarketLensBar extends StatelessWidget {
   const _MarketLensBar({
@@ -383,11 +559,28 @@ class _MarketLensBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<({String label, _MarketLens lens, String value})> options = <({String label, _MarketLens lens, String value})>[
-      (label: 'All tape', lens: _MarketLens.all, value: counts.total.toString()),
-      (label: 'Risers', lens: _MarketLens.risers, value: counts.risers.toString()),
-      (label: 'Dips', lens: _MarketLens.fallers, value: counts.fallers.toString()),
-      (label: 'Heat', lens: _MarketLens.highInterest, value: counts.highInterest.toString()),
+    final List<({String label, _MarketLens lens, String value})> options =
+        <({String label, _MarketLens lens, String value})>[
+      (
+        label: 'All tape',
+        lens: _MarketLens.all,
+        value: counts.total.toString()
+      ),
+      (
+        label: 'Risers',
+        lens: _MarketLens.risers,
+        value: counts.risers.toString()
+      ),
+      (
+        label: 'Dips',
+        lens: _MarketLens.fallers,
+        value: counts.fallers.toString()
+      ),
+      (
+        label: 'Heat',
+        lens: _MarketLens.highInterest,
+        value: counts.highInterest.toString()
+      ),
     ];
     return GteSurfacePanel(
       padding: const EdgeInsets.all(14),
@@ -396,7 +589,8 @@ class _MarketLensBar extends StatelessWidget {
         runSpacing: 10,
         children: options
             .map(
-              (({String label, _MarketLens lens, String value}) option) => ChoiceChip(
+              (({String label, _MarketLens lens, String value}) option) =>
+                  ChoiceChip(
                 label: Text('${option.label} ${option.value}'),
                 selected: selectedLens == option.lens,
                 onSelected: (_) => onSelected(option.lens),
@@ -424,9 +618,16 @@ class _MarketLensCounts {
   factory _MarketLensCounts.fromPlayers(List<GteMarketPlayerListItem> players) {
     return _MarketLensCounts(
       total: players.length,
-      risers: players.where((GteMarketPlayerListItem player) => player.movementPct > 0).length,
-      fallers: players.where((GteMarketPlayerListItem player) => player.movementPct < 0).length,
-      highInterest: players.where((GteMarketPlayerListItem player) => player.marketInterestScore >= 70).length,
+      risers: players
+          .where((GteMarketPlayerListItem player) => player.movementPct > 0)
+          .length,
+      fallers: players
+          .where((GteMarketPlayerListItem player) => player.movementPct < 0)
+          .length,
+      highInterest: players
+          .where((GteMarketPlayerListItem player) =>
+              player.marketInterestScore >= 70)
+          .length,
     );
   }
 }
@@ -439,13 +640,15 @@ class _PlayerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color movementColor = player.isRising ? GteShellTheme.positive : GteShellTheme.negative;
+    final Color movementColor =
+        player.isRising ? GteShellTheme.positive : GteShellTheme.negative;
     final String demandLabel = player.marketInterestScore >= 80
         ? 'HEAVY FLOW'
         : player.marketInterestScore >= 55
             ? 'ACTIVE FLOW'
             : 'THIN FLOW';
-    final bool looksIlliquid = player.marketInterestScore < 35 && player.trendScore < 4;
+    final bool looksIlliquid =
+        player.marketInterestScore < 35 && player.trendScore < 4;
     return GteSurfacePanel(
       onTap: onTap,
       accentColor: movementColor,
@@ -458,15 +661,17 @@ class _PlayerCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(player.playerName, style: Theme.of(context).textTheme.headlineSmall),
+                    Text(player.playerName,
+                        style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 6),
                     Text(
                       <String>[
-                        if (player.currentClubName != null) player.currentClubName!,
+                        if (player.currentClubName != null)
+                          player.currentClubName!,
                         if (player.nationality != null) player.nationality!,
                         if (player.position != null) player.position!,
                         'Age ${player.age}',
-                      ].join(' • '),
+                      ].join(' Ã¢â‚¬Â¢ '),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -477,7 +682,8 @@ class _PlayerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       color: looksIlliquid
@@ -487,22 +693,29 @@ class _PlayerCard extends StatelessWidget {
                     child: Text(
                       looksIlliquid ? 'THIN BOOK' : demandLabel,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: looksIlliquid ? GteShellTheme.accentWarm : movementColor,
+                            color: looksIlliquid
+                                ? GteShellTheme.accentWarm
+                                : movementColor,
                           ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(gteFormatCredits(player.currentValueCredits), style: Theme.of(context).textTheme.titleLarge),
+                  Text(gteFormatCredits(player.currentValueCredits),
+                      style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       color: movementColor.withValues(alpha: 0.12),
                     ),
                     child: Text(
                       gteFormatMovement(player.movementPct),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: movementColor),
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelLarge
+                          ?.copyWith(color: movementColor),
                     ),
                   ),
                 ],
@@ -515,7 +728,11 @@ class _PlayerCard extends StatelessWidget {
               Expanded(
                 child: _MicroBookStat(
                   label: 'Trend pressure',
-                  value: player.trendScore >= 7 ? 'ACCELERATING' : player.trendScore >= 4 ? 'BUILDING' : 'QUIET',
+                  value: player.trendScore >= 7
+                      ? 'ACCELERATING'
+                      : player.trendScore >= 4
+                          ? 'BUILDING'
+                          : 'QUIET',
                   color: movementColor,
                 ),
               ),
@@ -523,7 +740,11 @@ class _PlayerCard extends StatelessWidget {
               Expanded(
                 child: _MicroBookStat(
                   label: 'Scout demand',
-                  value: player.marketInterestScore >= 70 ? 'HEAVY' : player.marketInterestScore >= 40 ? 'ACTIVE' : 'LIGHT',
+                  value: player.marketInterestScore >= 70
+                      ? 'HEAVY'
+                      : player.marketInterestScore >= 40
+                          ? 'ACTIVE'
+                          : 'LIGHT',
                   color: GteShellTheme.accentWarm,
                 ),
               ),
@@ -542,11 +763,20 @@ class _PlayerCard extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: <Widget>[
-                GteMetricChip(label: 'Trend score', value: player.trendScore.toStringAsFixed(1)),
-                GteMetricChip(label: 'Interest', value: player.marketInterestScore.toString()),
+                GteMetricChip(
+                    label: 'Trend score',
+                    value: player.trendScore.toStringAsFixed(1)),
+                GteMetricChip(
+                    label: 'Interest',
+                    value: player.marketInterestScore.toString()),
                 GteMetricChip(label: 'Flow', value: demandLabel),
-                GteMetricChip(label: 'Rating', value: player.averageRating?.toStringAsFixed(1) ?? '--'),
-                GteMetricChip(label: 'Market state', value: player.isRising ? 'BID UP' : 'CHECK OFFER', positive: player.isRising),
+                GteMetricChip(
+                    label: 'Rating',
+                    value: player.averageRating?.toStringAsFixed(1) ?? '--'),
+                GteMetricChip(
+                    label: 'Market state',
+                    value: player.isRising ? 'BID UP' : 'CHECK OFFER',
+                    positive: player.isRising),
               ],
             ),
           ),
@@ -599,7 +829,8 @@ class _DeskSignalCard extends StatelessWidget {
 }
 
 class _MicroBookStat extends StatelessWidget {
-  const _MicroBookStat({required this.label, required this.value, required this.color});
+  const _MicroBookStat(
+      {required this.label, required this.value, required this.color});
 
   final String label;
   final String value;
@@ -619,7 +850,11 @@ class _MicroBookStat extends StatelessWidget {
         children: <Widget>[
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color)),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: color)),
         ],
       ),
     );
@@ -627,7 +862,8 @@ class _MicroBookStat extends StatelessWidget {
 }
 
 class _MiniTerminalTile extends StatelessWidget {
-  const _MiniTerminalTile({required this.label, required this.value, required this.accent});
+  const _MiniTerminalTile(
+      {required this.label, required this.value, required this.accent});
 
   final String label;
   final String value;
@@ -647,7 +883,11 @@ class _MiniTerminalTile extends StatelessWidget {
         children: <Widget>[
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: accent)),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: accent)),
         ],
       ),
     );

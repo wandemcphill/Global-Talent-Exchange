@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -22,11 +25,13 @@ class GteLiveMatchCenterScreen extends StatefulWidget {
     required this.competition,
     this.isAuthenticated = false,
     this.onOpenLogin,
+    this.navigationDependencies,
   });
 
   final CompetitionSummary competition;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
   State<GteLiveMatchCenterScreen> createState() =>
@@ -53,6 +58,19 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     setState(() {
       _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
     });
+  }
+
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
+    );
   }
 
   Future<void> _openHalftime() async {
@@ -134,6 +152,66 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               children: <Widget>[
                 _LiveScoreboardCard(match: match),
+                if (widget.navigationDependencies != null) ...<Widget>[
+                  const SizedBox(height: 16),
+                  GteSurfacePanel(
+                    accentColor: GteShellTheme.accentArena,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Match extensions',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Prediction and creator-stadium routes only open from a resolved match id. This live center uses the match snapshot id instead of a placeholder.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: <Widget>[
+                            FilledButton.tonalIcon(
+                              onPressed: match.matchId == null ||
+                                      match.matchId!.trim().isEmpty
+                                  ? null
+                                  : () => _openFeatureRoute(
+                                        FanPredictionMatchRouteData(
+                                          matchId: match.matchId!.trim(),
+                                        ),
+                                      ),
+                              icon: const Icon(Icons.insights_outlined),
+                              label: const Text('Fan predictions'),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: match.matchId == null ||
+                                      match.matchId!.trim().isEmpty
+                                  ? null
+                                  : () => _openFeatureRoute(
+                                        CreatorStadiumMatchRouteData(
+                                          matchId: match.matchId!.trim(),
+                                        ),
+                                      ),
+                              icon: const Icon(Icons.stadium_outlined),
+                              label: const Text('Stadium monetization'),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: () => _openFeatureRoute(
+                                WorldCompetitionContextRouteData(
+                                  competitionId: widget.competition.id,
+                                ),
+                              ),
+                              icon: const Icon(Icons.public_outlined),
+                              label: const Text('World context'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 GteSurfacePanel(
                   accentColor: GteShellTheme.accentArena,
@@ -402,7 +480,8 @@ class _CommentaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<LiveMatchEvent> events = match.commentary.reversed.take(6).toList();
+    final List<LiveMatchEvent> events =
+        match.commentary.reversed.take(6).toList();
     if (events.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,10 +715,15 @@ class _MatchStatsView extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: <Widget>[
-            GteMetricChip(label: '${match.homeTeam} Poss', value: '$homePossession%'),
-            GteMetricChip(label: '${match.awayTeam} Poss', value: '$awayPossession%'),
-            GteMetricChip(label: 'Shots', value: '${3 + match.homeScore + match.awayScore}'),
-            GteMetricChip(label: 'xG (est)', value: '${1.1 + match.homeScore * 0.4}'),
+            GteMetricChip(
+                label: '${match.homeTeam} Poss', value: '$homePossession%'),
+            GteMetricChip(
+                label: '${match.awayTeam} Poss', value: '$awayPossession%'),
+            GteMetricChip(
+                label: 'Shots',
+                value: '${3 + match.homeScore + match.awayScore}'),
+            GteMetricChip(
+                label: 'xG (est)', value: '${1.1 + match.homeScore * 0.4}'),
             GteMetricChip(label: 'Pressing', value: 'Aggressive'),
           ],
         ),
@@ -735,7 +819,8 @@ class _LineupTile extends StatelessWidget {
         children: <Widget>[
           SizedBox(
             width: 32,
-            child: Text(player.position, style: Theme.of(context).textTheme.bodySmall),
+            child: Text(player.position,
+                style: Theme.of(context).textTheme.bodySmall),
           ),
           Expanded(
             child: Text(
@@ -771,13 +856,16 @@ class _IncidentView extends StatelessWidget {
           if (match.cards.isNotEmpty) ...<Widget>[
             Text('Cards', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
-            ...match.cards.map((LiveMatchEvent event) => _IncidentTile(event: event)),
+            ...match.cards
+                .map((LiveMatchEvent event) => _IncidentTile(event: event)),
             const SizedBox(height: 12),
           ],
           if (match.substitutions.isNotEmpty) ...<Widget>[
-            Text('Substitutions', style: Theme.of(context).textTheme.titleSmall),
+            Text('Substitutions',
+                style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
-            ...match.substitutions.map((LiveMatchEvent event) => _IncidentTile(event: event)),
+            ...match.substitutions
+                .map((LiveMatchEvent event) => _IncidentTile(event: event)),
           ],
         ],
       ),
@@ -796,7 +884,8 @@ class _IncidentTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: <Widget>[
-          Text('${event.minute}\'', style: Theme.of(context).textTheme.bodySmall),
+          Text('${event.minute}\'',
+              style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

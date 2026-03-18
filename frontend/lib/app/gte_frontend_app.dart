@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../core/gte_session_identity.dart';
 import '../data/gte_exchange_api_client.dart';
-import '../data/gte_api_repository.dart';
 import '../features/app_routes/gte_app_route_registry.dart';
 import '../features/navigation/presentation/gte_navigation_shell_screen.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
+import '../screens/gte_login_screen.dart';
 import '../widgets/gte_shell_theme.dart';
 import 'gte_app_config.dart';
 
@@ -53,14 +53,38 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
 
   @override
   Widget build(BuildContext context) {
-    final GteSessionIdentity identity = GteSessionIdentity.fromExchangeController(_controller);
+    final GteSessionIdentity identity =
+        GteSessionIdentity.fromExchangeController(_controller);
     final GteNavigationDependencies dependencies = GteNavigationDependencies(
       apiBaseUrl: _config.apiBaseUrl,
       backendMode: _config.backendMode,
       currentUserId: identity.userId,
       currentUserName: identity.userName,
+      currentUserRole: _controller.session?.user.role,
+      currentClubId: identity.clubId,
+      currentClubName: identity.clubName,
+      accessToken: _controller.accessToken,
       isAuthenticated: _controller.isAuthenticated,
-      onOpenLogin: null,
+      onOpenLogin: (BuildContext context) async {
+        final bool? signedIn = await Navigator.of(context).push<bool>(
+          MaterialPageRoute<bool>(
+            builder: (BuildContext context) =>
+                GteLoginScreen(controller: _controller),
+          ),
+        );
+        return signedIn == true;
+      },
+      currentUserIdProvider: () =>
+          GteSessionIdentity.fromExchangeController(_controller).userId,
+      currentUserNameProvider: () =>
+          GteSessionIdentity.fromExchangeController(_controller).userName,
+      currentUserRoleProvider: () => _controller.session?.user.role,
+      currentClubIdProvider: () =>
+          GteSessionIdentity.fromExchangeController(_controller).clubId,
+      currentClubNameProvider: () =>
+          GteSessionIdentity.fromExchangeController(_controller).clubName,
+      accessTokenProvider: () => _controller.accessToken,
+      isAuthenticatedProvider: () => _controller.isAuthenticated,
     );
     final GteAppRouteRegistry registry = GteAppRouteRegistry(
       dependencies: dependencies,
@@ -81,7 +105,8 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         if (name != null && name.startsWith('/app')) {
           return MaterialPageRoute<void>(
             settings: settings,
-            builder: (BuildContext context) => GteNavigationShellScreen.fromPath(
+            builder: (BuildContext context) =>
+                GteNavigationShellScreen.fromPath(
               controller: _controller,
               apiBaseUrl: _config.apiBaseUrl,
               backendMode: _config.backendMode,
