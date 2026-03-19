@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
+from enum import Enum
 from secrets import token_hex
 from typing import Iterable
 
 from fastapi import Depends
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -81,6 +83,7 @@ _DEFAULT_RULES = (
     "Skill-based, player-versus-player contest with transparent entry fees, disclosed platform service fees, "
     "and a rules-based prize pool. No odds, house-banked outcomes, or prediction markets."
 )
+_DISCOVERY_SKIP_REASONS = frozenset({"invalid_summary_state", "rules_missing"})
 _TWO_PLACES = Decimal("0.01")
 _FOUR_PLACES = Decimal("0.0001")
 
@@ -90,6 +93,15 @@ class CompetitionActionError(ValueError):
         super().__init__(detail)
         self.detail = detail
         self.reason = reason or detail
+
+
+@dataclass(frozen=True, slots=True)
+class _CompetitionSummaryContext:
+    creator_id: str
+    viewer_user_id: str | None = None
+    invite_code: str | None = None
+    league_id: str | None = None
+    season_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -313,12 +325,9 @@ class CompetitionOrchestrator:
 
         items: list[CompetitionSummaryView] = []
         for item in competitions:
-            try:
-                items.append(self._to_summary(item))
-            except CompetitionActionError as exc:
-                if exc.reason == "rules_missing":
-                    continue
-                raise
+            summary = self._safe_list_summary(item)
+            if summary is not None:
+                items.append(summary)
         if fee_filter == "free":
             items = [item for item in items if item.entry_fee <= 0]
         elif fee_filter == "paid":
@@ -795,24 +804,31 @@ class CompetitionOrchestrator:
         rule_set = self._rule_set(competition.id)
         fees = self._fees_for(competition, participant_count=participant_count)
         payout_structure = self._payout_breakdown(competition=competition, prize_pool=fees.prize_pool)
-        join_decision = self._join_decision_for(
+        metadata = self._summary_metadata(competition)
+        context = self._summary_context(
             competition,
+            metadata=metadata,
             user_id=user_id,
             invite_code=invite_code,
+        )
+        capacity = self._summary_capacity(rule_set)
+        join_decision = self._join_decision_for(
+            competition,
+            user_id=context.viewer_user_id,
+            invite_code=context.invite_code,
             participant_count=participant_count,
         )
-        metadata = competition.metadata_json or {}
         return CompetitionSummaryView(
             id=competition.id,
             name=competition.name,
-            format=CompetitionFormat(competition.format),
-            visibility=CompetitionVisibility(competition.visibility),
-            status=CompetitionStatus(competition.status),
-            creator_id=competition.host_user_id,
+            format=self._coerce_enum(CompetitionFormat, competition.format, field_name="format"),
+            visibility=self._coerce_enum(CompetitionVisibility, competition.visibility, field_name="visibility"),
+            status=self._coerce_enum(CompetitionStatus, competition.status, field_name="status"),
+            creator_id=context.creator_id,
             creator_name=metadata.get("creator_name"),
             participant_count=participant_count,
-            capacity=rule_set.max_participants,
-            currency=competition.currency,
+            capacity=capacity,
+            currency=self._normalized_string(competition.currency) or "credit",
             entry_fee=fees.entry_fee,
             platform_fee_pct=fees.platform_fee_pct,
             host_fee_pct=fees.host_fee_pct,
@@ -830,6 +846,16 @@ class CompetitionOrchestrator:
             created_at=competition.created_at,
             updated_at=competition.updated_at,
         )
+
+    def _safe_list_summary(self, competition: Competition) -> CompetitionSummaryView | None:
+        try:
+            return self._to_summary(competition)
+        except CompetitionActionError as exc:
+            if exc.reason in _DISCOVERY_SKIP_REASONS:
+                return None
+            raise
+        except ValidationError:
+            return None
 
     def _payout_breakdown(
         self,
@@ -996,16 +1022,18 @@ class CompetitionOrchestrator:
         already_joined: bool | None = None,
     ) -> JoinDecision:
         rule_set = self._rule_set(competition.id)
+        user_id = self._normalized_string(user_id)
+        invite_code = self._normalized_string(invite_code)
         participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
         already_joined = already_joined if already_joined is not None else (
             self._participant(competition.id, user_id) is not None if user_id else False
         )
         invite_valid = self._resolve_invite(competition.id, invite_code=invite_code, club_id=user_id, consume=False) is not None
         join_decision = self.join_service.evaluate_join(
-            status=CompetitionStatus(competition.status),
-            visibility=CompetitionVisibility(competition.visibility),
+            status=self._coerce_enum(CompetitionStatus, competition.status, field_name="status"),
+            visibility=self._coerce_enum(CompetitionVisibility, competition.visibility, field_name="visibility"),
             participant_count=participant_count,
-            capacity=rule_set.max_participants,
+            capacity=self._summary_capacity(rule_set),
             already_joined=already_joined,
             invite_valid=invite_valid,
         )
@@ -1029,6 +1057,53 @@ class CompetitionOrchestrator:
                     requires_invite=visibility_decision.requires_invite,
                 )
         return join_decision
+
+    def _summary_context(
+        self,
+        competition: Competition,
+        *,
+        metadata: dict[str, object],
+        user_id: str | None = None,
+        invite_code: str | None = None,
+    ) -> _CompetitionSummaryContext:
+        return _CompetitionSummaryContext(
+            creator_id=self._required_identifier(competition.host_user_id, field_name="host_user_id"),
+            viewer_user_id=self._normalized_string(user_id),
+            invite_code=self._normalized_string(invite_code),
+            league_id=self._normalized_string(metadata.get("creator_league_config_id")) or self._normalized_string(competition.source_id),
+            season_id=self._normalized_string(metadata.get("creator_league_season_id")),
+        )
+
+    def _summary_metadata(self, competition: Competition) -> dict[str, object]:
+        metadata = competition.metadata_json
+        if metadata is None:
+            return {}
+        if isinstance(metadata, dict):
+            return metadata
+        raise CompetitionActionError("Competition metadata is invalid.", reason="invalid_summary_state")
+
+    def _summary_capacity(self, rule_set: CompetitionRuleSet) -> int:
+        if not isinstance(rule_set.max_participants, int) or rule_set.max_participants < 2:
+            raise CompetitionActionError("Competition capacity is invalid.", reason="invalid_summary_state")
+        return rule_set.max_participants
+
+    def _required_identifier(self, value: object, *, field_name: str) -> str:
+        normalized = self._normalized_string(value)
+        if normalized is None:
+            raise CompetitionActionError(f"Competition {field_name} is missing.", reason="invalid_summary_state")
+        return normalized
+
+    def _coerce_enum(self, enum_type: type[Enum], value: object, *, field_name: str):
+        try:
+            return enum_type(value)
+        except ValueError as exc:
+            raise CompetitionActionError(f"Competition {field_name} is invalid.", reason="invalid_summary_state") from exc
+
+    def _normalized_string(self, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     def _resolve_invite(
         self,

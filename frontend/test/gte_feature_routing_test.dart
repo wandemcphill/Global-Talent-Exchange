@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
@@ -248,10 +252,11 @@ void main() {
   });
 
   testWidgets(
-      'home dashboard shows an explicit no-club state at the widget boundary',
+      'home dashboard shows guided onboarding and stays offline without a canonical club',
       (WidgetTester tester) async {
+    final _CountingExchangeApiClient api = _CountingExchangeApiClient.fixture();
     final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
+      api: api,
     );
     controller.session = _authenticatedSession(
       userId: 'user-no-club',
@@ -259,28 +264,44 @@ void main() {
       clubId: null,
       clubName: null,
     );
+    final _HttpRequestProbe probe = _HttpRequestProbe();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: HomeDashboardScreen(
-          exchangeController: controller,
-          apiBaseUrl: 'http://127.0.0.1:8000',
-          backendMode: GteBackendMode.fixture,
-          navigationDependencies: _dependencies(
-            isAuthenticated: true,
-            clubId: null,
-            clubName: null,
+    await HttpOverrides.runZoned<Future<void>>(
+      () async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: HomeDashboardScreen(
+              exchangeController: controller,
+              apiBaseUrl: 'http://127.0.0.1:8000',
+              backendMode: GteBackendMode.live,
+              onOpenClubTab: () {},
+              onOpenCompetitionsTab: () {},
+              navigationDependencies: _dependencies(
+                isAuthenticated: true,
+                clubId: null,
+                clubName: null,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+        await tester.pumpAndSettle();
+      },
+      createHttpClient: (SecurityContext? _) => _ProbeHttpClient(probe),
     );
-    await tester.pumpAndSettle();
 
-    expect(find.text('No canonical club is selected'), findsOneWidget);
+    expect(find.text('Create or join a club to unlock Home'), findsOneWidget);
+    expect(find.text('Create Club'), findsWidgets);
+    expect(find.text('Join Club'), findsWidgets);
+    expect(find.text('Explore Arena'), findsWidgets);
+    expect(find.text('No canonical club is selected'), findsNothing);
     expect(
-      find.textContaining('Home requires a canonical club context'),
-      findsOneWidget,
+      find.text(
+        'Home requires a canonical club context before club-scoped surfaces can load.',
+      ),
+      findsNothing,
     );
+    expect(probe.openUrlCount, 0);
+    expect(api.listOrdersCount, 0);
   });
 
   testWidgets('market quick links open public club sale listings',
@@ -633,4 +654,116 @@ GteAuthSession _authenticatedSession({
       },
     },
   );
+}
+
+class _CountingExchangeApiClient extends GteExchangeApiClient {
+  _CountingExchangeApiClient._(this._delegate)
+      : super(
+          config: _delegate.config,
+          transport: _delegate.transport,
+          repository: _delegate.repository,
+        );
+
+  factory _CountingExchangeApiClient.fixture() {
+    final GteExchangeApiClient delegate = GteExchangeApiClient.fixture();
+    return _CountingExchangeApiClient._(delegate);
+  }
+
+  final GteExchangeApiClient _delegate;
+  int listOrdersCount = 0;
+
+  @override
+  Future<GteOrderListView> listOrders({
+    int limit = 20,
+    int offset = 0,
+    List<GteOrderStatus>? statuses,
+  }) {
+    listOrdersCount += 1;
+    return _delegate.listOrders(
+      limit: limit,
+      offset: offset,
+      statuses: statuses,
+    );
+  }
+}
+
+class _HttpRequestProbe {
+  int openUrlCount = 0;
+}
+
+class _ProbeHttpClient implements HttpClient {
+  _ProbeHttpClient(this._probe);
+
+  final _HttpRequestProbe _probe;
+
+  @override
+  Duration? connectionTimeout;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) async {
+    _probe.openUrlCount += 1;
+    return _ProbeHttpRequest();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ProbeHttpRequest implements HttpClientRequest {
+  @override
+  final HttpHeaders headers = _ProbeHttpHeaders();
+
+  @override
+  Future<HttpClientResponse> close() async => _ProbeHttpResponse();
+
+  @override
+  void write(Object? object) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ProbeHttpResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  final Stream<List<int>> _delegate = Stream<List<int>>.fromIterable(
+    <List<int>>[utf8.encode('{}')],
+  );
+
+  @override
+  HttpHeaders get headers => _ProbeHttpHeaders();
+
+  @override
+  int get statusCode => 200;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return _delegate.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ProbeHttpHeaders implements HttpHeaders {
+  @override
+  void add(String name, Object value, {bool preserveHeaderCase = false}) {}
+
+  @override
+  void forEach(void Function(String name, List<String> values) action) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

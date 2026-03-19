@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from backend.app.models.competition import Competition
 from backend.app.models.competition_prize_rule import CompetitionPrizeRule
 from backend.app.models.competition_rule_set import CompetitionRuleSet
 
@@ -193,6 +194,39 @@ def test_discovery_skips_competitions_missing_rules(client, app_session_factory)
         assert prize_rule is not None
         session.delete(rule_set)
         session.delete(prize_rule)
+        session.commit()
+
+    response = client.get("/api/competitions", params={"creator_id": creator_id})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
+def test_discovery_returns_empty_for_malformed_creator_league_metadata(client, app_session_factory) -> None:
+    creator_id = "discovery-null-context"
+    competition_id = _create(
+        client,
+        name="Broken Arena Creator League",
+        format="league",
+        visibility="public",
+        entry_fee="0.00",
+        capacity=10,
+        creator_id=creator_id,
+        beginner_friendly=None,
+        created_at=datetime(2026, 3, 13, tzinfo=timezone.utc).isoformat(),
+    )
+
+    with app_session_factory() as session:
+        competition = session.get(Competition, competition_id)
+        assert competition is not None
+        competition.source_type = "creator_league"
+        competition.source_id = None
+        competition.metadata_json = {
+            "creator_league_config_id": None,
+            "creator_league_season_id": None,
+            "creator_league_season_tier_id": None,
+            "creator_name": {"user_id": None},
+        }
         session.commit()
 
     response = client.get("/api/competitions", params={"creator_id": creator_id})
