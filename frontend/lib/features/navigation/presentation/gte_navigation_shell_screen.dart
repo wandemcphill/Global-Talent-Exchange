@@ -25,6 +25,7 @@ import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
+import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
@@ -505,25 +506,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                       index: GtePrimaryDestination.values
                           .indexOf(_route.primaryDestination),
                       children: <Widget>[
-                        HomeDashboardScreen(
-                          key: const PageStorageKey<String>('home-dashboard'),
-                          exchangeController: widget.controller,
-                          apiBaseUrl: widget.apiBaseUrl,
-                          backendMode: widget.backendMode,
-                          onOpenLogin: () => _openLogin(
-                            targetRoute: const GteNavigationRoute.home(),
-                          ),
-                          clubId: _clubProfileId(),
-                          clubName: _clubProfileName(),
-                          onOpenClubTab: () => _openPrimaryDestination(
-                            GtePrimaryDestination.club,
-                          ),
-                          onOpenCompetitionsTab: () => _openPrimaryDestination(
-                            GtePrimaryDestination.competitions,
-                          ),
-                          onOpenClubSubtab: _openClubSubtab,
-                          navigationDependencies: _navigationDependencies(),
-                        ),
+                        _buildHomeDestination(),
                         GteMarketPlayersScreen(
                           key: const PageStorageKey<String>('market-screen'),
                           controller: widget.controller,
@@ -577,20 +560,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                                     }
                                   : null,
                         ),
-                        ClubHubScreen(
-                          key: ValueKey<String>(
-                              'club-${_clubInitialTab.id}-$_clubHostSeed'),
-                          clubId: _clubProfileId(),
-                          clubName: _clubProfileName(),
-                          baseUrl: widget.apiBaseUrl,
-                          backendMode: widget.backendMode,
-                          isAuthenticated: widget.controller.isAuthenticated,
-                          onOpenLogin: () => _openLogin(
-                            targetRoute: const GteNavigationRoute.club(),
-                          ),
-                          initialTab: _clubInitialTab,
-                          navigationDependencies: _navigationDependencies(),
-                        ),
+                        _buildClubDestination(),
                         GtePortfolioScreen(
                           key: const PageStorageKey<String>('portfolio-screen'),
                           controller: widget.controller,
@@ -639,6 +609,111 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildClubDestination() {
+    final String? canonicalClubId = _canonicalClubId()?.trim();
+    final String? canonicalClubName = _canonicalClubName()?.trim();
+    if (canonicalClubId != null && canonicalClubId.isNotEmpty) {
+      return ClubHubScreen(
+        key: ValueKey<String>('club-${_clubInitialTab.id}-$_clubHostSeed'),
+        clubId: canonicalClubId,
+        clubName: canonicalClubName != null && canonicalClubName.isNotEmpty
+            ? canonicalClubName
+            : null,
+        baseUrl: widget.apiBaseUrl,
+        backendMode: widget.backendMode,
+        isAuthenticated: widget.controller.isAuthenticated,
+        onOpenLogin: () => _openLogin(
+          targetRoute: const GteNavigationRoute.club(),
+        ),
+        initialTab: _clubInitialTab,
+        navigationDependencies: _navigationDependencies(),
+      );
+    }
+    if (!widget.controller.isAuthenticated) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: GteStatePanel(
+          eyebrow: 'CLUB SCOPE',
+          title: 'Sign in to open a club workspace',
+          message:
+              'Guest preview mode does not expose a canonical club. Sign in to continue with a real club context or create one first.',
+          icon: Icons.login_outlined,
+          accentColor: const Color(0xFF85B8FF),
+          actionLabel: 'Sign in',
+          onAction: () {
+            _openLogin(targetRoute: const GteNavigationRoute.club());
+          },
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: GteStatePanel(
+        eyebrow: 'CLUB SCOPE',
+        title: 'No canonical club is selected',
+        message:
+            'This signed-in session does not expose a canonical current club. Select a club from the authenticated account context or create one before opening club-scoped surfaces.',
+        icon: Icons.shield_outlined,
+        accentColor: const Color(0xFF85B8FF),
+        actionLabel: 'Open home',
+        onAction: () => _openPrimaryDestination(GtePrimaryDestination.home),
+      ),
+    );
+  }
+
+  Widget _buildHomeDestination() {
+    final String? canonicalClubId = _canonicalClubId()?.trim();
+    if (canonicalClubId == null || canonicalClubId.isEmpty) {
+      if (!widget.controller.isAuthenticated) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: GteStatePanel(
+            eyebrow: 'CLUB SCOPE',
+            title: 'Sign in to open club-scoped home',
+            message:
+                'Guest preview mode does not expose a canonical club. Sign in to continue with a real club context or create one first.',
+            icon: Icons.login_outlined,
+            accentColor: const Color(0xFF72F0D8),
+            actionLabel: 'Sign in',
+            onAction: () {
+              _openLogin(targetRoute: const GteNavigationRoute.home());
+            },
+          ),
+        );
+      }
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: GteStatePanel(
+          eyebrow: 'CLUB SCOPE',
+          title: 'No canonical club is selected',
+          message:
+              'This signed-in session does not expose a canonical current club. Select a club from the authenticated account context or create one before using club-scoped home surfaces.',
+          icon: Icons.home_outlined,
+          accentColor: Color(0xFF72F0D8),
+        ),
+      );
+    }
+    return HomeDashboardScreen(
+      key: const PageStorageKey<String>('home-dashboard'),
+      exchangeController: widget.controller,
+      apiBaseUrl: widget.apiBaseUrl,
+      backendMode: widget.backendMode,
+      onOpenLogin: () => _openLogin(
+        targetRoute: const GteNavigationRoute.home(),
+      ),
+      clubId: _canonicalClubId(),
+      clubName: _canonicalClubName(),
+      onOpenClubTab: () => _openPrimaryDestination(
+        GtePrimaryDestination.club,
+      ),
+      onOpenCompetitionsTab: () => _openPrimaryDestination(
+        GtePrimaryDestination.competitions,
+      ),
+      onOpenClubSubtab: _openClubSubtab,
+      navigationDependencies: _navigationDependencies(),
     );
   }
 
@@ -694,16 +769,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       currentUserId: _competitionUserId,
       currentUserName: _competitionUserName,
       currentUserRole: widget.controller.session?.user.role,
-      currentClubId: _clubProfileId(),
-      currentClubName: _clubProfileName(),
+      currentClubId: _canonicalClubId(),
+      currentClubName: _canonicalClubName(),
       accessToken: widget.controller.accessToken,
       isAuthenticated: widget.controller.isAuthenticated,
       onOpenLogin: (BuildContext _) => _openLogin(targetRoute: _route),
       currentUserIdProvider: _resolveCompetitionUserId,
       currentUserNameProvider: _resolveCompetitionUserName,
       currentUserRoleProvider: () => widget.controller.session?.user.role,
-      currentClubIdProvider: _clubProfileId,
-      currentClubNameProvider: _clubProfileName,
+      currentClubIdProvider: _canonicalClubId,
+      currentClubNameProvider: _canonicalClubName,
       accessTokenProvider: () => widget.controller.accessToken,
       isAuthenticatedProvider: () => widget.controller.isAuthenticated,
     );
@@ -872,11 +947,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return _identity().userName;
   }
 
-  String _clubProfileId() {
-    return _identity().clubId ?? 'royal-lagos-fc';
+  String? _canonicalClubId() {
+    return _identity().clubId;
   }
 
-  String _clubProfileName() {
-    return _identity().clubName ?? 'Royal Lagos FC';
+  String? _canonicalClubName() {
+    return _identity().clubName;
   }
 }

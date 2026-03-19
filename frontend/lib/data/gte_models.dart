@@ -105,8 +105,7 @@ class GteJson {
     Object? source = value;
     String resolvedLabel = label;
     if (keys != null) {
-      final Map<String, Object?> container =
-          _tryMap(value) ?? fallback;
+      final Map<String, Object?> container = _tryMap(value) ?? fallback;
       source = GteJson.value(container, keys);
       resolvedLabel = keys.join(' / ');
       if (source == null) {
@@ -565,6 +564,7 @@ class GteCurrentUser {
     this.kycStatus,
     this.isActive = true,
     this.ageConfirmedAt,
+    this.rawJson = const <String, Object?>{},
   });
 
   final String id;
@@ -577,6 +577,7 @@ class GteCurrentUser {
   final String? kycStatus;
   final bool isActive;
   final DateTime? ageConfirmedAt;
+  final Map<String, Object?> rawJson;
 
   factory GteCurrentUser.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'current user');
@@ -596,6 +597,7 @@ class GteCurrentUser {
           fallback: true),
       ageConfirmedAt: GteJson.dateTimeOrNull(
           json, <String>['age_confirmed_at', 'ageConfirmedAt']),
+      rawJson: Map<String, Object?>.unmodifiable(json),
     );
   }
 }
@@ -608,6 +610,7 @@ class GteAuthSession {
     required this.user,
     this.permissions = const <String>[],
     this.landingRoute,
+    this.rawJson = const <String, Object?>{},
   });
 
   final String accessToken;
@@ -616,6 +619,7 @@ class GteAuthSession {
   final GteCurrentUser user;
   final List<String> permissions;
   final String? landingRoute;
+  final Map<String, Object?> rawJson;
 
   factory GteAuthSession.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'auth session');
@@ -627,8 +631,11 @@ class GteAuthSession {
       expiresIn: GteJson.integer(json, <String>['expires_in', 'expiresIn'],
           fallback: 0),
       user: GteCurrentUser.fromJson(GteJson.value(json, <String>['user'])),
-      permissions: GteJson.typedList<String>(json, <String>['permissions'], (Object? value) => value.toString()),
-      landingRoute: GteJson.stringOrNull(json, <String>['landing_route', 'landingRoute']),
+      permissions: GteJson.typedList<String>(
+          json, <String>['permissions'], (Object? value) => value.toString()),
+      landingRoute:
+          GteJson.stringOrNull(json, <String>['landing_route', 'landingRoute']),
+      rawJson: Map<String, Object?>.unmodifiable(json),
     );
   }
 }
@@ -916,8 +923,8 @@ class GteWalletOverview {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'wallet overview');
     return GteWalletOverview(
-      availableBalance:
-          GteJson.number(json, <String>['available_balance', 'availableBalance']),
+      availableBalance: GteJson.number(
+          json, <String>['available_balance', 'availableBalance']),
       pendingDeposits:
           GteJson.number(json, <String>['pending_deposits', 'pendingDeposits']),
       pendingWithdrawals: GteJson.number(
@@ -930,10 +937,14 @@ class GteWalletOverview {
           GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
       currency: _ledgerUnitFromString(
           GteJson.string(json, <String>['currency'], fallback: 'coin')),
-      countryCode: GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
+      countryCode:
+          GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
       requiredPolicyAcceptancesMissing: GteJson.integer(
         json,
-        <String>['required_policy_acceptances_missing', 'requiredPolicyAcceptancesMissing'],
+        <String>[
+          'required_policy_acceptances_missing',
+          'requiredPolicyAcceptancesMissing'
+        ],
       ),
       policyBlocked:
           GteJson.boolean(json, <String>['policy_blocked', 'policyBlocked']),
@@ -978,8 +989,8 @@ class GteWithdrawalEligibility {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'withdrawal eligibility');
     return GteWithdrawalEligibility(
-      availableBalance:
-          GteJson.number(json, <String>['available_balance', 'availableBalance']),
+      availableBalance: GteJson.number(
+          json, <String>['available_balance', 'availableBalance']),
       withdrawableNow:
           GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
       remainingAllowance: GteJson.number(
@@ -987,14 +998,16 @@ class GteWithdrawalEligibility {
       nextEligibleAt: GteJson.dateTimeOrNull(
           json, <String>['next_eligible_at', 'nextEligibleAt']),
       kycStatus: _kycStatusFromString(GteJson.string(
-          json, <String>['kyc_status', 'kycStatus'], fallback: 'unverified')),
+          json, <String>['kyc_status', 'kycStatus'],
+          fallback: 'unverified')),
       requiresKyc:
           GteJson.boolean(json, <String>['requires_kyc', 'requiresKyc']),
       requiresBankAccount: GteJson.boolean(
           json, <String>['requires_bank_account', 'requiresBankAccount']),
       pendingWithdrawals: GteJson.number(
           json, <String>['pending_withdrawals', 'pendingWithdrawals']),
-      countryCode: GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
+      countryCode:
+          GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
       countryWithdrawalsEnabled: GteJson.boolean(
         json,
         <String>['country_withdrawals_enabled', 'countryWithdrawalsEnabled'],
@@ -1004,7 +1017,9 @@ class GteWithdrawalEligibility {
         json,
         <String>['missing_required_policies', 'missingRequiredPolicies'],
         (Object? value) => value?.toString() ?? '',
-      ).where((String value) => value.trim().isNotEmpty).toList(growable: false),
+      )
+          .where((String value) => value.trim().isNotEmpty)
+          .toList(growable: false),
       policyBlocked:
           GteJson.boolean(json, <String>['policy_blocked', 'policyBlocked']),
       policyBlockReason: GteJson.stringOrNull(
@@ -1056,15 +1071,12 @@ class GteWithdrawalQuote {
           GteJson.number(json, <String>['gross_amount', 'grossAmount']),
       feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
       netAmount: GteJson.number(json, <String>['net_amount', 'netAmount']),
-      totalDebit:
-          GteJson.number(json, <String>['total_debit', 'totalDebit']),
-      sourceScope: GteJson.string(
-          json, <String>['source_scope', 'sourceScope'],
+      totalDebit: GteJson.number(json, <String>['total_debit', 'totalDebit']),
+      sourceScope: GteJson.string(json, <String>['source_scope', 'sourceScope'],
           fallback: 'trade'),
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
-      rateValue:
-          GteJson.number(json, <String>['rate_value', 'rateValue']),
+      rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
       rateDirection: _rateDirectionFromString(GteJson.string(
           json, <String>['rate_direction', 'rateDirection'],
           fallback: 'fiat_per_coin')),
@@ -1077,8 +1089,7 @@ class GteWithdrawalQuote {
           json, <String>['payout_channel', 'payoutChannel'],
           fallback: 'bank_transfer'),
       feeBps: GteJson.integer(json, <String>['fee_bps', 'feeBps']),
-      minimumFee:
-          GteJson.number(json, <String>['minimum_fee', 'minimumFee']),
+      minimumFee: GteJson.number(json, <String>['minimum_fee', 'minimumFee']),
       eligibility: GteWithdrawalEligibility.fromJson(
         GteJson.value(json, <String>['eligibility']),
       ),
@@ -1135,10 +1146,8 @@ class GteWithdrawalReceipt {
           GteJson.number(json, <String>['gross_amount', 'grossAmount']),
       feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
       netAmount: GteJson.number(json, <String>['net_amount', 'netAmount']),
-      totalDebit:
-          GteJson.number(json, <String>['total_debit', 'totalDebit']),
-      sourceScope: GteJson.string(
-          json, <String>['source_scope', 'sourceScope'],
+      totalDebit: GteJson.number(json, <String>['total_debit', 'totalDebit']),
+      sourceScope: GteJson.string(json, <String>['source_scope', 'sourceScope'],
           fallback: 'trade'),
       processorMode: GteJson.string(
           json, <String>['processor_mode', 'processorMode'],
@@ -1149,8 +1158,6 @@ class GteWithdrawalReceipt {
     );
   }
 }
-
-
 
 class GtePolicyDocumentVersionSummary {
   const GtePolicyDocumentVersionSummary({
@@ -1174,10 +1181,10 @@ class GtePolicyDocumentVersionSummary {
       id: GteJson.string(json, <String>['id']),
       versionLabel:
           GteJson.string(json, <String>['version_label', 'versionLabel']),
-      effectiveAt: GteJson.dateTimeOrNull(
-          json, <String>['effective_at', 'effectiveAt']),
-      publishedAt: GteJson.dateTimeOrNull(
-          json, <String>['published_at', 'publishedAt']),
+      effectiveAt:
+          GteJson.dateTimeOrNull(json, <String>['effective_at', 'effectiveAt']),
+      publishedAt:
+          GteJson.dateTimeOrNull(json, <String>['published_at', 'publishedAt']),
       changelog: GteJson.stringOrNull(json, <String>['changelog']),
     );
   }
@@ -1305,8 +1312,8 @@ class GtePolicyRequirementSummary {
           GteJson.string(json, <String>['version_label', 'versionLabel']),
       isMandatory:
           GteJson.boolean(json, <String>['is_mandatory', 'isMandatory']),
-      effectiveAt: GteJson.dateTimeOrNull(
-          json, <String>['effective_at', 'effectiveAt']),
+      effectiveAt:
+          GteJson.dateTimeOrNull(json, <String>['effective_at', 'effectiveAt']),
     );
   }
 }
@@ -1342,39 +1349,47 @@ class GteComplianceStatus {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'compliance status');
     return GteComplianceStatus(
-      countryCode:
-          GteJson.string(json, <String>['country_code', 'countryCode'], fallback: 'GLOBAL'),
+      countryCode: GteJson.string(json, <String>['country_code', 'countryCode'],
+          fallback: 'GLOBAL'),
       countryPolicyBucket: GteJson.string(
           json, <String>['country_policy_bucket', 'countryPolicyBucket'],
           fallback: 'default'),
-      depositsEnabled:
-          GteJson.boolean(json, <String>['deposits_enabled', 'depositsEnabled'], fallback: true),
+      depositsEnabled: GteJson.boolean(
+          json, <String>['deposits_enabled', 'depositsEnabled'],
+          fallback: true),
       marketTradingEnabled: GteJson.boolean(
           json, <String>['market_trading_enabled', 'marketTradingEnabled'],
           fallback: true),
       platformRewardWithdrawalsEnabled: GteJson.boolean(
         json,
-        <String>['platform_reward_withdrawals_enabled', 'platformRewardWithdrawalsEnabled'],
+        <String>[
+          'platform_reward_withdrawals_enabled',
+          'platformRewardWithdrawalsEnabled'
+        ],
         fallback: true,
       ),
       requiredPolicyAcceptancesMissing: GteJson.integer(
         json,
-        <String>['required_policy_acceptances_missing', 'requiredPolicyAcceptancesMissing'],
+        <String>[
+          'required_policy_acceptances_missing',
+          'requiredPolicyAcceptancesMissing'
+        ],
       ),
       missingPolicyAcceptances: GteJson.typedList(
         json,
         <String>['missing_policy_acceptances', 'missingPolicyAcceptances'],
         GtePolicyRequirementSummary.fromJson,
       ),
-      canDeposit:
-          GteJson.boolean(json, <String>['can_deposit', 'canDeposit'], fallback: true),
+      canDeposit: GteJson.boolean(json, <String>['can_deposit', 'canDeposit'],
+          fallback: true),
       canWithdrawPlatformRewards: GteJson.boolean(
         json,
         <String>['can_withdraw_platform_rewards', 'canWithdrawPlatformRewards'],
         fallback: true,
       ),
       canTradeMarket: GteJson.boolean(
-          json, <String>['can_trade_market', 'canTradeMarket'], fallback: true),
+          json, <String>['can_trade_market', 'canTradeMarket'],
+          fallback: true),
     );
   }
 }
@@ -1436,25 +1451,22 @@ class GteDepositRequest {
     return GteDepositRequest(
       id: GteJson.string(json, <String>['id']),
       reference: GteJson.string(json, <String>['reference']),
-      status: _depositStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'awaiting_payment')),
-      amountFiat:
-          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
-      amountCoin:
-          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      status: _depositStatusFromString(GteJson.string(json, <String>['status'],
+          fallback: 'awaiting_payment')),
+      amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
       rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
-      rateDirection: _rateDirectionFromString(
-          GteJson.string(json, <String>['rate_direction', 'rateDirection'],
-              fallback: 'fiat_per_coin')),
+      rateDirection: _rateDirectionFromString(GteJson.string(
+          json, <String>['rate_direction', 'rateDirection'],
+          fallback: 'fiat_per_coin')),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
       bankAccountNumber: GteJson.string(
           json, <String>['bank_account_number', 'bankAccountNumber']),
       bankAccountName: GteJson.string(
           json, <String>['bank_account_name', 'bankAccountName']),
-      bankCode:
-          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
       payerName:
           GteJson.stringOrNull(json, <String>['payer_name', 'payerName']),
       senderBank:
@@ -1513,8 +1525,7 @@ class GteDepositSubmitRequest {
         if (payerName != null) 'payer_name': payerName,
         if (senderBank != null) 'sender_bank': senderBank,
         if (transferReference != null) 'transfer_reference': transferReference,
-        if (proofAttachmentId != null)
-          'proof_attachment_id': proofAttachmentId,
+        if (proofAttachmentId != null) 'proof_attachment_id': proofAttachmentId,
       };
 }
 
@@ -1580,30 +1591,27 @@ class GteTreasuryWithdrawalRequest {
         GteJson.map(value, label: 'withdrawal request');
     return GteTreasuryWithdrawalRequest(
       id: GteJson.string(json, <String>['id']),
-      payoutRequestId:
-          GteJson.string(json, <String>['payout_request_id', 'payoutRequestId']),
+      payoutRequestId: GteJson.string(
+          json, <String>['payout_request_id', 'payoutRequestId']),
       reference: GteJson.string(json, <String>['reference']),
       status: _withdrawalStatusFromString(
           GteJson.string(json, <String>['status'], fallback: 'pending_review')),
       unit: _ledgerUnitFromString(
           GteJson.string(json, <String>['unit'], fallback: 'coin')),
-      amountCoin:
-          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
-      amountFiat:
-          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
       rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
-      rateDirection: _rateDirectionFromString(
-          GteJson.string(json, <String>['rate_direction', 'rateDirection'],
-              fallback: 'fiat_per_coin')),
+      rateDirection: _rateDirectionFromString(GteJson.string(
+          json, <String>['rate_direction', 'rateDirection'],
+          fallback: 'fiat_per_coin')),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
       bankAccountNumber: GteJson.string(
           json, <String>['bank_account_number', 'bankAccountNumber']),
       bankAccountName: GteJson.string(
           json, <String>['bank_account_name', 'bankAccountName']),
-      bankCode:
-          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
       kycStatusSnapshot: GteJson.string(
           json, <String>['kyc_status_snapshot', 'kycStatusSnapshot'],
           fallback: 'unverified'),
@@ -1611,8 +1619,7 @@ class GteTreasuryWithdrawalRequest {
           json, <String>['kyc_tier_snapshot', 'kycTierSnapshot'],
           fallback: 'unverified'),
       feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
-      totalDebit:
-          GteJson.number(json, <String>['total_debit', 'totalDebit']),
+      totalDebit: GteJson.number(json, <String>['total_debit', 'totalDebit']),
       notes: GteJson.stringOrNull(json, <String>['notes']),
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
@@ -1683,14 +1690,12 @@ class GteUserBankAccount {
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      accountNumber: GteJson.string(
-          json, <String>['account_number', 'accountNumber']),
+      accountNumber:
+          GteJson.string(json, <String>['account_number', 'accountNumber']),
       accountName:
           GteJson.string(json, <String>['account_name', 'accountName']),
-      bankCode:
-          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
-      isActive:
-          GteJson.boolean(json, <String>['is_active', 'isActive']),
+      bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      isActive: GteJson.boolean(json, <String>['is_active', 'isActive']),
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
       updatedAt:
@@ -1803,8 +1808,8 @@ class GteKycProfile {
       city: GteJson.stringOrNull(json, <String>['city']),
       state: GteJson.stringOrNull(json, <String>['state']),
       country: GteJson.stringOrNull(json, <String>['country']),
-      idDocumentAttachmentId: GteJson.stringOrNull(
-          json, <String>['id_document_attachment_id', 'idDocumentAttachmentId']),
+      idDocumentAttachmentId: GteJson.stringOrNull(json,
+          <String>['id_document_attachment_id', 'idDocumentAttachmentId']),
       submittedAt:
           GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
       reviewedAt:
@@ -1892,9 +1897,8 @@ class GteDisputeMessage {
       id: GteJson.string(json, <String>['id']),
       senderUserId: GteJson.stringOrNull(
           json, <String>['sender_user_id', 'senderUserId']),
-      senderRole:
-          GteJson.string(json, <String>['sender_role', 'senderRole'],
-              fallback: 'user'),
+      senderRole: GteJson.string(json, <String>['sender_role', 'senderRole'],
+          fallback: 'user'),
       message: GteJson.string(json, <String>['message']),
       attachmentId:
           GteJson.stringOrNull(json, <String>['attachment_id', 'attachmentId']),
@@ -1946,8 +1950,7 @@ class GteDispute {
       reference: GteJson.string(json, <String>['reference']),
       resourceType:
           GteJson.string(json, <String>['resource_type', 'resourceType']),
-      resourceId:
-          GteJson.string(json, <String>['resource_id', 'resourceId']),
+      resourceId: GteJson.string(json, <String>['resource_id', 'resourceId']),
       subject: GteJson.stringOrNull(json, <String>['subject']),
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
@@ -1956,10 +1959,9 @@ class GteDispute {
       lastMessageAt: GteJson.dateTimeOrNull(
           json, <String>['last_message_at', 'lastMessageAt']),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
-      userEmail:
-          GteJson.string(json, <String>['user_email', 'userEmail']),
-      userFullName:
-          GteJson.stringOrNull(json, <String>['user_full_name', 'userFullName']),
+      userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
+      userFullName: GteJson.stringOrNull(
+          json, <String>['user_full_name', 'userFullName']),
       userPhoneNumber: GteJson.stringOrNull(
           json, <String>['user_phone_number', 'userPhoneNumber']),
       messages: GteJson.typedList(
@@ -2040,8 +2042,7 @@ class GteNotification {
   final bool isRead;
 
   factory GteNotification.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'notification');
+    final Map<String, Object?> json = GteJson.map(value, label: 'notification');
     final Map<String, Object?> metadataJson = GteJson.map(
       GteJson.value(json, <String>['metadata']) ?? const <String, Object?>{},
       label: 'notification metadata',
@@ -2064,8 +2065,8 @@ class GteNotification {
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
       readAt: GteJson.dateTimeOrNull(json, <String>['read_at', 'readAt']),
-      isRead: GteJson.boolean(json, <String>['is_read', 'isRead'],
-          fallback: false),
+      isRead:
+          GteJson.boolean(json, <String>['is_read', 'isRead'], fallback: false),
     );
   }
 }
@@ -2086,15 +2087,13 @@ class GteAttachment {
   final DateTime? createdAt;
 
   factory GteAttachment.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'attachment');
+    final Map<String, Object?> json = GteJson.map(value, label: 'attachment');
     return GteAttachment(
       id: GteJson.string(json, <String>['id']),
       filename: GteJson.string(json, <String>['filename']),
       contentType:
           GteJson.string(json, <String>['content_type', 'contentType']),
-      sizeBytes:
-          GteJson.integer(json, <String>['size_bytes', 'sizeBytes']),
+      sizeBytes: GteJson.integer(json, <String>['size_bytes', 'sizeBytes']),
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
     );
@@ -2132,14 +2131,12 @@ class GteTreasuryBankAccount {
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      accountNumber: GteJson.string(
-          json, <String>['account_number', 'accountNumber']),
+      accountNumber:
+          GteJson.string(json, <String>['account_number', 'accountNumber']),
       accountName:
           GteJson.string(json, <String>['account_name', 'accountName']),
-      bankCode:
-          GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
-      isActive:
-          GteJson.boolean(json, <String>['is_active', 'isActive']),
+      bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
+      isActive: GteJson.boolean(json, <String>['is_active', 'isActive']),
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
       updatedAt:
@@ -2205,32 +2202,30 @@ class GteTreasurySettings {
           fallback: 'fiat_per_coin')),
       withdrawalRateValue: GteJson.number(
           json, <String>['withdrawal_rate_value', 'withdrawalRateValue']),
-      withdrawalRateDirection: _rateDirectionFromString(GteJson.string(
-          json,
+      withdrawalRateDirection: _rateDirectionFromString(GteJson.string(json,
           <String>['withdrawal_rate_direction', 'withdrawalRateDirection'],
           fallback: 'fiat_per_coin')),
-      minDeposit:
-          GteJson.number(json, <String>['min_deposit', 'minDeposit']),
-      maxDeposit:
-          GteJson.number(json, <String>['max_deposit', 'maxDeposit']),
+      minDeposit: GteJson.number(json, <String>['min_deposit', 'minDeposit']),
+      maxDeposit: GteJson.number(json, <String>['max_deposit', 'maxDeposit']),
       minWithdrawal:
           GteJson.number(json, <String>['min_withdrawal', 'minWithdrawal']),
       maxWithdrawal:
           GteJson.number(json, <String>['max_withdrawal', 'maxWithdrawal']),
-      depositMode: _paymentModeFromString(
-          GteJson.string(json, <String>['deposit_mode', 'depositMode'],
-              fallback: 'manual')),
-      withdrawalMode: _paymentModeFromString(
-          GteJson.string(json, <String>['withdrawal_mode', 'withdrawalMode'],
-              fallback: 'manual')),
+      depositMode: _paymentModeFromString(GteJson.string(
+          json, <String>['deposit_mode', 'depositMode'],
+          fallback: 'manual')),
+      withdrawalMode: _paymentModeFromString(GteJson.string(
+          json, <String>['withdrawal_mode', 'withdrawalMode'],
+          fallback: 'manual')),
       maintenanceMessage: GteJson.stringOrNull(
           json, <String>['maintenance_message', 'maintenanceMessage']),
-      whatsappNumber:
-          GteJson.stringOrNull(json, <String>['whatsapp_number', 'whatsappNumber']),
-      activeBankAccount: GteJson.value(json, <String>['active_bank_account']) == null
-          ? null
-          : GteTreasuryBankAccount.fromJson(
-              GteJson.value(json, <String>['active_bank_account'])),
+      whatsappNumber: GteJson.stringOrNull(
+          json, <String>['whatsapp_number', 'whatsappNumber']),
+      activeBankAccount:
+          GteJson.value(json, <String>['active_bank_account']) == null
+              ? null
+              : GteTreasuryBankAccount.fromJson(
+                  GteJson.value(json, <String>['active_bank_account'])),
       createdAt:
           GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
       updatedAt:
@@ -2276,7 +2271,8 @@ class GteTreasurySettingsUpdate {
         if (currencyCode != null) 'currency_code': currencyCode,
         if (depositRateValue != null) 'deposit_rate_value': depositRateValue,
         if (depositRateDirection != null)
-          'deposit_rate_direction': _rateDirectionToString(depositRateDirection!),
+          'deposit_rate_direction':
+              _rateDirectionToString(depositRateDirection!),
         if (withdrawalRateValue != null)
           'withdrawal_rate_value': withdrawalRateValue,
         if (withdrawalRateDirection != null)
@@ -2379,16 +2375,14 @@ class GteTreasuryDashboard {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'treasury dashboard');
     return GteTreasuryDashboard(
-      totalUsers:
-          GteJson.integer(json, <String>['total_users', 'totalUsers']),
+      totalUsers: GteJson.integer(json, <String>['total_users', 'totalUsers']),
       activeUsers:
           GteJson.integer(json, <String>['active_users', 'activeUsers']),
-      pendingDeposits:
-          GteJson.integer(json, <String>['pending_deposits', 'pendingDeposits']),
+      pendingDeposits: GteJson.integer(
+          json, <String>['pending_deposits', 'pendingDeposits']),
       pendingWithdrawals: GteJson.integer(
           json, <String>['pending_withdrawals', 'pendingWithdrawals']),
-      pendingKyc:
-          GteJson.integer(json, <String>['pending_kyc', 'pendingKyc']),
+      pendingKyc: GteJson.integer(json, <String>['pending_kyc', 'pendingKyc']),
       openDisputes:
           GteJson.integer(json, <String>['open_disputes', 'openDisputes']),
       depositsConfirmedToday: GteJson.integer(
@@ -2452,12 +2446,10 @@ class GteAdminDeposit {
     return GteAdminDeposit(
       id: GteJson.string(json, <String>['id']),
       reference: GteJson.string(json, <String>['reference']),
-      status: _depositStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'awaiting_payment')),
-      amountFiat:
-          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
-      amountCoin:
-          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      status: _depositStatusFromString(GteJson.string(json, <String>['status'],
+          fallback: 'awaiting_payment')),
+      amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
       payerName:
@@ -2479,8 +2471,7 @@ class GteAdminDeposit {
       adminNotes:
           GteJson.stringOrNull(json, <String>['admin_notes', 'adminNotes']),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
-      userEmail:
-          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
       userFullName: GteJson.stringOrNull(
           json, <String>['user_full_name', 'userFullName']),
       userPhoneNumber: GteJson.stringOrNull(
@@ -2542,10 +2533,8 @@ class GteAdminWithdrawal {
       reference: GteJson.string(json, <String>['reference']),
       status: _withdrawalStatusFromString(
           GteJson.string(json, <String>['status'], fallback: 'pending_review')),
-      amountCoin:
-          GteJson.number(json, <String>['amount_coin', 'amountCoin']),
-      amountFiat:
-          GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
       currencyCode:
           GteJson.string(json, <String>['currency_code', 'currencyCode']),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
@@ -2567,8 +2556,7 @@ class GteAdminWithdrawal {
       cancelledAt:
           GteJson.dateTimeOrNull(json, <String>['cancelled_at', 'cancelledAt']),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
-      userEmail:
-          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
       userFullName: GteJson.stringOrNull(
           json, <String>['user_full_name', 'userFullName']),
       userPhoneNumber: GteJson.stringOrNull(
@@ -2632,8 +2620,7 @@ class GteAdminKyc {
           GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
       rejectionReason: GteJson.stringOrNull(
           json, <String>['rejection_reason', 'rejectionReason']),
-      userEmail:
-          GteJson.string(json, <String>['user_email', 'userEmail']),
+      userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
       userFullName: GteJson.stringOrNull(
           json, <String>['user_full_name', 'userFullName']),
       userPhoneNumber: GteJson.stringOrNull(
@@ -2659,8 +2646,7 @@ class GteAdminQueuePage<T> {
     Object? value,
     T Function(Object? value) parser,
   ) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'admin queue');
+    final Map<String, Object?> json = GteJson.map(value, label: 'admin queue');
     return GteAdminQueuePage<T>(
       items: GteJson.typedList(json, <String>['items'], parser),
       total: GteJson.integer(json, <String>['total']),

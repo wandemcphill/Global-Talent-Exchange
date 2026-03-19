@@ -292,32 +292,100 @@ class ClubSaleListing {
 
   factory ClubSaleListing.fromJson(Object? value) {
     final JsonMap json = jsonMap(value, label: 'club sale listing');
+    final JsonMap? club = jsonMapOrNull(json['club']);
+    final JsonMap? seller = jsonMapOrNull(json['seller']);
+    final String clubId = _clubSaleString(
+      <Object?>[
+        json['club_id'],
+        json['clubId'],
+        club?['id'],
+        club?['club_id'],
+        club?['clubId'],
+        club?['slug'],
+        club?['club_slug'],
+      ],
+    );
+    final double askingPrice = _clubSaleNumber(
+      <Object?>[json['asking_price'], json['askingPrice']],
+    );
+    final double systemValuation = _clubSaleNumber(
+      <Object?>[json['system_valuation'], json['systemValuation']],
+      fallback: askingPrice,
+    );
     return ClubSaleListing(
-      listingId: stringValue(json['listing_id']),
-      clubId: stringValue(json['club_id']),
-      clubName: stringValue(json['club_name']),
-      sellerUserId: stringValue(json['seller_user_id']),
-      status: stringValue(json['status']),
-      visibility: stringValue(json['visibility']),
-      currency: stringValue(json['currency']),
-      askingPrice: numberValue(json['asking_price']),
-      systemValuation: numberValue(json['system_valuation']),
-      systemValuationMinor: intValue(json['system_valuation_minor']),
-      valuationLastRefreshedAt: dateTimeValue(
-        json['valuation_last_refreshed_at'],
+      listingId: _clubSaleString(
+        <Object?>[json['listing_id'], json['listingId'], json['id'], clubId],
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      clubId: clubId,
+      clubName: _clubSaleString(
+        <Object?>[
+          json['club_name'],
+          json['clubName'],
+          club?['name'],
+          club?['club_name'],
+          club?['clubName'],
+          club?['display_name'],
+          club?['displayName'],
+          club?['slug'],
+          club?['club_slug'],
+          if (clubId.isNotEmpty) _prettifyClubSaleClubId(clubId),
+        ],
+      ),
+      sellerUserId: _clubSaleString(
+        <Object?>[
+          json['seller_user_id'],
+          json['sellerUserId'],
+          json['seller_id'],
+          json['sellerId'],
+          seller?['id'],
+          seller?['user_id'],
+          seller?['userId'],
+        ],
+      ),
+      status: _clubSaleString(<Object?>[json['status']], fallback: 'active'),
+      visibility: _clubSaleString(
+        <Object?>[json['visibility']],
+        fallback: 'public',
+      ),
+      currency: _clubSaleString(
+        <Object?>[json['currency']],
+        fallback: 'credits',
+      ),
+      askingPrice: askingPrice,
+      systemValuation: systemValuation,
+      systemValuationMinor: _clubSaleInt(
+        <Object?>[json['system_valuation_minor'], json['systemValuationMinor']],
+        fallback: systemValuation.round(),
+      ),
+      valuationLastRefreshedAt: _clubSaleDateTime(
+        <Object?>[
+          json['valuation_last_refreshed_at'],
+          json['valuationLastRefreshedAt'],
+        ],
+      ),
+      createdAt: _clubSaleDateTime(
+            <Object?>[json['created_at'], json['createdAt']],
+          ) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt: _clubSaleDateTime(
+            <Object?>[json['updated_at'], json['updatedAt']],
+          ) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      valuationBreakdown: jsonMapOrNull(json['valuation_breakdown']) == null
+      valuationBreakdown: jsonMapOrNull(
+                json['valuation_breakdown'] ?? json['valuationBreakdown'],
+              ) ==
+              null
           ? null
-          : ClubSaleValuationBreakdown.fromJson(json['valuation_breakdown']),
-      note: stringOrNullValue(json['note']),
-      metadata: jsonMap(
-        json['metadata_json'],
-        fallback: const <String, Object?>{},
+          : ClubSaleValuationBreakdown.fromJson(
+              json['valuation_breakdown'] ?? json['valuationBreakdown'],
+            ),
+      note: stringOrNullValue(
+        json['note'] ?? json['listing_note'] ?? json['listingNote'],
       ),
+      metadata: jsonMapOrNull(
+            json['metadata_json'] ?? json['metadataJson'],
+          ) ??
+          const <String, Object?>{},
     );
   }
 }
@@ -336,16 +404,102 @@ class ClubSaleListingCollection {
         items = const <ClubSaleListing>[];
 
   factory ClubSaleListingCollection.fromJson(Object? value) {
+    if (value is List) {
+      final List<ClubSaleListing> items = parseList(
+          value, ClubSaleListing.fromJson,
+          label: 'club sale listings');
+      return ClubSaleListingCollection(total: items.length, items: items);
+    }
     final JsonMap json = jsonMap(value, label: 'club sale listing collection');
+    final Object? rawItems = _firstNonNullObject(
+      <Object?>[json['items'], json['listings'], json['results']],
+    );
+    final List<ClubSaleListing> items = rawItems == null
+        ? const <ClubSaleListing>[]
+        : parseList(
+            rawItems,
+            ClubSaleListing.fromJson,
+            label: 'club sale listings',
+          );
     return ClubSaleListingCollection(
-      total: intValue(json['total']),
-      items: parseList(
-        json['items'],
-        ClubSaleListing.fromJson,
-        label: 'club sale listings',
+      total: intValue(
+        _firstNonNullObject(<Object?>[json['total'], json['count']]),
+        fallback: items.length,
       ),
+      items: items,
     );
   }
+}
+
+Object? _firstNonNullObject(List<Object?> values) {
+  for (final Object? value in values) {
+    if (value != null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+String _clubSaleString(
+  List<Object?> values, {
+  String fallback = '',
+}) {
+  for (final Object? value in values) {
+    final String? parsed = stringOrNullValue(value);
+    if (parsed != null && parsed.isNotEmpty) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+double _clubSaleNumber(
+  List<Object?> values, {
+  double fallback = 0,
+}) {
+  for (final Object? value in values) {
+    if (value == null) {
+      continue;
+    }
+    final double parsed = numberValue(value, fallback: fallback);
+    if (parsed != fallback || value.toString().trim().isNotEmpty) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+int _clubSaleInt(
+  List<Object?> values, {
+  int fallback = 0,
+}) {
+  for (final Object? value in values) {
+    if (value == null) {
+      continue;
+    }
+    final int parsed = intValue(value, fallback: fallback);
+    if (parsed != fallback || value.toString().trim().isNotEmpty) {
+      return parsed;
+    }
+  }
+  return fallback;
+}
+
+DateTime? _clubSaleDateTime(List<Object?> values) {
+  for (final Object? value in values) {
+    final DateTime? parsed = dateTimeValue(value);
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+String _prettifyClubSaleClubId(String clubId) {
+  return clubId.replaceAll(RegExp(r'[-_]+'), ' ').replaceAllMapped(
+        RegExp(r'\b[a-z]'),
+        (Match match) => match.group(0)!.toUpperCase(),
+      );
 }
 
 class ClubSaleInquiry {

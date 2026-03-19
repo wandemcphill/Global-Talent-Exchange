@@ -23,6 +23,7 @@ class ClubSaleMarketScreen extends StatefulWidget {
     this.currentClubId,
     this.forceOwnerWorkspace = false,
     this.onOpenLogin,
+    this.controller,
   });
 
   final String? clubId;
@@ -34,6 +35,7 @@ class ClubSaleMarketScreen extends StatefulWidget {
   final String? currentClubId;
   final bool forceOwnerWorkspace;
   final VoidCallback? onOpenLogin;
+  final ClubSaleMarketController? controller;
 
   @override
   State<ClubSaleMarketScreen> createState() => _ClubSaleMarketScreenState();
@@ -42,17 +44,20 @@ class ClubSaleMarketScreen extends StatefulWidget {
 class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
   late final ClubSaleMarketController _controller;
   late final TextEditingController _clubLookupController;
+  late final bool _ownsController;
 
   bool get _hasAuth => widget.accessToken?.trim().isNotEmpty == true;
 
   @override
   void initState() {
     super.initState();
-    _controller = ClubSaleMarketController.standard(
-      baseUrl: widget.baseUrl,
-      backendMode: widget.backendMode,
-      accessToken: widget.accessToken,
-    );
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ??
+        ClubSaleMarketController.standard(
+          baseUrl: widget.baseUrl,
+          backendMode: widget.backendMode,
+          accessToken: widget.accessToken,
+        );
     _clubLookupController = TextEditingController(text: widget.clubId ?? '');
     if (widget.clubId == null) {
       _controller.loadPublicListings();
@@ -67,7 +72,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
   @override
   void dispose() {
     _clubLookupController.dispose();
-    _controller.dispose();
+    if (_ownsController) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -1136,6 +1143,7 @@ class _ClubSaleListingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool canOpen = listing.clubId.trim().isNotEmpty;
     final String? listingNote = listing.note?.trim();
     return GteSurfacePanel(
       child: Column(
@@ -1149,7 +1157,9 @@ class _ClubSaleListingTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      listing.clubName,
+                      listing.clubName.trim().isNotEmpty
+                          ? listing.clubName
+                          : _displayClubName(listing.clubId),
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 6),
@@ -1163,7 +1173,7 @@ class _ClubSaleListingTile extends StatelessWidget {
                 ),
               ),
               FilledButton.tonal(
-                onPressed: onOpen,
+                onPressed: canOpen ? onOpen : null,
                 child: const Text('Open'),
               ),
             ],
@@ -1190,6 +1200,16 @@ class _ClubSaleListingTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _displayClubName(String clubId) {
+    if (clubId.trim().isEmpty) {
+      return 'Unnamed club';
+    }
+    return clubId.replaceAll(RegExp(r'[-_]+'), ' ').replaceAllMapped(
+          RegExp(r'\b[a-z]'),
+          (Match match) => match.group(0)!.toUpperCase(),
+        );
   }
 }
 

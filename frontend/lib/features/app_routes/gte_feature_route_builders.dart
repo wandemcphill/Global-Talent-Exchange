@@ -632,33 +632,15 @@ Widget _buildCreatorShareMarketAdminControlScreen(
   BuildContext context,
   GteNavigationDependencies dependencies,
 ) {
-  if (dependencies.currentClubId == null ||
-      dependencies.currentClubId!.trim().isEmpty) {
-    return _authGuardedScreen(
-      context: context,
-      dependencies: dependencies,
-      icon: Icons.settings_outlined,
-      adminOnly: true,
-      child: const _RouteStateScreen(
-        title: 'Club selection required',
-        message:
-            'Creator-share controls are club-scoped. Open them from a real club route or use a session with a canonical current club id.',
-        icon: Icons.location_searching_outlined,
-      ),
-    );
-  }
   return _authGuardedScreen(
     context: context,
     dependencies: dependencies,
     icon: Icons.settings_outlined,
     adminOnly: true,
-    child: CreatorShareMarketScreen(
-      clubId: dependencies.currentClubId,
-      clubName: dependencies.currentClubName,
+    child: CreatorShareMarketAdminControlScreen(
       baseUrl: dependencies.apiBaseUrl,
       backendMode: dependencies.backendMode,
       accessToken: dependencies.accessToken,
-      currentClubId: dependencies.currentClubId,
       currentUserRole: dependencies.currentUserRole,
       onOpenLogin: _loginAction(context, dependencies),
     ),

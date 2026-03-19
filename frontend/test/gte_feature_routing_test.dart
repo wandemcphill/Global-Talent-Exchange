@@ -4,12 +4,15 @@ import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
+import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
 import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/features/home_dashboard/home_dashboard_screen.dart';
+import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
+import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
@@ -149,7 +152,7 @@ void main() {
     expect(find.text('Reject'), findsOneWidget);
   });
 
-  testWidgets('creator-share admin control requires canonical club selection',
+  testWidgets('creator-share admin control opens the admin control surface',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       _RouteLauncherHost(
@@ -165,9 +168,49 @@ void main() {
     );
 
     await tester.tap(find.text('Open control'));
+    await _pumpUntilText(tester, 'Creator share market control');
+
+    expect(find.text('Creator share market control'), findsOneWidget);
+    expect(find.text('Club selection required'), findsNothing);
+  });
+
+  testWidgets(
+      'navigation shell uses the canonical session club instead of the royal lagos fallback',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'user-ibadan',
+      userName: 'Ibadan Owner',
+      clubId: 'ibadan-lions',
+      clubName: 'Ibadan Lions FC',
+    );
+    controller.openOrderTotal = 1;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GteNavigationShellScreen(
+          controller: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          initialRoute: const GteNavigationRoute.club(),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Club selection required'), findsOneWidget);
+    final ClubHubScreen clubHub =
+        tester.widget<ClubHubScreen>(find.byType(ClubHubScreen));
+    expect(clubHub.clubId, 'ibadan-lions');
+    expect(clubHub.clubName, 'Ibadan Lions FC');
   });
 
   testWidgets('home expansion lanes open deep-link routes',
@@ -182,7 +225,12 @@ void main() {
           exchangeController: controller,
           apiBaseUrl: 'http://127.0.0.1:8000',
           backendMode: GteBackendMode.fixture,
-          navigationDependencies: _dependencies(),
+          clubId: 'ibadan-lions',
+          clubName: 'Ibadan Lions FC',
+          navigationDependencies: _dependencies(
+            clubId: 'ibadan-lions',
+            clubName: 'Ibadan Lions FC',
+          ),
         ),
       ),
     );
@@ -199,7 +247,43 @@ void main() {
     expect(find.text('Player-card marketplace'), findsOneWidget);
   });
 
-  testWidgets('market quick links open club sale routes',
+  testWidgets(
+      'home dashboard shows an explicit no-club state at the widget boundary',
+      (WidgetTester tester) async {
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'user-no-club',
+      userName: 'No Club Owner',
+      clubId: null,
+      clubName: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeDashboardScreen(
+          exchangeController: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          navigationDependencies: _dependencies(
+            isAuthenticated: true,
+            clubId: null,
+            clubName: null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No canonical club is selected'), findsOneWidget);
+    expect(
+      find.textContaining('Home requires a canonical club context'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('market quick links open public club sale listings',
       (WidgetTester tester) async {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
@@ -225,11 +309,10 @@ void main() {
     final Finder clubSaleMarketButton = find.text('Club sale market');
     await tester.ensureVisible(clubSaleMarketButton);
     await tester.tap(clubSaleMarketButton);
-    await _pumpUntilText(tester, 'Royal Lagos FC sale market');
+    await _pumpUntilText(tester, 'Refresh market');
 
-    expect(find.text('Royal Lagos FC sale market'), findsOneWidget);
-    expect(find.text('Inquiry'), findsOneWidget);
-    expect(find.text('Make offer'), findsOneWidget);
+    expect(find.text('Refresh market'), findsOneWidget);
+    expect(find.text('Open club market'), findsOneWidget);
   });
 
   testWidgets('market creator-share shortcut requires a canonical club id',
@@ -237,7 +320,6 @@ void main() {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
-    await controller.bootstrap();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -252,10 +334,12 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilText(tester, 'Market extensions');
 
-    await tester.tap(find.text('Creator shares'));
-    await tester.pumpAndSettle();
+    final Finder creatorSharesButton = find.text('Creator shares');
+    await tester.ensureVisible(creatorSharesButton);
+    await tester.tap(creatorSharesButton);
+    await _pumpUntilText(tester, 'Club selection required');
 
     expect(find.text('Club selection required'), findsOneWidget);
     expect(
@@ -263,6 +347,39 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+      'market creator-share shortcut opens when a canonical club is derivable',
+      (WidgetTester tester) async {
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GteMarketPlayersScreen(
+          controller: controller,
+          onOpenPlayer: (_) {},
+          onOpenLogin: () {},
+          navigationDependencies: _dependencies(
+            isAuthenticated: true,
+            clubId: 'ibadan-lions',
+            clubName: 'Ibadan Lions FC',
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilText(tester, 'Market extensions');
+
+    final Finder creatorSharesButton = find.text('Creator shares');
+    await tester.ensureVisible(creatorSharesButton);
+    await tester.tap(creatorSharesButton);
+    await _pumpUntilText(tester, 'Ibadan Lions FC creator shares');
+
+    expect(find.text('Ibadan Lions FC creator shares'), findsOneWidget);
+    expect(find.text('Club selection required'), findsNothing);
+  });
+
   testWidgets('arena quick links open tournament routes',
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
@@ -283,11 +400,18 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(
+      tester,
+      find.text('Arena extensions'),
+      scrollable: find.byType(ListView).first,
+    );
 
     expect(find.text('Arena extensions'), findsOneWidget);
 
-    await tester.tap(find.text('Streamer tournaments'));
-    await tester.pumpAndSettle();
+    final Finder streamerTournamentsButton = find.text('Streamer tournaments');
+    await tester.ensureVisible(streamerTournamentsButton);
+    await tester.tap(streamerTournamentsButton);
+    await _pumpUntilText(tester, 'Streamer tournament engine');
 
     expect(find.text('Streamer tournament engine'), findsOneWidget);
   });
@@ -311,13 +435,26 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _scrollUntilVisible(
+      tester,
+      find.text('Club extensions'),
+      scrollable: find.byType(ListView).first,
+    );
 
     expect(find.text('Club extensions'), findsOneWidget);
 
-    await tester.tap(find.text('World context'));
-    await tester.pumpAndSettle();
+    final Finder worldContextButton = find.text('World context');
+    await tester.ensureVisible(worldContextButton);
+    await tester.tap(worldContextButton);
+    await _pumpUntilFound(
+      tester,
+      find.textContaining('canonical football-world simulation'),
+    );
 
-    expect(find.text('Royal Lagos FC world context'), findsOneWidget);
+    expect(
+      find.textContaining('canonical football-world simulation'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('admin command center opens gift stabilizer route',
@@ -435,4 +572,65 @@ Future<void> _pumpUntilText(
     }
   }
   expect(finder, findsOneWidget);
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (int pump = 0; pump < maxPumps; pump += 1) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(finder, findsOneWidget);
+}
+
+Future<void> _scrollUntilVisible(
+  WidgetTester tester,
+  Finder finder, {
+  required Finder scrollable,
+  Offset moveStep = const Offset(0, -300),
+  int maxIteration = 20,
+}) async {
+  if (finder.evaluate().isEmpty) {
+    await tester.dragUntilVisible(
+      finder,
+      scrollable,
+      moveStep,
+      maxIteration: maxIteration,
+    );
+  } else {
+    await tester.ensureVisible(finder);
+  }
+  await tester.pump();
+}
+
+GteAuthSession _authenticatedSession({
+  required String userId,
+  required String userName,
+  String? clubId,
+  String? clubName,
+}) {
+  return GteAuthSession.fromJson(
+    <String, Object?>{
+      'access_token': 'test-token',
+      'token_type': 'bearer',
+      'expires_in': 3600,
+      if (clubId != null) 'current_club_id': clubId,
+      if (clubName != null) 'current_club_name': clubName,
+      'user': <String, Object?>{
+        'id': userId,
+        'email': '$userId@gtex.test',
+        'username': userId,
+        'display_name': userName,
+        'role': 'user',
+        if (clubId != null) 'current_club_id': clubId,
+        if (clubName != null) 'current_club_name': clubName,
+      },
+    },
+  );
 }

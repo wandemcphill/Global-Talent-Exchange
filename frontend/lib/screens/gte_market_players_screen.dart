@@ -208,13 +208,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                 ),
                 onOpenCreatorShareMarket: _openCreatorShareMarketRoute,
                 onOpenClubSaleMarket: () => _openFeatureRoute(
-                  widget.navigationDependencies!.currentClubId == null
-                      ? const ClubSaleMarketListingsRouteData()
-                      : ClubSaleMarketDetailRouteData(
-                          clubId: widget.navigationDependencies!.currentClubId!,
-                          clubName:
-                              widget.navigationDependencies!.currentClubName,
-                        ),
+                  const ClubSaleMarketListingsRouteData(),
                 ),
               ),
             ],
