@@ -9,6 +9,7 @@ from secrets import token_hex
 from typing import Iterable
 
 from fastapi import Depends
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
