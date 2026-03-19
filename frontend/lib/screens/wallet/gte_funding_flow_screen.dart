@@ -30,7 +30,12 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   @override
   void initState() {
     super.initState();
-    widget.controller.refreshCompliance();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.controller.refreshCompliance();
+    });
   }
 
   @override
