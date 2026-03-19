@@ -9,6 +9,9 @@
     content="GTEX is a football-tech platform built to spotlight talent, connect opportunity, and drive discovery from one mobile experience."
   >
   <meta name="theme-color" content="#04070c">
+  <meta property="og:image" content="frontend/assets/branding/gtex_logo.png">
+  <link rel="icon" type="image/png" href="frontend/assets/branding/gtex_icon.png">
+  <link rel="apple-touch-icon" href="frontend/assets/branding/gtex_icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -21,11 +24,13 @@
   <div class="site-shell">
     <header class="topbar">
       <a class="brand" href="#hero" aria-label="GTEX home">
-        <span class="brand-mark">GT</span>
-        <span class="brand-copy">
-          <strong>GTEX</strong>
-          <span>Global Talent Exchange</span>
-        </span>
+        <img
+          class="brand-image"
+          src="frontend/assets/branding/gtex_logo.png"
+          alt="GTEX | Global Talent Exchange"
+          width="682"
+          height="239"
+        >
       </a>
 
       <nav class="nav" aria-label="Primary">
@@ -39,8 +44,15 @@
     <main>
       <section class="hero section" id="hero">
         <div class="hero-copy reveal">
+          <img
+            class="hero-brand"
+            src="frontend/assets/branding/gtex_logo.png"
+            alt="GTEX | Global Talent Exchange"
+            width="682"
+            height="239"
+          >
           <p class="eyebrow">FOOTBALL x DISCOVERY x MOBILE</p>
-          <h1>GTEX</h1>
+          <h1 class="visually-hidden">GTEX</h1>
           <p class="tagline">Global Talent Exchange for the next generation of football visibility.</p>
           <p class="hero-text">
             GTEX brings players, scouts, fans, and opportunities into one sharp mobile experience built for discovery,
