@@ -72,13 +72,13 @@ class HomeDashboardScreen extends StatefulWidget {
 }
 
 class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
-  late ClubController _clubController;
+  ClubController? _clubController;
   late CompetitionController _competitionController;
   late RegenUniverseController _regenUniverseController;
   late String _userId;
   late String? _userName;
-  late String _clubId;
-  late String _clubName;
+  String? _clubId;
+  String? _clubName;
 
   @override
   void initState() {
@@ -109,7 +109,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   @override
   void dispose() {
     widget.exchangeController.removeListener(_handleExchangeChanged);
-    _clubController.dispose();
+    _clubController?.dispose();
     _competitionController.dispose();
     _regenUniverseController.dispose();
     super.dispose();
@@ -117,6 +117,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final ClubController? clubController = _clubController;
+    final String? clubId = _clubId;
+    final String? clubName = _clubName;
+    if (clubController == null ||
+        clubId == null ||
+        clubId.isEmpty ||
+        clubName == null ||
+        clubName.isEmpty) {
+      return _buildNoClubState();
+    }
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
         widget.exchangeController,
@@ -129,7 +139,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         final bool waitingForFirstFrame =
             clubData == null &&
             _competitionController.competitions.isEmpty &&
-            (_clubController.isLoading ||
+            (clubController.isLoading ||
                 _competitionController.isLoadingDiscovery);
         if (waitingForFirstFrame) {
           return const _HomeLoadingView();
@@ -137,14 +147,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
         if (clubData == null &&
             _competitionController.competitions.isEmpty &&
-            _clubController.errorMessage != null &&
+            clubController.errorMessage != null &&
             _competitionController.discoveryError != null) {
           return Padding(
             padding: const EdgeInsets.all(20),
             child: GteStatePanel(
               title: 'Home is unavailable',
               message:
-                  '${_clubController.errorMessage!} ${_competitionController.discoveryError!}',
+                  '${clubController.errorMessage!} ${_competitionController.discoveryError!}',
               actionLabel: 'Retry',
               onAction: _refresh,
               icon: Icons.home_outlined,
@@ -153,7 +163,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         }
 
         final _HomeSnapshot snapshot = _HomeSnapshot.fromSources(
-          clubName: _clubName,
+          clubName: clubName,
           isAuthenticated: widget.exchangeController.isAuthenticated,
           userLabel: _displayUserLabel(),
           clubData: clubData,
@@ -210,13 +220,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       _competitionController.isLoadingDiscovery,
                   onRefresh: _refresh,
                 ),
-                if (_clubController.errorMessage != null ||
+                if (clubController.errorMessage != null ||
                     _competitionController.discoveryError != null) ...<Widget>[
                   const SizedBox(height: 18),
                   _InlineWarning(
                     message: <String>[
-                      if (_clubController.errorMessage != null)
-                        _clubController.errorMessage!,
+                      if (clubController.errorMessage != null)
+                        clubController.errorMessage!,
                       if (_competitionController.discoveryError != null)
                         _competitionController.discoveryError!,
                     ].join(' '),
@@ -380,12 +390,22 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     _userName = identity.userName;
     _clubId = identity.clubId;
     _clubName = identity.clubName;
-    _clubController = ClubController.standard(
-      clubId: _clubId,
-      clubName: _clubName,
-      baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
-    );
+    final String? clubId = _clubId;
+    final String? clubName = _clubName;
+    if (clubId != null &&
+        clubId.isNotEmpty &&
+        clubName != null &&
+        clubName.isNotEmpty) {
+      _clubController = ClubController.standard(
+        clubId: clubId,
+        clubName: clubName,
+        baseUrl: widget.apiBaseUrl,
+        backendMode: widget.backendMode,
+      );
+      _clubController!.ensureLoaded();
+    } else {
+      _clubController = null;
+    }
     _competitionController = CompetitionController(
       api: CompetitionApi.standard(
         baseUrl: widget.apiBaseUrl,
@@ -404,11 +424,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   void _recreateControllers() {
-    final ClubController previousClub = _clubController;
+    final ClubController? previousClub = _clubController;
     final CompetitionController previousCompetition = _competitionController;
     final RegenUniverseController previousRegen = _regenUniverseController;
     _createControllers();
-    previousClub.dispose();
+    previousClub?.dispose();
     previousCompetition.dispose();
     previousRegen.dispose();
     if (mounted) {
@@ -429,17 +449,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _competitionController.loadDiscovery();
     }
     if (next.clubId != _clubId || next.clubName != _clubName) {
-      final ClubController previousClub = _clubController;
+      final ClubController? previousClub = _clubController;
       _clubId = next.clubId;
       _clubName = next.clubName;
-      _clubController = ClubController.standard(
-        clubId: _clubId,
-        clubName: _clubName,
-        baseUrl: widget.apiBaseUrl,
-        backendMode: widget.backendMode,
-      );
-      _clubController.ensureLoaded();
-      previousClub.dispose();
+      final String? clubId = _clubId;
+      final String? clubName = _clubName;
+      if (clubId != null &&
+          clubId.isNotEmpty &&
+          clubName != null &&
+          clubName.isNotEmpty) {
+        _clubController = ClubController.standard(
+          clubId: clubId,
+          clubName: clubName,
+          baseUrl: widget.apiBaseUrl,
+          backendMode: widget.backendMode,
+        );
+        _clubController!.ensureLoaded();
+      } else {
+        _clubController = null;
+      }
+      previousClub?.dispose();
       if (mounted) {
         setState(() {});
       }
@@ -565,6 +594,35 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
+  String? _resolveClubId() {
+    final String? directClubId = widget.clubId?.trim();
+    if (directClubId != null && directClubId.isNotEmpty) {
+      return directClubId;
+    }
+    final String? dependencyClubId =
+        widget.navigationDependencies?.currentClubId?.trim();
+    if (dependencyClubId != null && dependencyClubId.isNotEmpty) {
+      return dependencyClubId;
+    }
+    return null;
+  }
+
+  String? _resolveClubName(String? clubId) {
+    final String? directClubName = widget.clubName?.trim();
+    if (directClubName != null && directClubName.isNotEmpty) {
+      return directClubName;
+    }
+    final String? dependencyClubName =
+        widget.navigationDependencies?.currentClubName?.trim();
+    if (dependencyClubName != null && dependencyClubName.isNotEmpty) {
+      return dependencyClubName;
+    }
+    if (clubId == null || clubId.isEmpty) {
+      return null;
+    }
+    return _formatClubName(clubId);
+  }
+
   String _displayUserLabel() {
     final dynamic session = widget.exchangeController.session;
     final String? displayName = session?.user.displayName?.trim();
@@ -578,15 +636,52 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return 'Demo Fan';
   }
 
-  String _slugifyClub(String raw) {
-    final String slug = raw
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-    return slug.isEmpty ? 'royal-lagos-fc' : slug;
+  String _formatClubName(String clubId) {
+    return clubId
+        .split(RegExp(r'[-_]+'))
+        .where((String token) => token.isNotEmpty)
+        .map((String token) {
+      if (token.length <= 3) {
+        return token.toUpperCase();
+      }
+      return '${token[0].toUpperCase()}${token.substring(1)}';
+    }).join(' ');
+  }
+
+  Widget _buildNoClubState() {
+    final bool isAuthenticated = widget.exchangeController.isAuthenticated;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: GteStatePanel(
+        eyebrow: 'CLUB SCOPE',
+        title: isAuthenticated
+            ? 'No canonical club is selected'
+            : 'Sign in to open club-scoped home',
+        message: isAuthenticated
+            ? 'Home requires a canonical club context before club-scoped surfaces can load.'
+            : 'Guest preview mode does not expose a canonical club. Sign in to continue with a real club context or create one first.',
+        icon: isAuthenticated ? Icons.home_outlined : Icons.login_outlined,
+        accentColor: const Color(0xFF72F0D8),
+        actionLabel:
+            !isAuthenticated && widget.onOpenLogin != null ? 'Sign in' : null,
+        onAction: !isAuthenticated && widget.onOpenLogin != null
+            ? widget.onOpenLogin
+            : null,
+      ),
+    );
   }
 
   Future<void> _openTarget(_HomeLinkTarget target) async {
+    final ClubController? clubController = _clubController;
+    final String? clubId = _clubId;
+    final String? clubName = _clubName;
+    if (clubController == null ||
+        clubId == null ||
+        clubId.isEmpty ||
+        clubName == null ||
+        clubName.isEmpty) {
+      return;
+    }
     if (target == _HomeLinkTarget.club) {
       if (widget.onOpenClubTab != null) {
         widget.onOpenClubTab!();
@@ -652,10 +747,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       return;
     }
     final _HomeSnapshot snapshot = _HomeSnapshot.fromSources(
-      clubName: _clubName,
+      clubName: clubName,
       isAuthenticated: widget.exchangeController.isAuthenticated,
       userLabel: _displayUserLabel(),
-      clubData: _clubController.data,
+      clubData: clubController.data,
       competitions: _competitionController.competitions,
     );
     if (target == _HomeLinkTarget.replays) {
@@ -683,14 +778,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _ensureClubLoaded() async {
-    if (_clubController.hasData) {
+    final ClubController? clubController = _clubController;
+    if (clubController == null || clubController.hasData) {
       return;
     }
-    if (!_clubController.isLoading) {
-      await _clubController.load();
+    if (!clubController.isLoading) {
+      await clubController.load();
       return;
     }
-    while (_clubController.isLoading && mounted) {
+    while (clubController.isLoading && mounted) {
       await Future<void>.delayed(const Duration(milliseconds: 60));
     }
   }
@@ -1796,8 +1892,8 @@ class _HomeIdentity {
 
   final String userId;
   final String? userName;
-  final String clubId;
-  final String clubName;
+  final String? clubId;
+  final String? clubName;
 }
 
 class _HomeSnapshot {

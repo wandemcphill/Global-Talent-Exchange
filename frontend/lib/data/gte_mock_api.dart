@@ -159,14 +159,14 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<void> logout() async {}
 
-
   @override
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
     bool mandatoryOnly = false,
   }) async {
     await _delay();
     final Iterable<GtePolicyDocumentDetail> docs = mandatoryOnly
-        ? _policyDocuments.where((GtePolicyDocumentDetail doc) => doc.isMandatory)
+        ? _policyDocuments
+            .where((GtePolicyDocumentDetail doc) => doc.isMandatory)
         : _policyDocuments;
     return docs
         .map(
@@ -233,7 +233,8 @@ class GteMockApi implements GteApiRepository {
     String versionLabel,
   ) async {
     await _delay();
-    final GtePolicyDocumentDetail document = await fetchPolicyDocument(documentKey);
+    final GtePolicyDocumentDetail document =
+        await fetchPolicyDocument(documentKey);
     final int existingIndex = _policyAcceptances.indexWhere(
       (GtePolicyAcceptanceSummary item) => item.documentKey == documentKey,
     );
