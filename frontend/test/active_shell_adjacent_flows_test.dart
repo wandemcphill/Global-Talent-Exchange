@@ -239,12 +239,16 @@ void main() {
       (WidgetTester tester) async {
     _setLargeViewport(tester);
 
-    final GteMockApi repository = GteMockApi();
-    await repository.createWithdrawalRequest(
-      const GteWithdrawalCreateRequest(
-        amountCoin: 25,
-      ),
-    );
+    final GteMockApi repository = GteMockApi(latency: Duration.zero);
+    await tester.runAsync(() async {
+      await repository.acceptPolicyDocument('privacy_policy', 'v1.0');
+      await repository.acceptPolicyDocument('withdrawal_policy', 'v1.0');
+      await repository.createWithdrawalRequest(
+        const GteWithdrawalCreateRequest(
+          amountCoin: 25,
+        ),
+      );
+    });
     final GteExchangeController controller = GteExchangeController(
       api: _fixtureClient(repository),
     );
@@ -268,7 +272,7 @@ void main() {
     expect(withdrawalNotification, findsOneWidget);
 
     await tester.tap(withdrawalNotification);
-    await tester.pumpAndSettle();
+    await _pumpUntilText(tester, 'Request withdrawal');
 
     expect(find.text('Withdrawals'), findsOneWidget);
     expect(find.text('Request withdrawal'), findsOneWidget);
