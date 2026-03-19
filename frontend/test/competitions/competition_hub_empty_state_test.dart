@@ -22,7 +22,8 @@ class _IdleCompetitionController extends CompetitionController {
 }
 
 void main() {
-  testWidgets('competitions hub shows an empty state when no competitions are available',
+  testWidgets(
+      'competitions hub shows an empty state when no competitions are available',
       (WidgetTester tester) async {
     final CompetitionController controller = _IdleCompetitionController();
 
@@ -36,9 +37,16 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('Competition map is warming up'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text('Competition map is warming up'), findsOneWidget);
-    expect(find.text('Pull to refresh when new competitions publish.'), findsOneWidget);
+    expect(find.text('Pull to refresh when new competitions publish.'),
+        findsOneWidget);
   });
 }
