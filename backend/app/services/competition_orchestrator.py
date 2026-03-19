@@ -311,7 +311,14 @@ class CompetitionOrchestrator:
             stmt = stmt.where(Competition.host_user_id == creator_id)
         competitions = list(self.session.scalars(stmt).all())
 
-        items = [self._to_summary(item) for item in competitions]
+        items: list[CompetitionSummaryView] = []
+        for item in competitions:
+            try:
+                items.append(self._to_summary(item))
+            except CompetitionActionError as exc:
+                if exc.reason == "rules_missing":
+                    continue
+                raise
         if fee_filter == "free":
             items = [item for item in items if item.entry_fee <= 0]
         elif fee_filter == "paid":

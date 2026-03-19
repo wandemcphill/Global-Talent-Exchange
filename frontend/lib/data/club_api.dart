@@ -88,6 +88,9 @@ class ClubApi {
     required String clubId,
     String? clubName,
   }) async {
+    final String fallbackClubName = clubName?.trim().isNotEmpty == true
+        ? clubName!.trim()
+        : prettifyClubId(clubId);
     final List<Object?> payload = await Future.wait<Object?>(<Future<Object?>>[
       _identityRepository.fetchIdentity(clubId),
       _reputationRepository.fetchOverview(clubId),
@@ -100,8 +103,20 @@ class ClubApi {
         scope: PrestigeLeaderboardScope.region,
         currentClubId: clubId,
       ),
-      _dynastyRepository.fetchDynastyProfile(clubId),
-      _trophyRepository.fetchTrophyCabinet(clubId: clubId),
+      _loadOptionalDashboardPart<DynastyProfileDto>(
+        load: () => _dynastyRepository.fetchDynastyProfile(clubId),
+        fallback: _emptyDynastyProfile(
+          clubId: clubId,
+          clubName: fallbackClubName,
+        ),
+      ),
+      _loadOptionalDashboardPart<TrophyCabinetDto>(
+        load: () => _trophyRepository.fetchTrophyCabinet(clubId: clubId),
+        fallback: _emptyTrophyCabinet(
+          clubId: clubId,
+          clubName: fallbackClubName,
+        ),
+      ),
       _fetchClubRecord(clubId),
     ]);
 
@@ -116,7 +131,8 @@ class ClubApi {
         payload[4] as PrestigeLeaderboardDto;
     final DynastyProfileDto dynastyProfile = payload[5] as DynastyProfileDto;
     final TrophyCabinetDto trophyCabinet = payload[6] as TrophyCabinetDto;
-    final Map<String, Object?>? clubRecord = payload[7] as Map<String, Object?>?;
+    final Map<String, Object?>? clubRecord =
+        payload[7] as Map<String, Object?>?;
 
     final String resolvedClubName = _resolveClubName(
       clubName: clubName,
@@ -315,7 +331,8 @@ class ClubApi {
       ),
       ClubShowcasePanel(
         title: 'Cosmetic locker',
-        value: '${catalog.where((ClubCatalogItem item) => item.ownershipStatus != CatalogOwnershipStatus.available).length}',
+        value:
+            '${catalog.where((ClubCatalogItem item) => item.ownershipStatus != CatalogOwnershipStatus.available).length}',
         caption:
             'Transparent catalog ownership with equipped club cosmetics kept visible.',
       ),
@@ -348,15 +365,72 @@ class ClubApi {
         ),
       ),
       ...trophyCabinet.featuredHonors(limit: 2).map(
-        (honor) => ClubLegacyMilestone(
-          title: honor.trophyName,
-          subtitle: '${honor.seasonLabel} ${honor.competitionRegion}',
-          tagLabel: honor.prestigeLabel,
-          unlocked: true,
-        ),
-      ),
+            (honor) => ClubLegacyMilestone(
+              title: honor.trophyName,
+              subtitle: '${honor.seasonLabel} ${honor.competitionRegion}',
+              tagLabel: honor.prestigeLabel,
+              unlocked: true,
+            ),
+          ),
     ];
     return milestones.take(6).toList(growable: false);
+  }
+
+  Future<T> _loadOptionalDashboardPart<T>({
+    required Future<T> Function() load,
+    required T fallback,
+  }) async {
+    try {
+      return await load();
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  DynastyProfileDto _emptyDynastyProfile({
+    required String clubId,
+    required String clubName,
+  }) {
+    return DynastyProfileDto.fromJson(<String, Object?>{
+      'club_id': clubId,
+      'club_name': clubName,
+      'dynasty_status': 'none',
+      'current_era_label': 'none',
+      'active_dynasty_flag': false,
+      'dynasty_score': 0,
+      'active_streaks': <String, Object?>{
+        'top_four': 0,
+        'trophy_seasons': 0,
+        'world_super_cup_qualification': 0,
+        'positive_reputation': 0,
+      },
+      'last_four_season_summary': const <Object?>[],
+      'reasons': const <String>[],
+      'current_snapshot': null,
+      'dynasty_timeline': const <Object?>[],
+      'eras': const <Object?>[],
+      'events': const <Object?>[],
+    });
+  }
+
+  TrophyCabinetDto _emptyTrophyCabinet({
+    required String clubId,
+    required String clubName,
+  }) {
+    return TrophyCabinetDto.fromJson(<String, Object?>{
+      'club_id': clubId,
+      'club_name': clubName,
+      'total_honors_count': 0,
+      'major_honors_count': 0,
+      'elite_honors_count': 0,
+      'senior_honors_count': 0,
+      'academy_honors_count': 0,
+      'trophies_by_category': const <Object?>[],
+      'trophies_by_season': const <Object?>[],
+      'recent_honors': const <Object?>[],
+      'historic_honors_timeline': const <Object?>[],
+      'summary_outputs': const <String>[],
+    });
   }
 
   Future<Map<String, Object?>?> _fetchClubRecord(String clubId) async {
@@ -775,8 +849,8 @@ class _ClubFixtureStore {
     final Set<String> owned =
         _ownedByClub.putIfAbsent(clubId, () => <String>{});
     owned.add(item.id);
-    final List<ClubPurchaseRecord> history =
-        _purchaseHistoryByClub.putIfAbsent(clubId, () => <ClubPurchaseRecord>[]);
+    final List<ClubPurchaseRecord> history = _purchaseHistoryByClub.putIfAbsent(
+        clubId, () => <ClubPurchaseRecord>[]);
     final bool equipped =
         (_equippedByClub[clubId] ?? const <String, String>{})[item.slot] ==
             item.id;
@@ -801,8 +875,8 @@ class _ClubFixtureStore {
     final Map<String, String> equipped =
         _equippedByClub.putIfAbsent(clubId, () => <String, String>{});
     equipped[item.slot] = item.id;
-    final List<ClubPurchaseRecord> history =
-        _purchaseHistoryByClub.putIfAbsent(clubId, () => <ClubPurchaseRecord>[]);
+    final List<ClubPurchaseRecord> history = _purchaseHistoryByClub.putIfAbsent(
+        clubId, () => <ClubPurchaseRecord>[]);
     for (int index = 0; index < history.length; index += 1) {
       final ClubPurchaseRecord record = history[index];
       if (record.itemId == item.id) {
@@ -917,8 +991,7 @@ class _ClubFixtureStore {
       final BrandingReviewCase review = _brandingQueue[index];
       if (review.id == reviewId) {
         _brandingQueue[index] = review.copyWith(
-          statusLabel:
-              approved ? 'Approved for showcase' : 'Changes requested',
+          statusLabel: approved ? 'Approved for showcase' : 'Changes requested',
           reviewNote: approved
               ? 'Branding aligns with club identity guidance and showcase readability.'
               : 'Adjust contrast or motto length before resubmitting this club identity update.',
@@ -997,7 +1070,8 @@ const List<ClubCatalogItem> _catalogBlueprints = <ClubCatalogItem>[
     title: 'Founder frame',
     category: 'Club identity',
     slot: 'showcase',
-    description: 'Polished showcase frame for club profile and branding panels.',
+    description:
+        'Polished showcase frame for club profile and branding panels.',
     priceCredits: 60,
     highlightColor: '#E2A400',
     previewLabel: 'Legacy frame',

@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import select
+
+from backend.app.models.competition_prize_rule import CompetitionPrizeRule
+from backend.app.models.competition_rule_set import CompetitionRuleSet
+
 def _create(
     client,
     *,
@@ -157,3 +162,40 @@ def test_discovery_sorting_supports_new_prize_pool_fill_rate_and_trending(client
         "Beta Free Cup",
         "Alpha Paid League",
     ]
+
+
+def test_discovery_skips_competitions_missing_rules(client, app_session_factory) -> None:
+    creator_id = "discovery-missing-rules"
+    competition_id = _create(
+        client,
+        name="Broken Rule Set Cup",
+        format="cup",
+        visibility="public",
+        entry_fee="20.00",
+        capacity=8,
+        creator_id=creator_id,
+        beginner_friendly=None,
+        created_at=datetime(2026, 3, 12, tzinfo=timezone.utc).isoformat(),
+    )
+
+    with app_session_factory() as session:
+        rule_set = session.scalar(
+            select(CompetitionRuleSet).where(
+                CompetitionRuleSet.competition_id == competition_id
+            )
+        )
+        prize_rule = session.scalar(
+            select(CompetitionPrizeRule).where(
+                CompetitionPrizeRule.competition_id == competition_id
+            )
+        )
+        assert rule_set is not None
+        assert prize_rule is not None
+        session.delete(rule_set)
+        session.delete(prize_rule)
+        session.commit()
+
+    response = client.get("/api/competitions", params={"creator_id": creator_id})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []

@@ -160,6 +160,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/clubs/{club_id}/dynasty/history" in paths
     assert "/api/clubs/{club_id}/eras" in paths
     assert "/api/leaderboards/dynasties" in paths
+    assert "/api/clubs/{club_id}/trophy-cabinet" in paths
     assert "/api/clubs/{club_id}/identity" in paths
     assert "/api/clubs/{club_id}/valuation" in paths
     assert "/api/clubs/sale-market/listings" in paths
