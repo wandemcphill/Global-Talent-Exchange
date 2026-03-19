@@ -33,7 +33,12 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   @override
   void initState() {
     super.initState();
-    widget.controller.refreshCompliance();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.controller.refreshCompliance();
+    });
   }
 
   @override
@@ -43,8 +48,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   }
 
   Future<void> _submit() async {
-    final GteComplianceStatus? compliance =
-        widget.controller.complianceStatus;
+    final GteComplianceStatus? compliance = widget.controller.complianceStatus;
     if (widget.controller.isLoadingCompliance && compliance == null) {
       setState(() {
         _error = 'Compliance status is still loading. Please retry.';
@@ -106,8 +110,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final GteComplianceStatus? compliance =
-        widget.controller.complianceStatus;
+    final GteComplianceStatus? compliance = widget.controller.complianceStatus;
     final bool blocked = compliance != null && !compliance.canDeposit;
     return Scaffold(
       appBar: AppBar(title: const Text('Fund wallet')),
@@ -189,8 +192,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
-                    labelText:
-                        _inputFiat ? 'Amount in NGN' : 'Amount in coins',
+                    labelText: _inputFiat ? 'Amount in NGN' : 'Amount in coins',
                     prefixIcon: const Icon(Icons.payments_outlined),
                   ),
                 ),
@@ -270,10 +272,9 @@ class _GteDepositInstructionsScreenState
       return;
     }
     final PlatformFile file = result.files.first;
-    final List<int> bytes = file.bytes ??
-        await File(file.path!).readAsBytes();
-    final GteAttachment attachment = await widget.controller.api
-        .uploadAttachment(file.name, bytes);
+    final List<int> bytes = file.bytes ?? await File(file.path!).readAsBytes();
+    final GteAttachment attachment =
+        await widget.controller.api.uploadAttachment(file.name, bytes);
     if (!mounted) {
       return;
     }

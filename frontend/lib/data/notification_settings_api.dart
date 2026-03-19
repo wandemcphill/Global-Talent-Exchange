@@ -118,9 +118,11 @@ class NotificationSettingsApi {
         );
         return NotificationSubscription.fromJson(payload);
       },
-      () async => fixtures.addSubscription(
+      () async => fixtures.upsertSubscription(
         subscriptionKey: subscriptionKey,
         label: label,
+        subscriptionType: subscriptionType,
+        active: active,
       ),
     );
   }
@@ -200,7 +202,8 @@ class NotificationSettingsApi {
 }
 
 class _NotificationFixtures {
-  _NotificationFixtures(this._preference, this._subscriptions, this._announcements);
+  _NotificationFixtures(
+      this._preference, this._subscriptions, this._announcements);
 
   NotificationPreference _preference;
   final List<NotificationSubscription> _subscriptions;
@@ -236,7 +239,8 @@ class _NotificationFixtures {
           id: 'ann-1',
           announcementKey: 'market-reset',
           title: 'Announcement: Jude benchmark pricing reset',
-          body: 'Benchmark pricing has been recalibrated for the latest market window.',
+          body:
+              'Benchmark pricing has been recalibrated for the latest market window.',
           audience: 'all',
           severity: 'info',
           active: true,
@@ -253,16 +257,36 @@ class _NotificationFixtures {
   Future<List<NotificationSubscription>> subscriptions() async =>
       List<NotificationSubscription>.of(_subscriptions, growable: false);
 
-  Future<NotificationSubscription> addSubscription({
+  Future<NotificationSubscription> upsertSubscription({
     required String subscriptionKey,
     required String label,
+    required String subscriptionType,
+    required bool active,
   }) async {
+    final int existingIndex = _subscriptions.indexWhere(
+      (NotificationSubscription item) =>
+          item.subscriptionKey == subscriptionKey,
+    );
+    if (existingIndex != -1) {
+      final NotificationSubscription existing = _subscriptions[existingIndex];
+      final NotificationSubscription updated = NotificationSubscription(
+        id: existing.id,
+        subscriptionKey: existing.subscriptionKey,
+        subscriptionType: subscriptionType,
+        label: label,
+        active: active,
+        metadata: existing.metadata,
+      );
+      _subscriptions[existingIndex] = updated;
+      return updated;
+    }
+
     final NotificationSubscription created = NotificationSubscription(
       id: 'sub-${_subscriptions.length + 1}',
       subscriptionKey: subscriptionKey,
-      subscriptionType: 'general',
+      subscriptionType: subscriptionType,
       label: label,
-      active: true,
+      active: active,
       metadata: const <String, Object?>{},
     );
     _subscriptions.insert(0, created);
@@ -270,8 +294,8 @@ class _NotificationFixtures {
   }
 
   Future<void> removeSubscription(String subscriptionId) async {
-    _subscriptions
-        .removeWhere((NotificationSubscription item) => item.id == subscriptionId);
+    _subscriptions.removeWhere(
+        (NotificationSubscription item) => item.id == subscriptionId);
   }
 
   Future<List<PlatformAnnouncement>> announcements() async =>

@@ -538,8 +538,7 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
               ),
               if (_results.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 16),
-                Text('Results',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text('Results', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 for (final DiscoveryItem item in _results)
                   Padding(
@@ -553,8 +552,8 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
         const SizedBox(height: 16),
         FutureBuilder<List<SavedSearch>>(
           future: _savedFuture,
-          builder:
-              (BuildContext context, AsyncSnapshot<List<SavedSearch>> snapshot) {
+          builder: (BuildContext context,
+              AsyncSnapshot<List<SavedSearch>> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading saved searches...'),
@@ -597,8 +596,8 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
         const SizedBox(height: 16),
         FutureBuilder<DiscoveryHome>(
           future: _homeFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<DiscoveryHome> snapshot) {
+          builder:
+              (BuildContext context, AsyncSnapshot<DiscoveryHome> snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading discovery rails...'),
@@ -810,7 +809,8 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
       _error = null;
     });
     try {
-      final List<dynamic> payload = await Future.wait<dynamic>(<Future<dynamic>>[
+      final List<dynamic> payload =
+          await Future.wait<dynamic>(<Future<dynamic>>[
         if (widget.isAuthenticated) _api.fetchPreferences(),
         if (widget.isAuthenticated) _api.listSubscriptions(),
         _api.listAnnouncements(),
@@ -875,7 +875,8 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
     }
   }
 
-  Future<void> _toggleSubscription(NotificationSubscription subscription) async {
+  Future<void> _toggleSubscription(
+      NotificationSubscription subscription) async {
     try {
       final NotificationSubscription updated = await _api.upsertSubscription(
         subscriptionKey: subscription.subscriptionKey,
@@ -888,8 +889,10 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
       }
       setState(() {
         _subscriptions = _subscriptions
-            .map((NotificationSubscription item) =>
-                item.id == updated.id ? updated : item)
+            .map((NotificationSubscription item) => item.id == updated.id ||
+                    item.subscriptionKey == updated.subscriptionKey
+                ? updated
+                : item)
             .toList(growable: false);
       });
     } catch (_) {
@@ -1131,8 +1134,7 @@ class _FeedSectionState extends State<_FeedSection> {
                       stories: digest.countrySpotlight),
                   const SizedBox(height: 12),
                   _StoryLane(
-                      title: 'Feature stories',
-                      stories: digest.featureStories),
+                      title: 'Feature stories', stories: digest.featureStories),
                 ],
               ),
             );
@@ -1384,8 +1386,7 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
                 child: Text('Loading live threads...'),
               );
             }
-            final List<LiveThread> threads =
-                snapshot.data ?? <LiveThread>[];
+            final List<LiveThread> threads = snapshot.data ?? <LiveThread>[];
             return GteSurfacePanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1570,8 +1571,7 @@ class _LiveThreadDetailScreenState extends State<LiveThreadDetailScreen> {
       );
       _messageController.clear();
       setState(() {
-        _messagesFuture =
-            widget.api.listLiveThreadMessages(widget.thread.id);
+        _messagesFuture = widget.api.listLiveThreadMessages(widget.thread.id);
       });
     } finally {
       if (mounted) {
@@ -2044,8 +2044,7 @@ class _DisputesSection extends StatefulWidget {
 class _DisputesSectionState extends State<_DisputesSection> {
   late DisputeEngineApi _api;
   late Future<List<DisputeEngineCase>> _disputesFuture;
-  final TextEditingController _resourceTypeController =
-      TextEditingController();
+  final TextEditingController _resourceTypeController = TextEditingController();
   final TextEditingController _resourceIdController = TextEditingController();
   final TextEditingController _referenceController = TextEditingController();
   final TextEditingController _subjectController = TextEditingController();
@@ -2345,8 +2344,7 @@ class _DisputeDetailScreenState extends State<DisputeDetailScreen> {
                   itemCount: detail.messages.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (BuildContext context, int index) {
-                    final DisputeEngineMessage message =
-                        detail.messages[index];
+                    final DisputeEngineMessage message = detail.messages[index];
                     return GteSurfacePanel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
