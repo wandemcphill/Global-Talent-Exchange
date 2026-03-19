@@ -48,6 +48,9 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
     if (!notification.isRead) {
       await widget.controller.api
           .markNotificationRead(notification.notificationId);
+      if (mounted) {
+        await _refresh();
+      }
     }
     if (!mounted) {
       return;
@@ -63,7 +66,10 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
       );
       return;
     }
-    if (topic.contains('withdrawal') || topic.contains('payout')) {
+    if (topic.contains('withdrawal') ||
+        topic.contains('payout') ||
+        resource.startsWith('withdrawal') ||
+        resource.startsWith('payout')) {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
           builder: (BuildContext context) =>

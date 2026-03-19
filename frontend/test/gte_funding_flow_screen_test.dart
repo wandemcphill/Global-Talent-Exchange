@@ -38,7 +38,11 @@ void main() {
     );
 
     expect(find.text('Fund wallet'), findsOneWidget);
-    expect(find.text('Create a deposit request'), findsOneWidget);
+    expect(
+      find.text('Checking deposit access before manual funding opens...'),
+      findsOneWidget,
+    );
+    expect(find.text('Create a deposit request'), findsNothing);
     expect(find.text('Compliance action required'), findsNothing);
 
     await _pumpUntil(
@@ -51,8 +55,16 @@ void main() {
 
     expect(find.text('Compliance action required'), findsOneWidget);
     expect(find.text('Open compliance center'), findsOneWidget);
+    expect(find.text('Create a deposit request'), findsNothing);
+    expect(find.text('Deposit requests stay locked'), findsOneWidget);
     expect(
       find.text('Complete 1 policy items to unlock deposits.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Manual bank transfer instructions and exact payment references appear only after compliance review unlocks deposits for this account.',
+      ),
       findsOneWidget,
     );
   });

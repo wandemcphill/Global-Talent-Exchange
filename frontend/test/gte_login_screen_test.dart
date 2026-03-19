@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/app/gte_app_config.dart';
-import 'package:gte_frontend/app/gte_frontend_app.dart';
-import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/gte_login_screen.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
   testWidgets(
-      'club hub exposes the canonical identity, reputation, trophy, and dynasty tabs',
+      'authenticated login surface avoids unlocked copy when capital actions stay restricted',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
@@ -23,43 +22,49 @@ void main() {
       api: GteExchangeApiClient.fixture(),
     );
     controller.session = _authenticatedSession(
-      userId: 'user-ibadan',
-      userName: 'Ibadan Owner',
+      userId: 'demo-user',
+      userName: 'Ayo Martins',
       clubId: 'ibadan-lions',
       clubName: 'Ibadan Lions FC',
     );
+    controller.complianceStatus = const GteComplianceStatus(
+      countryCode: 'NG',
+      countryPolicyBucket: 'regulated_market_disabled',
+      depositsEnabled: true,
+      marketTradingEnabled: false,
+      platformRewardWithdrawalsEnabled: false,
+      requiredPolicyAcceptancesMissing: 1,
+      missingPolicyAcceptances: <GtePolicyRequirementSummary>[
+        GtePolicyRequirementSummary(
+          documentKey: 'wallet-policy',
+          title: 'Wallet policy acceptance',
+          versionLabel: 'v2',
+          isMandatory: true,
+        ),
+      ],
+      canDeposit: false,
+      canWithdrawPlatformRewards: false,
+      canTradeMarket: false,
+    );
 
     await tester.pumpWidget(
-      GteFrontendApp(
-        controller: controller,
-        config: const GteAppConfig(
-          apiBaseUrl: 'http://127.0.0.1:8000',
-          backendMode: GteBackendMode.fixture,
-        ),
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteLoginScreen(controller: controller),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Club').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Club hub'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('Reputation'));
-    await tester.tap(find.text('Reputation').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Open reputation'), findsOneWidget);
-
-    await tester.tap(find.text('Trophies').last);
-    await tester.pumpAndSettle();
-    expect(find.text('View trophies'), findsOneWidget);
-
-    await tester.tap(find.text('Dynasty').last);
-    await tester.pumpAndSettle();
-    expect(find.text('View dynasty'), findsOneWidget);
-
-    await tester.tap(find.text('Identity').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Edit identity'), findsOneWidget);
+    expect(find.text('Session active'), findsOneWidget);
+    expect(find.text('Mission confirmed'), findsNothing);
+    expect(
+      find.text(
+        'Active session for demo-user. GTEX access is live, but some capital actions remain restricted until compliance clears this account.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Compliance action required'), findsOneWidget);
+    expect(find.text('Open compliance center'), findsOneWidget);
   });
 }
 

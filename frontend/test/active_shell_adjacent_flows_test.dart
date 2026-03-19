@@ -143,6 +143,63 @@ void main() {
   });
 
   testWidgets(
+      'wallet actions disable manual funding when compliance blocks deposits',
+      (WidgetTester tester) async {
+    _setLargeViewport(tester);
+
+    final GteExchangeController controller = GteExchangeController(
+      api: _fixtureClient(
+        _BlockedComplianceApi(
+          latency: const Duration(milliseconds: 10),
+        ),
+      ),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'demo-user',
+      userName: 'Ayo Martins',
+      clubId: 'ibadan-lions',
+      clubName: 'Ibadan Lions FC',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: AnimatedBuilder(
+          animation: controller,
+          builder: (BuildContext context, Widget? child) => GtePortfolioScreen(
+            controller: controller,
+            onOpenPlayer: (_) {},
+            onOpenLogin: () {},
+          ),
+        ),
+      ),
+    );
+    controller.refreshAccount();
+
+    await _pumpUntil(
+      tester,
+      () =>
+          controller.complianceStatus != null &&
+          controller.complianceStatus!.canDeposit == false &&
+          !controller.isLoadingCompliance,
+    );
+    await _pumpUntilText(tester, 'Wallet actions');
+
+    final Finder fundWalletButton =
+        find.widgetWithText(OutlinedButton, 'Fund wallet');
+    expect(
+      tester.widget<OutlinedButton>(fundWalletButton).onPressed,
+      isNull,
+    );
+    expect(
+      find.text(
+        'Funding is locked until compliance review completes. Open Wallet overview for the current restriction and next steps.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
       'notifications refresh read state after opening an unread inbox item',
       (WidgetTester tester) async {
     _setLargeViewport(tester);
@@ -294,4 +351,59 @@ Future<void> _pumpUntilSwitchValue(
     }
   }
   throw TestFailure('Timed out waiting for switch value $expected.');
+}
+
+class _BlockedComplianceApi extends GteMockApi {
+  _BlockedComplianceApi({
+    super.latency = Duration.zero,
+  });
+
+  static const GtePolicyRequirementSummary _missingRequirement =
+      GtePolicyRequirementSummary(
+    documentKey: 'wallet-policy',
+    title: 'Wallet policy acceptance',
+    versionLabel: 'v2',
+    isMandatory: true,
+  );
+
+  static const List<GtePolicyRequirementSummary> _missingRequirements =
+      <GtePolicyRequirementSummary>[_missingRequirement];
+
+  @override
+  Future<GteComplianceStatus> fetchComplianceStatus() async {
+    await Future<void>.delayed(latency);
+    return const GteComplianceStatus(
+      countryCode: 'NG',
+      countryPolicyBucket: 'regulated_market_disabled',
+      depositsEnabled: true,
+      marketTradingEnabled: false,
+      platformRewardWithdrawalsEnabled: false,
+      requiredPolicyAcceptancesMissing: 1,
+      missingPolicyAcceptances: _missingRequirements,
+      canDeposit: false,
+      canWithdrawPlatformRewards: false,
+      canTradeMarket: false,
+    );
+  }
+
+  @override
+  Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() async {
+    await Future<void>.delayed(latency);
+    return _missingRequirements;
+  }
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration step = const Duration(milliseconds: 20),
+  int maxPumps = 60,
+}) async {
+  for (int pump = 0; pump < maxPumps; pump += 1) {
+    await tester.pump(step);
+    if (condition()) {
+      return;
+    }
+  }
+  throw TestFailure('Timed out waiting for condition.');
 }

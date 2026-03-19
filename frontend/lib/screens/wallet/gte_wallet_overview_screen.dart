@@ -31,14 +31,16 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
     super.initState();
     _overviewFuture = widget.controller.api.fetchWalletOverview();
     _eligibilityFuture = widget.controller.api.fetchWithdrawalEligibility();
-    _ledgerFuture = widget.controller.api.fetchWalletLedger(page: 1, pageSize: 12);
+    _ledgerFuture =
+        widget.controller.api.fetchWalletLedger(page: 1, pageSize: 12);
   }
 
   Future<void> _refresh() async {
     setState(() {
       _overviewFuture = widget.controller.api.fetchWalletOverview();
       _eligibilityFuture = widget.controller.api.fetchWithdrawalEligibility();
-      _ledgerFuture = widget.controller.api.fetchWalletLedger(page: 1, pageSize: 12);
+      _ledgerFuture =
+          widget.controller.api.fetchWalletLedger(page: 1, pageSize: 12);
     });
   }
 
@@ -67,7 +69,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
       ),
       body: FutureBuilder<GteWalletOverview>(
         future: _overviewFuture,
-        builder: (BuildContext context, AsyncSnapshot<GteWalletOverview> snapshot) {
+        builder:
+            (BuildContext context, AsyncSnapshot<GteWalletOverview> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -81,6 +84,11 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
             );
           }
           final GteWalletOverview overview = snapshot.data!;
+          final int pendingPolicyItems =
+              overview.requiredPolicyAcceptancesMissing;
+          final String complianceActionLabel = pendingPolicyItems > 0
+              ? 'Review $pendingPolicyItems pending item(s)'
+              : 'Open compliance center';
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
@@ -185,9 +193,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                       await _refresh();
                                     },
                                     icon: const Icon(Icons.gavel_outlined),
-                                    label: Text(
-                                      'Review ${overview.requiredPolicyAcceptancesMissing} pending item(s)',
-                                    ),
+                                    label: Text(complianceActionLabel),
                                   ),
                                 ],
                               ),
@@ -314,31 +320,30 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
-                                  if (!eligibility.countryWithdrawalsEnabled) ...<Widget>[
+                                  if (!eligibility
+                                      .countryWithdrawalsEnabled) ...<Widget>[
                                     const SizedBox(height: 6),
                                     Text(
                                       'Region status: withdrawals are disabled for this country.',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ],
                                   if (eligibility.requiresKyc) ...<Widget>[
                                     const SizedBox(height: 6),
                                     Text(
                                       'KYC is required before withdrawals unlock.',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ],
-                                  if (eligibility.requiresBankAccount) ...<Widget>[
+                                  if (eligibility
+                                      .requiresBankAccount) ...<Widget>[
                                     const SizedBox(height: 6),
                                     Text(
                                       'Verified bank details are required.',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ],
                                 ],
@@ -363,11 +368,13 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                     eligibility.policyBlockReason ??
                                         'Withdrawal is currently blocked by policy requirements.',
                                   ),
-                                  if (eligibility.missingRequiredPolicies.isNotEmpty) ...<Widget>[
+                                  if (eligibility.missingRequiredPolicies
+                                      .isNotEmpty) ...<Widget>[
                                     const SizedBox(height: 8),
                                     Text(
                                       'Pending: ${eligibility.missingRequiredPolicies.join(', ')}',
-                                      style: Theme.of(context).textTheme.bodySmall,
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
                                     ),
                                   ],
                                 ],
@@ -480,8 +487,7 @@ class _LedgerEntryTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(label,
-                      style: Theme.of(context).textTheme.titleSmall),
+                  Text(label, style: Theme.of(context).textTheme.titleSmall),
                   if (entry.description?.trim().isNotEmpty == true) ...<Widget>[
                     const SizedBox(height: 4),
                     Text(
