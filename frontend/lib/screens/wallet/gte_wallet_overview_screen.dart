@@ -256,9 +256,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                       await _refresh();
                                     },
                                     icon: const Icon(Icons.gavel_outlined),
-                                    label: Text(
-                                      'Review ${overview.requiredPolicyAcceptancesMissing} pending item(s)',
-                                    ),
+                                    label: Text(complianceActionLabel),
                                   ),
                                 ],
                               ),

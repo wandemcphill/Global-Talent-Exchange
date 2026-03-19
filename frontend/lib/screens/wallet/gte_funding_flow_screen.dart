@@ -30,11 +30,20 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   @override
   void initState() {
     super.initState();
+    _awaitingInitialComplianceCheck = widget.controller.isAuthenticated &&
+        widget.controller.complianceStatus == null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
+      if (!mounted || !widget.controller.isAuthenticated) {
         return;
       }
-      widget.controller.refreshCompliance();
+      widget.controller.refreshCompliance().whenComplete(() {
+        if (!mounted || !_awaitingInitialComplianceCheck) {
+          return;
+        }
+        setState(() {
+          _awaitingInitialComplianceCheck = false;
+        });
+      });
     });
   }
 
