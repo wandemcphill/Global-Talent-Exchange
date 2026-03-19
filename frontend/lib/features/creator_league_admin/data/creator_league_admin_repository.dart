@@ -55,6 +55,8 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     required GteAuthedApi client,
   }) : _client = client;
 
+  static const String _basePath = '/api/competitions/creator-league';
+
   factory CreatorLeagueAdminApiRepository.standard({
     required String baseUrl,
     required GteBackendMode mode,
@@ -74,7 +76,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
   @override
   Future<CreatorLeagueConfig> fetchOverview() async {
     return CreatorLeagueConfig.fromJson(
-      await _client.getMap('/creator-league', auth: false),
+      await _client.getMap(_basePath, auth: false),
     );
   }
 
@@ -85,7 +87,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     return CreatorLeagueConfig.fromJson(
       await _client.request(
         'PATCH',
-        '/creator-league/config',
+        '$_basePath/config',
         body: request.toJson(),
       ),
     );
@@ -98,7 +100,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     return CreatorLeagueConfig.fromJson(
       await _client.request(
         'POST',
-        '/creator-league/tiers',
+        '$_basePath/tiers',
         body: request.toJson(),
       ),
     );
@@ -112,7 +114,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     return CreatorLeagueConfig.fromJson(
       await _client.request(
         'PATCH',
-        '/creator-league/tiers/$tierId',
+        '$_basePath/tiers/$tierId',
         body: request.toJson(),
       ),
     );
@@ -123,7 +125,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     return CreatorLeagueConfig.fromJson(
       await _client.request(
         'DELETE',
-        '/creator-league/tiers/$tierId',
+        '$_basePath/tiers/$tierId',
       ),
     );
   }
@@ -131,7 +133,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
   @override
   Future<CreatorLeagueConfig> resetStructure() async {
     return CreatorLeagueConfig.fromJson(
-      await _client.request('POST', '/creator-league/reset'),
+      await _client.request('POST', '$_basePath/reset'),
     );
   }
 
@@ -142,7 +144,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     return CreatorLeagueSeason.fromJson(
       await _client.request(
         'POST',
-        '/creator-league/seasons',
+        '$_basePath/seasons',
         body: request.toJson(),
       ),
     );
@@ -151,14 +153,14 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
   @override
   Future<CreatorLeagueSeason> fetchSeason(String seasonId) async {
     return CreatorLeagueSeason.fromJson(
-      await _client.getMap('/creator-league/seasons/$seasonId', auth: false),
+      await _client.getMap('$_basePath/seasons/$seasonId', auth: false),
     );
   }
 
   @override
   Future<CreatorLeagueSeason> pauseSeason(String seasonId) async {
     return CreatorLeagueSeason.fromJson(
-      await _client.request('POST', '/creator-league/seasons/$seasonId/pause'),
+      await _client.request('POST', '$_basePath/seasons/$seasonId/pause'),
     );
   }
 
@@ -167,7 +169,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
       String seasonTierId) async {
     return parseList(
       await _client.getList(
-        '/creator-league/season-tiers/$seasonTierId/standings',
+        '$_basePath/season-tiers/$seasonTierId/standings',
         auth: false,
       ),
       CreatorLeagueStanding.fromJson,
@@ -181,7 +183,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
   ) async {
     return CreatorLeagueLivePriority.fromJson(
       await _client.getMap(
-        '/creator-league/live-priority',
+        '$_basePath/live-priority',
         query: query.toQuery(),
         auth: false,
       ),
@@ -194,7 +196,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
   ) async {
     return CreatorLeagueFinancialReport.fromJson(
       await _client.getMap(
-        '/creator-league/financial-report',
+        '$_basePath/financial-report',
         query: query.toQuery(),
       ),
     );
@@ -206,7 +208,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
   ) async {
     return parseList(
       await _client.getList(
-        '/creator-league/financial-settlements',
+        '$_basePath/financial-settlements',
         query: query.toQuery(),
       ),
       CreatorLeagueSettlement.fromJson,
@@ -222,7 +224,7 @@ class CreatorLeagueAdminApiRepository implements CreatorLeagueAdminRepository {
     return CreatorLeagueSettlement.fromJson(
       await _client.request(
         'POST',
-        '/creator-league/financial-settlements/$settlementId/approve',
+        '$_basePath/financial-settlements/$settlementId/approve',
         body: request.toJson(),
       ),
     );

@@ -1,0 +1,93 @@
+{
+  "commissions": {
+    "buy_commission_bps": 150,
+    "instant_sell_fee_bps": 75,
+    "minimum_withdrawal_fee_credits": "5.0000",
+    "reason": "Initial bounded admin policy.",
+    "sell_commission_bps": 150,
+    "updated_at": null,
+    "updated_by": null,
+    "withdrawal_fee_bps": 1000
+  },
+  "competition_controls": {
+    "prize_pool_topup_pct": "0.00",
+    "reason": "No extra prize-pool top-up yet.",
+    "updated_at": null,
+    "updated_by": null
+  },
+  "liquidity_interventions": [],
+  "payment_rails": [
+    {
+      "deposits_enabled": true,
+      "is_live": true,
+      "maintenance_message": "Manual bank-transfer desk is enabled.",
+      "provider": "bank_transfer_manual",
+      "withdrawals_enabled": true
+    },
+    {
+      "deposits_enabled": true,
+      "is_live": true,
+      "maintenance_message": null,
+      "provider": "paystack",
+      "withdrawals_enabled": true
+    },
+    {
+      "deposits_enabled": true,
+      "is_live": true,
+      "maintenance_message": null,
+      "provider": "flutterwave",
+      "withdrawals_enabled": true
+    },
+    {
+      "deposits_enabled": true,
+      "is_live": true,
+      "maintenance_message": null,
+      "provider": "monnify",
+      "withdrawals_enabled": true
+    }
+  ],
+  "roles": {
+    "assignments": [],
+    "available_roles": {
+      "finance_admin": [
+        "manage_commissions",
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "view_audit_log"
+      ],
+      "god_mode": [
+        "manage_admin_roles",
+        "manage_commissions",
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "manage_liquidity_desk",
+        "view_audit_log",
+        "pause_payments",
+        "view_integrity_controls"
+      ],
+      "market_ops_admin": [
+        "manage_liquidity_desk",
+        "view_audit_log",
+        "view_integrity_controls"
+      ],
+      "support_admin": [
+        "manage_withdrawals",
+        "view_audit_log"
+      ]
+    },
+    "default_admin_role": "god_mode"
+  },
+  "treasury_withdrawals": [],
+  "withdrawal_controls": {
+    "deposits_via_bank_transfer": true,
+    "egame_withdrawals_enabled": false,
+    "payouts_via_bank_transfer": true,
+    "processor_mode": "manual_bank_transfer",
+    "reason": "Manual bank-transfer-first control baseline.",
+    "trade_withdrawals_enabled": true,
+    "updated_at": null,
+    "updated_by": null
+  }
+}
