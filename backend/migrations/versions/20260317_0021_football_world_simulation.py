@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column("rivalry_themes_json", sa.JSON(), nullable=False),
         sa.Column("talent_archetypes_json", sa.JSON(), nullable=False),
         sa.Column("climate_notes", sa.String(length=255), server_default=sa.text("''"), nullable=False),
-        sa.Column("active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_football_culture_profiles"),
         sa.UniqueConstraint("culture_key", name="uq_football_culture_profiles_culture_key"),

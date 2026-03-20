@@ -205,7 +205,7 @@ def upgrade() -> None:
         sa.Column("competition_multiplier", sa.Float(), server_default=sa.text("1.0"), nullable=False),
         sa.Column("visibility_weight", sa.Float(), server_default=sa.text("1.0"), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_ingestion_internal_leagues"),
@@ -227,7 +227,7 @@ def upgrade() -> None:
         sa.Column("circulating_supply", sa.Integer(), nullable=False),
         sa.Column("daily_pack_supply", sa.Integer(), nullable=False),
         sa.Column("season_mint_cap", sa.Integer(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_ingestion_supply_tiers"),
@@ -248,7 +248,7 @@ def upgrade() -> None:
         sa.Column("max_spread_bps", sa.Integer(), nullable=False),
         sa.Column("maker_inventory_target", sa.Integer(), nullable=False),
         sa.Column("instant_sell_fee_bps", sa.Integer(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_ingestion_liquidity_bands"),
@@ -265,7 +265,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("confederation_code", sa.String(length=16), nullable=True))
         batch_op.add_column(sa.Column("market_region", sa.String(length=32), nullable=True))
         batch_op.add_column(
-            sa.Column("is_enabled_for_universe", sa.Boolean(), server_default=sa.text("1"), nullable=False)
+            sa.Column("is_enabled_for_universe", sa.Boolean(), server_default=sa.text("true"), nullable=False)
         )
         batch_op.create_index("ix_ingestion_countries_fifa_code", ["fifa_code"], unique=False)
         batch_op.create_index("ix_ingestion_countries_confederation_code", ["confederation_code"], unique=False)
@@ -275,11 +275,11 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("format_type", sa.String(length=32), nullable=True))
         batch_op.add_column(sa.Column("age_bracket", sa.String(length=32), nullable=True))
         batch_op.add_column(sa.Column("domestic_level", sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column("is_tradable", sa.Boolean(), server_default=sa.text("1"), nullable=False))
+        batch_op.add_column(sa.Column("is_tradable", sa.Boolean(), server_default=sa.text("true"), nullable=False))
         batch_op.add_column(sa.Column("competition_strength", sa.Float(), nullable=True))
         batch_op.create_index("ix_ingestion_competitions_internal_league_id", ["internal_league_id"], unique=False)
         batch_op.create_foreign_key(
-            "fk_ingestion_competitions_internal_league_id_ingestion_internal_leagues",
+            "fk_ing_comp_internal_league",
             "ingestion_internal_leagues",
             ["internal_league_id"],
             ["id"],
@@ -297,18 +297,18 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("internal_league_id", sa.String(length=36), nullable=True))
         batch_op.add_column(sa.Column("gender", sa.String(length=32), nullable=True))
         batch_op.add_column(sa.Column("popularity_score", sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column("is_tradable", sa.Boolean(), server_default=sa.text("1"), nullable=False))
+        batch_op.add_column(sa.Column("is_tradable", sa.Boolean(), server_default=sa.text("true"), nullable=False))
         batch_op.create_index("ix_ingestion_clubs_current_competition_id", ["current_competition_id"], unique=False)
         batch_op.create_index("ix_ingestion_clubs_internal_league_id", ["internal_league_id"], unique=False)
         batch_op.create_foreign_key(
-            "fk_ingestion_clubs_current_competition_id_ingestion_competitions",
+            "fk_ing_clubs_curr_comp",
             "ingestion_competitions",
             ["current_competition_id"],
             ["id"],
             ondelete="SET NULL",
         )
         batch_op.create_foreign_key(
-            "fk_ingestion_clubs_internal_league_id_ingestion_internal_leagues",
+            "fk_ing_clubs_internal_league",
             "ingestion_internal_leagues",
             ["internal_league_id"],
             ["id"],
@@ -322,20 +322,20 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("liquidity_band_id", sa.String(length=36), nullable=True))
         batch_op.add_column(sa.Column("market_value_eur", sa.Float(), nullable=True))
         batch_op.add_column(sa.Column("profile_completeness_score", sa.Float(), nullable=True))
-        batch_op.add_column(sa.Column("is_tradable", sa.Boolean(), server_default=sa.text("1"), nullable=False))
+        batch_op.add_column(sa.Column("is_tradable", sa.Boolean(), server_default=sa.text("true"), nullable=False))
         batch_op.create_index("ix_ingestion_players_current_competition_id", ["current_competition_id"], unique=False)
         batch_op.create_index("ix_ingestion_players_internal_league_id", ["internal_league_id"], unique=False)
         batch_op.create_index("ix_ingestion_players_supply_tier_id", ["supply_tier_id"], unique=False)
         batch_op.create_index("ix_ingestion_players_liquidity_band_id", ["liquidity_band_id"], unique=False)
         batch_op.create_foreign_key(
-            "fk_ingestion_players_current_competition_id_ingestion_competitions",
+            "fk_ing_players_curr_comp",
             "ingestion_competitions",
             ["current_competition_id"],
             ["id"],
             ondelete="SET NULL",
         )
         batch_op.create_foreign_key(
-            "fk_ingestion_players_internal_league_id_ingestion_internal_leagues",
+            "fk_ing_players_internal_league",
             "ingestion_internal_leagues",
             ["internal_league_id"],
             ["id"],
@@ -349,7 +349,7 @@ def upgrade() -> None:
             ondelete="SET NULL",
         )
         batch_op.create_foreign_key(
-            "fk_ingestion_players_liquidity_band_id_ingestion_liquidity_bands",
+            "fk_ing_players_liquidity_band",
             "ingestion_liquidity_bands",
             ["liquidity_band_id"],
             ["id"],
@@ -365,7 +365,7 @@ def upgrade() -> None:
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("confidence_score", sa.Float(), nullable=True),
-        sa.Column("rights_confirmed", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("rights_confirmed", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("reviewer_notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
@@ -390,8 +390,8 @@ def upgrade() -> None:
         sa.Column("file_size_bytes", sa.Integer(), nullable=True),
         sa.Column("checksum_sha256", sa.String(length=64), nullable=True),
         sa.Column("moderation_status", sa.String(length=32), server_default=sa.text("'pending'"), nullable=False),
-        sa.Column("rights_cleared", sa.Boolean(), server_default=sa.text("0"), nullable=False),
-        sa.Column("is_primary", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("rights_cleared", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("is_primary", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("last_processed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
@@ -413,10 +413,10 @@ def downgrade() -> None:
     op.drop_table("ingestion_player_verifications")
 
     with op.batch_alter_table("ingestion_players") as batch_op:
-        batch_op.drop_constraint("fk_ingestion_players_liquidity_band_id_ingestion_liquidity_bands", type_="foreignkey")
+        batch_op.drop_constraint("fk_ing_players_liquidity_band", type_="foreignkey")
         batch_op.drop_constraint("fk_ingestion_players_supply_tier_id_ingestion_supply_tiers", type_="foreignkey")
-        batch_op.drop_constraint("fk_ingestion_players_internal_league_id_ingestion_internal_leagues", type_="foreignkey")
-        batch_op.drop_constraint("fk_ingestion_players_current_competition_id_ingestion_competitions", type_="foreignkey")
+        batch_op.drop_constraint("fk_ing_players_internal_league", type_="foreignkey")
+        batch_op.drop_constraint("fk_ing_players_curr_comp", type_="foreignkey")
         batch_op.drop_index("ix_ingestion_players_liquidity_band_id")
         batch_op.drop_index("ix_ingestion_players_supply_tier_id")
         batch_op.drop_index("ix_ingestion_players_internal_league_id")
@@ -430,8 +430,8 @@ def downgrade() -> None:
         batch_op.drop_column("current_competition_id")
 
     with op.batch_alter_table("ingestion_clubs") as batch_op:
-        batch_op.drop_constraint("fk_ingestion_clubs_internal_league_id_ingestion_internal_leagues", type_="foreignkey")
-        batch_op.drop_constraint("fk_ingestion_clubs_current_competition_id_ingestion_competitions", type_="foreignkey")
+        batch_op.drop_constraint("fk_ing_clubs_internal_league", type_="foreignkey")
+        batch_op.drop_constraint("fk_ing_clubs_curr_comp", type_="foreignkey")
         batch_op.drop_index("ix_ingestion_clubs_internal_league_id")
         batch_op.drop_index("ix_ingestion_clubs_current_competition_id")
         batch_op.drop_column("is_tradable")
@@ -447,7 +447,7 @@ def downgrade() -> None:
         batch_op.drop_column("season_status")
 
     with op.batch_alter_table("ingestion_competitions") as batch_op:
-        batch_op.drop_constraint("fk_ingestion_competitions_internal_league_id_ingestion_internal_leagues", type_="foreignkey")
+        batch_op.drop_constraint("fk_ing_comp_internal_league", type_="foreignkey")
         batch_op.drop_index("ix_ingestion_competitions_internal_league_id")
         batch_op.drop_column("competition_strength")
         batch_op.drop_column("is_tradable")

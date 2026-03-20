@@ -67,7 +67,7 @@ def upgrade() -> None:
         sa.Column("token_weight", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("influence_weight", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("comment", sa.Text(), nullable=True),
-        sa.Column("is_proxy_vote", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_proxy_vote", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

@@ -63,7 +63,7 @@ def upgrade() -> None:
     op.create_index("ix_user_competitions_stage", "user_competitions", ["stage"], unique=False)
 
     with op.batch_alter_table("competition_rule_sets") as batch_op:
-        batch_op.add_column(sa.Column("group_stage_enabled", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        batch_op.add_column(sa.Column("group_stage_enabled", sa.Boolean(), nullable=False, server_default=sa.text("false")))
         batch_op.add_column(sa.Column("group_count", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("group_size", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("group_advance_count", sa.Integer(), nullable=True))
@@ -72,7 +72,7 @@ def upgrade() -> None:
     with op.batch_alter_table("competition_participants") as batch_op:
         batch_op.add_column(sa.Column("entry_id", sa.String(length=36), nullable=True))
         batch_op.add_column(sa.Column("seed", sa.Integer(), nullable=True))
-        batch_op.add_column(sa.Column("seed_locked", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        batch_op.add_column(sa.Column("seed_locked", sa.Boolean(), nullable=False, server_default=sa.text("false")))
         batch_op.add_column(sa.Column("group_key", sa.String(length=24), nullable=True))
         batch_op.add_column(sa.Column("played", sa.Integer(), nullable=False, server_default=sa.text("0")))
         batch_op.add_column(sa.Column("wins", sa.Integer(), nullable=False, server_default=sa.text("0")))
@@ -82,7 +82,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("goals_against", sa.Integer(), nullable=False, server_default=sa.text("0")))
         batch_op.add_column(sa.Column("goal_diff", sa.Integer(), nullable=False, server_default=sa.text("0")))
         batch_op.add_column(sa.Column("points", sa.Integer(), nullable=False, server_default=sa.text("0")))
-        batch_op.add_column(sa.Column("advanced", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        batch_op.add_column(sa.Column("advanced", sa.Boolean(), nullable=False, server_default=sa.text("false")))
 
     op.create_index("ix_competition_participants_entry_id", "competition_participants", ["entry_id"], unique=False)
     op.create_index("ix_competition_participants_group_key", "competition_participants", ["group_key"], unique=False)
@@ -170,9 +170,9 @@ def upgrade() -> None:
         sa.Column("home_score", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("away_score", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("winner_club_id", sa.String(length=36), nullable=True),
-        sa.Column("decided_by_penalties", sa.Boolean(), server_default=sa.text("0"), nullable=False),
-        sa.Column("requires_winner", sa.Boolean(), server_default=sa.text("0"), nullable=False),
-        sa.Column("stats_applied", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("decided_by_penalties", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("requires_winner", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("stats_applied", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(["competition_id"], ["user_competitions.id"], name="fk_competition_matches_competition_id_user_competitions", ondelete="CASCADE"),
@@ -207,7 +207,7 @@ def upgrade() -> None:
         sa.Column("player_id", sa.String(length=36), nullable=True),
         sa.Column("secondary_player_id", sa.String(length=36), nullable=True),
         sa.Column("card_type", sa.String(length=16), nullable=True),
-        sa.Column("highlight", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("highlight", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(["competition_id"], ["user_competitions.id"], name="fk_competition_match_events_competition_id_user_competitions", ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["match_id"], ["competition_matches.id"], name="fk_competition_match_events_match_id_competition_matches", ondelete="CASCADE"),
@@ -272,8 +272,8 @@ def upgrade() -> None:
         sa.Column("competition_id", sa.String(length=36), nullable=False),
         sa.Column("seed_method", sa.String(length=24), server_default=sa.text("'random'"), nullable=False),
         sa.Column("seed_source", sa.String(length=32), server_default=sa.text("'rating'"), nullable=False),
-        sa.Column("allow_admin_override", sa.Boolean(), server_default=sa.text("1"), nullable=False),
-        sa.Column("lock_after_seed", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("allow_admin_override", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("lock_after_seed", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(["competition_id"], ["user_competitions.id"], name="fk_competition_seed_rules_competition_id_user_competitions", ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_competition_seed_rules"),
@@ -289,10 +289,10 @@ def upgrade() -> None:
         sa.Column("competition_id", sa.String(length=36), nullable=False),
         sa.Column("rule_type", sa.String(length=32), nullable=False),
         sa.Column("rule_payload", sa.JSON(), nullable=False),
-        sa.Column("enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("priority", sa.Integer(), server_default=sa.text("100"), nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
-        sa.ForeignKeyConstraint(["competition_id"], ["user_competitions.id"], name="fk_competition_visibility_rules_competition_id_user_competitions", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["competition_id"], ["user_competitions.id"], name="fk_comp_visibility_rules_comp", ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_competition_visibility_rules"),
     )
     op.create_index("ix_competition_visibility_rules_competition_id", "competition_visibility_rules", ["competition_id"], unique=False)
@@ -330,7 +330,7 @@ def upgrade() -> None:
         sa.Column("source_payload", sa.JSON(), nullable=False),
         sa.Column("min_fill", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("max_fill", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("enabled", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("priority", sa.Integer(), server_default=sa.text("100"), nullable=False),
         sa.Column("metadata_json", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(["competition_id"], ["user_competitions.id"], name="fk_competition_autofill_rules_competition_id_user_competitions", ondelete="CASCADE"),
@@ -349,11 +349,11 @@ def upgrade() -> None:
         sa.Column("requested_dates_json", sa.JSON(), nullable=False),
         sa.Column("assigned_dates_json", sa.JSON(), nullable=False),
         sa.Column("schedule_plan_json", sa.JSON(), nullable=False),
-        sa.Column("preview_only", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("preview_only", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("alignment_group", sa.String(length=64), nullable=True),
         sa.Column("alignment_week", sa.Integer(), nullable=True),
         sa.Column("alignment_year", sa.Integer(), nullable=True),
-        sa.Column("requires_exclusive_windows", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("requires_exclusive_windows", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("priority", sa.Integer(), server_default=sa.text("100"), nullable=False),
         sa.Column("created_by_user_id", sa.String(length=36), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),

@@ -14,16 +14,16 @@ depends_on = None
 def upgrade() -> None:
     with op.batch_alter_table("creator_league_configs") as batch_op:
         batch_op.add_column(
-            sa.Column("broadcast_purchases_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1"))
+            sa.Column("broadcast_purchases_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true"))
         )
         batch_op.add_column(
-            sa.Column("season_pass_sales_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1"))
+            sa.Column("season_pass_sales_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true"))
         )
         batch_op.add_column(
-            sa.Column("match_gifting_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1"))
+            sa.Column("match_gifting_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true"))
         )
         batch_op.add_column(
-            sa.Column("settlement_review_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1"))
+            sa.Column("settlement_review_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true"))
         )
         batch_op.add_column(
             sa.Column(
@@ -59,8 +59,8 @@ def upgrade() -> None:
         )
 
     with op.batch_alter_table("creator_club_share_market_controls") as batch_op:
-        batch_op.add_column(sa.Column("issuance_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")))
-        batch_op.add_column(sa.Column("purchase_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")))
+        batch_op.add_column(sa.Column("issuance_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")))
+        batch_op.add_column(sa.Column("purchase_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")))
         batch_op.add_column(
             sa.Column(
                 "max_primary_purchase_value_coin",
@@ -71,7 +71,7 @@ def upgrade() -> None:
         )
 
     with op.batch_alter_table("creator_stadium_controls") as batch_op:
-        batch_op.add_column(sa.Column("ticket_sales_enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")))
+        batch_op.add_column(sa.Column("ticket_sales_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")))
         batch_op.add_column(
             sa.Column(
                 "max_placement_price_coin",

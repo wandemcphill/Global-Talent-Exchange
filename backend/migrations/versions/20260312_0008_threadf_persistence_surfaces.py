@@ -101,7 +101,7 @@ def upgrade() -> None:
         sa.Column("scheduled_start", sa.DateTime(timezone=True), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("final_whistle_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("live", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("live", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("home_club_json", sa.JSON(), nullable=False),
         sa.Column("away_club_json", sa.JSON(), nullable=False),
         sa.Column("scoreline_json", sa.JSON(), nullable=False),

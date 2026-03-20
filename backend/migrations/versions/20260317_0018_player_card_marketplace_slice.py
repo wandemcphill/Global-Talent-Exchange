@@ -20,7 +20,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "player_card_listings",
-        sa.Column("is_negotiable", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_negotiable", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
     op.create_index(
         "ix_player_card_listings_status_price",
@@ -37,7 +37,7 @@ def upgrade() -> None:
 
     op.add_column(
         "card_loan_listings",
-        sa.Column("is_negotiable", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_negotiable", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
     op.add_column(
         "card_loan_listings",
@@ -115,7 +115,7 @@ def upgrade() -> None:
             sa.Column("lender_net_credits", sa.Numeric(18, 4), nullable=False, server_default="0")
         )
         batch_op.add_column(sa.Column("platform_fee_bps", sa.Integer(), nullable=False, server_default="0"))
-        batch_op.add_column(sa.Column("fee_floor_applied", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+        batch_op.add_column(sa.Column("fee_floor_applied", sa.Boolean(), nullable=False, server_default=sa.text("false")))
         batch_op.add_column(sa.Column("loan_duration_days", sa.Integer(), nullable=False, server_default="0"))
         batch_op.add_column(sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column("settled_at", sa.DateTime(timezone=True), nullable=True))
@@ -127,7 +127,7 @@ def upgrade() -> None:
             sa.Column("lender_restrictions_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'"))
         )
         batch_op.create_foreign_key(
-            "fk_card_loan_contracts_accepted_negotiation_id_card_loan_negotiations",
+            "fk_card_loan_contract_accept_neg",
             "card_loan_negotiations",
             ["accepted_negotiation_id"],
             ["id"],
@@ -153,7 +153,7 @@ def upgrade() -> None:
         sa.Column("requested_player_card_id", sa.String(length=36), nullable=True),
         sa.Column("requested_player_id", sa.String(length=36), nullable=True),
         sa.Column("status", sa.String(length=24), nullable=False, server_default="open"),
-        sa.Column("is_negotiable", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_negotiable", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("desired_filters_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("terms_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
@@ -277,7 +277,7 @@ def downgrade() -> None:
     op.drop_index("ix_card_loan_contracts_negotiation_id", table_name="card_loan_contracts")
     with op.batch_alter_table("card_loan_contracts") as batch_op:
         batch_op.drop_constraint(
-            "fk_card_loan_contracts_accepted_negotiation_id_card_loan_negotiations",
+            "fk_card_loan_contract_accept_neg",
             type_="foreignkey",
         )
         batch_op.drop_column("lender_restrictions_json")

@@ -11,8 +11,8 @@ import tomllib
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 DEFAULT_CONFIG_ROOT = BACKEND_ROOT / "config"
-DEFAULT_DATABASE_PATH = PROJECT_ROOT / "gte_backend.db"
-DEFAULT_DATABASE_URL = f"sqlite+pysqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+DEFAULT_DATABASE_URL = ""
+DATABASE_URL_ENV_VARS = ("DATABASE_URL", "GTE_DATABASE_URL")
 
 PLAYER_UNIVERSE_WEIGHTING_FILE = "player_universe_weighting.toml"
 SUPPLY_TIERS_FILE = "supply_tiers.toml"
@@ -42,6 +42,28 @@ def _get_int(environ: Mapping[str, str], name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def normalize_database_url(database_url: str) -> str:
+    normalized = database_url.strip()
+    if not normalized:
+        raise ValueError("DATABASE_URL must not be empty.")
+    if normalized.startswith("postgres://"):
+        return f"postgresql+psycopg://{normalized[len('postgres://'):]}"
+    if normalized.startswith("postgresql://"):
+        return f"postgresql+psycopg://{normalized[len('postgresql://'):]}"
+    return normalized
+
+
+def resolve_database_url(environ: Mapping[str, str]) -> str:
+    for name in DATABASE_URL_ENV_VARS:
+        value = environ.get(name)
+        if value and value.strip():
+            return normalize_database_url(value)
+    raise ValueError(
+        "DATABASE_URL is required for backend database access. "
+        "GTE_DATABASE_URL is accepted only as a legacy fallback."
+    )
 
 
 def _load_toml_document(path: Path) -> dict[str, object]:
@@ -1369,7 +1391,7 @@ def load_settings(
         project_root=PROJECT_ROOT,
         backend_root=BACKEND_ROOT,
         config_root=resolved_config_root,
-        database_url=resolved_environ.get("GTE_DATABASE_URL", DEFAULT_DATABASE_URL),
+        database_url=resolve_database_url(resolved_environ),
         redis_url=resolved_environ.get("GTE_REDIS_URL"),
         auth_secret=resolved_environ.get("GTE_AUTH_SECRET", "gte-dev-secret-change-me"),
         media_signing_secret=resolved_environ.get("GTE_MEDIA_SIGNING_SECRET", "gte-media-secret-change-me"),

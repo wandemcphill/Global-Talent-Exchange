@@ -15,7 +15,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings
+from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings, normalize_database_url
 
 MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
@@ -42,7 +42,7 @@ def load_model_modules() -> None:
 
 
 def create_database_engine(database_url: str | None = None) -> Engine:
-    resolved_url = database_url or get_database_url()
+    resolved_url = normalize_database_url(database_url or get_database_url())
     _ensure_sqlite_database_path(resolved_url)
     connect_args = {"check_same_thread": False} if resolved_url.startswith("sqlite") else {}
     engine_kwargs: dict[str, object] = {"connect_args": connect_args}
@@ -81,7 +81,7 @@ def build_alembic_config(database_url: str | None = None) -> Config:
     config = Config(str(ALEMBIC_INI_PATH.resolve()))
     config.set_main_option("script_location", str(MIGRATIONS_ROOT.resolve()))
     config.set_main_option("prepend_sys_path", str(PROJECT_ROOT.resolve()))
-    config.set_main_option("sqlalchemy.url", database_url or get_database_url())
+    config.set_main_option("sqlalchemy.url", normalize_database_url(database_url or get_database_url()))
     return config
 
 

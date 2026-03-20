@@ -16,9 +16,7 @@ from backend.app.db import get_database_url, get_target_metadata, load_model_mod
 config = context.config
 
 load_model_modules()
-configured_url = config.get_main_option("sqlalchemy.url")
-if configured_url in {"", "sqlite:///./gte_backend.db", "sqlite+pysqlite:///./gte_backend.db"}:
-    config.set_main_option("sqlalchemy.url", get_database_url())
+config.set_main_option("sqlalchemy.url", get_database_url())
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

@@ -71,8 +71,8 @@ def upgrade() -> None:
         sa.Column("account_type", sa.String(length=32), nullable=False),
         sa.Column("currency", sa.String(length=12), server_default=sa.text("'USD'"), nullable=False),
         sa.Column("balance_minor", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("allow_negative", sa.Boolean(), server_default=sa.text("0"), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("allow_negative", sa.Boolean(), server_default=sa.text("false"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.CheckConstraint(
             f"account_type IN ({_as_check_values(_CLUB_FINANCE_ACCOUNT_TYPES)})",
             name="club_finance_account_type_allowed",
@@ -161,7 +161,7 @@ def upgrade() -> None:
         sa.Column("default_duration_months", sa.Integer(), server_default=sa.text("3"), nullable=False),
         sa.Column("payout_schedule", sa.String(length=24), server_default=sa.text("'monthly'"), nullable=False),
         sa.Column("description", sa.String(length=255), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.CheckConstraint(
             f"asset_type IN ({_as_check_values(_SPONSORSHIP_ASSET_TYPES)})",
             name="club_sponsorship_package_asset_type_allowed",
@@ -187,7 +187,7 @@ def upgrade() -> None:
         sa.Column("payout_schedule", sa.String(length=24), server_default=sa.text("'monthly'"), nullable=False),
         sa.Column("start_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("end_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("moderation_required", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("moderation_required", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("moderation_status", sa.String(length=32), server_default=sa.text("'not_required'"), nullable=False),
         sa.Column("custom_copy", sa.String(length=80), nullable=True),
         sa.Column("custom_logo_url", sa.String(length=255), nullable=True),
@@ -205,7 +205,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["package_id"],
             ["club_sponsorship_packages.id"],
-            name="fk_club_sponsorship_contracts_package_id_club_sponsorship_packages",
+            name="fk_club_spon_contracts_package",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_club_sponsorship_contracts"),
@@ -222,8 +222,8 @@ def upgrade() -> None:
         sa.Column("contract_id", sa.String(length=36), nullable=True),
         sa.Column("asset_type", sa.String(length=32), nullable=False),
         sa.Column("slot_code", sa.String(length=80), nullable=False),
-        sa.Column("is_visible", sa.Boolean(), server_default=sa.text("1"), nullable=False),
-        sa.Column("moderation_required", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("is_visible", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("moderation_required", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("moderation_status", sa.String(length=32), server_default=sa.text("'not_required'"), nullable=False),
         sa.Column("rendered_text", sa.String(length=120), nullable=True),
         sa.Column("asset_url", sa.String(length=255), nullable=True),
@@ -234,7 +234,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["contract_id"],
             ["club_sponsorship_contracts.id"],
-            name="fk_club_sponsorship_assets_contract_id_club_sponsorship_contracts",
+            name="fk_club_spon_assets_contract",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_club_sponsorship_assets"),
@@ -256,7 +256,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["contract_id"],
             ["club_sponsorship_contracts.id"],
-            name="fk_club_sponsorship_payouts_contract_id_club_sponsorship_contracts",
+            name="fk_club_spon_payouts_contract",
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_club_sponsorship_payouts"),
@@ -274,7 +274,7 @@ def upgrade() -> None:
         sa.Column("budget_minor", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("cycle_length_weeks", sa.Integer(), server_default=sa.text("6"), nullable=False),
         sa.Column("focus_attributes_json", sa.JSON(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.CheckConstraint(
             f"program_type IN ({_as_check_values(_ACADEMY_PROGRAM_TYPES)})",
             name="academy_program_type_allowed",
@@ -366,7 +366,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["training_cycle_id"],
             ["academy_training_cycles.id"],
-            name="fk_academy_player_progress_training_cycle_id_academy_training_cycles",
+            name="fk_academy_player_progress_cycle",
             ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_academy_player_progress"),
@@ -411,7 +411,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("region_type", sa.String(length=32), nullable=False),
         sa.Column("territory_codes_json", sa.JSON(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.CheckConstraint(
             f"region_type IN ({_as_check_values(_SCOUTING_REGION_TYPES)})",
             name="scouting_region_type_allowed",
