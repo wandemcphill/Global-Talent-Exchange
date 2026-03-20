@@ -8,6 +8,37 @@ import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
+  testWidgets('login surface hides seeded credentials on first render',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteLoginScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final List<TextField> fields =
+        tester.widgetList<TextField>(find.byType(TextField)).toList();
+
+    expect(find.text('Use demo credentials'), findsNothing);
+    expect(find.text('Use admin credentials'), findsNothing);
+    expect(fields, hasLength(2));
+    expect(fields[0].controller?.text, isEmpty);
+    expect(fields[1].controller?.text, isEmpty);
+  });
+
   testWidgets('login surface exposes creator access request entry',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 2200);

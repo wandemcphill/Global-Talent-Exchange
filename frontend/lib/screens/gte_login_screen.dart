@@ -29,8 +29,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
   @override
   void initState() {
     super.initState();
-    _emailController = TextEditingController(text: 'fan@demo.gte.local');
-    _passwordController = TextEditingController(text: 'DemoPass123');
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
   }
 
   @override
@@ -391,38 +391,6 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 16),
-                              Wrap(
-                                spacing: 12,
-                                runSpacing: 12,
-                                children: <Widget>[
-                                  OutlinedButton.icon(
-                                    onPressed: widget.controller.isSigningIn
-                                        ? null
-                                        : () {
-                                            _emailController.text =
-                                                'fan@demo.gte.local';
-                                            _passwordController.text =
-                                                'DemoPass123';
-                                          },
-                                    icon: const Icon(
-                                        Icons.rocket_launch_outlined),
-                                    label: const Text('Use demo credentials'),
-                                  ),
-                                  OutlinedButton.icon(
-                                    onPressed: widget.controller.isSigningIn
-                                        ? null
-                                        : () {
-                                            _emailController.text =
-                                                'vidvimedialtd@gmail.com';
-                                            _passwordController.text =
-                                                'NewPass1234!';
-                                          },
-                                    icon: const Icon(Icons.security_outlined),
-                                    label: const Text('Use admin credentials'),
-                                  ),
-                                ],
-                              ),
                               const SizedBox(height: 18),
                               Container(
                                 padding: const EdgeInsets.all(14),

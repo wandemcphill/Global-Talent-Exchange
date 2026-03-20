@@ -218,8 +218,15 @@ void main() {
   });
 
   testWidgets(
-      'authenticated no-club session reaches Home onboarding in the active shell',
+      'authenticated no-club session reaches shared onboarding in Home and opens club market',
       (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
@@ -243,17 +250,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomeDashboardScreen), findsOneWidget);
-    expect(find.text('HOME ONBOARDING'), findsOneWidget);
-    expect(find.text('Create or join a club to unlock Home'), findsOneWidget);
+    expect(find.text('NO CLUB ONBOARDING'), findsOneWidget);
+    expect(
+      find.text('This signed-in session has no canonical club yet'),
+      findsOneWidget,
+    );
     expect(find.text('No canonical club is selected'), findsNothing);
+    expect(find.text('Create or join a club to unlock Home'), findsNothing);
     expect(
       find.widgetWithText(FilledButton, 'Create Club unavailable'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.widgetWithText(FilledButton, 'Join Club unavailable'),
-      findsOneWidget,
+      findsNothing,
     );
+
+    final Finder browseClubMarketButton =
+        find.widgetWithText(FilledButton, 'Browse club market').first;
+    expect(
+      tester.widget<FilledButton>(browseClubMarketButton).onPressed,
+      isNotNull,
+    );
+
+    await _scrollUntilVisible(
+      tester,
+      browseClubMarketButton,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(browseClubMarketButton);
+    await _pumpUntilText(tester, 'Refresh market');
+
+    expect(find.text('Refresh market'), findsOneWidget);
+    expect(find.text('Open club market'), findsOneWidget);
   });
 
   testWidgets('home expansion lanes open deep-link routes',
@@ -305,7 +334,7 @@ void main() {
   });
 
   testWidgets(
-      'home dashboard shows guided onboarding and disables unavailable no-club CTAs',
+      'home dashboard shows shared no-club onboarding with working arena path',
       (WidgetTester tester) async {
     final _CountingExchangeApiClient api = _CountingExchangeApiClient.fixture();
     final GteExchangeController controller = GteExchangeController(
@@ -348,16 +377,20 @@ void main() {
       createHttpClient: (SecurityContext? _) => _ProbeHttpClient(probe),
     );
 
-    expect(find.text('Create or join a club to unlock Home'), findsOneWidget);
-    final Finder createClubButton =
-        find.widgetWithText(FilledButton, 'Create Club unavailable');
-    final Finder joinClubButton =
-        find.widgetWithText(FilledButton, 'Join Club unavailable');
+    expect(find.text('NO CLUB ONBOARDING'), findsOneWidget);
+    expect(
+      find.text('This signed-in session has no canonical club yet'),
+      findsOneWidget,
+    );
+    final Finder browseClubMarketButton =
+        find.widgetWithText(FilledButton, 'Browse club market').first;
     final Finder exploreArenaButton =
-        find.widgetWithText(OutlinedButton, 'Explore Arena');
+        find.widgetWithText(FilledButton, 'Explore Arena').first;
 
-    expect(createClubButton, findsOneWidget);
-    expect(joinClubButton, findsOneWidget);
+    expect(find.text('Create Club unavailable'), findsNothing);
+    expect(find.text('Join Club unavailable'), findsNothing);
+    expect(find.text('Create or join a club to unlock Home'), findsNothing);
+    expect(find.text('Browse club market'), findsWidgets);
     expect(find.text('Explore Arena'), findsWidgets);
     expect(find.text('No canonical club is selected'), findsNothing);
     expect(
@@ -366,10 +399,14 @@ void main() {
       ),
       findsNothing,
     );
-    expect(tester.widget<FilledButton>(createClubButton).onPressed, isNull);
-    expect(tester.widget<FilledButton>(joinClubButton).onPressed, isNull);
     expect(
-        tester.widget<OutlinedButton>(exploreArenaButton).onPressed, isNotNull);
+      tester.widget<FilledButton>(browseClubMarketButton).onPressed,
+      isNotNull,
+    );
+    expect(
+      tester.widget<FilledButton>(exploreArenaButton).onPressed,
+      isNotNull,
+    );
 
     await tester.tap(exploreArenaButton);
     await tester.pumpAndSettle();
@@ -378,6 +415,61 @@ void main() {
     expect(openCompetitionsCount, 1);
     expect(probe.openUrlCount, 0);
     expect(api.listOrdersCount, 0);
+  });
+
+  testWidgets(
+      'authenticated no-club Club tab shows shared onboarding and opens club market',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'clubless-shell-user',
+      userName: 'Clubless Shell User',
+      clubId: null,
+      clubName: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GteNavigationShellScreen(
+          controller: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          initialRoute: const GteNavigationRoute.club(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('NO CLUB ONBOARDING'), findsOneWidget);
+    expect(find.text('Open home'), findsNothing);
+    expect(find.text('No canonical club is selected'), findsNothing);
+
+    final Finder browseClubMarketButton =
+        find.widgetWithText(FilledButton, 'Browse club market').first;
+    expect(
+      tester.widget<FilledButton>(browseClubMarketButton).onPressed,
+      isNotNull,
+    );
+
+    await _scrollUntilVisible(
+      tester,
+      browseClubMarketButton,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(browseClubMarketButton);
+    await _pumpUntilText(tester, 'Refresh market');
+
+    expect(find.text('Refresh market'), findsOneWidget);
+    expect(find.text('Open club market'), findsOneWidget);
   });
 
   testWidgets('market quick links open public club sale listings',
