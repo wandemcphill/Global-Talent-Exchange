@@ -156,7 +156,7 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                   OutlinedButton.icon(
                     onPressed: () => _openCompetitionShare(context),
                     icon: const Icon(Icons.emoji_events_outlined),
-                    label: const Text('Join creator competition'),
+                    label: const Text('Share creator competition'),
                   ),
                 ],
               ),
@@ -233,7 +233,7 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
       return;
     }
     final String message =
-        'Join creator competition with code $code. Community invite: $url';
+        'Share creator competition invite with code $code. Community link: $url';
     await Clipboard.setData(ClipboardData(text: message));
     if (!mounted) {
       return;

@@ -217,6 +217,45 @@ void main() {
     expect(clubHub.clubName, 'Ibadan Lions FC');
   });
 
+  testWidgets(
+      'authenticated no-club session reaches Home onboarding in the active shell',
+      (WidgetTester tester) async {
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'user-no-club',
+      userName: 'No Club Owner',
+      clubId: null,
+      clubName: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GteNavigationShellScreen(
+          controller: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          initialRoute: const GteNavigationRoute.home(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HomeDashboardScreen), findsOneWidget);
+    expect(find.text('HOME ONBOARDING'), findsOneWidget);
+    expect(find.text('Create or join a club to unlock Home'), findsOneWidget);
+    expect(find.text('No canonical club is selected'), findsNothing);
+    expect(
+      find.widgetWithText(FilledButton, 'Create Club unavailable'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(FilledButton, 'Join Club unavailable'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('home expansion lanes open deep-link routes',
       (WidgetTester tester) async {
     final GteExchangeController controller = GteExchangeController(
@@ -242,6 +281,20 @@ void main() {
 
     expect(find.text('Expansion lanes'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
+    final Finder fanPredictionsButton = find.widgetWithText(
+      FilledButton,
+      'Fan predictions (live match only)',
+    );
+    expect(
+      tester.widget<FilledButton>(fanPredictionsButton).onPressed,
+      isNull,
+    );
+    expect(
+      find.text(
+        'Fan predictions unlock from live-match routes after a canonical match id is present.',
+      ),
+      findsOneWidget,
+    );
 
     final Finder playerCardsButton = find.text('Player cards');
     await tester.ensureVisible(playerCardsButton);
@@ -252,7 +305,7 @@ void main() {
   });
 
   testWidgets(
-      'home dashboard shows guided onboarding and stays offline without a canonical club',
+      'home dashboard shows guided onboarding and disables unavailable no-club CTAs',
       (WidgetTester tester) async {
     final _CountingExchangeApiClient api = _CountingExchangeApiClient.fixture();
     final GteExchangeController controller = GteExchangeController(
@@ -265,6 +318,8 @@ void main() {
       clubName: null,
     );
     final _HttpRequestProbe probe = _HttpRequestProbe();
+    int openClubTabCount = 0;
+    int openCompetitionsCount = 0;
 
     await HttpOverrides.runZoned<Future<void>>(
       () async {
@@ -274,8 +329,12 @@ void main() {
               exchangeController: controller,
               apiBaseUrl: 'http://127.0.0.1:8000',
               backendMode: GteBackendMode.live,
-              onOpenClubTab: () {},
-              onOpenCompetitionsTab: () {},
+              onOpenClubTab: () {
+                openClubTabCount += 1;
+              },
+              onOpenCompetitionsTab: () {
+                openCompetitionsCount += 1;
+              },
               navigationDependencies: _dependencies(
                 isAuthenticated: true,
                 clubId: null,
@@ -290,8 +349,15 @@ void main() {
     );
 
     expect(find.text('Create or join a club to unlock Home'), findsOneWidget);
-    expect(find.text('Create Club'), findsWidgets);
-    expect(find.text('Join Club'), findsWidgets);
+    final Finder createClubButton =
+        find.widgetWithText(FilledButton, 'Create Club unavailable');
+    final Finder joinClubButton =
+        find.widgetWithText(FilledButton, 'Join Club unavailable');
+    final Finder exploreArenaButton =
+        find.widgetWithText(OutlinedButton, 'Explore Arena');
+
+    expect(createClubButton, findsOneWidget);
+    expect(joinClubButton, findsOneWidget);
     expect(find.text('Explore Arena'), findsWidgets);
     expect(find.text('No canonical club is selected'), findsNothing);
     expect(
@@ -300,6 +366,16 @@ void main() {
       ),
       findsNothing,
     );
+    expect(tester.widget<FilledButton>(createClubButton).onPressed, isNull);
+    expect(tester.widget<FilledButton>(joinClubButton).onPressed, isNull);
+    expect(
+        tester.widget<OutlinedButton>(exploreArenaButton).onPressed, isNotNull);
+
+    await tester.tap(exploreArenaButton);
+    await tester.pumpAndSettle();
+
+    expect(openClubTabCount, 0);
+    expect(openCompetitionsCount, 1);
     expect(probe.openUrlCount, 0);
     expect(api.listOrdersCount, 0);
   });
@@ -428,6 +504,20 @@ void main() {
     );
 
     expect(find.text('Arena extensions'), findsOneWidget);
+    final Finder fanPredictionsButton = find.widgetWithText(
+      FilledButton,
+      'Fan predictions (live match only)',
+    );
+    expect(
+      tester.widget<FilledButton>(fanPredictionsButton).onPressed,
+      isNull,
+    );
+    expect(
+      find.text(
+        'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+      ),
+      findsOneWidget,
+    );
 
     final Finder streamerTournamentsButton = find.text('Streamer tournaments');
     await tester.ensureVisible(streamerTournamentsButton);
@@ -474,6 +564,47 @@ void main() {
 
     expect(
       find.textContaining('canonical football-world simulation'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('club hub demotes owner inbox when owner workspace is unknown',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ClubHubScreen(
+          clubId: 'royal-lagos-fc',
+          clubName: 'Royal Lagos FC',
+          baseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          isAuthenticated: true,
+          navigationDependencies: _dependencies(
+            isAuthenticated: true,
+            clubId: 'ibadan-lions',
+            clubName: 'Ibadan Lions FC',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollUntilVisible(
+      tester,
+      find.text('Club extensions'),
+      scrollable: find.byType(ListView).first,
+    );
+
+    final Finder ownerInboxButton = find.widgetWithText(
+      FilledButton,
+      'Owner-only inbox',
+    );
+    expect(
+      tester.widget<FilledButton>(ownerInboxButton).onPressed,
+      isNull,
+    );
+    expect(
+      find.text(
+        'Switch into this club owner workspace before opening the owner offer inbox.',
+      ),
       findsOneWidget,
     );
   });

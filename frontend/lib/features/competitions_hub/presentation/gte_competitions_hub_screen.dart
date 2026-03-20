@@ -230,7 +230,6 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                   onOpenStreamerTournaments: () => _openFeatureRoute(
                     const StreamerTournamentsListRouteData(),
                   ),
-                  onOpenFanPredictions: _openFanPredictionFallback,
                   onOpenNationsCup: () => _openFeatureRoute(
                     const NationalTeamCompetitionsRouteData(),
                   ),
@@ -351,26 +350,6 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
       context,
       route: route,
       dependencies: dependencies,
-    );
-  }
-
-  Future<void> _openFanPredictionFallback() {
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Canonical match id required'),
-          content: const Text(
-            'Fan prediction routes stay match-scoped. Open from a live match context or enter a canonical backend match id after the route mounts.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -816,14 +795,12 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
 class _ArenaRoutePanel extends StatelessWidget {
   const _ArenaRoutePanel({
     required this.onOpenStreamerTournaments,
-    required this.onOpenFanPredictions,
     required this.onOpenNationsCup,
     required this.onOpenWorldSimulation,
     required this.onOpenTransferCenter,
   });
 
   final VoidCallback onOpenStreamerTournaments;
-  final VoidCallback onOpenFanPredictions;
   final VoidCallback onOpenNationsCup;
   final VoidCallback onOpenWorldSimulation;
   final VoidCallback onOpenTransferCenter;
@@ -855,9 +832,9 @@ class _ArenaRoutePanel extends StatelessWidget {
                 label: const Text('Streamer tournaments'),
               ),
               FilledButton.tonalIcon(
-                onPressed: onOpenFanPredictions,
+                onPressed: null,
                 icon: const Icon(Icons.insights_outlined),
-                label: const Text('Fan predictions'),
+                label: const Text('Fan predictions (live match only)'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenNationsCup,
@@ -875,6 +852,11 @@ class _ArenaRoutePanel extends StatelessWidget {
                 label: const Text('Transfer center'),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),

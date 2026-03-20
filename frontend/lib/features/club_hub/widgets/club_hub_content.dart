@@ -55,6 +55,11 @@ class ClubHubContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool canOpenOwnerOffers =
+        isAuthenticated && navigationDependencies?.currentClubId == data.clubId;
+    final String ownerOffersMessage = !isAuthenticated
+        ? 'Sign in with the club owner account before opening the owner offer inbox.'
+        : 'Switch into this club owner workspace before opening the owner offer inbox.';
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -139,13 +144,16 @@ class ClubHubContent extends StatelessWidget {
                 clubName: data.clubName,
               ),
             ),
-            onOpenOwnerOffers: () => _openFeatureRoute(
-              context,
-              ClubSaleMarketOwnerOffersRouteData(
-                clubId: data.clubId,
-                clubName: data.clubName,
-              ),
-            ),
+            onOpenOwnerOffers: canOpenOwnerOffers
+                ? () => _openFeatureRoute(
+                      context,
+                      ClubSaleMarketOwnerOffersRouteData(
+                        clubId: data.clubId,
+                        clubName: data.clubName,
+                      ),
+                    )
+                : null,
+            ownerOffersMessage: ownerOffersMessage,
             onOpenWorldContext: () => _openFeatureRoute(
               context,
               WorldClubContextRouteData(
@@ -1078,12 +1086,14 @@ class _ClubRoutePanel extends StatelessWidget {
     required this.onOpenCreatorStadium,
     required this.onOpenClubSaleDetail,
     required this.onOpenOwnerOffers,
+    required this.ownerOffersMessage,
     required this.onOpenWorldContext,
   });
 
   final VoidCallback onOpenCreatorStadium;
   final VoidCallback onOpenClubSaleDetail;
-  final VoidCallback onOpenOwnerOffers;
+  final VoidCallback? onOpenOwnerOffers;
+  final String ownerOffersMessage;
   final VoidCallback onOpenWorldContext;
 
   @override
@@ -1120,7 +1130,7 @@ class _ClubRoutePanel extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onOpenOwnerOffers,
                 icon: const Icon(Icons.inbox_outlined),
-                label: const Text('Owner offer inbox'),
+                label: const Text('Owner-only inbox'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenWorldContext,
@@ -1129,6 +1139,13 @@ class _ClubRoutePanel extends StatelessWidget {
               ),
             ],
           ),
+          if (onOpenOwnerOffers == null) ...<Widget>[
+            const SizedBox(height: 10),
+            Text(
+              ownerOffersMessage,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ],
       ),
     );

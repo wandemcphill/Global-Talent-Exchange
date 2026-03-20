@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
 import '../../data/gte_models.dart';
@@ -66,6 +66,8 @@ class _GteWithdrawalEligibilityScreenState
             );
           }
           final GteWithdrawalEligibility eligibility = snapshot.data!;
+          final String? requestBlockReason =
+              _withdrawalEligibilityBlockReason(eligibility);
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
@@ -159,9 +161,7 @@ class _GteWithdrawalEligibilityScreenState
                       label: const Text('Bank details'),
                     ),
                     FilledButton.icon(
-                      onPressed: eligibility.withdrawableNow > 0 &&
-                              !eligibility.requiresKyc &&
-                              !eligibility.requiresBankAccount
+                      onPressed: requestBlockReason == null
                           ? () {
                               Navigator.of(context).push<void>(
                                 MaterialPageRoute<void>(
@@ -193,6 +193,14 @@ class _GteWithdrawalEligibilityScreenState
                     ),
                   ],
                 ),
+                if (requestBlockReason != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  GteStatePanel(
+                    title: 'Withdrawal request unavailable',
+                    message: requestBlockReason,
+                    icon: Icons.lock_outline,
+                  ),
+                ],
               ],
             ),
           );
@@ -295,8 +303,9 @@ class _GteWithdrawalRequestScreenState
           amountCoin: amount,
           bankAccountId: _selectedBankId,
           sourceScope: _sourceScope,
-          notes:
-              _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+          notes: _notesController.text.trim().isEmpty
+              ? null
+              : _notesController.text.trim(),
         ),
       );
       if (!mounted) {
@@ -376,6 +385,15 @@ class _GteWithdrawalRequestScreenState
 
   @override
   Widget build(BuildContext context) {
+    final String? initialBlockReason =
+        _withdrawalEligibilityBlockReason(widget.eligibility);
+    final String? submitGuardMessage = initialBlockReason ??
+        _quote?.blockedReason ??
+        (_selectedBankId == null
+            ? 'Add a bank account before submitting a withdrawal request.'
+            : _quote == null
+                ? 'Preview a clear withdrawal quote before submitting.'
+                : null);
     return Scaffold(
       appBar: AppBar(title: const Text('Request withdrawal')),
       body: ListView(
@@ -445,13 +463,23 @@ class _GteWithdrawalRequestScreenState
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.tonalIcon(
-                    onPressed: _isQuoting ? null : _requestQuote,
+                    onPressed: _isQuoting || initialBlockReason != null
+                        ? null
+                        : _requestQuote,
                     icon: const Icon(Icons.receipt_long_outlined),
                     label: Text(
                       _isQuoting ? 'Generating quote...' : 'Preview quote',
                     ),
                   ),
                 ),
+                if (initialBlockReason != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  GteStatePanel(
+                    title: 'Quote locked',
+                    message: initialBlockReason,
+                    icon: Icons.lock_outline,
+                  ),
+                ],
               ],
             ),
           ),
@@ -539,14 +567,16 @@ class _GteWithdrawalRequestScreenState
                     icon: Icons.account_balance_outlined,
                     actionLabel: 'Add bank details',
                     onAction: () {
-                      Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (BuildContext context) =>
-                              GteBankDetailsScreen(
-                            controller: widget.controller,
-                          ),
-                        ),
-                      ).then((_) => _loadAccounts());
+                      Navigator.of(context)
+                          .push<void>(
+                            MaterialPageRoute<void>(
+                              builder: (BuildContext context) =>
+                                  GteBankDetailsScreen(
+                                controller: widget.controller,
+                              ),
+                            ),
+                          )
+                          .then((_) => _loadAccounts());
                     },
                   )
                 else
@@ -587,10 +617,17 @@ class _GteWithdrawalRequestScreenState
                   ),
                 ],
                 const SizedBox(height: 18),
+                if (submitGuardMessage != null) ...<Widget>[
+                  Text(
+                    submitGuardMessage,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _isSubmitting || _selectedBankId == null
+                    onPressed: _isSubmitting || submitGuardMessage != null
                         ? null
                         : _submit,
                     child: Text(_isSubmitting ? 'Submitting...' : 'Submit'),
@@ -651,8 +688,8 @@ class _GteWithdrawalReceiptScreenState
       ),
       body: FutureBuilder<GteWithdrawalReceipt>(
         future: _receiptFuture,
-        builder:
-            (BuildContext context, AsyncSnapshot<GteWithdrawalReceipt> snapshot) {
+        builder: (BuildContext context,
+            AsyncSnapshot<GteWithdrawalReceipt> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -892,6 +929,33 @@ class _GteWithdrawalHistoryScreenState
       ),
     );
   }
+}
+
+String? _withdrawalEligibilityBlockReason(
+    GteWithdrawalEligibility eligibility) {
+  if (eligibility.policyBlocked) {
+    return eligibility.policyBlockReason ??
+        'Policy acceptance required before withdrawal is enabled.';
+  }
+  if (!eligibility.countryWithdrawalsEnabled) {
+    return 'Withdrawals are currently disabled for this country.';
+  }
+  if (eligibility.requiresKyc) {
+    return 'Complete KYC before requesting a withdrawal.';
+  }
+  if (eligibility.requiresBankAccount) {
+    return 'Add a bank account before requesting a withdrawal.';
+  }
+  if (eligibility.withdrawableNow > 0) {
+    return null;
+  }
+  if (eligibility.nextEligibleAt != null) {
+    return 'Withdrawal access resets at ${gteFormatDateTime(eligibility.nextEligibleAt)}.';
+  }
+  if (eligibility.pendingWithdrawals > 0) {
+    return 'Wait for the current withdrawal review to clear before opening another request.';
+  }
+  return 'No funds are currently available to withdraw.';
 }
 
 class _QuoteMetric extends StatelessWidget {

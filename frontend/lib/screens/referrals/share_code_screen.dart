@@ -113,7 +113,7 @@ class _ShareCodeScreenState extends State<ShareCodeScreen> {
       return;
     }
     final String message =
-        'Share your code ${hub.shareCode} and join creator competition here: ${hub.shareUrl}';
+        'Share your code ${hub.shareCode}. Creator competition invite: ${hub.shareUrl}';
     await Clipboard.setData(ClipboardData(text: message));
     if (!mounted) {
       return;

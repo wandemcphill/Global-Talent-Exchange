@@ -7,6 +7,7 @@ import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
 import '../widgets/gtex_branding.dart';
+import 'creators/creator_access_request_screen.dart';
 import 'wallet/gte_policy_compliance_center_screen.dart';
 
 class GteSignupScreen extends StatefulWidget {
@@ -47,6 +48,20 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
     super.dispose();
   }
 
+  Future<void> _trackAnalyticsEventSafely(
+    String name, {
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) async {
+    try {
+      await widget.controller.api.trackAnalyticsEvent(
+        name,
+        metadata: metadata,
+      );
+    } catch (_) {
+      // Analytics must not block signup on pre-auth screens.
+    }
+  }
+
   Future<void> _submit() async {
     final String fullName = _fullNameController.text.trim();
     final String phone = _phoneController.text.trim();
@@ -57,7 +72,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
     });
 
     if (!_isOver18) {
-      await widget.controller.api.trackAnalyticsEvent('underage_signup_blocked');
+      await _trackAnalyticsEventSafely('underage_signup_blocked');
       setState(() {
         _localError =
             'You must confirm that you are 18 or older to create an account.';
@@ -74,7 +89,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       return;
     }
 
-    await widget.controller.api.trackAnalyticsEvent('signup_started');
+    await _trackAnalyticsEventSafely('signup_started');
     await widget.controller.register(
       fullName: fullName,
       phoneNumber: phone,
@@ -91,8 +106,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       });
       return;
     }
-    final GteComplianceStatus? compliance =
-        widget.controller.complianceStatus;
+    final GteComplianceStatus? compliance = widget.controller.complianceStatus;
     if (compliance != null && compliance.hasMissingRequiredPolicies) {
       final bool? openCompliance = await showDialog<bool>(
         context: context,
@@ -125,7 +139,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
         );
       }
     }
-    await widget.controller.api.trackAnalyticsEvent('signup_completed');
+    await _trackAnalyticsEventSafely('signup_completed');
     Navigator.of(context).pop(true);
   }
 
@@ -177,14 +191,18 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                                   Text('What you unlock'),
                                   SizedBox(height: 10),
                                   _BulletLine(
-                                      icon: Icons.account_balance_wallet_outlined,
-                                      text: 'Smart wallet balances, deposit tracking, and withdrawal eligibility.'),
+                                      icon:
+                                          Icons.account_balance_wallet_outlined,
+                                      text:
+                                          'Smart wallet balances, deposit tracking, and withdrawal eligibility.'),
                                   _BulletLine(
                                       icon: Icons.receipt_long_outlined,
-                                      text: 'Manual bank transfer funding with exact references.'),
+                                      text:
+                                          'Manual bank transfer funding with exact references.'),
                                   _BulletLine(
                                       icon: Icons.support_agent_outlined,
-                                      text: 'In-app dispute chat and WhatsApp escalation.'),
+                                      text:
+                                          'In-app dispute chat and WhatsApp escalation.'),
                                 ],
                               ),
                             ),
@@ -325,6 +343,22 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                                         Navigator.of(context).pop();
                                       },
                                 child: const Text('I already have a login'),
+                              ),
+                              TextButton(
+                                onPressed: isSubmitting
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext context) =>
+                                                CreatorAccessRequestScreen(
+                                              exchangeController:
+                                                  widget.controller,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                child: const Text('Apply for creator access'),
                               ),
                             ],
                           ),

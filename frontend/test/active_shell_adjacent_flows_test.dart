@@ -10,6 +10,7 @@ import 'package:gte_frontend/features/navigation/presentation/gte_navigation_she
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen.dart';
+import 'package:gte_frontend/screens/wallet/gte_withdrawal_flow_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
@@ -277,6 +278,42 @@ void main() {
     expect(find.text('Withdrawals'), findsOneWidget);
     expect(find.text('Request withdrawal'), findsOneWidget);
   });
+
+  testWidgets(
+      'withdrawal workspace disables request initiation when blockers are already known',
+      (WidgetTester tester) async {
+    _setLargeViewport(tester);
+
+    final GteExchangeController controller = GteExchangeController(
+      api: _fixtureClient(_BlockedWithdrawalApi()),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'user-ibadan',
+      userName: 'Ibadan Owner',
+      clubId: 'ibadan-lions',
+      clubName: 'Ibadan Lions FC',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteWithdrawalEligibilityScreen(controller: controller),
+      ),
+    );
+    await _pumpUntilText(tester, 'Withdrawals');
+
+    final Finder requestButton =
+        find.widgetWithText(FilledButton, 'Request withdrawal');
+    expect(
+      tester.widget<FilledButton>(requestButton).onPressed,
+      isNull,
+    );
+    expect(find.text('Withdrawal request unavailable'), findsOneWidget);
+    expect(
+      find.text('Policy acceptance required before withdrawal is enabled.'),
+      findsOneWidget,
+    );
+  });
 }
 
 void _setLargeViewport(WidgetTester tester) {
@@ -394,6 +431,33 @@ class _BlockedComplianceApi extends GteMockApi {
   Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() async {
     await Future<void>.delayed(latency);
     return _missingRequirements;
+  }
+}
+
+class _BlockedWithdrawalApi extends GteMockApi {
+  _BlockedWithdrawalApi({
+    super.latency = Duration.zero,
+  });
+
+  @override
+  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() async {
+    await Future<void>.delayed(latency);
+    return const GteWithdrawalEligibility(
+      availableBalance: 250,
+      withdrawableNow: 0,
+      remainingAllowance: 0,
+      nextEligibleAt: null,
+      kycStatus: GteKycStatus.fullyVerified,
+      requiresKyc: false,
+      requiresBankAccount: false,
+      pendingWithdrawals: 0,
+      countryCode: 'NG',
+      countryWithdrawalsEnabled: true,
+      missingRequiredPolicies: <String>['withdrawal_policy'],
+      policyBlocked: true,
+      policyBlockReason:
+          'Policy acceptance required before withdrawal is enabled.',
+    );
   }
 }
 

@@ -1,47 +1,41 @@
-# GTEX Frontend RC Controlled Testing Checklist
+# GTEX Frontend RC Tester Instructions
 
 Branch: `codex/treasury-mvp`  
 Date: `2026-03-19`  
-Baseline: GTEX frontend is release-candidate ready for controlled testing. Release build generation is the next operator step.
+Artifact: release APK for controlled testing
 
-## What This RC Validates
+Use this pack for real-tester runs only. Keep testing concise, stay on assigned scenarios, and file one report per issue.
 
-- Sign-in and authenticated shell entry.
-- GTEX splash, logo, and header branding consistency.
-- Home stability with canonical club context.
-- Guided no-club onboarding instead of fallback club leakage.
-- Arena entry and overview or empty-state rendering.
-- Wallet entry, funding, withdrawal, and notifications access.
-- Compliance-gated funding behavior when deposits are blocked.
-- Notifications opening the correct workspace and refreshing read state after return.
-- Withdrawal notification routing into the withdrawal workspace.
-- One-step back/re-entry sanity on shell-adjacent frontend flows.
+## Before You Start
 
-## What Is Not Yet Fully Validated
+- Install the assigned release APK.
+- Use only the account type assigned to your scenario.
+- Capture a screenshot for every issue.
+- Start a screen recording before any routing, refresh, notification, or back/re-entry issue that may be hard to reproduce.
 
-- Native push lifecycle behavior across install, background, foreground, and OS-delivered notification paths.
-- Full real-world payment, bank transfer, or settlement operations beyond frontend gating and routing behavior.
-- Long-session endurance, low-connectivity recovery, and broad device-matrix coverage.
-- Final packaging polish beyond the controlled release-candidate build itself.
+## Who Should Test What
 
-## Known Non-Blockers
+- All testers: launch the APK, confirm GTEX splash/logo/header branding, and sign in successfully.
+- Club-linked account tester: verify Home canonical club context, Arena entry, Wallet entry, notifications open/read refresh, withdrawal notification routing, and one back/re-entry sanity check.
+- No-club account tester: verify the guided Home onboarding state with `Create Club`, `Join Club`, and `Explore Arena`.
+- Compliance-restricted account tester: verify blocked funding behavior, `Compliance action required`, and entry into the compliance center.
 
-- Windows executable naming still has a cosmetic mismatch.
-- Existing Kotlin warning during Android build is non-blocking for this RC.
-- This RC does not claim native push lifecycle validation.
+If the group is small, one tester may rotate across all three account types. Keep reports separated by account type.
 
-## What Testers Should Report
+## Evidence To Capture
 
-- Any crash, blank screen, frozen loader, or route that does not resolve.
-- Any wrong club name, fallback club identity, or missing no-club onboarding state.
-- Any GTEX branding mismatch on splash, login, header, or shell surfaces.
-- Any wallet/compliance issue where blocked funding appears enabled or incorrect instructions are shown.
-- Any notification that fails to open, fails to mark read after return, or opens the wrong workspace.
-- Any withdrawal notification that does not land in the withdrawal workspace.
+- Screenshot any visible error, wrong club context, incorrect branding, or blocked/unblocked state that looks wrong.
+- Screen recording for crashes, blank screens, route failures, notification open/read refresh issues, withdrawal routing issues, and back/re-entry problems.
+- Include the final visible screen after the failure, not only the step before it.
 
-## Reporting Format
+## When To Report Immediately
 
-- Include device, OS, build timestamp or artifact name, and account type used.
-- Include exact step-by-step reproduction.
-- Include expected result and actual result.
-- Include at least one screenshot; add screen recording if the issue involves routing or refresh behavior.
+- Report immediately if the APK crashes, freezes, shows a blank screen, fails sign-in, opens the wrong workspace, loses the club context, or exposes funding actions that should stay blocked.
+- Keep testing other scenarios only if the issue is not a blocker for the assigned account path.
+
+## Severity Labels
+
+- `Blocker`: testing cannot continue on the assigned path.
+- `Major`: main flow is wrong or unreliable, but partial testing can continue.
+- `Minor`: issue is real but does not break the main flow.
+- `Cosmetic`: visual or copy issue only.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
+import 'creators/creator_access_request_screen.dart';
 import 'gte_signup_screen.dart';
 import 'wallet/gte_policy_compliance_center_screen.dart';
 import '../widgets/gte_shell_theme.dart';
@@ -472,6 +473,22 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                         );
                                       },
                                 child: const Text('Create a new account'),
+                              ),
+                              TextButton(
+                                onPressed: widget.controller.isSigningIn
+                                    ? null
+                                    : () async {
+                                        await Navigator.of(context).push<void>(
+                                          MaterialPageRoute<void>(
+                                            builder: (BuildContext context) =>
+                                                CreatorAccessRequestScreen(
+                                              exchangeController:
+                                                  widget.controller,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                child: const Text('Apply for creator access'),
                               ),
                             ],
                           ),

@@ -34,6 +34,6 @@ void main() {
     expect(find.text('Community reward summary'), findsOneWidget);
     expect(find.text('Milestone progress'), findsOneWidget);
     expect(find.text('Creator dashboard'), findsOneWidget);
-    expect(find.text('Join creator competition'), findsOneWidget);
+    expect(find.text('Share creator competition'), findsOneWidget);
   });
 }

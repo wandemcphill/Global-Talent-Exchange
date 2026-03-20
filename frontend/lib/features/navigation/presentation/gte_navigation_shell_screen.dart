@@ -20,6 +20,7 @@ import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
 import 'package:gte_frontend/screens/community/community_hub_screen.dart';
+import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/referrals/referral_hub_screen.dart';
 import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
@@ -332,6 +333,23 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                         padding: const EdgeInsets.only(right: 12),
                         child: Center(
                           child: Text(widget.controller.session!.user.username),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: IconButton(
+                          tooltip: 'Creator access request',
+                          onPressed: () {
+                            Navigator.of(context).push<void>(
+                              MaterialPageRoute<void>(
+                                builder: (BuildContext context) =>
+                                    CreatorAccessRequestScreen(
+                                  exchangeController: widget.controller,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.how_to_reg_outlined),
                         ),
                       ),
                       Padding(
@@ -684,17 +702,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           ),
         );
       }
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: GteStatePanel(
-          eyebrow: 'CLUB SCOPE',
-          title: 'No canonical club is selected',
-          message:
-              'This signed-in session does not expose a canonical current club. Select a club from the authenticated account context or create one before using club-scoped home surfaces.',
-          icon: Icons.home_outlined,
-          accentColor: Color(0xFF72F0D8),
-        ),
-      );
     }
     return HomeDashboardScreen(
       key: const PageStorageKey<String>('home-dashboard'),

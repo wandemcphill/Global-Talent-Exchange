@@ -90,9 +90,9 @@ class CreatorApi {
           '${profile.shareCode}-${competition.competitionId.toUpperCase()}',
       shareUrl:
           '${_normalizedBase(baseUrl)}/community/creator/${profile.handle}/competitions/${competition.competitionId}',
-      headline: 'Invite friends to join creator competition',
+      headline: 'Share creator competition invite',
       supportingText:
-          'Share this creator competition with your community. Invite attribution stays tied to qualified contest participation and milestone rewards.',
+          'Share this creator competition invite with your community. Invite attribution stays tied to qualified contest participation and milestone rewards.',
       attributionNote:
           'Invite attribution is reviewable and tracks qualified community growth.',
     );
@@ -114,14 +114,12 @@ CreatorProfile _buildProfileFromSummary(
   final List<CreatorCompetition> competitions = competitionsPayload
       .map(_creatorCompetitionFromJson)
       .toList(growable: false);
-  final CreatorFinanceSummary finance =
-      _creatorFinanceFromJson(financePayload);
+  final CreatorFinanceSummary finance = _creatorFinanceFromJson(financePayload);
   final int totalSignups = (summary['total_signups'] as num?)?.toInt() ?? 0;
   final int qualifiedJoins = (summary['qualified_joins'] as num?)?.toInt() ?? 0;
   final int activeParticipants =
       (summary['active_participants'] as num?)?.toInt() ?? 0;
-  final int pendingRewards =
-      (summary['pending_rewards'] as num?)?.toInt() ?? 0;
+  final int pendingRewards = (summary['pending_rewards'] as num?)?.toInt() ?? 0;
   final int approvedRewards =
       (summary['approved_rewards'] as num?)?.toInt() ?? 0;
 
@@ -135,20 +133,21 @@ CreatorProfile _buildProfileFromSummary(
     growthHeadline: 'Creator growth',
     growthDetail:
         '$qualifiedJoins qualified joins tied to $totalSignups signups this season.',
-    weeklyInviteLift: '${max(0, qualifiedJoins ~/ 2)} qualified joins this week',
+    weeklyInviteLift:
+        '${max(0, qualifiedJoins ~/ 2)} qualified joins this week',
     topChannel: 'Creator share codes',
-    inviteAttributionRate:
-        totalSignups == 0 ? '0% attribution rate' : '${((qualifiedJoins / totalSignups) * 100).toStringAsFixed(1)}% attribution rate',
+    inviteAttributionRate: totalSignups == 0
+        ? '0% attribution rate'
+        : '${((qualifiedJoins / totalSignups) * 100).toStringAsFixed(1)}% attribution rate',
   );
   final CreatorRewardSummary rewardSummary = CreatorRewardSummary(
-    pendingCommunityRewards:
-        '$pendingRewards rewards pending review',
-    lifetimeMilestoneRewards:
-        '$approvedRewards rewards approved',
+    pendingCommunityRewards: '$pendingRewards rewards pending review',
+    lifetimeMilestoneRewards: '$approvedRewards rewards approved',
     competitionEntryCredits:
         '${finance.totalGiftIncome.toStringAsFixed(2)} credits unlocked',
-    ledgerStatus:
-        finance.pendingWithdrawals > 0 ? 'Withdrawals in flight' : 'Ledger balanced',
+    ledgerStatus: finance.pendingWithdrawals > 0
+        ? 'Withdrawals in flight'
+        : 'Ledger balanced',
   );
 
   return CreatorProfile(
@@ -156,8 +155,7 @@ CreatorProfile _buildProfileFromSummary(
     userId: profileJson['user_id']?.toString() ?? 'user',
     displayName: profileJson['display_name']?.toString() ?? 'Creator',
     handle: profileJson['handle']?.toString() ?? 'creator',
-    shareCode:
-        profileJson['default_share_code']?.toString() ?? 'CREATOR',
+    shareCode: profileJson['default_share_code']?.toString() ?? 'CREATOR',
     tier: profileJson['tier']?.toString() ?? 'standard',
     status: profileJson['status']?.toString() ?? 'active',
     revenueSharePercent:
@@ -201,8 +199,7 @@ CreatorProfile _buildProfileFromPublic(
     shareCode: payload['default_share_code']?.toString() ?? 'CREATOR',
     tier: payload['tier']?.toString() ?? 'standard',
     status: payload['status']?.toString() ?? 'active',
-    revenueSharePercent:
-        (payload['revenue_share_percent'] as num?)?.toDouble(),
+    revenueSharePercent: (payload['revenue_share_percent'] as num?)?.toDouble(),
     headline: 'Creator tier ${payload['tier']?.toString() ?? 'standard'}',
     bio: 'Creator profile preview.',
     communityTag: 'Creator community',
@@ -233,13 +230,13 @@ CreatorProfile _buildProfileFromPublic(
 }
 
 CreatorCompetition _creatorCompetitionFromJson(Object? value) {
-  final Map<String, dynamic> json = value as Map<String, dynamic>? ?? <String, dynamic>{};
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
   final int activeParticipants =
       (json['active_participants'] as num?)?.toInt() ?? 0;
   final int attributedSignups =
       (json['attributed_signups'] as num?)?.toInt() ?? 0;
-  final int qualifiedJoins =
-      (json['qualified_joins'] as num?)?.toInt() ?? 0;
+  final int qualifiedJoins = (json['qualified_joins'] as num?)?.toInt() ?? 0;
   return CreatorCompetition(
     competitionId: json['competition_id']?.toString() ?? 'competition',
     title: json['title']?.toString() ?? 'Creator competition',
@@ -254,27 +251,21 @@ CreatorCompetition _creatorCompetitionFromJson(Object? value) {
 }
 
 CreatorFinanceSummary _creatorFinanceFromJson(Object? value) {
-  final Map<String, dynamic> json = value as Map<String, dynamic>? ?? <String, dynamic>{};
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
   return CreatorFinanceSummary(
     currency: json['currency']?.toString() ?? 'credits',
-    totalGiftIncome:
-        (json['total_gift_income'] as num?)?.toDouble() ?? 0,
-    totalRewardIncome:
-        (json['total_reward_income'] as num?)?.toDouble() ?? 0,
+    totalGiftIncome: (json['total_gift_income'] as num?)?.toDouble() ?? 0,
+    totalRewardIncome: (json['total_reward_income'] as num?)?.toDouble() ?? 0,
     totalWithdrawnGross:
         (json['total_withdrawn_gross'] as num?)?.toDouble() ?? 0,
     totalWithdrawalFees:
         (json['total_withdrawal_fees'] as num?)?.toDouble() ?? 0,
-    totalWithdrawnNet:
-        (json['total_withdrawn_net'] as num?)?.toDouble() ?? 0,
-    pendingWithdrawals:
-        (json['pending_withdrawals'] as num?)?.toDouble() ?? 0,
-    activeCompetitions:
-        (json['active_competitions'] as num?)?.toInt() ?? 0,
-    attributedSignups:
-        (json['attributed_signups'] as num?)?.toInt() ?? 0,
-    qualifiedJoins:
-        (json['qualified_joins'] as num?)?.toInt() ?? 0,
+    totalWithdrawnNet: (json['total_withdrawn_net'] as num?)?.toDouble() ?? 0,
+    pendingWithdrawals: (json['pending_withdrawals'] as num?)?.toDouble() ?? 0,
+    activeCompetitions: (json['active_competitions'] as num?)?.toInt() ?? 0,
+    attributedSignups: (json['attributed_signups'] as num?)?.toInt() ?? 0,
+    qualifiedJoins: (json['qualified_joins'] as num?)?.toInt() ?? 0,
     insights: (json['insights'] as List<dynamic>? ?? const <dynamic>[])
         .map((dynamic item) => item.toString())
         .toList(growable: false),

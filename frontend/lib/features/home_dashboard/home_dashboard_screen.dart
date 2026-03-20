@@ -235,7 +235,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     onOpenStreamerTournaments: () => _openFeatureRoute(
                       const StreamerTournamentsListRouteData(),
                     ),
-                    onOpenFanPredictions: _openFanPredictionFallback,
                     onOpenNationsCup: () => _openFeatureRoute(
                       const NationalTeamCompetitionsRouteData(),
                     ),
@@ -555,14 +554,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  Future<void> _openFanPredictionFallback() {
-    return _showRouteRequirementDialog(
-      title: 'Canonical match id required',
-      message:
-          'Fan prediction routes stay match-scoped. Open from a live match context or enter a canonical backend match id after the route mounts.',
-    );
-  }
-
   Future<void> _showRouteRequirementDialog({
     required String title,
     required String message,
@@ -690,11 +681,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  VoidCallback? _clubOnboardingAction() {
-    if (widget.exchangeController.isAuthenticated) {
-      return widget.onOpenClubTab;
+  VoidCallback? _createClubOnboardingAction() {
+    if (!widget.exchangeController.isAuthenticated) {
+      return widget.onOpenLogin;
     }
-    return widget.onOpenLogin;
+    return null;
+  }
+
+  VoidCallback? _joinClubOnboardingAction() {
+    if (!widget.exchangeController.isAuthenticated) {
+      return widget.onOpenLogin;
+    }
+    return null;
   }
 
   VoidCallback? _arenaOnboardingAction() {
@@ -704,30 +702,32 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Widget _buildNoClubState() {
     final bool isAuthenticated = widget.exchangeController.isAuthenticated;
-    final VoidCallback? clubAction = _clubOnboardingAction();
+    final VoidCallback? createClubAction = _createClubOnboardingAction();
+    final VoidCallback? joinClubAction = _joinClubOnboardingAction();
     final VoidCallback? arenaAction = _arenaOnboardingAction();
     final List<Widget> cards = <Widget>[
       _HomeActionCard(
         eyebrow: 'STEP 1',
         title: 'Create Club',
         detail: isAuthenticated
-            ? 'Start a fresh club identity so Home can light up with a canonical club context.'
+            ? 'Club creation is not yet available from Home in this active shell. A dedicated create-club route is still required before this CTA can go live.'
             : 'Sign in, then create your first club to unlock Home, trophies, and match context.',
         icon: Icons.add_circle_outline,
         accent: GteShellTheme.accent,
-        actionLabel: 'Create Club',
-        onTap: clubAction,
+        actionLabel:
+            isAuthenticated ? 'Create Club unavailable' : 'Create Club',
+        onTap: createClubAction,
       ),
       _HomeActionCard(
         eyebrow: 'STEP 2',
         title: 'Join Club',
         detail: isAuthenticated
-            ? 'Connect an existing club to this account and bring its live story into Home.'
+            ? 'Club linking is not yet available from Home in this active shell. A dedicated join-club route is still required before this CTA can go live.'
             : 'Sign in to connect an existing club and pull its live arena, replay, and reputation context into Home.',
         icon: Icons.group_add_outlined,
         accent: GteShellTheme.accentWarm,
-        actionLabel: 'Join Club',
-        onTap: clubAction,
+        actionLabel: isAuthenticated ? 'Join Club unavailable' : 'Join Club',
+        onTap: joinClubAction,
       ),
       if (arenaAction != null)
         _HomeActionCard(
@@ -770,7 +770,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 8),
                 Text(
                   isAuthenticated
-                      ? 'Home keeps trophies, live match context, and club momentum in one lane, but it only turns on after this session exposes a canonical club.'
+                      ? 'Home onboarding is mounted for this signed-in session, but club creation and join routing are not yet live in the active shell. Arena remains available while those entry points are finished.'
                       : 'Guest preview stays lightweight. Sign in first, then create a club or join one you already manage to unlock the full Home lane.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
@@ -791,12 +791,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   runSpacing: 12,
                   children: <Widget>[
                     FilledButton(
-                      onPressed: clubAction,
-                      child: const Text('Create Club'),
+                      onPressed: createClubAction,
+                      child: Text(
+                        isAuthenticated
+                            ? 'Create Club unavailable'
+                            : 'Create Club',
+                      ),
                     ),
                     FilledButton.tonal(
-                      onPressed: clubAction,
-                      child: const Text('Join Club'),
+                      onPressed: joinClubAction,
+                      child: Text(
+                        isAuthenticated ? 'Join Club unavailable' : 'Join Club',
+                      ),
                     ),
                     if (arenaAction != null)
                       OutlinedButton(
@@ -2566,7 +2572,6 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
   const _HomeExpansionLanesPanel({
     required this.isAdmin,
     required this.onOpenStreamerTournaments,
-    required this.onOpenFanPredictions,
     required this.onOpenNationsCup,
     required this.onOpenWorld,
     required this.onOpenTransferCenter,
@@ -2580,7 +2585,6 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
 
   final bool isAdmin;
   final VoidCallback onOpenStreamerTournaments;
-  final VoidCallback onOpenFanPredictions;
   final VoidCallback onOpenNationsCup;
   final VoidCallback onOpenWorld;
   final VoidCallback onOpenTransferCenter;
@@ -2617,9 +2621,9 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
                 onPressed: onOpenStreamerTournaments,
               ),
               _HomeRouteButton(
-                label: 'Fan predictions',
+                label: 'Fan predictions (live match only)',
                 icon: Icons.insights_outlined,
-                onPressed: onOpenFanPredictions,
+                onPressed: null,
               ),
               _HomeRouteButton(
                 label: 'Nations cup',
@@ -2637,6 +2641,11 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
                 onPressed: onOpenTransferCenter,
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fan predictions unlock from live-match routes after a canonical match id is present.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 14),
           _HomeRouteGroup(
@@ -2729,7 +2738,7 @@ class _HomeRouteButton extends StatelessWidget {
 
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
