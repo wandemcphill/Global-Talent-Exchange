@@ -23,7 +23,7 @@ class CreatorController extends ChangeNotifier {
   bool get hasData => profile != null;
 
   Future<void> load({
-    String creatorId = 'creator-maya',
+    String creatorId = 'me',
     bool force = false,
   }) async {
     if (isLoading || (profile != null && !force)) {

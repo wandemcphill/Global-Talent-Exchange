@@ -195,6 +195,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Final Whistle Classic'), findsWidgets);
   });
+
+  testWidgets('arena host CTA is truthfully gated for ineligible users',
+      (WidgetTester tester) async {
+    final CompetitionController controller = CompetitionController(
+      api: CompetitionApi.fixture(),
+      currentUserId: 'demo-user',
+      currentUserName: 'Demo Fan',
+    );
+    bool openedCreatorAccess = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteCompetitionsHubScreen(
+          controller: controller,
+          currentDestination: CompetitionHubDestination.overview,
+          onDestinationChanged: (_) {},
+          isAuthenticated: true,
+          canHostCompetitions: false,
+          onOpenCreatorAccessRequest: () {
+            openedCreatorAccess = true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.text('Host your own competition'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Request creator access to host'), findsOneWidget);
+    expect(find.text('Host competition'), findsNothing);
+
+    await tester.tap(find.text('Request creator access to host'));
+    await tester.pumpAndSettle();
+
+    expect(openedCreatorAccess, isTrue);
+  });
 }
 
 CompetitionSummary _competition({

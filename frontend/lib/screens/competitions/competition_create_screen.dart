@@ -6,18 +6,30 @@ import 'package:gte_frontend/screens/competitions/competition_rule_builder_scree
 import 'package:gte_frontend/widgets/competitions/competition_financial_breakdown_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_payout_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_type_picker.dart';
+import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
 class CompetitionCreateScreen extends StatefulWidget {
   const CompetitionCreateScreen({
     super.key,
     required this.controller,
+    this.isAuthenticated = false,
+    this.isCheckingHostEligibility = false,
+    this.hostEligible = false,
+    this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
   });
 
   final CompetitionController controller;
+  final bool isAuthenticated;
+  final bool isCheckingHostEligibility;
+  final bool hostEligible;
+  final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenCreatorAccessRequest;
 
   @override
-  State<CompetitionCreateScreen> createState() => _CompetitionCreateScreenState();
+  State<CompetitionCreateScreen> createState() =>
+      _CompetitionCreateScreenState();
 }
 
 class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
@@ -47,6 +59,11 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
+          if (!widget.isAuthenticated ||
+              widget.isCheckingHostEligibility ||
+              !widget.hostEligible) {
+            return _buildLockedState();
+          }
           final draft = widget.controller.draft;
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -102,20 +119,24 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                       children: <Widget>[
                         _VisibilityChip(
                           label: 'Public',
-                          selected: draft.visibility == CompetitionVisibility.public,
-                          onTap: () => widget.controller
-                              .updateDraftVisibility(CompetitionVisibility.public),
+                          selected:
+                              draft.visibility == CompetitionVisibility.public,
+                          onTap: () => widget.controller.updateDraftVisibility(
+                            CompetitionVisibility.public,
+                          ),
                         ),
                         _VisibilityChip(
                           label: 'Private',
-                          selected: draft.visibility == CompetitionVisibility.private,
-                          onTap: () => widget.controller
-                              .updateDraftVisibility(CompetitionVisibility.private),
+                          selected:
+                              draft.visibility == CompetitionVisibility.private,
+                          onTap: () => widget.controller.updateDraftVisibility(
+                            CompetitionVisibility.private,
+                          ),
                         ),
                         _VisibilityChip(
                           label: 'Invite only',
-                          selected:
-                              draft.visibility == CompetitionVisibility.inviteOnly,
+                          selected: draft.visibility ==
+                              CompetitionVisibility.inviteOnly,
                           onTap: () => widget.controller.updateDraftVisibility(
                             CompetitionVisibility.inviteOnly,
                           ),
@@ -210,10 +231,14 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                       ),
                       items: const <DropdownMenuItem<int>>[
                         DropdownMenuItem<int>(value: 1, child: Text('1 place')),
-                        DropdownMenuItem<int>(value: 2, child: Text('2 places')),
-                        DropdownMenuItem<int>(value: 3, child: Text('3 places')),
-                        DropdownMenuItem<int>(value: 4, child: Text('4 places')),
-                        DropdownMenuItem<int>(value: 5, child: Text('5 places')),
+                        DropdownMenuItem<int>(
+                            value: 2, child: Text('2 places')),
+                        DropdownMenuItem<int>(
+                            value: 3, child: Text('3 places')),
+                        DropdownMenuItem<int>(
+                            value: 4, child: Text('4 places')),
+                        DropdownMenuItem<int>(
+                            value: 5, child: Text('5 places')),
                       ],
                       onChanged: (int? count) {
                         if (count == null) {
@@ -235,12 +260,14 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
               CompetitionFinancialBreakdownCard(
                 title: 'Projected fee summary',
                 entryFee: widget.controller.previewFinancials.entryFee,
-                participantCount: widget.controller.previewFinancials.participantCount,
+                participantCount:
+                    widget.controller.previewFinancials.participantCount,
                 platformFeePct: draft.platformFeePct,
                 platformFeeAmount:
                     widget.controller.previewFinancials.platformFeeAmount,
                 hostFeePct: draft.hostFeePct,
-                hostFeeAmount: widget.controller.previewFinancials.hostFeeAmount,
+                hostFeeAmount:
+                    widget.controller.previewFinancials.hostFeeAmount,
                 prizePool: widget.controller.previewFinancials.prizePool,
                 currency: draft.currency,
                 projected: true,
@@ -257,7 +284,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                           (String error) => Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
-                              '• $error',
+                              '- $error',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ),
@@ -284,6 +311,50 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildLockedState() {
+    if (!widget.isAuthenticated) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: GteStatePanel(
+          eyebrow: 'HOST ACCESS',
+          title: 'Sign in to host competitions',
+          message:
+              'Competition hosting only opens from a real signed-in creator session.',
+          actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
+          onAction: widget.onOpenLogin,
+          icon: Icons.login_outlined,
+        ),
+      );
+    }
+    if (widget.isCheckingHostEligibility) {
+      return const SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: GteStatePanel(
+          eyebrow: 'HOST ACCESS',
+          title: 'Checking creator access',
+          message:
+              'The app is verifying whether this account can host creator competitions.',
+          icon: Icons.hourglass_top_outlined,
+          isLoading: true,
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+      child: GteStatePanel(
+        eyebrow: 'HOST ACCESS',
+        title: 'Creator access required to host',
+        message:
+            'This account is not approved to host creator competitions yet, so the live publish form stays locked.',
+        actionLabel: widget.onOpenCreatorAccessRequest == null
+            ? null
+            : 'Request creator access',
+        onAction: widget.onOpenCreatorAccessRequest,
+        icon: Icons.lock_outline,
       ),
     );
   }

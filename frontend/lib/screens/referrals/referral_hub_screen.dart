@@ -22,10 +22,20 @@ class ReferralHubScreen extends StatefulWidget {
     super.key,
     required this.referralController,
     required this.creatorController,
+    this.isAuthenticated = false,
+    this.hasApprovedCreatorAccess = false,
+    this.isReferralRuntimeAvailable = false,
+    this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
   });
 
   final ReferralController referralController;
   final CreatorController creatorController;
+  final bool isAuthenticated;
+  final bool hasApprovedCreatorAccess;
+  final bool isReferralRuntimeAvailable;
+  final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenCreatorAccessRequest;
 
   @override
   State<ReferralHubScreen> createState() => _ReferralHubScreenState();
@@ -35,12 +45,80 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
   @override
   void initState() {
     super.initState();
+    _maybeLoadRuntimeData();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReferralHubScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isAuthenticated != widget.isAuthenticated ||
+        oldWidget.hasApprovedCreatorAccess != widget.hasApprovedCreatorAccess ||
+        oldWidget.isReferralRuntimeAvailable !=
+            widget.isReferralRuntimeAvailable ||
+        oldWidget.referralController != widget.referralController ||
+        oldWidget.creatorController != widget.creatorController) {
+      _maybeLoadRuntimeData();
+    }
+  }
+
+  bool get _shouldLoadRuntimeData =>
+      widget.isAuthenticated &&
+      widget.hasApprovedCreatorAccess &&
+      widget.isReferralRuntimeAvailable;
+
+  void _maybeLoadRuntimeData() {
+    if (!_shouldLoadRuntimeData) {
+      return;
+    }
     widget.referralController.load();
     widget.creatorController.load();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.isAuthenticated) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: GteStatePanel(
+          eyebrow: 'CREATOR REFERRALS',
+          title: 'Sign in to open creator referrals',
+          message:
+              'Referral tools are only available from a real signed-in creator session.',
+          actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
+          onAction: widget.onOpenLogin,
+          icon: Icons.login_outlined,
+        ),
+      );
+    }
+    if (!widget.hasApprovedCreatorAccess) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: GteStatePanel(
+          eyebrow: 'CREATOR REFERRALS',
+          title: 'Creator access required',
+          message:
+              'Referral and creator-community tools unlock only after creator access is approved.',
+          actionLabel: widget.onOpenCreatorAccessRequest == null
+              ? null
+              : 'Request creator access',
+          onAction: widget.onOpenCreatorAccessRequest,
+          icon: Icons.how_to_reg_outlined,
+        ),
+      );
+    }
+    if (!widget.isReferralRuntimeAvailable) {
+      return const SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
+        child: GteStatePanel(
+          eyebrow: 'CREATOR REFERRALS',
+          title: 'Referral runtime unavailable',
+          message:
+              'Live creator referral data is not connected in this runtime yet, so invite codes and milestones are hidden instead of showing fixture identities.',
+          icon: Icons.info_outline,
+        ),
+      );
+    }
+
     return AnimatedBuilder(
       animation: Listenable.merge(
         <Listenable>[
@@ -49,9 +127,11 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
         ],
       ),
       builder: (BuildContext context, _) {
-        final bool loading = widget.referralController.isLoading &&
+        final bool loadingReferral = widget.referralController.isLoading &&
             !widget.referralController.hasData;
-        if (loading) {
+        final bool loadingCreator = widget.creatorController.isLoading &&
+            !widget.creatorController.hasData;
+        if (loadingReferral || loadingCreator) {
           return const SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
             child: GteStatePanel(
@@ -73,8 +153,20 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
             ),
           );
         }
+        if (widget.creatorController.errorMessage != null &&
+            !widget.creatorController.hasData) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+            child: GteStatePanel(
+              title: 'Creator profile unavailable',
+              message: widget.creatorController.errorMessage!,
+              icon: Icons.error_outline,
+            ),
+          );
+        }
 
         final ReferralHubData hub = widget.referralController.hub!;
+        final bool hasCreatorProfile = widget.creatorController.profile != null;
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
           child: Column(
@@ -90,7 +182,7 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
-              if (widget.creatorController.profile != null) ...<Widget>[
+              if (hasCreatorProfile) ...<Widget>[
                 CreatorHeaderCard(
                   profile: widget.creatorController.profile!,
                   onShareCodeTap: () => _openShareCode(context),
@@ -148,16 +240,18 @@ class _ReferralHubScreenState extends State<ReferralHubScreen> {
                     icon: const Icon(Icons.mark_email_read_outlined),
                     label: const Text('Invite attribution'),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => _openCreatorDashboard(context),
-                    icon: const Icon(Icons.person_outline),
-                    label: const Text('Creator dashboard'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => _openCompetitionShare(context),
-                    icon: const Icon(Icons.emoji_events_outlined),
-                    label: const Text('Share creator competition'),
-                  ),
+                  if (hasCreatorProfile)
+                    OutlinedButton.icon(
+                      onPressed: () => _openCreatorDashboard(context),
+                      icon: const Icon(Icons.person_outline),
+                      label: const Text('Creator dashboard'),
+                    ),
+                  if (hasCreatorProfile)
+                    OutlinedButton.icon(
+                      onPressed: () => _openCompetitionShare(context),
+                      icon: const Icon(Icons.emoji_events_outlined),
+                      label: const Text('Share creator competition'),
+                    ),
                 ],
               ),
             ],

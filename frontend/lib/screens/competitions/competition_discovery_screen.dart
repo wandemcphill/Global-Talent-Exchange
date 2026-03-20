@@ -23,7 +23,10 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
     required this.currentUserId,
     this.currentUserName,
     this.isAuthenticated = false,
+    this.isCheckingCreatorAccess = false,
+    this.canHostCompetitions = false,
     this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
   });
 
   final CompetitionController? controller;
@@ -32,13 +35,18 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
   final String currentUserId;
   final String? currentUserName;
   final bool isAuthenticated;
+  final bool isCheckingCreatorAccess;
+  final bool canHostCompetitions;
   final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenCreatorAccessRequest;
 
   @override
-  State<CompetitionDiscoveryScreen> createState() => _CompetitionDiscoveryScreenState();
+  State<CompetitionDiscoveryScreen> createState() =>
+      _CompetitionDiscoveryScreenState();
 }
 
-class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen> {
+class _CompetitionDiscoveryScreenState
+    extends State<CompetitionDiscoveryScreen> {
   late final CompetitionController _controller;
   late final bool _ownsController;
   late final TextEditingController _searchController;
@@ -49,7 +57,8 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
     _ownsController = widget.controller == null;
     _controller = widget.controller ??
         CompetitionController(
-          api: CompetitionApi.standard(baseUrl: widget.baseUrl, mode: widget.backendMode),
+          api: CompetitionApi.standard(
+              baseUrl: widget.baseUrl, mode: widget.backendMode),
           currentUserId: widget.currentUserId,
           currentUserName: widget.currentUserName,
         );
@@ -61,8 +70,10 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
   @override
   void didUpdateWidget(covariant CompetitionDiscoveryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentUserId != widget.currentUserId || oldWidget.currentUserName != widget.currentUserName) {
-      _controller.updateCurrentUser(userId: widget.currentUserId, userName: widget.currentUserName);
+    if (oldWidget.currentUserId != widget.currentUserId ||
+        oldWidget.currentUserName != widget.currentUserName) {
+      _controller.updateCurrentUser(
+          userId: widget.currentUserId, userName: widget.currentUserName);
       _controller.loadDiscovery();
     }
   }
@@ -83,7 +94,8 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
     return AnimatedBuilder(
       animation: _controller,
       builder: (BuildContext context, Widget? child) {
-        final List<CompetitionSummary> featured = _controller.visibleCompetitions.take(3).toList(growable: false);
+        final List<CompetitionSummary> featured =
+            _controller.visibleCompetitions.take(3).toList(growable: false);
         return RefreshIndicator(
           onRefresh: _controller.loadDiscovery,
           child: ListView(
@@ -92,14 +104,22 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
             children: <Widget>[
               GtexHeroBanner(
                 eyebrow: 'LIVE MATCH CENTER',
-                title: 'Fixtures, tournaments, and creator-hosted football nights with arena energy.',
-                description: 'Competition mode is cinematic on purpose. It prioritizes stories, stakes, fixture flow, and watchability instead of looking like a market terminal.',
+                title:
+                    'Fixtures, tournaments, and creator-hosted football nights with arena energy.',
+                description:
+                    'Competition mode is cinematic on purpose. It prioritizes stories, stakes, fixture flow, and watchability instead of looking like a market terminal.',
                 accent: GteShellTheme.accentArena,
                 chips: <Widget>[
-                  GteMetricChip(label: 'Visible', value: _controller.visibleCompetitions.length.toString()),
+                  GteMetricChip(
+                      label: 'Visible',
+                      value: _controller.visibleCompetitions.length.toString()),
                   GteMetricChip(
                     label: 'Hosted by you',
-                    value: _controller.competitions.where((CompetitionSummary item) => item.creatorId == _controller.currentUserId).length.toString(),
+                    value: _controller.competitions
+                        .where((CompetitionSummary item) =>
+                            item.creatorId == _controller.currentUserId)
+                        .length
+                        .toString(),
                   ),
                   GteMetricChip(
                     label: 'Arena pass',
@@ -109,9 +129,9 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                 ],
                 actions: <Widget>[
                   FilledButton.icon(
-                    onPressed: _openCreateFlow,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Create competition'),
+                    onPressed: _createAction(),
+                    icon: Icon(_createIcon()),
+                    label: Text(_createLabel()),
                   ),
                   if (!widget.isAuthenticated && widget.onOpenLogin != null)
                     FilledButton.tonal(
@@ -124,11 +144,14 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                     TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Search creator competition, skill league, or skill cup',
+                        hintText:
+                            'Search creator competition, skill league, or skill cup',
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: _searchController.text.trim().isEmpty
                             ? null
-                            : IconButton(onPressed: _searchController.clear, icon: const Icon(Icons.close)),
+                            : IconButton(
+                                onPressed: _searchController.clear,
+                                icon: const Icon(Icons.close)),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -144,7 +167,7 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                         Expanded(
                           child: _ArenaSignalTile(
                             label: 'Publish state',
-                            value: widget.isAuthenticated ? 'OPEN' : 'LOCKED',
+                            value: _publishStateLabel(),
                           ),
                         ),
                       ],
@@ -156,8 +179,10 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
               if (featured.isNotEmpty) ...<Widget>[
                 const GtexSectionHeader(
                   eyebrow: 'FEATURED NOW',
-                  title: 'The headline fixtures and hosted competitions worth opening first.',
-                  description: 'The live match center leads with story, stakes, and watchability. Featured cards are meant to feel like floodlights, not filters.',
+                  title:
+                      'The headline fixtures and hosted competitions worth opening first.',
+                  description:
+                      'The live match center leads with story, stakes, and watchability. Featured cards are meant to feel like floodlights, not filters.',
                   accent: GteShellTheme.accentArena,
                 ),
                 const SizedBox(height: 14),
@@ -169,7 +194,11 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (BuildContext context, int index) {
                       final CompetitionSummary item = featured[index];
-                      return SizedBox(width: 320, child: _FeaturedArenaCard(competition: item, onOpen: () => _openCompetition(item.id)));
+                      return SizedBox(
+                          width: 320,
+                          child: _FeaturedArenaCard(
+                              competition: item,
+                              onOpen: () => _openCompetition(item.id)));
                     },
                   ),
                 ),
@@ -177,14 +206,19 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
               const SizedBox(height: 20),
               const GtexSectionHeader(
                 eyebrow: 'ARENA BROWSE',
-                title: 'Filter competitions by mood, format, and creator energy.',
-                description: 'Browse stays cinematic, but the information architecture is cleaner now. Status, access, and joinability should land in one glance.',
+                title:
+                    'Filter competitions by mood, format, and creator energy.',
+                description:
+                    'Browse stays cinematic, but the information architecture is cleaner now. Status, access, and joinability should land in one glance.',
                 accent: GteShellTheme.accentArena,
               ),
               const SizedBox(height: 14),
-              _SectionPicker(current: _controller.section, onChanged: _controller.setSection),
+              _SectionPicker(
+                  current: _controller.section,
+                  onChanged: _controller.setSection),
               const SizedBox(height: 20),
-              if (_controller.discoveryError != null && _controller.competitions.isNotEmpty)
+              if (_controller.discoveryError != null &&
+                  _controller.competitions.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: GteSurfacePanel(
@@ -203,24 +237,30 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                     ),
                   ),
                 ),
-              if (_controller.isLoadingDiscovery && _controller.competitions.isEmpty)
+              if (_controller.isLoadingDiscovery &&
+                  _controller.competitions.isEmpty)
                 const GteSurfacePanel(
                   accentColor: GteShellTheme.accentArena,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      GtexSectionBadge(label: 'BUILDING THE ARENA BOARD', color: GteShellTheme.accentArena),
+                      GtexSectionBadge(
+                          label: 'BUILDING THE ARENA BOARD',
+                          color: GteShellTheme.accentArena),
                       SizedBox(height: 14),
                       LinearProgressIndicator(),
                       SizedBox(height: 14),
-                      Text('Refreshing featured fixtures, creator competitions, and the latest join windows so the live match center opens with a crisp card stack.'),
+                      Text(
+                          'Refreshing featured fixtures, creator competitions, and the latest join windows so the live match center opens with a crisp card stack.'),
                     ],
                   ),
                 )
-              else if (_controller.discoveryError != null && _controller.competitions.isEmpty)
+              else if (_controller.discoveryError != null &&
+                  _controller.competitions.isEmpty)
                 GteStatePanel(
                   title: 'Competition discovery unavailable',
-                  message: 'The live match center could not confirm a fresh arena board. ${_controller.discoveryError!}',
+                  message:
+                      'The live match center could not confirm a fresh arena board. ${_controller.discoveryError!}',
                   actionLabel: 'Retry arena feed',
                   onAction: _controller.loadDiscovery,
                   icon: Icons.groups_outlined,
@@ -228,13 +268,17 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
               else if (_controller.visibleCompetitions.isEmpty)
                 GteStatePanel(
                   title: 'No competitions match this arena view',
-                  message: 'Try a different section or clear the search to pull more creator competitions into the spotlight.',
-                  actionLabel: _searchController.text.trim().isEmpty ? 'Reset arena browse' : 'Clear search',
+                  message:
+                      'Try a different section or clear the search to pull more creator competitions into the spotlight.',
+                  actionLabel: _searchController.text.trim().isEmpty
+                      ? 'Reset arena browse'
+                      : 'Clear search',
                   onAction: () {
                     if (_searchController.text.trim().isNotEmpty) {
                       _searchController.clear();
                     }
-                    _controller.setSection(CompetitionDiscoverySection.trending);
+                    _controller
+                        .setSection(CompetitionDiscoverySection.trending);
                   },
                   icon: Icons.search_off,
                 )
@@ -242,7 +286,9 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
                 ..._controller.visibleCompetitions.map(
                   (CompetitionSummary item) => Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: _CompetitionDiscoveryCard(competition: item, onOpen: () => _openCompetition(item.id)),
+                    child: _CompetitionDiscoveryCard(
+                        competition: item,
+                        onOpen: () => _openCompetition(item.id)),
                   ),
                 ),
             ],
@@ -275,8 +321,66 @@ class _CompetitionDiscoveryScreenState extends State<CompetitionDiscoveryScreen>
   Future<void> _openCreateFlow() async {
     _controller.startNewDraft();
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (BuildContext context) => CompetitionCreateScreen(controller: _controller)),
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => CompetitionCreateScreen(
+          controller: _controller,
+          isAuthenticated: widget.isAuthenticated,
+          isCheckingHostEligibility: widget.isCheckingCreatorAccess,
+          hostEligible: widget.canHostCompetitions,
+          onOpenLogin: widget.onOpenLogin,
+          onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
+        ),
+      ),
     );
+  }
+
+  VoidCallback? _createAction() {
+    if (!widget.isAuthenticated) {
+      return widget.onOpenLogin;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return null;
+    }
+    if (!widget.canHostCompetitions) {
+      return widget.onOpenCreatorAccessRequest;
+    }
+    return _openCreateFlow;
+  }
+
+  String _createLabel() {
+    if (!widget.isAuthenticated) {
+      return 'Sign in to host';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Checking creator access';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access to host';
+    }
+    return 'Create competition';
+  }
+
+  IconData _createIcon() {
+    if (!widget.isAuthenticated) {
+      return Icons.login;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return Icons.hourglass_top_outlined;
+    }
+    if (!widget.canHostCompetitions) {
+      return Icons.lock_outline;
+    }
+    return Icons.add;
+  }
+
+  String _publishStateLabel() {
+    if (!widget.isAuthenticated) {
+      return 'LOCKED';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'CHECKING';
+    }
+    return widget.canHostCompetitions ? 'OPEN' : 'APPROVAL';
   }
 }
 
@@ -288,26 +392,38 @@ class _SectionPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const List<MapEntry<CompetitionDiscoverySection, String>> sections = <MapEntry<CompetitionDiscoverySection, String>>[
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.trending, 'Trending'),
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.newest, 'New'),
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.freeToJoin, 'Free to join'),
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.paid, 'Paid competitions'),
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.creator, 'Creator competitions'),
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.leagues, 'Leagues'),
-      MapEntry<CompetitionDiscoverySection, String>(CompetitionDiscoverySection.cups, 'Cups'),
+    const List<MapEntry<CompetitionDiscoverySection, String>> sections =
+        <MapEntry<CompetitionDiscoverySection, String>>[
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.trending, 'Trending'),
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.newest, 'New'),
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.freeToJoin, 'Free to join'),
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.paid, 'Paid competitions'),
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.creator, 'Creator competitions'),
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.leagues, 'Leagues'),
+      MapEntry<CompetitionDiscoverySection, String>(
+          CompetitionDiscoverySection.cups, 'Cups'),
     ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: sections.map((MapEntry<CompetitionDiscoverySection, String> item) {
+        children:
+            sections.map((MapEntry<CompetitionDiscoverySection, String> item) {
           final bool selected = current == item.key;
           return Padding(
             padding: const EdgeInsets.only(right: 10),
             child: Material(
               color: Colors.transparent,
-              child: ChoiceChip(selected: selected, label: Text(item.value), onSelected: (_) => onChanged(item.key)),
+              child: ChoiceChip(
+                  selected: selected,
+                  label: Text(item.value),
+                  onSelected: (_) => onChanged(item.key)),
             ),
           );
         }).toList(growable: false),
@@ -342,14 +458,21 @@ class _FeaturedArenaCard extends StatelessWidget {
           const Spacer(),
           Text(competition.name, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
-          Text('${competition.safeFormatLabel} • ${competition.creatorLabel}', style: Theme.of(context).textTheme.bodyMedium),
+          Text('${competition.safeFormatLabel} • ${competition.creatorLabel}',
+              style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 14),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
-              GteMetricChip(label: 'Entry', value: _formatAmount(competition.entryFee, competition.currency)),
-              GteMetricChip(label: 'Prize', value: _formatAmount(competition.prizePool, competition.currency)),
+              GteMetricChip(
+                  label: 'Entry',
+                  value: _formatAmount(
+                      competition.entryFee, competition.currency)),
+              GteMetricChip(
+                  label: 'Prize',
+                  value: _formatAmount(
+                      competition.prizePool, competition.currency)),
             ],
           ),
         ],
@@ -359,7 +482,8 @@ class _FeaturedArenaCard extends StatelessWidget {
 }
 
 class _CompetitionDiscoveryCard extends StatelessWidget {
-  const _CompetitionDiscoveryCard({required this.competition, required this.onOpen});
+  const _CompetitionDiscoveryCard(
+      {required this.competition, required this.onOpen});
 
   final CompetitionSummary competition;
   final VoidCallback onOpen;
@@ -379,9 +503,12 @@ class _CompetitionDiscoveryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(competition.name, style: Theme.of(context).textTheme.titleLarge),
+                    Text(competition.name,
+                        style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 6),
-                    Text('${competition.safeFormatLabel} • Creator competition by ${competition.creatorLabel}', style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                        '${competition.safeFormatLabel} • Creator competition by ${competition.creatorLabel}',
+                        style: Theme.of(context).textTheme.bodyMedium),
                   ],
                 ),
               ),
@@ -395,29 +522,55 @@ class _CompetitionDiscoveryCard extends StatelessWidget {
             runSpacing: 10,
             children: <Widget>[
               CompetitionVisibilityChip(visibility: competition.visibility),
-              Chip(label: Text('Arena state: ${_statusLabel(competition.status)}')),
-              Chip(label: Text(competition.joinEligibility.eligible ? 'Join window open' : 'Review eligibility')),
-              if (competition.beginnerFriendly == true) const Chip(label: Text('Beginner friendly')),
+              Chip(
+                  label:
+                      Text('Arena state: ${_statusLabel(competition.status)}')),
+              Chip(
+                  label: Text(competition.joinEligibility.eligible
+                      ? 'Join window open'
+                      : 'Review eligibility')),
+              if (competition.beginnerFriendly == true)
+                const Chip(label: Text('Beginner friendly')),
             ],
           ),
           const SizedBox(height: 16),
-          Text(competition.rulesSummary, style: Theme.of(context).textTheme.bodyMedium),
+          Text(competition.rulesSummary,
+              style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 16),
           Row(
             children: <Widget>[
-              Expanded(child: _QuickStat(label: 'Entry fee', value: _formatAmount(competition.entryFee, competition.currency))),
+              Expanded(
+                  child: _QuickStat(
+                      label: 'Entry fee',
+                      value: _formatAmount(
+                          competition.entryFee, competition.currency))),
               const SizedBox(width: 10),
-              Expanded(child: _QuickStat(label: 'Prize pool', value: _formatAmount(competition.prizePool, competition.currency))),
+              Expanded(
+                  child: _QuickStat(
+                      label: 'Prize pool',
+                      value: _formatAmount(
+                          competition.prizePool, competition.currency))),
               const SizedBox(width: 10),
-              Expanded(child: _QuickStat(label: 'Players', value: '${competition.participantCount}/${competition.capacity}')),
+              Expanded(
+                  child: _QuickStat(
+                      label: 'Players',
+                      value:
+                          '${competition.participantCount}/${competition.capacity}')),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             children: <Widget>[
-              FilledButton.tonalIcon(onPressed: onOpen, icon: const Icon(Icons.open_in_new), label: const Text('Open arena')),
+              FilledButton.tonalIcon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Open arena')),
               const Spacer(),
-              Text(competition.joinEligibility.eligible ? 'Open to join now' : 'Review rules and eligibility', style: Theme.of(context).textTheme.bodyMedium),
+              Text(
+                  competition.joinEligibility.eligible
+                      ? 'Open to join now'
+                      : 'Review rules and eligibility',
+                  style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ],
@@ -427,7 +580,8 @@ class _CompetitionDiscoveryCard extends StatelessWidget {
 
   String _statusLabel(CompetitionStatus value) {
     return value.name
-        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) => '${match.group(1)} ${match.group(2)}')
+        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'),
+            (Match match) => '${match.group(1)} ${match.group(2)}')
         .replaceAll('_', ' ');
   }
 }
@@ -479,7 +633,11 @@ class _ArenaSignalTile extends StatelessWidget {
         children: <Widget>[
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: GteShellTheme.accentArena)),
+          Text(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: GteShellTheme.accentArena)),
         ],
       ),
     );

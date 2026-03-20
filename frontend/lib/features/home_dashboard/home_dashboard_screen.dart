@@ -11,6 +11,7 @@ import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.da
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
+import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
 import 'package:gte_frontend/models/club_models.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -33,11 +34,14 @@ class HomeDashboardScreen extends StatefulWidget {
     required this.apiBaseUrl,
     required this.backendMode,
     this.onOpenLogin,
+    this.isCheckingCreatorAccess = false,
+    this.canHostCompetitions = false,
     this.clubId,
     this.clubName,
     this.onOpenClubTab,
     this.onOpenCompetitionsTab,
     this.onOpenClubSubtab,
+    this.onOpenCreatorAccessRequest,
     this.navigationDependencies,
   });
 
@@ -45,11 +49,14 @@ class HomeDashboardScreen extends StatefulWidget {
   final String apiBaseUrl;
   final GteBackendMode backendMode;
   final VoidCallback? onOpenLogin;
+  final bool isCheckingCreatorAccess;
+  final bool canHostCompetitions;
   final String? clubId;
   final String? clubName;
   final VoidCallback? onOpenClubTab;
   final VoidCallback? onOpenCompetitionsTab;
   final ValueChanged<ClubNavigationTab>? onOpenClubSubtab;
+  final VoidCallback? onOpenCreatorAccessRequest;
   final GteNavigationDependencies? navigationDependencies;
 
   @override
@@ -700,8 +707,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         (widget.exchangeController.isAuthenticated ? null : widget.onOpenLogin);
   }
 
+  VoidCallback? _browseClubMarketOnboardingAction() {
+    if (widget.navigationDependencies == null) {
+      return null;
+    }
+    return () {
+      _openFeatureRoute(const ClubSaleMarketListingsRouteData());
+    };
+  }
+
   Widget _buildNoClubState() {
     final bool isAuthenticated = widget.exchangeController.isAuthenticated;
+    if (isAuthenticated) {
+      return GteNoClubOnboardingView(
+        onBrowseClubMarket: _browseClubMarketOnboardingAction(),
+        onExploreArena: _arenaOnboardingAction(),
+      );
+    }
     final VoidCallback? createClubAction = _createClubOnboardingAction();
     final VoidCallback? joinClubAction = _joinClubOnboardingAction();
     final VoidCallback? arenaAction = _arenaOnboardingAction();
@@ -896,7 +918,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             currentUserId: _userId,
             currentUserName: _userName,
             isAuthenticated: widget.exchangeController.isAuthenticated,
+            isCheckingCreatorAccess: widget.isCheckingCreatorAccess,
+            canHostCompetitions: widget.canHostCompetitions,
             onOpenLogin: widget.onOpenLogin,
+            onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
           ),
         ),
       );

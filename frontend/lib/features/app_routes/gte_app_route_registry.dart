@@ -103,6 +103,12 @@ class GteAppRouteRegistry {
         : () {
             dependencies.onOpenLogin!.call(context);
           };
+    final VoidCallback? openCreatorAccessRequest =
+        dependencies.onOpenCreatorAccessRequest == null
+            ? null
+            : () {
+                dependencies.onOpenCreatorAccessRequest!.call(context);
+              };
     if (route is CompetitionsDiscoveryRouteData) {
       return CompetitionDiscoveryScreen(
         baseUrl: dependencies.apiBaseUrl,
@@ -110,7 +116,10 @@ class GteAppRouteRegistry {
         currentUserId: dependencies.currentUserId,
         currentUserName: dependencies.currentUserName,
         isAuthenticated: dependencies.isAuthenticated,
+        isCheckingCreatorAccess: dependencies.isCheckingCreatorAccess,
+        canHostCompetitions: dependencies.canHostCompetitions,
         onOpenLogin: openLogin,
+        onOpenCreatorAccessRequest: openCreatorAccessRequest,
       );
     }
     if (route is CompetitionCreateRouteData) {
@@ -152,7 +161,10 @@ class GteAppRouteRegistry {
         currentUserId: dependencies.currentUserId,
         currentUserName: dependencies.currentUserName,
         isAuthenticated: dependencies.isAuthenticated,
+        isCheckingCreatorAccess: dependencies.isCheckingCreatorAccess,
+        canHostCompetitions: dependencies.canHostCompetitions,
         onOpenLogin: openLogin,
+        onOpenCreatorAccessRequest: openCreatorAccessRequest,
       );
     }
     if (route is ClubIdentityJerseysRouteData) {
@@ -546,7 +558,25 @@ class _CompetitionCreateRouteScreenState
 
   @override
   Widget build(BuildContext context) {
-    return CompetitionCreateScreen(controller: _controller);
+    final VoidCallback? openLogin = widget.dependencies.onOpenLogin == null
+        ? null
+        : () {
+            widget.dependencies.onOpenLogin!.call(context);
+          };
+    final VoidCallback? openCreatorAccessRequest =
+        widget.dependencies.onOpenCreatorAccessRequest == null
+            ? null
+            : () {
+                widget.dependencies.onOpenCreatorAccessRequest!.call(context);
+              };
+    return CompetitionCreateScreen(
+      controller: _controller,
+      isAuthenticated: widget.dependencies.isAuthenticated,
+      isCheckingHostEligibility: widget.dependencies.isCheckingCreatorAccess,
+      hostEligible: widget.dependencies.canHostCompetitions,
+      onOpenLogin: openLogin,
+      onOpenCreatorAccessRequest: openCreatorAccessRequest,
+    );
   }
 }
 

@@ -15,7 +15,7 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
   testWidgets(
-      'active shell reaches notification settings, wallet lane, and creator community surfaces',
+      'active shell keeps creator community hidden for non-creators while preserving adjacent flows',
       (WidgetTester tester) async {
     _setLargeViewport(tester);
 
@@ -68,10 +68,11 @@ void main() {
     expect(find.text('Wallet actions'), findsOneWidget);
     expect(find.text('Fund wallet'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Creator community'));
+    expect(find.byTooltip('Creator community'), findsNothing);
+
+    await tester.tap(find.byTooltip('Creator access request'));
     await tester.pumpAndSettle();
-    expect(find.text('Community invites'), findsOneWidget);
-    expect(find.text('Creator dashboard'), findsOneWidget);
+    expect(find.text('Creator access request'), findsOneWidget);
   });
 
   testWidgets(

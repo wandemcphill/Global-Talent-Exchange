@@ -50,7 +50,11 @@ class GteNavigationDependencies {
     String? currentClubName,
     String? accessToken,
     bool isAuthenticated = false,
+    bool isCheckingCreatorAccess = false,
+    bool hasApprovedCreatorAccess = false,
+    bool canHostCompetitions = false,
     this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
     this.competitionApi,
     this.trophyCabinetRepository,
     this.dynastyRepository,
@@ -65,13 +69,19 @@ class GteNavigationDependencies {
     this.currentClubNameProvider,
     this.accessTokenProvider,
     this.isAuthenticatedProvider,
+    this.isCheckingCreatorAccessProvider,
+    this.hasApprovedCreatorAccessProvider,
+    this.canHostCompetitionsProvider,
   })  : _currentUserId = currentUserId,
         _currentUserName = currentUserName,
         _currentUserRole = currentUserRole,
         _currentClubId = currentClubId,
         _currentClubName = currentClubName,
         _accessToken = accessToken,
-        _isAuthenticated = isAuthenticated;
+        _isAuthenticated = isAuthenticated,
+        _isCheckingCreatorAccess = isCheckingCreatorAccess,
+        _hasApprovedCreatorAccess = hasApprovedCreatorAccess,
+        _canHostCompetitions = canHostCompetitions;
 
   final String apiBaseUrl;
   final GteBackendMode backendMode;
@@ -82,7 +92,11 @@ class GteNavigationDependencies {
   final String? _currentClubName;
   final String? _accessToken;
   final bool _isAuthenticated;
+  final bool _isCheckingCreatorAccess;
+  final bool _hasApprovedCreatorAccess;
+  final bool _canHostCompetitions;
   final Future<bool> Function(BuildContext context)? onOpenLogin;
+  final Future<void> Function(BuildContext context)? onOpenCreatorAccessRequest;
   final CompetitionApi? competitionApi;
   final TrophyCabinetRepository? trophyCabinetRepository;
   final DynastyRepository? dynastyRepository;
@@ -98,6 +112,9 @@ class GteNavigationDependencies {
   final String? Function()? currentClubNameProvider;
   final String? Function()? accessTokenProvider;
   final bool Function()? isAuthenticatedProvider;
+  final bool Function()? isCheckingCreatorAccessProvider;
+  final bool Function()? hasApprovedCreatorAccessProvider;
+  final bool Function()? canHostCompetitionsProvider;
 
   String get currentUserId => currentUserIdProvider?.call() ?? _currentUserId;
 
@@ -116,6 +133,15 @@ class GteNavigationDependencies {
 
   bool get isAuthenticated =>
       isAuthenticatedProvider?.call() ?? _isAuthenticated;
+
+  bool get isCheckingCreatorAccess =>
+      isCheckingCreatorAccessProvider?.call() ?? _isCheckingCreatorAccess;
+
+  bool get hasApprovedCreatorAccess =>
+      hasApprovedCreatorAccessProvider?.call() ?? _hasApprovedCreatorAccess;
+
+  bool get canHostCompetitions =>
+      canHostCompetitionsProvider?.call() ?? _canHostCompetitions;
 
   bool get isAdminRole => <String>{'admin', 'super_admin'}
       .contains((currentUserRole ?? '').trim().toLowerCase());

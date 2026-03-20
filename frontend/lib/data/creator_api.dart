@@ -52,28 +52,20 @@ class CreatorApi {
   }
 
   Future<CreatorProfile> fetchCreatorProfile({String creatorId = 'me'}) {
-    return client.withFallback<CreatorProfile>(
-      () async {
-        if (creatorId != 'me') {
+    if (client.mode == GteBackendMode.fixture) {
+      return fixtures.profile();
+    }
+    if (creatorId != 'me') {
+      return client.withFallback<CreatorProfile>(
+        () async {
           final Map<String, dynamic> payload =
               await client.getMap('/api/creators/$creatorId', auth: false);
           return _buildProfileFromPublic(payload, baseUrl: baseUrl);
-        }
-        final Map<String, dynamic> summaryPayload =
-            await client.getMap('/api/creators/me/summary');
-        final List<dynamic> competitionsPayload =
-            await client.getList('/api/creators/me/competitions');
-        final Map<String, dynamic> financePayload =
-            await client.getMap('/api/creators/me/finance');
-        return _buildProfileFromSummary(
-          summaryPayload,
-          competitionsPayload,
-          financePayload,
-          baseUrl: baseUrl,
-        );
-      },
-      () async => fixtures.profile(),
-    );
+        },
+        () async => fixtures.profile(),
+      );
+    }
+    return _fetchCurrentCreatorProfile();
   }
 
   Future<CreatorCompetitionShareData> fetchCompetitionShare(
@@ -100,6 +92,21 @@ class CreatorApi {
 
   Future<CreatorLeaderboardSnapshot> fetchCreatorLeaderboard() async {
     return fixtures.leaderboard();
+  }
+
+  Future<CreatorProfile> _fetchCurrentCreatorProfile() async {
+    final Map<String, dynamic> summaryPayload =
+        await client.getMap('/api/creators/me/summary');
+    final List<dynamic> competitionsPayload =
+        await client.getList('/api/creators/me/competitions');
+    final Map<String, dynamic> financePayload =
+        await client.getMap('/api/creators/me/finance');
+    return _buildProfileFromSummary(
+      summaryPayload,
+      competitionsPayload,
+      financePayload,
+      baseUrl: baseUrl,
+    );
   }
 }
 

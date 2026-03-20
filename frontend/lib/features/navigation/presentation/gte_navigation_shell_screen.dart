@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/controllers/creator_application_controller.dart';
 import 'package:gte_frontend/controllers/creator_controller.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/controllers/referral_controller.dart';
 import 'package:gte_frontend/core/gte_session_identity.dart';
 import 'package:gte_frontend/data/competition_api.dart';
+import 'package:gte_frontend/data/creator_application_api.dart';
 import 'package:gte_frontend/data/creator_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/referral_api.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
 import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen.dart';
@@ -14,6 +18,7 @@ import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_d
 import 'package:gte_frontend/features/home_dashboard/home_dashboard_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_player_detail_screen.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
@@ -233,10 +238,12 @@ class _ShellHeaderCopy {
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late GteNavigationRoute _route;
   late CompetitionController _competitionController;
+  late CreatorApplicationController _creatorApplicationController;
   late CreatorController _creatorController;
   late ReferralController _referralController;
   late String _competitionUserId;
   late String? _competitionUserName;
+  late String? _creatorAccessToken;
   ClubNavigationTab _clubInitialTab = ClubNavigationTab.squad;
   int _clubHostSeed = 0;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
@@ -248,11 +255,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     widget.controller.addListener(_handleExchangeControllerChanged);
     _competitionUserId = _resolveCompetitionUserId();
     _competitionUserName = _resolveCompetitionUserName();
+    _creatorAccessToken = widget.controller.accessToken;
     _competitionController = _buildCompetitionController();
+    _creatorApplicationController = _buildCreatorApplicationController();
+    _creatorApplicationController.addListener(_handleCreatorAccessChanged);
     _creatorController = _buildCreatorController();
     _referralController = _buildReferralController();
     widget.controller.bootstrap();
     _competitionController.bootstrap();
+    _primeCreatorAccessState(force: true);
   }
 
   @override
@@ -267,11 +278,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         oldWidget.backendMode != widget.backendMode) {
       _competitionController.dispose();
       _competitionController = _buildCompetitionController();
+      _disposeCreatorAccessController();
+      _creatorApplicationController = _buildCreatorApplicationController();
+      _creatorApplicationController.addListener(_handleCreatorAccessChanged);
       _creatorController.dispose();
       _creatorController = _buildCreatorController();
       _referralController.dispose();
       _referralController = _buildReferralController();
+      _creatorAccessToken = widget.controller.accessToken;
       _competitionController.bootstrap();
+      _primeCreatorAccessState(force: true);
     }
     if (widget.initialRoute != oldWidget.initialRoute &&
         widget.initialRoute != _route) {
@@ -285,6 +301,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   void dispose() {
     widget.controller.removeListener(_handleExchangeControllerChanged);
     _competitionController.dispose();
+    _disposeCreatorAccessController();
     _creatorController.dispose();
     _referralController.dispose();
     super.dispose();
@@ -339,37 +356,37 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                         padding: const EdgeInsets.only(right: 8),
                         child: IconButton(
                           tooltip: 'Creator access request',
-                          onPressed: () {
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder: (BuildContext context) =>
-                                    CreatorAccessRequestScreen(
-                                  exchangeController: widget.controller,
-                                ),
-                              ),
-                            );
-                          },
+                          onPressed: () => _pushCreatorAccessRequest(context),
                           icon: const Icon(Icons.how_to_reg_outlined),
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: IconButton(
-                          tooltip: 'Creator community',
-                          onPressed: () {
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder: (BuildContext context) =>
-                                    ReferralHubScreen(
-                                  referralController: _referralController,
-                                  creatorController: _creatorController,
+                      if (_hasApprovedCreatorAccess)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: IconButton(
+                            tooltip: 'Creator community',
+                            onPressed: () {
+                              Navigator.of(context).push<void>(
+                                MaterialPageRoute<void>(
+                                  builder: (BuildContext context) =>
+                                      ReferralHubScreen(
+                                    referralController: _referralController,
+                                    creatorController: _creatorController,
+                                    isAuthenticated:
+                                        widget.controller.isAuthenticated,
+                                    hasApprovedCreatorAccess:
+                                        _hasApprovedCreatorAccess,
+                                    isReferralRuntimeAvailable:
+                                        _isReferralRuntimeAvailable,
+                                    onOpenCreatorAccessRequest: () =>
+                                        _pushCreatorAccessRequest(context),
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.campaign_outlined),
+                              );
+                            },
+                            icon: const Icon(Icons.campaign_outlined),
+                          ),
                         ),
-                      ),
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: IconButton(
@@ -541,12 +558,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                               _route.effectiveCompetitionDestination,
                           onDestinationChanged: _openCompetitionDestination,
                           isAuthenticated: widget.controller.isAuthenticated,
+                          isCheckingCreatorAccess: _isCheckingCreatorAccess,
+                          canHostCompetitions: _canHostCompetitions,
                           onOpenLogin: () => _openLogin(
                             targetRoute: GteNavigationRoute.competitions(
                               destination:
                                   _route.effectiveCompetitionDestination,
                             ),
                           ),
+                          onOpenCreatorAccessRequest: () =>
+                              _pushCreatorAccessRequest(context),
                           navigationDependencies: _navigationDependencies(),
                         ),
                         CommunityHubScreen(
@@ -667,18 +688,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: GteStatePanel(
-        eyebrow: 'CLUB SCOPE',
-        title: 'No canonical club is selected',
-        message:
-            'This signed-in session does not expose a canonical current club. Select a club from the authenticated account context or create one before opening club-scoped surfaces.',
-        icon: Icons.shield_outlined,
-        accentColor: const Color(0xFF85B8FF),
-        actionLabel: 'Open home',
-        onAction: () => _openPrimaryDestination(GtePrimaryDestination.home),
-      ),
+    return GteNoClubOnboardingView(
+      onBrowseClubMarket: () {
+        _openFeatureRoute(const ClubSaleMarketListingsRouteData());
+      },
+      onExploreArena: () {
+        _openPrimaryDestination(GtePrimaryDestination.competitions);
+      },
     );
   }
 
@@ -711,6 +727,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       onOpenLogin: () => _openLogin(
         targetRoute: const GteNavigationRoute.home(),
       ),
+      isCheckingCreatorAccess: _isCheckingCreatorAccess,
+      canHostCompetitions: _canHostCompetitions,
       clubId: _canonicalClubId(),
       clubName: _canonicalClubName(),
       onOpenClubTab: () => _openPrimaryDestination(
@@ -720,11 +738,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.competitions,
       ),
       onOpenClubSubtab: _openClubSubtab,
+      onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
       navigationDependencies: _navigationDependencies(),
     );
   }
 
   void _handleExchangeControllerChanged() {
+    final String? nextAccessToken = widget.controller.accessToken;
+    if (nextAccessToken != _creatorAccessToken) {
+      _creatorAccessToken = nextAccessToken;
+      _rebuildCreatorRuntimeControllers();
+    }
     final String nextUserId = _resolveCompetitionUserId();
     final String? nextUserName = _resolveCompetitionUserName();
     if (nextUserId != _competitionUserId ||
@@ -739,6 +763,66 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }
   }
 
+  void _handleCreatorAccessChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  void _rebuildCreatorRuntimeControllers() {
+    _disposeCreatorAccessController();
+    _creatorApplicationController = _buildCreatorApplicationController();
+    _creatorApplicationController.addListener(_handleCreatorAccessChanged);
+    _creatorController.dispose();
+    _creatorController = _buildCreatorController();
+    _referralController.dispose();
+    _referralController = _buildReferralController();
+    _primeCreatorAccessState(force: true);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _disposeCreatorAccessController() {
+    _creatorApplicationController.removeListener(_handleCreatorAccessChanged);
+    _creatorApplicationController.dispose();
+  }
+
+  void _primeCreatorAccessState({bool force = false}) {
+    if (!widget.controller.isAuthenticated) {
+      return;
+    }
+    _creatorApplicationController.load(force: force);
+  }
+
+  bool get _isCheckingCreatorAccess {
+    if (!widget.controller.isAuthenticated) {
+      return false;
+    }
+    return _creatorApplicationController.isLoading;
+  }
+
+  bool get _hasApprovedCreatorAccess {
+    final application = _creatorApplicationController.application;
+    return application?.isApproved == true;
+  }
+
+  bool get _canHostCompetitions {
+    if (!_hasApprovedCreatorAccess) {
+      return false;
+    }
+    final String? provisionStatus = _creatorApplicationController
+        .application?.provisioning?.provisionStatus;
+    if (provisionStatus == null || provisionStatus.trim().isEmpty) {
+      return true;
+    }
+    return provisionStatus.trim().toLowerCase() == 'active';
+  }
+
+  bool get _isReferralRuntimeAvailable =>
+      widget.backendMode == GteBackendMode.fixture;
+
   CompetitionController _buildCompetitionController() {
     return CompetitionController(
       api: CompetitionApi.standard(
@@ -747,6 +831,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       ),
       currentUserId: _competitionUserId,
       currentUserName: _competitionUserName,
+    );
+  }
+
+  CreatorApplicationController _buildCreatorApplicationController() {
+    return CreatorApplicationController(
+      api: CreatorApplicationApi.standard(
+        baseUrl: widget.apiBaseUrl,
+        accessToken: widget.controller.accessToken,
+        mode: widget.backendMode,
+      ),
     );
   }
 
@@ -780,7 +874,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       currentClubName: _canonicalClubName(),
       accessToken: widget.controller.accessToken,
       isAuthenticated: widget.controller.isAuthenticated,
+      isCheckingCreatorAccess: _isCheckingCreatorAccess,
+      hasApprovedCreatorAccess: _hasApprovedCreatorAccess,
+      canHostCompetitions: _canHostCompetitions,
       onOpenLogin: (BuildContext _) => _openLogin(targetRoute: _route),
+      onOpenCreatorAccessRequest: (BuildContext context) =>
+          _pushCreatorAccessRequest(context),
       currentUserIdProvider: _resolveCompetitionUserId,
       currentUserNameProvider: _resolveCompetitionUserName,
       currentUserRoleProvider: () => widget.controller.session?.user.role,
@@ -788,6 +887,27 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       currentClubNameProvider: _canonicalClubName,
       accessTokenProvider: () => widget.controller.accessToken,
       isAuthenticatedProvider: () => widget.controller.isAuthenticated,
+      isCheckingCreatorAccessProvider: () => _isCheckingCreatorAccess,
+      hasApprovedCreatorAccessProvider: () => _hasApprovedCreatorAccess,
+      canHostCompetitionsProvider: () => _canHostCompetitions,
+    );
+  }
+
+  Future<void> _pushCreatorAccessRequest(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => CreatorAccessRequestScreen(
+          exchangeController: widget.controller,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: _navigationDependencies(),
     );
   }
 

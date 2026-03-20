@@ -36,6 +36,13 @@ class ReferralApi {
 
   Future<ReferralHubData> fetchReferralHub() async {
     await Future<void>.delayed(latency);
+    if (mode != GteBackendMode.fixture) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Referral runtime is unavailable until live creator referral data is connected.',
+      );
+    }
     return ReferralHubData(
       shareCode: 'MAYA-GROWTH',
       shareUrl: '${_normalizedBase(baseUrl)}/community/invite/MAYA-GROWTH',

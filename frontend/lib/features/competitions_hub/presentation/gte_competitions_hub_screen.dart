@@ -26,7 +26,10 @@ class GteCompetitionsHubScreen extends StatefulWidget {
     required this.currentDestination,
     required this.onDestinationChanged,
     this.isAuthenticated = false,
+    this.isCheckingCreatorAccess = false,
+    this.canHostCompetitions = false,
     this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
     this.navigationDependencies,
   });
 
@@ -34,7 +37,10 @@ class GteCompetitionsHubScreen extends StatefulWidget {
   final CompetitionHubDestination currentDestination;
   final ValueChanged<CompetitionHubDestination> onDestinationChanged;
   final bool isAuthenticated;
+  final bool isCheckingCreatorAccess;
+  final bool canHostCompetitions;
   final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenCreatorAccessRequest;
   final GteNavigationDependencies? navigationDependencies;
 
   @override
@@ -357,6 +363,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     BuildContext context,
     List<CompetitionSummary> competitions,
   ) {
+    final String hostDescription = _hostDescription();
     final List<CompetitionSummary> featured =
         competitionHubFeaturedCompetitions(competitions);
 
@@ -443,7 +450,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             ),
             const SizedBox(height: 8),
             Text(
-              'Create a creator competition, publish transparent rules, and share invite codes for private joins.',
+              hostDescription,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 14),
@@ -452,9 +459,9 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _openCreateCompetition,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Host competition'),
+                  onPressed: _hostAction(),
+                  icon: Icon(_hostIcon()),
+                  label: Text(_hostLabel()),
                 ),
                 OutlinedButton.icon(
                   onPressed: () {
@@ -786,9 +793,66 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
       MaterialPageRoute<void>(
         builder: (BuildContext context) => CompetitionCreateScreen(
           controller: widget.controller,
+          isAuthenticated: widget.isAuthenticated,
+          isCheckingHostEligibility: widget.isCheckingCreatorAccess,
+          hostEligible: widget.canHostCompetitions,
+          onOpenLogin: widget.onOpenLogin,
+          onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
         ),
       ),
     );
+  }
+
+  VoidCallback? _hostAction() {
+    if (!widget.isAuthenticated) {
+      return widget.onOpenLogin;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return null;
+    }
+    if (!widget.canHostCompetitions) {
+      return widget.onOpenCreatorAccessRequest;
+    }
+    return _openCreateCompetition;
+  }
+
+  String _hostLabel() {
+    if (!widget.isAuthenticated) {
+      return 'Sign in to host';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Checking creator access';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access to host';
+    }
+    return 'Host competition';
+  }
+
+  IconData _hostIcon() {
+    if (!widget.isAuthenticated) {
+      return Icons.login;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return Icons.hourglass_top_outlined;
+    }
+    if (!widget.canHostCompetitions) {
+      return Icons.lock_outline;
+    }
+    return Icons.add;
+  }
+
+  String _hostDescription() {
+    if (!widget.isAuthenticated) {
+      return 'Hosting opens only after sign-in, so guest preview mode keeps the live creator flow locked.';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Creator access is being checked before the live host flow is exposed.';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access before opening the live host flow. Arena does not late-fail hosting from this primary surface.';
+    }
+    return 'Create a creator competition, publish transparent rules, and share invite codes for private joins.';
   }
 }
 
