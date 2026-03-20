@@ -995,14 +995,12 @@ class _ArenaRoutePanel extends StatelessWidget {
 class _ArenaRoutePanel extends StatelessWidget {
   const _ArenaRoutePanel({
     required this.onOpenStreamerTournaments,
-    required this.onOpenFanPredictions,
     required this.onOpenNationsCup,
     required this.onOpenWorldSimulation,
     required this.onOpenTransferCenter,
   });
 
   final VoidCallback onOpenStreamerTournaments;
-  final VoidCallback onOpenFanPredictions;
   final VoidCallback onOpenNationsCup;
   final VoidCallback onOpenWorldSimulation;
   final VoidCallback onOpenTransferCenter;
@@ -1034,9 +1032,9 @@ class _ArenaRoutePanel extends StatelessWidget {
                 label: const Text('Streamer tournaments'),
               ),
               FilledButton.tonalIcon(
-                onPressed: onOpenFanPredictions,
+                onPressed: null,
                 icon: const Icon(Icons.insights_outlined),
-                label: const Text('Fan predictions'),
+                label: const Text('Fan predictions (live match only)'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenNationsCup,
@@ -1054,6 +1052,11 @@ class _ArenaRoutePanel extends StatelessWidget {
                 label: const Text('Transfer center'),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
