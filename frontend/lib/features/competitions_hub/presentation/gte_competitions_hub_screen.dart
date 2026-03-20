@@ -990,6 +990,58 @@ class _ArenaRoutePanel extends StatelessWidget {
       ),
     );
   }
+
+  VoidCallback? _hostAction() {
+    if (!widget.isAuthenticated) {
+      return widget.onOpenLogin;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return null;
+    }
+    if (!widget.canHostCompetitions) {
+      return widget.onOpenCreatorAccessRequest;
+    }
+    return _openCreateCompetition;
+  }
+
+  String _hostLabel() {
+    if (!widget.isAuthenticated) {
+      return 'Sign in to host';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Checking creator access';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access to host';
+    }
+    return 'Host competition';
+  }
+
+  IconData _hostIcon() {
+    if (!widget.isAuthenticated) {
+      return Icons.login;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return Icons.hourglass_top_outlined;
+    }
+    if (!widget.canHostCompetitions) {
+      return Icons.lock_outline;
+    }
+    return Icons.add;
+  }
+
+  String _hostDescription() {
+    if (!widget.isAuthenticated) {
+      return 'Hosting opens only after sign-in, so guest preview mode keeps the live creator flow locked.';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Creator access is being checked before the live host flow is exposed.';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access before opening the live host flow. Arena does not late-fail hosting from this primary surface.';
+    }
+    return 'Create a creator competition, publish transparent rules, and share invite codes for private joins.';
+  }
 }
 
 class _ArenaRoutePanel extends StatelessWidget {
