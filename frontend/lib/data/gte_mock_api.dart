@@ -71,7 +71,7 @@ class GteMockApi implements GteApiRepository {
 
   GteWalletSummary _walletSummary;
   final List<GteWalletLedgerEntry> _walletLedger;
-  final GtePortfolioView _portfolio;
+  GtePortfolioView _portfolio;
   GtePortfolioSummary _portfolioSummary;
   final List<GteOrderRecord> _orders;
   final Set<String> _sessionOrderIds = <String>{};
@@ -515,6 +515,123 @@ class GteMockApi implements GteApiRepository {
     }
 
     return cancelled;
+  }
+
+  @override
+  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId) async {
+    await _delay();
+    final GteOrderRecord order = await fetchOrder(orderId);
+    final double fairValue =
+        order.maxPrice ?? _referencePriceFor(order.playerId, GteOrderSide.sell) ?? 0;
+    final double remainingQuantity =
+        order.remainingQuantity < 0 ? 0 : order.remainingQuantity;
+    final double estimatedP2pTotal = remainingQuantity * fairValue;
+    final double payoutRatio = _adminBuybackPayoutRatio(fairValue);
+    final double adminUnitPrice = fairValue * payoutRatio;
+    final double adminTotal = remainingQuantity * adminUnitPrice;
+    final DateTime? windowEndsAt = order.createdAt?.add(const Duration(hours: 48));
+    final bool windowElapsed = windowEndsAt == null || !_clock.isBefore(windowEndsAt);
+    final List<String> reasons = <String>[
+      if (order.side != GteOrderSide.sell)
+        'Admin quick exit is only available for sell orders.',
+      if (!order.canCancel)
+        'Only open sell orders can use admin quick exit.',
+      if (!windowElapsed)
+        'P2P remains the default path until ${windowEndsAt?.toIso8601String() ?? 'the priority window ends'}.',
+    ];
+    return GteAdminBuybackPreview(
+      orderId: order.id,
+      playerId: order.playerId,
+      eligible: reasons.isEmpty,
+      reasons: reasons,
+      message:
+          'P2P listings usually pay more. Admin quick exit is a lower fallback after the priority window ends.',
+      country: 'Nigeria',
+      fairValue: fairValue,
+      estimatedP2pUnitPrice: fairValue,
+      estimatedP2pTotal: estimatedP2pTotal,
+      adminUnitPrice: adminUnitPrice,
+      adminTotal: adminTotal,
+      payoutRatio: payoutRatio,
+      liquidityBand: _liquidityBandForPrice(fairValue),
+      payoutBand: _payoutBandForPrice(fairValue),
+      p2pPriorityWindowHours: 48,
+      p2pPriorityWindowEndsAt: windowEndsAt,
+      minimumHoldDays: 7,
+      minimumHoldExpiresAt:
+          order.createdAt?.subtract(const Duration(days: 1)),
+      holdDaysRemaining: 0,
+    );
+  }
+
+  @override
+  Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId) async {
+    await _delay();
+    final GteAdminBuybackPreview preview =
+        await fetchAdminBuybackPreview(orderId);
+    if (!preview.eligible) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: preview.reasons.isEmpty
+            ? 'Admin buyback is unavailable.'
+            : preview.reasons.first,
+      );
+    }
+    final int index =
+        _orders.indexWhere((GteOrderRecord order) => order.id == orderId);
+    if (index == -1) {
+      throw StateError('Unknown order id: $orderId');
+    }
+    final GteOrderRecord existing = _orders[index];
+    final DateTime executedAt = _nextTimestamp();
+    final GteOrderRecord updated = GteOrderRecord(
+      id: existing.id,
+      userId: existing.userId,
+      playerId: existing.playerId,
+      side: existing.side,
+      status: GteOrderStatus.filled,
+      quantity: existing.quantity,
+      filledQuantity: existing.quantity,
+      remainingQuantity: 0,
+      maxPrice: existing.maxPrice,
+      reservedAmount: 0,
+      currency: existing.currency,
+      holdTransactionId: existing.holdTransactionId,
+      createdAt: existing.createdAt,
+      updatedAt: executedAt,
+      executionSummary: existing.executionSummary,
+    );
+    _orders[index] = updated;
+    _walletSummary = GteWalletSummary(
+      availableBalance: _walletSummary.availableBalance + preview.adminTotal,
+      reservedBalance: _walletSummary.reservedBalance,
+      totalBalance: _walletSummary.totalBalance + preview.adminTotal,
+      currency: _walletSummary.currency,
+    );
+    _walletLedger.insert(
+      0,
+      GteWalletLedgerEntry(
+        id: 'ledger-${++_ledgerSequence}',
+        amount: preview.adminTotal,
+        reason: 'admin_buyback_settlement',
+        description: 'Admin quick exit credited for ${existing.playerId}',
+        createdAt: executedAt,
+      ),
+    );
+    _adjustHoldingQuantity(
+      existing.playerId,
+      -existing.remainingQuantity,
+      currentPrice: preview.fairValue,
+    );
+    _rebuildPortfolioSummary();
+    return GteAdminBuybackExecution(
+      preview: preview,
+      order: updated,
+      quantity: existing.remainingQuantity,
+      unitPrice: preview.adminUnitPrice,
+      total: preview.adminTotal,
+      executedAt: executedAt,
+    );
   }
 
   @override

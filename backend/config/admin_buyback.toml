@@ -1,0 +1,14 @@
+p2p_priority_window_hours = 48
+minimum_hold_days = 7
+admin_reserve_cooldown_days = 7
+wash_trade_lookback_hours = 72
+
+nigeria_aliases = ["Nigeria", "NG", "NGA"]
+african_allowlist = ["Ghana", "Kenya", "South Africa"]
+
+[band_payouts]
+a = 0.45
+b = 0.58
+c = 0.66
+d = 0.72
+e = 0.75

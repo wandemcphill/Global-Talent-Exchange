@@ -261,7 +261,7 @@ def test_run_backend_server_invokes_uvicorn(monkeypatch) -> None:
 def test_build_parser_help_includes_demo_operator_examples() -> None:
     help_output = build_parser().format_help()
 
-    assert "Fresh demo market:" in help_output
+    assert "Canonical launch/test path:" in help_output
     assert "rebuild-demo-market --seed 20260311" in help_output
     assert "simulation-ticks --count 5 --start-tick 1 --seed 20260311" in help_output
 

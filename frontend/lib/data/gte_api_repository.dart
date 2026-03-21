@@ -199,6 +199,10 @@ abstract class GteApiRepository {
 
   Future<GteOrderRecord> cancelOrder(String orderId);
 
+  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId);
+
+  Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId);
+
   Future<GteWalletSummary> fetchWalletSummary();
 
   Future<GteWalletOverview> fetchWalletOverview();
@@ -682,6 +686,28 @@ class GteReliableApiRepository implements GteApiRepository {
             requiresAuth: true),
       ),
       () => fixtures.cancelOrder(orderId),
+    );
+  }
+
+  @override
+  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId) {
+    return _withFallback<GteAdminBuybackPreview>(
+      () async => GteAdminBuybackPreview.fromJson(
+        await _request('GET', '/api/orders/$orderId/admin-buyback-preview',
+            requiresAuth: true),
+      ),
+      () => fixtures.fetchAdminBuybackPreview(orderId),
+    );
+  }
+
+  @override
+  Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId) {
+    return _withFallback<GteAdminBuybackExecution>(
+      () async => GteAdminBuybackExecution.fromJson(
+        await _request('POST', '/api/orders/$orderId/admin-buyback',
+            requiresAuth: true),
+      ),
+      () => fixtures.executeAdminBuyback(orderId),
     );
   }
 

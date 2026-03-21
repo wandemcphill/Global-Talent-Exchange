@@ -20,6 +20,7 @@ from backend.app.core.events import InMemoryEventPublisher
 from backend.app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_PASSWORD,
     DEMO_USER_SPECS,
+    canonical_band_counts_for_player_count,
     DemoBootstrapService,
 )
 from backend.app.ingestion.models import MarketSignal, Player
@@ -128,6 +129,16 @@ def test_demo_bootstrap_service_is_repeatable_for_demo_users_and_balances(demo_s
             select(func.count()).select_from(Player).where(Player.source_provider == second.provider_name)
         ) == 8
         assert session.scalar(select(func.count()).select_from(PlayerValueSnapshotRecord)) == 16
+
+
+def test_canonical_band_counts_match_locked_demo_distribution() -> None:
+    assert canonical_band_counts_for_player_count(120) == {
+        "band_a": 45,
+        "band_b": 40,
+        "band_c": 20,
+        "band_d": 10,
+        "band_e": 5,
+    }
 
 
 def test_demo_bootstrap_guarantees_rising_and_falling_players(demo_service) -> None:

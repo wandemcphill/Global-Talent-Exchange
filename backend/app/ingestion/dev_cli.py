@@ -34,7 +34,7 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescrip
 
 
 DEV_CLI_EPILOG = """Common local demo flows:
-  Fresh demo market:
+  Canonical launch/test path:
     python backend/scripts/dev.py rebuild-demo-market --seed 20260311
     python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
 
@@ -308,7 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
     seed_parser = subparsers.add_parser(
         "seed-demo",
         help="Seed demo users, wallets, holdings, and a sample player subset.",
-        description="Seed the core demo dataset without resetting the database first.",
+        description="Seed the core demo dataset without resetting the database first. Use rebuild-demo-market for the canonical local QA path.",
         formatter_class=_HelpFormatter,
     )
     seed_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
@@ -325,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap_parser = subparsers.add_parser(
         "bootstrap-demo",
         help="Reset the local SQLite database, migrate to head, and seed the demo dataset.",
-        description="Cleanly rebuild the local SQLite database and seed demo users, players, and holdings.",
+        description="Cleanly rebuild the local SQLite database and seed demo users, players, and holdings. This is the low-level/manual path; prefer rebuild-demo-market for normal QA.",
         formatter_class=_HelpFormatter,
     )
     bootstrap_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
@@ -379,7 +379,7 @@ def build_parser() -> argparse.ArgumentParser:
     rebuild_parser = subparsers.add_parser(
         "rebuild-demo-market",
         help="Reset the local demo database, seed demo users/players/holdings, and add demo liquidity.",
-        description="One-command rebuild for the local fake market used by frontend demos and QA.",
+        description="Canonical one-command rebuild for the local discoverable demo market used by frontend demos and QA.",
         formatter_class=_HelpFormatter,
     )
     rebuild_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
@@ -395,7 +395,7 @@ def build_parser() -> argparse.ArgumentParser:
     runserver_parser = subparsers.add_parser(
         "runserver",
         help="Start the FastAPI development server.",
-        description="Run the backend locally, optionally replaying the seeded fake market into the in-memory engine.",
+        description="Run the backend locally, optionally replaying the canonical seeded demo market into the in-memory engine.",
         formatter_class=_HelpFormatter,
     )
     runserver_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")

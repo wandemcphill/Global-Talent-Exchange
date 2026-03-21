@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
@@ -19,6 +19,7 @@ from backend.app.auth.service import AuthService
 from backend.app.ingestion.models import Player
 from backend.app.ledger.models import LedgerEventRecord
 from backend.app.models.base import Base
+from backend.app.models.user import KycStatus
 from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
 from backend.app.orders.models import Order
 from backend.app.orders.router import router
@@ -101,6 +102,19 @@ def _fund_user(session, current_user, *, amount: Decimal) -> None:
     session.commit()
 
 
+def _grant_position(session, current_user, *, player_id: str, quantity: Decimal) -> None:
+    WalletService().credit_position_units(
+        session,
+        user=current_user,
+        player_id=player_id,
+        quantity=quantity,
+        reference=f"grant-{current_user.id}-{player_id}",
+        description="Seed player position for testing",
+        external_reference=f"grant:{current_user.id}:{player_id}",
+    )
+    session.commit()
+
+
 def _ledger_events_for_order(session, order_id: str) -> list[LedgerEventRecord]:
     return session.scalars(
         select(LedgerEventRecord)
@@ -165,12 +179,103 @@ def test_place_order_returns_open_order_with_hold_details(api_context) -> None:
     assert {event.event_type.value for event in ledger_events} == {"order.accepted", "order.funds_reserved"}
 
 
+def test_sell_order_requires_owned_units(api_context) -> None:
+    client, session, auth_state = api_context
+    player = _create_player(session, provider_external_id="player-order-owned-units")
+
+    response = client.post(
+        "/api/orders",
+        json={
+            "player_id": player.id,
+            "side": "sell",
+            "quantity": 1,
+            "max_price": 5,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "owned quantity" in response.json()["detail"].lower()
+
+
+def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> None:
+    client, session, auth_state = api_context
+    player = _create_player(session, provider_external_id="player-order-admin-buyback")
+    seller = auth_state["user"]
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
+    session.execute(text("ALTER TABLE users ADD COLUMN nationality VARCHAR(120)"))
+    session.execute(
+        text("UPDATE users SET nationality = :nationality WHERE id = :user_id"),
+        {"nationality": "Nigeria", "user_id": seller.id},
+    )
+    seller.kyc_status = KycStatus.VERIFIED
+    session.commit()
+
+    aged_at = "2026-03-13T12:00:00Z"
+    session.execute(
+        text("UPDATE ledger_entries SET created_at = :created_at WHERE reference = :reference"),
+        {
+            "created_at": aged_at,
+            "reference": f"grant-{seller.id}-{player.id}",
+        },
+    )
+    session.commit()
+
+    create_response = client.post(
+        "/api/orders",
+        json={
+            "player_id": player.id,
+            "side": "sell",
+            "quantity": 5,
+            "max_price": 12,
+        },
+    )
+    assert create_response.status_code == 201
+    order_id = create_response.json()["id"]
+
+    preview_response = client.get(f"/api/orders/{order_id}/admin-buyback-preview")
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["eligible"] is False
+    assert any("p2p remains" in reason.lower() for reason in preview_payload["reasons"])
+
+    session.execute(
+        text("UPDATE exchange_orders SET created_at = :created_at WHERE id = :order_id"),
+        {
+            "created_at": "2026-03-19T09:00:00Z",
+            "order_id": order_id,
+        },
+    )
+    session.commit()
+
+    matured_preview_response = client.get(f"/api/orders/{order_id}/admin-buyback-preview")
+    assert matured_preview_response.status_code == 200
+    matured_preview = matured_preview_response.json()
+    assert matured_preview["eligible"] is True
+    assert Decimal(str(matured_preview["fair_value"])) == Decimal("12.0000")
+    assert Decimal(str(matured_preview["estimated_p2p_total"])) == Decimal("60.0000")
+    assert Decimal(str(matured_preview["admin_total"])) == Decimal("27.0000")
+    assert matured_preview["payout_band"] == "A"
+
+    execute_response = client.post(f"/api/orders/{order_id}/admin-buyback")
+    assert execute_response.status_code == 200
+    execution_payload = execute_response.json()
+    assert execution_payload["order"]["status"] == "filled"
+    assert Decimal(str(execution_payload["total"])) == Decimal("27.0000")
+    assert Decimal(str(execution_payload["order"]["remaining_quantity"])) == Decimal("0.0000")
+
+    wallet_summary = WalletService().get_wallet_summary(session, seller)
+    assert wallet_summary.available_balance == Decimal("27.0000")
+    assert wallet_summary.reserved_balance == Decimal("0.0000")
+    assert WalletService().get_position_quantity(session, seller, player.id) == Decimal("0.0000")
+
+
 def test_get_order_detail_returns_execution_summary(api_context) -> None:
     client, session, auth_state = api_context
     player = _create_player(session, provider_external_id="player-order-detail")
     seller = _create_user(session, email="seller-order-detail@example.com", username="sellerorderdetail")
     buyer = auth_state["user"]
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
 
     auth_state["user"] = seller
     sell_response = client.post(
@@ -332,6 +437,7 @@ def test_partial_fill_emits_execution_event_and_keeps_remaining_hold(api_context
     )
     buyer = auth_state["user"]
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("4"))
 
     auth_state["user"] = seller
     sell_response = client.post(
@@ -375,6 +481,7 @@ def test_partial_fill_emits_execution_event_and_keeps_remaining_hold(api_context
     seller_events = _ledger_events_for_order(session, sell_order_id)
     assert {event.event_type.value for event in seller_events} == {
         "order.accepted",
+        "order.funds_reserved",
         "order.executed",
     }
 
@@ -385,6 +492,7 @@ def test_cancel_partially_filled_order_releases_remaining_hold(api_context) -> N
     seller = _create_user(session, email="seller-order-partial@example.com", username="sellerorderpartial")
     buyer = auth_state["user"]
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("4"))
 
     auth_state["user"] = seller
     sell_response = client.post(
@@ -432,6 +540,7 @@ def test_cancel_partially_filled_order_releases_remaining_hold(api_context) -> N
     seller_events = _ledger_events_for_order(session, seller_order.id)
     assert {event.event_type.value for event in seller_events} == {
         "order.accepted",
+        "order.funds_reserved",
         "order.executed",
     }
 
@@ -447,6 +556,7 @@ def test_reject_cancel_for_filled_order(api_context) -> None:
     seller = _create_user(session, email="seller-order-filled@example.com", username="sellerorderfilled")
     buyer = auth_state["user"]
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
 
     auth_state["user"] = seller
     sell_response = client.post(
@@ -490,6 +600,8 @@ def test_order_book_endpoint_returns_aggregated_depth(api_context) -> None:
 
     for user in (buyer_one, buyer_two, buyer_three):
         _fund_user(session, user, amount=Decimal("200"))
+    _grant_position(session, seller_one, player_id=player.id, quantity=Decimal("4"))
+    _grant_position(session, seller_two, player_id=player.id, quantity=Decimal("1"))
 
     auth_state["user"] = buyer_one
     assert client.post(
@@ -541,6 +653,7 @@ def test_execution_events_are_written_for_both_orders(api_context) -> None:
     seller = _create_user(session, email="seller-order-events@example.com", username="sellerorderevents")
     buyer = auth_state["user"]
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
 
     auth_state["user"] = seller
     sell_response = client.post(
@@ -582,6 +695,7 @@ def test_execution_events_are_written_for_both_orders(api_context) -> None:
     }
     assert {event.event_type.value for event in sell_events} == {
         "order.accepted",
+        "order.funds_reserved",
         "order.executed",
     }
 
@@ -600,6 +714,7 @@ def test_price_improvement_releases_unused_reserved_funds(api_context) -> None:
     )
     buyer = auth_state["user"]
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("3"))
 
     auth_state["user"] = seller
     sell_response = client.post(

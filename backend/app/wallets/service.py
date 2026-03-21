@@ -805,6 +805,34 @@ class WalletService:
             actor=user,
         )
 
+    def release_reserved_position_units(
+        self,
+        session: Session,
+        *,
+        user: User,
+        player_id: str,
+        quantity: Decimal,
+        reference: str,
+        description: str,
+    ) -> list[LedgerEntry]:
+        released_quantity = self._normalize_amount(quantity)
+        if released_quantity <= Decimal("0.0000"):
+            return []
+
+        position_account = self.get_position_account(session, user, player_id)
+        escrow_account = self.get_position_escrow_account(session, user, player_id)
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=escrow_account, amount=-released_quantity),
+                LedgerPosting(account=position_account, amount=released_quantity),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference=reference,
+            description=description,
+            actor=user,
+        )
+
     def settle_reserved_position_units(
         self,
         session: Session,

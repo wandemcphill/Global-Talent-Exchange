@@ -20,6 +20,7 @@ LIQUIDITY_BANDS_FILE = "liquidity_bands.toml"
 IMAGE_POLICY_FILE = "image_policy.toml"
 VALUE_ENGINE_WEIGHTING_FILE = "value_engine_weighting.toml"
 SUSPICION_THRESHOLDS_FILE = "suspicion_thresholds.toml"
+ADMIN_BUYBACK_FILE = "admin_buyback.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -220,6 +221,17 @@ class SuspicionThresholdsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AdminBuybackConfig:
+    p2p_priority_window_hours: int
+    minimum_hold_days: int
+    admin_reserve_cooldown_days: int
+    wash_trade_lookback_hours: int
+    nigeria_aliases: tuple[str, ...]
+    african_allowlist: tuple[str, ...]
+    band_payouts: dict[str, float]
+
+
+@dataclass(frozen=True, slots=True)
 class ValueEngineWeightingConfig:
     config_version: str
     baseline_eur_per_credit: int
@@ -295,6 +307,7 @@ class Settings:
     liquidity_bands: LiquidityBandsConfig
     image_policy: ImagePolicyConfig
     suspicion_thresholds: SuspicionThresholdsConfig
+    admin_buyback: AdminBuybackConfig
     value_engine_weighting: ValueEngineWeightingConfig
 
 
@@ -313,6 +326,24 @@ def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
         holder_concentration_share=0.40,
         circular_trade_min_cycle_length=3,
         circular_trade_min_repetitions=1,
+    )
+
+
+def _default_admin_buyback_config() -> AdminBuybackConfig:
+    return AdminBuybackConfig(
+        p2p_priority_window_hours=48,
+        minimum_hold_days=7,
+        admin_reserve_cooldown_days=7,
+        wash_trade_lookback_hours=72,
+        nigeria_aliases=("Nigeria", "NG", "NGA"),
+        african_allowlist=("Ghana", "Kenya", "South Africa"),
+        band_payouts={
+            "a": 0.45,
+            "b": 0.58,
+            "c": 0.66,
+            "d": 0.72,
+            "e": 0.75,
+        },
     )
 
 
@@ -501,6 +532,41 @@ def load_suspicion_thresholds_config(config_root: Path) -> SuspicionThresholdsCo
         circular_trade_min_repetitions=int(
             document.get("circular_trade_min_repetitions", defaults.circular_trade_min_repetitions)
         ),
+    )
+
+
+def load_admin_buyback_config(config_root: Path) -> AdminBuybackConfig:
+    document = _load_optional_toml_document(config_root / ADMIN_BUYBACK_FILE)
+    if document is None:
+        return _default_admin_buyback_config()
+
+    defaults = _default_admin_buyback_config()
+    band_payouts = {
+        key.strip().lower(): float(value)
+        for key, value in _coerce_float_map(document.get("band_payouts", {}), name="band_payouts").items()
+    }
+    return AdminBuybackConfig(
+        p2p_priority_window_hours=int(
+            document.get("p2p_priority_window_hours", defaults.p2p_priority_window_hours)
+        ),
+        minimum_hold_days=int(document.get("minimum_hold_days", defaults.minimum_hold_days)),
+        admin_reserve_cooldown_days=int(
+            document.get("admin_reserve_cooldown_days", defaults.admin_reserve_cooldown_days)
+        ),
+        wash_trade_lookback_hours=int(
+            document.get("wash_trade_lookback_hours", defaults.wash_trade_lookback_hours)
+        ),
+        nigeria_aliases=_coerce_string_tuple(
+            document.get("nigeria_aliases", list(defaults.nigeria_aliases)),
+            name="nigeria_aliases",
+        )
+        or defaults.nigeria_aliases,
+        african_allowlist=_coerce_string_tuple(
+            document.get("african_allowlist", list(defaults.african_allowlist)),
+            name="african_allowlist",
+        )
+        or defaults.african_allowlist,
+        band_payouts=band_payouts or defaults.band_payouts,
     )
     if thresholds.player_min_suspicious_events <= 0:
         raise ValueError("Suspicion thresholds player_min_suspicious_events must be greater than zero.")
@@ -782,6 +848,7 @@ def load_settings(
         liquidity_bands=load_liquidity_bands_config(resolved_config_root),
         image_policy=load_image_policy_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
+        admin_buyback=load_admin_buyback_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
     )
 

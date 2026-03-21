@@ -32,13 +32,22 @@ python backend/scripts/dev.py runserver --demo-simulation
 This creates:
 
 - 3 demo users
-- a small seeded player universe subset
+- a curated 120-player demo market slice with visible Bands A-E supply coverage
+- 100+ players visible on the first market load in the current app flow
 - precomputed value snapshots and player summaries
 - seeded market holdings for the demo users' `/api/portfolio/snapshot` view
 - wallet balances and ledger entries for each demo user
 - seeded buy ladders and sell ladders in the exchange order book
 - seeded trade executions for ticker volume/history
-- liquid and illiquid player examples for local demos and tests
+- 30 higher-activity and 60 thinner-book seeded player markets for local demos and tests
+
+Canonical demo supply bands:
+
+- Band A: EUR 0.1m to EUR 1m -> 0.08 to 0.45 GTEX -> 10,000 copies
+- Band B: EUR 1m to EUR 5m -> 0.45 to 2.5 GTEX -> 1,000 copies
+- Band C: EUR 5m to EUR 20m -> 2.5 to 12 GTEX -> 300 copies
+- Band D: EUR 20m to EUR 60m -> 12 to 50 GTEX -> 10 copies
+- Band E: EUR 60m to EUR 100m+ -> 50 to 75 GTEX -> 5 copies
 
 Default demo credentials:
 
@@ -46,7 +55,7 @@ Default demo credentials:
 - `scout@demo.gte.local` / `DemoPass123`
 - `admin@demo.gte.local` / `DemoPass123`
 
-The demo rebuild command writes the exchange-side state into the database. `runserver --demo-simulation` then replays that seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
+The canonical local QA path is `rebuild-demo-market` followed by `runserver --demo-simulation`. The rebuild command writes the exchange-side state into the database, and `runserver --demo-simulation` replays that seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
 
 ## Demo operator runbook
 
@@ -66,6 +75,7 @@ python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
 Notes:
 
 - `rebuild-demo-market` already resets the SQLite database, migrates to head, seeds demo users/players/holdings, and adds demo liquidity. Use the explicit `reset-db` and `migrate` steps when you want to verify the database lifecycle or recover a dirty local DB.
+- `bootstrap-demo` and `backend/scripts/bootstrap_demo.py` remain available as low-level/manual seed entry points, but the canonical launch/test seed path is the two-command `rebuild-demo-market` plus `runserver --demo-simulation` flow above.
 - `seed-demo-liquidity` is safe to rerun after a rebuild when you want to refresh only the exchange-side order book and trade history.
 - If you run tick commands from a separate terminal, restart `runserver --demo-simulation` afterwards so the in-memory ticker projection replays the updated database state.
 

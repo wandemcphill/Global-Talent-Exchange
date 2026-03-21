@@ -11,9 +11,11 @@ from backend.app.auth.dependencies import get_session
 from backend.app.core.config import Settings, get_settings
 from backend.app.core.container import ApplicationContext, build_application_context
 from backend.app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from backend.app.ingestion.demo_bootstrap import CANONICAL_DEMO_PLAYER_COUNT
 from backend.app.main import _bind_application_state, _resolve_database_engine
 from backend.app.modules import DOMAIN_MODULES
 from backend.app.simulation.runtime import seed_demo_simulation_for_app
+from backend.app.simulation.service import DEFAULT_ILLIQUID_PLAYER_COUNT, DEFAULT_LIQUID_PLAYER_COUNT
 
 
 def create_demo_simulation_app(
@@ -44,9 +46,9 @@ def create_demo_simulation_app(
     demo_simulation_enabled = _get_bool("GTE_DEMO_SIMULATION_ENABLED", True)
     bootstrap_demo = _get_bool("GTE_DEMO_SIMULATION_BOOTSTRAP", False)
     seed_liquidity_on_boot = _get_bool("GTE_DEMO_SIMULATION_SEED_ON_BOOT", False)
-    demo_player_count = _get_int("GTE_DEMO_SIMULATION_PLAYER_COUNT", 24)
-    liquid_player_count = _get_int("GTE_DEMO_SIMULATION_LIQUID_PLAYERS", 4)
-    illiquid_player_count = _get_int("GTE_DEMO_SIMULATION_ILLIQUID_PLAYERS", 2)
+    demo_player_count = _get_int("GTE_DEMO_SIMULATION_PLAYER_COUNT", CANONICAL_DEMO_PLAYER_COUNT)
+    liquid_player_count = _get_int("GTE_DEMO_SIMULATION_LIQUID_PLAYERS", DEFAULT_LIQUID_PLAYER_COUNT)
+    illiquid_player_count = _get_int("GTE_DEMO_SIMULATION_ILLIQUID_PLAYERS", DEFAULT_ILLIQUID_PLAYER_COUNT)
     simulation_seed = _get_int("GTE_DEMO_SIMULATION_SEED", 20260311)
 
     @asynccontextmanager

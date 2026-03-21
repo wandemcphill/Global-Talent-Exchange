@@ -1,6 +1,27 @@
-﻿String gteFormatCredits(double value) {
+import '../data/gte_models.dart';
+
+String _gteFormatUnitAmount(double value, String unitLabel) {
   final bool wholeNumber = value == value.roundToDouble();
-  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} cr';
+  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} $unitLabel';
+}
+
+String gteFormatCredits(double value) {
+  return _gteFormatUnitAmount(value, 'GTEX Coin');
+}
+
+String gteFormatFanCoins(double value) {
+  return _gteFormatUnitAmount(value, 'Fan Coin');
+}
+
+String gteFormatLedgerUnitName(GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.credit:
+      return 'GTEX Coin';
+    case GteLedgerUnit.coin:
+      return 'Fan Coin';
+    case GteLedgerUnit.unknown:
+      return 'Unit';
+  }
 }
 
 String gteFormatFiat(double value, {String currency = 'NGN'}) {
@@ -44,7 +65,6 @@ String gteFormatOrderStatus(String rawStatus) {
   }).replaceAll('_', ' ');
   return spaced.toUpperCase();
 }
-
 
 String gteFormatRelativeTime(DateTime? value, {DateTime? now}) {
   if (value == null) {

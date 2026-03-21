@@ -6,6 +6,8 @@ import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
 
+const int _marketPageSize = 100;
+
 class GteExchangeController extends ChangeNotifier {
   GteExchangeController({
     required GteExchangeApiClient api,
@@ -161,7 +163,7 @@ class GteExchangeController extends ChangeNotifier {
           : marketPage!.offset + marketPage!.items.length;
       final GteMarketPlayerListView response = await _api.fetchPlayers(
         query: GteMarketPlayersQuery(
-          limit: 20,
+          limit: _marketPageSize,
           offset: offset,
           search: nextSearch.isEmpty ? null : nextSearch,
         ),

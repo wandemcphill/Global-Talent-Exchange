@@ -151,7 +151,7 @@ def test_order_detail_and_cancel_work_for_resting_orders(
             "player_id": illiquid_player.player_id,
             "side": "buy",
             "quantity": 1,
-            "max_price": str(best_ask - Decimal("1.0000")),
+            "max_price": str(max((best_ask * Decimal("0.80")).quantize(Decimal("0.0001")), Decimal("0.0100"))),
         },
     )
 
@@ -228,7 +228,7 @@ def test_open_orders_list_returns_recent_orders_with_status_filter(
             "player_id": illiquid_player.player_id,
             "side": "buy",
             "quantity": 1,
-            "max_price": str(illiquid_best_ask - Decimal("1.0000")),
+            "max_price": str(max((illiquid_best_ask * Decimal("0.80")).quantize(Decimal("0.0001")), Decimal("0.0100"))),
         },
     )
     assert open_order_response.status_code == 201

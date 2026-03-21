@@ -479,6 +479,12 @@ class GteExchangeApiClient {
   Future<GteOrderRecord> cancelOrder(String orderId) =>
       repository.cancelOrder(orderId);
 
+  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId) =>
+      repository.fetchAdminBuybackPreview(orderId);
+
+  Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId) =>
+      repository.executeAdminBuyback(orderId);
+
   Future<GteOrderListView> listOrders({
     int limit = 20,
     int offset = 0,
