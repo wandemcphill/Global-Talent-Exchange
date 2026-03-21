@@ -53,7 +53,7 @@ class GteWalletSummaryCard extends StatelessWidget {
                   border: Border.all(color: GteShellTheme.accentCapital.withValues(alpha: 0.2)),
                 ),
                 child: Text(
-                  summary.currency.name.toUpperCase(),
+                  gteFormatLedgerUnitName(summary.currency).toUpperCase(),
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(color: GteShellTheme.accentCapital),
                 ),
               ),
@@ -95,8 +95,8 @@ class GteWalletSummaryCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   utilization <= 0
-                      ? 'No cash is currently reserved by open orders.'
-                      : '${(utilization * 100).toStringAsFixed(0)}% of total funds are reserved by working orders.',
+                      ? 'No GTEX Coin is currently reserved by open orders.'
+                      : '${(utilization * 100).toStringAsFixed(0)}% of total GTEX Coin is reserved by working orders.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -118,7 +118,7 @@ class GteWalletSummaryCard extends StatelessWidget {
               ),
               GteMetricChip(
                 label: 'Funding state',
-                value: summary.availableBalance > 0 ? 'READY' : 'LOW CASH',
+                value: summary.availableBalance > 0 ? 'READY' : 'LOW GTEX',
                 positive: summary.availableBalance > 0,
               ),
             ],

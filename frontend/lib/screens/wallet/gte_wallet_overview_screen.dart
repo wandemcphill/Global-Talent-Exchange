@@ -115,24 +115,24 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                       Theme.of(context).textTheme.titleLarge),
                               const SizedBox(height: 8),
                               Text(
-                                'FanCoin rewards and Coin/Market Balance stay separated for clarity.',
+                                'Fan Coin rewards and GTEX Coin market balance stay separated for clarity.',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               const SizedBox(height: 14),
                               Row(
                                 children: <Widget>[
                                   _BalanceTile(
-                                    label: 'FanCoin',
+                                    label: 'Fan Coin',
                                     value: fanCoinBalance == null
                                         ? 'Syncing...'
-                                        : gteFormatCredits(fanCoinBalance),
+                                        : gteFormatFanCoins(fanCoinBalance),
                                     caption:
-                                        'Promo pool rewards and gifting credits.',
+                                        'Promo pool rewards and gifting Fan Coin.',
                                     accent: GteShellTheme.accentCommunity,
                                   ),
                                   const SizedBox(width: 12),
                                   _BalanceTile(
-                                    label: 'Coin / Market Balance',
+                                    label: 'GTEX Coin / Market Balance',
                                     value: gteFormatCredits(
                                         overview.availableBalance),
                                     caption:
