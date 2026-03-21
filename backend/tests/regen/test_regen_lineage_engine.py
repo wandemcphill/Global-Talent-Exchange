@@ -4,9 +4,9 @@ from dataclasses import replace
 
 import pytest
 
-from backend.app.core.config import get_settings
-from backend.app.services.club_finance_service import ClubOpsStore
-from backend.app.services.regen_service import (
+from app.core.config import get_settings
+from app.services.club_finance_service import ClubOpsStore
+from app.services.regen_service import (
     LineageCandidate,
     RegenClubContext,
     RegenGenerationEngine,

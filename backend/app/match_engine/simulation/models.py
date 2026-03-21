@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from backend.app.common.enums.match_status import MatchStatus
+from app.common.enums.match_status import MatchStatus
 
 
 class MatchCompetitionType(StrEnum):

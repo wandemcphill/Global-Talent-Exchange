@@ -4,9 +4,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
-from backend.app.club_identity.jerseys.router import get_identity_service, router
-from backend.app.club_identity.jerseys.service import ClubIdentityService
+from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
+from app.club_identity.jerseys.router import get_identity_service, router
+from app.club_identity.jerseys.service import ClubIdentityService
 
 
 @pytest.fixture

@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 
-from backend.app.models.competition_reward import CompetitionReward
-from backend.app.models.competition_reward_pool import CompetitionRewardPool
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_participant import CompetitionParticipant
+from app.models.competition_reward import CompetitionReward
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_participant import CompetitionParticipant
 
 
 @dataclass(slots=True)

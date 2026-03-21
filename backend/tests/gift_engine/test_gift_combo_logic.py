@@ -7,10 +7,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.admin_engine.schemas import AdminRewardRuleStabilityControls
-from backend.app.auth.service import AuthService
-from backend.app.gift_engine.service import GiftEngineError, GiftEngineService
-from backend.app.models import (
+from app.admin_engine.schemas import AdminRewardRuleStabilityControls
+from app.auth.service import AuthService
+from app.gift_engine.service import GiftEngineError, GiftEngineService
+from app.models import (
     AdminRewardRule,
     Base,
     GiftCatalogItem,
@@ -23,7 +23,7 @@ from backend.app.models import (
     SpendingControlAuditEvent,
     SpendingControlDecision,
 )
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

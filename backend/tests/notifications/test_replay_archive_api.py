@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.core.events import DomainEvent
-from backend.app.replay_archive.service import ensure_replay_archive
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.core.events import DomainEvent
+from app.replay_archive.service import ensure_replay_archive
 
 
 def _build_replay_payload(

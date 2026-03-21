@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.app.leagues.models import LeagueClub
-from backend.app.leagues.schemas import (
+from app.leagues.models import LeagueClub
+from app.leagues.schemas import (
     LeagueFixturesView,
     LeagueQualificationView,
     LeagueRegisterRequest,
@@ -12,7 +12,7 @@ from backend.app.leagues.schemas import (
     LeagueStandingRowView,
     LeagueStandingsView,
 )
-from backend.app.leagues.service import LeagueSeasonLifecycleService, LeagueSeasonNotFoundError, LeagueValidationError
+from app.leagues.service import LeagueSeasonLifecycleService, LeagueSeasonNotFoundError, LeagueValidationError
 
 router = APIRouter(tags=["leagues"])
 legacy_router = APIRouter(prefix="/leagues")

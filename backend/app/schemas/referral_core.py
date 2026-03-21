@@ -6,11 +6,11 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
-from backend.app.common.enums.referral_event_type import ReferralEventType
-from backend.app.common.enums.referral_reward_status import ReferralRewardStatus
-from backend.app.common.enums.referral_reward_type import ReferralRewardType
-from backend.app.common.enums.referral_source_channel import ReferralSourceChannel
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.referral_event_type import ReferralEventType
+from app.common.enums.referral_reward_status import ReferralRewardStatus
+from app.common.enums.referral_reward_type import ReferralRewardType
+from app.common.enums.referral_source_channel import ReferralSourceChannel
+from app.common.schemas.base import CommonSchema
 
 AttributionStatus = Literal["pending", "qualified", "blocked", "superseded"]
 RewardBeneficiary = Literal["referred_user", "referrer_user", "creator_profile"]

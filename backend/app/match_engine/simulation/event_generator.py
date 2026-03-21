@@ -5,9 +5,9 @@ from hashlib import sha256
 from itertools import count
 from random import Random
 
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.match_engine.schemas import MatchKitIdentityInput, MatchSimulationRequest, MatchTeamIdentityInput
-from backend.app.match_engine.simulation.models import (
+from app.common.enums.match_status import MatchStatus
+from app.match_engine.schemas import MatchKitIdentityInput, MatchSimulationRequest, MatchTeamIdentityInput
+from app.match_engine.simulation.models import (
     BadgeVisualIdentity,
     InternalPlayer,
     KitVisualIdentity,
@@ -25,8 +25,8 @@ from backend.app.match_engine.simulation.models import (
     TeamRuntimeState,
     TeamVisualIdentity,
 )
-from backend.app.match_engine.simulation.penalties import PenaltyShootoutGenerator
-from backend.app.match_engine.simulation.strength import DefaultTeamStrengthCalculator, TeamStrengthCalculator
+from app.match_engine.simulation.penalties import PenaltyShootoutGenerator
+from app.match_engine.simulation.strength import DefaultTeamStrengthCalculator, TeamStrengthCalculator
 
 
 @dataclass(frozen=True, slots=True)

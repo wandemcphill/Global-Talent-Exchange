@@ -3,17 +3,17 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.moderation.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.moderation.schemas import (
     ModerationAssignmentRequest,
     ModerationReportCreateRequest,
     ModerationReportView,
     ModerationResolveRequest,
     ModerationSummaryView,
 )
-from backend.app.moderation.service import ModerationError, ModerationService
-from backend.app.models.moderation_report import ModerationReport
-from backend.app.models.user import User
+from app.moderation.service import ModerationError, ModerationService
+from app.models.moderation_report import ModerationReport
+from app.models.user import User
 
 router = APIRouter(prefix="/moderation", tags=["moderation"])
 admin_router = APIRouter(prefix="/admin/moderation", tags=["admin-moderation"])

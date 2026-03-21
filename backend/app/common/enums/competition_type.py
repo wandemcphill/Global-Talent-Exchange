@@ -24,8 +24,8 @@ class CompetitionType(StrEnum):
 
     @property
     def default_fixture_windows(self) -> tuple["FixtureWindow", ...]:
-        from backend.app.common.enums.fixture_window import FixtureWindow
-        from backend.app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
+        from app.common.enums.fixture_window import FixtureWindow
+        from app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
 
         if self.uses_senior_windows:
             return FixtureWindow.senior_windows()[:LEAGUE_MATCH_WINDOWS_PER_DAY]

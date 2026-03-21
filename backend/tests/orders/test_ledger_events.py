@@ -5,18 +5,18 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 import pytest
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.matching.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-from backend.app.auth.service import AuthService
-from backend.app.core.database import build_alembic_config
-from backend.app.ingestion.models import Player
-from backend.app.ledger.models import LedgerEventRecord, LedgerEventType
-from backend.app.ledger.service import LedgerEventService
-from backend.app.models.wallet import LedgerUnit
-from backend.app.orders.models import Order, OrderSide, OrderStatus
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.matching.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+from app.auth.service import AuthService
+from app.core.database import build_alembic_config
+from app.ingestion.models import Player
+from app.ledger.models import LedgerEventRecord, LedgerEventType
+from app.ledger.service import LedgerEventService
+from app.models.wallet import LedgerUnit
+from app.orders.models import Order, OrderSide, OrderStatus
 
 
 @pytest.fixture()

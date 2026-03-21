@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.champions_league.services.competition_engine import ChampionsLeagueCompetitionEngineService
-from backend.app.champions_league.services.tournament import ChampionsLeagueService
-from backend.app.common.enums.fixture_window import FixtureWindow
+from app.champions_league.services.competition_engine import ChampionsLeagueCompetitionEngineService
+from app.champions_league.services.tournament import ChampionsLeagueService
+from app.common.enums.fixture_window import FixtureWindow
 
 
 def test_champions_league_competition_engine_cycles_shared_windows_for_dense_playoff_day(build_candidates) -> None:

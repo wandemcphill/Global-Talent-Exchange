@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.club_identity.models.reputation import PrestigeTier
+from app.club_identity.models.reputation import PrestigeTier
 
 
 @dataclass(frozen=True, slots=True)

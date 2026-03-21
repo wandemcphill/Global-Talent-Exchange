@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     FINAL_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MIN_MINUTES,
 )
-from backend.app.match_engine.schemas import MatchEventTimelineView, MatchEventView, MatchPlayerReferenceView
-from backend.app.match_engine.simulation.models import MatchEventType, SimulationResult
+from app.match_engine.schemas import MatchEventTimelineView, MatchEventView, MatchPlayerReferenceView
+from app.match_engine.simulation.models import MatchEventType, SimulationResult
 
 
 class MatchCommentaryTimelineGenerator:

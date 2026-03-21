@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 
 class CreatorProfileView(CommonSchema):

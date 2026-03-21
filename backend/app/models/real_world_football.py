@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-import backend.app.models.user  # noqa: F401
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+import app.models.user  # noqa: F401
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.ingestion.models import Player
-    from backend.app.models.user import User
+    from app.ingestion.models import Player
+    from app.models.user import User
 
 
 class EventIngestionJobStatus(StrEnum):

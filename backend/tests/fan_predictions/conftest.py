@@ -11,13 +11,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.fan_predictions.router import admin_router, router
-from backend.app.models.admin_rules import AdminRewardRule
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_social import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.fan_predictions.router import admin_router, router
+from app.models.admin_rules import AdminRewardRule
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.club_social import (
     ChallengeShareEvent,
     ClubChallenge,
     ClubChallengeLink,
@@ -27,29 +27,29 @@ from backend.app.models.club_social import (
     RivalryMatchHistory,
     RivalryProfile,
 )
-from backend.app.models.competition import UserCompetition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.creator_fan_engagement import CreatorClubFollow, CreatorFanGroup
-from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
-from backend.app.models.creator_monetization import CreatorSeasonPass
-from backend.app.models.economy_burn_event import EconomyBurnEvent
-from backend.app.models.fan_prediction import (
+from app.models.competition import UserCompetition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.creator_fan_engagement import CreatorClubFollow, CreatorFanGroup
+from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
+from app.models.creator_monetization import CreatorSeasonPass
+from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.fan_prediction import (
     FanPredictionFixture,
     FanPredictionOutcome,
     FanPredictionRewardGrant,
     FanPredictionSubmission,
     FanPredictionTokenLedger,
 )
-from backend.app.models.revenue_share_rule import RevenueShareRule
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.spending_control import SpendingControlAuditEvent
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerUnit
-from backend.app.reward_engine.service import RewardEngineService
+from app.models.revenue_share_rule import RevenueShareRule
+from app.models.reward_settlement import RewardSettlement
+from app.models.spending_control import SpendingControlAuditEvent
+from app.models.user import KycStatus, User, UserRole
+from app.models.wallet import LedgerAccount, LedgerEntry, LedgerUnit
+from app.reward_engine.service import RewardEngineService
 
 
 @pytest.fixture()

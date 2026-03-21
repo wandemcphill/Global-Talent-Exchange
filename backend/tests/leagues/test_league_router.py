@@ -6,10 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.leagues.models import LeaguePlayerContribution
-from backend.app.leagues.repository import InMemoryLeagueEventRepository
-from backend.app.leagues.router import get_league_service, router
-from backend.app.leagues.service import LeagueSeasonLifecycleService
+from app.leagues.models import LeaguePlayerContribution
+from app.leagues.repository import InMemoryLeagueEventRepository
+from app.leagues.router import get_league_service, router
+from app.leagues.service import LeagueSeasonLifecycleService
 
 
 @pytest.fixture()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from backend.app.leagues.models import LeagueClub
+from app.leagues.models import LeagueClub
 
 
 def _clubs() -> tuple[LeagueClub, ...]:

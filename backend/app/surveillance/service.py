@@ -7,12 +7,12 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.core.config import PriceBandLimit, Settings
-from backend.app.ingestion.models import Player
-from backend.app.market.models import ListingStatus, OfferStatus
-from backend.app.market.read_models import MarketSummaryReadModel
-from backend.app.market.service import MarketEngine
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.core.config import PriceBandLimit, Settings
+from app.ingestion.models import Player
+from app.market.models import ListingStatus, OfferStatus
+from app.market.read_models import MarketSummaryReadModel
+from app.market.service import MarketEngine
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 SUSPICIOUS_SIGNAL_TYPES = frozenset(
     {

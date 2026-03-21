@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.club_brand_asset_type import ClubBrandAssetType
-from backend.app.common.enums.club_cosmetic_purchase_type import ClubCosmeticPurchaseType
-from backend.app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
-from backend.app.schemas.club_branding_core import ClubCosmeticCatalogItemCore
+from app.common.enums.club_brand_asset_type import ClubBrandAssetType
+from app.common.enums.club_cosmetic_purchase_type import ClubCosmeticPurchaseType
+from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
+from app.schemas.club_branding_core import ClubCosmeticCatalogItemCore
 
 _DEFAULT_CATALOG_ITEMS: tuple[dict[str, object], ...] = (
     {

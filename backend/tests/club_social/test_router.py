@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from backend.app.models.user import User
+from app.models.user import User
 
 
 def test_challenge_creation_acceptance_and_share_links(

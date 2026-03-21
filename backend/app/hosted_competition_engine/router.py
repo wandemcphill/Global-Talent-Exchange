@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.hosted_competition_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.hosted_competition_engine.schemas import (
     CompetitionTemplateView,
     HostedCompetitionCreateRequest,
     HostedCompetitionCreateResponse,
@@ -20,9 +20,9 @@ from backend.app.hosted_competition_engine.schemas import (
     HostedCompetitionStandingView,
     HostedCompetitionView,
 )
-from backend.app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
-from backend.app.models.hosted_competition import CompetitionTemplate
-from backend.app.models.user import User
+from app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
+from app.models.hosted_competition import CompetitionTemplate
+from app.models.user import User
 
 router = APIRouter(prefix='/hosted-competitions', tags=['hosted-competitions'])
 admin_router = APIRouter(prefix='/admin/hosted-competitions', tags=['admin-hosted-competitions'])

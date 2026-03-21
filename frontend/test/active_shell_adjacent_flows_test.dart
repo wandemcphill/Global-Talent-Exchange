@@ -157,7 +157,7 @@ void main() {
       ),
     );
     controller.session = _authenticatedSession(
-      userId: 'demo-user',
+      userId: 'fixture-user',
       userName: 'Ayo Martins',
       clubId: 'ibadan-lions',
       clubName: 'Ibadan Lions FC',
@@ -210,7 +210,7 @@ void main() {
       api: GteExchangeApiClient.fixture(),
     );
     controller.session = _authenticatedSession(
-      userId: 'demo-user',
+      userId: 'fixture-user',
       userName: 'Ayo Martins',
       clubId: 'ibadan-lions',
       clubName: 'Ibadan Lions FC',
@@ -255,7 +255,7 @@ void main() {
       api: _fixtureClient(repository),
     );
     controller.session = _authenticatedSession(
-      userId: 'demo-user',
+      userId: 'fixture-user',
       userName: 'Ayo Martins',
       clubId: 'ibadan-lions',
       clubName: 'Ibadan Lions FC',

@@ -7,13 +7,13 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.auth.dependencies import get_session
-from backend.app.core.config import Settings, get_settings
-from backend.app.core.container import ApplicationContext, build_application_context
-from backend.app.core.module import DomainModule, register_domain_modules, run_module_hooks
-from backend.app.main import _bind_application_state, _resolve_database_engine
-from backend.app.modules import DOMAIN_MODULES
-from backend.app.simulation.runtime import seed_demo_simulation_for_app
+from app.auth.dependencies import get_session
+from app.core.config import Settings, get_settings
+from app.core.container import ApplicationContext, build_application_context
+from app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from app.main import _bind_application_state, _resolve_database_engine
+from app.modules import DOMAIN_MODULES
+from app.simulation.runtime import seed_demo_simulation_for_app
 
 
 def create_demo_simulation_app(
@@ -41,7 +41,7 @@ def create_demo_simulation_app(
         session_factory=database_session_factory,
     )
 
-    demo_simulation_enabled = _get_bool("GTE_DEMO_SIMULATION_ENABLED", True)
+    demo_simulation_enabled = _get_bool("GTE_DEMO_SIMULATION_ENABLED", False)
     bootstrap_demo = _get_bool("GTE_DEMO_SIMULATION_BOOTSTRAP", False)
     seed_liquidity_on_boot = _get_bool("GTE_DEMO_SIMULATION_SEED_ON_BOOT", False)
     demo_player_count = _get_int("GTE_DEMO_SIMULATION_PLAYER_COUNT", 24)

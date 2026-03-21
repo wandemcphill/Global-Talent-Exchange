@@ -7,11 +7,11 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.calendar_engine.service import CalendarEngineService
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sale_market import (
+from app.calendar_engine.service import CalendarEngineService
+from app.models.base import generate_uuid, utcnow
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_profile import ClubProfile
+from app.models.club_sale_market import (
     ClubSaleAuditEvent,
     ClubSaleInquiry,
     ClubSaleListing,
@@ -19,13 +19,13 @@ from backend.app.models.club_sale_market import (
     ClubSaleTransfer,
     ClubValuationSnapshot,
 )
-from backend.app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
-from backend.app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerSourceTag, LedgerUnit
-from backend.app.services.club_valuation_service import ClubValuationBreakdown, ClubValuationService
-from backend.app.story_feed_engine.service import StoryFeedService
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
+from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus
+from app.models.user import User
+from app.models.wallet import LedgerSourceTag, LedgerUnit
+from app.services.club_valuation_service import ClubValuationBreakdown, ClubValuationService
+from app.story_feed_engine.service import StoryFeedService
+from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 PLATFORM_FEE_BPS = 1_000

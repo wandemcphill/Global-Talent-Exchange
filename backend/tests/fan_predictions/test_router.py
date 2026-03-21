@@ -3,11 +3,11 @@ from __future__ import annotations
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from backend.app.main import create_app
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.user import User
-from backend.app.services.competition_match_service import CompetitionMatchService
+from app.main import create_app
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.user import User
+from app.services.competition_match_service import CompetitionMatchService
 
 
 def test_router_contracts_cover_fixture_submission_and_manual_settlement(

@@ -7,11 +7,11 @@ from typing import Any, TYPE_CHECKING
 from sqlalchemy import Enum, ForeignKey, Index, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
-from backend.app.models.wallet import LedgerUnit
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
-    from backend.app.models.user import User
+    from app.models.user import User
 
 
 class SpendingControlDecision(StrEnum):

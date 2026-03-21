@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Enum, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.club_finance_account_type import ClubFinanceAccountType
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.club_finance_account_type import ClubFinanceAccountType
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
+    from app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
 
 
 class ClubFinanceAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):

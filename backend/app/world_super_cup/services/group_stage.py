@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from backend.app.world_super_cup.models import Group, GroupMatch, GroupStageSnapshot, GroupStanding, QualifiedClub
-from backend.app.world_super_cup.services.match_resolution import resolve_seeded_score
+from app.world_super_cup.models import Group, GroupMatch, GroupStageSnapshot, GroupStanding, QualifiedClub
+from app.world_super_cup.services.match_resolution import resolve_seeded_score
 
 
 @dataclass(slots=True)

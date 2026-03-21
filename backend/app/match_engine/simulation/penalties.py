@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from random import Random
 
-from backend.app.match_engine.simulation.models import PenaltyAttempt, PenaltyShootout, TeamRuntimeState
+from app.match_engine.simulation.models import PenaltyAttempt, PenaltyShootout, TeamRuntimeState
 
 
 class PenaltyShootoutGenerator:

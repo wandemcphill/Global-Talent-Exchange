@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import ForeignKey, Numeric, String, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.economy_config import GiftCatalogItem
-    from backend.app.models.gift_transaction import GiftTransaction
-    from backend.app.models.gift_combo_rule import GiftComboRule
-    from backend.app.models.user import User
+    from app.models.economy_config import GiftCatalogItem
+    from app.models.gift_transaction import GiftTransaction
+    from app.models.gift_combo_rule import GiftComboRule
+    from app.models.user import User
 
 
 class GiftComboEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

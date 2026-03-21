@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.story_feed import StoryFeedItem
+from app.models.story_feed import StoryFeedItem
 
 
 @dataclass(slots=True)

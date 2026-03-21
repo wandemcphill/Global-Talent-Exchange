@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.wallets.providers.base import GenericProviderAdapter
+from app.wallets.providers.base import GenericProviderAdapter
 
 
 class ApplePayProviderAdapter(GenericProviderAdapter):

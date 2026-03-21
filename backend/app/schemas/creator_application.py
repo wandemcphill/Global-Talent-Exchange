@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 _HANDLE_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789._-")
 _SUPPORTED_PLATFORMS = {"youtube", "twitch", "tiktok"}

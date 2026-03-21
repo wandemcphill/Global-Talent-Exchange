@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -59,8 +57,7 @@ class _GteKycScreenState extends State<GteKycScreen> {
   }
 
   Future<GteKycProfile> _loadProfile() async {
-    final GteKycProfile profile =
-        await widget.controller.api.fetchKycProfile();
+    final GteKycProfile profile = await widget.controller.api.fetchKycProfile();
     if (!mounted) {
       return profile;
     }
@@ -107,8 +104,7 @@ class _GteKycScreenState extends State<GteKycScreen> {
         return;
       }
       final PlatformFile file = result.files.first;
-      final List<int> bytes = file.bytes ??
-          (file.path == null ? <int>[] : File(file.path!).readAsBytesSync());
+      final List<int> bytes = file.bytes ?? const <int>[];
       if (bytes.isEmpty) {
         throw Exception('Unable to read the selected file.');
       }
@@ -116,9 +112,8 @@ class _GteKycScreenState extends State<GteKycScreen> {
           await widget.controller.api.uploadAttachment(
         file.name,
         bytes,
-        contentType: file.extension == null
-            ? null
-            : 'application/${file.extension}',
+        contentType:
+            file.extension == null ? null : 'application/${file.extension}',
       );
       if (!mounted) {
         return;
@@ -220,8 +215,7 @@ class _GteKycScreenState extends State<GteKycScreen> {
       ),
       body: FutureBuilder<GteKycProfile>(
         future: _profileFuture,
-        builder:
-            (BuildContext context, AsyncSnapshot<GteKycProfile> snapshot) {
+        builder: (BuildContext context, AsyncSnapshot<GteKycProfile> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -360,9 +354,8 @@ class _GteKycScreenState extends State<GteKycScreen> {
                                 ? null
                                 : _pickAttachment,
                             icon: const Icon(Icons.upload_file_outlined),
-                            label: Text(_isUploading
-                                ? 'Uploading...'
-                                : 'Upload ID'),
+                            label: Text(
+                                _isUploading ? 'Uploading...' : 'Upload ID'),
                           ),
                           if (_attachment != null ||
                               profile.idDocumentAttachmentId != null)
@@ -387,9 +380,8 @@ class _GteKycScreenState extends State<GteKycScreen> {
                           onPressed: isLocked || _isSubmitting
                               ? null
                               : () => _submit(profile),
-                          child: Text(_isSubmitting
-                              ? 'Submitting...'
-                              : 'Submit KYC'),
+                          child: Text(
+                              _isSubmitting ? 'Submitting...' : 'Submit KYC'),
                         ),
                       ),
                     ],

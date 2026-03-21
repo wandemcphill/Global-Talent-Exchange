@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from backend.app.club_identity.models.jersey_models import ClubIdentityProfile
+from app.club_identity.models.jersey_models import ClubIdentityProfile
 
 
 @dataclass(slots=True)

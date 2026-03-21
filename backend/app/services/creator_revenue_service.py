@@ -5,20 +5,20 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import utcnow
-from backend.app.models.creator_league import CreatorLeagueConfig
-from backend.app.models.creator_monetization import (
+from app.models.base import utcnow
+from app.models.creator_league import CreatorLeagueConfig
+from app.models.creator_monetization import (
     CreatorBroadcastPurchase,
     CreatorMatchGiftEvent,
     CreatorRevenueSettlement,
     CreatorStadiumPlacement,
     CreatorStadiumTicketPurchase,
 )
-from backend.app.models.creator_share_market import CreatorClubShareDistribution
-from backend.app.models.media_engine import MatchView
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.creator_broadcast_service import CreatorBroadcastService, CreatorMatchContext
-from backend.app.services.creator_stadium_service import IN_STADIUM_AD, MATCHDAY_TICKET, SPONSOR_BANNER, VIP_TICKET
+from app.models.creator_share_market import CreatorClubShareDistribution
+from app.models.media_engine import MatchView
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.creator_broadcast_service import CreatorBroadcastService, CreatorMatchContext
+from app.services.creator_stadium_service import IN_STADIUM_AD, MATCHDAY_TICKET, SPONSOR_BANNER, VIP_TICKET
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 CREATOR_LEAGUE_KEY = "creator_league"

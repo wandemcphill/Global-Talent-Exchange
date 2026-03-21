@@ -8,12 +8,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.economy.service import EconomyConfigService
-from backend.app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.economy.service import EconomyConfigService
+from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
 class MediaEngineError(ValueError):

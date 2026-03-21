@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.schemas.club_ops_admin import TopClubMetricView
+from app.common.schemas.base import CommonSchema
+from app.schemas.club_ops_admin import TopClubMetricView
 
 
 class ClubFinanceAnalyticsView(CommonSchema):

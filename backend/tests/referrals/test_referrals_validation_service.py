@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from backend.app.services.referral_validation_service import ReferralValidationService
-from backend.app.schemas.creator_core import CreatorProfileCore
-from backend.app.schemas.share_code_core import ShareCodeCore
+from app.services.referral_validation_service import ReferralValidationService
+from app.schemas.creator_core import CreatorProfileCore
+from app.schemas.share_code_core import ShareCodeCore
 
 
 def test_validation_service_blocks_self_referral_for_user_and_creator_owner() -> None:

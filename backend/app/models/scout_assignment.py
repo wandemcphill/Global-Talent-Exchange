@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.scout_assignment_status import ScoutAssignmentStatus
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.scout_assignment_status import ScoutAssignmentStatus
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.scouting_region import ScoutingRegion
-    from backend.app.models.youth_prospect import YouthProspect
-    from backend.app.models.youth_prospect_report import YouthProspectReport
+    from app.models.scouting_region import ScoutingRegion
+    from app.models.youth_prospect import YouthProspect
+    from app.models.youth_prospect_report import YouthProspectReport
 
 
 class ScoutAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -6,7 +6,7 @@ from datetime import date, datetime
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 
 class RegenProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):

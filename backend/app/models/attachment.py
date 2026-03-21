@@ -6,10 +6,10 @@ from typing import Any, TYPE_CHECKING
 from sqlalchemy import DateTime, ForeignKey, Integer, JSON, LargeBinary, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, UUIDPrimaryKeyMixin
+from app.models.base import Base, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.user import User
+    from app.models.user import User
 
 
 class Attachment(UUIDPrimaryKeyMixin, Base):

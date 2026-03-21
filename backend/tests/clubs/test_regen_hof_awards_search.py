@@ -5,15 +5,15 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 
-from backend.app.models.club_hall_of_fame import ClubHallOfFameEntry
-from backend.app.models.regen import RegenLegacyRecord, RegenProfile
-from backend.app.schemas.club_requests import ClubCreateRequest
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_hall_of_fame_service import ClubHallOfFameService
-from backend.app.services.regen_legacy_service import RegenLegacyService
-from backend.app.services.regen_lineage_service import RegenLineageService
-from backend.app.services.regen_market_service import RegenAwardEvent, RegenMarketService, RegenSearchFilters
-from backend.app.services.regen_service import LineageSelection
+from app.models.club_hall_of_fame import ClubHallOfFameEntry
+from app.models.regen import RegenLegacyRecord, RegenProfile
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_hall_of_fame_service import ClubHallOfFameService
+from app.services.regen_legacy_service import RegenLegacyService
+from app.services.regen_lineage_service import RegenLineageService
+from app.services.regen_market_service import RegenAwardEvent, RegenMarketService, RegenSearchFilters
+from app.services.regen_service import LineageSelection
 
 
 def _create_club(session, *, slug: str) -> object:

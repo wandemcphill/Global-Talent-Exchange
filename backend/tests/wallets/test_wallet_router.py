@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from decimal import Decimal
 
@@ -7,15 +7,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.auth.router import register_user
-from backend.app.auth.schemas import RegisterRequest
-from backend.app.models import Base
-from backend.app.models.treasury import PaymentMode
-from backend.app.models.policy import CountryFeaturePolicy
-from backend.app.models.user import User
-from backend.app.treasury.service import TreasuryService
-from backend.app.wallets.router import create_payment_event, list_wallet_accounts
-from backend.app.wallets.schemas import PaymentEventCreate
+from app.auth.router import register_user
+from app.auth.schemas import RegisterRequest
+from app.models import Base
+from app.models.treasury import PaymentMode
+from app.models.policy import CountryFeaturePolicy
+from app.models.user import User
+from app.treasury.service import TreasuryService
+from app.wallets.router import create_payment_event, list_wallet_accounts
+from app.wallets.schemas import PaymentEventCreate
 
 
 @pytest.fixture()

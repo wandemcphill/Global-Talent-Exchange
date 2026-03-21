@@ -7,19 +7,19 @@ from decimal import Decimal
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.economy.service import EconomyConfigService
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.economy_burn_event import EconomyBurnEvent
-from backend.app.models.economy_config import GiftCatalogItem
-from backend.app.models.gift_combo_event import GiftComboEvent
-from backend.app.models.gift_combo_rule import GiftComboRule
-from backend.app.models.gift_transaction import GiftTransaction
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.services.spending_control_service import SpendingControlService, SpendingControlViolation
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.admin_engine.service import AdminEngineService
+from app.economy.service import EconomyConfigService
+from app.models.base import generate_uuid, utcnow
+from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.economy_config import GiftCatalogItem
+from app.models.gift_combo_event import GiftComboEvent
+from app.models.gift_combo_rule import GiftComboRule
+from app.models.gift_transaction import GiftTransaction
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal('0.0001')
 

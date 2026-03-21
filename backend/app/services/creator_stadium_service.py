@@ -8,27 +8,27 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import generate_uuid
-from backend.app.models.club_infra import ClubStadium
-from backend.app.models.creator_league import CreatorLeagueSeasonTier
-from backend.app.models.creator_monetization import (
+from app.models.base import generate_uuid
+from app.models.club_infra import ClubStadium
+from app.models.creator_league import CreatorLeagueSeasonTier
+from app.models.creator_monetization import (
     CreatorStadiumControl,
     CreatorStadiumPlacement,
     CreatorStadiumPricing,
     CreatorStadiumProfile,
     CreatorStadiumTicketPurchase,
 )
-from backend.app.models.creator_share_market import CreatorClubShareHolding
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.creator_broadcast_service import (
+from app.models.creator_share_market import CreatorClubShareHolding
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.creator_broadcast_service import (
     CreatorBeneficiary,
     CreatorBroadcastService,
     CreatorMatchContext,
 )
-from backend.app.services.spending_control_service import SpendingControlService, SpendingControlViolation
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 CONTROL_KEY = "default"
@@ -753,7 +753,7 @@ class CreatorStadiumService:
         match_id: str | None,
         metadata_json: dict[str, Any] | None = None,
     ) -> None:
-        from backend.app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
+        from app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
 
         try:
             CreatorClubShareMarketService(

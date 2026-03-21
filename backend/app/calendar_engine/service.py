@@ -8,16 +8,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.schemas.competition import CompetitionScheduleRequest
-from backend.app.competition_engine.scheduler import CompetitionScheduler
-from backend.app.hosted_competition_engine.service import HostedCompetitionService
-from backend.app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
-from backend.app.models.hosted_competition import UserHostedCompetition
-from backend.app.models.national_team import NationalTeamCompetition
-from backend.app.models.user import User
-from backend.app.national_team_engine.service import NationalTeamEngineService
-from backend.app.story_feed_engine.service import StoryFeedService
+from app.common.enums.competition_type import CompetitionType
+from app.common.schemas.competition import CompetitionScheduleRequest
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.hosted_competition_engine.service import HostedCompetitionService
+from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
+from app.models.hosted_competition import UserHostedCompetition
+from app.models.national_team import NationalTeamCompetition
+from app.models.user import User
+from app.national_team_engine.service import NationalTeamEngineService
+from app.story_feed_engine.service import StoryFeedService
 
 
 class CalendarEngineError(ValueError):

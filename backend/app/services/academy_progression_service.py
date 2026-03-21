@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from uuid import uuid4
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.schemas.academy_core import AcademyPlayerProgressView, AcademyPlayerView
-from backend.app.schemas.club_ops_requests import UpdateAcademyPlayerRequest
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.schemas.academy_core import AcademyPlayerProgressView, AcademyPlayerView
+from app.schemas.club_ops_requests import UpdateAcademyPlayerRequest
 
 
 def _utcnow() -> datetime:

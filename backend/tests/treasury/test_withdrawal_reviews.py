@@ -7,13 +7,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.auth.service import AuthService
-from backend.app.models import Base, CountryFeaturePolicy, KycStatus, LedgerEntryReason, LedgerUnit, TreasuryAuditEvent
-from backend.app.models.risk_ops import AmlCase, SystemEvent
-from backend.app.models.treasury import RateDirection, TreasuryWithdrawalStatus
-from backend.app.models.withdrawal_review import WithdrawalReview
-from backend.app.treasury.service import TreasuryService
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.auth.service import AuthService
+from app.models import Base, CountryFeaturePolicy, KycStatus, LedgerEntryReason, LedgerUnit, TreasuryAuditEvent
+from app.models.risk_ops import AmlCase, SystemEvent
+from app.models.treasury import RateDirection, TreasuryWithdrawalStatus
+from app.models.withdrawal_review import WithdrawalReview
+from app.treasury.service import TreasuryService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

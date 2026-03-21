@@ -7,10 +7,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sale_market import ClubSaleTransfer
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.creator_share_market import (
+from app.models.club_profile import ClubProfile
+from app.models.club_sale_market import ClubSaleTransfer
+from app.models.creator_provisioning import CreatorSquad
+from app.models.creator_share_market import (
     CreatorClubShareDistribution,
     CreatorClubShareHolding,
     CreatorClubShareMarket,
@@ -18,10 +18,10 @@ from backend.app.models.creator_share_market import (
     CreatorClubSharePayout,
     CreatorClubSharePurchase,
 )
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.club_governance_policy import (
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.club_governance_policy import (
     default_governance_policy,
     fully_diluted_governance_shares,
     governance_policy_from_metadata,
@@ -29,7 +29,7 @@ from backend.app.services.club_governance_policy import (
     owner_approval_required,
     ownership_bps,
 )
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_CONTROL_KEY = "default"

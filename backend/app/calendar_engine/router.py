@@ -5,8 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.calendar_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.calendar_engine.schemas import (
     CalendarDashboardView,
     CalendarEventCreateRequest,
     CalendarEventView,
@@ -17,8 +17,8 @@ from backend.app.calendar_engine.schemas import (
     NationalCompetitionLaunchRequest,
     PauseStatusView,
 )
-from backend.app.calendar_engine.service import CalendarEngineError, CalendarEngineService
-from backend.app.models.user import User
+from app.calendar_engine.service import CalendarEngineError, CalendarEngineService
+from app.models.user import User
 
 router = APIRouter(prefix="/calendar-engine", tags=["calendar-engine"])
 admin_router = APIRouter(prefix="/admin/calendar-engine", tags=["calendar-engine-admin"])

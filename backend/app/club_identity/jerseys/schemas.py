@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.club_identity.models.jersey_models import (
+from app.club_identity.models.jersey_models import (
     BadgePlacement,
     BadgeShape,
     CollarStyle,

@@ -7,22 +7,22 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.models.base import Base
-from backend.app.models.calendar_engine import CalendarEvent
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_playoff import CompetitionPlayoff
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
-from backend.app.models.competition_seed_rule import CompetitionSeedRule
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.fan_war import (
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.base import Base
+from app.models.calendar_engine import CalendarEvent
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_playoff import CompetitionPlayoff
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.fan_war import (
     CountryCreatorAssignment,
     FanWarPoint,
     FanWarProfile,
@@ -30,9 +30,9 @@ from backend.app.models.fan_war import (
     NationsCupEntry,
     NationsCupFanMetric,
 )
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.models.user_region import UserRegionProfile
+from app.models.story_feed import StoryFeedItem
+from app.models.user import KycStatus, User, UserRole
+from app.models.user_region import UserRegionProfile
 
 
 @pytest.fixture()

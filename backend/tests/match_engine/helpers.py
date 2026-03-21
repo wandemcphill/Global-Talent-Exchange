@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from backend.app.match_engine.schemas import (
+from app.match_engine.schemas import (
     MatchCompetitionContextInput,
     MatchPlayerInput,
     MatchSimulationRequest,
     MatchTeamInput,
     TeamTacticalPlanInput,
 )
-from backend.app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
+from app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
 
 
 def build_request(

@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.models.wallet import PayoutStatus
+from app.models.wallet import PayoutStatus
 
 
 class AdminAssignmentView(BaseModel):

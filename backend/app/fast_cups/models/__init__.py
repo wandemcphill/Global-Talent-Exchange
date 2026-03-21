@@ -1,4 +1,4 @@
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     ClubCompetitionWindow,
     CupReward,
     FastCup,

@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.models.user import User
-from backend.app.users.schemas import UserPublic
+from app.auth.dependencies import get_current_user
+from app.models.user import User
+from app.users.schemas import UserPublic
 
 router = APIRouter(prefix="/users", tags=["users"])
 

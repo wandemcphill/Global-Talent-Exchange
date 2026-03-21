@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.app.core.cache import CacheBackend, JsonCacheNamespace, NullCacheBackend, RedisCacheBackend, build_cache_backend
-from backend.app.ingestion.cache_keys import (
+from app.core.cache import CacheBackend, JsonCacheNamespace, NullCacheBackend, RedisCacheBackend, build_cache_backend
+from app.ingestion.cache_keys import (
     CACHE_TTLS,
     club_cache_keys,
     club_roster_snapshot_key,

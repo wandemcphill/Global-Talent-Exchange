@@ -4,7 +4,7 @@ These lightweight tests exist so the new module surface is discoverable in the r
 Runtime execution depends on the project SQLAlchemy/FastAPI test environment.
 """
 
-from backend.app.calendar_engine.schemas import CalendarSeasonCreateRequest, HostedCompetitionLaunchRequest
+from app.calendar_engine.schemas import CalendarSeasonCreateRequest, HostedCompetitionLaunchRequest
 
 
 def test_calendar_engine_schema_smoke() -> None:

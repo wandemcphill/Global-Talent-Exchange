@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.risk_ops_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.user import User
+from app.risk_ops_engine.schemas import (
     AmlCaseCreateRequest,
     AmlCaseResponse,
     AuditLogResponse,
@@ -18,7 +18,7 @@ from backend.app.risk_ops_engine.schemas import (
     SystemEventResponse,
     UserRiskOverviewResponse,
 )
-from backend.app.risk_ops_engine.service import RiskOpsService
+from app.risk_ops_engine.service import RiskOpsService
 
 router = APIRouter(prefix="/risk-ops", tags=["risk-ops"])
 admin_router = APIRouter(prefix="/admin/risk-ops", tags=["risk-ops-admin"])

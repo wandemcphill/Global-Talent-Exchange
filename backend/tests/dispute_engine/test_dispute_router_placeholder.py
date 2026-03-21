@@ -1,4 +1,4 @@
-from backend.app.dispute_engine.service import DisputeEngineService
+from app.dispute_engine.service import DisputeEngineService
 
 
 def test_dispute_service_symbol_exposed() -> None:

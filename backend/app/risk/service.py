@@ -6,9 +6,9 @@ from enum import StrEnum
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
-from backend.app.wallets.service import WalletService
+from app.models.user import User
+from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
+from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from backend.app.ingestion.models import Player
-from backend.app.models.player_cards import PlayerCard, PlayerCardHolding
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.regen import RegenGenerationEvent, RegenOriginMetadata, RegenProfile
-from backend.app.schemas.club_requests import ClubCreateRequest
-from backend.app.services.club_branding_service import ClubBrandingService
+from app.ingestion.models import Player
+from app.models.player_cards import PlayerCard, PlayerCardHolding
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.regen import RegenGenerationEvent, RegenOriginMetadata, RegenProfile
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
 
 
 def test_create_club_bootstraps_two_starter_regens(session) -> None:

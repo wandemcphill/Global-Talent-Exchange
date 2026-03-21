@@ -8,21 +8,21 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  # noqa: F401
-import backend.app.players.read_models  # noqa: F401
-from backend.app.core.config import get_settings
-from backend.app.ingestion.models import Player
-from backend.app.models.integrity import IntegrityIncident
-from backend.app.models.base import Base
-from backend.app.models.card_access import CardSwapExecution
-from backend.app.models.player_cards import PlayerCard, PlayerCardHolding, PlayerCardListing, PlayerCardSale, PlayerCardTier
-from backend.app.models.risk_ops import SystemEvent
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.player_cards.marketplace_service import PlayerCardMarketplaceService
-from backend.app.player_cards.service import PlayerCardValidationError
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.wallets.service import LedgerPosting, WalletService
+import app.models  # noqa: F401
+import app.players.read_models  # noqa: F401
+from app.core.config import get_settings
+from app.ingestion.models import Player
+from app.models.integrity import IntegrityIncident
+from app.models.base import Base
+from app.models.card_access import CardSwapExecution
+from app.models.player_cards import PlayerCard, PlayerCardHolding, PlayerCardListing, PlayerCardSale, PlayerCardTier
+from app.models.risk_ops import SystemEvent
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.player_cards.marketplace_service import PlayerCardMarketplaceService
+from app.player_cards.service import PlayerCardValidationError
+from app.players.read_models import PlayerSummaryReadModel
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

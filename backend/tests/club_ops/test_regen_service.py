@@ -5,8 +5,8 @@ import random
 
 import pytest
 
-from backend.app.core.config import get_settings
-from backend.app.services.regen_service import RegenClubContext, RegenGenerationEngine
+from app.core.config import get_settings
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
 
 def test_regen_service_generates_region_aware_academy_intake(club_ops_services) -> None:

@@ -5,9 +5,9 @@ from typing import Any
 
 from pydantic import Field
 
-from backend.app.common.enums.club_finance_account_type import ClubFinanceAccountType
-from backend.app.common.enums.club_finance_entry_type import ClubFinanceEntryType
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.club_finance_account_type import ClubFinanceAccountType
+from app.common.enums.club_finance_entry_type import ClubFinanceEntryType
+from app.common.schemas.base import CommonSchema
 
 
 class ClubFinanceAccountView(CommonSchema):

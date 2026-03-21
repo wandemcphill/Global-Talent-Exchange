@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Player
-from backend.app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
-from backend.app.services.scouting_intelligence_service import (
+from app.ingestion.models import Player
+from app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
+from app.services.scouting_intelligence_service import (
     ManagerProfileUpsert,
     ScoutMissionCreate,
     ScoutingIntelligenceService,

@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import textwrap
 
-from backend.app.core.config import DEFAULT_DATABASE_URL, load_settings
-from backend.app.core.database import get_target_metadata
-from backend.app.value_engine.scoring import ValueEngine
+from app.core.config import DEFAULT_DATABASE_URL, load_settings
+from app.core.database import get_target_metadata
+from app.value_engine.scoring import ValueEngine
 
 
 def _write_config(path: Path, content: str) -> None:

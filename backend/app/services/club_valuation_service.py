@@ -8,25 +8,25 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Player
-from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
-from backend.app.models.club_infra import ClubFacility, ClubStadium
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sale import ClubValuationSnapshot
-from backend.app.models.creator_monetization import CreatorStadiumProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.regen import AcademyCandidate, RegenProfile
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.club_sale_common import (
+from app.ingestion.models import Player
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_infra import ClubFacility, ClubStadium
+from app.models.club_profile import ClubProfile
+from app.models.club_sale import ClubValuationSnapshot
+from app.models.creator_monetization import CreatorStadiumProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.regen import AcademyCandidate, RegenProfile
+from app.players.read_models import PlayerSummaryReadModel
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.club_sale_common import (
     CLUB_SALE_VALUATION_VERSION,
     ClubSaleError,
     append_club_sale_audit,
     normalize_coin,
 )
-from backend.app.value_engine.scoring import credits_from_real_world_value
+from app.value_engine.scoring import credits_from_real_world_value
 
 
 @dataclass(frozen=True, slots=True)

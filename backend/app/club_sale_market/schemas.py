@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 
 class ClubSaleValuationBreakdownView(CommonSchema):

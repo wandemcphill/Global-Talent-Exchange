@@ -5,11 +5,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import Settings
-from backend.app.integrity_engine.service import IntegrityEngineService
-from backend.app.market.service import MarketEngine
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.surveillance.service import SurveillanceService
+from app.core.config import Settings
+from app.integrity_engine.service import IntegrityEngineService
+from app.market.service import MarketEngine
+from app.risk_ops_engine.service import RiskOpsService
+from app.surveillance.service import SurveillanceService
 
 
 @dataclass(slots=True)

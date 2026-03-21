@@ -5,8 +5,8 @@ from datetime import date
 from sqlalchemy import Date, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):

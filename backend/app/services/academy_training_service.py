@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from uuid import uuid4
 
-from backend.app.schemas.academy_core import AcademyProgramView, AcademyTrainingCycleView
+from app.schemas.academy_core import AcademyProgramView, AcademyTrainingCycleView
 
 
 def _utcnow() -> datetime:

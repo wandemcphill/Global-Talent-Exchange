@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import (
+from app.core.config import (
     LIQUIDITY_BANDS_FILE,
     PLAYER_CARD_MARKET_INTEGRITY_FILE,
     SUPPLY_TIERS_FILE,
@@ -22,7 +22,7 @@ from backend.app.core.config import (
     load_settings,
     reset_settings_cache,
 )
-from backend.app.ingestion.market_profile import PlayerMarketProfileService
+from app.ingestion.market_profile import PlayerMarketProfileService
 
 
 def _toml_scalar(value: object) -> str:

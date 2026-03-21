@@ -6,8 +6,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.storage_media_service import MediaStorageService
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.storage_media_service import MediaStorageService
 
 
 def _utcnow() -> datetime:

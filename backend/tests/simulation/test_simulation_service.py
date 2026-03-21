@@ -6,13 +6,13 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.main import create_app
-from backend.app.matching.models import TradeExecution
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.simulation.runtime import replace_market_engine
-from backend.app.simulation.service import DemoMarketSimulationService
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.main import create_app
+from app.matching.models import TradeExecution
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.simulation.runtime import replace_market_engine
+from app.simulation.service import DemoMarketSimulationService
 
 
 def test_seed_demo_liquidity_creates_open_order_book_and_trade_history(

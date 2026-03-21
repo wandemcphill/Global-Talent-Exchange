@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from backend.app.models.creator_fan_engagement import (
+from app.models.creator_fan_engagement import (
     CreatorFanCompetitionStatus,
     CreatorMatchChatMessageVisibility,
     CreatorMatchChatRoomStatus,

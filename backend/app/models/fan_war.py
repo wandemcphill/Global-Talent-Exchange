@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 
 class FanWarProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):

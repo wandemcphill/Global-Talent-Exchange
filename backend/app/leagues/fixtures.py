@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.schemas.competition import CompetitionScheduleRequest
-from backend.app.competition_engine.scheduler import CompetitionScheduler
-from backend.app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
-from backend.app.leagues.models import LeagueClub, LeagueFixture
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.schemas.competition import CompetitionScheduleRequest
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
+from app.leagues.models import LeagueClub, LeagueFixture
 
 
 class LeagueFixtureGenerationService:

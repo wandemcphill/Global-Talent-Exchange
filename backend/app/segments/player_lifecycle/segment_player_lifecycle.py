@@ -5,8 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.schemas.player_lifecycle import (
+from app.auth.dependencies import get_session
+from app.schemas.player_lifecycle import (
     BigClubApproachRequest,
     CareerEntryView,
     ContractCreateRequest,
@@ -36,7 +36,7 @@ from backend.app.schemas.player_lifecycle import (
     TransferBidView,
     TransferWindowView,
 )
-from backend.app.services.player_lifecycle_service import (
+from app.services.player_lifecycle_service import (
     PlayerLifecycleNotFoundError,
     PlayerLifecycleService,
     PlayerLifecycleValidationError,

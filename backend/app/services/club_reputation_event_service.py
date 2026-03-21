@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from backend.app.services.club_reputation_service import ClubReputationService
+from app.services.club_reputation_service import ClubReputationService
 
 _EVENT_WEIGHTS: dict[str, int] = {
     "competition_participation": 12,

@@ -3,15 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from backend.app.services.referral_rule_engine import ReferralRuleEngine
-from backend.app.schemas.creator_core import CreatorProfileCore
-from backend.app.schemas.referral_core import (
+from app.services.referral_rule_engine import ReferralRuleEngine
+from app.schemas.creator_core import CreatorProfileCore
+from app.schemas.referral_core import (
     ReferralAttributionCore,
     ReferralEventCore,
     ReferralRewardPolicy,
     ReferralValidationResult,
 )
-from backend.app.schemas.share_code_core import ShareCodeCore
+from app.schemas.share_code_core import ShareCodeCore
 
 
 def _attribution() -> ReferralAttributionCore:

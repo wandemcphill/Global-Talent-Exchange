@@ -4,15 +4,15 @@ from datetime import date
 
 import pytest
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.schemas.competition import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.schemas.competition import (
     CompetitionReference,
     FixtureWindowSlot,
     LeagueFixtureRequest,
 )
-from backend.app.competition_engine.calendar_service import CalendarConflictError, CalendarService
-from backend.app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
+from app.competition_engine.calendar_service import CalendarConflictError, CalendarService
+from app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
 
 
 def _fixture(*, fixture_id: str, home_club_id: str, away_club_id: str) -> LeagueFixtureRequest:

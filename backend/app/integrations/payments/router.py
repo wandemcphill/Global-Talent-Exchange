@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.services.payment_gateway_service import PaymentGatewayError, PaymentGatewayService
-from backend.app.integrations.payments.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.models.user import User
+from app.services.payment_gateway_service import PaymentGatewayError, PaymentGatewayService
+from app.integrations.payments.schemas import (
     PaymentMethodView,
     PaymentOrderCreateRequest,
     PaymentOrderView,

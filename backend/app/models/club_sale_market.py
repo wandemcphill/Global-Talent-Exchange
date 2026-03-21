@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint, event, inspect
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 IMMUTABLE_SETTLED_TRANSFER_FIELDS = (

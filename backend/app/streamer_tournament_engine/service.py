@@ -8,18 +8,18 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.models.base import utcnow
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_entry import CompetitionEntry
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.creator_league import CreatorLeagueSeason
-from backend.app.models.creator_monetization import CreatorMatchGiftEvent, CreatorSeasonPass
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.creator_share_market import CreatorClubShareHolding
-from backend.app.models.streamer_tournament import (
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.base import utcnow
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_participant import CompetitionParticipant
+from app.models.creator_league import CreatorLeagueSeason
+from app.models.creator_monetization import CreatorMatchGiftEvent, CreatorSeasonPass
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.creator_share_market import CreatorClubShareHolding
+from app.models.streamer_tournament import (
     StreamerTournament,
     StreamerTournamentApprovalStatus,
     StreamerTournamentEntry,
@@ -37,10 +37,10 @@ from backend.app.models.streamer_tournament import (
     StreamerTournamentStatus,
     StreamerTournamentType,
 )
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.reward_engine.service import RewardEngineService
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.reward_engine.service import RewardEngineService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_POLICY_KEY = "default"

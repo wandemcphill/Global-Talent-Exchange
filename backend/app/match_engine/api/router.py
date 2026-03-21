@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.match_engine.schemas import (
+from app.common.enums.match_status import MatchStatus
+from app.match_engine.schemas import (
     MatchEventTimelineView,
     MatchFinalSummaryView,
     MatchHighlightItemView,
@@ -14,8 +14,8 @@ from backend.app.match_engine.schemas import (
     MatchReplayPayloadView,
     MatchSimulationRequest,
 )
-from backend.app.match_engine.services.match_simulation_service import MatchSimulationService
-from backend.app.replay_archive.service import ensure_replay_archive
+from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.replay_archive.service import ensure_replay_archive
 
 router = APIRouter(tags=["match-engine"])
 legacy_router = APIRouter(prefix="/match-engine")

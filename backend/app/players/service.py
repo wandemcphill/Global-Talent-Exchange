@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.ingestion.models import Match, Player, PlayerMatchStat, PlayerSeasonStat
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.value_engine.models import ValueSnapshot
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.ingestion.models import Match, Player, PlayerMatchStat, PlayerSeasonStat
+from app.players.read_models import PlayerSummaryReadModel
+from app.value_engine.models import ValueSnapshot
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 @dataclass(slots=True)

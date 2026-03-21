@@ -12,32 +12,32 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_payout_mode import CompetitionPayoutMode
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.config.competition_constants import USER_COMPETITION_MIN_PARTICIPANTS
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.models.competition import Competition
-from backend.app.models.competition_entry import CompetitionEntry
-from backend.app.models.competition_invite import CompetitionInvite
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_reward_pool import CompetitionRewardPool
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
-from backend.app.models.competition_seed_rule import CompetitionSeedRule
-from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
-from backend.app.schemas.competition_core import CompetitionCorePayload, CompetitionCreateRequest as CompetitionCoreCreateRequest
-from backend.app.schemas.competition_financials import CompetitionFinancialsPayload
-from backend.app.schemas.competition_lifecycle import (
+from app.auth.dependencies import get_session
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_payout_mode import CompetitionPayoutMode
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.match_status import MatchStatus
+from app.config.competition_constants import USER_COMPETITION_MIN_PARTICIPANTS
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.competition import Competition
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_invite import CompetitionInvite
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.schemas.competition_core import CompetitionCorePayload, CompetitionCreateRequest as CompetitionCoreCreateRequest
+from app.schemas.competition_financials import CompetitionFinancialsPayload
+from app.schemas.competition_lifecycle import (
     CompetitionAdvanceRequest,
     CompetitionFinalizeRequest,
     CompetitionInviteAcceptRequest,
@@ -55,12 +55,12 @@ from backend.app.schemas.competition_lifecycle import (
     CompetitionStructureRequest,
     CompetitionVisibilityRuleRequest,
 )
-from backend.app.schemas.competition_requests import (
+from app.schemas.competition_requests import (
     CompetitionCreateRequest,
     CompetitionUpdateRequest,
     validate_format_capacity_for_update,
 )
-from backend.app.schemas.competition_responses import (
+from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
     CompetitionFeesView,
     CompetitionInviteView,
@@ -69,15 +69,15 @@ from backend.app.schemas.competition_responses import (
     CompetitionSummaryView,
     JoinEligibilityView,
 )
-from backend.app.schemas.competition_rules import CompetitionRuleSetPayload, CupRuleSetPayload, LeagueRuleSetPayload
-from backend.app.services.competition_creation_service import CompetitionCreationService
-from backend.app.services.competition_discovery_service import CompetitionDiscoveryFilter
-from backend.app.services.competition_fee_service import CompetitionFeeService
-from backend.app.services.competition_join_service import CompetitionJoinService, JoinDecision
-from backend.app.services.competition_lifecycle_service import CompetitionLifecycleService
-from backend.app.services.competition_rules_engine import CompetitionRulesEngine
-from backend.app.services.competition_validation_service import CompetitionValidationService
-from backend.app.services.competition_visibility_service import CompetitionVisibilityService
+from app.schemas.competition_rules import CompetitionRuleSetPayload, CupRuleSetPayload, LeagueRuleSetPayload
+from app.services.competition_creation_service import CompetitionCreationService
+from app.services.competition_discovery_service import CompetitionDiscoveryFilter
+from app.services.competition_fee_service import CompetitionFeeService
+from app.services.competition_join_service import CompetitionJoinService, JoinDecision
+from app.services.competition_lifecycle_service import CompetitionLifecycleService
+from app.services.competition_rules_engine import CompetitionRulesEngine
+from app.services.competition_validation_service import CompetitionValidationService
+from app.services.competition_visibility_service import CompetitionVisibilityService
 
 _DEFAULT_RULES = (
     "Skill-based, player-versus-player contest with transparent entry fees, disclosed platform service fees, "

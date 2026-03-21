@@ -3,19 +3,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.gift_engine.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.gift_engine.schemas import (
     GiftComboEventView,
     GiftComboSummaryView,
     GiftEngineSummaryView,
     GiftSendRequest,
     GiftTransactionView,
 )
-from backend.app.gift_engine.service import GiftEngineError, GiftEngineService
-from backend.app.models.gift_combo_event import GiftComboEvent
-from backend.app.models.gift_transaction import GiftTransaction
-from backend.app.models.user import User
-from backend.app.wallets.service import InsufficientBalanceError
+from app.gift_engine.service import GiftEngineError, GiftEngineService
+from app.models.gift_combo_event import GiftComboEvent
+from app.models.gift_transaction import GiftTransaction
+from app.models.user import User
+from app.wallets.service import InsufficientBalanceError
 
 router = APIRouter(prefix='/gift-engine', tags=['gift-engine'])
 

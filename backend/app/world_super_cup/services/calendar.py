@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
-from backend.app.competition_engine.scheduler import CompetitionScheduler
-from backend.app.world_super_cup.models import PausePolicy, TournamentCountdown
+from app.common.enums.competition_type import CompetitionType
+from app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.world_super_cup.models import PausePolicy, TournamentCountdown
 
 
 @dataclass(slots=True)

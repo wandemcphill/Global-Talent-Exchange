@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.world_super_cup.services.competition_engine import WorldSuperCupCompetitionEngineService
-from backend.app.world_super_cup.services.tournament import WorldSuperCupService
+from app.common.enums.fixture_window import FixtureWindow
+from app.world_super_cup.services.competition_engine import WorldSuperCupCompetitionEngineService
+from app.world_super_cup.services.tournament import WorldSuperCupService
 
 
 def test_world_super_cup_competition_engine_builds_shared_dispatch_batch() -> None:

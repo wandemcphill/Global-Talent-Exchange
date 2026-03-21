@@ -7,12 +7,12 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_rule_set import CompetitionRuleSet
+from app.common.enums.match_status import MatchStatus
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_rule_set import CompetitionRuleSet
 
 
 @dataclass(slots=True)
@@ -51,7 +51,7 @@ class CompetitionMatchService:
         self.session.add(event)
         self.session.flush()
         try:
-            from backend.app.club_social.service import ClubSocialError, ClubSocialService
+            from app.club_social.service import ClubSocialError, ClubSocialService
 
             ClubSocialService(self.session).record_reaction_from_match_event(event=event)
         except ClubSocialError:
@@ -86,13 +86,13 @@ class CompetitionMatchService:
         self._apply_match_result(match=match, rule_set=rule_set)
         self.session.flush()
         try:
-            from backend.app.club_social.service import ClubSocialError, ClubSocialService
+            from app.club_social.service import ClubSocialError, ClubSocialService
 
             ClubSocialService(self.session).record_match_outcome_from_match(match=match)
         except ClubSocialError:
             pass
         try:
-            from backend.app.fan_predictions.service import FanPredictionService
+            from app.fan_predictions.service import FanPredictionService
 
             FanPredictionService(self.session).attempt_match_settlement(match_id=match.id)
         except ValueError:

@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.auth.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.auth.schemas import (
     ChangePasswordRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
@@ -12,11 +12,11 @@ from backend.app.auth.schemas import (
     RegisterRequest,
     TokenResponse,
 )
-from backend.app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
-from backend.app.analytics.service import AnalyticsService
-from backend.app.models.user import User
-from backend.app.users.schemas import UserPublic
-from backend.app.wallets.service import WalletService
+from app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
+from app.analytics.service import AnalyticsService
+from app.models.user import User
+from app.users.schemas import UserPublic
+from app.wallets.service import WalletService
 
 router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")

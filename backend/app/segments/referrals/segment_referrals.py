@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.models.user import User
-from backend.app.schemas.referral_requests import (
+from app.auth.dependencies import get_current_user
+from app.models.user import User
+from app.schemas.referral_requests import (
     AttributionCaptureRequest,
     ShareCodeCreateRequest,
     ShareCodeRedeemRequest,
     ShareCodeUpdateRequest,
 )
-from backend.app.schemas.referral_responses import (
+from app.schemas.referral_responses import (
     AttributionView,
     ReferralInviteView,
     ReferralRewardView,
@@ -18,7 +18,7 @@ from backend.app.schemas.referral_responses import (
     ShareCodeRedeemResponse,
     ShareCodeView,
 )
-from backend.app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, get_referral_orchestrator
+from app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, get_referral_orchestrator
 
 router = APIRouter(prefix="/api/referrals", tags=["referrals"])
 

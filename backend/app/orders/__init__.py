@@ -1,5 +1,5 @@
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.orders.service import OrderNotFoundError, OrderPlacementError, OrderService, PlayerNotFoundError
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.orders.service import OrderNotFoundError, OrderPlacementError, OrderService, PlayerNotFoundError
 
 __all__ = [
     "Order",

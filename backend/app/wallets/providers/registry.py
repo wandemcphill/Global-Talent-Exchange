@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from backend.app.wallets.providers.apple_pay import ApplePayProviderAdapter
-from backend.app.wallets.providers.base import ProviderAdapter
-from backend.app.wallets.providers.cards import CardsProviderAdapter
-from backend.app.wallets.providers.crypto_fiat import CryptoFiatProviderAdapter
-from backend.app.wallets.providers.google_pay import GooglePayProviderAdapter
-from backend.app.wallets.providers.regional_rails import RegionalRailsProviderAdapter
+from app.wallets.providers.apple_pay import ApplePayProviderAdapter
+from app.wallets.providers.base import ProviderAdapter
+from app.wallets.providers.cards import CardsProviderAdapter
+from app.wallets.providers.crypto_fiat import CryptoFiatProviderAdapter
+from app.wallets.providers.google_pay import GooglePayProviderAdapter
+from app.wallets.providers.regional_rails import RegionalRailsProviderAdapter
 
 
 _REGISTRY: dict[str, ProviderAdapter] = {

@@ -2,76 +2,76 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from backend.app.academy.api.router import router as academy_router
-from backend.app.analytics.router import admin_router as analytics_admin_router, router as analytics_router
-from backend.app.attachments.router import router as attachments_router
-from backend.app.calendar_engine.router import admin_router as calendar_engine_admin_router, router as calendar_engine_router
-from backend.app.admin.router import router as admin_router
-from backend.app.admin_access.router import router as admin_access_router
-from backend.app.admin_godmode.router import router as admin_godmode_router
-from backend.app.admin_engine.router import admin_router as admin_engine_admin_router, router as admin_engine_router
-from backend.app.economy.router import admin_router as admin_economy_router, router as economy_router
-from backend.app.gift_engine.router import router as gift_engine_router
-from backend.app.auth.router import router as auth_router
-from backend.app.champions_league.api.router import router as champions_league_router
-from backend.app.clubs.router import router as clubs_router
-from backend.app.club_identity.jerseys.router import router as club_identity_router
-from backend.app.routes.competitions import router as competitions_router
-from backend.app.routes.admin_referrals import router as admin_referrals_router
-from backend.app.routes.creators import router as creators_router
-from backend.app.routes.referrals import router as referrals_router
-from backend.app.routes.admin_clubs import router as admin_clubs_router
-from backend.app.routes.admin_club_ops import router as admin_club_ops_router
-from backend.app.routes.clubs import router as canonical_clubs_router
-from backend.app.routes.club_ops import router as club_ops_router
-from backend.app.core.health import router as health_router
-from backend.app.core.module import DomainModule
-from backend.app.observability.router import admin_router as ops_admin_router, router as observability_router
-from backend.app.fast_cups.api.router import router as fast_cups_router
-from backend.app.fan_predictions.router import admin_router as fan_predictions_admin_router, router as fan_predictions_router
-from backend.app.fan_wars.router import admin_router as fan_wars_admin_router, router as fan_wars_router
-from backend.app.football_events_engine.router import admin_router as football_events_admin_router, router as football_events_router
-from backend.app.ingestion.router import router as ingestion_router
-from backend.app.leagues.router import router as leagues_router
-from backend.app.market.router import router as market_router
-from backend.app.manager_market.router import router as manager_market_router
-from backend.app.match_engine.api.router import router as match_engine_router
-from backend.app.notifications.router import notifications_router
-from backend.app.player_cards.router import router as player_cards_router
-from backend.app.players.router import router as players_router
-from backend.app.policies.router import admin_router as admin_policies_router, router as policies_router
-from backend.app.routes.player_lifecycle import router as player_lifecycle_router
-from backend.app.portfolios.router import router as portfolios_router
-from backend.app.realtime.router import router as realtime_router
-from backend.app.reward_engine.router import admin_router as reward_engine_admin_router, router as reward_engine_router
-from backend.app.daily_challenge_engine.router import router as daily_challenge_router
-from backend.app.hosted_competition_engine.router import admin_router as hosted_competition_admin_router, router as hosted_competition_router
-from backend.app.moderation.router import admin_router as moderation_admin_router, router as moderation_router
-from backend.app.national_team_engine.router import admin_router as national_team_admin_router, router as national_team_router
-from backend.app.story_feed_engine.router import admin_router as story_feed_admin_router, router as story_feed_router
-from backend.app.integrity_engine.router import admin_router as integrity_admin_router, router as integrity_router
-from backend.app.replay_archive.router import router as replay_archive_router
-from backend.app.replay_archive.service import ensure_replay_archive
-from backend.app.surveillance.router import router as surveillance_router
-from backend.app.users.router import router as users_router
-from backend.app.value_engine.router import router as value_engine_router
-from backend.app.wallets.router import router as wallets_router
-from backend.app.media_engine.router import admin_router as media_engine_admin_router, router as media_engine_router
-from backend.app.club_infra_engine.router import admin_router as club_infra_admin_router, router as club_infra_router
-from backend.app.community_engine.router import router as community_engine_router
-from backend.app.club_social.router import router as club_social_router
-from backend.app.discovery_engine.router import admin_router as discovery_admin_router, router as discovery_router
-from backend.app.player_import_engine.router import admin_router as player_import_admin_router, router as player_import_router
-from backend.app.risk_ops_engine.router import admin_router as risk_ops_admin_router, router as risk_ops_router
-from backend.app.sponsorship_engine.router import admin_router as sponsorship_admin_router, router as sponsorship_router
-from backend.app.creator_campaign_engine.router import admin_router as creator_campaign_admin_router, router as creator_campaign_router
-from backend.app.governance_engine.router import admin_router as governance_admin_router, router as governance_router
-from backend.app.dispute_engine.router import admin_router as dispute_admin_router, router as dispute_router
-from backend.app.streamer_tournament_engine.router import admin_router as streamer_tournament_admin_router, router as streamer_tournament_router
-from backend.app.world_simulation.router import admin_router as world_simulation_admin_router, router as world_simulation_router
-from backend.app.world_super_cup.api.router import router as world_super_cup_router
-from backend.app.treasury.router import router as treasury_router
-from backend.app.integrations.payments.router import router as payments_router
+from app.academy.api.router import router as academy_router
+from app.analytics.router import admin_router as analytics_admin_router, router as analytics_router
+from app.attachments.router import router as attachments_router
+from app.calendar_engine.router import admin_router as calendar_engine_admin_router, router as calendar_engine_router
+from app.admin.router import router as admin_router
+from app.admin_access.router import router as admin_access_router
+from app.admin_godmode.router import router as admin_godmode_router
+from app.admin_engine.router import admin_router as admin_engine_admin_router, router as admin_engine_router
+from app.economy.router import admin_router as admin_economy_router, router as economy_router
+from app.gift_engine.router import router as gift_engine_router
+from app.auth.router import router as auth_router
+from app.champions_league.api.router import router as champions_league_router
+from app.clubs.router import router as clubs_router
+from app.club_identity.jerseys.router import router as club_identity_router
+from app.routes.competitions import router as competitions_router
+from app.routes.admin_referrals import router as admin_referrals_router
+from app.routes.creators import router as creators_router
+from app.routes.referrals import router as referrals_router
+from app.routes.admin_clubs import router as admin_clubs_router
+from app.routes.admin_club_ops import router as admin_club_ops_router
+from app.routes.clubs import router as canonical_clubs_router
+from app.routes.club_ops import router as club_ops_router
+from app.core.health import router as health_router
+from app.core.module import DomainModule
+from app.observability.router import admin_router as ops_admin_router, router as observability_router
+from app.fast_cups.api.router import router as fast_cups_router
+from app.fan_predictions.router import admin_router as fan_predictions_admin_router, router as fan_predictions_router
+from app.fan_wars.router import admin_router as fan_wars_admin_router, router as fan_wars_router
+from app.football_events_engine.router import admin_router as football_events_admin_router, router as football_events_router
+from app.ingestion.router import router as ingestion_router
+from app.leagues.router import router as leagues_router
+from app.market.router import router as market_router
+from app.manager_market.router import router as manager_market_router
+from app.match_engine.api.router import router as match_engine_router
+from app.notifications.router import notifications_router
+from app.player_cards.router import router as player_cards_router
+from app.players.router import router as players_router
+from app.policies.router import admin_router as admin_policies_router, router as policies_router
+from app.routes.player_lifecycle import router as player_lifecycle_router
+from app.portfolios.router import router as portfolios_router
+from app.realtime.router import router as realtime_router
+from app.reward_engine.router import admin_router as reward_engine_admin_router, router as reward_engine_router
+from app.daily_challenge_engine.router import router as daily_challenge_router
+from app.hosted_competition_engine.router import admin_router as hosted_competition_admin_router, router as hosted_competition_router
+from app.moderation.router import admin_router as moderation_admin_router, router as moderation_router
+from app.national_team_engine.router import admin_router as national_team_admin_router, router as national_team_router
+from app.story_feed_engine.router import admin_router as story_feed_admin_router, router as story_feed_router
+from app.integrity_engine.router import admin_router as integrity_admin_router, router as integrity_router
+from app.replay_archive.router import router as replay_archive_router
+from app.replay_archive.service import ensure_replay_archive
+from app.surveillance.router import router as surveillance_router
+from app.users.router import router as users_router
+from app.value_engine.router import router as value_engine_router
+from app.wallets.router import router as wallets_router
+from app.media_engine.router import admin_router as media_engine_admin_router, router as media_engine_router
+from app.club_infra_engine.router import admin_router as club_infra_admin_router, router as club_infra_router
+from app.community_engine.router import router as community_engine_router
+from app.club_social.router import router as club_social_router
+from app.discovery_engine.router import admin_router as discovery_admin_router, router as discovery_router
+from app.player_import_engine.router import admin_router as player_import_admin_router, router as player_import_router
+from app.risk_ops_engine.router import admin_router as risk_ops_admin_router, router as risk_ops_router
+from app.sponsorship_engine.router import admin_router as sponsorship_admin_router, router as sponsorship_router
+from app.creator_campaign_engine.router import admin_router as creator_campaign_admin_router, router as creator_campaign_router
+from app.governance_engine.router import admin_router as governance_admin_router, router as governance_router
+from app.dispute_engine.router import admin_router as dispute_admin_router, router as dispute_router
+from app.streamer_tournament_engine.router import admin_router as streamer_tournament_admin_router, router as streamer_tournament_router
+from app.world_simulation.router import admin_router as world_simulation_admin_router, router as world_simulation_router
+from app.world_super_cup.api.router import router as world_super_cup_router
+from app.treasury.router import router as treasury_router
+from app.integrations.payments.router import router as payments_router
 
 
 def _with_api_alias(router: APIRouter) -> APIRouter:
@@ -87,7 +87,7 @@ def _initialize_replay_archive(app, _context) -> None:
 
 def _seed_policy_documents(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.policies.service import PolicyService
+        from app.policies.service import PolicyService
 
         service = PolicyService(session)
         service.seed_defaults()
@@ -98,7 +98,7 @@ def _seed_policy_documents(app, context) -> None:
 
 def _seed_economy_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.economy.service import EconomyConfigService
+        from app.economy.service import EconomyConfigService
 
         service = EconomyConfigService(session)
         service.seed_defaults()
@@ -109,7 +109,7 @@ def _seed_economy_defaults(app, context) -> None:
 
 def _seed_calendar_engine_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.calendar_engine.service import CalendarEngineService
+        from app.calendar_engine.service import CalendarEngineService
 
         service = CalendarEngineService(session)
         service.seed_defaults()
@@ -118,7 +118,7 @@ def _seed_calendar_engine_defaults(app, context) -> None:
 
 def _seed_daily_challenges(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.daily_challenge_engine.service import DailyChallengeService
+        from app.daily_challenge_engine.service import DailyChallengeService
 
         service = DailyChallengeService(session)
         service.seed_defaults()
@@ -127,7 +127,7 @@ def _seed_daily_challenges(app, context) -> None:
 
 def _seed_hosted_competitions(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.hosted_competition_engine.service import HostedCompetitionService
+        from app.hosted_competition_engine.service import HostedCompetitionService
 
         service = HostedCompetitionService(session)
         service.seed_defaults()
@@ -135,7 +135,7 @@ def _seed_hosted_competitions(app, context) -> None:
 
 def _seed_discovery_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.discovery_engine.service import DiscoveryEngineService
+        from app.discovery_engine.service import DiscoveryEngineService
 
         service = DiscoveryEngineService(session)
         service.seed_defaults()
@@ -146,7 +146,7 @@ def _seed_discovery_defaults(app, context) -> None:
 
 def _seed_sponsorship_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.sponsorship_engine.service import SponsorshipEngineService
+        from app.sponsorship_engine.service import SponsorshipEngineService
 
         service = SponsorshipEngineService(session)
         service.seed_defaults()
@@ -154,7 +154,7 @@ def _seed_sponsorship_defaults(app, context) -> None:
 
 def _seed_admin_engine_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.admin_engine.service import AdminEngineService
+        from app.admin_engine.service import AdminEngineService
 
         service = AdminEngineService(session)
         service.seed_defaults()
@@ -163,7 +163,7 @@ def _seed_admin_engine_defaults(app, context) -> None:
 
 def _seed_football_event_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.football_events_engine.service import RealWorldFootballEventService
+        from app.football_events_engine.service import RealWorldFootballEventService
 
         service = RealWorldFootballEventService(session)
         service.seed_defaults()
@@ -172,7 +172,7 @@ def _seed_football_event_defaults(app, context) -> None:
 
 def _seed_world_simulation_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.world_simulation.service import FootballWorldService
+        from app.world_simulation.service import FootballWorldService
 
         service = FootballWorldService(session)
         service.seed_defaults()

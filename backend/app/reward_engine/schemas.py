@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from backend.app.models.wallet import LedgerUnit
+from app.models.wallet import LedgerUnit
 
 
 class RewardSettlementRequest(BaseModel):

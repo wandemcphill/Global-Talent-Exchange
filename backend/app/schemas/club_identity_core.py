@@ -5,9 +5,9 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.enums.club_brand_asset_type import ClubBrandAssetType
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.club_brand_asset_type import ClubBrandAssetType
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.common.schemas.base import CommonSchema
 
 
 class _ClubOrmSchema(CommonSchema):

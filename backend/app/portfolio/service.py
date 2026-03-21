@@ -8,12 +8,12 @@ from decimal import Decimal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import MarketSignal
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason, LedgerUnit
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
-from backend.app.wallets.service import WalletService
+from app.ingestion.models import MarketSignal
+from app.models.user import User
+from app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason, LedgerUnit
+from app.players.read_models import PlayerSummaryReadModel
+from app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 PRICE_SIGNAL_TYPES = (

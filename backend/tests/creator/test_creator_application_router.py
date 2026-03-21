@@ -4,15 +4,15 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, select
 
-from backend.app.main import (
+from app.main import (
     INITIAL_ADMIN_EMAIL,
     INITIAL_ADMIN_PASSWORD,
     create_app,
 )
-from backend.app.models.club_infra import ClubStadium
-from backend.app.models.creator_application import CreatorApplication
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
+from app.models.club_infra import ClubStadium
+from app.models.creator_application import CreatorApplication
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
 
 
 @pytest.fixture()

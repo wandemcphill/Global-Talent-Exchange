@@ -3,11 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.ingestion.schemas import CursorRead, ProviderHealthSnapshot, SyncExecutionSummary, SyncRunRead, SyncStatusRead, SyncTriggerRequest
-from backend.app.ingestion.service import IngestionService
-from backend.app.models.user import User
-from backend.app.providers import ProviderConfigurationError
+from app.auth.dependencies import get_current_admin, get_session
+from app.ingestion.schemas import CursorRead, ProviderHealthSnapshot, SyncExecutionSummary, SyncRunRead, SyncStatusRead, SyncTriggerRequest
+from app.ingestion.service import IngestionService
+from app.models.user import User
+from app.providers import ProviderConfigurationError
 
 router = APIRouter(prefix="/internal/ingestion", tags=["ingestion"], dependencies=[Depends(get_current_admin)])
 

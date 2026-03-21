@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.models.competition import Competition
-from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.models.competition import Competition
+from app.models.competition_visibility_rule import CompetitionVisibilityRule
 
 
 @dataclass(slots=True)

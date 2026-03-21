@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.regen import RegenDiscoveryBadge
+from app.models.regen import RegenDiscoveryBadge
 
 
 @dataclass(slots=True)

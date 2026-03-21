@@ -6,10 +6,10 @@ from datetime import date
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Player
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.regen import RegenAward, RegenLegacyRecord, RegenProfile
-from backend.app.services.club_hall_of_fame_service import ClubHallOfFameService
+from app.ingestion.models import Player
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.regen import RegenAward, RegenLegacyRecord, RegenProfile
+from app.services.club_hall_of_fame_service import ClubHallOfFameService
 
 
 LEGEND_SCORE_THRESHOLD = 120.0

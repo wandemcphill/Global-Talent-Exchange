@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from backend.app.schemas.creator_requests import CreatorProfileCreateRequest
-from backend.app.schemas.referral_requests import AttributionCaptureRequest, ShareCodeRedeemRequest
-from backend.app.services.referral_orchestrator import ReferralOrchestrator
-from backend.app.services.referral_risk_service import ReferralRiskContext, ReferralRiskService
+from app.schemas.creator_requests import CreatorProfileCreateRequest
+from app.schemas.referral_requests import AttributionCaptureRequest, ShareCodeRedeemRequest
+from app.services.referral_orchestrator import ReferralOrchestrator
+from app.services.referral_risk_service import ReferralRiskContext, ReferralRiskService
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,12 +6,12 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.schemas import AdminRewardRuleStabilityControls
-from backend.app.fan_predictions.service import FanPredictionService
-from backend.app.models.admin_rules import AdminRewardRule
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.services.competition_match_service import CompetitionMatchService
+from app.admin_engine.schemas import AdminRewardRuleStabilityControls
+from app.fan_predictions.service import FanPredictionService
+from app.models.admin_rules import AdminRewardRule
+from app.models.competition_match import CompetitionMatch
+from app.models.reward_settlement import RewardSettlement
+from app.services.competition_match_service import CompetitionMatchService
 
 
 def test_prediction_tokens_settlement_rewards_and_leaderboards(

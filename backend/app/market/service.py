@@ -5,9 +5,9 @@ from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
-from backend.app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.market.models import (
+from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.market.models import (
     Listing,
     ListingStatus,
     ListingType,
@@ -18,16 +18,16 @@ from backend.app.market.models import (
     TradeIntentStatus,
     utcnow,
 )
-from backend.app.market.projections import MarketSummaryProjector
-from backend.app.market.repositories import (
+from app.market.projections import MarketSummaryProjector
+from app.market.repositories import (
     InMemoryMarketRepository,
     MarketPlayerRecord,
     MarketRepository,
     SqlAlchemyMarketPlayerRepository,
 )
-from backend.app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
-from backend.app.pricing.service import MarketPricingService, PricingValidationError
-from backend.app.value_engine.scoring import credits_from_real_world_value
+from app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
+from app.pricing.service import MarketPricingService, PricingValidationError
+from app.value_engine.scoring import credits_from_real_world_value
 from sqlalchemy.orm import Session
 
 

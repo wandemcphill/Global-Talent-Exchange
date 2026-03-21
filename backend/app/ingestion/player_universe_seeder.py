@@ -11,7 +11,7 @@ from uuid import uuid4
 from sqlalchemy import delete, insert, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import Settings, load_settings
+from app.core.config import Settings, load_settings
 
 from .models import (
     Club,

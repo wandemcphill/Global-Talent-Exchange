@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from backend.app.realtime.schemas import RealtimeStatusView
+from app.realtime.schemas import RealtimeStatusView
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
 

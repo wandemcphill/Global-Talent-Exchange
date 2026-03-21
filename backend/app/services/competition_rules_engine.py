@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_payout_mode import CompetitionPayoutMode
-from backend.app.config.competition_constants import (
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_payout_mode import CompetitionPayoutMode
+from app.config.competition_constants import (
     CUP_ALLOWED_PARTICIPANT_SIZES,
     LEAGUE_RULE_ALLOWED_TIE_BREAKS,
     LEAGUE_RULE_DRAW_POINTS_MAX,
@@ -16,8 +16,8 @@ from backend.app.config.competition_constants import (
     USER_COMPETITION_MAX_PARTICIPANTS,
     USER_COMPETITION_MIN_PARTICIPANTS,
 )
-from backend.app.schemas.competition_financials import CompetitionFeeSummary, CompetitionFinancialsPayload
-from backend.app.schemas.competition_rules import CompetitionRuleSetPayload, CupRuleSetPayload, LeagueRuleSetPayload
+from app.schemas.competition_financials import CompetitionFeeSummary, CompetitionFinancialsPayload
+from app.schemas.competition_rules import CompetitionRuleSetPayload, CupRuleSetPayload, LeagueRuleSetPayload
 
 
 class CompetitionRulesError(ValueError):

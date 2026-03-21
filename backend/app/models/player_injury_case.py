@@ -5,7 +5,7 @@ from datetime import date
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class PlayerInjuryCase(UUIDPrimaryKeyMixin, TimestampMixin, Base):

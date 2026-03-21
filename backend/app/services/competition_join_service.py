@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
 
 
 @dataclass(slots=True, frozen=True)

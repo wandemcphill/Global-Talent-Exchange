@@ -5,16 +5,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.club_identity.models.reputation  # noqa: F401
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.models  # noqa: F401
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.user import User
-from backend.app.services.creator_squad_service import CreatorSquadLimitError, CreatorSquadService
+import app.club_identity.models.reputation  # noqa: F401
+import app.ingestion.models  # noqa: F401
+import app.models  # noqa: F401
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.user import User
+from app.services.creator_squad_service import CreatorSquadLimitError, CreatorSquadService
 
 
 @pytest.fixture()

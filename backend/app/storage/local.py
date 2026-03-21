@@ -6,7 +6,7 @@ import json
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from backend.app.storage.base import ObjectStorage, StorageNotFound, StorageObject
+from app.storage.base import ObjectStorage, StorageNotFound, StorageObject
 
 
 def _normalize_key(key: str) -> PurePosixPath:

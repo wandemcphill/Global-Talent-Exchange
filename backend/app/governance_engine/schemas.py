@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from backend.app.models.governance_engine import (
+from app.models.governance_engine import (
     GovernanceProposalScope,
     GovernanceProposalStatus,
     GovernanceVoteChoice,

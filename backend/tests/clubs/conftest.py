@@ -9,21 +9,21 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user
-from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
-from backend.app.db import get_session
-from backend.app.ingestion.models import Country, Player, PlayerVerification
-from backend.app.models.base import Base
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
-from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
-from backend.app.models.club_dynasty_milestone import ClubDynastyMilestone
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_infra import ClubFacility
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_cards import (
+from app.auth.dependencies import get_current_admin, get_current_user
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
+from app.db import get_session
+from app.ingestion.models import Country, Player, PlayerVerification
+from app.models.base import Base
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_dynasty_milestone import ClubDynastyMilestone
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_infra import ClubFacility
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.models.player_cards import (
     PlayerCard,
     PlayerCardHolding,
     PlayerCardHistory,
@@ -32,10 +32,10 @@ from backend.app.models.player_cards import (
     PlayerCardSale,
     PlayerCardTier,
 )
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.models.regen import (
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.regen import (
     AcademyCandidate,
     AcademyIntakeBatch,
     RegenAward,
@@ -57,7 +57,7 @@ from backend.app.models.regen import (
     RegenValueSnapshot,
     RegenVisualProfile,
 )
-from backend.app.models.scouting_intelligence import (
+from app.models.scouting_intelligence import (
     AcademySupplySignal,
     HiddenPotentialEstimate,
     ManagerScoutingProfile,
@@ -68,12 +68,12 @@ from backend.app.models.scouting_intelligence import (
     ScoutingNetworkAssignment,
     TalentDiscoveryBadge,
 )
-from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.models.club_trophy_cabinet import ClubTrophyCabinet
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.routes.admin_clubs import router as admin_clubs_router
-from backend.app.routes.clubs import router as clubs_router
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_trophy import ClubTrophy
+from app.models.club_trophy_cabinet import ClubTrophyCabinet
+from app.models.user import KycStatus, User, UserRole
+from app.routes.admin_clubs import router as admin_clubs_router
+from app.routes.clubs import router as clubs_router
 
 
 @pytest.fixture()

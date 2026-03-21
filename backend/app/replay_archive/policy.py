@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.common.enums.replay_visibility import ReplayVisibility
+from app.common.enums.replay_visibility import ReplayVisibility
 
 
 @dataclass(frozen=True, slots=True)

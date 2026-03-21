@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.club_sponsorship_asset import ClubSponsorshipAsset
-    from backend.app.models.club_sponsorship_package import ClubSponsorshipPackage
-    from backend.app.models.club_sponsorship_payout import ClubSponsorshipPayout
+    from app.models.club_sponsorship_asset import ClubSponsorshipAsset
+    from app.models.club_sponsorship_package import ClubSponsorshipPackage
+    from app.models.club_sponsorship_payout import ClubSponsorshipPayout
 
 
 class ClubSponsorshipContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -5,8 +5,8 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
 
 
 class FastCupValidationError(ValueError):

@@ -6,8 +6,8 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.regen import RegenLineageProfile, RegenRelationshipTag, RegenTwinsGroup
-from backend.app.services.regen_service import LineageSelection
+from app.models.regen import RegenLineageProfile, RegenRelationshipTag, RegenTwinsGroup
+from app.services.regen_service import LineageSelection
 
 
 @dataclass(slots=True)

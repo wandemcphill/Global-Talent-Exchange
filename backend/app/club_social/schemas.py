@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.config.club_social import DEFAULT_CHALLENGE_VISIBILITY
+from app.common.schemas.base import CommonSchema
+from app.config.club_social import DEFAULT_CHALLENGE_VISIBILITY
 
 
 class ChallengeCreateRequest(CommonSchema):

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationEventType
-from backend.app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventType
+from app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,7 +5,7 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
 
 void main() {
-  test('live-then-fixture mode falls back to fixtures on transport failure',
+  test('live-then-fixture mode falls back to fixtures for market reads',
       () async {
     final GteReliableApiRepository repository = GteReliableApiRepository(
       config: const GteRepositoryConfig(
@@ -20,6 +20,48 @@ void main() {
 
     expect(players, hasLength(4));
     expect(players.first.id, 'lamine-yamal');
+  });
+
+  test('login does not fall back to fixture auth on transport failure',
+      () async {
+    final GteReliableApiRepository repository = GteReliableApiRepository(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.liveThenFixture,
+      ),
+      transport: _ThrowingTransport(),
+      fixtures: GteMockApi(latency: Duration.zero),
+    );
+
+    expect(
+      () => repository.login(
+        const GteAuthLoginRequest(
+          email: 'qa@example.com',
+          password: 'DemoPass123',
+        ),
+      ),
+      throwsA(isA<GteApiException>()),
+    );
+  });
+
+  test('fetch current user does not fall back to fixture auth on transport failure',
+      () async {
+    final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
+    await tokenStore.writeToken('stale-token');
+    final GteReliableApiRepository repository = GteReliableApiRepository(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.liveThenFixture,
+      ),
+      transport: _ThrowingTransport(),
+      fixtures: GteMockApi(latency: Duration.zero),
+      tokenStore: tokenStore,
+    );
+
+    expect(
+      repository.fetchCurrentUser,
+      throwsA(isA<GteApiException>()),
+    );
   });
 
   test('login persists token and reuses it on authenticated requests',

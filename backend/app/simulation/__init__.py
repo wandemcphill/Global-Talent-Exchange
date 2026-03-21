@@ -1,4 +1,4 @@
-from backend.app.simulation.service import (
+from app.simulation.service import (
     DEFAULT_ILLIQUID_PLAYER_COUNT,
     DEFAULT_LIQUID_PLAYER_COUNT,
     DEFAULT_SIMULATION_SEED,

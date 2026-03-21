@@ -6,10 +6,10 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import Settings, get_settings
-from backend.app.ingestion.models import Player
-from backend.app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenOriginMetadata, RegenProfile
-from backend.app.models.scouting_intelligence import (
+from app.core.config import Settings, get_settings
+from app.ingestion.models import Player
+from app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenOriginMetadata, RegenProfile
+from app.models.scouting_intelligence import (
     AcademySupplySignal,
     HiddenPotentialEstimate,
     ManagerScoutingProfile,
@@ -20,7 +20,7 @@ from backend.app.models.scouting_intelligence import (
     ScoutingNetworkAssignment,
     TalentDiscoveryBadge,
 )
-from backend.app.schemas.scouting_intelligence import (
+from app.schemas.scouting_intelligence import (
     AcademySupplySignalView,
     CompletedScoutMissionView,
     HiddenPotentialEstimateView,
@@ -33,7 +33,7 @@ from backend.app.schemas.scouting_intelligence import (
     ScoutingNetworkView,
     TalentDiscoveryBadgeView,
 )
-from backend.app.services.regen_market_service import RegenMarketService, RegenRecommendationRequest, RegenSearchFilters
+from app.services.regen_market_service import RegenMarketService, RegenRecommendationRequest, RegenSearchFilters
 
 _MISSION_DURATIONS = {
     "short_scan": 7,

@@ -5,8 +5,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.models.wallet import LedgerUnit
-from backend.app.orders.models import OrderSide, OrderStatus
+from app.models.wallet import LedgerUnit
+from app.orders.models import OrderSide, OrderStatus
 
 
 class OrderCreateRequest(BaseModel):

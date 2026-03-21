@@ -8,15 +8,15 @@ import re
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.config.club_social import (
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.config.club_social import (
     CHALLENGE_DEEP_LINK_PREFIX,
     CHALLENGE_WEB_PATH_PREFIX,
     DEFAULT_HIGH_GIFT_THRESHOLD,
     DEFAULT_HIGH_VIEW_THRESHOLD,
 )
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_social import (
+from app.models.club_profile import ClubProfile
+from app.models.club_social import (
     ChallengeShareEvent,
     ClubChallenge,
     ClubChallengeLink,
@@ -26,9 +26,9 @@ from backend.app.models.club_social import (
     RivalryMatchHistory,
     RivalryProfile,
 )
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.user import User
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.user import User
 
 _NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 

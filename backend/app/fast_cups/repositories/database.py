@@ -8,7 +8,7 @@ from enum import Enum
 from sqlalchemy import DateTime, Integer, JSON, Numeric, String, UniqueConstraint, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     CupReward,
     FastCup,
     FastCupBracket,
@@ -23,8 +23,8 @@ from backend.app.fast_cups.models.domain import (
     FastCupStatus,
     PayoutLedgerEvent,
 )
-from backend.app.fast_cups.repositories.base import FastCupRepository
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.fast_cups.repositories.base import FastCupRepository
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class FastCupRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -153,7 +153,7 @@ def _deserialize_fast_cup(payload: dict[str, object]) -> FastCup:
 
 
 def _deserialize_slot(payload: dict[str, object]) -> FastCupSlot:
-    from backend.app.common.enums.fixture_window import FixtureWindow
+    from app.common.enums.fixture_window import FixtureWindow
 
     return FastCupSlot(
         registration_opens_at=_parse_datetime(payload["registration_opens_at"]),

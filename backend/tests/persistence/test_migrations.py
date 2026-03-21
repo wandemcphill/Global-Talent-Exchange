@@ -4,8 +4,8 @@ import ast
 from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 
-from backend.app.core.config import BACKEND_ROOT
-from backend.app.core.database import ensure_database_schema_current
+from app.core.config import BACKEND_ROOT
+from app.core.database import ensure_database_schema_current
 
 
 def _migration_graph_heads() -> set[str]:

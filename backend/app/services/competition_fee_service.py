@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
-from backend.app.schemas.competition_responses import CompetitionFeesView, PayoutBreakdown
+from app.schemas.competition_responses import CompetitionFeesView, PayoutBreakdown
 
 _FOUR_PLACES = Decimal("0.0001")
 

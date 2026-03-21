@@ -7,19 +7,19 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.models.base import utcnow
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
-from backend.app.models.club_sponsorship_package import ClubSponsorshipPackage
-from backend.app.models.club_sponsorship_payout import ClubSponsorshipPayout
-from backend.app.models.sponsorship_engine import SponsorshipLead
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerSourceTag
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.story_feed_engine.service import StoryFeedService
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.models.base import utcnow
+from app.models.club_profile import ClubProfile
+from app.models.club_sponsorship_contract import ClubSponsorshipContract
+from app.models.club_sponsorship_package import ClubSponsorshipPackage
+from app.models.club_sponsorship_payout import ClubSponsorshipPayout
+from app.models.sponsorship_engine import SponsorshipLead
+from app.models.user import User
+from app.models.wallet import LedgerSourceTag
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.story_feed_engine.service import StoryFeedService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 class SponsorshipEngineError(ValueError):

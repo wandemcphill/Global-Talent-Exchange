@@ -8,12 +8,12 @@ from typing import Any, TYPE_CHECKING
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from backend.app.models.treasury import RateDirection
-from backend.app.models.wallet import LedgerUnit
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.treasury import RateDirection
+from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
-    from backend.app.models.user import User
+    from app.models.user import User
 
 
 class PurchaseOrderStatus(StrEnum):

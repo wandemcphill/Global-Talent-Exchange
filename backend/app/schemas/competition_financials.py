@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.common.enums.competition_payout_mode import CompetitionPayoutMode
+from app.common.enums.competition_payout_mode import CompetitionPayoutMode
 
 
 class CompetitionFinancialsPayload(BaseModel):

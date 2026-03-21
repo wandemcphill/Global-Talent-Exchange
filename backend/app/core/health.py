@@ -6,8 +6,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel
 
-from backend.app.core.config import Settings, get_settings
-from backend.app.core.database import DatabaseRuntime
+from app.core.config import Settings, get_settings
+from app.core.database import DatabaseRuntime
 
 router = APIRouter(tags=["health"])
 

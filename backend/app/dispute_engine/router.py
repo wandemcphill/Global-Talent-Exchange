@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.dispute_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.dispute_engine.schemas import (
     DisputeAssignRequest,
     DisputeCreateRequest,
     DisputeDetailResponse,
@@ -14,8 +14,8 @@ from backend.app.dispute_engine.schemas import (
     DisputeStatusRequest,
     DisputeView,
 )
-from backend.app.dispute_engine.service import DisputeEngineError, DisputeEngineService
-from backend.app.models.user import User
+from app.dispute_engine.service import DisputeEngineError, DisputeEngineService
+from app.models.user import User
 
 router = APIRouter(prefix="/disputes", tags=["disputes"])
 admin_router = APIRouter(prefix="/admin/disputes", tags=["admin-disputes"])

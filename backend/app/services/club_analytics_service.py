@@ -5,15 +5,15 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.schemas.club_analytics import (
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.models.club_trophy import ClubTrophy
+from app.schemas.club_analytics import (
     ClubAnalyticsView,
     ClubLeaderboardEntry,
     ClubSummaryView,
@@ -21,7 +21,7 @@ from backend.app.schemas.club_analytics import (
     ThemeUsageStat,
     TrophyIssuanceSummary,
 )
-from backend.app.services.club_reputation_service import ClubReputationService
+from app.services.club_reputation_service import ClubReputationService
 
 
 @dataclass(slots=True)

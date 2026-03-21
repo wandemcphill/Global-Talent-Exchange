@@ -22,7 +22,7 @@ void main() {
     );
 
     await controller.signIn(
-      email: 'fan@demo.gte.local',
+      email: 'fixture.trader@gte.local',
       password: 'DemoPass123',
     );
 
@@ -43,7 +43,7 @@ void main() {
     );
 
     await controller.signIn(
-      email: 'fan@demo.gte.local',
+      email: 'fixture.trader@gte.local',
       password: 'DemoPass123',
     );
     await controller.openPlayer('lamine-yamal');

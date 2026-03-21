@@ -7,28 +7,28 @@ import re
 from sqlalchemy import case, select
 from sqlalchemy.orm import Session, aliased
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.common.schemas.competition import CompetitionSchedulePlan, CompetitionWindowAssignment
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
-from backend.app.models.creator_league import (
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.match_status import MatchStatus
+from app.common.schemas.competition import CompetitionSchedulePlan, CompetitionWindowAssignment
+from app.models.base import generate_uuid, utcnow
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.creator_league import (
     CreatorLeagueConfig,
     CreatorLeagueSeason,
     CreatorLeagueSeasonTier,
     CreatorLeagueTier,
 )
-from backend.app.schemas.creator_league import (
+from app.schemas.creator_league import (
     CreatorLeagueConfigUpdateRequest,
     CreatorLeagueConfigView,
     CreatorLeagueLiveMatchView,
@@ -42,8 +42,8 @@ from backend.app.schemas.creator_league import (
     CreatorLeagueTierUpdateRequest,
     CreatorLeagueTierView,
 )
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.competition_fixture_service import CompetitionFixtureService
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.competition_fixture_service import CompetitionFixtureService
 
 
 class CreatorLeagueError(ValueError):
@@ -744,7 +744,7 @@ class CreatorLeagueService:
 
     @staticmethod
     def _competition_type():
-        from backend.app.common.enums.competition_type import CompetitionType
+        from app.common.enums.competition_type import CompetitionType
 
         return CompetitionType.LEAGUE
 

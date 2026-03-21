@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_format import CompetitionFormat
 
 
 class LeagueRuleSetPayload(BaseModel):

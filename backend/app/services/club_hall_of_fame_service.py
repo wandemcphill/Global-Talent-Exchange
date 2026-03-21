@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Player
-from backend.app.models.club_hall_of_fame import ClubHallOfFameEntry
-from backend.app.models.regen import RegenLegacyRecord, RegenProfile
+from app.ingestion.models import Player
+from app.models.club_hall_of_fame import ClubHallOfFameEntry
+from app.models.regen import RegenLegacyRecord, RegenProfile
 
 
 @dataclass(slots=True)

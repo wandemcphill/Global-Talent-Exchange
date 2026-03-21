@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 import logging
 from typing import Any
 
-from backend.app.cache.redis_helpers import HotReadCache, NullCacheBackend
-from backend.app.core.config import Settings
-from backend.app.ingestion.constants import (
+from app.cache.redis_helpers import HotReadCache, NullCacheBackend
+from app.core.config import Settings
+from app.ingestion.constants import (
     BOOTSTRAP_ENTITY_TYPE,
     DEFAULT_CURSOR_KEY,
     DEFAULT_PROVIDER_NAME,
@@ -19,9 +19,9 @@ from backend.app.ingestion.constants import (
     SYNC_RUN_STATUS_PARTIAL,
     SYNC_RUN_STATUS_SUCCESS,
 )
-from backend.app.ingestion.models import Club, Competition, Match, Player, ProviderSyncRun, Season
-from backend.app.ingestion.market_profile import PlayerMarketProfileService
-from backend.app.ingestion.normalizers import (
+from app.ingestion.models import Club, Competition, Match, Player, ProviderSyncRun, Season
+from app.ingestion.market_profile import PlayerMarketProfileService
+from app.ingestion.normalizers import (
     build_player_tenure_payload,
     flatten_standings,
     normalize_club_payload,
@@ -34,15 +34,15 @@ from backend.app.ingestion.normalizers import (
     normalize_season_payload,
     normalize_team_standing_payload,
 )
-from backend.app.ingestion.repository import IngestionRepository, MutationStats
-from backend.app.ingestion.schemas import (
+from app.ingestion.repository import IngestionRepository, MutationStats
+from app.ingestion.schemas import (
     CursorRead,
     ProviderHealthSnapshot,
     SyncExecutionSummary,
     SyncRunRead,
     SyncStatusRead,
 )
-from backend.app.providers import ProviderRegistry
+from app.providers import ProviderRegistry
 
 logger = logging.getLogger(__name__)
 

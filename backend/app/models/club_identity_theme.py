@@ -5,8 +5,8 @@ from typing import Any
 from sqlalchemy import Boolean, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ClubIdentityTheme(UUIDPrimaryKeyMixin, TimestampMixin, Base):

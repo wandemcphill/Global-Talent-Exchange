@@ -35,7 +35,7 @@ cd frontend
 flutter pub get
 flutter analyze
 flutter test
-flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=liveThenFixture
+flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live
 ```
 
 If the Android wrapper is incomplete, regenerate it locally with `flutter create . --platforms=android`.
@@ -53,20 +53,14 @@ python backend/scripts/dev.py runserver --demo-simulation
 
 This creates:
 
-- 3 demo users
 - a small seeded player universe subset
 - precomputed value snapshots and player summaries
-- seeded market holdings for the demo users' `/api/portfolio/snapshot` view
-- wallet balances and ledger entries for each demo user
+- synthetic local-only QA users for market and portfolio checks
+- seeded market holdings for the synthetic QA users' `/api/portfolio/snapshot` view
+- wallet balances and ledger entries for the synthetic QA users
 - seeded buy ladders and sell ladders in the exchange order book
 - seeded trade executions for ticker volume/history
 - liquid and illiquid player examples for local demos and tests
-
-Default demo credentials:
-
-- `fan@demo.gte.local` / `DemoPass123`
-- `scout@demo.gte.local` / `DemoPass123`
-- `admin@demo.gte.local` / `DemoPass123`
 
 The demo rebuild command writes the exchange-side state into the database. `runserver --demo-simulation` then replays that seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
 
@@ -255,7 +249,7 @@ $token = (
     -Method Post `
     -Uri http://127.0.0.1:8000/auth/login `
     -ContentType "application/json" `
-    -Body '{"email":"fan@demo.gte.local","password":"DemoPass123"}'
+    -Body '{"email":"seed.fan@gte.local","password":"DemoPass123"}'
 ).access_token
 ```
 

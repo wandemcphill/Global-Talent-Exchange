@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +7,7 @@ import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
+import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
@@ -21,6 +21,7 @@ import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.da
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   test('new feature deep links round-trip through the parser', () {
@@ -349,33 +350,35 @@ void main() {
     final _HttpRequestProbe probe = _HttpRequestProbe();
     int openClubTabCount = 0;
     int openCompetitionsCount = 0;
+    final GteHttpClientFactory previousClientFactory =
+        GteHttpTransport.clientFactory;
 
-    await HttpOverrides.runZoned<Future<void>>(
-      () async {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: HomeDashboardScreen(
-              exchangeController: controller,
-              apiBaseUrl: 'http://127.0.0.1:8000',
-              backendMode: GteBackendMode.live,
-              onOpenClubTab: () {
-                openClubTabCount += 1;
-              },
-              onOpenCompetitionsTab: () {
-                openCompetitionsCount += 1;
-              },
-              navigationDependencies: _dependencies(
-                isAuthenticated: true,
-                clubId: null,
-                clubName: null,
-              ),
-            ),
+    GteHttpTransport.clientFactory = () => _ProbeHttpClient(probe);
+    addTearDown(() {
+      GteHttpTransport.clientFactory = previousClientFactory;
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeDashboardScreen(
+          exchangeController: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.live,
+          onOpenClubTab: () {
+            openClubTabCount += 1;
+          },
+          onOpenCompetitionsTab: () {
+            openCompetitionsCount += 1;
+          },
+          navigationDependencies: _dependencies(
+            isAuthenticated: true,
+            clubId: null,
+            clubName: null,
           ),
-        );
-        await tester.pumpAndSettle();
-      },
-      createHttpClient: (SecurityContext? _) => _ProbeHttpClient(probe),
+        ),
+      ),
     );
+    await tester.pumpAndSettle();
 
     expect(find.text('NO CLUB ONBOARDING'), findsOneWidget);
     expect(
@@ -413,7 +416,7 @@ void main() {
 
     expect(openClubTabCount, 0);
     expect(openCompetitionsCount, 1);
-    expect(probe.openUrlCount, 0);
+    expect(probe.sendCount, 0);
     expect(api.listOrdersCount, 0);
   });
 
@@ -911,82 +914,21 @@ class _CountingExchangeApiClient extends GteExchangeApiClient {
 }
 
 class _HttpRequestProbe {
-  int openUrlCount = 0;
+  int sendCount = 0;
 }
 
-class _ProbeHttpClient implements HttpClient {
+class _ProbeHttpClient extends http.BaseClient {
   _ProbeHttpClient(this._probe);
 
   final _HttpRequestProbe _probe;
 
   @override
-  Duration? connectionTimeout;
-
-  @override
-  void close({bool force = false}) {}
-
-  @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) async {
-    _probe.openUrlCount += 1;
-    return _ProbeHttpRequest();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _ProbeHttpRequest implements HttpClientRequest {
-  @override
-  final HttpHeaders headers = _ProbeHttpHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => _ProbeHttpResponse();
-
-  @override
-  void write(Object? object) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _ProbeHttpResponse extends Stream<List<int>>
-    implements HttpClientResponse {
-  final Stream<List<int>> _delegate = Stream<List<int>>.fromIterable(
-    <List<int>>[utf8.encode('{}')],
-  );
-
-  @override
-  HttpHeaders get headers => _ProbeHttpHeaders();
-
-  @override
-  int get statusCode => 200;
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int> event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) {
-    return _delegate.listen(
-      onData,
-      onError: onError,
-      onDone: onDone,
-      cancelOnError: cancelOnError,
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    _probe.sendCount += 1;
+    return http.StreamedResponse(
+      Stream<List<int>>.fromIterable(<List<int>>[utf8.encode('{}')]),
+      200,
+      headers: const <String, String>{'content-type': 'application/json'},
     );
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _ProbeHttpHeaders implements HttpHeaders {
-  @override
-  void add(String name, Object value, {bool preserveHeaderCase = false}) {}
-
-  @override
-  void forEach(void Function(String name, List<String> values) action) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

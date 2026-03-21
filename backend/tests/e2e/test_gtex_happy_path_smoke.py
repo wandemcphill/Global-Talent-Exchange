@@ -8,44 +8,44 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher
-from backend.app.core.events import InMemoryEventPublisher
-from backend.app.db import get_session
-from backend.app.leagues.models import LeagueClub
-from backend.app.leagues.repository import InMemoryLeagueEventRepository
-from backend.app.leagues.service import LeagueSeasonLifecycleService
-from backend.app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
-from backend.app.models.base import Base
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_dynasty_milestone import ClubDynastyMilestone
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.models.club_trophy_cabinet import ClubTrophyCabinet
-from backend.app.models.competition import Competition
-from backend.app.models.competition_entry import CompetitionEntry
-from backend.app.models.competition_invite import CompetitionInvite
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_reward_pool import CompetitionRewardPool
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_seed_rule import CompetitionSeedRule
-from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
-from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.notifications.service import NotificationCenter
-from backend.app.replay_archive.persistence import InMemoryReplayArchiveRepository
-from backend.app.replay_archive.policy import SpectatorVisibilityPolicyService
-from backend.app.replay_archive.service import ReplayArchiveService
-from backend.app.routes.clubs import router as clubs_router
-from backend.app.routes.competitions import router as competitions_router
-from backend.app.services.competition_orchestrator import CompetitionOrchestrator, get_competition_orchestrator
+from app.auth.dependencies import get_current_user
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.core.events import InMemoryEventPublisher
+from app.db import get_session
+from app.leagues.models import LeagueClub
+from app.leagues.repository import InMemoryLeagueEventRepository
+from app.leagues.service import LeagueSeasonLifecycleService
+from app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
+from app.models.base import Base
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_dynasty_milestone import ClubDynastyMilestone
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_trophy import ClubTrophy
+from app.models.club_trophy_cabinet import ClubTrophyCabinet
+from app.models.competition import Competition
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_invite import CompetitionInvite
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.user import KycStatus, User, UserRole
+from app.notifications.service import NotificationCenter
+from app.replay_archive.persistence import InMemoryReplayArchiveRepository
+from app.replay_archive.policy import SpectatorVisibilityPolicyService
+from app.replay_archive.service import ReplayArchiveService
+from app.routes.clubs import router as clubs_router
+from app.routes.competitions import router as competitions_router
+from app.services.competition_orchestrator import CompetitionOrchestrator, get_competition_orchestrator
 
 
 def test_gtex_happy_path_smoke() -> None:

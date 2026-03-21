@@ -1,0 +1,93 @@
+services:
+  - type: web
+    name: gtex-api
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
+    preDeployCommand: python -m alembic -c backend/migrations/alembic.ini upgrade head
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - backend/**
+        - ops/render/**
+        - render.yaml
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
+      - key: GTE_REDIS_URL
+        fromService:
+          name: gtex-cache
+          type: keyvalue
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_APP_NAME
+        value: Global Talent Exchange API
+      - key: GTE_APP_VERSION
+        value: 0.1.0
+      - key: GTE_PHASE_MARKER
+        value: phase-8
+      - key: GTE_CONFIG_DIR
+        value: backend/config
+      - key: GTE_AUTH_SECRET
+        generateValue: true
+      - key: GTE_MEDIA_SIGNING_SECRET
+        generateValue: true
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "false"
+      - key: GTE_INGESTION_PROVIDER
+        value: mock
+      - key: GTE_PROVIDER_TIMEOUT_SECONDS
+        value: "20"
+      - key: GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS
+        value: "7"
+      - key: GTE_CRYPTO_DEPOSIT_ENABLED
+        value: "false"
+      - key: GTE_CRYPTO_PROVIDER_KEY
+        value: crypto_fiat
+      # This path is writable on Render, but uploads remain ephemeral until you
+      # move media to a persistent disk or external object storage.
+      - key: GTE_MEDIA_STORAGE_ROOT
+        value: backend/storage
+      - key: GTE_MEDIA_DOWNLOAD_BASE_URL
+        value: /media-engine/downloads
+      # Add FOOTBALL_DATA_API_KEY in the Render dashboard only if you switch
+      # GTE_INGESTION_PROVIDER to football_data.
+
+  - type: web
+    name: gtex-web
+    runtime: static
+    plan: free
+    buildCommand: bash ops/render/build-frontend.sh
+    staticPublishPath: frontend/build/web
+    buildFilter:
+      paths:
+        - frontend/**
+        - ops/render/**
+        - render.yaml
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Set this to the backend service's public https URL during Blueprint
+      # creation, for example https://gtex-api.onrender.com
+      - key: GTE_API_BASE_URL
+        sync: false
+      - key: GTE_BACKEND_MODE
+        value: live
+
+  - type: keyvalue
+    name: gtex-cache
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: gtex-postgres
+    plan: free
+    ipAllowList: []

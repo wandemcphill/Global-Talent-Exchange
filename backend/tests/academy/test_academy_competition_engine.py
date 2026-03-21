@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.academy.models import AcademyAwardsLeaders, AcademyClubRegistrationRequest, AcademySeasonRequest
-from backend.app.academy.services import AcademyCompetitionService
-from backend.app.academy.services.competition_engine import AcademyCompetitionEngineService
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.config.competition_constants import LEAGUE_GROUP_SIZE
+from app.academy.models import AcademyAwardsLeaders, AcademyClubRegistrationRequest, AcademySeasonRequest
+from app.academy.services import AcademyCompetitionService
+from app.academy.services.competition_engine import AcademyCompetitionEngineService
+from app.common.enums.fixture_window import FixtureWindow
+from app.config.competition_constants import LEAGUE_GROUP_SIZE
 
 
 def test_academy_competition_engine_preserves_open_window_slot_sequences() -> None:

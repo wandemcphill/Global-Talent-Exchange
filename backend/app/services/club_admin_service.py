@@ -6,17 +6,17 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.schemas.club_admin import AdminClubDetailView, BrandingModerationResultView, ModerateBrandingRequest
-from backend.app.schemas.club_branding_core import ClubJerseyDesignCore
-from backend.app.schemas.club_identity_core import ClubBrandingAssetCore
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.club_jersey_service import ClubJerseyService
-from backend.app.services.club_purchase_service import ClubPurchaseService
-from backend.app.services.club_reputation_service import ClubReputationService
-from backend.app.services.club_trophy_service import ClubTrophyService
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.schemas.club_admin import AdminClubDetailView, BrandingModerationResultView, ModerateBrandingRequest
+from app.schemas.club_branding_core import ClubJerseyDesignCore
+from app.schemas.club_identity_core import ClubBrandingAssetCore
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.club_jersey_service import ClubJerseyService
+from app.services.club_purchase_service import ClubPurchaseService
+from app.services.club_reputation_service import ClubReputationService
+from app.services.club_trophy_service import ClubTrophyService
 
 
 @dataclass(slots=True)

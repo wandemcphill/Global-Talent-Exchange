@@ -16,7 +16,7 @@ class GteAppConfig {
     );
     const String rawMode = String.fromEnvironment(
       'GTE_BACKEND_MODE',
-      defaultValue: 'liveThenFixture',
+      defaultValue: 'live',
     );
     return GteAppConfig(
       apiBaseUrl: rawBaseUrl,

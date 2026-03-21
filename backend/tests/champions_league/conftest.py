@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.champions_league.api.router import router
-from backend.app.champions_league.models.domain import AdvancementStatus, ClubCandidate, ClubSeed, LeagueStandingRow
+from app.champions_league.api.router import router
+from app.champions_league.models.domain import AdvancementStatus, ClubCandidate, ClubSeed, LeagueStandingRow
 
 
 def _build_candidates(total: int = 60) -> list[ClubCandidate]:

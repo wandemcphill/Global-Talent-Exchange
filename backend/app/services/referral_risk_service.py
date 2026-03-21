@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Mapping
 
-from backend.app.schemas.referral_admin import ReferralFlagView
-from backend.app.services.referral_analytics_service import ReferralAnalyticsService
-from backend.app.services.referral_orchestrator import AttributionRecord, ReferralOrchestrator, utcnow
+from app.schemas.referral_admin import ReferralFlagView
+from app.services.referral_analytics_service import ReferralAnalyticsService
+from app.services.referral_orchestrator import AttributionRecord, ReferralOrchestrator, utcnow
 
 _ZERO = Decimal("0")
 

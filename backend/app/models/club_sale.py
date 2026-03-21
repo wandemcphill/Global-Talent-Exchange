@@ -1,4 +1,4 @@
-from backend.app.models.club_sale_market import (
+from app.models.club_sale_market import (
     ClubSaleAuditEvent,
     ClubSaleInquiry,
     ClubSaleInquiryStatus,

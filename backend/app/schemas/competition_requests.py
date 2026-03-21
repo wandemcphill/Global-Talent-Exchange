@@ -5,11 +5,11 @@ from decimal import Decimal
 
 from pydantic import Field, model_validator
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.config.competition_constants import CUP_ALLOWED_PARTICIPANT_SIZES, USER_COMPETITION_MAX_PARTICIPANTS
-from backend.app.schemas.competition_lifecycle import CompetitionStructureRequest, CompetitionVisibilityRuleRequest
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.schemas.base import CommonSchema
+from app.config.competition_constants import CUP_ALLOWED_PARTICIPANT_SIZES, USER_COMPETITION_MAX_PARTICIPANTS
+from app.schemas.competition_lifecycle import CompetitionStructureRequest, CompetitionVisibilityRuleRequest
 
 _ONE_HUNDRED = Decimal("1")
 

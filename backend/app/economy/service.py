@@ -6,16 +6,16 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.economy.schemas import (
+from app.economy.schemas import (
     GiftCatalogItemUpsertRequest,
     ServicePricingRuleUpsertRequest,
     GiftComboRuleUpsertRequest,
     RevenueShareRuleUpsertRequest,
 )
-from backend.app.models.economy_config import GiftCatalogItem, ServicePricingRule
-from backend.app.models.gift_combo_rule import GiftComboRule
-from backend.app.models.revenue_share_rule import RevenueShareRule
-from backend.app.models.user import User
+from app.models.economy_config import GiftCatalogItem, ServicePricingRule
+from app.models.gift_combo_rule import GiftComboRule
+from app.models.revenue_share_rule import RevenueShareRule
+from app.models.user import User
 
 DEFAULT_GIFTS: tuple[dict[str, object], ...] = (
     {

@@ -5,9 +5,9 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.fast_cups.models.domain import FastCupDivision, FastCupStage, FastCupStatus
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.fast_cups.models.domain import FastCupDivision, FastCupStage, FastCupStatus
 
 
 class ClubCompetitionWindowRequest(BaseModel):

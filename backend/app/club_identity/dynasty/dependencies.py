@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request, status
 
-from backend.app.db import get_session_factory
-from backend.app.club_identity.dynasty.repository import DatabaseDynastyReadRepository, DynastyReadRepository
+from app.db import get_session_factory
+from app.club_identity.dynasty.repository import DatabaseDynastyReadRepository, DynastyReadRepository
 
 
 def get_dynasty_repository(request: Request) -> DynastyReadRepository:

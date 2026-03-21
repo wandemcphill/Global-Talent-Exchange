@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.club_social.schemas import (
+from app.auth.dependencies import get_current_user
+from app.club_social.schemas import (
     ChallengeAcceptRequest,
     ChallengeCreateRequest,
     ChallengeLinkCreateRequest,
@@ -19,9 +19,9 @@ from backend.app.club_social.schemas import (
     RivalryDetailView,
     RivalryMatchRecordRequest,
 )
-from backend.app.club_social.service import ClubSocialError, ClubSocialService
-from backend.app.db import get_session
-from backend.app.models.user import User
+from app.club_social.service import ClubSocialError, ClubSocialService
+from app.db import get_session
+from app.models.user import User
 
 router = APIRouter(tags=["club_social"])
 

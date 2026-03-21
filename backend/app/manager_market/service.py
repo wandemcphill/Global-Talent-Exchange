@@ -11,8 +11,8 @@ from fastapi import FastAPI
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.manager_market import (
+from app.models.base import generate_uuid, utcnow
+from app.models.manager_market import (
     ManagerAuditLog,
     ManagerCatalogEntry,
     ManagerCompetitionSetting,
@@ -22,10 +22,10 @@ from backend.app.models.manager_market import (
     ManagerTradeListing,
     ManagerTradeRecord,
 )
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerSourceTag, LedgerUnit
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.admin_engine.service import AdminEngineService
+from app.models.user import User
+from app.models.wallet import LedgerSourceTag, LedgerUnit
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 from .schemas import (
     CompetitionAdminUpdateRequest,

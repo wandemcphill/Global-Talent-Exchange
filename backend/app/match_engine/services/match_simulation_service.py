@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.match_engine.commentary.timeline import MatchCommentaryTimelineGenerator
-from backend.app.match_engine.schemas import (
+from app.match_engine.commentary.timeline import MatchCommentaryTimelineGenerator
+from app.match_engine.schemas import (
     MatchBadgeVisualView,
     MatchFinalSummaryView,
     MatchHighlightClipView,
@@ -19,8 +19,8 @@ from backend.app.match_engine.schemas import (
     PenaltyAttemptView,
     PenaltyShootoutView,
 )
-from backend.app.match_engine.services.replay_builder import ReplayEventLogBuilder
-from backend.app.match_engine.services.experience_layers import (
+from app.match_engine.services.replay_builder import ReplayEventLogBuilder
+from app.match_engine.services.experience_layers import (
     MatchControlLogBuilder,
     MatchHalftimeAnalyticsBuilder,
     MatchHighlightBuilder,
@@ -28,8 +28,8 @@ from backend.app.match_engine.services.experience_layers import (
     MatchReplayContractBuilder,
     HighlightBundle,
 )
-from backend.app.match_engine.simulation.event_generator import MatchEventGenerator
-from backend.app.match_engine.simulation.models import MatchEventType, SimulationResult
+from app.match_engine.simulation.event_generator import MatchEventGenerator
+from app.match_engine.simulation.models import MatchEventType, SimulationResult
 
 
 class MatchSimulationService:

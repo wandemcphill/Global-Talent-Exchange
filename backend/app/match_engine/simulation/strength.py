@@ -3,7 +3,7 @@ from __future__ import annotations
 from statistics import fmean
 from typing import Protocol
 
-from backend.app.match_engine.simulation.models import MatchTeamProfile, PlayerRole, TacticalStyle, TeamStrengthSnapshot
+from app.match_engine.simulation.models import MatchTeamProfile, PlayerRole, TacticalStyle, TeamStrengthSnapshot
 
 
 class TeamStrengthCalculator(Protocol):

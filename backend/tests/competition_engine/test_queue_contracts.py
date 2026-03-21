@@ -5,10 +5,10 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.competition_engine.queue_contracts import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.competition_engine.queue_contracts import (
     InMemoryQueuePublisher,
     MatchSimulationJob,
 )

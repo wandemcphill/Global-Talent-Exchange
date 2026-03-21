@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "20260314_0035"
@@ -16,14 +17,43 @@ branch_labels = None
 depends_on = None
 
 
-governanceproposalscope = sa.Enum("club", "platform", name="governanceproposalscope")
-governanceproposalstatus = sa.Enum("draft", "open", "closed", "accepted", "rejected", name="governanceproposalstatus")
-governancevotechoice = sa.Enum("yes", "no", "abstain", name="governancevotechoice")
 dispute_status = sa.Enum("open", "awaiting_user", "awaiting_admin", "resolved", "closed", name="dispute_status", native_enum=False)
 
 
 def upgrade() -> None:
     bind = op.get_bind()
+    governanceproposalscope = postgresql.ENUM("club", "platform", name="governanceproposalscope")
+    governanceproposalstatus = postgresql.ENUM(
+        "draft",
+        "open",
+        "closed",
+        "accepted",
+        "rejected",
+        name="governanceproposalstatus",
+    )
+    governancevotechoice = postgresql.ENUM("yes", "no", "abstain", name="governancevotechoice")
+    governanceproposalscope_column = postgresql.ENUM(
+        "club",
+        "platform",
+        name="governanceproposalscope",
+        create_type=False,
+    )
+    governanceproposalstatus_column = postgresql.ENUM(
+        "draft",
+        "open",
+        "closed",
+        "accepted",
+        "rejected",
+        name="governanceproposalstatus",
+        create_type=False,
+    )
+    governancevotechoice_column = postgresql.ENUM(
+        "yes",
+        "no",
+        "abstain",
+        name="governancevotechoice",
+        create_type=False,
+    )
     governanceproposalscope.create(bind, checkfirst=True)
     governanceproposalstatus.create(bind, checkfirst=True)
     governancevotechoice.create(bind, checkfirst=True)
@@ -33,8 +63,8 @@ def upgrade() -> None:
         "governance_proposals",
         sa.Column("club_id", sa.String(length=36), nullable=True),
         sa.Column("proposer_user_id", sa.String(length=36), nullable=False),
-        sa.Column("scope", governanceproposalscope, nullable=False),
-        sa.Column("status", governanceproposalstatus, nullable=False),
+        sa.Column("scope", governanceproposalscope_column, nullable=False),
+        sa.Column("status", governanceproposalstatus_column, nullable=False),
         sa.Column("title", sa.String(length=180), nullable=False),
         sa.Column("summary", sa.Text(), nullable=False),
         sa.Column("category", sa.String(length=64), nullable=False, server_default="general"),
@@ -63,7 +93,7 @@ def upgrade() -> None:
         sa.Column("proposal_id", sa.String(length=36), nullable=False),
         sa.Column("voter_user_id", sa.String(length=36), nullable=False),
         sa.Column("club_id", sa.String(length=36), nullable=True),
-        sa.Column("choice", governancevotechoice, nullable=False),
+        sa.Column("choice", governancevotechoice_column, nullable=False),
         sa.Column("token_weight", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("influence_weight", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("comment", sa.Text(), nullable=True),
@@ -95,6 +125,6 @@ def downgrade() -> None:
 
     bind = op.get_bind()
     dispute_status.drop(bind, checkfirst=True)
-    governancevotechoice.drop(bind, checkfirst=True)
-    governanceproposalstatus.drop(bind, checkfirst=True)
-    governanceproposalscope.drop(bind, checkfirst=True)
+    postgresql.ENUM(name="governancevotechoice").drop(bind, checkfirst=True)
+    postgresql.ENUM(name="governanceproposalstatus").drop(bind, checkfirst=True)
+    postgresql.ENUM(name="governanceproposalscope").drop(bind, checkfirst=True)

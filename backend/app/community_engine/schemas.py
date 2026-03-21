@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from backend.app.models.community_engine import LiveThreadStatus, MessageVisibility, PrivateMessageThreadStatus
+from app.models.community_engine import LiveThreadStatus, MessageVisibility, PrivateMessageThreadStatus
 
 
 class CompetitionWatchlistCreate(BaseModel):

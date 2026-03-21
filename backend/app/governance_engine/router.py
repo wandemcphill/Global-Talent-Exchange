@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.governance_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.governance_engine.schemas import (
     GovernanceClubPanelResponse,
     GovernanceOverviewResponse,
     GovernanceProposalCreateRequest,
@@ -16,8 +16,8 @@ from backend.app.governance_engine.schemas import (
     GovernanceVoteResponse,
     GovernanceVoteView,
 )
-from backend.app.governance_engine.service import GovernanceEngineError, GovernanceEngineService
-from backend.app.models.user import User
+from app.governance_engine.service import GovernanceEngineError, GovernanceEngineService
+from app.models.user import User
 
 router = APIRouter(prefix="/governance", tags=["governance"])
 admin_router = APIRouter(prefix="/admin/governance", tags=["admin-governance"])

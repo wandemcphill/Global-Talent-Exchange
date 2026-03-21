@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.club_infra_engine.schemas import ClubInfraActionResponse, ClubInfraDashboardResponse, FacilityUpgradeRequest, StadiumUpgradeRequest, SupportClubRequest
-from backend.app.club_infra_engine.service import ClubInfraError, ClubInfraService
-from backend.app.models.user import User
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.club_infra_engine.schemas import ClubInfraActionResponse, ClubInfraDashboardResponse, FacilityUpgradeRequest, StadiumUpgradeRequest, SupportClubRequest
+from app.club_infra_engine.service import ClubInfraError, ClubInfraService
+from app.models.user import User
 
 router = APIRouter(prefix='/club-infra', tags=['club-infra'])
 admin_router = APIRouter(prefix='/admin/club-infra', tags=['admin-club-infra'])

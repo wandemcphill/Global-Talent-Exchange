@@ -3,16 +3,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.integrity_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.integrity_engine.schemas import (
     IntegrityIncidentResponse,
     IntegrityResolveRequest,
     IntegrityScanRequest,
     IntegrityScanResponse,
     IntegrityScoreResponse,
 )
-from backend.app.integrity_engine.service import IntegrityEngineService
-from backend.app.models.user import User
+from app.integrity_engine.service import IntegrityEngineService
+from app.models.user import User
 
 router = APIRouter(prefix="/integrity-engine", tags=["integrity-engine"])
 admin_router = APIRouter(prefix="/admin/integrity-engine", tags=["integrity-engine-admin"])

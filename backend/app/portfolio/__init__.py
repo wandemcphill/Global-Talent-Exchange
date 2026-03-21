@@ -1,6 +1,6 @@
-from backend.app.portfolio.router import router
-from backend.app.portfolio.schemas import PortfolioHoldingView, PortfolioSummaryView, PortfolioView
-from backend.app.portfolio.service import PortfolioHolding, PortfolioService, PortfolioSummary
+from app.portfolio.router import router
+from app.portfolio.schemas import PortfolioHoldingView, PortfolioSummaryView, PortfolioView
+from app.portfolio.service import PortfolioHolding, PortfolioService, PortfolioSummary
 
 __all__ = [
     "PortfolioHolding",

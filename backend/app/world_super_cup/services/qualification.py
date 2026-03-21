@@ -3,18 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     WORLD_SUPER_CUP_DIRECT_SLOTS,
     WORLD_SUPER_CUP_PLAYOFF_TEAMS,
 )
-from backend.app.world_super_cup.models import (
+from app.world_super_cup.models import (
     ClubSeasonPerformance,
     CoefficientEntry,
     PlayoffMatch,
     QualificationPlan,
     QualifiedClub,
 )
-from backend.app.world_super_cup.services.match_resolution import resolve_seeded_score
+from app.world_super_cup.services.match_resolution import resolve_seeded_score
 
 
 @dataclass(frozen=True, slots=True)

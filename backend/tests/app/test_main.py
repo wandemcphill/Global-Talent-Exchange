@@ -8,17 +8,17 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, text
 
-from backend.app.auth.dependencies import get_session
-from backend.app.auth.router import register_user
-from backend.app.auth.schemas import RegisterRequest
-from backend.app.cache.redis_helpers import NullCacheBackend
-from backend.app.core.database import DatabaseRuntime, build_alembic_config
-from backend.app.ingestion.service import IngestionService
-from backend.app.main import create_app
-from backend.app.market.router import create_listing
-from backend.app.market.schemas import ListingCreate
-from backend.app.models.user import User
-from backend.app.wallets.router import list_wallet_accounts
+from app.auth.dependencies import get_session
+from app.auth.router import register_user
+from app.auth.schemas import RegisterRequest
+from app.cache.redis_helpers import NullCacheBackend
+from app.core.database import DatabaseRuntime, build_alembic_config
+from app.ingestion.service import IngestionService
+from app.main import create_app
+from app.market.router import create_listing
+from app.market.schemas import ListingCreate
+from app.models.user import User
+from app.wallets.router import list_wallet_accounts
 
 
 @pytest.fixture()

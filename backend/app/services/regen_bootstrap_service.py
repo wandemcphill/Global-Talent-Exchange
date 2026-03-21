@@ -7,22 +7,22 @@ from decimal import Decimal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.core.config import Settings, get_settings
-from backend.app.ingestion.models import Country, Player, PlayerVerification
-from backend.app.models.club_infra import ClubFacility
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_cards import (
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.core.config import Settings, get_settings
+from app.ingestion.models import Country, Player, PlayerVerification
+from app.models.club_infra import ClubFacility
+from app.models.club_profile import ClubProfile
+from app.models.player_cards import (
     PlayerCard,
     PlayerCardHolding,
     PlayerCardHistory,
     PlayerCardOwnerHistory,
     PlayerCardTier,
 )
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.models.regen import (
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.regen import (
     RegenGenerationEvent,
     RegenLineageProfile,
     RegenOnboardingFlag,
@@ -33,7 +33,7 @@ from backend.app.models.regen import (
     RegenTwinsGroup,
     RegenVisualProfile,
 )
-from backend.app.services.regen_service import RegenClubContext, RegenGenerationEngine
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
 _COUNTRY_NAMES = {
     "NG": "Nigeria",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 
 class ClubLeaderboardEntry(CommonSchema):

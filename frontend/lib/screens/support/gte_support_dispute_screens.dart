@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -56,8 +54,7 @@ class _GteDisputeHubScreenState extends State<GteDisputeHubScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final List<GteDispute> disputes =
-              snapshot.data ?? <GteDispute>[];
+          final List<GteDispute> disputes = snapshot.data ?? <GteDispute>[];
           if (disputes.isEmpty) {
             return const Center(
               child: GteStatePanel(
@@ -206,8 +203,7 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
         return;
       }
       final PlatformFile file = result.files.first;
-      final List<int> bytes = file.bytes ??
-          (file.path == null ? <int>[] : File(file.path!).readAsBytesSync());
+      final List<int> bytes = file.bytes ?? const <int>[];
       if (bytes.isEmpty) {
         throw Exception('Unable to read the selected file.');
       }
@@ -215,9 +211,8 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
           await widget.controller.api.uploadAttachment(
         file.name,
         bytes,
-        contentType: file.extension == null
-            ? null
-            : 'application/${file.extension}',
+        contentType:
+            file.extension == null ? null : 'application/${file.extension}',
       );
       if (!mounted) {
         return;
@@ -375,9 +370,8 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
                     OutlinedButton.icon(
                       onPressed: _isUploading ? null : _pickAttachment,
                       icon: const Icon(Icons.attach_file_outlined),
-                      label: Text(_isUploading
-                          ? 'Uploading...'
-                          : 'Add attachment'),
+                      label: Text(
+                          _isUploading ? 'Uploading...' : 'Add attachment'),
                     ),
                     if (_attachment != null)
                       Chip(label: Text(_attachment!.filename)),
@@ -396,8 +390,8 @@ class _GteDisputeCreateScreenState extends State<GteDisputeCreateScreen> {
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: _isSubmitting ? null : _submit,
-                    child: Text(
-                        _isSubmitting ? 'Submitting...' : 'Open dispute'),
+                    child:
+                        Text(_isSubmitting ? 'Submitting...' : 'Open dispute'),
                   ),
                 ),
               ],
@@ -493,17 +487,15 @@ class _GteDisputeThreadScreenState extends State<GteDisputeThreadScreen> {
         return;
       }
       final PlatformFile file = result.files.first;
-      final List<int> bytes = file.bytes ??
-          (file.path == null ? <int>[] : File(file.path!).readAsBytesSync());
+      final List<int> bytes = file.bytes ?? const <int>[];
       if (bytes.isEmpty) {
         throw Exception('Unable to read the selected file.');
       }
       final GteAttachment attachment = await widget.api.uploadAttachment(
         file.name,
         bytes,
-        contentType: file.extension == null
-            ? null
-            : 'application/${file.extension}',
+        contentType:
+            file.extension == null ? null : 'application/${file.extension}',
       );
       if (!mounted) {
         return;

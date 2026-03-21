@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.football_events_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.football_events_engine.schemas import (
     EventCategoryToggleRequest,
     EventEffectRuleUpsertRequest,
     EventEffectRuleView,
@@ -20,7 +20,7 @@ from backend.app.football_events_engine.schemas import (
     RealWorldFootballEventView,
     TrendingPlayerFlagView,
 )
-from backend.app.football_events_engine.service import (
+from app.football_events_engine.service import (
     EventCategoryToggle,
     EventEffectRuleUpsert,
     EventFeedIngestionRequest,
@@ -30,7 +30,7 @@ from backend.app.football_events_engine.service import (
     RealWorldFootballEventService,
     RealWorldFootballEventValidationError,
 )
-from backend.app.models.user import User
+from app.models.user import User
 
 router = APIRouter(prefix="/football-events", tags=["football-events"])
 admin_router = APIRouter(prefix="/admin/football-events", tags=["admin-football-events"])

@@ -1,41 +1,47 @@
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:http/http.dart' as http;
 
 import 'gte_api_repository.dart';
+
+typedef GteHttpClientFactory = http.Client Function();
 
 class GteHttpTransport implements GteTransport {
   GteHttpTransport({
     Duration? connectionTimeout,
-  }) : connectionTimeout = connectionTimeout ?? const Duration(seconds: 5);
+    http.Client? client,
+  })  : connectionTimeout = connectionTimeout ?? const Duration(seconds: 5),
+        _client = client;
 
   final Duration connectionTimeout;
+  final http.Client? _client;
+
+  static GteHttpClientFactory clientFactory = http.Client.new;
 
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
-    final HttpClient client = HttpClient()
-      ..connectionTimeout = connectionTimeout;
+    final http.Client client = _client ?? clientFactory();
+    final bool ownsClient = _client == null;
     try {
-      final HttpClientRequest httpRequest =
-          await client.openUrl(request.method, request.uri);
-      request.headers.forEach(httpRequest.headers.add);
+      final http.Request httpRequest = http.Request(request.method, request.uri)
+        ..headers.addAll(request.headers);
       if (request.body != null) {
-        httpRequest.write(jsonEncode(request.body));
+        httpRequest.body = jsonEncode(request.body);
       }
-      final HttpClientResponse response = await httpRequest.close();
-      final String text = await response.transform(utf8.decoder).join();
+      final http.StreamedResponse response =
+          await client.send(httpRequest).timeout(connectionTimeout);
+      final String text = await response.stream.bytesToString();
       final Object? decodedBody =
           text.trim().isEmpty ? null : _decodeBody(text);
-      final Map<String, String> responseHeaders = <String, String>{};
-      response.headers.forEach((String name, List<String> values) {
-        responseHeaders[name] = values.join(', ');
-      });
       return GteTransportResponse(
         statusCode: response.statusCode,
         body: decodedBody,
-        headers: responseHeaders,
+        headers: response.headers,
       );
     } finally {
-      client.close(force: true);
+      if (ownsClient) {
+        client.close();
+      }
     }
   }
 
@@ -49,28 +55,23 @@ class GteHttpTransport implements GteTransport {
 }
 
 class GteFileTokenStore implements GteTokenStore {
-  GteFileTokenStore(this.file);
+  GteFileTokenStore([this.storageKey = 'gte_access_token']);
 
-  final File file;
+  final String storageKey;
+  static final Map<String, String> _tokens = <String, String>{};
 
   @override
   Future<String?> readToken() async {
-    if (!await file.exists()) {
-      return null;
-    }
-    final String token = (await file.readAsString()).trim();
+    final String token = (_tokens[storageKey] ?? '').trim();
     return token.isEmpty ? null : token;
   }
 
   @override
   Future<void> writeToken(String? token) async {
     if (token == null || token.isEmpty) {
-      if (await file.exists()) {
-        await file.delete();
-      }
+      _tokens.remove(storageKey);
       return;
     }
-    await file.parent.create(recursive: true);
-    await file.writeAsString(token);
+    _tokens[storageKey] = token;
   }
 }

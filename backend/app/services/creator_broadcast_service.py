@@ -6,12 +6,12 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import generate_uuid
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
-from backend.app.models.creator_monetization import (
+from app.models.base import generate_uuid
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
+from app.models.creator_monetization import (
     CreatorBroadcastModeConfig,
     CreatorBroadcastPurchase,
     CreatorMatchGiftEvent,
@@ -19,12 +19,12 @@ from backend.app.models.creator_monetization import (
     CreatorStadiumPricing,
     CreatorStadiumTicketPurchase,
 )
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.services.spending_control_service import SpendingControlService, SpendingControlViolation
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 CREATOR_LEAGUE_KEY = "creator_league"
@@ -736,7 +736,7 @@ class CreatorBroadcastService:
         match_id: str | None,
         metadata_json: dict[str, object] | None = None,
     ) -> None:
-        from backend.app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
+        from app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
 
         try:
             CreatorClubShareMarketService(

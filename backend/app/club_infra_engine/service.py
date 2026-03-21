@@ -6,10 +6,10 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.economy.service import EconomyConfigService
-from backend.app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.user import User
+from app.economy.service import EconomyConfigService
+from app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
+from app.models.club_profile import ClubProfile
+from app.models.user import User
 
 
 class ClubInfraError(ValueError):

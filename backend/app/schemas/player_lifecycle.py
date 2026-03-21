@@ -6,11 +6,11 @@ from typing import Literal
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.common.enums.contract_status import ContractStatus
-from backend.app.common.enums.injury_severity import InjurySeverity
-from backend.app.common.enums.transfer_bid_status import TransferBidStatus
-from backend.app.common.enums.transfer_window_status import TransferWindowStatus
+from app.common.schemas.base import CommonSchema
+from app.common.enums.contract_status import ContractStatus
+from app.common.enums.injury_severity import InjurySeverity
+from app.common.enums.transfer_bid_status import TransferBidStatus
+from app.common.enums.transfer_window_status import TransferWindowStatus
 
 
 class CareerEntryView(CommonSchema):

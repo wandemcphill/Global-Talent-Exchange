@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine
 
-from backend.app.core import database as database_module
-from backend.app.main import create_app
+from app.core import database as database_module
+from app.main import create_app
 
 
 def test_ensure_database_schema_current_upgrades_single_head(monkeypatch, tmp_path) -> None:

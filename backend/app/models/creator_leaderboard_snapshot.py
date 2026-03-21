@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import Date, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class CreatorLeaderboardSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):

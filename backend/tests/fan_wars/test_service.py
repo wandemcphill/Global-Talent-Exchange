@@ -6,14 +6,14 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.fan_wars.schemas import CreatorCountryAssignmentRequest, FanWarPointRecordRequest, NationsCupCreateRequest
-from backend.app.fan_wars.service import FanWarError, FanWarService
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.fan_war import FanWarPoint, FanWarProfile
-from backend.app.models.user import User
+from app.common.enums.competition_status import CompetitionStatus
+from app.fan_wars.schemas import CreatorCountryAssignmentRequest, FanWarPointRecordRequest, NationsCupCreateRequest
+from app.fan_wars.service import FanWarError, FanWarService
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.fan_war import FanWarPoint, FanWarProfile
+from app.models.user import User
 
 
 def _assign_country(service: FanWarService, *, creator_profile_id: str, country_code: str, country_name: str, actor: User) -> None:

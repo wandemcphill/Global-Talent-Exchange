@@ -44,8 +44,8 @@ curl http://127.0.0.1:8000/diagnostics
 
 ## Seeded accounts
 
-- Demo bootstrap users: `fan@demo.gte.local`, `scout@demo.gte.local`, `admin@demo.gte.local`
-- Demo bootstrap password: `DemoPass123`
+- Local bootstrap users: `seed.fan@gte.local`, `seed.scout@gte.local`, `seed.admin@gte.local`
+- Local bootstrap password: `DemoPass123`
 - Auto-seeded super admin: `vidvimedialtd@gmail.com` / `NewPass1234!`
 
 ## Frontend quick start
@@ -57,7 +57,7 @@ Flutter was not installed in this audit environment, so the commands below still
 ```powershell
 cd frontend
 flutter pub get
-flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=liveThenFixture
+flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live
 ```
 
 Useful variants:

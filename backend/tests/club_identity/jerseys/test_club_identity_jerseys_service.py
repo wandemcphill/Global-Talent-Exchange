@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from backend.app.club_identity.jerseys.service import ClubIdentityService
-from backend.app.club_identity.models.jersey_models import BadgeShape, IconFamily, JerseyType
+from app.club_identity.jerseys.service import ClubIdentityService
+from app.club_identity.models.jersey_models import BadgeShape, IconFamily, JerseyType
 
 
 def test_jersey_creation_generates_full_default_identity(identity_service: ClubIdentityService) -> None:

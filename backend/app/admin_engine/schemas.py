@@ -6,9 +6,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
 
 
 class AdminGiftStabilityControlConfig(BaseModel):

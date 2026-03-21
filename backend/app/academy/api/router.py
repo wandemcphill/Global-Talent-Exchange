@@ -4,7 +4,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter
 
-from backend.app.academy.api.schemas import (
+from app.academy.api.schemas import (
     AcademyAwardsResponseView,
     AcademyFixturesResponseView,
     AcademyQualificationResponseView,
@@ -13,13 +13,13 @@ from backend.app.academy.api.schemas import (
     AcademySeasonSummaryView,
     AcademyStandingsResponseView,
 )
-from backend.app.academy.models import (
+from app.academy.models import (
     AcademyAwardsLeaders,
     AcademyClubRegistrationRequest,
     AcademyMatchResult,
     AcademySeasonRequest,
 )
-from backend.app.academy.services import AcademyCompetitionService
+from app.academy.services import AcademyCompetitionService
 
 router = APIRouter(prefix="/academy", tags=["academy"])
 

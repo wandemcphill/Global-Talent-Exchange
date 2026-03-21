@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.sponsorship_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.user import User
+from app.sponsorship_engine.schemas import (
     ClubSponsorAssignmentRequest,
     ClubSponsorView,
     SponsorCategoryToggleRequest,
@@ -28,10 +28,10 @@ from backend.app.sponsorship_engine.schemas import (
     SponsorshipReviewRequest,
     SponsorshipSettlementView,
 )
-from backend.app.sponsorship_engine.offer_service import ClubSponsorOfferError, ClubSponsorOfferService
-from backend.app.sponsorship_engine.service import SponsorshipEngineError, SponsorshipEngineService
-from backend.app.services.sponsorship_placement_service import SponsorshipPlacementService
-from backend.app.analytics.service import AnalyticsService
+from app.sponsorship_engine.offer_service import ClubSponsorOfferError, ClubSponsorOfferService
+from app.sponsorship_engine.service import SponsorshipEngineError, SponsorshipEngineService
+from app.services.sponsorship_placement_service import SponsorshipPlacementService
+from app.analytics.service import AnalyticsService
 
 router = APIRouter(prefix="/sponsorship", tags=["sponsorship"])
 admin_router = APIRouter(prefix="/admin/sponsorship", tags=["admin-sponsorship"])

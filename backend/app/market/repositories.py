@@ -7,10 +7,10 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.ingestion.models import Player
-from backend.app.market.models import Listing, Offer, TradeIntent
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.ingestion.models import Player
+from app.market.models import Listing, Offer, TradeIntent
+from app.players.read_models import PlayerSummaryReadModel
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 class MarketRepository(Protocol):

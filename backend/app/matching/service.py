@@ -8,8 +8,8 @@ from decimal import Decimal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.matching.models import TradeExecution
-from backend.app.orders.models import Order, OrderSide, OrderStatus
+from app.matching.models import TradeExecution
+from app.orders.models import Order, OrderSide, OrderStatus
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 ACTIVE_ORDER_STATUSES = (OrderStatus.OPEN, OrderStatus.PARTIALLY_FILLED)

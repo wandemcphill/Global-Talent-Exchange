@@ -11,16 +11,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.community_engine.router import router as community_router
-from backend.app.models.base import Base
-from backend.app.models.club_infra import ClubSupporterHolding
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_social import RivalryProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.creator_fan_engagement import (
+from app.auth.dependencies import get_current_user, get_session
+from app.community_engine.router import router as community_router
+from app.models.base import Base
+from app.models.club_infra import ClubSupporterHolding
+from app.models.club_profile import ClubProfile
+from app.models.club_social import RivalryProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_round import CompetitionRound
+from app.models.creator_fan_engagement import (
     CreatorClubFollow,
     CreatorFanCompetition,
     CreatorFanCompetitionEntry,
@@ -32,13 +32,13 @@ from backend.app.models.creator_fan_engagement import (
     CreatorMatchTacticalAdvice,
     CreatorRivalrySignalOutput,
 )
-from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
-from backend.app.models.creator_monetization import CreatorBroadcastPurchase, CreatorMatchGiftEvent, CreatorSeasonPass
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.media_engine import MatchView, PremiumVideoPurchase
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.services.creator_fan_engagement_service import CreatorFanEngagementService
+from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
+from app.models.creator_monetization import CreatorBroadcastPurchase, CreatorMatchGiftEvent, CreatorSeasonPass
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.media_engine import MatchView, PremiumVideoPurchase
+from app.models.user import KycStatus, User, UserRole
+from app.services.creator_fan_engagement_service import CreatorFanEngagementService
 
 
 @pytest.fixture()

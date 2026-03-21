@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     ClubCompetitionWindow,
     FastCup,
     FastCupBracket,
@@ -16,14 +16,14 @@ from backend.app.fast_cups.models.domain import (
     FastCupStatus,
     RegistrationCountdown,
 )
-from backend.app.fast_cups.repositories.base import FastCupRepository
-from backend.app.fast_cups.repositories.database import DatabaseFastCupRepository
-from backend.app.fast_cups.repositories.memory import InMemoryFastCupRepository
-from backend.app.fast_cups.services.bracket import FastCupBracketService
-from backend.app.fast_cups.services.countdown import RegistrationCountdownService
-from backend.app.fast_cups.services.creation import RecurringFastCupCreationService
-from backend.app.fast_cups.services.payouts import FastCupRewardPayoutService
-from backend.app.fast_cups.services.registration import FastCupRegistrationService
+from app.fast_cups.repositories.base import FastCupRepository
+from app.fast_cups.repositories.database import DatabaseFastCupRepository
+from app.fast_cups.repositories.memory import InMemoryFastCupRepository
+from app.fast_cups.services.bracket import FastCupBracketService
+from app.fast_cups.services.countdown import RegistrationCountdownService
+from app.fast_cups.services.creation import RecurringFastCupCreationService
+from app.fast_cups.services.payouts import FastCupRewardPayoutService
+from app.fast_cups.services.registration import FastCupRegistrationService
 
 
 class FastCupEcosystemService:

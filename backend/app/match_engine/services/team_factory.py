@@ -6,15 +6,15 @@ from datetime import date
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import select
 
-from backend.app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
-from backend.app.club_identity.jerseys.service import ClubIdentityService
-from backend.app.club_identity.models.jersey_models import JerseyVariant
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.competition_engine.queue_contracts import MatchSimulationJob
-from backend.app.ingestion.models import Player
-from backend.app.match_engine.schemas import (
+from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
+from app.club_identity.jerseys.service import ClubIdentityService
+from app.club_identity.models.jersey_models import JerseyVariant
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.common.enums.competition_type import CompetitionType
+from app.competition_engine.queue_contracts import MatchSimulationJob
+from app.ingestion.models import Player
+from app.match_engine.schemas import (
     MatchClubContextInput,
     MatchCompetitionContextInput,
     MatchKitIdentityInput,
@@ -24,9 +24,9 @@ from backend.app.match_engine.schemas import (
     MatchTeamIdentityInput,
     TeamTacticalPlanInput,
 )
-from backend.app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
-from backend.app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
-from backend.app.services.player_lifecycle_service import (
+from app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
+from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
+from app.services.player_lifecycle_service import (
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
 )

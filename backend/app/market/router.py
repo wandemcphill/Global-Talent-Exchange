@@ -5,11 +5,11 @@ from typing import Never
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.auth.dependencies import get_session
-from backend.app.market.read_models import MarketSummaryReadModel
-from backend.app.market.projections import MarketSummaryProjector
-from backend.app.market.schemas import (
+from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_session
+from app.market.read_models import MarketSummaryReadModel
+from app.market.projections import MarketSummaryProjector
+from app.market.schemas import (
     ListingCreate,
     ListingView,
     MarketPlayerDetailView,
@@ -22,8 +22,8 @@ from backend.app.market.schemas import (
     TradeIntentCreate,
     TradeIntentView,
 )
-from backend.app.pricing.schemas import MarketCandlesView, MarketMoversView, MarketTickerView
-from backend.app.market.service import (
+from app.pricing.schemas import MarketCandlesView, MarketMoversView, MarketTickerView
+from app.market.service import (
     MarketConflictError,
     MarketEngine,
     MarketError,
@@ -32,7 +32,7 @@ from backend.app.market.service import (
     MarketPermissionError,
     MarketValidationError,
 )
-from backend.app.models.user import User
+from app.models.user import User
 
 router = APIRouter(prefix="/market", tags=["market"])
 

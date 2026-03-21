@@ -6,9 +6,9 @@ from io import StringIO
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.player_import_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.user import User
+from app.player_import_engine.schemas import (
     PlayerCardSupplyJobCreateRequest,
     PlayerImportJobCreateRequest,
     PlayerImportJobView,
@@ -17,7 +17,7 @@ from backend.app.player_import_engine.schemas import (
     YouthGenerationResponse,
     YouthProspectView,
 )
-from backend.app.player_import_engine.service import PlayerImportError, PlayerImportService
+from app.player_import_engine.service import PlayerImportError, PlayerImportService
 
 router = APIRouter(prefix='/player-import', tags=['player-import'])
 admin_router = APIRouter(prefix='/admin/player-import', tags=['admin-player-import'])

@@ -7,14 +7,14 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.models.community_engine import CompetitionWatchlist, LiveThread
-from backend.app.models.daily_challenge import DailyChallenge, DailyChallengeStatus
-from backend.app.models.discovery_engine import FeaturedRail, SavedSearch
-from backend.app.models.hosted_competition import UserHostedCompetition
-from backend.app.models.national_team import NationalTeamCompetition
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.user import User
-from backend.app.models.youth_prospect import YouthProspect
+from app.models.community_engine import CompetitionWatchlist, LiveThread
+from app.models.daily_challenge import DailyChallenge, DailyChallengeStatus
+from app.models.discovery_engine import FeaturedRail, SavedSearch
+from app.models.hosted_competition import UserHostedCompetition
+from app.models.national_team import NationalTeamCompetition
+from app.models.story_feed import StoryFeedItem
+from app.models.user import User
+from app.models.youth_prospect import YouthProspect
 
 
 class DiscoveryEngineError(ValueError):
@@ -107,7 +107,7 @@ class DiscoveryEngineService:
                 output.append({"item_type": "live_thread", "item_id": item.id, "title": item.title, "subtitle": item.competition_key or "community", "score": self._score(query_lower, item.title, item.competition_key or ""), "metadata": item.metadata_json})
         if "prospects" in scopes:
             for item in self.session.scalars(select(YouthProspect).where(or_(YouthProspect.player_name.ilike(f"%{term}%"), YouthProspect.country_code.ilike(f"%{term}%"))).order_by(YouthProspect.created_at.desc()).limit(limit)).all():
-                output.append({"item_type": "prospect", "item_id": item.id, "title": item.player_name, "subtitle": f"{item.position_group} • {item.country_code}", "score": self._score(query_lower, item.player_name, item.country_code), "metadata": {"position_group": item.position_group, "potential_band": item.potential_band}})
+                output.append({"item_type": "prospect", "item_id": item.id, "title": item.player_name, "subtitle": f"{item.position_group} â€¢ {item.country_code}", "score": self._score(query_lower, item.player_name, item.country_code), "metadata": {"position_group": item.position_group, "potential_band": item.potential_band}})
         if "challenges" in scopes:
             for item in self.session.scalars(select(DailyChallenge).where(DailyChallenge.status == DailyChallengeStatus.ACTIVE, or_(DailyChallenge.challenge_key.ilike(f"%{term}%"), DailyChallenge.title.ilike(f"%{term}%"))).order_by(DailyChallenge.updated_at.desc()).limit(limit)).all():
                 output.append({"item_type": "challenge", "item_id": item.id, "title": item.title, "subtitle": item.description[:140], "score": self._score(query_lower, item.title, item.description), "metadata": {"challenge_key": item.challenge_key}})

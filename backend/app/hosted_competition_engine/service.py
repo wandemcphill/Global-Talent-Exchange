@@ -8,8 +8,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.models.hosted_competition import (
+from app.admin_engine.service import AdminEngineService
+from app.models.hosted_competition import (
     CompetitionTemplate,
     HostedCompetitionSettlement,
     HostedCompetitionSettlementStatus,
@@ -18,10 +18,10 @@ from backend.app.models.hosted_competition import (
     UserHostedCompetition,
     UserHostedCompetitionParticipant,
 )
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.story_feed_engine.service import StoryFeedService
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.models.user import User
+from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.story_feed_engine.service import StoryFeedService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
     {

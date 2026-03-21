@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from decimal import Decimal
 
@@ -7,9 +7,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.auth.service import AuthService
-from backend.app.models import Base, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentStatus
-from backend.app.wallets.service import (
+from app.auth.service import AuthService
+from app.models import Base, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentStatus
+from app.wallets.service import (
     InsufficientBalanceError,
     LedgerError,
     LedgerPosting,

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import base64
 import hashlib
@@ -9,7 +9,7 @@ import time
 from datetime import timedelta
 from typing import Any
 
-from backend.app.core.config import get_settings
+from app.core.config import get_settings
 
 PBKDF2_DIGEST = "sha256"
 PBKDF2_ITERATIONS = 390000

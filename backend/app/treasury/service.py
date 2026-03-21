@@ -9,13 +9,13 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_godmode.service import DEFAULT_COMMISSION_SETTINGS
-from backend.app.models.analytics_event import AnalyticsEvent
-from backend.app.models.attachment import Attachment
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.dispute import Dispute, DisputeMessage, DisputeStatus
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.treasury import (
+from app.admin_godmode.service import DEFAULT_COMMISSION_SETTINGS
+from app.models.analytics_event import AnalyticsEvent
+from app.models.attachment import Attachment
+from app.models.base import generate_uuid, utcnow
+from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
+from app.models.notification_record import NotificationRecord
+from app.models.treasury import (
     DepositRequest,
     DepositStatus,
     KycProfile,
@@ -28,12 +28,12 @@ from backend.app.models.treasury import (
     TreasuryWithdrawalStatus,
     UserBankAccount,
 )
-from backend.app.models.withdrawal_review import WithdrawalReview
-from backend.app.models.risk_ops import RiskSeverity, SystemEventSeverity
-from backend.app.models.user import KycStatus, User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.models.withdrawal_review import WithdrawalReview
+from app.models.risk_ops import RiskSeverity, SystemEventSeverity
+from app.models.user import KycStatus, User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
+from app.risk_ops_engine.service import RiskOpsService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_WHATSAPP = "+2347000000000"
@@ -397,7 +397,7 @@ class TreasuryService:
         return request
 
     def _resolve_user_policy_state(self, session: Session, user: User) -> tuple[str, bool, tuple[str, ...]]:
-        from backend.app.policies.service import PolicyService
+        from app.policies.service import PolicyService
 
         policy_service = PolicyService(session)
         country_policy = policy_service.get_country_policy_for_user(user=user)
@@ -407,7 +407,7 @@ class TreasuryService:
         return country_policy.country_code, bool(country_policy.platform_reward_withdrawals_enabled), missing_documents
 
     def _assert_deposit_allowed(self, session: Session, user: User) -> None:
-        from backend.app.policies.service import PolicyService
+        from app.policies.service import PolicyService
 
         policy_service = PolicyService(session)
         country_policy = policy_service.get_country_policy_for_user(user=user)
@@ -420,7 +420,7 @@ class TreasuryService:
             raise TreasuryConflictError(f"Accept the latest required policies before making a deposit: {names}{suffix}")
 
     def _assert_withdrawal_policy(self, session: Session, user: User, source_scope: str) -> None:
-        from backend.app.policies.service import PolicyService
+        from app.policies.service import PolicyService
 
         policy_service = PolicyService(session)
         country_policy = policy_service.get_country_policy_for_user(user=user)

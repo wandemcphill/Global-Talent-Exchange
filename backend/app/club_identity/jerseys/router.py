@@ -5,15 +5,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
-from backend.app.club_identity.jerseys.schemas import (
+from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
+from app.club_identity.jerseys.schemas import (
     BadgeProfileView,
     ClubIdentityProfilePatch,
     ClubIdentityProfileView,
     JerseySetPatch,
     JerseySetView,
 )
-from backend.app.club_identity.jerseys.service import ClubIdentityService
+from app.club_identity.jerseys.service import ClubIdentityService
 
 router = APIRouter(prefix="/api", tags=["club-identity-jerseys"])
 

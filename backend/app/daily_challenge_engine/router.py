@@ -5,17 +5,17 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.daily_challenge_engine.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.daily_challenge_engine.schemas import (
     DailyChallengeClaimResponse,
     DailyChallengeClaimView,
     DailyChallengeListResponse,
     DailyChallengeMeResponse,
     DailyChallengeView,
 )
-from backend.app.daily_challenge_engine.service import DailyChallengeError, DailyChallengeService
-from backend.app.models.daily_challenge import DailyChallenge
-from backend.app.models.user import User
+from app.daily_challenge_engine.service import DailyChallengeError, DailyChallengeService
+from app.models.daily_challenge import DailyChallenge
+from app.models.user import User
 
 router = APIRouter(prefix='/daily-challenges', tags=['daily-challenges'])
 

@@ -4,17 +4,17 @@ from datetime import datetime
 
 from pydantic import Field
 
-from backend.app.common.enums.club_reputation_tier import ClubReputationTier
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.schemas.club_branding_core import (
+from app.common.enums.club_reputation_tier import ClubReputationTier
+from app.common.schemas.base import CommonSchema
+from app.schemas.club_branding_core import (
     ClubCosmeticCatalogItemCore,
     ClubCosmeticPurchaseCore,
     ClubJerseyDesignCore,
 )
-from backend.app.schemas.club_dynasty_core import ClubDynastyMilestoneCore, ClubDynastyProgressCore
-from backend.app.schemas.club_identity_core import ClubBrandingAssetCore, ClubIdentityThemeCore, ClubProfileCore
-from backend.app.schemas.club_reputation_core import ClubReputationCore
-from backend.app.schemas.club_trophy_core import ClubTrophyCabinetCore, ClubTrophyCore
+from app.schemas.club_dynasty_core import ClubDynastyMilestoneCore, ClubDynastyProgressCore
+from app.schemas.club_identity_core import ClubBrandingAssetCore, ClubIdentityThemeCore, ClubProfileCore
+from app.schemas.club_reputation_core import ClubReputationCore
+from app.schemas.club_trophy_core import ClubTrophyCabinetCore, ClubTrophyCore
 
 
 class ClubProfileView(CommonSchema):

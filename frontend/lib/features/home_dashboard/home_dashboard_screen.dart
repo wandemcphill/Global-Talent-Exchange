@@ -588,7 +588,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final String username = session?.user.username.trim() ?? '';
     final String sessionUserId = session?.user.id.trim() ?? '';
     final String userId =
-        sessionUserId.isNotEmpty ? sessionUserId : 'demo-user';
+        sessionUserId.isNotEmpty ? sessionUserId : 'guest-user';
     final String? userName = displayName?.isNotEmpty == true
         ? displayName
         : username.isNotEmpty
@@ -643,7 +643,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (username.isNotEmpty) {
       return username;
     }
-    return 'Demo Fan';
+    return 'Preview User';
   }
 
   String _formatClubName(String clubId) {

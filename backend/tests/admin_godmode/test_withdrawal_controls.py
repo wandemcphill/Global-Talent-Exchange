@@ -11,18 +11,18 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-from backend.app.admin_godmode.router import router as admin_router
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.auth.service import AuthService
-from backend.app.models.base import Base
-from backend.app.models.user import UserRole
-from backend.app.wallets.router import router as wallet_router
-from backend.app.wallets.service import LedgerPosting, WalletService
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+from app.admin_godmode.router import router as admin_router
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.service import AuthService
+from app.models.base import Base
+from app.models.user import UserRole
+from app.wallets.router import router as wallet_router
+from app.wallets.service import LedgerPosting, WalletService
+from app.models.wallet import LedgerEntryReason, LedgerUnit
 
 
 @pytest.fixture()
@@ -55,6 +55,7 @@ def admin_wallet_context(tmp_path: Path):
     app.include_router(admin_router)
     app.include_router(wallet_router)
     app.state.settings = SimpleNamespace(config_root=tmp_path)
+    app.state.session_factory = SessionLocal
 
     def override_session():
         yield session

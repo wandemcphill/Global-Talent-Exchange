@@ -9,11 +9,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  # noqa: F401
-from backend.app.models.base import Base
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.routes.creators import router as creators_router
-from backend.app.routes.referrals import router as referrals_router
+import app.models  # noqa: F401
+from app.models.base import Base
+from app.auth.dependencies import get_current_user, get_session
+from app.routes.creators import router as creators_router
+from app.routes.referrals import router as referrals_router
 
 
 @dataclass(frozen=True, slots=True)

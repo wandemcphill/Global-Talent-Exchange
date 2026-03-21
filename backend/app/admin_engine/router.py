@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.schemas import (
+from app.admin_engine.schemas import (
     AdminCalendarRuleUpsertRequest,
     AdminCalendarRuleView,
     AdminFeatureFlagUpsertRequest,
@@ -14,9 +14,9 @@ from backend.app.admin_engine.schemas import (
     CompetitionSchedulePreviewRequest,
     CompetitionSchedulePreviewResponse,
 )
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.models.user import User
+from app.admin_engine.service import AdminEngineService
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
 
 router = APIRouter(prefix="/admin-engine", tags=["admin-engine"])
 admin_router = APIRouter(prefix="/admin/admin-engine", tags=["admin-admin-engine"])

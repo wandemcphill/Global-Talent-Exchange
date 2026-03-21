@@ -5,16 +5,16 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_profile import ClubProfile
-from backend.app.schemas.club_identity_core import ClubBrandingAssetCore, ClubIdentityThemeCore, ClubProfileCore
-from backend.app.schemas.club_requests import BrandingUpsertRequest, ClubCreateRequest, ClubUpdateRequest
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.regen_bootstrap_service import RegenBootstrapService
-from backend.app.services.club_reputation_service import ClubReputationService
-from backend.app.services.club_trophy_service import ClubTrophyService
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_profile import ClubProfile
+from app.schemas.club_identity_core import ClubBrandingAssetCore, ClubIdentityThemeCore, ClubProfileCore
+from app.schemas.club_requests import BrandingUpsertRequest, ClubCreateRequest, ClubUpdateRequest
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.regen_bootstrap_service import RegenBootstrapService
+from app.services.club_reputation_service import ClubReputationService
+from app.services.club_trophy_service import ClubTrophyService
 
 
 @dataclass(slots=True)

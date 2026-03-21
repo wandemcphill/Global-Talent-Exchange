@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
-from backend.app.common.enums.referral_event_type import ReferralEventType
-from backend.app.common.enums.referral_reward_status import ReferralRewardStatus
-from backend.app.common.enums.referral_reward_type import ReferralRewardType
-from backend.app.schemas.creator_core import CreatorProfileCore
-from backend.app.schemas.referral_core import (
+from app.common.enums.referral_event_type import ReferralEventType
+from app.common.enums.referral_reward_status import ReferralRewardStatus
+from app.common.enums.referral_reward_type import ReferralRewardType
+from app.schemas.creator_core import CreatorProfileCore
+from app.schemas.referral_core import (
     ReferralAttributionCore,
     ReferralEventCore,
     ReferralRewardComputation,
@@ -17,7 +17,7 @@ from backend.app.schemas.referral_core import (
     ReferralRewardPolicy,
     ReferralValidationResult,
 )
-from backend.app.schemas.share_code_core import ShareCodeCore
+from app.schemas.share_code_core import ShareCodeCore
 
 _CURRENCY_QUANTUM = Decimal("0.01")
 

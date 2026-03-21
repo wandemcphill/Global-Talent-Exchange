@@ -6,11 +6,11 @@ from typing import Any
 from sqlalchemy import DateTime, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):

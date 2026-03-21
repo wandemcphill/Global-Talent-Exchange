@@ -8,8 +8,8 @@ from typing import Protocol
 from sqlalchemy import Boolean, DateTime, Integer, JSON, String, UniqueConstraint, and_, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
-from backend.app.replay_archive.schemas import CountdownView, ReplayArchiveRecord
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.replay_archive.schemas import CountdownView, ReplayArchiveRecord
 
 
 class ReplayArchiveRecordRow(UUIDPrimaryKeyMixin, Base):

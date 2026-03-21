@@ -3,11 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.user import User
-from backend.app.reward_engine.schemas import PromoPoolCreditRequest, PromoPoolCreditView, RewardEngineSummaryView, RewardSettlementRequest, RewardSettlementView
-from backend.app.reward_engine.service import RewardEngineError, RewardEngineService
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.reward_settlement import RewardSettlement
+from app.models.user import User
+from app.reward_engine.schemas import PromoPoolCreditRequest, PromoPoolCreditView, RewardEngineSummaryView, RewardSettlementRequest, RewardSettlementView
+from app.reward_engine.service import RewardEngineError, RewardEngineService
 
 router = APIRouter(prefix='/reward-engine', tags=['reward-engine'])
 admin_router = APIRouter(prefix='/admin/reward-engine', tags=['admin-reward-engine'])

@@ -7,10 +7,10 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.gift_transaction import GiftTransaction
-from backend.app.models.integrity import IntegrityIncident, IntegrityScore
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.user import User
+from app.models.gift_transaction import GiftTransaction
+from app.models.integrity import IntegrityIncident, IntegrityScore
+from app.models.reward_settlement import RewardSettlement
+from app.models.user import User
 
 
 @dataclass(slots=True)

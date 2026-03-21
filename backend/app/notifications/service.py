@@ -9,10 +9,10 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent
-from backend.app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.user import User
+from app.core.events import DomainEvent
+from app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
+from app.models.notification_record import NotificationRecord
+from app.models.user import User
 
 
 def utcnow() -> datetime:

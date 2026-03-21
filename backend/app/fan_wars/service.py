@@ -9,12 +9,12 @@ import re
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.fan_wars.schemas import (
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.enums.fixture_window import FixtureWindow
+from app.fan_wars.schemas import (
     CreatorCountryAssignmentRequest,
     CreatorCountryAssignmentView,
     FanWarDashboardView,
@@ -37,15 +37,15 @@ from backend.app.fan_wars.schemas import (
     RivalryLeaderboardEntryView,
     RivalryLeaderboardView,
 )
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.fan_war import (
+from app.models.base import generate_uuid, utcnow
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.fan_war import (
     CountryCreatorAssignment,
     FanWarPoint,
     FanWarProfile,
@@ -53,9 +53,9 @@ from backend.app.models.fan_war import (
     NationsCupEntry,
     NationsCupFanMetric,
 )
-from backend.app.models.user import User
-from backend.app.models.user_region import UserRegionProfile
-from backend.app.services.competition_lifecycle_service import CompetitionLifecycleService
+from app.models.user import User
+from app.models.user_region import UserRegionProfile
+from app.services.competition_lifecycle_service import CompetitionLifecycleService
 
 
 class FanWarError(ValueError):

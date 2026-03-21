@@ -37,8 +37,8 @@ void main() {
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'demo-user',
-      currentUserName: 'Demo Fan',
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
     );
 
     await tester.pumpWidget(
@@ -200,8 +200,8 @@ void main() {
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'demo-user',
-      currentUserName: 'Demo Fan',
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
     );
     bool openedCreatorAccess = false;
 

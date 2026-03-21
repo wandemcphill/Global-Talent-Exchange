@@ -4,12 +4,12 @@ from datetime import datetime
 
 from fastapi import APIRouter
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     WORLD_SUPER_CUP_DIRECT_SLOTS,
     WORLD_SUPER_CUP_PLAYOFF_TEAMS,
     WORLD_SUPER_CUP_PLAYOFF_WINNERS,
 )
-from backend.app.world_super_cup.api.schemas import (
+from app.world_super_cup.api.schemas import (
     CoefficientEntryView,
     GroupMatchView,
     GroupStageTableView,
@@ -25,7 +25,7 @@ from backend.app.world_super_cup.api.schemas import (
     TournamentCountdownView,
     TrophyCeremonyView,
 )
-from backend.app.world_super_cup.services.tournament import WorldSuperCupService
+from app.world_super_cup.services.tournament import WorldSuperCupService
 
 router = APIRouter(prefix="/world-super-cup", tags=["world-super-cup"])
 

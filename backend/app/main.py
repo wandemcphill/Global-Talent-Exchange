@@ -6,16 +6,16 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.auth.service import AuthService
-from backend.app.models.user import UserRole
+from app.auth.service import AuthService
+from app.models.user import UserRole
 
-from backend.app.auth.dependencies import get_session as auth_get_session
-from backend.app.core.config import Settings, get_settings
-from backend.app.core.container import ApplicationContext, build_application_context
-from backend.app.core.database import create_database_engine, create_session_factory, get_session as core_get_session
-from backend.app.core.module import DomainModule, register_domain_modules, run_module_hooks
-from backend.app.db import get_session as db_get_session
-from backend.app.modules import DOMAIN_MODULES
+from app.auth.dependencies import get_session as auth_get_session
+from app.core.config import Settings, get_settings
+from app.core.container import ApplicationContext, build_application_context
+from app.core.database import create_database_engine, create_session_factory, get_session as core_get_session
+from app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from app.db import get_session as db_get_session
+from app.modules import DOMAIN_MODULES
 
 INITIAL_ADMIN_EMAIL = "vidvimedialtd@gmail.com"
 INITIAL_ADMIN_PASSWORD = "NewPass1234!"

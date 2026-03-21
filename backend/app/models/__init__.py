@@ -1,14 +1,14 @@
-from backend.app.models.academy_graduation_event import AcademyGraduationEvent
-from backend.app.models.academy_player import AcademyPlayer
-from backend.app.models.academy_player_progress import AcademyPlayerProgress
-from backend.app.models.academy_program import AcademyProgram
-from backend.app.models.academy_training_cycle import AcademyTrainingCycle
-from backend.app.models.analytics_event import AnalyticsEvent
-from backend.app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
-from backend.app.models.attachment import Attachment
-from backend.app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
-from backend.app.models.base import Base
-from backend.app.models.card_access import (
+from app.models.academy_graduation_event import AcademyGraduationEvent
+from app.models.academy_player import AcademyPlayer
+from app.models.academy_player_progress import AcademyPlayerProgress
+from app.models.academy_program import AcademyProgram
+from app.models.academy_training_cycle import AcademyTrainingCycle
+from app.models.analytics_event import AnalyticsEvent
+from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
+from app.models.attachment import Attachment
+from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
+from app.models.base import Base
+from app.models.card_access import (
     CardLoanContract,
     CardLoanListing,
     CardLoanNegotiation,
@@ -17,20 +17,20 @@ from backend.app.models.card_access import (
     CardSwapListing,
     StarterSquadRental,
 )
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_budget_snapshot import ClubBudgetSnapshot
-from backend.app.models.club_cashflow_summary import ClubCashflowSummary
-from backend.app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
-from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_finance_account import ClubFinanceAccount
-from backend.app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
-from backend.app.models.club_hall_of_fame import ClubHallOfFameEntry
-from backend.app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sale import (
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_budget_snapshot import ClubBudgetSnapshot
+from app.models.club_cashflow_summary import ClubCashflowSummary
+from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_finance_account import ClubFinanceAccount
+from app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
+from app.models.club_hall_of_fame import ClubHallOfFameEntry
+from app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.models.club_sale import (
     ClubSaleAuditEvent,
     ClubSaleInquiry,
     ClubSaleInquiryStatus,
@@ -42,8 +42,8 @@ from backend.app.models.club_sale import (
     ClubSaleTransferStatus,
     ClubValuationSnapshot,
 )
-from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
-from backend.app.models.club_social import (
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_social import (
     ChallengeShareEvent,
     ClubChallenge,
     ClubChallengeLink,
@@ -53,32 +53,32 @@ from backend.app.models.club_social import (
     RivalryMatchHistory,
     RivalryProfile,
 )
-from backend.app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
-from backend.app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
-from backend.app.models.club_sponsorship_asset import ClubSponsorshipAsset
-from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
-from backend.app.models.club_sponsorship_package import ClubSponsorshipPackage
-from backend.app.models.club_sponsorship_payout import ClubSponsorshipPayout
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.models.competition import Competition, UserCompetition
-from backend.app.models.competition_autofill_rule import CompetitionAutofillRule
-from backend.app.models.competition_entry import CompetitionEntry
-from backend.app.models.competition_invite import CompetitionInvite
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_playoff import CompetitionPlayoff
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_reward import CompetitionReward
-from backend.app.models.competition_reward_pool import CompetitionRewardPool
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
-from backend.app.models.competition_seed_rule import CompetitionSeedRule
-from backend.app.models.competition_visibility_rule import CompetitionVisibilityRule
-from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
-from backend.app.models.creator_campaign import CreatorCampaign
-from backend.app.models.creator_monetization import (
+from app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
+from app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
+from app.models.club_sponsorship_asset import ClubSponsorshipAsset
+from app.models.club_sponsorship_contract import ClubSponsorshipContract
+from app.models.club_sponsorship_package import ClubSponsorshipPackage
+from app.models.club_sponsorship_payout import ClubSponsorshipPayout
+from app.models.club_trophy import ClubTrophy
+from app.models.competition import Competition, UserCompetition
+from app.models.competition_autofill_rule import CompetitionAutofillRule
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_invite import CompetitionInvite
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_playoff import CompetitionPlayoff
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_reward import CompetitionReward
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.creator_campaign import CreatorCampaign
+from app.models.creator_monetization import (
     CreatorBroadcastModeConfig,
     CreatorBroadcastPurchase,
     CreatorMatchGiftEvent,
@@ -90,7 +90,7 @@ from backend.app.models.creator_monetization import (
     CreatorStadiumProfile,
     CreatorStadiumTicketPurchase,
 )
-from backend.app.models.creator_share_market import (
+from app.models.creator_share_market import (
     CreatorClubShareDistribution,
     CreatorClubShareHolding,
     CreatorClubShareMarket,
@@ -98,7 +98,7 @@ from backend.app.models.creator_share_market import (
     CreatorClubSharePayout,
     CreatorClubSharePurchase,
 )
-from backend.app.models.creator_fan_engagement import (
+from app.models.creator_fan_engagement import (
     CreatorClubFollow,
     CreatorFanCompetition,
     CreatorFanCompetitionEntry,
@@ -117,12 +117,12 @@ from backend.app.models.creator_fan_engagement import (
     CreatorTacticalAdviceStatus,
     CreatorTacticalAdviceType,
 )
-from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier, CreatorLeagueTier
-from backend.app.models.creator_application import CreatorApplication
-from backend.app.models.creator_card import CreatorCard, CreatorCardListing, CreatorCardLoan, CreatorCardSale, CreatorCardSwap
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
-from backend.app.models.streamer_tournament import (
+from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier, CreatorLeagueTier
+from app.models.creator_application import CreatorApplication
+from app.models.creator_card import CreatorCard, CreatorCardListing, CreatorCardLoan, CreatorCardSale, CreatorCardSwap
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
+from app.models.streamer_tournament import (
     StreamerTournament,
     StreamerTournamentApprovalStatus,
     StreamerTournamentEntry,
@@ -140,22 +140,22 @@ from backend.app.models.streamer_tournament import (
     StreamerTournamentStatus,
     StreamerTournamentType,
 )
-from backend.app.models.community_engine import CompetitionWatchlist, LiveThread, LiveThreadMessage, MessageVisibility, PrivateMessage, PrivateMessageParticipant, PrivateMessageThread, PrivateMessageThreadStatus, LiveThreadStatus
-from backend.app.models.discovery_engine import FeaturedRail, SavedSearch
-from backend.app.models.dispute import Dispute, DisputeMessage, DisputeStatus
-from backend.app.models.economy_config import GiftCatalogItem, ServicePricingRule
-from backend.app.models.economy_burn_event import EconomyBurnEvent
-from backend.app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
-from backend.app.models.gift_combo_event import GiftComboEvent
-from backend.app.models.gift_combo_rule import GiftComboRule
-from backend.app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
-from backend.app.models.market_topup import MarketTopup, MarketTopupStatus
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
-from backend.app.models.player_injury_case import PlayerInjuryCase
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.models.player_cards import (
+from app.models.community_engine import CompetitionWatchlist, LiveThread, LiveThreadMessage, MessageVisibility, PrivateMessage, PrivateMessageParticipant, PrivateMessageThread, PrivateMessageThreadStatus, LiveThreadStatus
+from app.models.discovery_engine import FeaturedRail, SavedSearch
+from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
+from app.models.economy_config import GiftCatalogItem, ServicePricingRule
+from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from app.models.gift_combo_event import GiftComboEvent
+from app.models.gift_combo_rule import GiftComboRule
+from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+from app.models.market_topup import MarketTopup, MarketTopupStatus
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
+from app.models.player_injury_case import PlayerInjuryCase
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_cards import (
     PlayerAlias,
     PlayerMoniker,
     PlayerCard,
@@ -173,7 +173,7 @@ from backend.app.models.player_cards import (
     PlayerStatsSnapshot,
     PlayerMarketValueSnapshot,
 )
-from backend.app.models.real_world_football import (
+from app.models.real_world_football import (
     EventEffectRule,
     EventIngestionJob,
     PlayerDemandSignal,
@@ -181,14 +181,14 @@ from backend.app.models.real_world_football import (
     RealWorldFootballEvent,
     TrendingPlayerFlag,
 )
-from backend.app.models.referral_attribution import ReferralAttribution
-from backend.app.models.referral_event import ReferralEvent
-from backend.app.models.referral_reward import ReferralReward
-from backend.app.models.referral_reward_ledger import ReferralRewardLedger
-from backend.app.models.scout_assignment import ScoutAssignment
-from backend.app.models.scouting_region import ScoutingRegion
-from backend.app.models.share_code import ShareCode
-from backend.app.models.manager_market import (
+from app.models.referral_attribution import ReferralAttribution
+from app.models.referral_event import ReferralEvent
+from app.models.referral_reward import ReferralReward
+from app.models.referral_reward_ledger import ReferralRewardLedger
+from app.models.scout_assignment import ScoutAssignment
+from app.models.scouting_region import ScoutingRegion
+from app.models.share_code import ShareCode
+from app.models.manager_market import (
     ManagerAuditLog,
     ManagerCatalogEntry,
     ManagerCompetitionSetting,
@@ -198,9 +198,9 @@ from backend.app.models.manager_market import (
     ManagerTradeListing,
     ManagerTradeRecord,
 )
-from backend.app.models.transfer_bid import TransferBid
-from backend.app.models.transfer_window import TransferWindow
-from backend.app.models.treasury import (
+from app.models.transfer_bid import TransferBid
+from app.models.transfer_window import TransferWindow
+from app.models.treasury import (
     DepositRequest,
     DepositStatus,
     KycProfile,
@@ -213,12 +213,12 @@ from backend.app.models.treasury import (
     TreasuryWithdrawalStatus,
     UserBankAccount,
 )
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.models.user_region import UserRegionProfile
-from backend.app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
-from backend.app.models.fan_prediction import (
+from app.models.user import KycStatus, User, UserRole
+from app.models.user_region import UserRegionProfile
+from app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
+from app.models.notification_record import NotificationRecord
+from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
+from app.models.fan_prediction import (
     FanPredictionFixture,
     FanPredictionFixtureStatus,
     FanPredictionLeaderboardScope,
@@ -230,7 +230,7 @@ from backend.app.models.fan_prediction import (
     FanPredictionTokenLedger,
     FanPredictionTokenReason,
 )
-from backend.app.models.fan_war import (
+from app.models.fan_war import (
     CountryCreatorAssignment,
     FanWarPoint,
     FanWarProfile,
@@ -238,9 +238,9 @@ from backend.app.models.fan_war import (
     NationsCupEntry,
     NationsCupFanMetric,
 )
-from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
-from backend.app.models.spending_control import SpendingControlAuditEvent, SpendingControlDecision
-from backend.app.models.regen import (
+from app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from app.models.spending_control import SpendingControlAuditEvent, SpendingControlDecision
+from app.models.regen import (
     AcademyCandidate,
     AcademyIntakeBatch,
     CurrencyConversionQuote,
@@ -271,7 +271,7 @@ from backend.app.models.regen import (
     RegenVisualProfile,
     TransferHeadlineMediaRecord,
 )
-from backend.app.models.scouting_intelligence import (
+from app.models.scouting_intelligence import (
     AcademySupplySignal,
     HiddenPotentialEstimate,
     ManagerScoutingProfile,
@@ -282,20 +282,20 @@ from backend.app.models.scouting_intelligence import (
     ScoutingNetworkAssignment,
     TalentDiscoveryBadge,
 )
-from backend.app.models.revenue_share_rule import RevenueShareRule
-from backend.app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
-from backend.app.models.sponsorship_engine import SponsorshipLead
-from backend.app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
-from backend.app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
-from backend.app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
-from backend.app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
-from backend.app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
-from backend.app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
-from backend.app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, HostedCompetitionSettlementStatus, HostedCompetitionStanding, HostedCompetitionStatus, UserHostedCompetition, UserHostedCompetitionParticipant
-from backend.app.models.integrity import IntegrityIncident, IntegrityScore
-from backend.app.models.wallet import (
+from app.models.revenue_share_rule import RevenueShareRule
+from app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
+from app.models.sponsorship_engine import SponsorshipLead
+from app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
+from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
+from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
+from app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
+from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
+from app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
+from app.models.story_feed import StoryFeedItem
+from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
+from app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, HostedCompetitionSettlementStatus, HostedCompetitionStanding, HostedCompetitionStatus, UserHostedCompetition, UserHostedCompetitionParticipant
+from app.models.integrity import IntegrityIncident, IntegrityScore
+from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
     LedgerEntry,
@@ -308,10 +308,10 @@ from backend.app.models.wallet import (
     PayoutRequest,
     PayoutStatus,
 )
-from backend.app.models.withdrawal_review import WithdrawalReview
-from backend.app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
-from backend.app.models.youth_prospect import YouthProspect
-from backend.app.models.youth_prospect_report import YouthProspectReport
+from app.models.withdrawal_review import WithdrawalReview
+from app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
+from app.models.youth_prospect import YouthProspect
+from app.models.youth_prospect_report import YouthProspectReport
 
 __all__ = [
     "AcademyGraduationEvent",

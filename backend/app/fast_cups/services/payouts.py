@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal, ROUND_DOWN
 
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     CupReward,
     FastCup,
     FastCupBracket,

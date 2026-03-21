@@ -1,3 +1,3 @@
-from backend.app.clubs.service import ClubQueryService
+from app.clubs.service import ClubQueryService
 
 __all__ = ["ClubQueryService"]

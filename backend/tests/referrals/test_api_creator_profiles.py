@@ -67,10 +67,10 @@ def test_creator_finance_endpoint_summarizes_rewards_and_withdrawals(referral_ap
         },
     )
 
-    from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
-    from backend.app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
-    from backend.app.models.wallet import LedgerUnit, PayoutRequest, PayoutStatus
-    from backend.app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalStatus, RateDirection
+    from app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+    from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+    from app.models.wallet import LedgerUnit, PayoutRequest, PayoutStatus
+    from app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalStatus, RateDirection
 
     payout = PayoutRequest(
         user_id=users["creator"].id,

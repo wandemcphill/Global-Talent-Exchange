@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.player_cards.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.models.user import User
+from app.player_cards.schemas import (
     PlayerCardHoldingView,
     PlayerCardLoanBorrowRequest,
     PlayerCardLoanContractView,
@@ -22,7 +22,7 @@ from backend.app.player_cards.schemas import (
     PlayerCardWatchlistCreateRequest,
     PlayerCardWatchlistView,
 )
-from backend.app.player_cards.marketplace_schemas import (
+from app.player_cards.marketplace_schemas import (
     PlayerCardMarketplaceListingView,
     PlayerCardMarketplaceLoanContractListResponse,
     PlayerCardMarketplaceLoanContractView,
@@ -39,17 +39,17 @@ from backend.app.player_cards.marketplace_schemas import (
     PlayerCardMarketplaceSwapListingCreateRequest,
     PlayerCardMarketplaceSwapListingView,
 )
-from backend.app.player_cards.marketplace_service import PlayerCardMarketplaceService
-from backend.app.player_cards.access_service import CardLoanService, StarterSquadRentalService
-from backend.app.player_cards.service import (
+from app.player_cards.marketplace_service import PlayerCardMarketplaceService
+from app.player_cards.access_service import CardLoanService, StarterSquadRentalService
+from app.player_cards.service import (
     PlayerCardMarketError,
     PlayerCardMarketService,
     PlayerCardNotFoundError,
     PlayerCardPermissionError,
     PlayerCardValidationError,
 )
-from backend.app.wallets.service import InsufficientBalanceError, WalletService
-from backend.app.core.events import InMemoryEventPublisher
+from app.wallets.service import InsufficientBalanceError, WalletService
+from app.core.events import InMemoryEventPublisher
 
 router = APIRouter(prefix="/player-cards", tags=["player-cards"])
 

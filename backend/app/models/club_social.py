@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, CreatedAtMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, CreatedAtMixin
 
 
 class ClubChallenge(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -7,15 +7,15 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_match_event import CompetitionMatchEvent
-from backend.app.models.creator_fan_engagement import CreatorClubFollow, CreatorFanGroup, CreatorFanGroupMembership
-from backend.app.models.creator_league import CreatorLeagueSeason, CreatorLeagueSeasonTier
-from backend.app.models.creator_monetization import CreatorSeasonPass
-from backend.app.models.fan_prediction import (
+from app.admin_engine.service import AdminEngineService
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.creator_fan_engagement import CreatorClubFollow, CreatorFanGroup, CreatorFanGroupMembership
+from app.models.creator_league import CreatorLeagueSeason, CreatorLeagueSeasonTier
+from app.models.creator_monetization import CreatorSeasonPass
+from app.models.fan_prediction import (
     FanPredictionFixture,
     FanPredictionFixtureStatus,
     FanPredictionLeaderboardScope,
@@ -27,9 +27,9 @@ from backend.app.models.fan_prediction import (
     FanPredictionTokenLedger,
     FanPredictionTokenReason,
 )
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.user import User, UserRole
-from backend.app.reward_engine.service import RewardEngineService
+from app.models.reward_settlement import RewardSettlement
+from app.models.user import User, UserRole
+from app.reward_engine.service import RewardEngineService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_OPEN_BEFORE = timedelta(hours=24)

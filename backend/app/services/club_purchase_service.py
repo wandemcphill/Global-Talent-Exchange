@@ -6,14 +6,14 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_profile import ClubProfile
-from backend.app.schemas.club_branding_core import ClubCosmeticPurchaseCore
-from backend.app.schemas.club_requests import CatalogPurchaseRequest
-from backend.app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_profile import ClubProfile
+from app.schemas.club_branding_core import ClubCosmeticPurchaseCore
+from app.schemas.club_requests import CatalogPurchaseRequest
+from app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
 
 
 @dataclass(slots=True)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.services.storage_media_service import MediaStorageService
-from backend.app.storage import LocalObjectStorage
+from app.services.storage_media_service import MediaStorageService
+from app.storage import LocalObjectStorage
 
 
 def test_media_download_flow(client, demo_auth_headers, app):

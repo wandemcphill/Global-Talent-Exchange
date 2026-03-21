@@ -11,20 +11,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.admin_rules import AdminRewardRule
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_entry import CompetitionEntry
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.creator_league import CreatorLeagueSeason
-from backend.app.models.creator_monetization import CreatorMatchGiftEvent, CreatorSeasonPass
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.creator_share_market import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.admin_rules import AdminRewardRule
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.models.creator_league import CreatorLeagueSeason
+from app.models.creator_monetization import CreatorMatchGiftEvent, CreatorSeasonPass
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.creator_share_market import (
     CreatorClubShareDistribution,
     CreatorClubShareHolding,
     CreatorClubShareMarket,
@@ -32,10 +32,10 @@ from backend.app.models.creator_share_market import (
     CreatorClubSharePayout,
     CreatorClubSharePurchase,
 )
-from backend.app.models.economy_burn_event import EconomyBurnEvent
-from backend.app.models.revenue_share_rule import RevenueShareRule
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.streamer_tournament import (
+from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.revenue_share_rule import RevenueShareRule
+from app.models.reward_settlement import RewardSettlement
+from app.models.streamer_tournament import (
     StreamerTournament,
     StreamerTournamentEntry,
     StreamerTournamentInvite,
@@ -44,9 +44,9 @@ from backend.app.models.streamer_tournament import (
     StreamerTournamentRewardGrant,
     StreamerTournamentRiskSignal,
 )
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.models.wallet import LedgerAccount, LedgerEntry
-from backend.app.streamer_tournament_engine.router import admin_router, router
+from app.models.user import KycStatus, User, UserRole
+from app.models.wallet import LedgerAccount, LedgerEntry
+from app.streamer_tournament_engine.router import admin_router, router
 
 
 @pytest.fixture()

@@ -9,11 +9,11 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
-from backend.app.models.user import User
-from backend.app.services.sponsorship_placement_service import SponsorshipPlacementService
-from backend.app.services.storage_media_service import MediaAssetDescriptor, MediaStorageService
-from backend.app.story_feed_engine.service import StoryFeedService
+from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
+from app.models.user import User
+from app.services.sponsorship_placement_service import SponsorshipPlacementService
+from app.services.storage_media_service import MediaAssetDescriptor, MediaStorageService
+from app.story_feed_engine.service import StoryFeedService
 
 
 DEFAULT_SHARE_TEMPLATES: tuple[dict[str, Any], ...] = (

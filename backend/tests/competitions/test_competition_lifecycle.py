@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from backend.app.models.calendar_engine import CalendarEvent
+from app.models.calendar_engine import CalendarEvent
 
 
 def _create_competition(client, *, name: str, format: str, capacity: int) -> str:

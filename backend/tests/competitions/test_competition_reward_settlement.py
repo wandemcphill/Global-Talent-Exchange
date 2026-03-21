@@ -7,8 +7,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.service import AuthService
-from backend.app.models import (
+from app.auth.service import AuthService
+from app.models import (
     Base,
     Competition,
     CompetitionEntry,
@@ -19,9 +19,9 @@ from backend.app.models import (
     CompetitionRuleSet,
     RewardSettlement,
 )
-from backend.app.reward_engine.service import RewardEngineService, RewardEngineError
-from backend.app.services.competition_lifecycle_service import CompetitionLifecycleService
-from backend.app.wallets.service import WalletService
+from app.reward_engine.service import RewardEngineService, RewardEngineError
+from app.services.competition_lifecycle_service import CompetitionLifecycleService
+from app.wallets.service import WalletService
 
 
 @pytest.fixture()

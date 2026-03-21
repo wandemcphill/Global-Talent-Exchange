@@ -8,15 +8,15 @@ from functools import lru_cache
 from threading import RLock
 from uuid import uuid4
 
-from backend.app.common.enums.club_finance_account_type import ClubFinanceAccountType
-from backend.app.common.enums.club_finance_entry_type import ClubFinanceEntryType
-from backend.app.schemas.club_finance_core import (
+from app.common.enums.club_finance_account_type import ClubFinanceAccountType
+from app.common.enums.club_finance_entry_type import ClubFinanceEntryType
+from app.schemas.club_finance_core import (
     ClubBudgetSnapshotView,
     ClubCashflowSummaryView,
     ClubFinanceAccountView,
     ClubFinanceLedgerEntryView,
 )
-from backend.app.schemas.club_ops_responses import ClubFinanceLedgerResponse, ClubFinanceOverviewResponse
+from app.schemas.club_ops_responses import ClubFinanceLedgerResponse, ClubFinanceOverviewResponse
 
 _DEFAULT_CURRENCY = "USD"
 _OPENING_BALANCE_MINOR = 1_500_000

@@ -7,10 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.jobs.ops_jobs import OpsJobRunner
-from backend.app.models.risk_ops import AuditLog
-from backend.app.observability.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.jobs.ops_jobs import OpsJobRunner
+from app.models.risk_ops import AuditLog
+from app.observability.schemas import (
     AuditFeedItem,
     ConfigSnapshotView,
     MediaStorageSnapshot,
@@ -18,7 +18,7 @@ from backend.app.observability.schemas import (
     PaymentMethodSnapshot,
     SponsorshipSnapshot,
 )
-from backend.app.services.payment_gateway_service import PaymentGatewayService
+from app.services.payment_gateway_service import PaymentGatewayService
 
 
 router = APIRouter(prefix="/observability", tags=["observability"])

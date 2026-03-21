@@ -8,17 +8,17 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.models.player_cards  # noqa: F401
-from backend.app.ingestion.models import Player
-from backend.app.integrity_engine.service import IntegrityEngineService
-from backend.app.models.base import Base
-from backend.app.models.player_cards import PlayerCard, PlayerCardHolding, PlayerCardOwnerHistory, PlayerCardTier
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.player_cards.service import PlayerCardMarketService, PlayerCardValidationError
-from backend.app.player_import_engine.service import PlayerImportService
-from backend.app.wallets.service import LedgerPosting, WalletService
+import app.ingestion.models  # noqa: F401
+import app.models.player_cards  # noqa: F401
+from app.ingestion.models import Player
+from app.integrity_engine.service import IntegrityEngineService
+from app.models.base import Base
+from app.models.player_cards import PlayerCard, PlayerCardHolding, PlayerCardOwnerHistory, PlayerCardTier
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.player_cards.service import PlayerCardMarketService, PlayerCardValidationError
+from app.player_import_engine.service import PlayerImportService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

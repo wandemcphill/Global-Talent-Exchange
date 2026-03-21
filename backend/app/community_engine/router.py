@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.community_engine.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.community_engine.schemas import (
     CommunityDigestView,
     CompetitionWatchlistCreate,
     CompetitionWatchlistView,
@@ -17,8 +17,8 @@ from backend.app.community_engine.schemas import (
     PrivateMessageThreadView,
     PrivateMessageView,
 )
-from backend.app.community_engine.service import CommunityEngineError, CommunityEngineService
-from backend.app.schemas.creator_fan_engagement import (
+from app.community_engine.service import CommunityEngineError, CommunityEngineService
+from app.schemas.creator_fan_engagement import (
     CreatorClubFollowCreateRequest,
     CreatorClubFollowView,
     CreatorFanCompetitionCreateRequest,
@@ -38,8 +38,8 @@ from backend.app.schemas.creator_fan_engagement import (
     CreatorTacticalAdviceCreateRequest,
     CreatorTacticalAdviceView,
 )
-from backend.app.models.user import User
-from backend.app.services.creator_fan_engagement_service import (
+from app.models.user import User
+from app.services.creator_fan_engagement_service import (
     CreatorFanEngagementError,
     CreatorFanEngagementService,
 )

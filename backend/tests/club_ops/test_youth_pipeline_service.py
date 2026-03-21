@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.schemas.club_ops_requests import (
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.schemas.club_ops_requests import (
     CreateAcademyProgramRequest,
     CreateScoutAssignmentRequest,
     UpdateYouthProspectRequest,

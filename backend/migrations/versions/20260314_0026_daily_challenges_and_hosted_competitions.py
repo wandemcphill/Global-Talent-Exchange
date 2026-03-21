@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = '20260314_0026'
@@ -17,9 +18,33 @@ depends_on = None
 
 
 def upgrade() -> None:
-    challenge_status = sa.Enum('ACTIVE', 'INACTIVE', name='dailychallengestatus')
-    hosted_status = sa.Enum('DRAFT', 'OPEN', 'LOCKED', 'LIVE', 'COMPLETED', 'CANCELLED', name='hostedcompetitionstatus')
     bind = op.get_bind()
+    challenge_status = postgresql.ENUM('ACTIVE', 'INACTIVE', name='dailychallengestatus')
+    hosted_status = postgresql.ENUM(
+        'DRAFT',
+        'OPEN',
+        'LOCKED',
+        'LIVE',
+        'COMPLETED',
+        'CANCELLED',
+        name='hostedcompetitionstatus',
+    )
+    challenge_status_column = postgresql.ENUM(
+        'ACTIVE',
+        'INACTIVE',
+        name='dailychallengestatus',
+        create_type=False,
+    )
+    hosted_status_column = postgresql.ENUM(
+        'DRAFT',
+        'OPEN',
+        'LOCKED',
+        'LIVE',
+        'COMPLETED',
+        'CANCELLED',
+        name='hostedcompetitionstatus',
+        create_type=False,
+    )
     challenge_status.create(bind, checkfirst=True)
     hosted_status.create(bind, checkfirst=True)
 
@@ -32,7 +57,7 @@ def upgrade() -> None:
         sa.Column('reward_unit', sa.String(length=16), nullable=False),
         sa.Column('claim_limit_per_day', sa.Integer(), nullable=False),
         sa.Column('sort_order', sa.Integer(), nullable=False),
-        sa.Column('status', challenge_status, nullable=False),
+        sa.Column('status', challenge_status_column, nullable=False),
         sa.Column('metadata_json', sa.JSON(), nullable=False),
         sa.Column('id', sa.String(length=36), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
@@ -95,7 +120,7 @@ def upgrade() -> None:
         sa.Column('title', sa.String(length=180), nullable=False),
         sa.Column('slug', sa.String(length=180), nullable=False),
         sa.Column('description', sa.Text(), nullable=False),
-        sa.Column('status', hosted_status, nullable=False),
+        sa.Column('status', hosted_status_column, nullable=False),
         sa.Column('visibility', sa.String(length=24), nullable=False),
         sa.Column('starts_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('lock_at', sa.DateTime(timezone=True), nullable=True),
@@ -134,6 +159,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
     op.drop_index(op.f('ix_user_hosted_competition_participants_user_id'), table_name='user_hosted_competition_participants')
     op.drop_index(op.f('ix_user_hosted_competition_participants_competition_id'), table_name='user_hosted_competition_participants')
     op.drop_table('user_hosted_competition_participants')
@@ -147,5 +173,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_daily_challenge_claims_user_id'), table_name='daily_challenge_claims')
     op.drop_table('daily_challenge_claims')
     op.drop_table('daily_challenges')
-    sa.Enum(name='hostedcompetitionstatus').drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name='dailychallengestatus').drop(op.get_bind(), checkfirst=True)
+    postgresql.ENUM(name='hostedcompetitionstatus').drop(bind, checkfirst=True)
+    postgresql.ENUM(name='dailychallengestatus').drop(bind, checkfirst=True)

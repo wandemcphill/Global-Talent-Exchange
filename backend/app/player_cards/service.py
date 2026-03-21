@@ -10,13 +10,13 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.football_events_engine.service import RealWorldFootballEventService
-from backend.app.ingestion.models import MarketSignal, Player
-from backend.app.integrity_engine.service import IntegrityEngineService
-from backend.app.models.base import generate_uuid
-from backend.app.models.player_cards import (
+from app.admin_engine.service import AdminEngineService
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.football_events_engine.service import RealWorldFootballEventService
+from app.ingestion.models import MarketSignal, Player
+from app.integrity_engine.service import IntegrityEngineService
+from app.models.base import generate_uuid
+from app.models.player_cards import (
     PlayerAlias,
     PlayerCard,
     PlayerCardEffect,
@@ -34,12 +34,12 @@ from backend.app.models.player_cards import (
     PlayerMoniker,
     PlayerStatsSnapshot,
 )
-from backend.app.models.risk_ops import SystemEventSeverity
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerSourceTag, LedgerUnit
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.models.risk_ops import SystemEventSeverity
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerSourceTag, LedgerUnit
+from app.players.read_models import PlayerSummaryReadModel
+from app.risk_ops_engine.service import RiskOpsService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 AMOUNT_QUANTUM = Decimal("0.0001")

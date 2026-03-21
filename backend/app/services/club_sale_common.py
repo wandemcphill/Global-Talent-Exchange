@@ -5,8 +5,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.models.club_sale import ClubSaleAuditEvent
-from backend.app.risk_ops_engine.service import RiskOpsService
+from app.models.club_sale import ClubSaleAuditEvent
+from app.risk_ops_engine.service import RiskOpsService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 CLUB_SALE_PLATFORM_FEE_BPS = 1_000

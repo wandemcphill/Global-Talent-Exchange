@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.club_identity.reputation.prestige_tier_service import PrestigeTierService
-from backend.app.club_identity.reputation.reputation_calculator import ReputationCalculator
-from backend.app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.club_identity.reputation.prestige_tier_service import PrestigeTierService
+from app.club_identity.reputation.reputation_calculator import ReputationCalculator
+from app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
 
 
 def test_reputation_calculator_applies_weighted_score_inputs() -> None:

@@ -1,3 +1,3 @@
-from backend.app.realtime.service import RealtimeHub
+from app.realtime.service import RealtimeHub
 
 __all__ = ["RealtimeHub"]

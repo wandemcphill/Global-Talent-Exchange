@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from backend.app.schemas.competition_financials import CompetitionFinancialsPayload
-from backend.app.schemas.competition_rules import CompetitionRuleSetPayload
-from backend.app.services.competition_rules_engine import CompetitionRulesEngine, CompetitionRulesError
+from app.schemas.competition_financials import CompetitionFinancialsPayload
+from app.schemas.competition_rules import CompetitionRuleSetPayload
+from app.services.competition_rules_engine import CompetitionRulesEngine, CompetitionRulesError
 
 
 def test_rules_engine_builds_deterministic_top_n_payouts_and_fee_summary() -> None:

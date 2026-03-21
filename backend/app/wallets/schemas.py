@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
@@ -6,7 +6,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
+from app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
 
 
 class WalletAccountBalance(BaseModel):

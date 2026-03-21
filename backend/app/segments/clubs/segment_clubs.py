@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.db import get_session
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.scouting_intelligence import (
+from app.auth.dependencies import get_current_user
+from app.db import get_session
+from app.models.club_profile import ClubProfile
+from app.models.scouting_intelligence import (
     AcademySupplySignal,
     HiddenPotentialEstimate,
     ScoutMission,
@@ -16,8 +16,8 @@ from backend.app.models.scouting_intelligence import (
     ScoutingNetworkAssignment,
     TalentDiscoveryBadge,
 )
-from backend.app.schemas.club_branding_core import ClubCosmeticPurchaseCore
-from backend.app.schemas.club_requests import (
+from app.schemas.club_branding_core import ClubCosmeticPurchaseCore
+from app.schemas.club_requests import (
     BrandingUpsertRequest,
     CatalogPurchaseRequest,
     ClubCreateRequest,
@@ -25,7 +25,7 @@ from backend.app.schemas.club_requests import (
     JerseyCreateRequest,
     JerseyUpdateRequest,
 )
-from backend.app.schemas.club_responses import (
+from app.schemas.club_responses import (
     ClubBrandingView,
     ClubCatalogView,
     ClubJerseysView,
@@ -34,7 +34,7 @@ from backend.app.schemas.club_responses import (
     ClubShowcaseView,
     ClubTrophiesView,
 )
-from backend.app.schemas.scouting_intelligence import (
+from app.schemas.scouting_intelligence import (
     AcademySupplySignalView,
     CompletedScoutMissionView,
     HiddenPotentialEstimateView,
@@ -51,13 +51,13 @@ from backend.app.schemas.scouting_intelligence import (
     ScoutingNetworkView,
     TalentDiscoveryBadgeView,
 )
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
-from backend.app.services.club_jersey_service import ClubJerseyService
-from backend.app.services.club_purchase_service import ClubPurchaseService
-from backend.app.services.club_showcase_service import ClubShowcaseService
-from backend.app.services.club_trophy_service import ClubTrophyService
-from backend.app.services.scouting_intelligence_service import (
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
+from app.services.club_jersey_service import ClubJerseyService
+from app.services.club_purchase_service import ClubPurchaseService
+from app.services.club_showcase_service import ClubShowcaseService
+from app.services.club_trophy_service import ClubTrophyService
+from app.services.scouting_intelligence_service import (
     ManagerProfileUpsert,
     ScoutMissionCreate,
     ScoutingIntelligenceService,

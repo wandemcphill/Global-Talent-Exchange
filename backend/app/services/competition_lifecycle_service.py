@@ -8,33 +8,33 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.models.competition import Competition
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition_entry import CompetitionEntry
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_playoff import CompetitionPlayoff
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_reward import CompetitionReward
-from backend.app.models.competition_reward_pool import CompetitionRewardPool
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
-from backend.app.models.competition_seed_rule import CompetitionSeedRule
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerUnit
-from backend.app.reward_engine.service import RewardEngineError, RewardEngineService
-from backend.app.services.competition_fixture_service import CompetitionFixtureService, FixtureBuildResult
-from backend.app.services.competition_match_service import CompetitionMatchService
-from backend.app.services.competition_reward_service import CompetitionRewardService
-from backend.app.services.competition_schedule_service import CompetitionScheduleService
-from backend.app.services.competition_seeding_service import CompetitionSeedingService
-from backend.app.services.competition_visibility_service import CompetitionVisibilityService
-from backend.app.story_feed_engine.service import StoryFeedService
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.match_status import MatchStatus
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.competition import Competition
+from app.models.club_profile import ClubProfile
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_playoff import CompetitionPlayoff
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_reward import CompetitionReward
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.user import User
+from app.models.wallet import LedgerUnit
+from app.reward_engine.service import RewardEngineError, RewardEngineService
+from app.services.competition_fixture_service import CompetitionFixtureService, FixtureBuildResult
+from app.services.competition_match_service import CompetitionMatchService
+from app.services.competition_reward_service import CompetitionRewardService
+from app.services.competition_schedule_service import CompetitionScheduleService
+from app.services.competition_seeding_service import CompetitionSeedingService
+from app.services.competition_visibility_service import CompetitionVisibilityService
+from app.story_feed_engine.service import StoryFeedService
 
 
 @dataclass(slots=True)

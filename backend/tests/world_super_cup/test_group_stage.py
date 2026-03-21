@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.app.world_super_cup.services.tournament import WorldSuperCupService
+from app.world_super_cup.services.tournament import WorldSuperCupService
 
 
 def test_group_stage_advances_top_two_from_all_eight_groups() -> None:

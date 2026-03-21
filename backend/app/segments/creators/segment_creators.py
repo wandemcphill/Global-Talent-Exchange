@@ -6,17 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.schemas.creator_requests import CreatorProfileCreateRequest, CreatorProfileUpdateRequest
-from backend.app.schemas.creator_responses import CreatorCompetitionView, CreatorFinanceSummaryView, CreatorProfileView, CreatorSummaryView
-from backend.app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, get_referral_orchestrator
+from app.auth.dependencies import get_current_user, get_session
+from app.models.user import User
+from app.schemas.creator_requests import CreatorProfileCreateRequest, CreatorProfileUpdateRequest
+from app.schemas.creator_responses import CreatorCompetitionView, CreatorFinanceSummaryView, CreatorProfileView, CreatorSummaryView
+from app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, get_referral_orchestrator
 
-from backend.app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
-from backend.app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
-from backend.app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
-from backend.app.models.wallet import PayoutRequest
-from backend.app.wallets.service import WalletService
+from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+from app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from app.models.wallet import PayoutRequest
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/api/creators", tags=["creators"])
 

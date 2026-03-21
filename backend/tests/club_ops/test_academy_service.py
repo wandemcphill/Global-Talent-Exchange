@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.schemas.club_ops_requests import (
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.schemas.club_ops_requests import (
     CreateAcademyPlayerRequest,
     CreateAcademyProgramRequest,
     UpdateAcademyPlayerRequest,

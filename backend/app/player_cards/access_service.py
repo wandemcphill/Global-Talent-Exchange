@@ -8,25 +8,25 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.core.config import Settings, get_settings
-from backend.app.ingestion.models import Player
-from backend.app.integrity_engine.service import IntegrityEngineService
-from backend.app.models.base import utcnow
-from backend.app.models.card_access import CardLoanContract, CardLoanListing, StarterSquadRental
-from backend.app.models.club_infra import ClubFacility
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_cards import PlayerCard, PlayerCardHistory, PlayerCardHolding, PlayerCardOwnerHistory, PlayerCardTier
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.player_cards.service import (
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.core.config import Settings, get_settings
+from app.ingestion.models import Player
+from app.integrity_engine.service import IntegrityEngineService
+from app.models.base import utcnow
+from app.models.card_access import CardLoanContract, CardLoanListing, StarterSquadRental
+from app.models.club_infra import ClubFacility
+from app.models.club_profile import ClubProfile
+from app.models.player_cards import PlayerCard, PlayerCardHistory, PlayerCardHolding, PlayerCardOwnerHistory, PlayerCardTier
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.player_cards.service import (
     PlayerCardMarketError,
     PlayerCardNotFoundError,
     PlayerCardPermissionError,
     PlayerCardValidationError,
 )
-from backend.app.services.regen_service import RegenClubContext, RegenGenerationEngine
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
 DEFAULT_STARTER_RENTAL_FEE = Decimal("5.0000")

@@ -4,14 +4,14 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from backend.app.schemas.referral_analytics import (
+from app.schemas.referral_analytics import (
     CommunityGrowthEfficiencyView,
     CreatorCampaignPerformanceView,
     ReferralAnalyticsDailyView,
     ReferralAnalyticsSummaryView,
     ReferralSourceRetentionView,
 )
-from backend.app.services.referral_orchestrator import (
+from app.services.referral_orchestrator import (
     AttributionRecord,
     CreatorProfileRecord,
     ReferralOrchestrator,

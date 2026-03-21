@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import Date, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class CreatorCampaignMetricSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, Base):

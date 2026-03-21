@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.risk_ops_engine.service import RiskOpsService
+from app.risk_ops_engine.service import RiskOpsService
 
 
 def _admin_headers(client) -> dict[str, str]:

@@ -8,28 +8,28 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.common.enums.contract_status import ContractStatus
-from backend.app.common.enums.injury_severity import InjurySeverity
-from backend.app.common.enums.transfer_bid_status import TransferBidStatus
-from backend.app.common.enums.transfer_window_status import TransferWindowStatus
-from backend.app.core.config import Settings, get_settings
-from backend.app.ingestion.models import (
+from app.common.enums.contract_status import ContractStatus
+from app.common.enums.injury_severity import InjurySeverity
+from app.common.enums.transfer_bid_status import TransferBidStatus
+from app.common.enums.transfer_window_status import TransferWindowStatus
+from app.core.config import Settings, get_settings
+from app.ingestion.models import (
     Club as IngestionClub,
     Competition as IngestionCompetition,
     Player,
     Season,
 )
-from backend.app.match_engine.schemas import MatchReplayPayloadView
-from backend.app.models.notification_center import PlatformAnnouncement
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.base import utcnow
-from backend.app.models.club_infra import ClubFacility
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.player_injury_case import PlayerInjuryCase
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.models.regen import (
+from app.match_engine.schemas import MatchReplayPayloadView
+from app.models.notification_center import PlatformAnnouncement
+from app.models.notification_record import NotificationRecord
+from app.models.base import utcnow
+from app.models.club_infra import ClubFacility
+from app.models.club_profile import ClubProfile
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.player_injury_case import PlayerInjuryCase
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.regen import (
     CurrencyConversionQuote,
     MajorTransferAnnouncement,
     RegenBigClubApproach,
@@ -43,12 +43,12 @@ from backend.app.models.regen import (
     RegenUnsettlingEvent,
     TransferHeadlineMediaRecord,
 )
-from backend.app.models.transfer_bid import TransferBid
-from backend.app.models.transfer_window import TransferWindow
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.schemas.player_lifecycle import (
+from app.models.transfer_bid import TransferBid
+from app.models.transfer_window import TransferWindow
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.schemas.player_lifecycle import (
     AvailabilityBadgeView,
     BigClubApproachRequest,
     CareerEntryView,
@@ -92,7 +92,7 @@ from backend.app.schemas.player_lifecycle import (
     TransferWindowEligibilityView,
     TransferWindowView,
 )
-from backend.app.services.regen_transfer_addon import (
+from app.services.regen_transfer_addon import (
     AUTO_CONVERSION_PREMIUM_BPS,
     BigClubApproachInputs,
     ContractOfferScoreInputs,
@@ -109,8 +109,8 @@ from backend.app.services.regen_transfer_addon import (
     score_contract_offer,
     unresolved_days_since,
 )
-from backend.app.story_feed_engine.service import StoryFeedService
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.story_feed_engine.service import StoryFeedService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 CONTRACT_EXPIRING_SOON_DAYS = 90
 DEFAULT_INJURY_RECOVERY_DAYS: dict[InjurySeverity, int] = {
@@ -2941,7 +2941,7 @@ class PlayerLifecycleService:
                     details={"regen_id": regen.regen_id, "lifecycle_age_months": lifecycle_age_months},
                     notes=None,
                 )
-                from backend.app.services.regen_legacy_service import RegenLegacyService
+                from app.services.regen_legacy_service import RegenLegacyService
 
                 RegenLegacyService(self.session).snapshot_legacy(
                     regen.id,

@@ -7,15 +7,15 @@ import random
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
-from backend.app.ingestion.models import Player
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
-from backend.app.models.user import User
-from backend.app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
-from backend.app.models.youth_prospect import YouthProspect
-from backend.app.models.youth_prospect_report import YouthProspectReport
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
+from app.ingestion.models import Player
+from app.models.club_profile import ClubProfile
+from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
+from app.models.user import User
+from app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
+from app.models.youth_prospect import YouthProspect
+from app.models.youth_prospect_report import YouthProspectReport
 
 FIRST_NAMES = ('Tunde', 'Seyi', 'Ayo', 'Kelechi', 'Ibrahim', 'David', 'Michael', 'Chinedu', 'Omar', 'Santi', 'Leo', 'Kwame')
 LAST_NAMES = ('Oni', 'Adeyemi', 'Balogun', 'Okafor', 'Musa', 'Mensah', 'Silva', 'Diallo', 'Ibrahim', 'Torres', 'Costa', 'Ramos')
@@ -275,7 +275,7 @@ class PlayerImportService:
         return player
 
     def _apply_card_supply(self, *, actor: User, payload: dict[str, object], source_label: str) -> "PlayerCardSupplyBatch":
-        from backend.app.player_cards.service import PlayerCardMarketService
+        from app.player_cards.service import PlayerCardMarketService
 
         player = self._resolve_player_from_supply_payload(payload)
         if player is None:

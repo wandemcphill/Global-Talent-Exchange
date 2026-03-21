@@ -8,20 +8,20 @@ from hashlib import sha256
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.club_infra_engine.service import ClubInfraService
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.models.base import generate_uuid
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.creator_application import CreatorApplication
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorClubProvisioning
-from backend.app.models.user import User
-from backend.app.models.user_region import UserRegionProfile
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.club_reputation_service import ClubReputationService
-from backend.app.services.club_trophy_service import ClubTrophyService
-from backend.app.services.creator_squad_service import CreatorSquadService
+from app.club_infra_engine.service import ClubInfraService
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.base import generate_uuid
+from app.models.club_profile import ClubProfile
+from app.models.creator_application import CreatorApplication
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorClubProvisioning
+from app.models.user import User
+from app.models.user_region import UserRegionProfile
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.club_reputation_service import ClubReputationService
+from app.services.club_trophy_service import ClubTrophyService
+from app.services.creator_squad_service import CreatorSquadService
 
 
 class CreatorProvisioningError(ValueError):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.models.user import User
+from app.models.user import User
 
 
 def _as_user(user_state: dict[str, User], session, user_id: str) -> None:

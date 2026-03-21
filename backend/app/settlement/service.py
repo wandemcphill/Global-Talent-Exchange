@@ -6,11 +6,11 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerSourceTag, LedgerUnit
-from backend.app.orders.models import Order, OrderStatus
-from backend.app.risk.service import RiskControlService, TradeSide
-from backend.app.wallets.service import WalletService
+from app.models.user import User
+from app.models.wallet import LedgerAccount, LedgerEntry, LedgerSourceTag, LedgerUnit
+from app.orders.models import Order, OrderStatus
+from app.risk.service import RiskControlService, TradeSide
+from app.wallets.service import WalletService
 
 
 class SettlementError(ValueError):

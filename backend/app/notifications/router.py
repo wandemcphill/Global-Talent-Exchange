@@ -7,11 +7,11 @@ from fastapi import APIRouter, Depends, FastAPI, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.match_engine.services import ensure_local_match_execution_runtime
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.user import User
-from backend.app.notifications.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.match_engine.services import ensure_local_match_execution_runtime
+from app.models.notification_record import NotificationRecord
+from app.models.user import User
+from app.notifications.schemas import (
     NotificationPreferenceUpdate,
     NotificationPreferenceView,
     NotificationSubscriptionCreate,
@@ -20,9 +20,9 @@ from backend.app.notifications.schemas import (
     PlatformAnnouncementCreate,
     PlatformAnnouncementView,
 )
-from backend.app.notifications.service import NotificationSettingsService
-from backend.app.replay_archive.router import router as replay_router
-from backend.app.replay_archive.service import ensure_replay_archive
+from app.notifications.service import NotificationSettingsService
+from app.replay_archive.router import router as replay_router
+from app.replay_archive.service import ensure_replay_archive
 
 
 @asynccontextmanager

@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.main import create_app
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.main import create_app
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 

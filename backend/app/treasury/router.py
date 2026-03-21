@@ -7,10 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_godmode.service import AdminGodModeService
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.dispute import Dispute, DisputeMessage
-from backend.app.models.treasury import (
+from app.admin_godmode.service import AdminGodModeService
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.dispute import Dispute, DisputeMessage
+from app.models.treasury import (
     DepositRequest,
     DepositStatus,
     KycProfile,
@@ -19,9 +19,9 @@ from backend.app.models.treasury import (
     TreasuryWithdrawalRequest,
     TreasuryWithdrawalStatus,
 )
-from backend.app.models.user import KycStatus, User
-from backend.app.models.withdrawal_review import WithdrawalReview
-from backend.app.treasury.schemas import (
+from app.models.user import KycStatus, User
+from app.models.withdrawal_review import WithdrawalReview
+from app.treasury.schemas import (
     AdminDepositView,
     AdminDisputeMessageView,
     AdminDisputeView,
@@ -46,8 +46,8 @@ from backend.app.treasury.schemas import (
     WithdrawalReviewView,
     WithdrawalRequestView,
 )
-from backend.app.treasury.service import TreasuryConflictError, TreasuryNotFoundError, TreasuryService
-from backend.app.wallets.service import WalletService
+from app.treasury.service import TreasuryConflictError, TreasuryNotFoundError, TreasuryService
+from app.wallets.service import WalletService
 
 router = APIRouter(tags=["treasury"])
 admin_router = APIRouter(prefix="/api/admin/treasury", tags=["admin-treasury"])

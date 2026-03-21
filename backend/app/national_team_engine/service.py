@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.models.national_team import (
+from app.models.national_team import (
     NationalTeamCompetition,
     NationalTeamEntry,
     NationalTeamManagerHistory,
     NationalTeamSquadMember,
 )
-from backend.app.models.user import User
-from backend.app.story_feed_engine.service import StoryFeedService
+from app.models.user import User
+from app.story_feed_engine.service import StoryFeedService
 
 
 class NationalTeamEngineError(ValueError):

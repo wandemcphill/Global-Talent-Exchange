@@ -4,7 +4,7 @@ from collections import defaultdict
 from threading import RLock
 from typing import Protocol
 
-from backend.app.club_identity.models.trophy_models import (
+from app.club_identity.models.trophy_models import (
     ClubTrophyWin,
     SeasonHonorsRecord,
     TrophyDefinition,

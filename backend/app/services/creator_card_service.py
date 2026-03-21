@@ -7,20 +7,20 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Player
-from backend.app.models.base import generate_uuid
-from backend.app.models.creator_card import (
+from app.ingestion.models import Player
+from app.models.base import generate_uuid
+from app.models.creator_card import (
     CreatorCard,
     CreatorCardListing,
     CreatorCardLoan,
     CreatorCardSale,
     CreatorCardSwap,
 )
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.models.creator_profile import CreatorProfile
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.wallets.service import LedgerPosting, WalletService
 
 
 class CreatorCardError(ValueError):

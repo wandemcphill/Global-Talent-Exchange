@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from backend.app.ingestion.models import NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
+from app.ingestion.models import NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
 
 from .config import ValueEngineConfig, get_value_engine_config
 from .models import (

@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.creator_share_market import (
+from app.models.reward_settlement import RewardSettlement
+from app.models.creator_share_market import (
     CreatorClubShareHolding,
     CreatorClubShareMarket,
     CreatorClubShareMarketControl,
 )
-from backend.app.models.streamer_tournament import (
+from app.models.streamer_tournament import (
     StreamerTournamentApprovalStatus,
     StreamerTournamentRewardGrant,
     StreamerTournamentStatus,
 )
-from backend.app.models.wallet import LedgerUnit
-from backend.app.reward_engine.service import RewardEngineService
-from backend.app.streamer_tournament_engine.schemas import (
+from app.models.wallet import LedgerUnit
+from app.reward_engine.service import RewardEngineService
+from app.streamer_tournament_engine.schemas import (
     StreamerTournamentCreateRequest,
     StreamerTournamentJoinRequest,
     StreamerTournamentPublishRequest,
@@ -22,7 +22,7 @@ from backend.app.streamer_tournament_engine.schemas import (
     StreamerTournamentSettleRequest,
     StreamerTournamentSettlementPlacement,
 )
-from backend.app.streamer_tournament_engine.service import StreamerTournamentService
+from app.streamer_tournament_engine.service import StreamerTournamentService
 
 
 def test_high_reward_tournament_requires_admin_review_and_settles_rewards(session, seeded_context) -> None:

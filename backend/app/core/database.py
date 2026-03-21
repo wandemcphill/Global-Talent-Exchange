@@ -15,20 +15,20 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings, normalize_database_url
+from app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings, normalize_database_url
 
 MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
-    "backend.app.models",
-    "backend.app.club_identity.models.reputation",
-    "backend.app.fast_cups.repositories.database",
-    "backend.app.ingestion.models",
-    "backend.app.leagues.repository",
-    "backend.app.market.read_models",
-    "backend.app.players.read_models",
-    "backend.app.replay_archive.persistence",
-    "backend.app.value_engine.read_models",
+    "app.models",
+    "app.club_identity.models.reputation",
+    "app.fast_cups.repositories.database",
+    "app.ingestion.models",
+    "app.leagues.repository",
+    "app.market.read_models",
+    "app.players.read_models",
+    "app.replay_archive.persistence",
+    "app.value_engine.read_models",
 )
 
 
@@ -126,7 +126,7 @@ def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, .
 
 def get_target_metadata() -> MetaData:
     load_model_modules()
-    from backend.app.models import Base
+    from app.models import Base
 
     return Base.metadata
 

@@ -6,18 +6,18 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.schemas.creator_league import CreatorLeagueSeasonCreateRequest, CreatorLeagueSeasonTierAssignmentRequest
-from backend.app.services.creator_league_service import CreatorLeagueService
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.enums.match_status import MatchStatus
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.schemas.creator_league import CreatorLeagueSeasonCreateRequest, CreatorLeagueSeasonTierAssignmentRequest
+from app.services.creator_league_service import CreatorLeagueService
 
 
 def test_creator_league_bootstraps_default_three_divisions(session: Session) -> None:

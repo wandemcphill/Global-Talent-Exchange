@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.dispute import Dispute, DisputeMessage, DisputeStatus
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.user import User
+from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
+from app.models.notification_record import NotificationRecord
+from app.models.user import User
 
 
 class DisputeEngineError(ValueError):

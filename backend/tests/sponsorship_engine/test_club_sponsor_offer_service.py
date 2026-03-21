@@ -6,27 +6,27 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.club_identity.models.reputation  # noqa: F401
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.models.club_profile  # noqa: F401
-import backend.app.models.club_sponsor  # noqa: F401
-import backend.app.models.club_sponsorship_contract  # noqa: F401
-import backend.app.models.club_infra  # noqa: F401
-import backend.app.models.competition_participant  # noqa: F401
-import backend.app.models.media_engine  # noqa: F401
-from backend.app.analytics.service import AnalyticsService
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.core.config import get_settings
-from backend.app.ingestion.models import Player
-from backend.app.models.base import Base
-from backend.app.models.club_infra import ClubSupporterToken
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.media_engine import MatchRevenueSnapshot
-from backend.app.models.user import User, UserRole
-from backend.app.services.sponsorship_placement_service import SponsorshipPlacementService
-from backend.app.sponsorship_engine.offer_service import ClubSponsorOfferService
-from backend.app.sponsorship_engine.schemas import (
+import app.club_identity.models.reputation  # noqa: F401
+import app.ingestion.models  # noqa: F401
+import app.models.club_profile  # noqa: F401
+import app.models.club_sponsor  # noqa: F401
+import app.models.club_sponsorship_contract  # noqa: F401
+import app.models.club_infra  # noqa: F401
+import app.models.competition_participant  # noqa: F401
+import app.models.media_engine  # noqa: F401
+from app.analytics.service import AnalyticsService
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.core.config import get_settings
+from app.ingestion.models import Player
+from app.models.base import Base
+from app.models.club_infra import ClubSupporterToken
+from app.models.club_profile import ClubProfile
+from app.models.competition_participant import CompetitionParticipant
+from app.models.media_engine import MatchRevenueSnapshot
+from app.models.user import User, UserRole
+from app.services.sponsorship_placement_service import SponsorshipPlacementService
+from app.sponsorship_engine.offer_service import ClubSponsorOfferService
+from app.sponsorship_engine.schemas import (
     ClubSponsorAssignmentRequest,
     SponsorOfferCreateRequest,
     SponsorOfferRuleUpsertRequest,

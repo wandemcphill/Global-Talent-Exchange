@@ -7,15 +7,15 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.admin_engine.schemas import AdminRewardRuleStabilityControls
-from backend.app.auth.service import AuthService
-from backend.app.models import (
+from app.admin_engine.schemas import AdminRewardRuleStabilityControls
+from app.auth.service import AuthService
+from app.models import (
     AdminRewardRule,
     Base,
     SpendingControlAuditEvent,
     SpendingControlDecision,
 )
-from backend.app.reward_engine.service import RewardEngineError, RewardEngineService
+from app.reward_engine.service import RewardEngineError, RewardEngineService
 
 
 @pytest.fixture()

@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
-from backend.app.core.config import MediaStorageConfig
-from backend.app.storage import ObjectStorage, StorageNotFound
+from app.core.config import MediaStorageConfig
+from app.storage import ObjectStorage, StorageNotFound
 
 
 def _utcnow() -> datetime:

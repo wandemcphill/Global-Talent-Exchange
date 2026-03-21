@@ -8,10 +8,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.service import AdminEngineService
-from backend.app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
-from backend.app.models.user import User
-from backend.app.reward_engine.service import RewardEngineService
+from app.admin_engine.service import AdminEngineService
+from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
+from app.models.user import User
+from app.reward_engine.service import RewardEngineService
 
 DEFAULT_DAILY_CHALLENGES: tuple[dict[str, object], ...] = (
     {

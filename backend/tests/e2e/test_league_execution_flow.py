@@ -6,11 +6,11 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
-from backend.app.auth.service import AuthService
-from backend.app.leagues.models import LeagueClub
-from backend.app.leagues.repository import InMemoryLeagueEventRepository, get_league_event_repository
-from backend.app.leagues.service import LeagueSeasonLifecycleService
-from backend.app.main import create_app
+from app.auth.service import AuthService
+from app.leagues.models import LeagueClub
+from app.leagues.repository import InMemoryLeagueEventRepository, get_league_event_repository
+from app.leagues.service import LeagueSeasonLifecycleService
+from app.main import create_app
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Player
-from backend.app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
-from backend.app.models.scouting_intelligence import ManagerScoutingProfile, ScoutMission, ScoutingNetwork, ScoutingNetworkAssignment
+from app.ingestion.models import Player
+from app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
+from app.models.scouting_intelligence import ManagerScoutingProfile, ScoutMission, ScoutingNetwork, ScoutingNetworkAssignment
 
 
 def _starter_regens(session: Session, club_id: str) -> list[RegenProfile]:

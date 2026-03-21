@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from backend.app.schemas.academy_core import AcademyPlayerView, AcademyProgramView
-from backend.app.schemas.club_finance_core import ClubBudgetSnapshotView, ClubCashflowSummaryView
-from backend.app.schemas.club_ops_requests import (
+from app.schemas.academy_core import AcademyPlayerView, AcademyProgramView
+from app.schemas.club_finance_core import ClubBudgetSnapshotView, ClubCashflowSummaryView
+from app.schemas.club_ops_requests import (
     CreateAcademyPlayerRequest,
     CreateAcademyProgramRequest,
     CreateScoutAssignmentRequest,
@@ -13,7 +13,7 @@ from backend.app.schemas.club_ops_requests import (
     UpdateSponsorshipContractRequest,
     UpdateYouthProspectRequest,
 )
-from backend.app.schemas.club_ops_responses import (
+from app.schemas.club_ops_responses import (
     AcademyOverviewResponse,
     AcademyPlayersResponse,
     AcademyTrainingCyclesResponse,
@@ -25,14 +25,14 @@ from backend.app.schemas.club_ops_responses import (
     ScoutingProspectDetailResponse,
     ScoutingProspectsResponse,
 )
-from backend.app.schemas.scouting_core import ScoutAssignmentView, YouthProspectView
-from backend.app.schemas.sponsorship_core import ClubSponsorshipAssetView, ClubSponsorshipContractView
-from backend.app.services.academy_service import AcademyService, get_academy_service
-from backend.app.services.club_budget_service import ClubBudgetService, get_club_budget_service
-from backend.app.services.club_cashflow_service import ClubCashflowService, get_club_cashflow_service
-from backend.app.services.club_finance_service import ClubFinanceService, get_club_finance_service
-from backend.app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
-from backend.app.services.scouting_service import ScoutingService, get_scouting_service
+from app.schemas.scouting_core import ScoutAssignmentView, YouthProspectView
+from app.schemas.sponsorship_core import ClubSponsorshipAssetView, ClubSponsorshipContractView
+from app.services.academy_service import AcademyService, get_academy_service
+from app.services.club_budget_service import ClubBudgetService, get_club_budget_service
+from app.services.club_cashflow_service import ClubCashflowService, get_club_cashflow_service
+from app.services.club_finance_service import ClubFinanceService, get_club_finance_service
+from app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
+from app.services.scouting_service import ScoutingService, get_scouting_service
 
 router = APIRouter(prefix="/api/clubs/{club_id}", tags=["club-ops"])
 

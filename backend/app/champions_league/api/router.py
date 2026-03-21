@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from backend.app.champions_league.api.schemas import (
+from app.champions_league.api.schemas import (
     ClubCandidateRequest,
     ClubSeedRequest,
     KnockoutBracketRequest,
@@ -18,14 +18,14 @@ from backend.app.champions_league.api.schemas import (
     QualificationMapRequest,
     QualificationMapView,
 )
-from backend.app.champions_league.models.domain import (
+from app.champions_league.models.domain import (
     ChampionsLeagueValidationError,
     ClubCandidate,
     ClubSeed,
     LeagueMatchResult,
     LeagueStandingRow,
 )
-from backend.app.champions_league.services.tournament import ChampionsLeagueService
+from app.champions_league.services.tournament import ChampionsLeagueService
 
 router = APIRouter(prefix="/champions-league", tags=["champions-league"])
 

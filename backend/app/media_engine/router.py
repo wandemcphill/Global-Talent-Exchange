@@ -5,8 +5,8 @@ from fastapi.responses import FileResponse
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.media_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.media_engine.schemas import (
     CreatorAnalyticsDashboardView,
     CreatorAnalyticsTopGifterView,
     CreatorBroadcastModeView,
@@ -45,19 +45,19 @@ from backend.app.media_engine.schemas import (
     PremiumVideoPurchaseView,
     RevenueSnapshotCreateRequest,
 )
-from backend.app.media_engine.service import MediaEngineError, MediaEngineService
-from backend.app.models.user import User
-from backend.app.services.creator_analytics_service import CreatorAnalyticsDashboard, CreatorAnalyticsService, CreatorTopGifterMetric
-from backend.app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastQuote, CreatorBroadcastService
-from backend.app.services.creator_revenue_service import CreatorRevenueService
-from backend.app.services.creator_stadium_service import CreatorMatchStadiumOffer, CreatorStadiumBundle, CreatorStadiumError, CreatorStadiumService
-from backend.app.services.media_access_service import MediaAccessError, MediaAccessService
-from backend.app.services.highlight_share_service import HighlightShareError, HighlightShareService
-from backend.app.services.signing_service import SignedTokenService
-from backend.app.services.storage_media_service import MediaStorageService
-from backend.app.services.sponsorship_placement_service import SponsorshipPlacementService
-from backend.app.analytics.service import AnalyticsService
-from backend.app.storage import LocalObjectStorage, StorageNotFound
+from app.media_engine.service import MediaEngineError, MediaEngineService
+from app.models.user import User
+from app.services.creator_analytics_service import CreatorAnalyticsDashboard, CreatorAnalyticsService, CreatorTopGifterMetric
+from app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastQuote, CreatorBroadcastService
+from app.services.creator_revenue_service import CreatorRevenueService
+from app.services.creator_stadium_service import CreatorMatchStadiumOffer, CreatorStadiumBundle, CreatorStadiumError, CreatorStadiumService
+from app.services.media_access_service import MediaAccessError, MediaAccessService
+from app.services.highlight_share_service import HighlightShareError, HighlightShareService
+from app.services.signing_service import SignedTokenService
+from app.services.storage_media_service import MediaStorageService
+from app.services.sponsorship_placement_service import SponsorshipPlacementService
+from app.analytics.service import AnalyticsService
+from app.storage import LocalObjectStorage, StorageNotFound
 
 router = APIRouter(prefix='/media-engine', tags=['media-engine'])
 admin_router = APIRouter(prefix='/admin/media-engine', tags=['admin-media-engine'])

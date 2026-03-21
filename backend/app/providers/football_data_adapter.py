@@ -7,8 +7,8 @@ from typing import Any
 
 import requests
 
-from backend.app.ingestion.constants import ENV_FOOTBALL_DATA_API_KEY, ENV_FOOTBALL_DATA_BASE_URL
-from backend.app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
+from app.ingestion.constants import ENV_FOOTBALL_DATA_API_KEY, ENV_FOOTBALL_DATA_BASE_URL
+from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
 from .base import BaseFootballProvider, ProviderConfigurationError
 

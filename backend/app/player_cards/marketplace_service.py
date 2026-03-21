@@ -9,12 +9,12 @@ from typing import Any
 from sqlalchemy import Boolean, Integer, Numeric, String, and_, case, cast, func, literal, or_, select, union_all
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import PlayerCardMarketIntegrityConfig, Settings, get_settings
-from backend.app.core.events import EventPublisher, InMemoryEventPublisher
-from backend.app.ingestion.models import Player
-from backend.app.integrity_engine.service import IntegrityEngineService
-from backend.app.models.base import generate_uuid
-from backend.app.models.card_access import (
+from app.core.config import PlayerCardMarketIntegrityConfig, Settings, get_settings
+from app.core.events import EventPublisher, InMemoryEventPublisher
+from app.ingestion.models import Player
+from app.integrity_engine.service import IntegrityEngineService
+from app.models.base import generate_uuid
+from app.models.card_access import (
     CardLoanContract,
     CardLoanListing,
     CardLoanNegotiation,
@@ -22,8 +22,8 @@ from backend.app.models.card_access import (
     CardSwapExecution,
     CardSwapListing,
 )
-from backend.app.models.creator_card import CreatorCard
-from backend.app.models.player_cards import (
+from app.models.creator_card import CreatorCard
+from app.models.player_cards import (
     PlayerAlias,
     PlayerCard,
     PlayerCardHolding,
@@ -35,15 +35,15 @@ from backend.app.models.player_cards import (
     PlayerCardTier,
     PlayerMoniker,
 )
-from backend.app.models.regen import RegenProfile
-from backend.app.models.risk_ops import SystemEventSeverity
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerSourceTag, LedgerUnit
-from backend.app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissionError, PlayerCardValidationError
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.value_engine.scoring import credits_from_real_world_value
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.models.regen import RegenProfile
+from app.models.risk_ops import SystemEventSeverity
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerSourceTag, LedgerUnit
+from app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissionError, PlayerCardValidationError
+from app.players.read_models import PlayerSummaryReadModel
+from app.risk_ops_engine.service import RiskOpsService
+from app.value_engine.scoring import credits_from_real_world_value
+from app.wallets.service import LedgerPosting, WalletService
 
 
 AMOUNT_QUANTUM = Decimal("0.0001")

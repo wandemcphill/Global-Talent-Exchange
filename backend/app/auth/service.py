@@ -5,13 +5,13 @@ import re
 from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
 
-from backend.app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
-from backend.app.admin_godmode.service import AdminGodModeService
-from backend.app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.user import User, UserRole
-from backend.app.policies.service import PolicyService
-from backend.app.wallets.service import WalletService
+from app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
+from app.admin_godmode.service import AdminGodModeService
+from app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
+from app.models.base import generate_uuid, utcnow
+from app.models.user import User, UserRole
+from app.policies.service import PolicyService
+from app.wallets.service import WalletService
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
 PROFILE_MUTABLE_FIELDS = (

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
-from backend.app.main import create_app
+from app.main import create_app
 
 
 def test_real_app_registers_club_ops_routes(tmp_path) -> None:

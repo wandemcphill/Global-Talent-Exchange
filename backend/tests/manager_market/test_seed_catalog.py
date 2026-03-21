@@ -1,4 +1,4 @@
-from backend.app.manager_market.seed_catalog import CATALOG_VERSION, build_seed_catalog
+from app.manager_market.seed_catalog import CATALOG_VERSION, build_seed_catalog
 
 
 def test_seed_catalog_includes_tunde_oni() -> None:

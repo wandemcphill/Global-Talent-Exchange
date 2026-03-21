@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.market.models import (
+from app.market.models import (
     ListingStatus,
     ListingType,
     OfferStatus,

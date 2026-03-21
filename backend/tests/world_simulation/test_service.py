@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from backend.app.world_simulation.schemas import (
+from app.world_simulation.schemas import (
     ClubWorldProfileUpsertRequest,
     FootballCultureUpsertRequest,
     WorldNarrativeUpsertRequest,
 )
-from backend.app.world_simulation.service import FootballWorldService
+from app.world_simulation.service import FootballWorldService
 
 
 def test_club_context_merges_curated_world_profile_and_narrative_hooks(session, seeded_context) -> None:

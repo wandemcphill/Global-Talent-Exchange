@@ -9,15 +9,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import UserCompetition
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.world_simulation.router import admin_router, router
+from app.auth.dependencies import get_current_admin, get_session
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.competition import UserCompetition
+from app.models.competition_participant import CompetitionParticipant
+from app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
+from app.models.user import KycStatus, User, UserRole
+from app.world_simulation.router import admin_router, router
 
 
 @pytest.fixture()

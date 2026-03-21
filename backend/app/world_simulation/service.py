@@ -8,11 +8,11 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import UserCompetition
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.models.club_profile import ClubProfile
+from app.models.competition import UserCompetition
+from app.models.competition_participant import CompetitionParticipant
+from app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
 
 _KEY_RE = re.compile(r"[^a-z0-9]+")
 _RIVALRY_TAGS = {"derby", "rivalry", "grudge", "regional", "cross-town"}

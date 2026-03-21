@@ -1,1 +1,1 @@
-from backend.app.gift_engine.router import router
+from app.gift_engine.router import router

@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from random import Random
 from typing import Iterable
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     HALFTIME_ANALYSIS_MAX_SECONDS,
     HALFTIME_ANALYSIS_MIN_SECONDS,
     HIGHLIGHT_DEFAULT_EXPIRY_SECONDS,
 )
-from backend.app.match_engine.schemas import (
+from app.match_engine.schemas import (
     MatchBroadcastPresentationView,
     MatchCriticalSnapshotView,
     MatchHalftimeAnalyticsView,
@@ -27,7 +27,7 @@ from backend.app.match_engine.schemas import (
     MatchSubstitutionLogView,
     MatchTacticalChangeLogView,
 )
-from backend.app.match_engine.simulation.models import MatchEventType, MatchHighlightProfile, MatchSpectatorMode, SimulationResult
+from app.match_engine.simulation.models import MatchEventType, MatchHighlightProfile, MatchSpectatorMode, SimulationResult
 
 
 @dataclass(frozen=True, slots=True)

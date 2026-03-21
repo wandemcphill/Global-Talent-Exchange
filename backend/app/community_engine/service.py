@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.models.community_engine import (
+from app.models.community_engine import (
     CompetitionWatchlist,
     LiveThread,
     LiveThreadMessage,
@@ -18,7 +18,7 @@ from backend.app.models.community_engine import (
     PrivateMessageThread,
     PrivateMessageThreadStatus,
 )
-from backend.app.models.user import User
+from app.models.user import User
 
 
 class CommunityEngineError(ValueError):

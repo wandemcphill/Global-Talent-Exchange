@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.config.competition_constants import FINAL_PRESENTATION_MAX_MINUTES
-from backend.app.world_super_cup.models import TrophyCeremonyMetadata
+from app.config.competition_constants import FINAL_PRESENTATION_MAX_MINUTES
+from app.world_super_cup.models import TrophyCeremonyMetadata
 
 
 @dataclass(slots=True)

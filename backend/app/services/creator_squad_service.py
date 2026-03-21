@@ -5,14 +5,14 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.core.config import Settings, get_settings
-from backend.app.models.club_infra import ClubFacility
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorRegen, CreatorSquad
-from backend.app.schemas.regen_core import RegenProfileView
-from backend.app.services.regen_service import RegenClubContext, RegenGenerationEngine
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.core.config import Settings, get_settings
+from app.models.club_infra import ClubFacility
+from app.models.club_profile import ClubProfile
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorRegen, CreatorSquad
+from app.schemas.regen_core import RegenProfileView
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 
 
 class CreatorSquadError(ValueError):

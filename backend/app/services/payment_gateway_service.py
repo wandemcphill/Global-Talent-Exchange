@@ -7,11 +7,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_PAYMENT_RAILS
-from backend.app.core.config import Settings
-from backend.app.models.wallet import LedgerUnit
-from backend.app.treasury.service import TreasuryService
-from backend.app.wallets.rail_service import PurchaseOrderQuote, WalletRailService
+from app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_PAYMENT_RAILS
+from app.core.config import Settings
+from app.models.wallet import LedgerUnit
+from app.treasury.service import TreasuryService
+from app.wallets.rail_service import PurchaseOrderQuote, WalletRailService
 
 
 @dataclass(frozen=True, slots=True)

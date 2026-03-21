@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.config.competition_constants import MATCH_PRESENTATION_MAX_MINUTES, MATCH_PRESENTATION_MIN_MINUTES
-from backend.app.match_engine.schemas import (
+from app.common.enums.match_status import MatchStatus
+from app.config.competition_constants import MATCH_PRESENTATION_MAX_MINUTES, MATCH_PRESENTATION_MIN_MINUTES
+from app.match_engine.schemas import (
     MatchKitIdentityInput,
     MatchSubstitutionRequestInput,
     MatchTacticalAdjustmentInput,
     MatchTacticalChangeInput,
     MatchTeamIdentityInput,
 )
-from backend.app.match_engine.services.match_simulation_service import MatchSimulationService
-from backend.app.match_engine.simulation.models import (
+from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.match_engine.simulation.models import (
     MatchCompetitionType,
     MatchEventType,
     MatchHighlightProfile,

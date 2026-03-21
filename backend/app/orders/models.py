@@ -6,8 +6,8 @@ from enum import StrEnum
 from sqlalchemy import Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from backend.app.models.wallet import LedgerUnit
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.wallet import LedgerUnit
 
 
 class OrderSide(StrEnum):

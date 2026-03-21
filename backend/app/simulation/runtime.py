@@ -5,11 +5,11 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.market.projections import MarketSummaryProjector
-from backend.app.market.repositories import InMemoryMarketRepository
-from backend.app.market.service import MarketEngine
-from backend.app.simulation.service import (
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.market.projections import MarketSummaryProjector
+from app.market.repositories import InMemoryMarketRepository
+from app.market.service import MarketEngine
+from app.simulation.service import (
     DEFAULT_ILLIQUID_PLAYER_COUNT,
     DEFAULT_LIQUID_PLAYER_COUNT,
     DEFAULT_SIMULATION_SEED,

@@ -10,8 +10,8 @@ void main() {
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'demo-user',
-      currentUserName: 'Demo Fan',
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
     );
 
     await tester.pumpWidget(
@@ -19,9 +19,10 @@ void main() {
         theme: GteShellTheme.build(),
         home: CompetitionDiscoveryScreen(
           controller: controller,
-          currentUserId: 'demo-user',
-          currentUserName: 'Demo Fan',
-          isAuthenticated: false,
+          currentUserId: 'fixture-user',
+          currentUserName: 'Fixture Trader',
+          isAuthenticated: true,
+          canHostCompetitions: true,
         ),
       ),
     );

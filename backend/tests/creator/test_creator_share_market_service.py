@@ -7,15 +7,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  # noqa: F401
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
-from backend.app.wallets.service import LedgerPosting, WalletService
+import app.models  # noqa: F401
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

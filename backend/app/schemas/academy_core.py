@@ -4,9 +4,9 @@ from datetime import datetime
 
 from pydantic import Field
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.common.enums.academy_program_type import AcademyProgramType
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.common.enums.academy_program_type import AcademyProgramType
+from app.common.schemas.base import CommonSchema
 
 
 class AcademyProgramView(CommonSchema):

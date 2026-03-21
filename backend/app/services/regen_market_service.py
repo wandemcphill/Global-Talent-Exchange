@@ -8,11 +8,11 @@ import random
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import Settings, get_settings
-from backend.app.ingestion.models import Player
-from backend.app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardSale
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.regen import (
+from app.core.config import Settings, get_settings
+from app.ingestion.models import Player
+from app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardSale
+from app.models.player_contract import PlayerContract
+from app.models.regen import (
     RegenDemandSignal,
     RegenLineageProfile,
     RegenMarketActivity,
@@ -30,7 +30,7 @@ from backend.app.models.regen import (
     RegenTwinsGroup,
     RegenValueSnapshot,
 )
-from backend.app.schemas.regen_core import (
+from app.schemas.regen_core import (
     AbilityRangeView,
     RegenLineageView,
     RegenOriginView,

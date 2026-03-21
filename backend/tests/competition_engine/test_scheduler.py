@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.schemas.competition import CompetitionScheduleRequest
-from backend.app.competition_engine.scheduler import CompetitionScheduler
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.schemas.competition import CompetitionScheduleRequest
+from app.competition_engine.scheduler import CompetitionScheduler
 
 
 def test_scheduler_prevents_senior_window_collisions_between_competitions() -> None:

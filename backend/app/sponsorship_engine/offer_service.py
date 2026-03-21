@@ -7,16 +7,16 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.analytics.service import AnalyticsService
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.ingestion.models import Player
-from backend.app.models.analytics_event import AnalyticsEvent
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
-from backend.app.models.club_infra import ClubSupporterHolding, ClubSupporterToken
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.media_engine import MatchRevenueSnapshot
-from backend.app.models.user import User
+from app.analytics.service import AnalyticsService
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.ingestion.models import Player
+from app.models.analytics_event import AnalyticsEvent
+from app.models.club_profile import ClubProfile
+from app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
+from app.models.club_infra import ClubSupporterHolding, ClubSupporterToken
+from app.models.competition_participant import CompetitionParticipant
+from app.models.media_engine import MatchRevenueSnapshot
+from app.models.user import User
 
 
 @dataclass(frozen=True, slots=True)

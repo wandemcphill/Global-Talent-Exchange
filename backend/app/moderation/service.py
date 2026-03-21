@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.moderation_report import (
+from app.models.moderation_report import (
     ModerationPriority,
     ModerationReport,
     ModerationReportStatus,
     ModerationResolutionAction,
 )
-from backend.app.models.user import User
+from app.models.user import User
 
 ALLOWED_TARGET_TYPES = {
     "user",

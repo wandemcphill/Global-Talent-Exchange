@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from backend.app.cache.redis_helpers import NullCacheBackend
-from backend.app.ingestion.models import Club, Competition, Country, Player, PlayerClubTenure, ProviderRawPayload, ProviderSyncRun, Season
-from backend.app.ingestion.service import IngestionService
+from app.cache.redis_helpers import NullCacheBackend
+from app.ingestion.models import Club, Competition, Country, Player, PlayerClubTenure, ProviderRawPayload, ProviderSyncRun, Season
+from app.ingestion.service import IngestionService
 
 
 def test_bootstrap_sync_happy_path_persists_canonical_records(session) -> None:

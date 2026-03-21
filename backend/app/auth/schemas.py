@@ -5,8 +5,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.app.models.user import KycStatus, UserRole
-from backend.app.users.schemas import UserPublic
+from app.models.user import KycStatus, UserRole
+from app.users.schemas import UserPublic
 
 PROTECTED_PROFILE_FIELDS = frozenset(
     {

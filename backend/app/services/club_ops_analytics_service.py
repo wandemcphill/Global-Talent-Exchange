@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.schemas.club_ops_admin import TopClubMetricView
-from backend.app.schemas.club_ops_analytics import (
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.schemas.club_ops_admin import TopClubMetricView
+from app.schemas.club_ops_analytics import (
     ClubAcademyAnalyticsView,
     ClubFinanceAnalyticsView,
     ClubScoutingAnalyticsView,
     ClubSponsorshipAnalyticsView,
 )
-from backend.app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
+from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
 
 
 class ClubOpsAnalyticsService:

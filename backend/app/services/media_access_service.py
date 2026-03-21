@@ -9,19 +9,19 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.analytics.service import AnalyticsService
-from backend.app.core.config import Settings
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.economy.service import EconomyConfigService
-from backend.app.models.media_engine import PremiumVideoPurchase
-from backend.app.models.risk_ops import AuditLog
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService
-from backend.app.services.signing_service import SignatureError, SignedTokenService
-from backend.app.services.storage_media_service import MediaAssetDescriptor, MediaStorageService
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.analytics.service import AnalyticsService
+from app.core.config import Settings
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.economy.service import EconomyConfigService
+from app.models.media_engine import PremiumVideoPurchase
+from app.models.risk_ops import AuditLog
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.risk_ops_engine.service import RiskOpsService
+from app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService
+from app.services.signing_service import SignatureError, SignedTokenService
+from app.services.storage_media_service import MediaAssetDescriptor, MediaStorageService
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 
 class MediaAccessError(ValueError):

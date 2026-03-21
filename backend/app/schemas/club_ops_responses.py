@@ -2,26 +2,26 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.schemas.academy_core import (
+from app.common.schemas.base import CommonSchema
+from app.schemas.academy_core import (
     AcademyGraduationEventView,
     AcademyPlayerView,
     AcademyProgramView,
     AcademyTrainingCycleView,
 )
-from backend.app.schemas.club_finance_core import (
+from app.schemas.club_finance_core import (
     ClubBudgetSnapshotView,
     ClubCashflowSummaryView,
     ClubFinanceAccountView,
     ClubFinanceLedgerEntryView,
 )
-from backend.app.schemas.scouting_core import (
+from app.schemas.scouting_core import (
     ScoutAssignmentView,
     ScoutingRegionView,
     YouthPipelineSnapshotView,
     YouthProspectView,
 )
-from backend.app.schemas.sponsorship_core import (
+from app.schemas.sponsorship_core import (
     ClubSponsorshipAssetView,
     ClubSponsorshipContractView,
     ClubSponsorshipPackageView,

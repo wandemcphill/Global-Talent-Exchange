@@ -16,7 +16,7 @@ class GteSessionIdentity {
 
   static GteSessionIdentity fromExchangeController(
     GteExchangeController controller, {
-    String guestUserId = 'demo-user',
+    String guestUserId = 'guest-user',
   }) {
     final GteAuthSession? session = controller.session;
     final String? trimmedSessionUserId = controller.session?.user.id.trim();

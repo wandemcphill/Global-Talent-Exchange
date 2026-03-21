@@ -1,4 +1,4 @@
-from backend.app.football_events_engine.service import (
+from app.football_events_engine.service import (
     EventCategoryToggle,
     EventEffectRuleUpsert,
     EventFeedIngestionRequest,

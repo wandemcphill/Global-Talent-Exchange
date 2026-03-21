@@ -4,18 +4,18 @@ from datetime import date, timedelta
 
 from sqlalchemy import select
 
-from backend.app.ingestion.models import Player
-from backend.app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
-from backend.app.models.scouting_intelligence import (
+from app.ingestion.models import Player
+from app.models.regen import AcademyCandidate, AcademyIntakeBatch, RegenProfile
+from app.models.scouting_intelligence import (
     HiddenPotentialEstimate,
     ScoutMission,
     ScoutReport,
     ScoutingNetwork,
     TalentDiscoveryBadge,
 )
-from backend.app.schemas.club_requests import ClubCreateRequest
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.scouting_intelligence_service import (
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
+from app.services.scouting_intelligence_service import (
     ManagerProfileUpsert,
     ScoutMissionCreate,
     ScoutingIntelligenceService,

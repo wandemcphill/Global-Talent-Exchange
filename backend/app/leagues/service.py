@@ -4,8 +4,8 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from backend.app.competition_engine import MatchDispatcher, QueuedJobRecord
-from backend.app.competitions.models.league_events import (
+from app.competition_engine import MatchDispatcher, QueuedJobRecord
+from app.competitions.models.league_events import (
     LeagueClubOptOutEvent,
     LeagueFixtureCompletedEvent,
     LeaguePlayerStatsRecordedEvent,
@@ -13,18 +13,18 @@ from backend.app.competitions.models.league_events import (
     LeagueSeasonEvent,
     LeagueSeasonRegisteredEvent,
 )
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     LEAGUE_BUY_IN_TIERS,
     LEAGUE_GROUP_SIZE,
     LEAGUE_MATCHES_PER_CLUB,
 )
-from backend.app.leagues.fixtures import LeagueFixtureGenerationService
-from backend.app.leagues.models import LeagueClub, LeagueMatchResult, LeaguePlayerContribution, LeagueSeasonState
-from backend.app.leagues.prizes import LeaguePrizeService
-from backend.app.leagues.qualification import LeagueQualificationService
-from backend.app.leagues.repository import LeagueEventRepository, get_league_event_repository
-from backend.app.leagues.standings import LeagueStandingsService
-from backend.app.leagues.competition_engine import LeagueCompetitionEngineService
+from app.leagues.fixtures import LeagueFixtureGenerationService
+from app.leagues.models import LeagueClub, LeagueMatchResult, LeaguePlayerContribution, LeagueSeasonState
+from app.leagues.prizes import LeaguePrizeService
+from app.leagues.qualification import LeagueQualificationService
+from app.leagues.repository import LeagueEventRepository, get_league_event_repository
+from app.leagues.standings import LeagueStandingsService
+from app.leagues.competition_engine import LeagueCompetitionEngineService
 
 
 class LeagueValidationError(ValueError):

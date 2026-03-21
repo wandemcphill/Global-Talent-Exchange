@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
+    from app.models.club_sponsorship_contract import ClubSponsorshipContract
 
 
 class ClubSponsorshipAsset(UUIDPrimaryKeyMixin, TimestampMixin, Base):

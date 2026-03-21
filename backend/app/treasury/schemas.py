@@ -7,9 +7,9 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.app.models.treasury import DepositStatus, PaymentMode, RateDirection, TreasuryWithdrawalStatus
-from backend.app.models.user import KycStatus
-from backend.app.models.wallet import LedgerUnit
+from app.models.treasury import DepositStatus, PaymentMode, RateDirection, TreasuryWithdrawalStatus
+from app.models.user import KycStatus
+from app.models.wallet import LedgerUnit
 
 
 class TreasuryBankAccountView(BaseModel):

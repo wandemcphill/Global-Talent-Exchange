@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.champions_league.models.domain import (
+from app.champions_league.models.domain import (
     AdvancementStatus,
     MatchStage,
     QualificationStatus,

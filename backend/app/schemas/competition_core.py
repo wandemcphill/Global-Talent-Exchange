@@ -4,12 +4,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.schemas.competition_financials import CompetitionFinancialsPayload
-from backend.app.schemas.competition_rules import CompetitionRuleSetPayload
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.schemas.competition_financials import CompetitionFinancialsPayload
+from app.schemas.competition_rules import CompetitionRuleSetPayload
 
 
 class CompetitionCorePayload(BaseModel):

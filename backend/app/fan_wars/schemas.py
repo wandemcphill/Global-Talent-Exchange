@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 FanWarProfileType = Literal["club", "country", "creator"]
 FanWarBoardType = Literal["global", "club", "country", "creator"]

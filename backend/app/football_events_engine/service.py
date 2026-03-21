@@ -9,11 +9,11 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.calendar_engine.service import CalendarEngineService
-from backend.app.ingestion.models import MarketSignal, Player
-from backend.app.models.base import utcnow
-from backend.app.models.player_cards import PlayerCard, PlayerCardFormBuff
-from backend.app.models.real_world_football import (
+from app.calendar_engine.service import CalendarEngineService
+from app.ingestion.models import MarketSignal, Player
+from app.models.base import utcnow
+from app.models.player_cards import PlayerCard, PlayerCardFormBuff
+from app.models.real_world_football import (
     EffectRecordStatus,
     EventEffectRule,
     EventIngestionJob,
@@ -25,8 +25,8 @@ from backend.app.models.real_world_football import (
     RealWorldFootballEvent,
     TrendingPlayerFlag,
 )
-from backend.app.models.user import User
-from backend.app.story_feed_engine.service import StoryFeedService
+from app.models.user import User
+from app.story_feed_engine.service import StoryFeedService
 
 
 _ENGINE_SOURCE = "football_event_engine"

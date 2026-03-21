@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.user import User
+from app.models.club_profile import ClubProfile
+from app.models.user import User
 
 
 def _ensure_club(session, owner: User) -> ClubProfile:

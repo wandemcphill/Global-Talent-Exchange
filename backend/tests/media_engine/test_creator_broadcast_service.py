@@ -28,20 +28,20 @@ for package_name, package_path in PACKAGE_PATHS.items():
         module.__path__ = [str(package_path)]
         sys.modules[package_name] = module
 
-from backend.app.admin_engine.schemas import AdminRewardRuleStabilityControls
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_start_mode import CompetitionStartMode
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.models.admin_rules import AdminRewardRule
-from backend.app.models.base import Base
-from backend.app.models.club_infra import ClubStadium
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
-from backend.app.models.creator_monetization import (
+from app.admin_engine.schemas import AdminRewardRuleStabilityControls
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_start_mode import CompetitionStartMode
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.models.admin_rules import AdminRewardRule
+from app.models.base import Base
+from app.models.club_infra import ClubStadium
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_round import CompetitionRound
+from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier
+from app.models.creator_monetization import (
     CreatorBroadcastModeConfig,
     CreatorBroadcastPurchase,
     CreatorMatchGiftEvent,
@@ -53,7 +53,7 @@ from backend.app.models.creator_monetization import (
     CreatorStadiumProfile,
     CreatorStadiumTicketPurchase,
 )
-from backend.app.models.creator_share_market import (
+from app.models.creator_share_market import (
     CreatorClubShareDistribution,
     CreatorClubShareHolding,
     CreatorClubShareMarket,
@@ -61,18 +61,18 @@ from backend.app.models.creator_share_market import (
     CreatorClubSharePayout,
     CreatorClubSharePurchase,
 )
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorSquad
-from backend.app.models.media_engine import MatchView
-from backend.app.models.risk_ops import AuditLog
-from backend.app.models.spending_control import SpendingControlAuditEvent, SpendingControlDecision
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason, LedgerUnit
-from backend.app.services.creator_analytics_service import CreatorAnalyticsService
-from backend.app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService
-from backend.app.services.creator_revenue_service import CreatorRevenueService
-from backend.app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
-from backend.app.services.creator_stadium_service import (
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorSquad
+from app.models.media_engine import MatchView
+from app.models.risk_ops import AuditLog
+from app.models.spending_control import SpendingControlAuditEvent, SpendingControlDecision
+from app.models.user import KycStatus, User, UserRole
+from app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason, LedgerUnit
+from app.services.creator_analytics_service import CreatorAnalyticsService
+from app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService
+from app.services.creator_revenue_service import CreatorRevenueService
+from app.services.creator_share_market_service import CreatorClubShareMarketError, CreatorClubShareMarketService
+from app.services.creator_stadium_service import (
     IN_STADIUM_AD,
     MATCHDAY_TICKET,
     SPONSOR_BANNER,
@@ -80,7 +80,7 @@ from backend.app.services.creator_stadium_service import (
     CreatorStadiumError,
     CreatorStadiumService,
 )
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

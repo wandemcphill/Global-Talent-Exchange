@@ -5,8 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.fan_wars.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.fan_wars.schemas import (
     CreatorCountryAssignmentRequest,
     CreatorCountryAssignmentView,
     FanWarDashboardView,
@@ -19,8 +19,8 @@ from backend.app.fan_wars.schemas import (
     NationsCupOverviewView,
     RivalryLeaderboardView,
 )
-from backend.app.fan_wars.service import FanWarError, FanWarService
-from backend.app.models.user import User
+from app.fan_wars.service import FanWarError, FanWarService
+from app.models.user import User
 
 router = APIRouter(prefix="/fan-wars", tags=["fan-wars"])
 admin_router = APIRouter(prefix="/admin/fan-wars", tags=["admin-fan-wars"])

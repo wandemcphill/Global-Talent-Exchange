@@ -4,15 +4,15 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from backend.app.club_social.service import ClubSocialService
-from backend.app.models.club_social import ClubChallenge
-from backend.app.models.competition import UserCompetition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.user import User
-from backend.app.services.competition_match_service import CompetitionMatchService
+from app.club_social.service import ClubSocialService
+from app.models.club_social import ClubChallenge
+from app.models.competition import UserCompetition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.user import User
+from app.services.competition_match_service import CompetitionMatchService
 
 
 def _seed_match_context(session: Session) -> CompetitionMatch:

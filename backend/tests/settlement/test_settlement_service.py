@@ -7,20 +7,20 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-from backend.app.auth.service import AuthService
-from backend.app.ingestion.models import Player
-from backend.app.models.base import Base
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.orders.service import OrderService
-from backend.app.risk.service import DuplicateSettlementError
-from backend.app.settlement.service import SettlementService
-from backend.app.wallets.service import LedgerPosting, WalletService
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+from app.auth.service import AuthService
+from app.ingestion.models import Player
+from app.models.base import Base
+from app.models.user import User
+from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.orders.service import OrderService
+from app.risk.service import DuplicateSettlementError
+from app.settlement.service import SettlementService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

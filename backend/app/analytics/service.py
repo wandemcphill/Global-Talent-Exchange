@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.analytics_event import AnalyticsEvent
+from app.models.analytics_event import AnalyticsEvent
 
 
 class AnalyticsService:

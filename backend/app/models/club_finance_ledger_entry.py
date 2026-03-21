@@ -5,12 +5,12 @@ from typing import Any, TYPE_CHECKING
 from sqlalchemy import Enum, ForeignKey, JSON, Integer, String, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.club_finance_account_type import ClubFinanceAccountType
-from backend.app.common.enums.club_finance_entry_type import ClubFinanceEntryType
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.common.enums.club_finance_account_type import ClubFinanceAccountType
+from app.common.enums.club_finance_entry_type import ClubFinanceEntryType
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.club_finance_account import ClubFinanceAccount
+    from app.models.club_finance_account import ClubFinanceAccount
 
 
 class ClubFinanceLedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

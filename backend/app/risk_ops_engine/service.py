@@ -6,13 +6,13 @@ from decimal import Decimal
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.integrity import IntegrityIncident, IntegrityScore
-from backend.app.models.moderation_report import ModerationReport, ModerationReportStatus
-from backend.app.models.reward_settlement import RewardSettlement
-from backend.app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
-from backend.app.models.treasury import DepositRequest, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
-from backend.app.models.user import KycStatus, User
-from backend.app.models.gift_transaction import GiftTransaction
+from app.models.integrity import IntegrityIncident, IntegrityScore
+from app.models.moderation_report import ModerationReport, ModerationReportStatus
+from app.models.reward_settlement import RewardSettlement
+from app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
+from app.models.treasury import DepositRequest, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from app.models.user import KycStatus, User
+from app.models.gift_transaction import GiftTransaction
 
 
 @dataclass(slots=True)

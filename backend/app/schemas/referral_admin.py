@@ -6,9 +6,9 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.common.enums.referral_reward_status import ReferralRewardStatus
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.common.enums.referral_reward_status import ReferralRewardStatus
+from app.common.schemas.base import CommonSchema
 
 
 class AdminShareCodeUpdateRequest(CommonSchema):

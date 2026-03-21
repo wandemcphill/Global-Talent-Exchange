@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import DateTime, Integer, JSON, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 
 class PrestigeTier(str, Enum):

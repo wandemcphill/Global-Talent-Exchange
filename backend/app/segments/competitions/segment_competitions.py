@@ -4,9 +4,9 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from backend.app.competitions.creator_league_router import router as creator_league_router
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.schemas.competition_lifecycle import (
+from app.competitions.creator_league_router import router as creator_league_router
+from app.common.enums.competition_format import CompetitionFormat
+from app.schemas.competition_lifecycle import (
     CompetitionAdvanceRequest,
     CompetitionFinalizeRequest,
     CompetitionInviteAcceptRequest,
@@ -22,7 +22,7 @@ from backend.app.schemas.competition_lifecycle import (
     CompetitionSeedRequest,
     CompetitionStandingView,
 )
-from backend.app.schemas.competition_requests import (
+from app.schemas.competition_requests import (
     CompetitionCreateRequest,
     CompetitionInviteCreateRequest,
     CompetitionJoinRequest,
@@ -30,14 +30,14 @@ from backend.app.schemas.competition_requests import (
     CompetitionPublishRequest,
     CompetitionUpdateRequest,
 )
-from backend.app.schemas.competition_responses import (
+from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
     CompetitionListResponse,
     CompetitionSummaryView,
 )
-from backend.app.services.competition_orchestrator import (
+from app.services.competition_orchestrator import (
     CompetitionActionError,
     CompetitionOrchestrator,
     get_competition_orchestrator,

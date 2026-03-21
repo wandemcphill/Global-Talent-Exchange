@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from backend.app.models.risk_ops import RiskCaseStatus, RiskSeverity, SystemEventSeverity
+from app.models.risk_ops import RiskCaseStatus, RiskSeverity, SystemEventSeverity
 
 
 class RiskOverviewResponse(BaseModel):

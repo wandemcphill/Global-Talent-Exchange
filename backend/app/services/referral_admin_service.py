@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import Request
 
-from backend.app.schemas.referral_admin import (
+from app.schemas.referral_admin import (
     AttributionChainEntryView,
     CreatorAdminSummaryView,
     CreatorRewardFreezeRequest,
@@ -18,11 +18,11 @@ from backend.app.schemas.referral_admin import (
     ShareCodeModerationRequest,
     ShareCodeUsageSummaryView,
 )
-from backend.app.schemas.referral_analytics import CreatorLeaderboardResponse, ReferralAnalyticsSummaryView
-from backend.app.services.creator_leaderboard_service import CreatorLeaderboardService
-from backend.app.services.referral_analytics_service import ReferralAnalyticsService
-from backend.app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, RewardRecord, utcnow
-from backend.app.services.referral_risk_service import ReferralRiskService
+from app.schemas.referral_analytics import CreatorLeaderboardResponse, ReferralAnalyticsSummaryView
+from app.services.creator_leaderboard_service import CreatorLeaderboardService
+from app.services.referral_analytics_service import ReferralAnalyticsService
+from app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator, RewardRecord, utcnow
+from app.services.referral_risk_service import ReferralRiskService
 
 _FOUR_PLACES = Decimal("0.0001")
 
@@ -416,7 +416,7 @@ def get_referral_admin_service(request: Request) -> ReferralAdminService:
     service = getattr(request.app.state, "referral_admin_service", None)
     orchestrator = getattr(request.app.state, "referral_orchestrator", None)
     if orchestrator is None:
-        from backend.app.services.referral_orchestrator import ReferralOrchestrator
+        from app.services.referral_orchestrator import ReferralOrchestrator
 
         orchestrator = ReferralOrchestrator()
         request.app.state.referral_orchestrator = orchestrator

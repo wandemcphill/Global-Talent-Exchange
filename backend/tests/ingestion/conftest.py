@@ -8,14 +8,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.players.read_models  # noqa: F401
-import backend.app.value_engine.read_models  # noqa: F401
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.main import create_app
-from backend.app.models.base import Base
+import app.ingestion.models  # noqa: F401
+import app.models  # noqa: F401
+import app.players.read_models  # noqa: F401
+import app.value_engine.read_models  # noqa: F401
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.main import create_app
+from app.models.base import Base
 
 
 @pytest.fixture()

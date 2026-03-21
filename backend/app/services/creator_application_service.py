@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import utcnow
-from backend.app.models.creator_application import CreatorApplication
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.creator_provisioning import CreatorClubProvisioning
-from backend.app.models.user import User
-from backend.app.services.creator_provisioning_service import CreatorProvisioningService
+from app.models.base import utcnow
+from app.models.creator_application import CreatorApplication
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorClubProvisioning
+from app.models.user import User
+from app.services.creator_provisioning_service import CreatorProvisioningService
 
 CREATOR_APPLICATION_PENDING = "pending"
 CREATOR_APPLICATION_APPROVED = "approved"

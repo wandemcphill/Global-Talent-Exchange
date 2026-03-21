@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.creator_monetization import CreatorRevenueSettlement
+from app.models.competition_match import CompetitionMatch
+from app.models.creator_monetization import CreatorRevenueSettlement
 
 
 def test_creator_league_admin_config_and_reset_routes(api_client) -> None:

@@ -4,7 +4,7 @@ from dataclasses import replace
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.core.config import (
+from app.core.config import (
     LiquidityBand,
     LiquidityBandsConfig,
     PlayerCardMarketIntegrityConfig,

@@ -24,10 +24,10 @@ __all__ = [
 
 def __getattr__(name: str):
     if name == "ValueEngineConfig":
-        module = import_module("backend.app.value_engine.config")
+        module = import_module("app.value_engine.config")
         return getattr(module, name)
     if name in {"InMemoryValueSnapshotRepository", "ValueSnapshotJob", "ValueSnapshotRepository"}:
-        module = import_module("backend.app.value_engine.jobs")
+        module = import_module("app.value_engine.jobs")
         return getattr(module, name)
     if name in {
         "DemandSignal",
@@ -38,12 +38,12 @@ def __getattr__(name: str):
         "ValueBreakdown",
         "ValueSnapshot",
     }:
-        module = import_module("backend.app.value_engine.models")
+        module = import_module("app.value_engine.models")
         return getattr(module, name)
     if name in {"GlobalScoutingIndexService", "ValueEngine", "credits_from_real_world_value"}:
-        module = import_module("backend.app.value_engine.scoring")
+        module = import_module("app.value_engine.scoring")
         return getattr(module, name)
     if name in {"IngestionValueEngineBridge", "IngestionValueSnapshotRepository"}:
-        module = import_module("backend.app.value_engine.service")
+        module = import_module("app.value_engine.service")
         return getattr(module, name)
     raise AttributeError(name)

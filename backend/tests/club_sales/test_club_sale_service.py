@@ -7,12 +7,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  # noqa: F401
-from backend.app.club_sale_market.service import ClubSaleMarketError, ClubSaleMarketService
-from backend.app.models.base import Base
-from backend.app.models.calendar_engine import CalendarEvent
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_sale_market import (
+import app.models  # noqa: F401
+from app.club_sale_market.service import ClubSaleMarketError, ClubSaleMarketService
+from app.models.base import Base
+from app.models.calendar_engine import CalendarEvent
+from app.models.club_profile import ClubProfile
+from app.models.club_sale_market import (
     ClubSaleInquiry,
     ClubSaleInquiryStatus,
     ClubSaleListing,
@@ -23,11 +23,11 @@ from backend.app.models.club_sale_market import (
     ClubSaleTransferStatus,
     ClubValuationSnapshot,
 )
-from backend.app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
+from app.models.story_feed import StoryFeedItem
+from app.models.user import User
+from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

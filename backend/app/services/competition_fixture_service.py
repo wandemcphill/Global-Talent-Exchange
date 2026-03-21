@@ -5,16 +5,16 @@ from datetime import date
 import math
 from typing import Iterable
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.schemas.competition import CompetitionSchedulePlan
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_playoff import CompetitionPlayoff
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.base import generate_uuid
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.schemas.competition import CompetitionSchedulePlan
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_playoff import CompetitionPlayoff
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.base import generate_uuid
 
 
 @dataclass(slots=True)

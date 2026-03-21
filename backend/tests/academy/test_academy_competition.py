@@ -7,17 +7,17 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.app.academy.api.router import router
-from backend.app.academy.models import (
+from app.academy.api.router import router
+from app.academy.models import (
     AcademyAwardsLeaders,
     AcademyClubRegistrationRequest,
     AcademyMatchResult,
     AcademySeasonRequest,
 )
-from backend.app.academy.services import AcademyCompetitionService
-from backend.app.config.competition_constants import LEAGUE_GROUP_SIZE
-from backend.app.competition_engine import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.academy.services import AcademyCompetitionService
+from app.config.competition_constants import LEAGUE_GROUP_SIZE
+from app.competition_engine import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
 
 
 def _build_clubs() -> tuple[AcademyClubRegistrationRequest, ...]:

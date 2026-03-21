@@ -7,12 +7,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy import create_engine
 
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.main import create_app
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.simulation.runtime import replace_market_engine
-from backend.app.simulation.service import DemoMarketSimulationService
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.main import create_app
+from app.players.read_models import PlayerSummaryReadModel
+from app.simulation.runtime import replace_market_engine
+from app.simulation.service import DemoMarketSimulationService
 
 
 @pytest.fixture(scope="module")
@@ -76,12 +76,12 @@ def demo_users_by_username(seeded_demo_market):
 
 @pytest.fixture(scope="module")
 def demo_primary_user(demo_users_by_username):
-    return demo_users_by_username["demo_fan"]
+    return demo_users_by_username["seed_fan"]
 
 
 @pytest.fixture(scope="module")
 def demo_secondary_user(demo_users_by_username):
-    return demo_users_by_username["demo_scout"]
+    return demo_users_by_username["seed_scout"]
 
 
 def _login_demo_user(client: TestClient, *, email: str, password: str) -> dict[str, str]:

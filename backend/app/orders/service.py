@@ -6,16 +6,16 @@ from typing import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.ingestion.models import Player
-from backend.app.ledger.models import LedgerEventType
-from backend.app.ledger.service import LedgerEventService
-from backend.app.matching.models import TradeExecution
-from backend.app.matching.service import ExecutionSnapshot, InvalidOrderTransitionError, MatchingService
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.ingestion.models import Player
+from app.ledger.models import LedgerEventType
+from app.ledger.service import LedgerEventService
+from app.matching.models import TradeExecution
+from app.matching.service import ExecutionSnapshot, InvalidOrderTransitionError, MatchingService
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 

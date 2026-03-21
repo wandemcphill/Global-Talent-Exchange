@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import CompetitionDispatchRequest, CompetitionScheduleRequest, ScheduledFixture
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher
-from backend.app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import CompetitionDispatchRequest, CompetitionScheduleRequest, ScheduledFixture
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
 
 
 def test_window_resolver_cycles_senior_windows_into_follow_up_slot_sequences() -> None:

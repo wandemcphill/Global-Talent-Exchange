@@ -5,18 +5,18 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import (
+from app.club_identity.models.reputation import (
     ClubReputationProfile,
     PrestigeTier,
     ReputationEventLog,
     ReputationEventType,
     ReputationSnapshot,
 )
-from backend.app.club_identity.reputation.inactivity_decay_service import InactivityDecayService
-from backend.app.club_identity.reputation.prestige_tier_service import PrestigeTierService
-from backend.app.club_identity.reputation.reputation_calculator import ReputationCalculator
-from backend.app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
-from backend.app.core.events import DomainEvent, EventPublisher, utcnow
+from app.club_identity.reputation.inactivity_decay_service import InactivityDecayService
+from app.club_identity.reputation.prestige_tier_service import PrestigeTierService
+from app.club_identity.reputation.reputation_calculator import ReputationCalculator
+from app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
+from app.core.events import DomainEvent, EventPublisher, utcnow
 
 
 @dataclass(frozen=True, slots=True)

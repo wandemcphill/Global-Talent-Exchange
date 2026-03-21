@@ -1,10 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from backend.app.models.user import KycStatus, UserRole
+from app.models.user import KycStatus, UserRole
 
 
 class UserPublic(BaseModel):

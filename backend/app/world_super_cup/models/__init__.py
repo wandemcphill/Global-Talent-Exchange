@@ -1,4 +1,4 @@
-from backend.app.world_super_cup.models.domain import (
+from app.world_super_cup.models.domain import (
     ClubSeasonPerformance,
     CoefficientEntry,
     Group,

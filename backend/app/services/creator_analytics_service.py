@@ -7,10 +7,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.creator_monetization import CreatorBroadcastPurchase, CreatorMatchGiftEvent
-from backend.app.models.media_engine import MatchView
-from backend.app.models.user import User
-from backend.app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService, CreatorMatchContext
+from app.models.creator_monetization import CreatorBroadcastPurchase, CreatorMatchGiftEvent
+from app.models.media_engine import MatchView
+from app.models.user import User
+from app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastService, CreatorMatchContext
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 

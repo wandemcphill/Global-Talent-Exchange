@@ -291,7 +291,7 @@ class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
     if (sessionUserId != null && sessionUserId.isNotEmpty) {
       return sessionUserId;
     }
-    return 'demo-user';
+    return 'guest-user';
   }
 
   String _competitionUserName() {
@@ -303,7 +303,7 @@ class _GteExchangeShellScreenState extends State<GteExchangeShellScreen> {
     if (username.isNotEmpty) {
       return username;
     }
-    return 'Demo Fan';
+    return 'Preview User';
   }
 
   String _clubProfileId() {

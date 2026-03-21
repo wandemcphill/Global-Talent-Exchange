@@ -1,4 +1,4 @@
-from backend.app.pricing.models import (
+from app.pricing.models import (
     CandleSeries,
     MarketCandle,
     MarketMoverItem,
@@ -7,7 +7,7 @@ from backend.app.pricing.models import (
     PlayerPricingSnapshot,
     PricingHistoryPoint,
 )
-from backend.app.pricing.service import MarketPricingService, PricingValidationError
+from app.pricing.service import MarketPricingService, PricingValidationError
 
 __all__ = [
     "CandleSeries",

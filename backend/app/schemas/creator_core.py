@@ -6,8 +6,8 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.common.schemas.base import CommonSchema
 
 _ONE_HUNDRED = Decimal("100")
 

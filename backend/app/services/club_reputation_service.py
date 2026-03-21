@@ -10,11 +10,11 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationSnapshot
-from backend.app.common.enums.club_reputation_tier import ClubReputationTier
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_reputation_event import ClubReputationEvent
-from backend.app.schemas.club_reputation_core import (
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationSnapshot
+from app.common.enums.club_reputation_tier import ClubReputationTier
+from app.models.club_profile import ClubProfile
+from app.models.club_reputation_event import ClubReputationEvent
+from app.schemas.club_reputation_core import (
     ClubReputationCore,
     ReputationEventCore,
     ReputationScoreBreakdown,

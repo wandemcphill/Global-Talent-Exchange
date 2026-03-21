@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:http/http.dart' as http;
 
 import 'gte_models.dart';
 
@@ -173,7 +174,6 @@ abstract class GteApiRepository {
     String versionLabel,
   );
 
-
   Future<List<PlayerSnapshot>> fetchPlayers({int limit = 20});
 
   Future<PlayerProfile> fetchPlayerProfile(String playerId);
@@ -213,7 +213,8 @@ abstract class GteApiRepository {
 
   Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(String withdrawalId);
 
-  Future<GteDepositRequest> createDepositRequest(GteDepositCreateRequest request);
+  Future<GteDepositRequest> createDepositRequest(
+      GteDepositCreateRequest request);
 
   Future<GteDepositRequest> submitDepositRequest(
       String depositId, GteDepositSubmitRequest request);
@@ -358,6 +359,7 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request('POST', '/auth/login', body: request.toJson()),
       ),
       () => fixtures.login(request),
+      allowFixtureFallback: false,
     );
     await tokenStore.writeToken(session.accessToken);
     return session;
@@ -370,6 +372,7 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request('POST', '/auth/register', body: request.toJson()),
       ),
       () => fixtures.register(request),
+      allowFixtureFallback: false,
     );
     await tokenStore.writeToken(session.accessToken);
     return session;
@@ -381,6 +384,7 @@ class GteReliableApiRepository implements GteApiRepository {
       () async => GteCurrentUser.fromJson(
           await _request('GET', '/api/auth/me', requiresAuth: true)),
       fixtures.fetchCurrentUser,
+      allowFixtureFallback: false,
     );
   }
 
@@ -419,10 +423,13 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request(
           'GET',
           '/policies/documents/$documentKey',
-          query: <String, Object?>{if (versionLabel != null) 'version_label': versionLabel},
+          query: <String, Object?>{
+            if (versionLabel != null) 'version_label': versionLabel
+          },
         ),
       ),
-      () => fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
+      () =>
+          fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
     );
   }
 
@@ -441,7 +448,8 @@ class GteReliableApiRepository implements GteApiRepository {
     return _withFallback<List<GtePolicyRequirementSummary>>(
       () async {
         final List<Object?> payload = GteJson.list(
-          await _request('GET', '/policies/me/requirements', requiresAuth: true),
+          await _request('GET', '/policies/me/requirements',
+              requiresAuth: true),
           label: 'policy requirements',
         );
         return payload
@@ -488,10 +496,13 @@ class GteReliableApiRepository implements GteApiRepository {
           label: 'policy acceptance response',
         );
         return GtePolicyAcceptanceSummary(
-          documentKey: GteJson.string(payload, <String>['document_key', 'documentKey']),
+          documentKey:
+              GteJson.string(payload, <String>['document_key', 'documentKey']),
           title: documentKey,
-          versionLabel: GteJson.string(payload, <String>['version_label', 'versionLabel']),
-          acceptedAt: GteJson.dateTimeOrNull(payload, <String>['accepted_at', 'acceptedAt']),
+          versionLabel: GteJson.string(
+              payload, <String>['version_label', 'versionLabel']),
+          acceptedAt: GteJson.dateTimeOrNull(
+              payload, <String>['accepted_at', 'acceptedAt']),
         );
       },
       () => fixtures.acceptPolicyDocument(documentKey, versionLabel),
@@ -787,9 +798,7 @@ class GteReliableApiRepository implements GteApiRepository {
           await _request('GET', '/api/wallets/deposits', requiresAuth: true),
           label: 'deposit list',
         );
-        return payload
-            .map(GteDepositRequest.fromJson)
-            .toList(growable: false);
+        return payload.map(GteDepositRequest.fromJson).toList(growable: false);
       },
       fixtures.listDepositRequests,
     );
@@ -852,9 +861,7 @@ class GteReliableApiRepository implements GteApiRepository {
           await _request('GET', '/api/bank-accounts', requiresAuth: true),
           label: 'bank accounts',
         );
-        return payload
-            .map(GteUserBankAccount.fromJson)
-            .toList(growable: false);
+        return payload.map(GteUserBankAccount.fromJson).toList(growable: false);
       },
       fixtures.listUserBankAccounts,
     );
@@ -944,9 +951,7 @@ class GteReliableApiRepository implements GteApiRepository {
               query: <String, Object?>{'limit': limit}, requiresAuth: true),
           label: 'notifications',
         );
-        return payload
-            .map(GteNotification.fromJson)
-            .toList(growable: false);
+        return payload.map(GteNotification.fromJson).toList(growable: false);
       },
       () => fixtures.listNotifications(limit: limit),
     );
@@ -985,7 +990,8 @@ class GteReliableApiRepository implements GteApiRepository {
         bytes,
         contentType: contentType,
       ),
-      () => fixtures.uploadAttachment(filename, bytes, contentType: contentType),
+      () =>
+          fixtures.uploadAttachment(filename, bytes, contentType: contentType),
     );
   }
 
@@ -1163,7 +1169,9 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request(
           'POST',
           '/api/admin/treasury/deposits/$depositId/confirm',
-          body: adminNotes == null ? null : <String, Object?>{'admin_notes': adminNotes},
+          body: adminNotes == null
+              ? null
+              : <String, Object?>{'admin_notes': adminNotes},
           requiresAuth: true,
         ),
       ),
@@ -1179,7 +1187,9 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request(
           'POST',
           '/api/admin/treasury/deposits/$depositId/reject',
-          body: adminNotes == null ? null : <String, Object?>{'admin_notes': adminNotes},
+          body: adminNotes == null
+              ? null
+              : <String, Object?>{'admin_notes': adminNotes},
           requiresAuth: true,
         ),
       ),
@@ -1195,7 +1205,9 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request(
           'POST',
           '/api/admin/treasury/deposits/$depositId/review',
-          body: adminNotes == null ? null : <String, Object?>{'admin_notes': adminNotes},
+          body: adminNotes == null
+              ? null
+              : <String, Object?>{'admin_notes': adminNotes},
           requiresAuth: true,
         ),
       ),
@@ -1368,29 +1380,23 @@ class GteReliableApiRepository implements GteApiRepository {
     String? contentType,
   }) async {
     final Uri uri = config.uriFor('/api/attachments');
-    final String boundary =
-        '----gte-${DateTime.now().toUtc().millisecondsSinceEpoch}';
-    final String resolvedContentType =
-        (contentType == null || contentType.isEmpty)
-            ? 'application/octet-stream'
-            : contentType;
-    final HttpClient client = HttpClient();
+    final http.Client client = http.Client();
     try {
-      final HttpClientRequest request = await client.postUrl(uri);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(HttpHeaders.contentTypeHeader,
-          'multipart/form-data; boundary=$boundary');
+      final http.MultipartRequest request = http.MultipartRequest('POST', uri)
+        ..headers['Accept'] = 'application/json';
       final String? token = await tokenStore.readToken();
       if (token != null && token.isNotEmpty) {
-        request.headers
-            .set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        request.headers['Authorization'] = 'Bearer $token';
       }
-      request.add(utf8.encode(
-          '--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$filename\"\\r\\nContent-Type: $resolvedContentType\\r\\n\\r\\n'));
-      request.add(bytes);
-      request.add(utf8.encode('\\r\\n--$boundary--\\r\\n'));
-      final HttpClientResponse response = await request.close();
-      final String text = await response.transform(utf8.decoder).join();
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+        ),
+      );
+      final http.StreamedResponse response = await client.send(request);
+      final String text = await response.stream.bytesToString();
       final Object? decoded = text.trim().isEmpty ? null : jsonDecode(text);
       if (response.statusCode >= 400) {
         throw GteApiException(
@@ -1416,19 +1422,23 @@ class GteReliableApiRepository implements GteApiRepository {
         cause: error,
       );
     } finally {
-      client.close(force: true);
+      client.close();
     }
   }
 
   Future<T> _withFallback<T>(
-      Future<T> Function() liveCall, Future<T> Function() fixtureCall) async {
+    Future<T> Function() liveCall,
+    Future<T> Function() fixtureCall, {
+    bool allowFixtureFallback = true,
+  }) async {
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
     try {
       return await liveCall();
     } on GteApiException catch (error) {
-      if (config.mode == GteBackendMode.liveThenFixture &&
+      if (allowFixtureFallback &&
+          config.mode == GteBackendMode.liveThenFixture &&
           error.supportsFixtureFallback) {
         return fixtureCall();
       }

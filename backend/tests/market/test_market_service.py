@@ -6,13 +6,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.market.read_models  # noqa: F401
-import backend.app.players.read_models  # noqa: F401
-import backend.app.value_engine.read_models  # noqa: F401
-from backend.app.ingestion.models import Club, Competition, Country, LiquidityBand, Player, SupplyTier
+import app.ingestion.models  # noqa: F401
+import app.market.read_models  # noqa: F401
+import app.players.read_models  # noqa: F401
+import app.value_engine.read_models  # noqa: F401
+from app.ingestion.models import Club, Competition, Country, LiquidityBand, Player, SupplyTier
 
-from backend.app.market import (
+from app.market import (
     ListingStatus,
     ListingType,
     MarketConflictError,
@@ -22,15 +22,15 @@ from backend.app.market import (
     TradeIntentDirection,
     TradeIntentStatus,
 )
-from backend.app.market.router import (
+from app.market.router import (
     get_market_player_detail,
     get_market_player_history,
     list_market_players,
 )
-from backend.app.market.service import MarketPlayerQueryService
-from backend.app.models.base import Base
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.market.service import MarketPlayerQueryService
+from app.models.base import Base
+from app.players.read_models import PlayerSummaryReadModel
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 @pytest.fixture()

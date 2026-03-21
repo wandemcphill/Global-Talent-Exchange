@@ -5,8 +5,8 @@ import hashlib
 import re
 from typing import Iterable
 
-from backend.app.common.enums.share_code_type import ShareCodeType
-from backend.app.schemas.share_code_core import ShareCodeCore, ShareCodeGenerationRequest
+from app.common.enums.share_code_type import ShareCodeType
+from app.schemas.share_code_core import ShareCodeCore, ShareCodeGenerationRequest
 
 _NON_ALPHANUMERIC = re.compile(r"[^A-Z0-9]+")
 

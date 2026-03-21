@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from backend.app.models.competition import Competition
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition import Competition
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_rule_set import CompetitionRuleSet
 
 def _create(
     client,

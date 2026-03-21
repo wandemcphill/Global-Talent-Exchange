@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from itertools import combinations
 from typing import Sequence
 
-from backend.app.academy.models import (
+from app.academy.models import (
     AcademyAwardAllocation,
     AcademyAwardsLeaders,
     AcademyAwardsPreview,
@@ -26,13 +26,13 @@ from backend.app.academy.models import (
     AcademyStandingRow,
     AcademyValidationError,
 )
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.qualification_status import QualificationStatus
-from backend.app.common.schemas.competition import CompetitionScheduleRequest
-from backend.app.competition_engine import MatchDispatcher, QueuedJobRecord
-from backend.app.competition_engine.scheduler import CompetitionScheduler
-from backend.app.config.competition_constants import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.qualification_status import QualificationStatus
+from app.common.schemas.competition import CompetitionScheduleRequest
+from app.competition_engine import MatchDispatcher, QueuedJobRecord
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.config.competition_constants import (
     ACADEMY_BUY_IN_MULTIPLIER,
     CHAMPIONS_LEAGUE_DIRECT_SLOTS,
     CHAMPIONS_LEAGUE_FUND_PCT,
@@ -47,7 +47,7 @@ from backend.app.config.competition_constants import (
     TOP_ASSIST_PCT,
     TOP_SCORER_PCT,
 )
-from backend.app.academy.services.competition_engine import AcademyCompetitionEngineService
+from app.academy.services.competition_engine import AcademyCompetitionEngineService
 
 _CURRENCY_QUANTUM = Decimal("0.01")
 

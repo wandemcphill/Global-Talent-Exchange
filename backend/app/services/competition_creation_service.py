@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.models.competition import Competition
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
-from backend.app.models.base import generate_uuid
-from backend.app.schemas.competition_core import CompetitionCreateRequest
-from backend.app.services.competition_rules_engine import CompetitionRulesEngine
-from backend.app.services.competition_validation_service import CompetitionValidationService
+from app.common.enums.competition_format import CompetitionFormat
+from app.models.competition import Competition
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.base import generate_uuid
+from app.schemas.competition_core import CompetitionCreateRequest
+from app.services.competition_rules_engine import CompetitionRulesEngine
+from app.services.competition_validation_service import CompetitionValidationService
 
 
 @dataclass(frozen=True, slots=True)

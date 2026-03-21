@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.base import utcnow
-from backend.app.models.user import User
-from backend.app.policies.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.base import utcnow
+from app.models.user import User
+from app.policies.schemas import (
     AdminRegionOverrideRequest,
     CountryFeaturePolicyAdminSummary,
     CountryFeaturePolicyResponse,
@@ -25,8 +25,8 @@ from backend.app.policies.schemas import (
     UserRegionUpdateRequest,
     UserComplianceStatus,
 )
-from backend.app.policies.service import PolicyService
-from backend.app.risk_ops_engine.service import RiskOpsService
+from app.policies.service import PolicyService
+from app.risk_ops_engine.service import RiskOpsService
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 admin_router = APIRouter(prefix="/admin/policies", tags=["admin-policies"])

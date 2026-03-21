@@ -6,7 +6,7 @@ from threading import RLock
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 
 JobCallable = Callable[[], Any]
 

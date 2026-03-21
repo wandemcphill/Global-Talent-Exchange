@@ -9,22 +9,22 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.competitions.creator_league_router import router as creator_league_router
-from backend.app.models.admin_rules import AdminRewardRule
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.competition import Competition
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
-from backend.app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier, CreatorLeagueTier
-from backend.app.models.creator_monetization import CreatorRevenueSettlement, CreatorStadiumControl
-from backend.app.models.creator_share_market import CreatorClubShareMarketControl
-from backend.app.models.risk_ops import AuditLog
-from backend.app.models.user import KycStatus, User, UserRole
+from app.auth.dependencies import get_current_admin, get_session
+from app.competitions.creator_league_router import router as creator_league_router
+from app.models.admin_rules import AdminRewardRule
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.competition import Competition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.creator_league import CreatorLeagueConfig, CreatorLeagueSeason, CreatorLeagueSeasonTier, CreatorLeagueTier
+from app.models.creator_monetization import CreatorRevenueSettlement, CreatorStadiumControl
+from app.models.creator_share_market import CreatorClubShareMarketControl
+from app.models.risk_ops import AuditLog
+from app.models.user import KycStatus, User, UserRole
 
 
 @pytest.fixture()

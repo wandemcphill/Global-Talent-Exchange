@@ -11,12 +11,12 @@ from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerAccount, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus, PayoutRequest, PayoutStatus
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
-from backend.app.observability.audit_service import AuditTrailService
+from app.models.base import generate_uuid, utcnow
+from app.models.user import User
+from app.models.wallet import LedgerAccount, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus, PayoutRequest, PayoutStatus
+from app.players.read_models import PlayerSummaryReadModel
+from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.observability.audit_service import AuditTrailService
 
 from .schemas import (
     AdminRoleCatalogUpdate,
@@ -868,7 +868,7 @@ class AdminGodModeService:
         code = f"platform:{unit.value}:treasury_withdrawals"
         account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
         if account is None:
-            from backend.app.models.wallet import LedgerAccountKind
+            from app.models.wallet import LedgerAccountKind
             account = LedgerAccount(
                 code=code,
                 label=f"Treasury {unit.value.capitalize()} Withdrawal Sink",

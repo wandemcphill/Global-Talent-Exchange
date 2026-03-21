@@ -4,12 +4,12 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from backend.app.ingestion.models import Player
-from backend.app.models.club_hall_of_fame import ClubHallOfFameEntry
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_cards import PlayerCard, PlayerCardTier
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.regen import (
+from app.ingestion.models import Player
+from app.models.club_hall_of_fame import ClubHallOfFameEntry
+from app.models.club_profile import ClubProfile
+from app.models.player_cards import PlayerCard, PlayerCardTier
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.regen import (
     RegenAward,
     RegenLegacyRecord,
     RegenLineageProfile,
@@ -17,9 +17,9 @@ from backend.app.models.regen import (
     RegenProfile,
     RegenTwinsGroup,
 )
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.services.regen_legacy_service import RegenLegacyService
-from backend.app.services.regen_market_service import RegenMarketService, RegenSearchFilters, _validate_award_name
+from app.models.user import KycStatus, User, UserRole
+from app.services.regen_legacy_service import RegenLegacyService
+from app.services.regen_market_service import RegenMarketService, RegenSearchFilters, _validate_award_name
 
 
 def _make_user(session, *, user_id: str, email: str, username: str) -> User:

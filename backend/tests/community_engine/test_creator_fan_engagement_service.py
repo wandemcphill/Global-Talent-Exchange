@@ -7,13 +7,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.competition_match import CompetitionMatch
-from backend.app.models.competition_round import CompetitionRound
-from backend.app.models.creator_fan_engagement import CreatorMatchChatMessage, CreatorRivalrySignalSurface
-from backend.app.models.creator_monetization import CreatorMatchGiftEvent
-from backend.app.models.media_engine import MatchView
-from backend.app.models.user import User
-from backend.app.services.creator_fan_engagement_service import CreatorFanEngagementError, CreatorFanEngagementService
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_round import CompetitionRound
+from app.models.creator_fan_engagement import CreatorMatchChatMessage, CreatorRivalrySignalSurface
+from app.models.creator_monetization import CreatorMatchGiftEvent
+from app.models.media_engine import MatchView
+from app.models.user import User
+from app.services.creator_fan_engagement_service import CreatorFanEngagementError, CreatorFanEngagementService
 
 
 def _user(session: Session, user_id: str) -> User:

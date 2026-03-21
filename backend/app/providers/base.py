@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from backend.app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
+from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
 
 class ProviderConfigurationError(RuntimeError):

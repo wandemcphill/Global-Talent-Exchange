@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.models.streamer_tournament import (
+from app.models.streamer_tournament import (
     StreamerTournamentApprovalStatus,
     StreamerTournamentEntryStatus,
     StreamerTournamentInviteStatus,

@@ -7,13 +7,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  # noqa: F401
-from backend.app.governance_engine.service import GovernanceEngineService
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
-from backend.app.models.governance_engine import GovernanceProposalScope, GovernanceVoteChoice
-from backend.app.models.user import User
+import app.models  # noqa: F401
+from app.governance_engine.service import GovernanceEngineService
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
+from app.models.governance_engine import GovernanceProposalScope, GovernanceVoteChoice
+from app.models.user import User
 
 
 @pytest.fixture()

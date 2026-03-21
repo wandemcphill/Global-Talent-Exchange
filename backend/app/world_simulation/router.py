@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.world_simulation.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.world_simulation.schemas import (
     ClubWorldContextView,
     ClubWorldProfileUpsertRequest,
     CompetitionWorldContextView,
@@ -13,7 +13,7 @@ from backend.app.world_simulation.schemas import (
     WorldNarrativeUpsertRequest,
     WorldNarrativeView,
 )
-from backend.app.world_simulation.service import FootballWorldError, FootballWorldService
+from app.world_simulation.service import FootballWorldError, FootballWorldService
 
 router = APIRouter(prefix="/api/world", tags=["world-simulation"])
 admin_router = APIRouter(prefix="/admin/world", tags=["admin-world-simulation"])

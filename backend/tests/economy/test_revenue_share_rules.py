@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.economy.service import EconomyConfigService
-from backend.app.models import Base, RevenueShareRule
+from app.economy.service import EconomyConfigService
+from app.models import Base, RevenueShareRule
 
 
 @pytest.fixture()

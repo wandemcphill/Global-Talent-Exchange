@@ -39,11 +39,11 @@ void main() {
         GteAppController(api: GteMockApi(latency: Duration.zero));
 
     await controller.signIn(
-      email: 'fan@demo.gte.local',
+      email: 'fixture.trader@gte.local',
       password: 'DemoPass123',
     );
 
-    expect(controller.session?.user.username, 'demo_fan');
+    expect(controller.session?.user.username, 'fixture_trader');
     expect(controller.walletSummary?.availableBalance, 1200);
     expect(controller.portfolio?.holdings, isNotEmpty);
     expect(controller.portfolioSummary?.totalEquity, greaterThan(0));

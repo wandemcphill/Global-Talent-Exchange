@@ -6,11 +6,11 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
-from backend.app.auth.service import AuthService
-from backend.app.leagues.repository import InMemoryLeagueEventRepository, get_league_event_repository
-from backend.app.main import create_app
-from backend.app.match_engine.services import ensure_local_match_execution_runtime
-from backend.app.replay_archive.service import ensure_replay_archive
+from app.auth.service import AuthService
+from app.leagues.repository import InMemoryLeagueEventRepository, get_league_event_repository
+from app.main import create_app
+from app.match_engine.services import ensure_local_match_execution_runtime
+from app.replay_archive.service import ensure_replay_archive
 
 
 @dataclass(frozen=True, slots=True)

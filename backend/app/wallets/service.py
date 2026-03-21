@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass
@@ -9,10 +9,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.user import User
-from backend.app.models.wallet import (
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.base import generate_uuid, utcnow
+from app.models.user import User
+from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
     LedgerEntry,
@@ -693,7 +693,7 @@ class WalletService:
         )
 
     def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
-        from backend.app.portfolio.service import PortfolioService
+        from app.portfolio.service import PortfolioService
 
         summary = self.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
         portfolio_snapshot = PortfolioService(wallet_service=self).build_for_user(session, user)

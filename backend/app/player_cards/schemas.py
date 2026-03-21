@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from backend.app.football_events_engine.schemas import (
+from app.football_events_engine.schemas import (
     PlayerDemandSignalView,
     PlayerFormModifierView,
     TrendingPlayerFlagView,

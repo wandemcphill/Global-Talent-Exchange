@@ -8,8 +8,8 @@ from hashlib import sha256
 import random
 from uuid import uuid4
 
-from backend.app.core.config import Settings, get_settings
-from backend.app.schemas.regen_core import (
+from app.core.config import Settings, get_settings
+from app.schemas.regen_core import (
     AbilityRangeView,
     AcademyCandidateView,
     AcademyIntakeBatchView,
@@ -19,7 +19,7 @@ from backend.app.schemas.regen_core import (
     RegenProfileView,
     StarterRegenBundleView,
 )
-from backend.app.services.club_finance_service import ClubOpsStore, get_club_ops_store
+from app.services.club_finance_service import ClubOpsStore, get_club_ops_store
 
 _PRIMARY_POSITIONS = ("GK", "CB", "RB", "LB", "DM", "CM", "AM", "RW", "LW", "ST")
 _SECONDARY_POSITIONS = {

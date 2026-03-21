@@ -7,15 +7,15 @@ import math
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
-from backend.app.competition_engine.scheduler import CompetitionScheduler
-from backend.app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
-from backend.app.models.calendar_engine import CalendarEvent
-from backend.app.models.competition import Competition
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_schedule_job import CompetitionScheduleJob
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_type import CompetitionType
+from app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.config.competition_constants import LEAGUE_MATCH_WINDOWS_PER_DAY
+from app.models.calendar_engine import CalendarEvent
+from app.models.competition import Competition
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
 
 
 @dataclass(slots=True)

@@ -6,12 +6,12 @@ from typing import Any, TYPE_CHECKING
 from sqlalchemy import ForeignKey, JSON, Numeric, String, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.treasury import TreasuryWithdrawalRequest
-    from backend.app.models.user import User
-    from backend.app.models.wallet import PayoutRequest
+    from app.models.treasury import TreasuryWithdrawalRequest
+    from app.models.user import User
+    from app.models.wallet import PayoutRequest
 
 
 class WithdrawalReview(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

@@ -3,16 +3,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.schemas.creator_application import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.user import User
+from app.schemas.creator_application import (
     CreatorAdminDashboardView,
     CreatorApplicationAdminActionRequest,
     CreatorApplicationSubmitRequest,
     CreatorApplicationView,
     CreatorContactVerificationView,
 )
-from backend.app.schemas.creator_card import (
+from app.schemas.creator_card import (
     CreatorCardAssignRequest,
     CreatorCardListingCreateRequest,
     CreatorCardListingView,
@@ -23,7 +23,7 @@ from backend.app.schemas.creator_card import (
     CreatorCardSwapView,
     CreatorCardView,
 )
-from backend.app.schemas.creator_share_market import (
+from app.schemas.creator_share_market import (
     CreatorClubShareDistributionView,
     CreatorClubShareHoldingView,
     CreatorClubShareMarketControlUpdateRequest,
@@ -33,24 +33,24 @@ from backend.app.schemas.creator_share_market import (
     CreatorClubSharePurchaseRequest,
     CreatorClubSharePurchaseView,
 )
-from backend.app.segments.creators.segment_creators import router as legacy_creator_router
-from backend.app.services.creator_application_service import (
+from app.segments.creators.segment_creators import router as legacy_creator_router
+from app.services.creator_application_service import (
     CreatorApplicationConflictError,
     CreatorApplicationError,
     CreatorApplicationNotFoundError,
     CreatorApplicationService,
 )
-from backend.app.services.creator_card_service import (
+from app.services.creator_card_service import (
     CreatorCardError,
     CreatorCardPermissionError,
     CreatorCardService,
     CreatorCardValidationError,
 )
-from backend.app.services.creator_share_market_service import (
+from app.services.creator_share_market_service import (
     CreatorClubShareMarketError,
     CreatorClubShareMarketService,
 )
-from backend.app.wallets.service import InsufficientBalanceError
+from app.wallets.service import InsufficientBalanceError
 
 
 def get_application_service(session: Session = Depends(get_session)) -> CreatorApplicationService:

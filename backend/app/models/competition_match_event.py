@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 
 class CompetitionMatchEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

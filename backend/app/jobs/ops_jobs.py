@@ -5,12 +5,12 @@ from typing import Any
 
 from sqlalchemy.orm import sessionmaker
 
-from backend.app.core.config import Settings
-from backend.app.market.service import MarketEngine
-from backend.app.services.storage_media_service import MediaStorageService
-from backend.app.storage import LocalObjectStorage
-from backend.app.workers.integrity_scan_worker import IntegrityScanWorker
-from backend.app.workers.media_retention_worker import MediaRetentionWorker
+from app.core.config import Settings
+from app.market.service import MarketEngine
+from app.services.storage_media_service import MediaStorageService
+from app.storage import LocalObjectStorage
+from app.workers.integrity_scan_worker import IntegrityScanWorker
+from app.workers.media_retention_worker import MediaRetentionWorker
 
 
 @dataclass(slots=True)

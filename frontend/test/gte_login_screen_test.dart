@@ -84,7 +84,7 @@ void main() {
       api: GteExchangeApiClient.fixture(),
     );
     controller.session = _authenticatedSession(
-      userId: 'demo-user',
+      userId: 'fixture-user',
       userName: 'Ayo Martins',
       clubId: 'ibadan-lions',
       clubName: 'Ibadan Lions FC',
@@ -121,7 +121,7 @@ void main() {
     expect(find.text('Mission confirmed'), findsNothing);
     expect(
       find.text(
-        'Active session for demo-user. GTEX access is live, but some capital actions remain restricted until compliance clears this account.',
+        'Active session for fixture-user. GTEX access is live, but some capital actions remain restricted until compliance clears this account.',
       ),
       findsOneWidget,
     );

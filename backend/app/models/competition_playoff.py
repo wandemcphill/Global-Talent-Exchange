@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class CompetitionPlayoff(UUIDPrimaryKeyMixin, TimestampMixin, Base):

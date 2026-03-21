@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.economy.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.economy.schemas import (
     EconomyBurnEventView,
     GiftComboRuleUpsertRequest,
     GiftComboRuleView,
@@ -16,9 +16,9 @@ from backend.app.economy.schemas import (
     ServicePricingRuleUpsertRequest,
     ServicePricingRuleView,
 )
-from backend.app.economy.service import EconomyConfigService
-from backend.app.models.economy_burn_event import EconomyBurnEvent
-from backend.app.models.user import User
+from app.economy.service import EconomyConfigService
+from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.user import User
 
 router = APIRouter(prefix="/economy", tags=["economy"])
 admin_router = APIRouter(prefix="/admin/economy", tags=["admin-economy"])

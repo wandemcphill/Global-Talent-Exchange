@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from backend.app.models.wallet import LedgerUnit
+from app.models.wallet import LedgerUnit
 
 
 class PaymentMethodView(BaseModel):

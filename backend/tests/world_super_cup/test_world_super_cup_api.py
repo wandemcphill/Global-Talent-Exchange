@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.app.world_super_cup.api.router import router
+from app.world_super_cup.api.router import router
 
 
 def _build_client() -> TestClient:

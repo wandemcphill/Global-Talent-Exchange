@@ -6,8 +6,8 @@ from typing import Literal
 
 from pydantic import Field
 
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.match_status import MatchStatus
+from app.common.schemas.base import CommonSchema
 
 
 class CreatorLeagueTierCreateRequest(CommonSchema):

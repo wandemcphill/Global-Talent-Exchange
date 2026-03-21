@@ -1,4 +1,4 @@
-from backend.app.academy.models.domain import (
+from app.academy.models.domain import (
     AcademyAwardAllocation,
     AcademyAwardsLeaders,
     AcademyAwardsPreview,

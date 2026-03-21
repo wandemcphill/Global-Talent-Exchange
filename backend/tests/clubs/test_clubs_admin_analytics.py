@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.common.enums.trophy_type import TrophyType
-from backend.app.services.club_trophy_service import ClubTrophyService
+from app.common.enums.trophy_type import TrophyType
+from app.services.club_trophy_service import ClubTrophyService
 
 
 def test_admin_summary_analytics_and_moderation_endpoints_work(client, session, create_club) -> None:

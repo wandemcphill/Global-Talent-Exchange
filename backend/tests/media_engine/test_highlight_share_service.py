@@ -9,17 +9,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models.highlight_share  # noqa: F401
-import backend.app.models.media_engine  # noqa: F401
-import backend.app.models.story_feed  # noqa: F401
-from backend.app.core.config import MediaStorageConfig
-from backend.app.media_engine.schemas import HighlightShareAmplificationRequest, HighlightShareExportRequest
-from backend.app.models.base import Base
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.user import User, UserRole
-from backend.app.services.highlight_share_service import HighlightShareService
-from backend.app.services.storage_media_service import MediaStorageService
-from backend.app.storage import LocalObjectStorage
+import app.models.highlight_share  # noqa: F401
+import app.models.media_engine  # noqa: F401
+import app.models.story_feed  # noqa: F401
+from app.core.config import MediaStorageConfig
+from app.media_engine.schemas import HighlightShareAmplificationRequest, HighlightShareExportRequest
+from app.models.base import Base
+from app.models.story_feed import StoryFeedItem
+from app.models.user import User, UserRole
+from app.services.highlight_share_service import HighlightShareService
+from app.services.storage_media_service import MediaStorageService
+from app.storage import LocalObjectStorage
 
 
 def _session():

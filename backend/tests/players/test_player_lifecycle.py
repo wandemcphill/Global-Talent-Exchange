@@ -11,24 +11,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_session
-from backend.app.common.enums.contract_status import ContractStatus
-from backend.app.common.enums.injury_severity import InjurySeverity
-from backend.app.common.enums.transfer_window_status import TransferWindowStatus
-from backend.app.club_identity.models.reputation import ClubReputationProfile
-from backend.app.ingestion.models import Club as IngestionClub
-from backend.app.ingestion.models import Competition, Match, Player, PlayerSeasonStat, Season
-from backend.app.models.base import Base
-from backend.app.models.club_infra import ClubFacility
-from backend.app.models.player_cards import PlayerCard, PlayerCardTier
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.notification_center import PlatformAnnouncement
-from backend.app.models.notification_record import NotificationRecord
-from backend.app.models.player_career_entry import PlayerCareerEntry
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.player_injury_case import PlayerInjuryCase
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.models.regen import (
+from app.auth.dependencies import get_session
+from app.common.enums.contract_status import ContractStatus
+from app.common.enums.injury_severity import InjurySeverity
+from app.common.enums.transfer_window_status import TransferWindowStatus
+from app.club_identity.models.reputation import ClubReputationProfile
+from app.ingestion.models import Club as IngestionClub
+from app.ingestion.models import Competition, Match, Player, PlayerSeasonStat, Season
+from app.models.base import Base
+from app.models.club_infra import ClubFacility
+from app.models.player_cards import PlayerCard, PlayerCardTier
+from app.models.club_profile import ClubProfile
+from app.models.notification_center import PlatformAnnouncement
+from app.models.notification_record import NotificationRecord
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_contract import PlayerContract
+from app.models.player_injury_case import PlayerInjuryCase
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.regen import (
     CurrencyConversionQuote,
     MajorTransferAnnouncement,
     RegenBigClubApproach,
@@ -40,12 +40,12 @@ from backend.app.models.regen import (
     RegenTransferPressureState,
     TransferHeadlineMediaRecord,
 )
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.transfer_bid import TransferBid
-from backend.app.models.transfer_window import TransferWindow
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from backend.app.schemas.player_lifecycle import (
+from app.models.story_feed import StoryFeedItem
+from app.models.transfer_bid import TransferBid
+from app.models.transfer_window import TransferWindow
+from app.models.user import KycStatus, User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.schemas.player_lifecycle import (
     BigClubApproachRequest,
     ContractCreateRequest,
     ContractRenewRequest,
@@ -59,14 +59,14 @@ from backend.app.schemas.player_lifecycle import (
     TransferBidCreateRequest,
     TransferBidRejectRequest,
 )
-from backend.app.segments.player_lifecycle.segment_player_lifecycle import router
-from backend.app.services.player_lifecycle_service import (
+from app.segments.player_lifecycle.segment_player_lifecycle import router
+from app.services.player_lifecycle_service import (
     PlayerLifecycleNotFoundError,
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
 )
-from backend.app.services.regen_transfer_addon import AUTO_CONVERSION_PREMIUM_BPS
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.services.regen_transfer_addon import AUTO_CONVERSION_PREMIUM_BPS
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

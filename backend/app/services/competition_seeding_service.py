@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import random
 from typing import Iterable
 
-from backend.app.models.competition_participant import CompetitionParticipant
-from backend.app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_seed_rule import CompetitionSeedRule
 
 
 @dataclass(slots=True)

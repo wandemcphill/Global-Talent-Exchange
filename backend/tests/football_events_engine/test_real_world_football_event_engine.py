@@ -8,23 +8,23 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.models.player_cards  # noqa: F401
-import backend.app.models.real_world_football  # noqa: F401
-import backend.app.models.user  # noqa: F401
-from backend.app.models.calendar_engine import CalendarEvent
-from backend.app.football_events_engine.service import (
+import app.ingestion.models  # noqa: F401
+import app.models.player_cards  # noqa: F401
+import app.models.real_world_football  # noqa: F401
+import app.models.user  # noqa: F401
+from app.models.calendar_engine import CalendarEvent
+from app.football_events_engine.service import (
     EventCategoryToggle,
     RealWorldFootballEventCreate,
     RealWorldFootballEventService,
 )
-from backend.app.ingestion.models import MarketSignal, Player
-from backend.app.models.base import Base
-from backend.app.models.player_cards import PlayerCard, PlayerCardFormBuff, PlayerCardTier
-from backend.app.models.real_world_football import PlayerDemandSignal, PlayerFormModifier, RealWorldFootballEvent, TrendingPlayerFlag
-from backend.app.models.story_feed import StoryFeedItem
-from backend.app.models.user import User, UserRole
-from backend.app.player_cards.service import PlayerCardMarketService
+from app.ingestion.models import MarketSignal, Player
+from app.models.base import Base
+from app.models.player_cards import PlayerCard, PlayerCardFormBuff, PlayerCardTier
+from app.models.real_world_football import PlayerDemandSignal, PlayerFormModifier, RealWorldFootballEvent, TrendingPlayerFlag
+from app.models.story_feed import StoryFeedItem
+from app.models.user import User, UserRole
+from app.player_cards.service import PlayerCardMarketService
 
 
 @pytest.fixture()

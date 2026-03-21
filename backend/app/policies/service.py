@@ -5,16 +5,16 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.models.policy import (
+from app.models.policy import (
     CountryFeaturePolicy,
     PolicyAcceptanceRecord,
     PolicyDocument,
     PolicyDocumentVersion,
 )
-from backend.app.core.config import BACKEND_ROOT
-from backend.app.models.base import utcnow
-from backend.app.models.user_region import UserRegionProfile
-from backend.app.observability.audit_service import AuditTrailService
+from app.core.config import BACKEND_ROOT
+from app.models.base import utcnow
+from app.models.user_region import UserRegionProfile
+from app.observability.audit_service import AuditTrailService
 
 DEFAULT_POLICY_DOCUMENTS: tuple[tuple[str, str, bool], ...] = (
     ("terms-and-conditions", "Terms & Conditions", True),
@@ -405,7 +405,7 @@ class PolicyService:
         return profile
 
     def resolve_country_code_for_user(self, *, user) -> str:
-        from backend.app.models.treasury import KycProfile
+        from app.models.treasury import KycProfile
 
         region_profile = self.session.scalar(select(UserRegionProfile).where(UserRegionProfile.user_id == user.id))
         if region_profile is not None:

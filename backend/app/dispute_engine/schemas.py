@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from backend.app.models.dispute import DisputeStatus
+from app.models.dispute import DisputeStatus
 
 
 class DisputeCreateRequest(BaseModel):

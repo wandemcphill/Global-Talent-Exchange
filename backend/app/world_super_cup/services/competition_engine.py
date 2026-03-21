@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import (
     CompetitionDispatchRequest,
     CompetitionEngineBatch,
     CompetitionScheduleRequest,
     ScheduledFixture,
 )
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher, scale_strength_rating
-from backend.app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
-from backend.app.world_super_cup.models import GroupMatch, KnockoutMatch, PlayoffMatch, TournamentPlan
+from app.competition_engine.match_dispatcher import MatchDispatcher, scale_strength_rating
+from app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
+from app.world_super_cup.models import GroupMatch, KnockoutMatch, PlayoffMatch, TournamentPlan
 
 
 @dataclass(slots=True)

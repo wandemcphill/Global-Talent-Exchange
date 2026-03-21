@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.club_sale_market.service import ClubSaleMarketError, ClubSaleMarketService
+from app.club_sale_market.service import ClubSaleMarketError, ClubSaleMarketService
 
 
 class ClubSalePermissionError(ClubSaleMarketError, PermissionError):

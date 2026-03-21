@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.schemas.club_ops_requests import CreateScoutAssignmentRequest, UpdateYouthProspectRequest
-from backend.app.schemas.club_ops_responses import (
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.schemas.club_ops_requests import CreateScoutAssignmentRequest, UpdateYouthProspectRequest
+from app.schemas.club_ops_responses import (
     ScoutingOverviewResponse,
     ScoutingProspectDetailResponse,
     ScoutingProspectsResponse,
 )
-from backend.app.services.academy_service import AcademyService, get_academy_service
-from backend.app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
-from backend.app.services.scout_assignment_service import ScoutAssignmentService, get_scout_assignment_service
-from backend.app.services.youth_pipeline_service import YouthPipelineService, get_youth_pipeline_service
-from backend.app.services.youth_prospect_service import YouthProspectService, get_youth_prospect_service
+from app.services.academy_service import AcademyService, get_academy_service
+from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
+from app.services.scout_assignment_service import ScoutAssignmentService, get_scout_assignment_service
+from app.services.youth_pipeline_service import YouthPipelineService, get_youth_pipeline_service
+from app.services.youth_prospect_service import YouthProspectService, get_youth_prospect_service
 
 
 class ScoutingService:

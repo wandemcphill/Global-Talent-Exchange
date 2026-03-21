@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.models.user import User
-from backend.app.schemas.referral_admin import (
+from app.auth.dependencies import get_current_user
+from app.models.user import User
+from app.schemas.referral_admin import (
     AttributionChainEntryView,
     CreatorAdminSummaryView,
     CreatorRewardFreezeRequest,
@@ -16,9 +16,9 @@ from backend.app.schemas.referral_admin import (
     ShareCodeModerationRequest,
     ShareCodeUsageSummaryView,
 )
-from backend.app.schemas.referral_analytics import CreatorLeaderboardResponse, ReferralAnalyticsSummaryView
-from backend.app.services.referral_admin_service import ReferralAdminService, get_referral_admin_service
-from backend.app.services.referral_orchestrator import ReferralActionError
+from app.schemas.referral_analytics import CreatorLeaderboardResponse, ReferralAnalyticsSummaryView
+from app.services.referral_admin_service import ReferralAdminService, get_referral_admin_service
+from app.services.referral_orchestrator import ReferralActionError
 
 router = APIRouter(prefix="/api/admin/referrals", tags=["admin-referrals"])
 

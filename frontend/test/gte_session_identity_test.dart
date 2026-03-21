@@ -14,7 +14,7 @@ void main() {
     final GteSessionIdentity identity =
         GteSessionIdentity.fromExchangeController(controller);
 
-    expect(identity.userId, 'demo-user');
+    expect(identity.userId, 'guest-user');
     expect(identity.clubId, isNull);
     expect(identity.clubName, isNull);
   });

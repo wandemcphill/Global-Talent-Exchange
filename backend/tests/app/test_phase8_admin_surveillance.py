@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import create_engine, select
 
-from backend.app.admin.router import (
+from app.admin.router import (
     get_liquidity_bands,
     get_supply_tiers,
     update_liquidity_bands,
@@ -16,12 +16,12 @@ from backend.app.admin.router import (
     update_suspicion_thresholds,
     update_value_controls,
 )
-from backend.app.admin.schemas import SuspicionThresholdsPayload, ValueControlsPayload
-from backend.app.admin.service import ConfigAdminService
-from backend.app.auth.service import AuthService
-from backend.app.core.config import BACKEND_ROOT, load_settings
-from backend.app.ingestion.market_profile import PlayerMarketProfileService
-from backend.app.ingestion.models import (
+from app.admin.schemas import SuspicionThresholdsPayload, ValueControlsPayload
+from app.admin.service import ConfigAdminService
+from app.auth.service import AuthService
+from app.core.config import BACKEND_ROOT, load_settings
+from app.ingestion.market_profile import PlayerMarketProfileService
+from app.ingestion.models import (
     Club,
     Competition,
     Country,
@@ -31,18 +31,18 @@ from backend.app.ingestion.models import (
     Player,
     SupplyTier,
 )
-from backend.app.main import create_app
-from backend.app.market.read_models import MarketSummaryReadModel
-from backend.app.models.user import UserRole
-from backend.app.surveillance.router import (
+from app.main import create_app
+from app.market.read_models import MarketSummaryReadModel
+from app.models.user import UserRole
+from app.surveillance.router import (
     list_circular_trade_alerts,
     list_holder_concentration_alerts,
     list_suspicious_clusters,
     list_suspicious_players,
     list_thin_market_alerts,
 )
-from backend.app.surveillance.service import SurveillanceService
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.surveillance.service import SurveillanceService
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 def _seed_low_thresholds(config_root: Path) -> None:

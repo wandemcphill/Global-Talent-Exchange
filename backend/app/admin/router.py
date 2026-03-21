@@ -5,10 +5,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.models.user import User
-from backend.app.value_engine.router import _build_daily_close_view, _build_snapshot_view
-from backend.app.value_engine.schemas import (
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
+from app.value_engine.router import _build_daily_close_view, _build_snapshot_view
+from app.value_engine.schemas import (
     AdminValueInspectionView,
     ValueAdminAuditResponse,
     ValueAdminAuditView,

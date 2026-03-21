@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pathlib import Path
@@ -8,22 +8,22 @@ from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.admin_godmode.service import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.admin_godmode.service import (
     AdminGodModeService,
     DEFAULT_COMMISSION_SETTINGS,
     DEFAULT_WITHDRAWAL_CONTROLS,
 )
-from backend.app.models.user import User
-from backend.app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
-from backend.app.models.market_topup import MarketTopup, MarketTopupStatus
-from backend.app.policies.service import PolicyService
-from backend.app.orders.router import (
+from app.models.user import User
+from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from app.models.market_topup import MarketTopup, MarketTopupStatus
+from app.policies.service import PolicyService
+from app.orders.router import (
     api_router as orders_api_router,
     legacy_router as orders_legacy_router,
 )
-from backend.app.portfolio.router import router as portfolio_router
-from backend.app.wallets.schemas import (
+from app.portfolio.router import router as portfolio_router
+from app.wallets.schemas import (
     PaymentEventCreate,
     PaymentEventView,
     PortfolioSnapshotView,
@@ -46,13 +46,13 @@ from backend.app.wallets.schemas import (
     WalletAdaptiveOverviewView,
     WalletOverviewView,
 )
-from backend.app.wallets.service import LedgerError, WalletService
-from backend.app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
-from backend.app.wallets.providers import get_provider_adapter
-from backend.app.models.wallet import LedgerEntry, PayoutRequest, PayoutStatus
-from backend.app.risk_ops_engine.service import RiskOpsService
-from backend.app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
-from backend.app.treasury.schemas import (
+from app.wallets.service import LedgerError, WalletService
+from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
+from app.wallets.providers import get_provider_adapter
+from app.models.wallet import LedgerEntry, PayoutRequest, PayoutStatus
+from app.risk_ops_engine.service import RiskOpsService
+from app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from app.treasury.schemas import (
     DepositQuoteRequest,
     DepositRequestView,
     DepositSubmitRequest,
@@ -64,7 +64,7 @@ from backend.app.treasury.schemas import (
     WithdrawalRequestCreate as TreasuryWithdrawalRequestCreate,
     WithdrawalRequestView as TreasuryWithdrawalRequestView,
 )
-from backend.app.treasury.service import TreasuryConflictError, TreasuryService
+from app.treasury.service import TreasuryConflictError, TreasuryService
 
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])

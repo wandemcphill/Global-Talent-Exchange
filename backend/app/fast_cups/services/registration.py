@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     ClubCompetitionWindow,
     FastCup,
     FastCupEntrant,

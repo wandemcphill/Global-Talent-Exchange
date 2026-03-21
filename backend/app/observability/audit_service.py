@@ -5,8 +5,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.models.risk_ops import SystemEventSeverity
-from backend.app.risk_ops_engine.service import RiskOpsService
+from app.models.risk_ops import SystemEventSeverity
+from app.risk_ops_engine.service import RiskOpsService
 
 
 @dataclass(slots=True)

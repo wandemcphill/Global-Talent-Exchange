@@ -5,8 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_current_user, get_session
-from backend.app.fan_predictions.schemas import (
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.fan_predictions.schemas import (
     FanPredictionFixtureConfigRequest,
     FanPredictionFixtureView,
     FanPredictionLeaderboardEntryView,
@@ -19,9 +19,9 @@ from backend.app.fan_predictions.schemas import (
     FanPredictionTokenLedgerView,
     FanPredictionTokenSummaryView,
 )
-from backend.app.fan_predictions.service import FanPredictionError, FanPredictionService
-from backend.app.models.fan_prediction import FanPredictionFixture, FanPredictionOutcome, FanPredictionRewardGrant, FanPredictionSubmission
-from backend.app.models.user import User
+from app.fan_predictions.service import FanPredictionError, FanPredictionService
+from app.models.fan_prediction import FanPredictionFixture, FanPredictionOutcome, FanPredictionRewardGrant, FanPredictionSubmission
+from app.models.user import User
 
 router = APIRouter(prefix="/fan-predictions", tags=["fan-predictions"])
 admin_router = APIRouter(prefix="/admin/fan-predictions", tags=["admin-fan-predictions"])

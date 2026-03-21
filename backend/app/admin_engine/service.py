@@ -7,15 +7,15 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.admin_engine.schemas import (
+from app.admin_engine.schemas import (
     AdminCalendarRuleUpsertRequest,
     AdminFeatureFlagUpsertRequest,
     AdminRewardRuleUpsertRequest,
     AdminRewardRuleStabilityControls,
 )
-from backend.app.competition_engine.scheduler import CompetitionScheduler
-from backend.app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
-from backend.app.models.user import User
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
+from app.models.user import User
 
 DEFAULT_FEATURE_FLAGS: tuple[dict[str, object], ...] = (
     {

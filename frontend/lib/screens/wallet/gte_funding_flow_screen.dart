@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -330,12 +328,17 @@ class _GteDepositInstructionsScreenState
   }
 
   Future<void> _pickAttachment() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles();
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      withData: true,
+    );
     if (result == null || result.files.isEmpty) {
       return;
     }
     final PlatformFile file = result.files.first;
-    final List<int> bytes = file.bytes ?? await File(file.path!).readAsBytes();
+    final List<int> bytes = file.bytes ?? const <int>[];
+    if (bytes.isEmpty) {
+      throw Exception('Unable to read the selected file.');
+    }
     final GteAttachment attachment =
         await widget.controller.api.uploadAttachment(file.name, bytes);
     if (!mounted) {

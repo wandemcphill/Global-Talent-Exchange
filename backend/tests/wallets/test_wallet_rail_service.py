@@ -7,12 +7,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.auth.service import AuthService
-from backend.app.models import AmlCase, Base, LedgerUnit
-from backend.app.models.fancoin_purchase_order import PurchaseOrderStatus
-from backend.app.models.treasury import RateDirection
-from backend.app.treasury.service import TreasuryService
-from backend.app.wallets.rail_service import WalletRailService
+from app.auth.service import AuthService
+from app.models import AmlCase, Base, LedgerUnit
+from app.models.fancoin_purchase_order import PurchaseOrderStatus
+from app.models.treasury import RateDirection
+from app.treasury.service import TreasuryService
+from app.wallets.rail_service import WalletRailService
 
 
 @pytest.fixture()

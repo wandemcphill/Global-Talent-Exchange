@@ -7,13 +7,13 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.analytics.service import AnalyticsService
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.common.enums.sponsorship_surface import SponsorshipSurface
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.core.config import Settings, SponsorshipCampaignConfig
-from backend.app.models.club_sponsor import ClubSponsor
-from backend.app.models.club_sponsorship_contract import ClubSponsorshipContract
+from app.analytics.service import AnalyticsService
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.common.enums.sponsorship_surface import SponsorshipSurface
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.core.config import Settings, SponsorshipCampaignConfig
+from app.models.club_sponsor import ClubSponsor
+from app.models.club_sponsorship_contract import ClubSponsorshipContract
 
 
 def _utcnow() -> datetime:

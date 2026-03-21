@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.academy_player import AcademyPlayer
+    from app.models.academy_player import AcademyPlayer
 
 
 class AcademyGraduationEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

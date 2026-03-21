@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.models.user import User
-from backend.app.story_feed_engine.schemas import StoryDigestResponse, StoryFeedItemResponse, StoryFeedPublishRequest
-from backend.app.story_feed_engine.service import StoryFeedService
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
+from app.story_feed_engine.schemas import StoryDigestResponse, StoryFeedItemResponse, StoryFeedPublishRequest
+from app.story_feed_engine.service import StoryFeedService
 
 router = APIRouter(prefix="/story-feed", tags=["story-feed"])
 admin_router = APIRouter(prefix="/admin/story-feed", tags=["story-feed-admin"])

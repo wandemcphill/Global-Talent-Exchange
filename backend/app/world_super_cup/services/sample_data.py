@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.world_super_cup.models import ClubSeasonPerformance
+from app.world_super_cup.models import ClubSeasonPerformance
 
 ACTIVE_REGIONS: tuple[str, ...] = (
     "Africa",
