@@ -27,7 +27,9 @@ class GteStatePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent = accentColor ?? GteShellTheme.accent;
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color accent = accentColor ?? tokens.accent;
+
     return GteSurfacePanel(
       emphasized: true,
       accentColor: accent,
@@ -35,39 +37,54 @@ class GteStatePanel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          if (eyebrow != null) ...<Widget>[
-            Text(
-              eyebrow!,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: accent,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (icon != null || isLoading) ...<Widget>[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: isLoading
-                  ? SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.6,
-                        valueColor: AlwaysStoppedAnimation<Color>(accent),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (icon != null || isLoading) ...<Widget>[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(tokens.radiusSmall),
+                    color: accent.withValues(alpha: 0.14),
+                    border: Border.all(color: accent.withValues(alpha: 0.24)),
+                  ),
+                  child: isLoading
+                      ? SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.6,
+                            valueColor: AlwaysStoppedAnimation<Color>(accent),
+                          ),
+                        )
+                      : Icon(icon, size: 28, color: accent),
+                ),
+                const SizedBox(width: 14),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (eyebrow != null) ...<Widget>[
+                      Text(
+                        eyebrow!,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: accent,
+                              letterSpacing: 1.1,
+                            ),
                       ),
-                    )
-                  : Icon(icon, size: 28, color: accent),
-            ),
-            const SizedBox(height: 14),
-          ],
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
+                      const SizedBox(height: 8),
+                    ],
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(message, style: Theme.of(context).textTheme.bodyMedium),
           if (actionLabel != null && onAction != null) ...<Widget>[
             const SizedBox(height: 18),
