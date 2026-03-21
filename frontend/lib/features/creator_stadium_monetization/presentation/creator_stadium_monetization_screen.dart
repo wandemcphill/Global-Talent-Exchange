@@ -114,7 +114,7 @@ class _CreatorStadiumMonetizationScreenState
         decoration: gteBackdropDecoration(),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(title: const Text('Creator stadium control')),
+          appBar: AppBar(title: const Text('Creator Stadium Control')),
           body: Padding(
             padding: const EdgeInsets.all(20),
             child: GteStatePanel(
@@ -134,7 +134,7 @@ class _CreatorStadiumMonetizationScreenState
         decoration: gteBackdropDecoration(),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(title: const Text('Creator stadium control')),
+          appBar: AppBar(title: const Text('Creator Stadium Control')),
           body: const Padding(
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
@@ -154,8 +154,8 @@ class _CreatorStadiumMonetizationScreenState
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: Text(widget.adminOnly
-              ? 'Creator stadium control'
-              : 'Creator stadium monetization'),
+              ? 'Creator Stadium Control'
+              : 'Creator Stadium'),
           actions: <Widget>[
             IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
           ],
@@ -180,12 +180,12 @@ class _CreatorStadiumMonetizationScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          widget.clubName ?? 'Creator stadium deck',
+                          widget.clubName ?? 'Creator Stadium',
                           style: Theme.of(context).textTheme.headlineSmall,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'This surface handles club stadium config, match access, ticketing, placements, gifting, analytics, and admin control without creating a parallel monetization system.',
+                          'Run tickets, match access, placements, gifts, and stadium settings from one club-day view.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         const SizedBox(height: 14),
@@ -227,7 +227,7 @@ class _CreatorStadiumMonetizationScreenState
                               FilledButton.tonalIcon(
                                 onPressed: _updateClubConfig,
                                 icon: const Icon(Icons.settings_outlined),
-                                label: const Text('Club config'),
+                                label: const Text('Edit setup'),
                               ),
                             if (_isAuthenticated && _hasMatchScope)
                               FilledButton.tonalIcon(
@@ -240,7 +240,7 @@ class _CreatorStadiumMonetizationScreenState
                               FilledButton.tonalIcon(
                                 onPressed: _createPlacement,
                                 icon: const Icon(Icons.view_carousel_outlined),
-                                label: const Text('Add placement'),
+                                label: const Text('Add sponsor slot'),
                               ),
                             if (_isAuthenticated && _hasMatchScope)
                               FilledButton.tonalIcon(
@@ -263,16 +263,16 @@ class _CreatorStadiumMonetizationScreenState
                   const SizedBox(height: 18),
                   if (!widget.adminOnly && !_hasClubScope && !_hasMatchScope)
                     const GteStatePanel(
-                      title: 'Select a creator club or match',
+                      title: 'Pick a creator club or live match',
                       message:
-                          'Open this screen from a canonical creator club or creator match route to load stadium monetization data.',
+                          'Open this from a creator club or match to load stadium data.',
                       icon: Icons.stadium_outlined,
                     ),
                   if (_hasClubScope && !_hasSeasonScope)
                     const GteStatePanel(
                       title: 'Creator season required',
                       message:
-                          'Club stadium monetization is only loaded when a canonical creator league season id is available for this club.',
+                          'Stadium data needs an active creator season for this club.',
                       icon: Icons.event_busy_outlined,
                     ),
                   if (_hasClubScope && !_hasSeasonScope)
@@ -282,13 +282,13 @@ class _CreatorStadiumMonetizationScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text('Club stadium',
+                          Text('Stadium setup',
                               style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 10),
                           if (_controller.isLoadingClubStadium &&
                               clubStadium == null)
                             const GteStatePanel(
-                              title: 'Loading club stadium',
+                              title: 'Loading stadium setup',
                               message:
                                   'Ticket pricing and stadium profile are syncing.',
                               icon: Icons.stadium_outlined,
@@ -315,12 +315,12 @@ class _CreatorStadiumMonetizationScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text('Match monetization',
+                          Text('Matchday access',
                               style: Theme.of(context).textTheme.titleLarge),
                           const SizedBox(height: 10),
                           if (_controller.isLoadingMatch && matchAccess == null)
                             const GteStatePanel(
-                              title: 'Loading match access',
+                              title: 'Loading matchday access',
                               message:
                                   'Broadcast access, placements, and analytics are syncing.',
                               icon: Icons.live_tv_outlined,
@@ -329,7 +329,7 @@ class _CreatorStadiumMonetizationScreenState
                           else if (_controller.matchError != null &&
                               matchAccess == null)
                             GteStatePanel(
-                              title: 'Match monetization unavailable',
+                              title: 'Matchday access unavailable',
                               message: _controller.matchError!,
                               icon: Icons.error_outline,
                             )
@@ -478,7 +478,7 @@ class _CreatorStadiumMonetizationScreenState
     if (matchId == null || clubId == null) {
       AppFeedback.showError(
         context,
-        'Gifting needs both a real match id and a canonical club id.',
+        'Gifting needs a real match id and club id.',
       );
       return;
     }

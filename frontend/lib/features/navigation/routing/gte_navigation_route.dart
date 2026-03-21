@@ -16,15 +16,15 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.home:
         return 'Home';
       case GtePrimaryDestination.market:
-        return 'Trade';
+        return 'Market';
       case GtePrimaryDestination.competitions:
-        return 'Arena';
+        return 'Play';
       case GtePrimaryDestination.community:
-        return 'Community';
+        return 'Hub';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
-        return 'Wallet';
+        return 'Capital';
     }
   }
 
@@ -52,9 +52,9 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.home:
         return Icons.home_outlined;
       case GtePrimaryDestination.market:
-        return Icons.show_chart_outlined;
+        return Icons.storefront_outlined;
       case GtePrimaryDestination.competitions:
-        return Icons.emoji_events_outlined;
+        return Icons.sports_soccer_outlined;
       case GtePrimaryDestination.community:
         return Icons.forum_outlined;
       case GtePrimaryDestination.club:
@@ -63,8 +63,6 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return Icons.account_balance_wallet_outlined;
     }
   }
-
-
 
   Color get accentColor {
     switch (this) {
@@ -88,9 +86,9 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.home:
         return Icons.home;
       case GtePrimaryDestination.market:
-        return Icons.show_chart;
+        return Icons.storefront;
       case GtePrimaryDestination.competitions:
-        return Icons.emoji_events;
+        return Icons.sports_soccer;
       case GtePrimaryDestination.community:
         return Icons.forum;
       case GtePrimaryDestination.club:
@@ -188,9 +186,10 @@ class GteNavigationRoute {
       return const GteNavigationRoute.home();
     }
 
-    final List<String> normalizedSegments = segments.isNotEmpty && segments.first.toLowerCase() == 'app'
-        ? segments.sublist(1)
-        : segments;
+    final List<String> normalizedSegments =
+        segments.isNotEmpty && segments.first.toLowerCase() == 'app'
+            ? segments.sublist(1)
+            : segments;
     if (normalizedSegments.isEmpty) {
       return const GteNavigationRoute.home();
     }

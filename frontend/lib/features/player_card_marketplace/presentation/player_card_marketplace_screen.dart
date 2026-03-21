@@ -92,7 +92,7 @@ class _PlayerCardMarketplaceScreenState
           child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: const Text('Player-card marketplace'),
+              title: const Text('Player Card Market'),
               actions: <Widget>[
                 IconButton(
                   onPressed: _reload,
@@ -108,9 +108,9 @@ class _PlayerCardMarketplaceScreenState
                   GtexHeroBanner(
                     eyebrow: 'PLAYER-CARD MARKETPLACE',
                     title:
-                        'Sales, loans, swaps, inventory, contracts, and watchlists live on one trading surface.',
+                        'Buy, loan, swap, and track player cards in one market.',
                     description:
-                        'This screen is wired to the canonical card marketplace endpoints, so pricing, fees, loan terms, and swap execution all come straight from the backend.',
+                        'Prices, fees, loan terms, and swaps come straight from the live market feed.',
                     accent: const Color(0xFF91C9FF),
                     chips: <Widget>[
                       GteMetricChip(
@@ -158,7 +158,7 @@ class _PlayerCardMarketplaceScreenState
                         FilledButton.tonalIcon(
                           onPressed: _reload,
                           icon: const Icon(Icons.search),
-                          label: const Text('Apply search'),
+                          label: const Text('Search'),
                         ),
                       ],
                     ),
@@ -185,7 +185,7 @@ class _PlayerCardMarketplaceScreenState
                         Tab(text: 'Loans'),
                         Tab(text: 'Swaps'),
                         Tab(text: 'Inventory'),
-                        Tab(text: 'My desk'),
+                        Tab(text: 'My moves'),
                         Tab(text: 'Watchlist'),
                       ],
                     ),
@@ -229,15 +229,15 @@ class _PlayerCardMarketplaceScreenState
     if (_controller.isLoadingMarketplace && items.isEmpty) {
       return const GteStatePanel(
         title: 'Loading sales',
-        message: 'Sale listings, pricing, and card availability are loading.',
+        message: 'Cards, prices, and availability are loading.',
         icon: Icons.storefront_outlined,
         isLoading: true,
       );
     }
     if (items.isEmpty) {
       return const GteStatePanel(
-        title: 'No sale listings found',
-        message: 'This sale book is currently empty for the active search.',
+        title: 'No cards on sale right now',
+        message: 'Try a new search or check back when the next listings drop.',
         icon: Icons.search_off_outlined,
       );
     }
@@ -253,9 +253,9 @@ class _PlayerCardMarketplaceScreenState
                 : !_hasAuth
                     ? widget.onOpenLogin
                     : () => _showBuySaleDialog(context, item),
-            primaryLabel: isOwner ? 'Cancel sale' : 'Buy sale',
+            primaryLabel: isOwner ? 'Cancel sale' : 'Buy card',
             onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-            secondaryLabel: 'Player',
+            secondaryLabel: 'View player',
           ),
         );
       }).toList(growable: false),
@@ -275,8 +275,8 @@ class _PlayerCardMarketplaceScreenState
     }
     if (items.isEmpty) {
       return const GteStatePanel(
-        title: 'No loan listings found',
-        message: 'The current loan book is empty for this search.',
+        title: 'No loans live right now',
+        message: 'Try a new search or check back when clubs list new loans.',
         icon: Icons.search_off_outlined,
       );
     }
@@ -294,7 +294,7 @@ class _PlayerCardMarketplaceScreenState
                     : () => _showLoanNegotiationDialog(context, item),
             primaryLabel: isOwner ? 'Cancel loan' : 'Negotiate',
             onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-            secondaryLabel: 'Player',
+            secondaryLabel: 'View player',
           ),
         );
       }).toList(growable: false),
@@ -314,8 +314,8 @@ class _PlayerCardMarketplaceScreenState
     }
     if (items.isEmpty) {
       return const GteStatePanel(
-        title: 'No swap listings found',
-        message: 'No swap opportunities match the active search.',
+        title: 'No swaps live right now',
+        message: 'No swap offers match this search right now.',
         icon: Icons.search_off_outlined,
       );
     }
@@ -333,7 +333,7 @@ class _PlayerCardMarketplaceScreenState
                     : () => _showExecuteSwapDialog(context, item),
             primaryLabel: isOwner ? 'Cancel swap' : 'Execute swap',
             onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-            secondaryLabel: 'Player',
+            secondaryLabel: 'View player',
           ),
         );
       }).toList(growable: false),
@@ -345,7 +345,7 @@ class _PlayerCardMarketplaceScreenState
       return GteStatePanel(
         title: 'Sign in required',
         message:
-            'Inventory actions are only available for authenticated owners.',
+            'Sign in to list cards from your own squad.',
         actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
         onAction: widget.onOpenLogin,
         icon: Icons.lock_outline,
@@ -361,8 +361,8 @@ class _PlayerCardMarketplaceScreenState
     }
     if (_controller.inventory.isEmpty) {
       return const GteStatePanel(
-        title: 'No card inventory yet',
-        message: 'Acquire or buy player cards to start creating listings.',
+        title: 'No cards in your locker yet',
+        message: 'Buy or win player cards to start listing them.',
         icon: Icons.inventory_2_outlined,
       );
     }
@@ -386,7 +386,7 @@ class _PlayerCardMarketplaceScreenState
       return GteStatePanel(
         title: 'Sign in required',
         message:
-            'My listings and loan contracts need an authenticated session.',
+            'Sign in to view your listings and live loan deals.',
         actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
         onAction: widget.onOpenLogin,
         icon: Icons.lock_outline,
@@ -409,7 +409,7 @@ class _PlayerCardMarketplaceScreenState
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
               if (_controller.myListings.isEmpty)
-                const Text('No personal listings are open right now.')
+                const Text('No live listings yet.')
               else
                 ..._controller.myListings.map(
                   (PlayerCardListing listing) => ListTile(
@@ -432,7 +432,7 @@ class _PlayerCardMarketplaceScreenState
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
               if (_controller.loanContracts.items.isEmpty)
-                const Text('No active marketplace loan contracts yet.')
+                const Text('No live loan deals yet.')
               else
                 ..._controller.loanContracts.items.map(
                   (PlayerCardMarketplaceLoanContract contract) => ListTile(
@@ -481,13 +481,13 @@ class _PlayerCardMarketplaceScreenState
         FilledButton.tonalIcon(
           onPressed: () => _showAddWatchlistDialog(context),
           icon: const Icon(Icons.playlist_add_outlined),
-          label: const Text('Add watchlist item'),
+          label: const Text('Add to watchlist'),
         ),
         const SizedBox(height: 16),
         if (_controller.watchlist.isEmpty)
           const GteStatePanel(
             title: 'Watchlist is empty',
-            message: 'Add a player or card id to track it from one place.',
+            message: 'Add a player or card id and track it here.',
             icon: Icons.visibility_outlined,
           )
         else
@@ -498,7 +498,7 @@ class _PlayerCardMarketplaceScreenState
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(item.playerCardId ?? item.playerId),
-                  subtitle: Text(item.notes ?? 'No notes'),
+                  subtitle: Text(item.notes ?? 'No notes yet'),
                   trailing: OutlinedButton(
                     onPressed: () => _controller.removeWatchlist(item.id),
                     child: const Text('Remove'),
@@ -957,9 +957,9 @@ class _ExecutionSummaryPanel extends StatelessWidget {
         child: ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.insights_outlined),
-          title: Text('Latest execution summary'),
+          title: Text('Latest deal recap'),
           subtitle:
-              Text('Completed sale, loan, and swap actions will appear here.'),
+              Text('Finished sales, loans, and swaps show up here.'),
         ),
       );
     }
@@ -967,20 +967,20 @@ class _ExecutionSummaryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Latest execution summary',
+          Text('Latest deal recap',
               style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
           if (sale != null)
             Text(
-              'Sale: ${gteFormatCredits(sale.grossCredits)} gross â€¢ fee ${gteFormatCredits(sale.feeCredits)} â€¢ seller net ${gteFormatCredits(sale.sellerNetCredits)}',
+              'Sale: ${gteFormatCredits(sale.grossCredits)} gross | fee ${gteFormatCredits(sale.feeCredits)} | seller net ${gteFormatCredits(sale.sellerNetCredits)}',
             ),
           if (contract != null)
             Text(
-              'Loan: ${contract.contractStatus.toUpperCase()} â€¢ lender net ${gteFormatCredits(contract.lenderNetCredits)} â€¢ fee ${gteFormatCredits(contract.platformFeeCredits)}',
+              'Loan: ${contract.contractStatus.toUpperCase()} | lender net ${gteFormatCredits(contract.lenderNetCredits)} | fee ${gteFormatCredits(contract.platformFeeCredits)}',
             ),
           if (swap != null)
             Text(
-              'Swap: ${swap.status.toUpperCase()} â€¢ owner card ${swap.ownerPlayerCardId} for ${swap.counterpartyPlayerCardId}',
+              'Swap: ${swap.status.toUpperCase()} | owner card ${swap.ownerPlayerCardId} for ${swap.counterpartyPlayerCardId}',
             ),
         ],
       ),

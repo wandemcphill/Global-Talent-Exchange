@@ -62,7 +62,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wallet overview'),
+        title: const Text('Club Wallet'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
@@ -110,14 +110,30 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Text('Wallet hub',
-                                  style:
-                                      Theme.of(context).textTheme.titleLarge),
-                              const SizedBox(height: 8),
-                              Text(
-                                'FanCoin rewards and Coin/Market Balance stay separated for clarity.',
-                                style: Theme.of(context).textTheme.bodyMedium,
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: const <Widget>[
+                                  _WalletTag(
+                                    label: 'Club wallet',
+                                    color: GteShellTheme.accentCapital,
+                                  ),
+                                  _WalletTag(
+                                    label: 'Rewards lane',
+                                    color: GteShellTheme.accentCommunity,
+                                  ),
+                                ],
                               ),
+                              const SizedBox(height: 14),
+                               Text('Club wallet',
+                                   style: Theme.of(context)
+                                       .textTheme
+                                       .headlineSmall),
+                              const SizedBox(height: 8),
+                               Text(
+                                 'FanCoin rewards stay separate from your tradable balance.',
+                                 style: Theme.of(context).textTheme.bodyMedium,
+                               ),
                               const SizedBox(height: 14),
                               Row(
                                 children: <Widget>[
@@ -127,7 +143,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                         ? 'Syncing...'
                                         : gteFormatCredits(fanCoinBalance),
                                     caption:
-                                        'Promo pool rewards and gifting credits.',
+                                        'Rewards, boosts, and gifting credits.',
                                     accent: GteShellTheme.accentCommunity,
                                   ),
                                   const SizedBox(width: 12),
@@ -136,7 +152,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                     value: gteFormatCredits(
                                         overview.availableBalance),
                                     caption:
-                                        'Tradeable balance for market and competitions.',
+                                        'Balance ready for market and competitions.',
                                     accent: GteShellTheme.accentCapital,
                                   ),
                                 ],
@@ -200,10 +216,15 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             ),
                           ),
                         Text(
-                          'Source-tagged history',
+                          'Money moves',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
+                        Text(
+                          'Every wallet event stays readable by source so rewards, top-ups, and transfers do not blur together.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
                         if (ledgerSnapshot.connectionState ==
                                 ConnectionState.waiting &&
                             !ledgerSnapshot.hasData)
@@ -231,18 +252,18 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Wallet flow totals',
+                      Text('Money in / out',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 12),
                       Row(
                         children: <Widget>[
                           _MetricTile(
-                            label: 'Total inflow',
+                            label: 'Money in',
                             value: gteFormatCredits(overview.totalInflow),
                           ),
                           const SizedBox(width: 12),
                           _MetricTile(
-                            label: 'Total outflow',
+                            label: 'Money out',
                             value: gteFormatCredits(overview.totalOutflow),
                           ),
                         ],
@@ -395,6 +416,36 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   }
 }
 
+class _WalletTag extends StatelessWidget {
+  const _WalletTag({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.14),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+      ),
+    );
+  }
+}
+
 class _MetricTile extends StatelessWidget {
   const _MetricTile({required this.label, required this.value});
 
@@ -408,14 +459,21 @@ class _MetricTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.white.withValues(alpha: 0.03),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
+          border: Border.all(
+              color: GteShellTheme.accentCapital.withValues(alpha: 0.12)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 6),
+            Text(
+              label.toUpperCase(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
             Text(value, style: Theme.of(context).textTheme.titleMedium),
           ],
         ),
@@ -450,10 +508,19 @@ class _BalanceTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 6),
-            Text(value, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 6),
+            Text(
+              label.toUpperCase(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
             Text(
               caption,
               style: Theme.of(context).textTheme.bodySmall,
@@ -475,27 +542,55 @@ class _LedgerEntryTile extends StatelessWidget {
     final String label = _sourceLabel(entry.reason);
     final IconData icon = _sourceIcon(entry.reason);
     final bool isPositive = entry.amount >= 0;
+    final Color accent =
+        isPositive ? GteShellTheme.positive : GteShellTheme.accentWarm;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GteSurfacePanel(
+        accentColor: accent,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: accent.withValues(alpha: 0.14),
+              ),
+              child: Icon(icon, color: accent),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(label, style: Theme.of(context).textTheme.titleSmall),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: accent.withValues(alpha: 0.14),
+                    ),
+                    child: Text(
+                      label.toUpperCase(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: accent,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   if (entry.description?.trim().isNotEmpty == true) ...<Widget>[
-                    const SizedBox(height: 4),
                     Text(
                       entry.description!,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    const SizedBox(height: 4),
                   ],
-                  const SizedBox(height: 4),
                   Text(
                     'Source: ${entry.reason}',
                     style: Theme.of(context).textTheme.bodySmall,

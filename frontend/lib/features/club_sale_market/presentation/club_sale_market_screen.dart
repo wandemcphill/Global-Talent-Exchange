@@ -118,10 +118,10 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             appBar: AppBar(
               title: Text(
                 clubId == null
-                    ? 'Club sale market'
+                    ? 'Club Market'
                     : widget.forceOwnerWorkspace
-                        ? '${widget.clubName ?? clubId} owner inbox'
-                        : '${widget.clubName ?? clubId} sale market',
+                        ? '${widget.clubName ?? clubId} club offers'
+                        : '${widget.clubName ?? clubId} club market',
               ),
               actions: <Widget>[
                 IconButton(
@@ -154,9 +154,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
           GtexHeroBanner(
             eyebrow: 'CLUB SALE MARKET',
             title:
-                'Public valuations, asking prices, and live deal posture stay readable.',
+                'Clubs on the move, prices in play.',
             description:
-                'Club sales do not invent a second ownership system in the client. This screen only shows the canonical backend valuation, listing posture, and sale history.',
+                'See club value, asking price, and recent sale history in one market view.',
             accent: const Color(0xFFF5C65B),
             chips: <Widget>[
               GteMetricChip(
@@ -170,16 +170,16 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
               ),
             ],
             actions: <Widget>[
-              FilledButton.tonalIcon(
-                onPressed: _controller.loadPublicListings,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh market'),
-              ),
+                FilledButton.tonalIcon(
+                  onPressed: _controller.loadPublicListings,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh'),
+                ),
               if (widget.currentClubId?.isNotEmpty == true)
                 FilledButton.icon(
                   onPressed: () => _openClub(context, widget.currentClubId!),
                   icon: const Icon(Icons.shield_outlined),
-                  label: const Text('Open my club'),
+                  label: const Text('My club'),
                 ),
             ],
             sidePanel: Column(
@@ -187,18 +187,18 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                 TextField(
                   controller: _clubLookupController,
                   decoration: const InputDecoration(
-                    labelText: 'Open club by id',
+                    labelText: 'Scout club by id',
                     hintText: 'club-123',
                   ),
                 ),
                 const SizedBox(height: 12),
-                FilledButton.tonalIcon(
+                FilledButton.icon(
                   onPressed: () => _openClub(
                     context,
                     _clubLookupController.text.trim(),
                   ),
                   icon: const Icon(Icons.open_in_new),
-                  label: const Text('Open club market'),
+                  label: const Text('Open club'),
                 ),
               ],
             ),
@@ -206,6 +206,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
           const SizedBox(height: 20),
           if (_controller.listingsError != null && listings.isEmpty)
             GteStatePanel(
+              eyebrow: 'TRANSFER MARKET',
               title: 'Club sale market unavailable',
               message: _controller.listingsError!,
               actionLabel: 'Retry',
@@ -214,17 +215,21 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             )
           else if (_controller.isLoadingPublicListings && listings.isEmpty)
             const GteStatePanel(
+              eyebrow: 'TRANSFER MARKET',
               title: 'Loading listings',
               message:
-                  'Valuations, asking prices, and listing posture are being assembled.',
+                  'Club prices and asking tags are loading.',
               icon: Icons.storefront_outlined,
               isLoading: true,
             )
           else if (listings.isEmpty)
-            const GteStatePanel(
-              title: 'No clubs are listed right now',
+            GteStatePanel(
+              eyebrow: 'TRANSFER MARKET',
+              title: 'No clubs up for sale right now',
               message:
-                  'The market stays explicit when there are no active sale listings. Try again later or open a club directly by id.',
+                  'Fans are waiting. Check back later or scout a club directly by id.',
+              actionLabel: 'Refresh',
+              onAction: _controller.loadPublicListings,
               icon: Icons.search_off_outlined,
             )
           else
@@ -286,6 +291,24 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: <Widget>[
+                    _MarketTag(
+                      label: listing?.isActive == true
+                          ? 'Live listing'
+                          : 'Transfer desk',
+                      color: const Color(0xFFF5C65B),
+                    ),
+                    if (ownerView)
+                      const _MarketTag(
+                        label: 'Owner inbox',
+                        color: GteShellTheme.accentClub,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 Text(
                   widget.clubName ??
                       valuation?.clubName ??
@@ -295,7 +318,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Public view shows canonical valuation and asking price. Transfer settlement stays backend-owned and is only displayed here after execution.',
+                  'See club value, asking price, and the last sale at a glance.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 14),
@@ -345,18 +368,18 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                           ? null
                           : !_hasAuth
                               ? widget.onOpenLogin
-                              : () => _showInquiryDialog(context, clubId),
-                      icon: const Icon(Icons.question_answer_outlined),
-                      label: const Text('Inquiry'),
+                              : () => _showOfferDialog(context, clubId),
+                      icon: const Icon(Icons.local_offer_outlined),
+                      label: const Text('Make offer'),
                     ),
                     FilledButton.tonalIcon(
                       onPressed: listing == null
                           ? null
                           : !_hasAuth
                               ? widget.onOpenLogin
-                              : () => _showOfferDialog(context, clubId),
-                      icon: const Icon(Icons.local_offer_outlined),
-                      label: const Text('Make offer'),
+                              : () => _showInquiryDialog(context, clubId),
+                      icon: const Icon(Icons.question_answer_outlined),
+                      label: const Text('Ask seller'),
                     ),
                     if (canManageListing)
                       OutlinedButton.icon(
@@ -386,7 +409,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                 if (!_hasAuth && widget.onOpenLogin != null) ...<Widget>[
                   const SizedBox(height: 12),
                   Text(
-                    'Sign in to send inquiries, submit offers, and open owner inboxes.',
+                    'Sign in to ask questions, send offers, or open club offers.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -1132,6 +1155,36 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
   }
 }
 
+class _MarketTag extends StatelessWidget {
+  const _MarketTag({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.14),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+      ),
+    );
+  }
+}
+
 class _ClubSaleListingTile extends StatelessWidget {
   const _ClubSaleListingTile({
     required this.listing,
@@ -1146,6 +1199,7 @@ class _ClubSaleListingTile extends StatelessWidget {
     final bool canOpen = listing.clubId.trim().isNotEmpty;
     final String? listingNote = listing.note?.trim();
     return GteSurfacePanel(
+      accentColor: const Color(0xFFF5C65B),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -1156,6 +1210,29 @@ class _ClubSaleListingTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        color: const Color(0xFFF5C65B).withValues(alpha: 0.14),
+                        border: Border.all(
+                          color:
+                              const Color(0xFFF5C65B).withValues(alpha: 0.24),
+                        ),
+                      ),
+                      child: Text(
+                        listing.isActive ? 'HOT LISTING' : 'MARKET WATCH',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFFF5C65B),
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
                       listing.clubName.trim().isNotEmpty
                           ? listing.clubName
@@ -1163,16 +1240,18 @@ class _ClubSaleListingTile extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      listingNote?.isNotEmpty == true
-                          ? listingNote!
-                          : 'Active listing on the canonical club sale market.',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      Text(
+                        listingNote?.isNotEmpty == true
+                            ? listingNote!
+                            : 'Live now in Club Market.',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
               ),
-              FilledButton.tonal(
+              FilledButton(
                 onPressed: canOpen ? onOpen : null,
                 child: const Text('Open'),
               ),
@@ -1238,7 +1317,7 @@ class _SnapshotSection extends StatelessWidget {
       return const GteStatePanel(
         title: 'No public snapshot yet',
         message:
-            'This club has no active public sale listing right now, but the history and owner workspace may still be available.',
+            'This club is not listed right now, but past deals and club offers may still be available.',
         icon: Icons.info_outline,
       );
     }
@@ -1258,7 +1337,7 @@ class _SnapshotSection extends StatelessWidget {
             Text(
               listingNote?.isNotEmpty == true
                   ? listingNote!
-                  : 'This listing is active on the canonical club sale market.',
+                  : 'This club is live in Club Market.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           if (listing != null) const SizedBox(height: 12),
@@ -1268,7 +1347,7 @@ class _SnapshotSection extends StatelessWidget {
             children: <Widget>[
               if (valuation != null)
                 GteMetricChip(
-                  label: 'System valuation',
+                  label: 'Club value',
                   value: gteFormatCredits(valuation!.systemValuation),
                 ),
               if (listing != null)
@@ -1534,8 +1613,8 @@ class _OwnerWorkspaceSection extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isLoading && inquiries.isEmpty && offers.isEmpty && myOffers.isEmpty) {
       return const GteStatePanel(
-        title: 'Loading owner workspace',
-        message: 'Offer inbox, inquiry inbox, and owner actions are loading.',
+        title: 'Loading club offers',
+        message: 'Offers, questions, and owner actions are loading.',
         icon: Icons.inbox_outlined,
         isLoading: true,
       );
@@ -1549,7 +1628,7 @@ class _OwnerWorkspaceSection extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  'Owner workspace',
+                  'Club offers',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),

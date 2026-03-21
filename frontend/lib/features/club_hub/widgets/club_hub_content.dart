@@ -58,24 +58,34 @@ class ClubHubContent extends StatelessWidget {
     final bool canOpenOwnerOffers =
         isAuthenticated && navigationDependencies?.currentClubId == data.clubId;
     final String ownerOffersMessage = !isAuthenticated
-        ? 'Sign in with the club owner account before opening the owner offer inbox.'
-        : 'Switch into this club owner workspace before opening the owner offer inbox.';
+        ? 'Sign in as the club owner to open club offers.'
+        : 'Switch to this club before opening club offers.';
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
       children: <Widget>[
         GteSurfacePanel(
           emphasized: true,
+          accentColor: GteShellTheme.accentClub,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: const <Widget>[
+                  ClubHubPill(label: 'Club HQ'),
+                  ClubHubPill(label: 'Live board'),
+                ],
+              ),
+              const SizedBox(height: 14),
               Text(
-                'Club hub',
+                'Club room',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
               Text(
-                'Run the badge from one surface: squad posture, tactical language, identity, reputation, trophies, dynasty, and history.',
+                'Run your squad, tactics, badge, trophies, dynasty, and history from one place.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -90,14 +100,15 @@ class ClubHubContent extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Sign in to persist club updates. The club hub stays readable while signed out.',
+                    'Sign in to save club changes. The club room stays open while signed out, but live actions stay on the bench.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
                 const SizedBox(width: 12),
-                FilledButton.tonal(
+                FilledButton.icon(
                   onPressed: onOpenLogin,
-                  child: const Text('Sign in'),
+                  icon: const Icon(Icons.login_outlined),
+                  label: const Text('Sign in'),
                 ),
               ],
             ),
@@ -227,7 +238,7 @@ class ClubHubContent extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'The squad shell keeps recruitment, standards, and matchday expectations visible without leaving the club tab.',
+                'Keep recruitment, standards, and matchday expectations in view.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -264,12 +275,12 @@ class ClubHubContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Locker room signals',
+                'Dressing room buzz',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
               ClubHubMetricRow(
-                label: 'Club posture',
+                label: 'Squad mood',
                 value: _squadPostureLabel(data),
               ),
               ClubHubMetricRow(
@@ -438,7 +449,7 @@ class ClubHubContent extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: onOpenIdentity,
                   icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Edit identity'),
+                  label: const Text('Edit club look'),
                 ),
               ],
             ),
@@ -475,7 +486,7 @@ class ClubHubContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Palette system',
+                'Club colours',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -1104,12 +1115,12 @@ class _ClubRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Club extensions',
+            'More club routes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Owner routes for stadium monetization, club sales, offer review, and world context stay one click from the hub.',
+            'Jump from the club room into transfers, stadium, offers, and the wider world.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -1117,25 +1128,25 @@ class _ClubRoutePanel extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
+              FilledButton.icon(
+                onPressed: onOpenClubSaleDetail,
+                icon: const Icon(Icons.sell_outlined),
+                label: const Text('Club Market'),
+              ),
               FilledButton.tonalIcon(
                 onPressed: onOpenCreatorStadium,
                 icon: const Icon(Icons.stadium_outlined),
                 label: const Text('Creator stadium'),
               ),
               FilledButton.tonalIcon(
-                onPressed: onOpenClubSaleDetail,
-                icon: const Icon(Icons.sell_outlined),
-                label: const Text('Club sale detail'),
-              ),
-              FilledButton.tonalIcon(
                 onPressed: onOpenOwnerOffers,
                 icon: const Icon(Icons.inbox_outlined),
-                label: const Text('Owner-only inbox'),
+                label: const Text('Club offers'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenWorldContext,
                 icon: const Icon(Icons.public_outlined),
-                label: const Text('World context'),
+                label: const Text('World view'),
               ),
             ],
           ),
@@ -1169,12 +1180,12 @@ class ClubQuickActionRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Quick actions',
+            'Locker room shortcuts',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Jump straight to the club surfaces managers open most often.',
+            'Jump to the tabs managers reach for most often without scanning every tab first.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -1183,13 +1194,13 @@ class ClubQuickActionRow extends StatelessWidget {
             runSpacing: 12,
             children: <Widget>[
               _QuickActionButton(
-                label: 'Edit Tactics',
+                label: 'Set Tactics',
                 icon: Icons.dashboard_customize_outlined,
                 selected: selectedTab == ClubNavigationTab.tactics,
                 onPressed: () => onSelected(ClubNavigationTab.tactics),
               ),
               _QuickActionButton(
-                label: 'Edit Identity',
+                label: 'Club Look',
                 icon: Icons.shield_outlined,
                 selected: selectedTab == ClubNavigationTab.identity,
                 onPressed: () => onSelected(ClubNavigationTab.identity),

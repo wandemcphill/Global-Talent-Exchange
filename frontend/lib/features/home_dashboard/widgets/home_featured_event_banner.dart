@@ -28,13 +28,15 @@ class HomeFeaturedEventBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+
     return GteSurfacePanel(
       emphasized: true,
       padding: EdgeInsets.zero,
       onTap: onPressed,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(tokens.radiusLarge),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -51,10 +53,10 @@ class HomeFeaturedEventBanner extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(tokens.radiusMedium),
                     color: Colors.white.withValues(alpha: 0.08),
                     border: Border.all(
                       color: Colors.white.withValues(alpha: 0.14),
@@ -62,35 +64,24 @@ class HomeFeaturedEventBanner extends StatelessWidget {
                   ),
                   child: Icon(icon, color: GteShellTheme.accentWarm),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    color: GteShellTheme.accentWarm.withValues(alpha: 0.14),
-                    border: Border.all(
-                      color: GteShellTheme.accentWarm.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Text(
-                    label.toUpperCase(),
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: GteShellTheme.accentWarm,
-                          letterSpacing: 1.2,
-                        ),
-                  ),
-                ),
+                _BannerTag(label: label, color: GteShellTheme.accentWarm),
+                _BannerTag(label: 'Live lobby', color: GteShellTheme.accent),
               ],
             ),
             const SizedBox(height: 20),
             Text(title, style: Theme.of(context).textTheme.displaySmall),
             const SizedBox(height: 10),
-            Text(summary, style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: 14),
+            Text(
+              summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 12),
             Text(
               body,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: GteShellTheme.textPrimary.withValues(alpha: 0.82),
                   ),
@@ -101,6 +92,7 @@ class HomeFeaturedEventBanner extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 12,
                 children: stats
+                    .take(3)
                     .map(
                       (MapEntry<String, String> item) => _BannerStat(
                         label: item.key,
@@ -112,14 +104,45 @@ class HomeFeaturedEventBanner extends StatelessWidget {
             ],
             if (actionLabel != null && onPressed != null) ...<Widget>[
               const SizedBox(height: 22),
-              FilledButton.tonalIcon(
+              FilledButton.icon(
                 onPressed: onPressed,
-                icon: const Icon(Icons.open_in_new_outlined),
+                icon: const Icon(Icons.bolt_outlined),
                 label: Text(actionLabel!),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BannerTag extends StatelessWidget {
+  const _BannerTag({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.14),
+        border: Border.all(
+          color: color.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: color,
+              letterSpacing: 1.1,
+            ),
       ),
     );
   }
@@ -140,19 +163,21 @@ class _BannerStat extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withValues(alpha: 0.04),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: GteShellTheme.textPrimary.withValues(alpha: 0.72),
+                  letterSpacing: 0.9,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             value,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(

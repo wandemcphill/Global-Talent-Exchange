@@ -32,7 +32,8 @@ class GtexLogoMark extends StatelessWidget {
 }
 
 class GtexWordmark extends StatelessWidget {
-  const GtexWordmark({super.key, this.compact = false, this.showTagline = true});
+  const GtexWordmark(
+      {super.key, this.compact = false, this.showTagline = true});
 
   final bool compact;
   final bool showTagline;
@@ -60,7 +61,9 @@ class GtexWordmark extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Trade football upside. Run the matchday universe.',
-            style: textTheme.bodySmall?.copyWith(color: GteShellTheme.textMuted),
+            style: textTheme.bodySmall?.copyWith(
+              color: GteShellTheme.tokensOf(context).textMuted,
+            ),
           ),
         ],
       ],
@@ -76,7 +79,7 @@ class GtexHeroBanner extends StatelessWidget {
     required this.description,
     required this.chips,
     this.actions = const <Widget>[],
-    this.accent = GteShellTheme.accent,
+    this.accent,
     this.sidePanel,
   });
 
@@ -85,17 +88,19 @@ class GtexHeroBanner extends StatelessWidget {
   final String description;
   final List<Widget> chips;
   final List<Widget> actions;
-  final Color accent;
+  final Color? accent;
   final Widget? sidePanel;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color resolvedAccent = accent ?? tokens.accent;
     return GteSurfacePanel(
       emphasized: true,
-      accentColor: accent,
+      accentColor: resolvedAccent,
       padding: const EdgeInsets.all(24),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(tokens.radiusLarge - 6),
         child: Stack(
           children: <Widget>[
             Positioned.fill(
@@ -105,9 +110,9 @@ class GtexHeroBanner extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: <Color>[
-                      accent.withValues(alpha: 0.11),
-                      Colors.white.withValues(alpha: 0.01),
-                      GteShellTheme.accentWarm.withValues(alpha: 0.06),
+                      resolvedAccent.withValues(alpha: 0.11),
+                      tokens.surfaceHighlight.withValues(alpha: 0.01),
+                      tokens.accentWarm.withValues(alpha: 0.06),
                     ],
                     stops: const <double>[0, 0.52, 1],
                   ),
@@ -117,12 +122,14 @@ class GtexHeroBanner extends StatelessWidget {
             Positioned(
               top: -72,
               right: -24,
-              child: _GlowOrb(size: 180, color: accent.withValues(alpha: 0.18)),
+              child: _GlowOrb(
+                  size: 180, color: resolvedAccent.withValues(alpha: 0.18)),
             ),
             Positioned(
               bottom: -80,
               left: -22,
-              child: _GlowOrb(size: 168, color: GteShellTheme.accentWarm.withValues(alpha: 0.12)),
+              child: _GlowOrb(
+                  size: 168, color: tokens.accentWarm.withValues(alpha: 0.12)),
             ),
             Padding(
               padding: const EdgeInsets.all(0),
@@ -132,11 +139,13 @@ class GtexHeroBanner extends StatelessWidget {
                   final Widget main = Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      GtexSectionBadge(label: eyebrow, color: accent),
+                      GtexSectionBadge(label: eyebrow, color: resolvedAccent),
                       const SizedBox(height: 18),
-                      Text(title, style: Theme.of(context).textTheme.displaySmall),
+                      Text(title,
+                          style: Theme.of(context).textTheme.displaySmall),
                       const SizedBox(height: 12),
-                      Text(description, style: Theme.of(context).textTheme.bodyLarge),
+                      Text(description,
+                          style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 18),
                       Wrap(spacing: 10, runSpacing: 10, children: chips),
                       if (actions.isNotEmpty) ...<Widget>[
@@ -146,11 +155,15 @@ class GtexHeroBanner extends StatelessWidget {
                     ],
                   );
                   final Widget right =
-                      sidePanel ?? _DefaultSignalPanel(accent: accent);
+                      sidePanel ?? _DefaultSignalPanel(accent: resolvedAccent);
                   if (stacked) {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[main, const SizedBox(height: 18), right],
+                      children: <Widget>[
+                        main,
+                        const SizedBox(height: 18),
+                        right
+                      ],
                     );
                   }
                   return Row(
@@ -172,23 +185,28 @@ class GtexHeroBanner extends StatelessWidget {
 }
 
 class GtexSectionBadge extends StatelessWidget {
-  const GtexSectionBadge({super.key, required this.label, this.color = GteShellTheme.accent});
+  const GtexSectionBadge({super.key, required this.label, this.color});
 
   final String label;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color resolvedColor = color ?? tokens.accent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: color.withValues(alpha: 0.12),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
+        color: resolvedColor.withValues(alpha: 0.12),
+        border: Border.all(color: resolvedColor.withValues(alpha: 0.24)),
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
+            ?.copyWith(color: resolvedColor),
       ),
     );
   }
@@ -200,20 +218,22 @@ class GtexSectionHeader extends StatelessWidget {
     required this.eyebrow,
     required this.title,
     required this.description,
-    this.accent = GteShellTheme.accent,
+    this.accent,
   });
 
   final String eyebrow;
   final String title;
   final String description;
-  final Color accent;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
+    final Color resolvedAccent =
+        accent ?? GteShellTheme.tokensOf(context).accent;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        GtexSectionBadge(label: eyebrow, color: accent),
+        GtexSectionBadge(label: eyebrow, color: resolvedAccent),
         const SizedBox(height: 10),
         Text(title, style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 6),
@@ -229,18 +249,20 @@ class GtexSignalStrip extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.tiles,
-    this.accent = GteShellTheme.accent,
+    this.accent,
   });
 
   final String title;
   final String subtitle;
   final List<Widget> tiles;
-  final Color accent;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
+    final Color resolvedAccent =
+        accent ?? GteShellTheme.tokensOf(context).accent;
     return GteSurfacePanel(
-      accentColor: accent,
+      accentColor: resolvedAccent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -252,7 +274,8 @@ class GtexSignalStrip extends StatelessWidget {
                   children: <Widget>[
                     Text(title, style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 6),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+                    Text(subtitle,
+                        style: Theme.of(context).textTheme.bodyMedium),
                   ],
                 ),
               ),
@@ -261,10 +284,14 @@ class GtexSignalStrip extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: accent,
+                  color: resolvedAccent,
                   shape: BoxShape.circle,
                   boxShadow: <BoxShadow>[
-                    BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 14, spreadRadius: 2),
+                    BoxShadow(
+                      color: resolvedAccent.withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      spreadRadius: 2,
+                    ),
                   ],
                 ),
               ),
@@ -309,23 +336,25 @@ class GtexSignalTile extends StatelessWidget {
     required this.value,
     required this.caption,
     required this.icon,
-    this.color = GteShellTheme.accent,
+    this.color,
   });
 
   final String label;
   final String value;
   final String caption;
   final IconData icon;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color resolvedColor = color ?? tokens.accent;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        color: Colors.white.withValues(alpha: 0.035),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        color: tokens.surfaceHighlight.withValues(alpha: 0.035),
+        border: Border.all(color: tokens.stroke.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,14 +363,20 @@ class GtexSignalTile extends StatelessWidget {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              color: color.withValues(alpha: 0.12),
+              color: resolvedColor.withValues(alpha: 0.12),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(icon, color: resolvedColor, size: 20),
           ),
           const SizedBox(height: 14),
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color)),
+          Text(
+            value,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(color: resolvedColor),
+          ),
           const SizedBox(height: 8),
           Text(caption, style: Theme.of(context).textTheme.bodySmall),
         ],
@@ -379,29 +414,37 @@ class _DefaultSignalPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: tokens.stroke.withValues(alpha: 0.5)),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            Colors.white.withValues(alpha: 0.04),
+            tokens.surfaceHighlight.withValues(alpha: 0.04),
             accent.withValues(alpha: 0.12),
-            GteShellTheme.accentWarm.withValues(alpha: 0.08),
+            tokens.accentWarm.withValues(alpha: 0.08),
           ],
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const <Widget>[
-          _SignalRow(label: 'Trading Pulse', value: 'LIVE', icon: Icons.show_chart),
+          _SignalRow(
+              label: 'Trading Pulse', value: 'LIVE', icon: Icons.show_chart),
           SizedBox(height: 12),
-          _SignalRow(label: 'E-Game Arena', value: 'SIM READY', icon: Icons.stadium_outlined),
+          _SignalRow(
+              label: 'E-Game Arena',
+              value: 'SIM READY',
+              icon: Icons.stadium_outlined),
           SizedBox(height: 12),
-          _SignalRow(label: 'Wallet', value: 'CAPITAL LINKED', icon: Icons.account_balance_wallet_outlined),
+          _SignalRow(
+              label: 'Wallet',
+              value: 'CAPITAL LINKED',
+              icon: Icons.account_balance_wallet_outlined),
         ],
       ),
     );
@@ -409,7 +452,8 @@ class _DefaultSignalPanel extends StatelessWidget {
 }
 
 class _SignalRow extends StatelessWidget {
-  const _SignalRow({required this.label, required this.value, required this.icon});
+  const _SignalRow(
+      {required this.label, required this.value, required this.icon});
 
   final String label;
   final String value;
@@ -417,15 +461,16 @@ class _SignalRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     return Row(
       children: <Widget>[
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white12,
+            color: tokens.surfaceHighlight.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(14),
           ),
-          child: Icon(icon, size: 18, color: GteShellTheme.textPrimary),
+          child: Icon(icon, size: 18, color: tokens.textPrimary),
         ),
         const SizedBox(width: 12),
         Expanded(

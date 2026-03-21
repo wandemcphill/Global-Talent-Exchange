@@ -111,11 +111,11 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
             children: <Widget>[
               GtexHeroBanner(
-                eyebrow: 'E-GAME ARENA',
+                eyebrow: 'MATCHDAY ARENA',
                 title:
                     'Fixtures, brackets, storylines, and adaptive simulations live here.',
                 description:
-                    'This surface is not the trading floor. It is the orchestration deck for leagues, cups, fast leagues, world super cups, and cinematic 3-5 minute match stories.',
+                    'Jump into leagues, cups, fast brackets, world stages, and quick-fire match stories.',
                 accent: Colors.deepPurpleAccent,
                 chips: <Widget>[
                   GteMetricChip(
@@ -137,7 +137,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                     FilledButton.tonalIcon(
                       onPressed: widget.onOpenLogin,
                       icon: const Icon(Icons.login),
-                      label: const Text('Sign in for live join access'),
+                      label: const Text('Sign in to join'),
                     ),
                 ],
                 sidePanel: Container(
@@ -166,11 +166,11 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                       Text(destination.hubDescription,
                           style: Theme.of(context).textTheme.bodyMedium),
                       const SizedBox(height: 14),
-                      Text('Arena promise',
+                      Text('Why it hits',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       Text(
-                          'Adaptive qualification, realistic match probabilities, key moments, injuries, and manager fingerprints should all show up here in one smooth flow.',
+                          'Qualification, match odds, key moments, injuries, and manager fingerprints should all land here in one matchday flow.',
                           style: Theme.of(context).textTheme.bodyMedium),
                     ],
                   ),
@@ -184,13 +184,13 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                 accent: Colors.deepPurpleAccent,
                 tiles: <Widget>[
                   GtexSignalTile(
-                    label: 'Featured fixture lane',
+                    label: 'Featured fixture',
                     value: competitions
                             .where((CompetitionSummary item) =>
                                 item.status == CompetitionStatus.inProgress)
                             .isNotEmpty
                         ? 'LIVE NOW'
-                        : 'QUEUE READY',
+                        : 'UP NEXT',
                     caption: competitions
                             .where((CompetitionSummary item) =>
                                 item.status == CompetitionStatus.inProgress)
@@ -201,7 +201,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                     color: Colors.deepPurpleAccent,
                   ),
                   GtexSignalTile(
-                    label: 'Join pressure',
+                    label: 'Open entries',
                     value: openCount > 0 ? '$openCount OPEN' : 'SEALED',
                     caption:
                         'Open and published competitions stay separate from the market so match-night tension never feels like order entry.',
@@ -209,7 +209,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                     color: const Color(0xFFFFA3E0),
                   ),
                   GtexSignalTile(
-                    label: 'Format spread',
+                    label: 'Format mix',
                     value:
                         '${competitions.where((CompetitionSummary item) => item.isLeague).length}L / ${competitions.where((CompetitionSummary item) => item.isCup).length}C',
                     caption:
@@ -221,7 +221,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               ),
               const SizedBox(height: 20),
               GteSyncStatusCard(
-                title: 'Arena systems',
+                title: 'Arena pulse',
                 status: widget.controller.discoveryError == null
                     ? 'Live storylines, bracket states, and replay lanes are humming.'
                     : 'Arena sync degraded. Last good fixture board remains available.',
@@ -323,7 +323,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (widget.controller.discoveryError != null && allCompetitions.isEmpty) {
       return <Widget>[
         GteStatePanel(
-          title: 'Competitions hub unavailable',
+          title: 'Arena unavailable',
           message: widget.controller.discoveryError!,
           actionLabel: 'Retry',
           onAction: widget.controller.loadDiscovery,
@@ -844,7 +844,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
 
   String _hostDescription() {
     if (!widget.isAuthenticated) {
-      return 'Hosting opens only after sign-in, so guest preview mode keeps the live creator flow locked.';
+      return 'Sign in to host your own cup.';
     }
     if (widget.isCheckingCreatorAccess) {
       return 'Creator access is being checked before the live host flow is exposed.';
@@ -877,7 +877,7 @@ class _ArenaRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Arena extensions',
+            'More arena routes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
@@ -898,28 +898,28 @@ class _ArenaRoutePanel extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: null,
                 icon: const Icon(Icons.insights_outlined),
-                label: const Text('Fan predictions (live match only)'),
+                label: const Text('Predictions (live only)'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenNationsCup,
                 icon: const Icon(Icons.flag_outlined),
-                label: const Text('Nations cup'),
+                label: const Text('Nations Cup'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenWorldSimulation,
                 icon: const Icon(Icons.public_outlined),
-                label: const Text('World simulation'),
+                label: const Text('World'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenTransferCenter,
                 icon: const Icon(Icons.event_note_outlined),
-                label: const Text('Transfer center'),
+                label: const Text('Transfer hub'),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+            'Predictions unlock once a live-match route sends a match id.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

@@ -81,10 +81,10 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
           return const Padding(
             padding: EdgeInsets.all(20),
             child: GteStatePanel(
-              eyebrow: 'CLUB SYSTEMS',
-              title: 'Loading club identity command room',
+              eyebrow: 'CLUB READY ROOM',
+              title: 'Loading club room',
               message:
-                  'Squad, prestige, trophies, and history surfaces are being assembled for a cleaner club lane.',
+                  'Squad, trophies, prestige, and history are lining up.',
               icon: Icons.shield_outlined,
               accentColor: Color(0xFF85B8FF),
               isLoading: true,
@@ -111,10 +111,10 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: GteSyncStatusCard(
-                title: 'Club identity systems',
+                title: 'Club sync',
                 status: widget.isAuthenticated
-                    ? 'Squad, prestige, culture, and identity layers are in writable mode.'
-                    : 'Guest preview mode is active for club surfaces.',
+                    ? 'Squad, prestige, and club style are live.'
+                    : 'Scout the club first. Sign in to make changes.',
                 syncedAt: _controller.dataSyncedAt,
                 accent: const Color(0xFF85B8FF),
                 isRefreshing: _controller.isLoading,
@@ -127,9 +127,9 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
                 child: GteStatePanel(
                   eyebrow: 'GUEST PREVIEW',
                   title:
-                      'Club identity is open for scouting, but edits stay protected.',
+                      'Scout the club first, edit later.',
                   message:
-                      'Browse squad mood, history, and prestige from the public concourse. Sign in to reshape branding, dynasty, and reputation layers.',
+                      'Check the squad, history, and prestige from the stands. Sign in to change kits, dynasty, and reputation.',
                   icon: Icons.lock_outline,
                   accentColor: Color(0xFF85B8FF),
                 ),
