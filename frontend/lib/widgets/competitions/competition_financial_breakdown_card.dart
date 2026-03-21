@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
@@ -151,10 +152,13 @@ class _MoneyRow extends StatelessWidget {
 }
 
 String _formatAmount(double value, String currency) {
+  if (currency.toLowerCase() == 'credit') {
+    return gteFormatCredits(value);
+  }
+  if (currency.toLowerCase() == 'coin') {
+    return gteFormatFanCoins(value);
+  }
   final bool whole = value == value.roundToDouble();
   final String number = value.toStringAsFixed(whole ? 0 : 2);
-  if (currency.toLowerCase() == 'credit') {
-    return '$number cr';
-  }
   return '$number ${currency.toUpperCase()}';
 }

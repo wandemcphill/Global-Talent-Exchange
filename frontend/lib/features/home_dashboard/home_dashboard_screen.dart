@@ -15,6 +15,7 @@ import 'package:gte_frontend/screens/clubs/club_profile_screen.dart';
 import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
@@ -2153,11 +2154,14 @@ String _ordinal(int value) {
 }
 
 String _formatCompetitionAmount(double value, String currency) {
+  if (currency.toLowerCase() == 'credit') {
+    return gteFormatCredits(value);
+  }
+  if (currency.toLowerCase() == 'coin') {
+    return gteFormatFanCoins(value);
+  }
   final bool whole = value == value.roundToDouble();
   final String amount = value.toStringAsFixed(whole ? 0 : 2);
-  if (currency.toLowerCase() == 'credit') {
-    return '$amount cr';
-  }
   return '$amount ${currency.toUpperCase()}';
 }
 
