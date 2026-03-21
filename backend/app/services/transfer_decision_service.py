@@ -24,6 +24,7 @@ class TransferDecisionService:
     ) -> AgencyDecisionOutcome:
         target_weights = self._target_weights(player_context.career_target_band)
         wage_ratio = float(move.offered_wage_amount / max(player_context.salary_expectation_amount, player_context.current_wage_amount or 1))
+        relative_wage_uplift = float(move.offered_wage_amount / max(player_context.current_wage_amount, 1))
         wage_score = clamp((wage_ratio * 70.0) + (18.0 if move.offered_wage_amount > player_context.current_wage_amount else 0.0))
         minutes_score = clamp((club_context.expected_minutes_score * 0.76) + self._role_bonus(move.expected_role))
         development_score = clamp((club_context.development_score * 0.72) + (minutes_score * 0.28))
@@ -55,6 +56,18 @@ class TransferDecisionService:
             "grievance_drive": round(grievance_drive, 2),
             "loyalty_anchor": round(loyalty_anchor, 2),
         }
+        decision_weight_breakdown = {
+            "wage_weight": round(wage_score * target_weights["wage"], 2),
+            "playing_time_weight": round(minutes_score * target_weights["minutes"], 2),
+            "development_weight": round(development_score * target_weights["development"], 2),
+            "club_prestige_weight": round(prestige_gain * target_weights["prestige"], 2),
+            "league_quality_weight": round(league_gain * 0.08, 2),
+            "continental_weight": round(continental_score * 0.06, 2),
+            "bench_security_weight": round(bench_security * 0.09, 2),
+            "geography_weight": round(club_context.geography_score * 0.05, 2),
+            "grievance_drive_weight": round(grievance_drive * 0.11, 2),
+            "loyalty_weight": round(-(loyalty_anchor * 0.10), 2),
+        }
         weighted_score = clamp(
             (wage_score * target_weights["wage"])
             + (minutes_score * target_weights["minutes"])
@@ -69,14 +82,23 @@ class TransferDecisionService:
         )
         if club_context.bench_risk >= 62.0 and player_context.personality.ego >= 70:
             weighted_score = clamp(weighted_score - 9.0)
+            decision_weight_breakdown["ego_bench_penalty_weight"] = -9.0
         if move.offered_wage_amount < player_context.current_wage_amount and player_context.personality.greed >= 60:
             weighted_score = clamp(weighted_score - 10.0)
+            decision_weight_breakdown["greed_discount_penalty_weight"] = -10.0
+        if player_context.personality.greed >= 88 and relative_wage_uplift >= 1.9:
+            weighted_score = clamp(weighted_score + 16.0)
+            decision_weight_breakdown["greed_uplift_bonus_weight"] = 16.0
 
         decision_code = self._decision_code(
             score=weighted_score,
             player_context=player_context,
+            club_context=club_context,
+            move=move,
             prestige_gain=prestige_gain,
+            league_gain=league_gain,
             wage_score=wage_score,
+            relative_wage_uplift=relative_wage_uplift,
         )
         reasons = self._reasons(
             player_context=player_context,
@@ -90,6 +112,7 @@ class TransferDecisionService:
             secondary_reasons=reasons[3:6],
             persuading_factors=self._persuading_factors(component_scores),
             component_scores=component_scores,
+            decision_weight_breakdown=decision_weight_breakdown,
         )
 
     def evaluate_transfer_request(self, *, player_context: AgencyPlayerContext) -> AgencyDecisionOutcome:
@@ -134,6 +157,18 @@ class TransferDecisionService:
                 "contract_urgency": round(contract_urgency, 2),
                 "ambition_gap": round(target_gap, 2),
             },
+            decision_weight_breakdown={
+                "playing_time_weight": round((100.0 - player_context.state.playing_time_satisfaction) * 0.25, 2),
+                "wage_weight": round((100.0 - player_context.state.wage_satisfaction) * 0.18, 2),
+                "development_weight": round((100.0 - player_context.state.development_satisfaction) * 0.13, 2),
+                "club_project_weight": round((100.0 - player_context.state.club_project_belief) * 0.16, 2),
+                "morale_weight": round((100.0 - player_context.state.morale) * 0.16, 2),
+                "contract_urgency_weight": round(contract_urgency * 0.06, 2),
+                "ambition_gap_weight": round(target_gap * 0.14, 2),
+                "denied_move_weight": round(denied_move_pressure, 2),
+                "loyalty_weight": round(-(player_context.personality.loyalty * 0.10), 2),
+                "patience_weight": round(-(player_context.personality.patience * 0.06), 2),
+            },
         )
 
     def _target_weights(self, career_target_band: str) -> dict[str, float]:
@@ -166,11 +201,43 @@ class TransferDecisionService:
         *,
         score: float,
         player_context: AgencyPlayerContext,
+        club_context: AgencyClubContext,
+        move: TransferEvaluationInput,
         prestige_gain: float,
+        league_gain: float,
         wage_score: float,
+        relative_wage_uplift: float,
     ) -> str:
+        if (
+            player_context.current_club.club_stature >= club_context.club_stature + 20.0
+            and player_context.personality.loyalty >= 65
+            and player_context.personality.greed < 85
+        ):
+            return "prefers_current_club"
         if score >= 82.0 and (player_context.state.transfer_appetite >= 68.0 or prestige_gain >= 62.0):
             return "requests_transfer_if_blocked"
+        if (
+            score >= 68.0
+            and prestige_gain >= 90.0
+            and league_gain >= 68.0
+            and player_context.personality.ambition >= 78
+            and player_context.personality.loyalty <= 45
+        ):
+            return "requests_transfer_if_blocked"
+        if (
+            score >= 68.0
+            and prestige_gain >= 88.0
+            and player_context.personality.ambition >= 82
+            and player_context.state.transfer_appetite >= 38.0
+        ):
+            return "requests_transfer_if_blocked"
+        if (
+            player_context.personality.greed >= 88
+            and relative_wage_uplift >= 1.9
+            and wage_score >= 62.0
+            and score >= 66.0
+        ):
+            return "eager_to_join"
         if score >= 74.0:
             return "eager_to_join"
         if score >= 62.0:
@@ -196,7 +263,7 @@ class TransferDecisionService:
             reasons.append(AgencyReason("prestige_step", "The destination is a clear step up in stature.", component_scores["prestige_gain"] - 50.0))
         if component_scores["league_gain"] >= 58.0:
             reasons.append(AgencyReason("league_step", "The move improves league quality and exposure.", component_scores["league_gain"] - 50.0))
-        if component_scores["wage"] >= 65.0:
+        if component_scores["wage"] >= 60.0:
             reasons.append(AgencyReason("wage_uplift", "The wage offer materially improves the current package.", component_scores["wage"] - 50.0))
         elif component_scores["wage"] <= 50.0:
             reasons.append(AgencyReason("wage_gap", "The wage offer is not persuasive enough for a move.", 50.0 - component_scores["wage"]))
@@ -256,7 +323,7 @@ class TransferDecisionService:
         if target_gap > 8.0:
             reasons.append(AgencyReason("ambition_gap", "Ambition has outgrown the current project.", target_gap))
         if player_context.state.last_transfer_denial_at is not None:
-            reasons.append(AgencyReason("denied_move", "A previously blocked move is still remembered.", 18.0))
+            reasons.append(AgencyReason("denied_move", "A previously blocked move is still remembered.", 70.0))
         return tuple(sorted(reasons, key=lambda item: item.weight, reverse=True))
 
     def _transfer_request_persuaders(self, player_context: AgencyPlayerContext) -> tuple[str, ...]:

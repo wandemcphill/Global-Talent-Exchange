@@ -63,6 +63,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "match_engine" in app.state.domain_modules
         assert "canonical_clubs" in app.state.domain_modules
         assert "player_lifecycle" in app.state.domain_modules
+        assert "player_agency" in app.state.domain_modules
         assert "club_identity" in app.state.domain_modules
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules
@@ -183,6 +184,9 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/replays/public/featured" in paths
     assert "/api/replays/public/featured" in paths
     assert "/api/players/{player_id}/career" in paths
+    assert "/api/players/{player_id}/agency" in paths
+    assert "/api/players/{player_id}/agency/contract-decision" in paths
+    assert "/api/players/{player_id}/agency/transfer-decision" in paths
     assert "/api/players/{player_id}/contracts" in paths
     assert "/api/players/{player_id}/injuries" in paths
     assert "/api/transfers/windows" in paths

@@ -16,7 +16,8 @@ from app.db import get_database_url, get_target_metadata, load_model_modules  # 
 config = context.config
 
 load_model_modules()
-config.set_main_option("sqlalchemy.url", get_database_url())
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", get_database_url())
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

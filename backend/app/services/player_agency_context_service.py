@@ -43,6 +43,7 @@ class AgencyDecisionOutcome:
     secondary_reasons: tuple[AgencyReason, ...] = ()
     persuading_factors: tuple[str, ...] = ()
     component_scores: dict[str, float] = field(default_factory=dict)
+    decision_weight_breakdown: dict[str, float] = field(default_factory=dict)
     next_review_at: datetime | None = None
     cooldown_until: datetime | None = None
 

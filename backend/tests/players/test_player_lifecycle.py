@@ -24,10 +24,12 @@ from app.models.player_cards import PlayerCard, PlayerCardTier
 from app.models.club_profile import ClubProfile
 from app.models.notification_center import PlatformAnnouncement
 from app.models.notification_record import NotificationRecord
+from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_contract import PlayerContract
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_personality import PlayerPersonality
 from app.models.regen import (
     CurrencyConversionQuote,
     MajorTransferAnnouncement,
@@ -45,6 +47,7 @@ from app.models.transfer_bid import TransferBid
 from app.models.transfer_window import TransferWindow
 from app.models.user import KycStatus, User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
 from app.schemas.player_lifecycle import (
     BigClubApproachRequest,
     ContractCreateRequest,
@@ -60,6 +63,7 @@ from app.schemas.player_lifecycle import (
     TransferBidRejectRequest,
 )
 from app.segments.player_lifecycle.segment_player_lifecycle import router
+from app.services.player_agency_service import PlayerAgencyService
 from app.services.player_lifecycle_service import (
     PlayerLifecycleNotFoundError,
     PlayerLifecycleService,
@@ -1715,3 +1719,394 @@ def test_major_regen_transfer_creates_headline_and_announcement_records(
     assert platform_announcement is not None
     assert platform_announcement.announcement_key.startswith("regen-transfer:")
     assert lifecycle_session.scalar(select(NotificationRecord)) is not None
+
+
+def _seed_agency_supporting_data(
+    session: Session,
+    context: dict[str, str],
+    *,
+    current_reputation: int = 52,
+    buyer_reputation: int = 78,
+    current_titles: int = 0,
+    buyer_titles: int = 2,
+    current_training: int = 2,
+    buyer_training: int = 4,
+) -> None:
+    session.add_all(
+        [
+            ClubReputationProfile(
+                id=f"rep-{context['club_profile_id']}",
+                club_id=context["club_profile_id"],
+                current_score=current_reputation,
+                highest_score=current_reputation,
+                prestige_tier="Established",
+                total_league_titles=current_titles,
+                total_continental_titles=0,
+                total_world_super_cup_titles=0,
+                total_continental_qualifications=current_titles,
+            ),
+            ClubReputationProfile(
+                id=f"rep-{context['buyer_profile_id']}",
+                club_id=context["buyer_profile_id"],
+                current_score=buyer_reputation,
+                highest_score=buyer_reputation,
+                prestige_tier="Elite",
+                total_league_titles=buyer_titles,
+                total_continental_titles=buyer_titles // 2,
+                total_world_super_cup_titles=0,
+                total_continental_qualifications=buyer_titles,
+            ),
+            ClubFacility(
+                id=f"facility-{context['club_profile_id']}",
+                club_id=context["club_profile_id"],
+                training_level=current_training,
+                academy_level=current_training,
+                medical_level=2,
+                branding_level=2,
+            ),
+            ClubFacility(
+                id=f"facility-{context['buyer_profile_id']}",
+                club_id=context["buyer_profile_id"],
+                training_level=buyer_training,
+                academy_level=buyer_training,
+                medical_level=3,
+                branding_level=3,
+            ),
+        ]
+    )
+    session.commit()
+
+
+def _set_playing_time(
+    session: Session,
+    context: dict[str, str],
+    *,
+    starts: int,
+    appearances: int,
+    minutes: int | None = None,
+) -> None:
+    existing = session.scalar(select(PlayerSeasonStat).where(PlayerSeasonStat.id == f"agency-season-{context['player_id']}"))
+    if existing is not None:
+        session.delete(existing)
+        session.flush()
+    session.add(
+        PlayerSeasonStat(
+            id=f"agency-season-{context['player_id']}",
+            source_provider="test",
+            provider_external_id=f"agency-season-{context['player_id']}",
+            player_id=context["player_id"],
+            club_id=context["current_ingestion_club_id"],
+            competition_id=context["competition_id"],
+            season_id=context["current_season_id"],
+            appearances=appearances,
+            starts=starts,
+            minutes=minutes if minutes is not None else starts * 90,
+            goals=0,
+            assists=0,
+            clean_sheets=0,
+            saves=0,
+            average_rating=6.8,
+        )
+    )
+    session.commit()
+
+
+def _seed_contract(
+    lifecycle_service: PlayerLifecycleService,
+    context: dict[str, str],
+    *,
+    club_id: str,
+    wage_amount: str,
+    ends_on: date = date(2027, 6, 30),
+) -> None:
+    lifecycle_service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=club_id,
+            wage_amount=Decimal(wage_amount),
+            signed_on=date(2025, 7, 1),
+            starts_on=date(2025, 7, 1),
+            ends_on=ends_on,
+        ),
+    )
+
+
+def test_player_agency_personality_generation_is_stable(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+    )
+    _seed_agency_supporting_data(lifecycle_session, context)
+    service = PlayerAgencyService(lifecycle_session)
+
+    first = service.get_snapshot(context["player_id"], reference_on=date(2026, 3, 12))
+    second = service.get_snapshot(context["player_id"], reference_on=date(2026, 3, 12))
+    stored = lifecycle_session.scalar(select(PlayerPersonality).where(PlayerPersonality.player_id == context["player_id"]))
+
+    assert first.personality == second.personality
+    assert first.state.career_target_band == second.state.career_target_band
+    assert stored is not None
+    assert stored.default_career_target_band == first.personality.default_career_target_band
+
+
+@pytest.mark.parametrize(
+    ("label", "trait_overrides", "generated_at", "current_wage", "request_kwargs", "expected_decision", "expected_reason"),
+    [
+        (
+            "loyal_but_underpaid",
+            {"loyalty": 90, "greed": 36, "professionalism": 76},
+            datetime(2025, 7, 1, 12, 0),
+            "180.00",
+            {
+                "offering_club_id": "club-profile-metro",
+                "offered_wage_amount": Decimal("220.00"),
+                "contract_years": 2,
+                "role_promised": "starter",
+                "is_renewal": True,
+            },
+            "requests_renegotiation",
+            "wage_shortfall",
+        ),
+        (
+            "wonderkid_development",
+            {"development_focus": 92, "ambition": 78, "greed": 28, "ego": 40},
+            datetime(2026, 1, 1, 12, 0),
+            "260.00",
+            {
+                "offering_club_id": "club-profile-river",
+                "offered_wage_amount": Decimal("280.00"),
+                "contract_years": 3,
+                "role_promised": "breakthrough",
+                "development_opportunity": 92.0,
+                "pathway_to_minutes": 85.0,
+                "club_stature": 72.0,
+            },
+            "accept",
+            "development_fit",
+        ),
+        (
+            "veteran_stability",
+            {"loyalty": 84, "professionalism": 88, "greed": 30, "development_focus": 32},
+            datetime(2021, 1, 1, 12, 0),
+            "300.00",
+            {
+                "offering_club_id": "club-profile-metro",
+                "offered_wage_amount": Decimal("305.00"),
+                "contract_years": 1,
+                "role_promised": "starter",
+                "is_renewal": True,
+            },
+            "accept",
+            "role_pathway",
+        ),
+    ],
+)
+def test_contract_agency_decisions_are_explainable(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+    label: str,
+    trait_overrides: dict[str, int],
+    generated_at: datetime,
+    current_wage: str,
+    request_kwargs: dict[str, object],
+    expected_decision: str,
+    expected_reason: str,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    player = lifecycle_session.get(Player, context["player_id"])
+    assert player is not None
+    if label == "veteran_stability":
+        player.date_of_birth = date(1988, 4, 10)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=generated_at,
+        decision_traits=trait_overrides,
+    )
+    _seed_agency_supporting_data(lifecycle_session, context)
+    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount=current_wage)
+    service = PlayerAgencyService(lifecycle_session)
+
+    decision = service.evaluate_contract_offer(
+        context["player_id"],
+        ContractDecisionRequest(**request_kwargs, requested_on=date(2026, 3, 12)),
+        reference_on=date(2026, 3, 12),
+    )
+
+    assert decision.decision_code == expected_decision
+    assert decision.primary_reasons
+    assert expected_reason in {item.code for item in decision.primary_reasons} | {item.code for item in decision.secondary_reasons}
+    assert decision.decision_weight_breakdown
+    assert "wage_weight" in decision.decision_weight_breakdown
+
+
+@pytest.mark.parametrize(
+    ("label", "trait_overrides", "club_context", "transfer_kwargs", "expected_decision", "expected_reason"),
+    [
+        (
+            "ambitious_low_loyalty_small_to_big",
+            {"ambition": 92, "loyalty": 24, "greed": 44, "development_focus": 62},
+            {"current_reputation": 40, "buyer_reputation": 84, "current_training": 2, "buyer_training": 4},
+            {"offered_wage_amount": Decimal("340.00"), "contract_years": 4, "expected_role": "starter"},
+            "requests_transfer_if_blocked",
+            "prestige_step",
+        ),
+        (
+            "greedy_chasing_wages",
+            {"greed": 94, "ambition": 68, "loyalty": 38},
+            {"current_reputation": 55, "buyer_reputation": 58, "current_training": 3, "buyer_training": 3},
+            {"offered_wage_amount": Decimal("560.00"), "contract_years": 3, "expected_role": "starter"},
+            "eager_to_join",
+            "wage_uplift",
+        ),
+        (
+            "small_club_bigger_league_move",
+            {"ambition": 80, "loyalty": 42, "development_focus": 64},
+            {"current_reputation": 38, "buyer_reputation": 82, "current_training": 2, "buyer_training": 4},
+            {"offered_wage_amount": Decimal("320.00"), "contract_years": 3, "expected_role": "starter"},
+            "requests_transfer_if_blocked",
+            "league_step",
+        ),
+        (
+            "elite_club_weaker_money_move",
+            {"ambition": 88, "loyalty": 72, "greed": 54, "professionalism": 82},
+            {"current_reputation": 90, "buyer_reputation": 52, "current_titles": 4, "buyer_titles": 0, "current_training": 4, "buyer_training": 2},
+            {"offered_wage_amount": Decimal("600.00"), "contract_years": 3, "expected_role": "starter"},
+            "prefers_current_club",
+            "current_club_pull",
+        ),
+    ],
+)
+def test_transfer_agency_decisions_cover_key_player_archetypes(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+    label: str,
+    trait_overrides: dict[str, int],
+    club_context: dict[str, int],
+    transfer_kwargs: dict[str, object],
+    expected_decision: str,
+    expected_reason: str,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits=trait_overrides,
+    )
+    _seed_agency_supporting_data(lifecycle_session, context, **club_context)
+    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="240.00")
+    _set_playing_time(lifecycle_session, context, starts=20, appearances=24)
+    service = PlayerAgencyService(lifecycle_session)
+
+    decision = service.evaluate_transfer_opportunity(
+        context["player_id"],
+        TransferDecisionRequest(
+            destination_club_id=context["buyer_profile_id"],
+            requested_on=date(2026, 3, 12),
+            **transfer_kwargs,
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+
+    assert decision.decision_code == expected_decision
+    assert expected_reason in {item.code for item in decision.primary_reasons} | {item.code for item in decision.secondary_reasons}
+    assert decision.decision_weight_breakdown
+    assert "club_prestige_weight" in decision.decision_weight_breakdown
+
+
+@pytest.mark.parametrize(
+    ("label", "trait_overrides", "starts", "appearances", "expect_transfer_request", "apply_denied_move"),
+    [
+        ("benched_high_ego", {"ego": 92, "ambition": 86, "patience": 28}, 2, 18, {"agent_warning", "transfer_request", "public_unhappy_state"}, False),
+        ("denied_prior_move", {"ambition": 90, "loyalty": 34, "ego": 78}, 10, 20, {"transfer_request", "public_unhappy_state"}, True),
+        ("role_dissatisfaction", {"ego": 84, "development_focus": 70, "patience": 34}, 4, 22, {"agent_warning", "transfer_request", "public_unhappy_state"}, False),
+    ],
+)
+def test_transfer_request_behavior_triggers_for_unhappy_profiles(
+    lifecycle_session: Session,
+    lifecycle_service: PlayerLifecycleService,
+    label: str,
+    trait_overrides: dict[str, int],
+    starts: int,
+    appearances: int,
+    expect_transfer_request: set[str],
+    apply_denied_move: bool,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits=trait_overrides,
+    )
+    _seed_agency_supporting_data(lifecycle_session, context, current_reputation=42, buyer_reputation=82)
+    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="180.00", ends_on=date(2026, 6, 30))
+    _set_playing_time(lifecycle_session, context, starts=starts, appearances=appearances)
+    service = PlayerAgencyService(lifecycle_session)
+    if apply_denied_move:
+        service.record_blocked_move(context["player_id"], reference_on=date(2026, 3, 10), reason=label)
+
+    snapshot = service.get_snapshot(context["player_id"], reference_on=date(2026, 3, 12))
+
+    assert snapshot.transfer_request_decision.decision_code in expect_transfer_request
+    assert snapshot.transfer_request_decision.decision_weight_breakdown
+    assert "playing_time_weight" in snapshot.transfer_request_decision.decision_weight_breakdown
+    if apply_denied_move:
+        assert "denied_move" in {item.code for item in snapshot.transfer_request_decision.primary_reasons} | {item.code for item in snapshot.transfer_request_decision.secondary_reasons}
+        assert snapshot.transfer_request_decision.decision_weight_breakdown["denied_move_weight"] > 0
+
+
+def test_transfer_decision_cooldown_prevents_flip_flopping(lifecycle_session: Session, lifecycle_service: PlayerLifecycleService) -> None:
+    context = seed_base_context(lifecycle_session)
+    seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2025, 7, 1, 12, 0),
+        decision_traits={"ambition": 88, "loyalty": 30, "greed": 72},
+    )
+    _seed_agency_supporting_data(lifecycle_session, context, current_reputation=45, buyer_reputation=84)
+    _seed_contract(lifecycle_service, context, club_id=context["club_profile_id"], wage_amount="220.00")
+    _set_playing_time(lifecycle_session, context, starts=9, appearances=20)
+    service = PlayerAgencyService(lifecycle_session)
+    request = TransferDecisionRequest(
+        destination_club_id=context["buyer_profile_id"],
+        offered_wage_amount=Decimal("450.00"),
+        contract_years=4,
+        expected_role="starter",
+        requested_on=date(2026, 3, 12),
+    )
+
+    first = service.evaluate_transfer_opportunity(context["player_id"], request, reference_on=date(2026, 3, 12))
+    second = service.evaluate_transfer_opportunity(context["player_id"], request, reference_on=date(2026, 3, 12))
+    agency_state = lifecycle_session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == context["player_id"]))
+
+    assert first.decision_code == second.decision_code
+    assert first.cooldown_until == second.cooldown_until
+    assert first.decision_weight_breakdown == second.decision_weight_breakdown
+    assert agency_state is not None
+    assert agency_state.recent_offer_cooldown_until is not None
+
+
+def test_player_agency_layer_does_not_depend_on_locked_pricing_paths() -> None:
+    from pathlib import Path
+
+    backend_root = Path(__file__).resolve().parents[2]
+    files = [
+        backend_root / "app" / "services" / "player_agency_service.py",
+        backend_root / "app" / "services" / "contract_decision_service.py",
+        backend_root / "app" / "services" / "transfer_decision_service.py",
+        backend_root / "app" / "services" / "player_agency_context_service.py",
+    ]
+
+    for file_path in files:
+        source = file_path.read_text(encoding="utf-8")
+        assert "app.value_engine" not in source
+        assert "app.pricing" not in source

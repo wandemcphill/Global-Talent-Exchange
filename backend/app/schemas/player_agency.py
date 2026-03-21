@@ -60,6 +60,7 @@ class AgencyDecisionView(CommonSchema):
     secondary_reasons: tuple[AgencyReasonView, ...] = Field(default_factory=tuple)
     persuading_factors: tuple[str, ...] = Field(default_factory=tuple)
     component_scores: dict[str, float] = Field(default_factory=dict)
+    decision_weight_breakdown: dict[str, float] = Field(default_factory=dict)
     next_review_at: datetime | None = None
     cooldown_until: datetime | None = None
 

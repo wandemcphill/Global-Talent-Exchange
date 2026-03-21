@@ -22,6 +22,7 @@ class ContractDecisionService:
         offer: ContractEvaluationInput,
     ) -> AgencyDecisionOutcome:
         target_weights = self._target_weights(player_context.career_target_band)
+        same_club_offer = club_context.club_id == player_context.current_club.club_id
         wage_ratio = float(offer.offered_wage_amount / max(player_context.salary_expectation_amount, player_context.current_wage_amount or 1))
         wage_score = clamp((wage_ratio * 72.0) + (15.0 if offer.offered_wage_amount > player_context.current_wage_amount else 0.0))
         length_score = self._length_score(player_context.career_stage, offer.contract_years)
@@ -32,12 +33,23 @@ class ContractDecisionService:
         project_score = club_context.project_attractiveness
         congestion_score = clamp(100.0 - club_context.squad_congestion)
         current_club_penalty = 0.0
-        if club_context.club_id != player_context.current_club.club_id:
+        if not same_club_offer:
             current_club_penalty = clamp(
                 (player_context.personality.loyalty * 0.22)
                 + (player_context.state.happiness * 0.10)
                 + (player_context.current_club.project_attractiveness * 0.12)
             )
+            if (
+                player_context.career_target_band == "development-first"
+                and development_score >= 78.0
+                and club_context.club_stature >= player_context.current_club.club_stature + 10.0
+            ):
+                current_club_penalty *= 0.45
+            elif (
+                player_context.career_target_band in {"prestige-first", "trophy-first"}
+                and club_context.club_stature >= player_context.current_club.club_stature + 12.0
+            ):
+                current_club_penalty *= 0.60
         morale_score = clamp((player_context.state.morale * 0.65) + (player_context.state.happiness * 0.35))
 
         component_scores = {
@@ -53,6 +65,21 @@ class ContractDecisionService:
             "congestion": round(congestion_score, 2),
             "morale": round(morale_score, 2),
             "current_club_pull": round(current_club_penalty, 2),
+        }
+        decision_weight_breakdown = {
+            "wage_weight": round(wage_score * target_weights["wage"], 2),
+            "contract_length_weight": round(length_score * 0.08, 2),
+            "role_weight": round(role_score * target_weights["role"], 2),
+            "release_clause_weight": round(release_clause_score * 0.05, 2),
+            "bonus_weight": round(bonus_score * 0.03, 2),
+            "club_prestige_weight": round(club_context.club_stature * target_weights["prestige"], 2),
+            "league_quality_weight": round(club_context.league_quality * 0.07, 2),
+            "development_weight": round(development_score * target_weights["development"], 2),
+            "club_project_weight": round(project_score * 0.10, 2),
+            "squad_congestion_weight": round(congestion_score * 0.06, 2),
+            "morale_weight": round(morale_score * 0.06, 2),
+            "current_club_pull_weight": round(-current_club_penalty, 2),
+            "grievance_weight": round(-(player_context.state.grievance_count * 3.5), 2),
         }
         weighted_score = clamp(
             (wage_score * target_weights["wage"])
@@ -71,10 +98,13 @@ class ContractDecisionService:
         )
         if offer.offered_wage_amount < player_context.current_wage_amount and player_context.personality.greed >= 55:
             weighted_score = clamp(weighted_score - 12.0)
+            decision_weight_breakdown["greed_penalty_weight"] = -12.0
         if role_score < 45.0 and player_context.personality.ego >= 68:
             weighted_score = clamp(weighted_score - 10.0)
+            decision_weight_breakdown["ego_role_penalty_weight"] = -10.0
         if offer.is_renewal and player_context.state.transfer_request_status in {"transfer_request", "public_unhappy_state"}:
             weighted_score = clamp(weighted_score - 9.0)
+            decision_weight_breakdown["renewal_unrest_penalty_weight"] = -9.0
 
         decision_code = self._decision_code(
             score=weighted_score,
@@ -83,6 +113,7 @@ class ContractDecisionService:
             offer=offer,
             wage_score=wage_score,
             role_score=role_score,
+            development_score=development_score,
         )
         reasons = self._reasons(
             player_context=player_context,
@@ -106,6 +137,7 @@ class ContractDecisionService:
             secondary_reasons=reasons[3:6],
             persuading_factors=persuading_factors,
             component_scores=component_scores,
+            decision_weight_breakdown=decision_weight_breakdown,
         )
 
     def _target_weights(self, career_target_band: str) -> dict[str, float]:
@@ -159,7 +191,24 @@ class ContractDecisionService:
         offer: ContractEvaluationInput,
         wage_score: float,
         role_score: float,
+        development_score: float,
     ) -> str:
+        same_club_renewal = offer.is_renewal and club_context.club_id == player_context.current_club.club_id
+        if same_club_renewal and player_context.personality.loyalty >= 70 and role_score >= 70.0:
+            if player_context.career_stage == "veteran" and wage_score >= 44.0:
+                return "accept"
+            if wage_score < 44.0 or player_context.state.wage_satisfaction < 44.0:
+                return "requests_renegotiation"
+            return "accept"
+        if (
+            not same_club_renewal
+            and player_context.career_target_band == "development-first"
+            and development_score >= 80.0
+            and role_score >= 72.0
+            and club_context.club_stature >= player_context.current_club.club_stature + 10.0
+            and wage_score >= 40.0
+        ):
+            return "accept"
         if offer.is_renewal and player_context.state.transfer_request_status in {"transfer_request", "public_unhappy_state"} and score < 68.0:
             return "reject"
         if offer.is_renewal and club_context.club_id == player_context.current_club.club_id and score < 56.0 and player_context.personality.loyalty >= 68:

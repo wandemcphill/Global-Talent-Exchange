@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 import hashlib
 import json
@@ -38,6 +38,9 @@ from app.services.transfer_decision_service import TransferDecisionService
 @dataclass(slots=True)
 class PlayerAgencyService:
     session: Session
+    context_service: PlayerAgencyContextService = field(init=False)
+    contract_decision_service: ContractDecisionService = field(init=False)
+    transfer_decision_service: TransferDecisionService = field(init=False)
 
     def __post_init__(self) -> None:
         self.context_service = PlayerAgencyContextService(self.session)
@@ -472,6 +475,7 @@ class PlayerAgencyService:
             "secondary_reasons": tuple(AgencyReasonView(**item) for item in cache.get("secondary_reasons", [])),
             "persuading_factors": tuple(cache.get("persuading_factors", [])),
             "component_scores": dict(cache.get("component_scores", {})),
+            "decision_weight_breakdown": dict(cache.get("decision_weight_breakdown", {})),
             "next_review_at": datetime.fromisoformat(str(cache["next_review_at"])) if cache.get("next_review_at") else None,
             "cooldown_until": datetime.fromisoformat(str(cache["cooldown_until"])) if cache.get("cooldown_until") else None,
         }
@@ -493,6 +497,7 @@ class PlayerAgencyService:
             "secondary_reasons": [self._reason_payload(item) for item in outcome.secondary_reasons],
             "persuading_factors": list(outcome.persuading_factors),
             "component_scores": dict(outcome.component_scores),
+            "decision_weight_breakdown": dict(outcome.decision_weight_breakdown),
             "next_review_at": outcome.next_review_at.isoformat() if outcome.next_review_at is not None else None,
             "cooldown_until": outcome.cooldown_until.isoformat() if outcome.cooldown_until is not None else None,
         }
@@ -510,6 +515,7 @@ class PlayerAgencyService:
             secondary_reasons=outcome.secondary_reasons,
             persuading_factors=outcome.persuading_factors,
             component_scores=outcome.component_scores,
+            decision_weight_breakdown=outcome.decision_weight_breakdown,
             next_review_at=self.context_service.review_time(outcome.decision_code, reference_on=reference_on),
             cooldown_until=self.context_service.decision_cooldown(outcome.decision_code, reference_on=reference_on),
         )
@@ -523,6 +529,7 @@ class PlayerAgencyService:
             "secondary_reasons": tuple(self._to_reason_view(item) for item in outcome.secondary_reasons),
             "persuading_factors": outcome.persuading_factors,
             "component_scores": outcome.component_scores,
+            "decision_weight_breakdown": outcome.decision_weight_breakdown,
             "next_review_at": outcome.next_review_at,
             "cooldown_until": outcome.cooldown_until,
         }

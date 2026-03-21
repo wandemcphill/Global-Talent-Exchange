@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint
@@ -49,7 +50,7 @@ class PlayerAgencyState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     grievance_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     promise_memory_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     unmet_expectations_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
-    recent_offer_cooldown_until: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recent_offer_cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     transfer_request_status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -80,10 +81,10 @@ class PlayerAgencyState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=Decimal("0.0000"),
         server_default="0",
     )
-    last_major_decision_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_contract_decision_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_transfer_decision_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_transfer_denial_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_transfer_request_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    next_review_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_major_decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_contract_decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_transfer_decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_transfer_denial_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_transfer_request_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)

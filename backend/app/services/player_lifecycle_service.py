@@ -25,10 +25,12 @@ from app.models.notification_record import NotificationRecord
 from app.models.base import utcnow
 from app.models.club_infra import ClubFacility
 from app.models.club_profile import ClubProfile
+from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_contract import PlayerContract
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_personality import PlayerPersonality
 from app.models.regen import (
     CurrencyConversionQuote,
     MajorTransferAnnouncement,
@@ -92,6 +94,8 @@ from app.schemas.player_lifecycle import (
     TransferWindowEligibilityView,
     TransferWindowView,
 )
+from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
+from app.services.player_agency_context_service import clamp
 from app.services.regen_transfer_addon import (
     AUTO_CONVERSION_PREMIUM_BPS,
     BigClubApproachInputs,
@@ -109,6 +113,7 @@ from app.services.regen_transfer_addon import (
     score_contract_offer,
     unresolved_days_since,
 )
+from app.services.player_agency_service import PlayerAgencyService
 from app.story_feed_engine.service import StoryFeedService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
@@ -201,6 +206,9 @@ class PlayerLifecycleService:
 
     def __post_init__(self) -> None:
         self.settings = self.settings or get_settings()
+
+    def _agency_service(self) -> PlayerAgencyService:
+        return PlayerAgencyService(self.session)
 
     def get_career(self, player_id: str) -> list[PlayerCareerEntry]:
         statement = (
@@ -1110,7 +1118,6 @@ class PlayerLifecycleService:
         ]
         if not submitted_bids:
             return ()
-        traits = self._resolve_regen_traits(regen)
         evaluations: list[RegenBidEvaluationView] = []
         offers_by_bid_id = {
             offer.transfer_bid_id: offer
@@ -1121,76 +1128,36 @@ class PlayerLifecycleService:
             ).all()
             if offer.transfer_bid_id is not None
         }
-        wage_anchor = max(
-            float((offers_by_bid_id.get(bid.id).offered_salary_fancoin_per_year if offers_by_bid_id.get(bid.id) is not None else (bid.wage_offer_amount or 0)))
-            for bid in submitted_bids
-        ) or 1.0
-        bid_anchor = max(float((offers_by_bid_id.get(bid.id).training_fee_gtex_coin if offers_by_bid_id.get(bid.id) is not None else (bid.bid_amount or 0))) for bid in submitted_bids) or 1.0
-        contract_anchor = max(int(offers_by_bid_id.get(bid.id).contract_years if offers_by_bid_id.get(bid.id) is not None else 1) for bid in submitted_bids) or 1
         for bid in submitted_bids:
             offer = offers_by_bid_id.get(bid.id)
-            offered_salary = float(offer.offered_salary_fancoin_per_year if offer is not None else (bid.wage_offer_amount or 0))
-            fee_amount = float(offer.training_fee_gtex_coin if offer is not None else (bid.bid_amount or 0))
-            salary_score = min(100.0, ((offered_salary / wage_anchor) * 82.0) + ((fee_amount / bid_anchor) * 18.0))
-            contract_length_score = min(100.0, ((offer.contract_years if offer is not None else 1) / contract_anchor) * 100.0)
-            club_context = self._regen_club_context(bid.buying_club_id, regen)
-            prestige_score = club_context["prestige"]
-            trophy_score = club_context["trophy_score"]
-            development_score = club_context["development_score"]
-            hometown_score = club_context["hometown_score"]
-            playing_time_score = club_context["playing_time_score"]
-            manager_fit_score = min(100.0, round((development_score * 0.55) + (playing_time_score * 0.45), 2))
-            ambition_alignment_score = min(
-                100.0,
-                round(
-                    (prestige_score * (0.45 + (traits["ambition"] / 2000.0)))
-                    + (trophy_score * (0.25 + (traits["trophy_hunger"] / 2200.0)))
-                    + (playing_time_score * 0.18),
-                    2,
+            transfer_decision = self._agency_service().evaluate_transfer_opportunity(
+                player_id,
+                TransferDecisionRequest(
+                    destination_club_id=bid.buying_club_id or regen.generated_for_club_id,
+                    offered_wage_amount=(offer.offered_salary_fancoin_per_year if offer is not None else (bid.wage_offer_amount or Decimal("0.0000"))),
+                    contract_years=(offer.contract_years if offer is not None else 3),
+                    expected_role="starter",
+                    requested_on=effective_date,
                 ),
+                reference_on=effective_date,
             )
-            score_input = ContractOfferScoreInputs(
-                salary_score=salary_score,
-                contract_length_score=contract_length_score,
-                prestige_score=prestige_score,
-                trophy_score=trophy_score,
-                playing_time_score=playing_time_score,
-                hometown_score=hometown_score,
-                manager_fit_score=manager_fit_score,
-                ambition_alignment_score=ambition_alignment_score,
-                greed=traits["greed"],
-                ambition=traits["ambition"],
-                loyalty=traits["loyalty"],
-                professionalism=traits["professionalism"],
-                trophy_hunger=traits["trophy_hunger"],
-            )
-            scored_offer = score_contract_offer(score_input)
-            score = scored_offer.total_score
-            if club_context["cross_border"] and traits["adaptability"] < 45:
-                score -= 6.0
-            reasons = scored_offer.reasons or self._top_regen_bid_reasons(
-                salary_score=salary_score,
-                prestige_score=prestige_score,
-                playing_time_score=playing_time_score,
-                development_score=development_score,
-                hometown_score=hometown_score,
-                trophy_score=trophy_score,
-            )
+            component_scores = dict(transfer_decision.component_scores)
+            reasons = tuple(item.code for item in transfer_decision.primary_reasons) or ("club_fit",)
             evaluations.append(
                 RegenBidEvaluationView(
                     bid_id=bid.id,
                     buying_club_id=bid.buying_club_id,
-                    score=round(score, 2),
+                    score=round(transfer_decision.decision_score, 2),
                     preferred=False,
-                    salary_score=round(salary_score, 2),
-                    contract_length_score=round(contract_length_score, 2),
-                    prestige_score=round(prestige_score, 2),
-                    playing_time_score=round(playing_time_score, 2),
-                    development_score=round(development_score, 2),
-                    hometown_score=round(hometown_score, 2),
-                    trophy_score=round(trophy_score, 2),
-                    manager_fit_score=round(manager_fit_score, 2),
-                    ambition_alignment_score=round(ambition_alignment_score, 2),
+                    salary_score=round(float(component_scores.get("wage", 0.0)), 2),
+                    contract_length_score=round(float((offer.contract_years if offer is not None else 3) * 25.0), 2),
+                    prestige_score=round(float(component_scores.get("prestige_gain", 0.0)), 2),
+                    playing_time_score=round(float(component_scores.get("minutes", 0.0)), 2),
+                    development_score=round(float(component_scores.get("development", 0.0)), 2),
+                    hometown_score=round(float(component_scores.get("geography", 0.0)), 2),
+                    trophy_score=round(float(component_scores.get("continental", 0.0)), 2),
+                    manager_fit_score=round(float(component_scores.get("bench_security", 0.0)), 2),
+                    ambition_alignment_score=round(float(component_scores.get("prestige_gain", 0.0)), 2),
                     reasons=reasons,
                 )
             )
@@ -1221,6 +1188,8 @@ class PlayerLifecycleService:
         if not evaluations:
             raise PlayerLifecycleValidationError("No submitted bids are available for regen resolution")
         preferred = evaluations[0]
+        if preferred.score < 55.0:
+            raise PlayerLifecycleValidationError("Player agency rejected the available transfer offers")
         bid = self._require_bid(window_id, preferred.bid_id)
         regen = self._require_regen_profile(player_id)
         offer = self._get_contract_offer_by_bid_id(bid.id)
@@ -1418,6 +1387,16 @@ class PlayerLifecycleService:
             state["previous_club_id"] = payload.club_id
             state["agency_message"] = "Committed to a FanCoin contract."
             self._set_regen_career_state(regen, state)
+            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            if agency_state is not None:
+                agency_state.current_club_id = payload.club_id
+                agency_state.transfer_request_status = "no_action"
+                agency_state.contract_stance = "stable"
+                agency_state.transfer_appetite = min(20.0, agency_state.transfer_appetite)
+                agency_state.grievance_count = 0
+                agency_state.unmet_expectations_json = []
+                agency_state.morale = max(64.0, agency_state.morale)
+                agency_state.happiness = max(66.0, agency_state.happiness)
         self.session.commit()
         self.session.refresh(contract)
         return contract
@@ -1472,6 +1451,16 @@ class PlayerLifecycleService:
             },
             notes=payload.bonus_terms,
         )
+        regen = self._get_regen_profile(player_id)
+        if regen is not None:
+            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            if agency_state is not None:
+                agency_state.current_club_id = contract.club_id
+                agency_state.contract_stance = "stable"
+                agency_state.morale = max(60.0, agency_state.morale)
+                agency_state.happiness = max(62.0, agency_state.happiness)
+                agency_state.wage_satisfaction = max(agency_state.wage_satisfaction, 60.0)
+                agency_state.transfer_request_status = "no_action" if agency_state.transfer_request_status == "private_unrest" else agency_state.transfer_request_status
         self.session.commit()
         self.session.refresh(contract)
         return contract
@@ -1553,6 +1542,44 @@ class PlayerLifecycleService:
                 "contract_years": payload.contract_years,
                 "salary_offer_hidden": True,
             }
+        if regen is not None and payload.buying_club_id is not None:
+            transfer_preview = self._agency_service().evaluate_transfer_opportunity(
+                payload.player_id,
+                TransferDecisionRequest(
+                    destination_club_id=payload.buying_club_id,
+                    offered_wage_amount=offered_salary or Decimal("0.0000"),
+                    contract_years=payload.contract_years or 3,
+                    expected_role="starter" if payload.wage_offer_amount and payload.wage_offer_amount > Decimal("0") else "rotation",
+                    transfer_denied_recently=False,
+                    requested_on=reference_on,
+                ),
+                reference_on=reference_on,
+            )
+            structured_terms["player_agency_preview"] = {
+                "decision_code": transfer_preview.decision_code,
+                "decision_score": transfer_preview.decision_score,
+                "confidence_band": transfer_preview.confidence_band,
+                "primary_reasons": [item.code for item in transfer_preview.primary_reasons],
+            }
+            if payload.contract_years is not None:
+                contract_preview = self._agency_service().evaluate_contract_offer(
+                    payload.player_id,
+                    ContractDecisionRequest(
+                        offering_club_id=payload.buying_club_id,
+                        offered_wage_amount=offered_salary or Decimal("0.0000"),
+                        contract_years=payload.contract_years,
+                        role_promised="starter",
+                        is_renewal=False,
+                        requested_on=reference_on,
+                    ),
+                    reference_on=reference_on,
+                )
+                structured_terms["contract_agency_preview"] = {
+                    "decision_code": contract_preview.decision_code,
+                    "decision_score": contract_preview.decision_score,
+                    "confidence_band": contract_preview.confidence_band,
+                    "primary_reasons": [item.code for item in contract_preview.primary_reasons],
+                }
 
         bid = TransferBid(
             window_id=window_id,
@@ -1827,6 +1854,18 @@ class PlayerLifecycleService:
                 effect.performance_penalty = 0.0
                 effect.influences_younger_players = False
                 effect.unresolved_since = None
+            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            if agency_state is not None:
+                agency_state.current_club_id = new_contract.club_id
+                agency_state.transfer_appetite = min(18.0, agency_state.transfer_appetite)
+                agency_state.transfer_request_status = "no_action"
+                agency_state.contract_stance = "stable"
+                agency_state.grievance_count = 0
+                agency_state.unmet_expectations_json = []
+                agency_state.morale = max(68.0, agency_state.morale)
+                agency_state.happiness = max(72.0, agency_state.happiness)
+                agency_state.last_major_decision_at = datetime.combine(acceptance_on, datetime.min.time())
+                agency_state.next_review_at = datetime.combine(acceptance_on + timedelta(days=21), datetime.min.time())
             self._publish_transfer_headline(
                 player=player,
                 regen=regen,
@@ -1862,6 +1901,14 @@ class PlayerLifecycleService:
                 "rejection_reason": payload.reason or "",
             }
             self._sync_offer_visibility_counts(offer.regen_id)
+        regen = self._get_regen_profile(bid.player_id)
+        preview = dict((terms or {}).get("player_agency_preview") or {})
+        if regen is not None and preview.get("decision_code") in {"eager_to_join", "open_to_join", "requests_transfer_if_blocked"}:
+            self._agency_service().record_blocked_move(
+                bid.player_id,
+                reference_on=date.today(),
+                reason=payload.reason or "bid_rejected",
+            )
         self._record_event(
             player_id=player.id,
             club_id=bid.selling_club_id or bid.buying_club_id,
@@ -2293,8 +2340,11 @@ class PlayerLifecycleService:
         reference_on: date,
         current_salary: Decimal,
     ) -> RegenOfferVisibilityState:
-        del reference_on
         visibility = self._get_offer_visibility_state(regen.id)
+        _player, _regen, _personality, agency_state, _transfer_request = self._agency_service().sync(
+            regen.player_id,
+            reference_on=reference_on,
+        )
         traits = self._resolve_regen_traits(regen)
         training_fee = default_training_fee_gtex(
             current_gsi=regen.current_gsi,
@@ -2306,6 +2356,7 @@ class PlayerLifecycleService:
             greed=traits["greed"],
             current_salary=current_salary,
         )
+        minimum_salary = max(minimum_salary, agency_state.salary_expectation_amount)
         if visibility is None:
             visibility = RegenOfferVisibilityState(
                 regen_id=regen.id,
@@ -2331,6 +2382,10 @@ class PlayerLifecycleService:
         reference_on: date,
         contract_summary: ContractSummaryView | None,
     ) -> RegenTransferPressureState:
+        _player, _regen, agency_personality, agency_state, transfer_request = self._agency_service().sync(
+            player.id,
+            reference_on=reference_on,
+        )
         pressure = self._get_pressure_state(regen.id)
         if pressure is None:
             pressure = RegenTransferPressureState(
@@ -2341,49 +2396,43 @@ class PlayerLifecycleService:
                 metadata_json={},
             )
             self.session.add(pressure)
-        traits = self._resolve_regen_traits(regen)
         current_contract = contract_summary.active_contract if contract_summary is not None else None
         current_salary = current_contract.wage_amount if current_contract is not None else Decimal("0.0000")
         visibility = self._ensure_offer_visibility_state(regen, reference_on=reference_on, current_salary=current_salary)
         current_club_id = current_contract.club_id if current_contract is not None else player.current_club_profile_id
-        current_context = self._regen_club_context(current_club_id, regen)
-        metadata = dict(pressure.metadata_json or {})
-        computation = compute_transfer_pressure(
-            TransferPressureInputs(
-                current_state=pressure.current_state,
-                ambition_pressure=pressure.ambition_pressure,
-                transfer_desire=pressure.transfer_desire,
-                prestige_dissatisfaction=pressure.prestige_dissatisfaction,
-                title_frustration=pressure.title_frustration,
-                salary_expectation_fancoin_per_year=max(pressure.salary_expectation_fancoin_per_year, visibility.minimum_salary_fancoin_per_year),
-                current_salary_fancoin_per_year=current_salary,
-                ambition=traits["ambition"],
-                loyalty=traits["loyalty"],
-                trophy_hunger=traits["trophy_hunger"],
-                greed=traits["greed"],
-                current_club_prestige=float(current_context["prestige"]),
-                current_club_trophies=float(current_context["trophy_score"]),
-                days_remaining=contract_summary.days_remaining if contract_summary is not None else None,
-                unresolved_bonus=float(metadata.get("unresolved_bonus", 0.0)),
-                relief_score=float(metadata.get("relief_score", 0.0)),
-            )
-        )
         pressure.current_club_id = current_club_id
-        pressure.current_state = computation.current_state
-        pressure.ambition_pressure = computation.ambition_pressure
-        pressure.transfer_desire = computation.transfer_desire
-        pressure.prestige_dissatisfaction = computation.prestige_dissatisfaction
-        pressure.title_frustration = computation.title_frustration
-        pressure.pressure_score = computation.pressure_score
-        pressure.salary_expectation_fancoin_per_year = computation.salary_expectation_fancoin_per_year
-        pressure.active_transfer_request = computation.active_transfer_request
-        pressure.refuses_new_contract = computation.refuses_new_contract
-        pressure.end_of_contract_pressure = computation.end_of_contract_pressure
+        pressure.current_state = {
+            "no_action": "content",
+            "private_unrest": "monitoring_situation",
+            "agent_warning": "considering_transfer",
+            "transfer_request": "transfer_requested",
+            "public_unhappy_state": "unsettled",
+        }.get(agency_state.transfer_request_status, "content")
+        pressure.ambition_pressure = clamp(max(0.0, agency_personality.ambition - agency_state.club_project_belief))
+        pressure.transfer_desire = agency_state.transfer_appetite
+        pressure.prestige_dissatisfaction = clamp(max(0.0, agency_personality.ambition - agency_state.club_project_belief) + (100.0 - agency_state.club_project_belief) * 0.35)
+        pressure.title_frustration = clamp(max(0.0, agency_personality.trophy_hunger - agency_state.club_project_belief))
+        pressure.pressure_score = transfer_request.decision_score
+        pressure.salary_expectation_fancoin_per_year = max(agency_state.salary_expectation_amount, visibility.minimum_salary_fancoin_per_year)
+        pressure.active_transfer_request = agency_state.transfer_request_status in {"transfer_request", "public_unhappy_state"}
+        pressure.refuses_new_contract = agency_state.contract_stance in {"open_market", "requests_renegotiation"} and agency_state.wage_satisfaction < 55.0
+        pressure.end_of_contract_pressure = bool(
+            contract_summary is not None
+            and contract_summary.days_remaining is not None
+            and contract_summary.days_remaining <= 180
+            and agency_state.contract_stance in {"open_market", "requests_upgrade", "requests_renegotiation"}
+        )
         if pressure.active_transfer_request and pressure.unresolved_since is None:
             pressure.unresolved_since = datetime.combine(reference_on, datetime.min.time())
-        if not pressure.active_transfer_request and computation.current_state in {"content", "monitoring_situation"}:
+        if not pressure.active_transfer_request and pressure.current_state in {"content", "monitoring_situation"}:
             pressure.last_resolved_at = datetime.combine(reference_on, datetime.min.time())
-        pressure.metadata_json = metadata
+        pressure.metadata_json = {
+            "career_stage": agency_state.career_stage,
+            "career_target_band": agency_state.career_target_band,
+            "contract_stance": agency_state.contract_stance,
+            "transfer_request_status": agency_state.transfer_request_status,
+            "primary_reasons": [item.code for item in transfer_request.primary_reasons],
+        }
         self.session.flush()
         return pressure
 
@@ -2840,6 +2889,22 @@ class PlayerLifecycleService:
         return record
 
     def _resolve_regen_traits(self, regen: RegenProfile) -> dict[str, int]:
+        agency_personality = self.session.scalar(
+            select(PlayerPersonality).where(PlayerPersonality.regen_profile_id == regen.id)
+        )
+        if agency_personality is not None:
+            return {
+                "ambition": int(agency_personality.ambition),
+                "loyalty": int(agency_personality.loyalty),
+                "professionalism": int(agency_personality.professionalism),
+                "greed": int(agency_personality.greed),
+                "patience": int(agency_personality.patience),
+                "hometown_affinity": int(agency_personality.hometown_affinity),
+                "trophy_hunger": int(agency_personality.trophy_hunger),
+                "media_appetite": int(agency_personality.media_appetite),
+                "temperament": int(agency_personality.temperament),
+                "adaptability": int(agency_personality.adaptability),
+            }
         metadata = dict(regen.metadata_json or {})
         decision_traits = dict(metadata.get("decision_traits") or {})
         personality = self._get_regen_personality(regen.id)
@@ -2869,12 +2934,20 @@ class PlayerLifecycleService:
         del bids
         state = self._regen_career_state(regen)
         traits = self._resolve_regen_traits(regen)
+        _agency_player, _agency_regen, _agency_personality, agency_state, transfer_request = self._agency_service().sync(
+            player.id,
+            reference_on=reference_on,
+        )
         lifecycle_age_months = self._months_between(regen.generated_at.date(), reference_on)
         phase = self._regen_phase_for_age(lifecycle_age_months)
         retired = lifecycle_age_months >= self.settings.regen_generation.regen_lifecycle_retirement_months
         state["lifecycle_age_months"] = lifecycle_age_months
         state["lifecycle_phase"] = "retired" if retired else phase
         state["retirement_pressure"] = phase == "retirement_pressure"
+        state["career_stage"] = agency_state.career_stage
+        state["career_target_band"] = agency_state.career_target_band
+        state["transfer_request_status"] = agency_state.transfer_request_status
+        state["transfer_request_score"] = transfer_request.decision_score
         if contract_summary is not None and contract_summary.active_contract is not None:
             state["previous_club_id"] = contract_summary.active_contract.club_id
         elif not state.get("previous_club_id"):
@@ -2972,7 +3045,11 @@ class PlayerLifecycleService:
                 )
         else:
             regen.status = "active"
-            if pressure is not None and state.get("transfer_listed") and bool((pressure.metadata_json or {}).get("manual_transfer_request")):
+            if agency_state.transfer_request_status == "public_unhappy_state":
+                state["agency_message"] = "Publicly unhappy and pushing for a move."
+            elif agency_state.transfer_request_status == "agent_warning":
+                state["agency_message"] = "Agent has warned the club about growing unrest."
+            elif pressure is not None and state.get("transfer_listed") and bool((pressure.metadata_json or {}).get("manual_transfer_request")):
                 state["agency_message"] = "Requested to be transfer listed."
             elif pressure is not None and pressure.current_state == "unsettled":
                 state["agency_message"] = "Unsettled after interest from a bigger club."
