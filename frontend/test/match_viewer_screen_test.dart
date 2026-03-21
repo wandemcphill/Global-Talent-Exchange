@@ -192,7 +192,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 48));
+    await tester.pump(const Duration(milliseconds: 64));
 
     expect(find.text('2D Match Viewer'), findsOneWidget);
     expect(find.text('Replay lane'), findsOneWidget);
