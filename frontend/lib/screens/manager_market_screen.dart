@@ -318,7 +318,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         content: TextField(
           controller: priceController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Asking price credits'),
+          decoration: const InputDecoration(labelText: 'Asking price GTEX Coin'),
         ),
         actions: <Widget>[
           TextButton(
@@ -741,7 +741,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text((item['display_name'] ?? '').toString()),
                   subtitle: Text(
-                    'Seller: ${(item['seller_name'] ?? '').toString()} • Ask: ${(item['asking_price_credits'] ?? '').toString()} credits',
+                    'Seller: ${(item['seller_name'] ?? '').toString()} • Ask: ${(item['asking_price_credits'] ?? '').toString()} GTEX Coin',
                   ),
                   trailing: Wrap(
                     spacing: 8,
@@ -891,7 +891,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
               ..._tradeHistory.take(12).map((Map<String, dynamic> entry) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text((entry['display_name'] ?? 'Unknown manager').toString()),
-                subtitle: Text('Mode: ${(entry['mode'] ?? '').toString()} • Gross: ${(entry['gross_credits'] ?? '').toString()} • Fee: ${(entry['fee_credits'] ?? '').toString()}'),
+                subtitle: Text('Mode: ${(entry['mode'] ?? '').toString()} • Gross: ${(entry['gross_credits'] ?? '').toString()} GTEX Coin • Fee: ${(entry['fee_credits'] ?? '').toString()} GTEX Coin'),
                 trailing: Text((entry['settlement_status'] ?? '').toString()),
               )),
           ],
@@ -1138,7 +1138,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                                       (item['display_name'] ?? '').toString(),
                                     ),
                                     subtitle: Text(
-                                      'Ask ${(item['asking_price_credits'] ?? '').toString()} credits',
+                                      'Ask ${(item['asking_price_credits'] ?? '').toString()} GTEX Coin',
                                     ),
                                     trailing: OutlinedButton(
                                       onPressed: _isRunningAction
