@@ -11,10 +11,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from backend.app.auth.security import hash_password
 from backend.app.auth.service import AuthService
 from backend.app.core.events import EventPublisher, InMemoryEventPublisher
-from backend.app.ingestion.demo_bootstrap import (
-    CANONICAL_ILLIQUID_PLAYER_COUNT,
-    CANONICAL_LIQUID_PLAYER_COUNT,
-)
 from backend.app.ingestion.models import Player
 from backend.app.ledger.models import LedgerEventRecord
 from backend.app.market.service import MarketEngine
@@ -28,11 +24,10 @@ from backend.app.players.read_models import PlayerSummaryReadModel
 from backend.app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-PRICE_QUANTUM = Decimal("0.0001")
-MIN_SIMULATION_PRICE = Decimal("0.0500")
+PRICE_QUANTUM = Decimal("1")
 DEFAULT_SIMULATION_SEED = 20260311
-DEFAULT_LIQUID_PLAYER_COUNT = CANONICAL_LIQUID_PLAYER_COUNT
-DEFAULT_ILLIQUID_PLAYER_COUNT = CANONICAL_ILLIQUID_PLAYER_COUNT
+DEFAULT_LIQUID_PLAYER_COUNT = 4
+DEFAULT_ILLIQUID_PLAYER_COUNT = 2
 DEFAULT_SIMULATION_CREDIT_BALANCE = Decimal("250000.0000")
 DEFAULT_TICK_COUNT = 3
 
@@ -205,12 +200,6 @@ class DemoMarketSimulationService:
             )
             if not profiles:
                 raise SimulationSeedError("No tradable players were found. Seed demo data before seeding liquidity.")
-            self._ensure_simulation_inventory(
-                session,
-                wallet_service=wallet_service,
-                simulation_users=simulation_users,
-                profiles=profiles,
-            )
 
             buy_orders_seeded = 0
             sell_orders_seeded = 0
@@ -283,7 +272,6 @@ class DemoMarketSimulationService:
             raise SimulationSeedError("tick_number must be at least 1.")
 
         order_service = OrderService(event_publisher=self.event_publisher)
-        wallet_service = WalletService(event_publisher=self.event_publisher)
         with self.session_factory() as session:
             simulation_users = self._load_simulation_users(session)
             profiles = self._select_player_profiles(
@@ -295,12 +283,6 @@ class DemoMarketSimulationService:
                 raise SimulationSeedError("No tradable players were found. Seed demo data before running simulation ticks.")
             if len(simulation_users) < 2:
                 raise SimulationSeedError("Simulation users are missing. Run seed_demo_liquidity before simulation ticks.")
-            self._ensure_simulation_inventory(
-                session,
-                wallet_service=wallet_service,
-                simulation_users=simulation_users,
-                profiles=profiles,
-            )
 
             orders_created = 0
             trades_created = 0
@@ -310,10 +292,10 @@ class DemoMarketSimulationService:
                 rng = random.Random(random_seed + (tick_number * 10_000) + index)
                 seller = simulation_users[(index + tick_number) % len(simulation_users)]
                 buyer = simulation_users[(index + tick_number + 1) % len(simulation_users)]
-                max_shift_bps = 650 if profile.liquidity_label == "liquid" else 1200
-                price = self._apply_bps_shift(
-                    profile.reference_price,
-                    rng.randint(-max_shift_bps, max_shift_bps),
+                price_shift = rng.randint(-profile.activity_intensity, profile.activity_intensity)
+                price = max(
+                    Decimal("1.0000"),
+                    self._normalize_amount(profile.reference_price + Decimal(price_shift)),
                 )
                 quantity = Decimal(profile.activity_intensity)
 
@@ -337,9 +319,8 @@ class DemoMarketSimulationService:
                 trades_created += 1
                 touched.append(profile.player_id)
 
-                resting_spread_bps = 900 if profile.liquidity_label == "liquid" else 1800
-                resting_bid = self._apply_bps_shift(price, -resting_spread_bps)
-                resting_ask = self._apply_bps_shift(price, resting_spread_bps)
+                resting_bid = max(Decimal("1.0000"), self._normalize_amount(price - Decimal(profile.activity_intensity)))
+                resting_ask = self._normalize_amount(price + Decimal(profile.activity_intensity))
                 order_service.place_order(
                     session,
                     user=buyer,
@@ -388,30 +369,13 @@ class DemoMarketSimulationService:
             for offset in range(tick_count)
         )
 
-    def replay_market_state(
-        self,
-        market_engine: MarketEngine,
-        *,
-        liquid_player_count: int = DEFAULT_LIQUID_PLAYER_COUNT,
-        illiquid_player_count: int = DEFAULT_ILLIQUID_PLAYER_COUNT,
-    ) -> DemoLiquiditySeedSummary:
+    def replay_market_state(self, market_engine: MarketEngine) -> DemoLiquiditySeedSummary:
         with self.session_factory() as session:
             profiles = self._select_player_profiles(
                 session,
-                liquid_player_count=liquid_player_count,
-                illiquid_player_count=illiquid_player_count,
+                liquid_player_count=DEFAULT_LIQUID_PLAYER_COUNT,
+                illiquid_player_count=DEFAULT_ILLIQUID_PLAYER_COUNT,
             )
-            if not profiles:
-                return DemoLiquiditySeedSummary(
-                    player_count=0,
-                    buy_orders_seeded=0,
-                    sell_orders_seeded=0,
-                    trade_executions_seeded=0,
-                    simulation_users=tuple(spec.username for spec in SIMULATION_USER_SPECS),
-                    liquid_player_id=None,
-                    illiquid_player_id=None,
-                    players=(),
-                )
             player_ids = [profile.player_id for profile in profiles]
             orders = session.scalars(
                 select(Order)
@@ -442,7 +406,7 @@ class DemoMarketSimulationService:
                     ),
                     None,
                 )
-                if ask_order is not None and best_ask >= Decimal("1.0000"):
+                if ask_order is not None:
                     market_engine.create_listing(
                         asset_id=profile.player_id,
                         seller_user_id=ask_order.user_id,
@@ -463,7 +427,7 @@ class DemoMarketSimulationService:
                     ),
                     None,
                 )
-                if bid_order is not None and best_bid >= Decimal("1.0000"):
+                if bid_order is not None:
                     market_engine.create_trade_intent(
                         user_id=bid_order.user_id,
                         asset_id=profile.player_id,
@@ -623,14 +587,8 @@ class DemoMarketSimulationService:
         if not rows:
             return ()
 
-        top_count = min(max(liquid_player_count, 0), len(rows))
-        bottom_count = min(max(illiquid_player_count, 0), max(len(rows) - top_count, 0))
-        if illiquid_player_count > 0 and len(rows) > 1 and bottom_count == 0:
-            bottom_count = 1
-            top_count = max(1, len(rows) - bottom_count)
-
-        top_rows = rows[:top_count]
-        bottom_rows = rows[-bottom_count:] if bottom_count else []
+        top_rows = rows[:liquid_player_count]
+        bottom_rows = rows[-illiquid_player_count:] if illiquid_player_count else []
         selected_rows: list[tuple[Player, PlayerSummaryReadModel]] = []
         seen: set[str] = set()
         for row in [*top_rows, *bottom_rows]:
@@ -640,17 +598,16 @@ class DemoMarketSimulationService:
             seen.add(player.id)
             selected_rows.append((player, summary))
 
-        liquid_player_ids = {player.id for player, _ in top_rows}
         profiles: list[SimulationPlayerProfile] = []
-        for player, summary in selected_rows:
-            liquidity_label = "liquid" if player.id in liquid_player_ids else "illiquid"
+        for index, (player, summary) in enumerate(selected_rows):
+            liquidity_label = "liquid" if index < len(top_rows) else "illiquid"
             if liquidity_label == "liquid":
                 activity_intensity = 3
-                spread_steps = (350, 700, 1100)
+                spread_steps = (2, 4, 6)
                 trade_history_count = 3
             else:
                 activity_intensity = 1
-                spread_steps = (1200, 2000)
+                spread_steps = (10, 16)
                 trade_history_count = 1
             reference_price = self._normalize_price(summary.current_value_credits)
             profiles.append(
@@ -681,11 +638,8 @@ class DemoMarketSimulationService:
         for index in range(profile.trade_history_count):
             seller = simulation_users[(index * 2) % len(simulation_users)]
             buyer = simulation_users[(index * 2 + 1) % len(simulation_users)]
-            max_shift_bps = 450 if profile.liquidity_label == "liquid" else 900
-            trade_price = self._apply_bps_shift(
-                profile.reference_price,
-                rng.randint(-max_shift_bps, max_shift_bps),
-            )
+            price_adjustment = rng.randint(-profile.activity_intensity, profile.activity_intensity)
+            trade_price = max(Decimal("1.0000"), self._normalize_amount(profile.reference_price + Decimal(price_adjustment)))
             quantity = Decimal(profile.activity_intensity)
             order_service.place_order(
                 session,
@@ -720,8 +674,11 @@ class DemoMarketSimulationService:
         for level_index, spread_step in enumerate(profile.spread_steps):
             bid_user = simulation_users[(level_index + 1) % len(simulation_users)]
             ask_user = simulation_users[(level_index + 2) % len(simulation_users)]
-            bid_price = self._apply_bps_shift(profile.reference_price, -spread_step)
-            ask_price = self._apply_bps_shift(profile.reference_price, spread_step)
+            bid_price = max(
+                Decimal("1.0000"),
+                self._normalize_amount(profile.reference_price - Decimal(spread_step)),
+            )
+            ask_price = self._normalize_amount(profile.reference_price + Decimal(spread_step))
             quantity = Decimal(profile.activity_intensity + level_index + rng.randint(0, profile.activity_intensity))
 
             order_service.place_order(
@@ -796,52 +753,6 @@ class DemoMarketSimulationService:
             actor=actor,
         )
 
-    def _ensure_simulation_inventory(
-        self,
-        session: Session,
-        *,
-        wallet_service: WalletService,
-        simulation_users: Sequence[User],
-        profiles: Sequence[SimulationPlayerProfile],
-    ) -> None:
-        for profile in profiles:
-            target_quantity = self._inventory_target_for_profile(profile)
-            for user in simulation_users:
-                self._rebalance_user_position_inventory(
-                    session,
-                    wallet_service=wallet_service,
-                    user=user,
-                    player_id=profile.player_id,
-                    target_quantity=target_quantity,
-                )
-
-    def _rebalance_user_position_inventory(
-        self,
-        session: Session,
-        *,
-        wallet_service: WalletService,
-        user: User,
-        player_id: str,
-        target_quantity: Decimal,
-    ) -> None:
-        position_account = wallet_service.get_position_account(session, user, player_id)
-        platform_account = wallet_service.ensure_platform_position_account(session, player_id)
-        current_quantity = wallet_service.get_balance(session, position_account)
-        delta = self._normalize_amount(target_quantity - current_quantity)
-        if delta == Decimal("0.0000"):
-            return
-        wallet_service.append_transaction(
-            session,
-            postings=[
-                LedgerPosting(account=position_account, amount=delta),
-                LedgerPosting(account=platform_account, amount=-delta),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            reference=f"simulation-position-rebalance:{user.id}:{player_id}",
-            description="Simulation position inventory rebalance",
-            actor=user,
-        )
-
     @staticmethod
     def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
         if value is None:
@@ -851,22 +762,11 @@ class DemoMarketSimulationService:
     @staticmethod
     def _normalize_price(value: Decimal | int | float | str | None) -> Decimal:
         if value is None:
-            return MIN_SIMULATION_PRICE
+            return Decimal("1.0000")
         normalized = Decimal(str(value)).quantize(PRICE_QUANTUM, rounding=ROUND_HALF_UP)
         if normalized <= Decimal("0"):
-            return MIN_SIMULATION_PRICE
+            return Decimal("1.0000")
         return normalized.quantize(AMOUNT_QUANTUM)
-
-    def _apply_bps_shift(self, price: Decimal, shift_bps: int) -> Decimal:
-        multiplier = Decimal("1.0000") + (Decimal(shift_bps) / Decimal("10000"))
-        shifted = price * multiplier
-        if shifted <= Decimal("0"):
-            shifted = MIN_SIMULATION_PRICE
-        return self._normalize_price(max(shifted, MIN_SIMULATION_PRICE))
-
-    @staticmethod
-    def _inventory_target_for_profile(profile: SimulationPlayerProfile) -> Decimal:
-        return Decimal("24.0000") if profile.liquidity_label == "liquid" else Decimal("8.0000")
 
 
 __all__ = [
