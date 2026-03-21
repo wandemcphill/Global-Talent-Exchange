@@ -64,7 +64,7 @@ class GtePortfolioScreen extends StatelessWidget {
           children: <Widget>[
             GtexHeroBanner(
               eyebrow: 'CAPITAL ROOM',
-              title: 'Cash, holdings, open orders, and funding trust all live on one calm deck.',
+              title: 'GTEX Coin, holdings, open orders, and funding trust all live on one calm deck.',
               description: 'Portfolio mode is deliberately cleaner than trading and quieter than the arena. It should feel bank-grade, transparent, and ready for action without drama.',
               accent: GteShellTheme.accentCapital,
               chips: <Widget>[
@@ -264,9 +264,9 @@ class _PortfolioSummaryCard extends StatelessWidget {
             runSpacing: 12,
             children: <Widget>[
               GteMetricChip(label: 'Market value', value: gteFormatCredits(summary.totalMarketValue)),
-              GteMetricChip(label: 'Cash', value: gteFormatCredits(summary.cashBalance)),
+              GteMetricChip(label: 'GTEX Coin', value: gteFormatCredits(summary.cashBalance)),
               GteMetricChip(label: 'Positions', value: holdingCount.toString()),
-              GteMetricChip(label: 'Account posture', value: holdingCount == 0 ? 'CASH HEAVY' : 'BALANCED', positive: holdingCount > 0),
+              GteMetricChip(label: 'Account posture', value: holdingCount == 0 ? 'GTEX HEAVY' : 'BALANCED', positive: holdingCount > 0),
             ],
           ),
         ],

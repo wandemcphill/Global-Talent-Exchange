@@ -537,7 +537,7 @@ class GteMockApi implements GteApiRepository {
       if (!order.canCancel)
         'Only open sell orders can use admin quick exit.',
       if (!windowElapsed)
-        'P2P remains the default path until ${windowEndsAt?.toIso8601String() ?? 'the priority window ends'}.',
+        'P2P remains the default path until ${windowEndsAt.toIso8601String()}.',
     ];
     return GteAdminBuybackPreview(
       orderId: order.id,
@@ -592,9 +592,9 @@ class GteMockApi implements GteApiRepository {
       status: GteOrderStatus.filled,
       quantity: existing.quantity,
       filledQuantity: existing.quantity,
-      remainingQuantity: 0,
+      remainingQuantity: 0.0,
       maxPrice: existing.maxPrice,
-      reservedAmount: 0,
+      reservedAmount: 0.0,
       currency: existing.currency,
       holdTransactionId: existing.holdTransactionId,
       createdAt: existing.createdAt,

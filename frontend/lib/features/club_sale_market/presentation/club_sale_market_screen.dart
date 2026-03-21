@@ -1128,6 +1128,9 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
     return currency.toLowerCase() == 'credits' ||
             currency.toLowerCase() == 'credit'
         ? gteFormatCredits(amount)
+        : currency.toLowerCase() == 'coin' ||
+                currency.toLowerCase() == 'coins'
+            ? gteFormatFanCoins(amount)
         : gteFormatFiat(amount, currency: currency.toUpperCase());
   }
 }
