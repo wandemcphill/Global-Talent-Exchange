@@ -27,6 +27,8 @@ from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContributi
 from app.leagues.service import LeagueSeasonLifecycleService
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.models.competition_match import CompetitionMatch
+from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.match_engine.simulation.models import MatchEventType
 from app.services.player_lifecycle_service import PlayerLifecycleService
@@ -226,6 +228,7 @@ class LocalMatchExecutionWorker:
             request = self.team_factory.build_request(job)
             replay_payload = self.match_service.build_replay_payload(request)
             self._persist_player_lifecycle_incidents(job, replay_payload)
+            self._persist_match_viewer_payload(job, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.simulation.completed",
                 job,
@@ -377,6 +380,29 @@ class LocalMatchExecutionWorker:
                 match_date=job.match_date,
                 replay_payload=replay_payload,
             )
+        finally:
+            session.close()
+
+    def _persist_match_viewer_payload(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        if self.session_factory is None:
+            return
+        session = self.session_factory()
+        try:
+            match = session.get(CompetitionMatch, job.fixture_id)
+            if match is None:
+                return
+            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
+            match.metadata_json = {
+                **(match.metadata_json or {}),
+                "match_viewer": viewer_payload.model_dump(mode="json"),
+            }
+            session.commit()
+        except Exception:
+            session.rollback()
         finally:
             session.close()
 

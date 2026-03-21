@@ -39,6 +39,7 @@ from app.models.user import User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
+from app.services.avatar_service import AvatarService
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -67,6 +68,7 @@ class PlayerCardMarketService:
     session: Session
     wallet_service: WalletService = field(default_factory=WalletService)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
+    avatar_service: AvatarService = field(default_factory=AvatarService)
 
     def list_players(self, *, search: str | None = None, limit: int = 20, offset: int = 0) -> list[dict[str, object]]:
         supply_subq = (
@@ -114,6 +116,7 @@ class PlayerCardMarketService:
                     "current_club_name": current_club_name or (player.current_club.name if player.current_club is not None else None),
                     "card_supply_total": int(supply_total or 0),
                     "latest_value_credits": float(current_value_credits) if current_value_credits is not None else None,
+                    "avatar": self._avatar_payload(player),
                 }
             )
         return results
@@ -161,6 +164,7 @@ class PlayerCardMarketService:
             "position": player.normalized_position or player.position,
             "nationality_code": player.country.alpha2_code if player.country is not None else None,
             "current_club_name": player.current_club.name if player.current_club is not None else None,
+            "avatar": self._avatar_payload(player),
             "aliases": aliases,
             "monikers": monikers,
             "cards": card_views,
@@ -196,6 +200,7 @@ class PlayerCardMarketService:
                     "player_card_id": card.id,
                     "player_id": player.id,
                     "player_name": player.full_name,
+                    "avatar": self._avatar_payload(player),
                     "tier_code": tier.code,
                     "tier_name": tier.name,
                     "edition_code": card.edition_code,
@@ -928,6 +933,7 @@ class PlayerCardMarketService:
             "player_card_id": listing.player_card_id,
             "player_id": player.id,
             "player_name": player.full_name,
+            "avatar": self._avatar_payload(player),
             "tier_code": tier.code,
             "tier_name": tier.name,
             "edition_code": card.edition_code,
@@ -937,6 +943,14 @@ class PlayerCardMarketService:
             "status": listing.status,
             "created_at": listing.created_at,
         }
+
+    def _avatar_payload(self, player: Player) -> dict[str, object]:
+        summary = self.session.get(PlayerSummaryReadModel, player.id)
+        summary_payload = summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else None
+        return self.avatar_service.build_from_player(
+            player,
+            summary_payload=summary_payload,
+        ).model_dump()
 
     def _new_id(self, prefix: str) -> str:
         return f"{prefix}_{generate_uuid().split('-')[0]}"

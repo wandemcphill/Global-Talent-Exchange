@@ -151,10 +151,12 @@ from app.models.gift_combo_rule import GiftComboRule
 from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
 from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_personality import PlayerPersonality
 from app.models.player_cards import (
     PlayerAlias,
     PlayerMoniker,

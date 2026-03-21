@@ -42,6 +42,7 @@ from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissionError, PlayerCardValidationError
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
+from app.services.avatar_service import AvatarIdentityInput, AvatarService
 from app.value_engine.scoring import credits_from_real_world_value
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -61,6 +62,7 @@ class PlayerCardMarketplaceService:
     wallet_service: WalletService = field(default_factory=WalletService)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
     settings: Settings = field(default_factory=get_settings)
+    avatar_service: AvatarService = field(default_factory=AvatarService)
 
     @staticmethod
     def _normalize_amount(value: Decimal | float | int | str | None) -> Decimal:
@@ -247,6 +249,7 @@ class PlayerCardMarketplaceService:
                 Player,
                 PlayerSummaryReadModel.current_club_name,
                 PlayerSummaryReadModel.average_rating,
+                PlayerSummaryReadModel.summary_json,
             )
             .join(PlayerCardTier, PlayerCardTier.id == PlayerCard.tier_id)
             .join(Player, Player.id == PlayerCard.player_id)
@@ -255,7 +258,7 @@ class PlayerCardMarketplaceService:
         ).one_or_none()
         if row is None:
             raise PlayerCardNotFoundError("Player card was not found.")
-        card, tier, player, current_club_name, average_rating = row
+        card, tier, player, current_club_name, average_rating, summary_payload = row
         is_regen = card.card_variant.lower().startswith("regen") or self.session.scalar(
             select(RegenProfile.id).where(RegenProfile.linked_unique_card_id == card.id).limit(1)
         ) is not None
@@ -272,6 +275,10 @@ class PlayerCardMarketplaceService:
             "is_regen_newgen": is_regen,
             "is_creator_linked": is_creator_linked,
             "asset_origin": asset_origin,
+            "avatar": self.avatar_service.build_from_player(
+                player,
+                summary_payload=summary_payload if isinstance(summary_payload, dict) else None,
+            ).model_dump(),
         }
 
     def _base_value_credits(self, context: dict[str, Any]) -> Decimal:
@@ -1106,6 +1113,15 @@ class PlayerCardMarketplaceService:
             payload["requested_filters_json"] = dict(requested_filters or {})
         payload.pop("search_price", None)
         payload.pop("search_rank", None)
+        payload["avatar"] = self.avatar_service.build_from_payload(
+            AvatarIdentityInput(
+                player_id=str(payload.get("player_id") or ""),
+                player_name=str(payload.get("player_name") or ""),
+                position=payload.get("position"),
+                avatar_seed_token=payload.get("avatar_seed_token"),
+                avatar_dna_seed=payload.get("avatar_dna_seed"),
+            )
+        ).model_dump()
         return payload
 
     def search_marketplace(
@@ -1238,6 +1254,7 @@ class PlayerCardMarketplaceService:
             "club_name": context["club_name"],
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "avatar": context["avatar"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,
@@ -1463,6 +1480,7 @@ class PlayerCardMarketplaceService:
             "club_name": context["club_name"],
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "avatar": context["avatar"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,
@@ -1517,6 +1535,7 @@ class PlayerCardMarketplaceService:
             "club_name": context["club_name"],
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "avatar": context["avatar"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,
@@ -1891,6 +1910,7 @@ class PlayerCardMarketplaceService:
             "club_name": context["club_name"],
             "position": context["player"].normalized_position or context["player"].position,
             "average_rating": float(context["average_rating"]) if context["average_rating"] is not None else None,
+            "avatar": context["avatar"],
             "tier_code": context["tier"].code,
             "tier_name": context["tier"].name,
             "rarity_rank": context["tier"].rarity_rank,

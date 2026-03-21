@@ -4,6 +4,7 @@ import '../app/gte_app_config.dart';
 import 'gte_api_repository.dart';
 import 'gte_exchange_api_client.dart';
 import 'gte_models.dart';
+import '../models/player_avatar.dart';
 import '../models/competition_models.dart';
 
 enum LiveMatchPhase {
@@ -45,12 +46,22 @@ class LiveMatchLineupPlayer {
     required this.position,
     required this.rating,
     this.captain = false,
+    this.playerId,
+    this.nationalityCode,
+    this.avatarSeedToken,
+    this.avatarDnaSeed,
+    this.avatar,
   });
 
   final String name;
   final String position;
   final double rating;
   final bool captain;
+  final String? playerId;
+  final String? nationalityCode;
+  final String? avatarSeedToken;
+  final String? avatarDnaSeed;
+  final PlayerAvatar? avatar;
 }
 
 class LiveMatchTacticalSuggestion {
@@ -134,7 +145,8 @@ class LiveMatchSnapshot {
   final DateTime standardHighlightExpiresAt;
   final DateTime premiumHighlightExpiresAt;
 
-  bool get isLive => phase == LiveMatchPhase.firstHalf || phase == LiveMatchPhase.secondHalf;
+  bool get isLive =>
+      phase == LiveMatchPhase.firstHalf || phase == LiveMatchPhase.secondHalf;
 
   bool get isHalftime => phase == LiveMatchPhase.halftime;
 
@@ -145,7 +157,8 @@ Future<LiveMatchSnapshot> loadLiveMatchSnapshot(
   CompetitionSummary competition,
 ) async {
   await Future<void>.delayed(const Duration(milliseconds: 350));
-  final LiveMatchSnapshot fallback = LiveMatchFixtures.buildSnapshot(competition);
+  final LiveMatchSnapshot fallback =
+      LiveMatchFixtures.buildSnapshot(competition);
   if (_matchApiConfig.backendMode == GteBackendMode.fixture) {
     return fallback;
   }
@@ -228,6 +241,12 @@ LiveMatchSnapshot _mergeLiveFeedSnapshot(
 
   final DateTime now = DateTime.now().toUtc();
   final DateTime premiumExpiry = now.add(const Duration(hours: 3));
+  final List<LiveMatchLineupPlayer>? homeLineup = _lineupFromPayload(
+    GteJson.value(payload, <String>['home_lineup', 'homeLineup']),
+  );
+  final List<LiveMatchLineupPlayer>? awayLineup = _lineupFromPayload(
+    GteJson.value(payload, <String>['away_lineup', 'awayLineup']),
+  );
   final List<LiveMatchHighlightClip> keyMoments = keyMomentsAvailable
       ? _keyMomentsFromEvents(commentary, matchId, premiumExpiry)
       : const <LiveMatchHighlightClip>[];
@@ -245,8 +264,8 @@ LiveMatchSnapshot _mergeLiveFeedSnapshot(
     phase: phase,
     momentum: fallback.momentum,
     commentary: commentary,
-    homeLineup: fallback.homeLineup,
-    awayLineup: fallback.awayLineup,
+    homeLineup: homeLineup ?? fallback.homeLineup,
+    awayLineup: awayLineup ?? fallback.awayLineup,
     substitutions: substitutions,
     cards: cards,
     tacticalSuggestions: fallback.tacticalSuggestions,
@@ -345,6 +364,43 @@ LiveMatchSnapshot _mergeHighlightsSnapshot(
     standardHighlightExpiresAt: standardExpiry,
     premiumHighlightExpiresAt: premiumExpiry,
   );
+}
+
+List<LiveMatchLineupPlayer>? _lineupFromPayload(Object? value) {
+  if (value is! List<Object?> || value.isEmpty) {
+    return null;
+  }
+  return value.map((Object? item) {
+    final Map<String, Object?> json = GteJson.map(
+      item,
+      label: 'live match lineup player',
+    );
+    return LiveMatchLineupPlayer(
+      playerId: GteJson.stringOrNull(json, <String>['player_id', 'playerId']),
+      name: GteJson.string(
+        json,
+        <String>['player_name', 'playerName', 'name'],
+        fallback: 'Unnamed player',
+      ),
+      position: GteJson.string(json, <String>['position'], fallback: 'UNK'),
+      rating: GteJson.number(json, <String>['rating'], fallback: 6.5),
+      captain: GteJson.boolean(json, <String>['captain'], fallback: false),
+      nationalityCode: GteJson.stringOrNull(
+        json,
+        <String>['nationality_code', 'nationalityCode'],
+      ),
+      avatarSeedToken: GteJson.stringOrNull(
+        json,
+        <String>['avatar_seed_token', 'avatarSeedToken'],
+      ),
+      avatarDnaSeed: GteJson.stringOrNull(
+        json,
+        <String>['avatar_dna_seed', 'avatarDnaSeed'],
+      ),
+      avatar:
+          PlayerAvatar.fromJsonOrNull(GteJson.value(json, <String>['avatar'])),
+    );
+  }).toList(growable: false);
 }
 
 int _requireInt(Map<String, Object?> payload, List<String> keys, String label) {
@@ -560,18 +616,24 @@ class LiveMatchFixtures {
       awayTeam: awayTeam,
       minute: minute,
     );
-    final List<LiveMatchEvent> substitutions =
-        commentary.where((LiveMatchEvent event) => event.type == LiveMatchEventType.substitution).toList(growable: false);
-    final List<LiveMatchEvent> cards =
-        commentary.where((LiveMatchEvent event) => event.type == LiveMatchEventType.card).toList(growable: false);
-    final List<LiveMatchHighlightClip> keyMoments =
-        _buildKeyMoments(competition, commentary.where((LiveMatchEvent event) => event.isKeyMoment).toList(growable: false));
+    final List<LiveMatchEvent> substitutions = commentary
+        .where((LiveMatchEvent event) =>
+            event.type == LiveMatchEventType.substitution)
+        .toList(growable: false);
+    final List<LiveMatchEvent> cards = commentary
+        .where((LiveMatchEvent event) => event.type == LiveMatchEventType.card)
+        .toList(growable: false);
+    final List<LiveMatchHighlightClip> keyMoments = _buildKeyMoments(
+        competition,
+        commentary
+            .where((LiveMatchEvent event) => event.isKeyMoment)
+            .toList(growable: false));
 
     final DateTime now = DateTime.now().toUtc();
     final DateTime standardExpiry = now.add(const Duration(minutes: 10));
     final DateTime premiumExpiry = now.add(const Duration(hours: 3));
-    final List<LiveMatchHighlightClip> highlights =
-        _buildHighlights(competition, commentary, standardExpiry, premiumExpiry);
+    final List<LiveMatchHighlightClip> highlights = _buildHighlights(
+        competition, commentary, standardExpiry, premiumExpiry);
 
     return LiveMatchSnapshot(
       matchId: competition.id,
@@ -631,7 +693,8 @@ class LiveMatchFixtures {
     }
   }
 
-  static int _scoreForSide(Random rng, LiveMatchPhase phase, {required bool isHome}) {
+  static int _scoreForSide(Random rng, LiveMatchPhase phase,
+      {required bool isHome}) {
     if (phase == LiveMatchPhase.preMatch) {
       return 0;
     }
@@ -761,15 +824,18 @@ class LiveMatchFixtures {
   }
 
   static List<LiveMatchTacticalSuggestion> _buildSuggestions(Random rng) {
-    final List<LiveMatchTacticalSuggestion> suggestions = <LiveMatchTacticalSuggestion>[
+    final List<LiveMatchTacticalSuggestion> suggestions =
+        <LiveMatchTacticalSuggestion>[
       const LiveMatchTacticalSuggestion(
         title: 'Shift press to the right channel',
-        detail: 'Their build-up overloads the left side. Force turnovers toward the touchline to compress space.',
+        detail:
+            'Their build-up overloads the left side. Force turnovers toward the touchline to compress space.',
         impactLabel: 'High press +8',
       ),
       const LiveMatchTacticalSuggestion(
         title: 'Trigger early fullback overlap',
-        detail: 'Opposition winger is staying high. Overlap quickly to create 2v1s on the outside.',
+        detail:
+            'Opposition winger is staying high. Overlap quickly to create 2v1s on the outside.',
         impactLabel: 'Width +12',
       ),
       const LiveMatchTacticalSuggestion(

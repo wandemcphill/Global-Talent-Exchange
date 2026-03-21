@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.schemas.avatar import PlayerAvatarView
+
 
 class PlayerCardMarketplaceListingView(BaseModel):
     listing_id: str
@@ -16,6 +18,7 @@ class PlayerCardMarketplaceListingView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    avatar: PlayerAvatarView
     tier_code: str
     tier_name: str
     rarity_rank: int
@@ -95,6 +98,7 @@ class PlayerCardMarketplaceLoanListingView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    avatar: PlayerAvatarView
     tier_code: str
     tier_name: str
     rarity_rank: int
@@ -154,6 +158,7 @@ class PlayerCardMarketplaceLoanContractView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    avatar: PlayerAvatarView
     tier_code: str
     tier_name: str
     rarity_rank: int
@@ -210,6 +215,7 @@ class PlayerCardMarketplaceSwapListingView(BaseModel):
     club_name: str | None
     position: str | None
     average_rating: float | None
+    avatar: PlayerAvatarView
     tier_code: str
     tier_name: str
     rarity_rank: int

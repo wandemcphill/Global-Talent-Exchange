@@ -1,13 +1,15 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../core/app_feedback.dart';
 import '../../../data/gte_api_repository.dart';
+import '../../../services/avatar_mapper.dart';
 import '../../../widgets/gte_formatters.dart';
 import '../../../widgets/gte_metric_chip.dart';
 import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_state_panel.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
+import '../../../widgets/player_card_avatar.dart';
 import '../data/player_card_marketplace_models.dart';
 import 'player_card_marketplace_controller.dart';
 
@@ -414,6 +416,10 @@ class _PlayerCardMarketplaceScreenState
                 ..._controller.myListings.map(
                   (PlayerCardListing listing) => ListTile(
                     contentPadding: EdgeInsets.zero,
+                    leading: PlayerCardAvatar(
+                      avatar: AvatarMapper.fromListing(listing),
+                      size: 42,
+                    ),
                     title: Text(listing.playerName),
                     subtitle: Text(
                       '${listing.quantity} cards â€¢ ${gteFormatCredits(listing.pricePerCardCredits)}',
@@ -437,6 +443,11 @@ class _PlayerCardMarketplaceScreenState
                 ..._controller.loanContracts.items.map(
                   (PlayerCardMarketplaceLoanContract contract) => ListTile(
                     contentPadding: EdgeInsets.zero,
+                    leading: PlayerCardAvatar(
+                      avatar:
+                          AvatarMapper.fromMarketplaceLoanContract(contract),
+                      size: 42,
+                    ),
                     title: Text(contract.playerName),
                     subtitle: Text(
                       '${contract.contractStatus.toUpperCase()} â€¢ ${gteFormatCredits(contract.effectiveLoanFeeCredits)} â€¢ due ${gteFormatDateTime(contract.dueAt)}',
@@ -1005,6 +1016,7 @@ class _MarketplaceListingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatar = AvatarMapper.fromMarketplaceListing(listing);
     final String priceLabel = listing.salePriceCredits != null
         ? gteFormatCredits(listing.salePriceCredits!)
         : listing.loanFeeCredits != null
@@ -1017,6 +1029,8 @@ class _MarketplaceListingTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              PlayerCardAvatar(avatar: avatar),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1092,16 +1106,31 @@ class _HoldingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatar = AvatarMapper.fromHolding(holding);
     return GteSurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(holding.playerName,
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 6),
-          Text(
-            '${holding.tierName} â€¢ ${holding.quantityAvailable}/${holding.quantityTotal} available',
-            style: Theme.of(context).textTheme.bodyMedium,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              PlayerCardAvatar(avatar: avatar, size: 52),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(holding.playerName,
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${holding.tierName} â€¢ ${holding.quantityAvailable}/${holding.quantityTotal} available',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -1166,4 +1195,3 @@ class _NegotiationActionPanel extends StatelessWidget {
     );
   }
 }
-

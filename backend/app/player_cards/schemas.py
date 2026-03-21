@@ -11,6 +11,7 @@ from app.football_events_engine.schemas import (
     PlayerFormModifierView,
     TrendingPlayerFlagView,
 )
+from app.schemas.avatar import PlayerAvatarView
 
 
 class PlayerCardTierView(BaseModel):
@@ -102,6 +103,7 @@ class PlayerCardPlayerSummaryView(BaseModel):
     current_club_name: str | None
     card_supply_total: int
     latest_value_credits: float | None
+    avatar: PlayerAvatarView
 
 
 class PlayerCardPlayerDetailView(BaseModel):
@@ -110,6 +112,7 @@ class PlayerCardPlayerDetailView(BaseModel):
     position: str | None
     nationality_code: str | None
     current_club_name: str | None
+    avatar: PlayerAvatarView
     aliases: list[str]
     monikers: list[str]
     cards: list[PlayerCardView]
@@ -130,6 +133,7 @@ class PlayerCardHoldingView(BaseModel):
     player_card_id: str
     player_id: str
     player_name: str
+    avatar: PlayerAvatarView
     tier_code: str
     tier_name: str
     edition_code: str
@@ -144,6 +148,7 @@ class PlayerCardListingView(BaseModel):
     player_card_id: str
     player_id: str
     player_name: str
+    avatar: PlayerAvatarView
     tier_code: str
     tier_name: str
     edition_code: str
@@ -159,6 +164,7 @@ class PlayerCardLoanListingView(BaseModel):
     player_card_id: str
     player_id: str
     player_name: str
+    avatar: PlayerAvatarView
     position: str | None
     tier_code: str
     tier_name: str

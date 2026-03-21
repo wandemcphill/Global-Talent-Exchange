@@ -5,14 +5,18 @@ import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/services/avatar_mapper.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/match/match_hud_avatar.dart';
+import 'package:gte_frontend/widgets/squad/squad_avatar_badge.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
 
 import 'gte_halftime_analytics_screen.dart';
 import 'gte_match_highlights_screen.dart';
+import '../match/gtex_match_viewer_screen.dart';
 
 enum _LiveViewMode {
   commentary,
@@ -94,6 +98,20 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
+  Future<void> _openViewer(LiveMatchSnapshot match) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GtexMatchViewerScreen(
+          competition: widget.competition,
+          matchKey: match.matchId?.trim().isNotEmpty == true
+              ? match.matchId!.trim()
+              : widget.competition.id,
+          fallbackSnapshot: match,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -152,6 +170,42 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               children: <Widget>[
                 _LiveScoreboardCard(match: match),
+                if (match.isFinal ||
+                    match.highlightsAvailable ||
+                    match.keyMomentsAvailable) ...<Widget>[
+                  const SizedBox(height: 16),
+                  GteSurfacePanel(
+                    accentColor: GteShellTheme.accentArena,
+                    child: Row(
+                      children: <Widget>[
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                '2D replay viewer',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'Open the top-down replay to watch marker movement, event emphasis, and the authoritative scoreboard in one surface.',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        FilledButton.icon(
+                          onPressed: () => _openViewer(match),
+                          icon: const Icon(Icons.sports_soccer),
+                          label: const Text('Open viewer'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (widget.navigationDependencies != null) ...<Widget>[
                   const SizedBox(height: 16),
                   GteSurfacePanel(
@@ -375,6 +429,8 @@ class _LiveScoreboardCard extends StatelessWidget {
                   team: match.homeTeam,
                   score: match.homeScore,
                   alignRight: false,
+                  featuredPlayer: _featuredPlayer(match.homeLineup),
+                  matchId: match.matchId,
                 ),
               ),
               const SizedBox(width: 10),
@@ -398,6 +454,8 @@ class _LiveScoreboardCard extends StatelessWidget {
                   team: match.awayTeam,
                   score: match.awayScore,
                   alignRight: true,
+                  featuredPlayer: _featuredPlayer(match.awayLineup),
+                  matchId: match.matchId,
                 ),
               ),
             ],
@@ -410,6 +468,18 @@ class _LiveScoreboardCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  LiveMatchLineupPlayer? _featuredPlayer(List<LiveMatchLineupPlayer> players) {
+    for (final LiveMatchLineupPlayer player in players) {
+      if (player.captain) {
+        return player;
+      }
+    }
+    if (players.isEmpty) {
+      return null;
+    }
+    return players.first;
   }
 }
 
@@ -445,18 +515,33 @@ class _TeamScore extends StatelessWidget {
     required this.team,
     required this.score,
     required this.alignRight,
+    required this.featuredPlayer,
+    required this.matchId,
   });
 
   final String team;
   final int score;
   final bool alignRight;
+  final LiveMatchLineupPlayer? featuredPlayer;
+  final String? matchId;
 
   @override
   Widget build(BuildContext context) {
+    final avatar = featuredPlayer == null
+        ? null
+        : AvatarMapper.fromLiveLineupPlayer(
+            featuredPlayer!,
+            teamName: team,
+            matchId: matchId,
+          );
     return Column(
       crossAxisAlignment:
           alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: <Widget>[
+        if (avatar != null) ...<Widget>[
+          MatchHudAvatar(avatar: avatar),
+          const SizedBox(height: 8),
+        ],
         Text(
           team,
           style: Theme.of(context).textTheme.titleMedium,
@@ -792,13 +877,21 @@ class _LineupsView extends StatelessWidget {
           Text(match.homeTeam, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
           ...match.homeLineup.map((LiveMatchLineupPlayer player) {
-            return _LineupTile(player: player);
+            return _LineupTile(
+              player: player,
+              teamName: match.homeTeam,
+              matchId: match.matchId,
+            );
           }),
           const SizedBox(height: 16),
           Text(match.awayTeam, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
           ...match.awayLineup.map((LiveMatchLineupPlayer player) {
-            return _LineupTile(player: player);
+            return _LineupTile(
+              player: player,
+              teamName: match.awayTeam,
+              matchId: match.matchId,
+            );
           }),
         ],
       ),
@@ -807,12 +900,23 @@ class _LineupsView extends StatelessWidget {
 }
 
 class _LineupTile extends StatelessWidget {
-  const _LineupTile({required this.player});
+  const _LineupTile({
+    required this.player,
+    required this.teamName,
+    required this.matchId,
+  });
 
   final LiveMatchLineupPlayer player;
+  final String teamName;
+  final String? matchId;
 
   @override
   Widget build(BuildContext context) {
+    final avatar = AvatarMapper.fromLiveLineupPlayer(
+      player,
+      teamName: teamName,
+      matchId: matchId,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -822,6 +926,8 @@ class _LineupTile extends StatelessWidget {
             child: Text(player.position,
                 style: Theme.of(context).textTheme.bodySmall),
           ),
+          SquadAvatarBadge(avatar: avatar, size: 32),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               player.captain ? '${player.name} (C)' : player.name,

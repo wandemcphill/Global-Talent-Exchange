@@ -5,12 +5,14 @@ import '../features/app_routes/gte_route_data.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../data/gte_exchange_models.dart';
 import '../providers/gte_exchange_controller.dart';
+import '../services/avatar_mapper.dart';
 import '../widgets/gte_formatters.dart';
 import '../widgets/gte_metric_chip.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_sync_status_card.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
+import '../widgets/market/player_market_avatar.dart';
 import '../widgets/gtex_branding.dart';
 
 class GteMarketPlayersScreen extends StatefulWidget {
@@ -636,6 +638,7 @@ class _PlayerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color movementColor =
         player.isRising ? GteShellTheme.positive : GteShellTheme.negative;
+    final avatar = AvatarMapper.fromMarketListItem(player);
     final String demandLabel = player.marketInterestScore >= 80
         ? 'HEAVY FLOW'
         : player.marketInterestScore >= 55
@@ -651,6 +654,8 @@ class _PlayerCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
+              PlayerMarketAvatar(avatar: avatar),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

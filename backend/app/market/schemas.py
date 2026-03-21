@@ -12,6 +12,7 @@ from app.market.models import (
     TradeIntentDirection,
     TradeIntentStatus,
 )
+from app.schemas.avatar import PlayerAvatarView
 
 
 class ListingCreate(BaseModel):
@@ -125,6 +126,7 @@ class MarketPlayerListItemView(BaseModel):
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    avatar: PlayerAvatarView
 
 
 class MarketPlayerListView(BaseModel):
@@ -158,6 +160,7 @@ class MarketPlayerIdentityView(BaseModel):
     current_competition_id: str | None
     current_competition_name: str | None
     image_url: str | None
+    avatar: PlayerAvatarView
 
 
 class MarketPlayerMarketProfileView(BaseModel):

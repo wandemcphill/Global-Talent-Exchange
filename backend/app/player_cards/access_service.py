@@ -25,6 +25,8 @@ from app.player_cards.service import (
     PlayerCardPermissionError,
     PlayerCardValidationError,
 )
+from app.players.read_models import PlayerSummaryReadModel
+from app.services.avatar_service import AvatarService
 from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
@@ -52,6 +54,7 @@ class StarterRentalError(PlayerCardMarketError):
 class CardLoanService:
     session: Session
     wallet_service: WalletService = field(default_factory=WalletService)
+    avatar_service: AvatarService = field(default_factory=AvatarService)
 
     def list_listings(
         self,
@@ -329,11 +332,17 @@ class CardLoanService:
             raise PlayerCardValidationError("This loan cannot be used in the requested squad scope.")
 
     def _listing_payload(self, listing: CardLoanListing, card: PlayerCard, tier: PlayerCardTier, player: Player) -> dict[str, Any]:
+        summary = self.session.get(PlayerSummaryReadModel, player.id)
+        summary_payload = summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else None
         return {
             "loan_listing_id": listing.id,
             "player_card_id": card.id,
             "player_id": player.id,
             "player_name": player.full_name,
+            "avatar": self.avatar_service.build_from_player(
+                player,
+                summary_payload=summary_payload,
+            ).model_dump(),
             "position": player.position,
             "tier_code": tier.code,
             "tier_name": tier.name,

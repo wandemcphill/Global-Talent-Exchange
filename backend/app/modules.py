@@ -20,6 +20,7 @@ from app.routes.competitions import router as competitions_router
 from app.routes.admin_referrals import router as admin_referrals_router
 from app.routes.creators import router as creators_router
 from app.routes.referrals import router as referrals_router
+from app.routes.match_viewer import router as match_viewer_router
 from app.routes.admin_clubs import router as admin_clubs_router
 from app.routes.admin_club_ops import router as admin_club_ops_router
 from app.routes.clubs import router as canonical_clubs_router
@@ -268,6 +269,7 @@ DOMAIN_MODULES = (
     DomainModule(name="world_super_cup", router=_with_api_alias(world_super_cup_router)),
     DomainModule(name="fast_cups", router=_with_api_alias(fast_cups_router)),
     DomainModule(name="match_engine", router=match_engine_router),
+    DomainModule(name="match_viewer", router=_with_api_alias(match_viewer_router)),
     # legacy club_identity routers provide compatibility endpoints while /api/clubs/... remains canonical
     DomainModule(name="club_identity", router=club_identity_router),
     DomainModule(name="club_ops_admin", router=admin_club_ops_router),

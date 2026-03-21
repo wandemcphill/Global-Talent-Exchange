@@ -1,4 +1,5 @@
 import '../../shared/data/gte_feature_support.dart';
+import '../../../models/player_avatar.dart';
 
 class PlayerCardMarketplaceQuery {
   const PlayerCardMarketplaceQuery({
@@ -311,6 +312,7 @@ class PlayerCardMarketplaceListing {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get clubName => stringOrNullValue(raw['club_name']);
   String? get position => stringOrNullValue(raw['position']);
   double? get averageRating =>
@@ -425,6 +427,7 @@ class PlayerCardMarketplaceLoanListing {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get position => stringOrNullValue(raw['position']);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
@@ -493,6 +496,7 @@ class PlayerCardMarketplaceLoanContract {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get clubName => stringOrNullValue(raw['club_name']);
   String? get position => stringOrNullValue(raw['position']);
   double? get averageRating =>
@@ -564,6 +568,7 @@ class PlayerCardMarketplaceSwapListing {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get clubName => stringOrNullValue(raw['club_name']);
   String? get position => stringOrNullValue(raw['position']);
   String get tierCode => stringValue(raw['tier_code']);
@@ -617,6 +622,7 @@ class PlayerCardPlayerSummary {
 
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get position => stringOrNullValue(raw['position']);
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
@@ -639,6 +645,7 @@ class PlayerCardPlayerDetail {
 
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get position => stringOrNullValue(raw['position']);
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
@@ -681,6 +688,7 @@ class PlayerCardHolding {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);
@@ -705,6 +713,7 @@ class PlayerCardListing {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);
   String get editionCode => stringValue(raw['edition_code']);
@@ -730,6 +739,7 @@ class PlayerCardLoanSupportListing {
   String get playerCardId => stringValue(raw['player_card_id']);
   String get playerId => stringValue(raw['player_id']);
   String get playerName => stringValue(raw['player_name']);
+  PlayerAvatar? get avatar => PlayerAvatar.fromJsonOrNull(raw['avatar']);
   String? get position => stringOrNullValue(raw['position']);
   String get tierCode => stringValue(raw['tier_code']);
   String get tierName => stringValue(raw['tier_name']);

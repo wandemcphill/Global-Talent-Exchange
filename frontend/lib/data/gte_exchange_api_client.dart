@@ -218,7 +218,8 @@ class GteExchangeApiClient {
     List<int> bytes, {
     String? contentType,
   }) {
-    return repository.uploadAttachment(filename, bytes, contentType: contentType);
+    return repository.uploadAttachment(filename, bytes,
+        contentType: contentType);
   }
 
   Future<GteAnalyticsEvent> trackAnalyticsEvent(
@@ -417,8 +418,8 @@ class GteExchangeApiClient {
     );
   }
 
-
-  Future<GtePlayerLifecycleSnapshot?> fetchPlayerLifecycleSnapshot(String playerId) async {
+  Future<GtePlayerLifecycleSnapshot?> fetchPlayerLifecycleSnapshot(
+      String playerId) async {
     if (config.mode == GteBackendMode.fixture) {
       return null;
     }
@@ -446,6 +447,13 @@ class GteExchangeApiClient {
     return GteJson.map(
       await _sendPublicGet('/api/match-engine/highlights/$matchKey'),
       label: 'match highlights',
+    );
+  }
+
+  Future<Map<String, Object?>> fetchMatchViewer(String matchKey) async {
+    return GteJson.map(
+      await _sendPublicGet('/api/match-viewer/$matchKey'),
+      label: 'match viewer',
     );
   }
 
