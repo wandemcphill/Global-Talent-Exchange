@@ -729,6 +729,9 @@ class GteExchangeController extends ChangeNotifier {
 
   void _mergeOrder(GteOrderRecord order) {
     _ordersById[order.id] = order;
+    if (order.side != GteOrderSide.sell || !order.canCancel) {
+      _adminBuybackPreviewsByOrderId.remove(order.id);
+    }
     _recentOrderIds
       ..remove(order.id)
       ..insert(0, order.id);
