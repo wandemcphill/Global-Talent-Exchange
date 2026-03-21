@@ -24,6 +24,7 @@ import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
+import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
@@ -67,6 +68,15 @@ class GteNavigationShellScreen extends StatefulWidget {
       _GteNavigationShellScreenState();
 }
 
+const List<GtePrimaryDestination> _primaryLaneDestinations =
+    <GtePrimaryDestination>[
+  GtePrimaryDestination.home,
+  GtePrimaryDestination.competitions,
+  GtePrimaryDestination.market,
+  GtePrimaryDestination.hub,
+  GtePrimaryDestination.club,
+];
+
 Color _routeAccentFor(
   BuildContext context,
   GtePrimaryDestination destination,
@@ -74,10 +84,13 @@ Color _routeAccentFor(
   final tokens = GteShellTheme.tokensOf(context);
   switch (destination) {
     case GtePrimaryDestination.home:
-    case GtePrimaryDestination.market:
       return tokens.accent;
     case GtePrimaryDestination.competitions:
       return tokens.accentArena;
+    case GtePrimaryDestination.market:
+      return tokens.accent;
+    case GtePrimaryDestination.hub:
+      return const Color(0xFF5FE3A1);
     case GtePrimaryDestination.club:
       return tokens.accentClub;
     case GtePrimaryDestination.wallet:
@@ -195,32 +208,50 @@ class _ShellHeaderCopy {
           detail:
               'Home now prioritizes the next best move, then lets quieter signals sit lower in the stack.',
           chips: <String>[
+            'Play distinct',
             'Market distinct',
-            'Arena distinct',
-            'Capital distinct'
-          ],
-        );
-      case GtePrimaryDestination.market:
-        return const _ShellHeaderCopy(
-          eyebrow: 'TRADING FLOOR',
-          title:
-              'The tape is built for speed, confidence, and clean execution.',
-          detail:
-              'Market screens stay denser and sharper than the arena so price discovery never feels theatrical.',
-          chips: <String>[
-            'Terminal rhythm',
-            'Liquidity cues',
-            'Execution first'
+            'Hub distinct',
+            'Capital utility',
           ],
         );
       case GtePrimaryDestination.competitions:
         return const _ShellHeaderCopy(
-          eyebrow: 'LIVE MATCH CENTER',
+          eyebrow: 'PLAY LANE',
           title:
-              'Fixtures, replays, and broadcast-style storylines stay in one arena lane.',
+              'Fixtures, replays, and match-night momentum sit in one active lane.',
           detail:
-              'This route is designed to feel cinematic and alive, not like the market wearing football boots.',
-          chips: <String>['Live now', 'Up next', 'Replay lane'],
+              'Play stays vivid and live without borrowing the density or pacing of the market.',
+          chips: <String>[
+            'Live now',
+            'Replays',
+            'Season arcs',
+          ],
+        );
+      case GtePrimaryDestination.market:
+        return const _ShellHeaderCopy(
+          eyebrow: 'MARKET LANE',
+          title:
+              'The tape is built for speed, confidence, and clean execution.',
+          detail:
+              'Market screens stay denser and sharper than play so price discovery never feels theatrical.',
+          chips: <String>[
+            'Terminal rhythm',
+            'Liquidity cues',
+            'Execution first',
+          ],
+        );
+      case GtePrimaryDestination.hub:
+        return const _ShellHeaderCopy(
+          eyebrow: 'HUB LANE',
+          title:
+              'Community momentum, creator signal, and referrals stay together.',
+          detail:
+              'Hub keeps growth loops visible without competing with the urgency of play or market flow.',
+          chips: <String>[
+            'Invites',
+            'Milestones',
+            'Creator signal',
+          ],
         );
       case GtePrimaryDestination.club:
         return const _ShellHeaderCopy(
@@ -232,12 +263,16 @@ class _ShellHeaderCopy {
         );
       case GtePrimaryDestination.wallet:
         return _ShellHeaderCopy(
-          eyebrow: 'CAPITAL LAYER',
+          eyebrow: 'CAPITAL ACCESS',
           title: 'Cash, exposure, and ledger trust stay readable at a glance.',
           detail: isAuthenticated
-              ? 'Open orders: $openOrderCount. Wallet surfaces are deliberately quieter than the market and cleaner than the arena.'
+              ? 'Open orders: $openOrderCount. Capital stays one click away without stealing a primary lane.'
               : 'Preview mode keeps the capital room visible while balances and ledger actions stay protected until sign-in.',
-          chips: <String>['Cash vs reserve', 'Holdings view', 'Ledger clarity'],
+          chips: <String>[
+            'Cash vs reserve',
+            'Holdings view',
+            'Ledger clarity',
+          ],
         );
     }
   }
@@ -245,6 +280,7 @@ class _ShellHeaderCopy {
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late GteNavigationRoute _route;
+  late GtePrimaryDestination _selectedPrimaryLane;
   late CompetitionController _competitionController;
   late CreatorController _creatorController;
   late ReferralController _referralController;
@@ -258,6 +294,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   void initState() {
     super.initState();
     _route = widget.initialRoute;
+    _selectedPrimaryLane = _resolvePrimaryLane(_route.primaryDestination);
     widget.controller.addListener(_handleExchangeControllerChanged);
     _competitionUserId = _resolveCompetitionUserId();
     _competitionUserName = _resolveCompetitionUserName();
@@ -290,6 +327,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         widget.initialRoute != _route) {
       setState(() {
         _route = widget.initialRoute;
+        _selectedPrimaryLane =
+            _resolvePrimaryLane(widget.initialRoute.primaryDestination);
       });
     }
   }
@@ -339,28 +378,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                   return Row(
                     children: <Widget>[
                       _buildThemePickerAction(context),
+                      _buildCapitalAction(context),
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
                         child: Center(
                           child: Text(widget.controller.session!.user.username),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: IconButton(
-                          tooltip: 'Creator community',
-                          onPressed: () {
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder: (BuildContext context) =>
-                                    ReferralHubScreen(
-                                  referralController: _referralController,
-                                  creatorController: _creatorController,
-                                ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.campaign_outlined),
                         ),
                       ),
                       Padding(
@@ -436,9 +458,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                             if (!mounted) {
                               return;
                             }
-                            setState(() {
-                              _route = const GteNavigationRoute.home();
-                            });
+                            _setRoute(const GteNavigationRoute.home());
                           },
                           child: const Text('Sign out'),
                         ),
@@ -450,6 +470,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     _buildThemePickerAction(context),
+                    _buildCapitalAction(context),
                     Padding(
                       padding: const EdgeInsets.only(right: 16),
                       child: FilledButton(
@@ -514,14 +535,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                           ),
                           onOpenClubSubtab: _openClubSubtab,
                         ),
-                        GteMarketPlayersScreen(
-                          key: const PageStorageKey<String>('market-screen'),
-                          controller: widget.controller,
-                          onOpenPlayer: _openPlayer,
-                          onOpenLogin: () => _openLogin(
-                            targetRoute: const GteNavigationRoute.market(),
-                          ),
-                        ),
                         GteCompetitionsHubScreen(
                           key: const PageStorageKey<String>('competitions-hub'),
                           controller: _competitionController,
@@ -536,6 +549,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                             ),
                           ),
                         ),
+                        GteMarketPlayersScreen(
+                          key: const PageStorageKey<String>('market-screen'),
+                          controller: widget.controller,
+                          onOpenPlayer: _openPlayer,
+                          onOpenLogin: () => _openLogin(
+                            targetRoute: const GteNavigationRoute.market(),
+                          ),
+                        ),
+                        _buildHubDestination(),
                         ClubHubScreen(
                           key: ValueKey<String>(
                               'club-${_clubInitialTab.id}-$_clubHostSeed'),
@@ -581,13 +603,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             ],
           ),
           child: NavigationBar(
-            selectedIndex: GtePrimaryDestination.values.indexOf(
-              _route.primaryDestination,
-            ),
+            selectedIndex:
+                _primaryLaneDestinations.indexOf(_selectedPrimaryLane),
             onDestinationSelected: (int index) {
-              _openPrimaryDestination(GtePrimaryDestination.values[index]);
+              _openPrimaryDestination(_primaryLaneDestinations[index]);
             },
-            destinations: GtePrimaryDestination.values
+            destinations: _primaryLaneDestinations
                 .map(
                   (GtePrimaryDestination destination) => NavigationDestination(
                     icon: Icon(destination.icon),
@@ -657,22 +678,55 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
-  void _openPrimaryDestination(GtePrimaryDestination destination) {
+  Widget _buildHubDestination() {
+    if (!widget.controller.isAuthenticated) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: GteStatePanel(
+          eyebrow: 'HUB ACCESS',
+          title: 'Sign in to open Hub',
+          message:
+              'Hub keeps creator invites, referral milestones, and community momentum in one lane. Sign in to load the live data behind it.',
+          icon: Icons.groups_outlined,
+          accentColor: const Color(0xFF5FE3A1),
+          actionLabel: 'Sign in',
+          onAction: () =>
+              _openLogin(targetRoute: const GteNavigationRoute.hub()),
+        ),
+      );
+    }
+
+    return ReferralHubScreen(
+      key: const PageStorageKey<String>('hub-screen'),
+      referralController: _referralController,
+      creatorController: _creatorController,
+    );
+  }
+
+  GtePrimaryDestination _resolvePrimaryLane(GtePrimaryDestination destination) {
+    return _primaryLaneDestinations.contains(destination)
+        ? destination
+        : GtePrimaryDestination.home;
+  }
+
+  void _setRoute(GteNavigationRoute route) {
     setState(() {
-      _route = _route.withPrimaryDestination(destination);
+      _route = route;
+      _selectedPrimaryLane = _resolvePrimaryLane(route.primaryDestination);
     });
     widget.onRouteChanged?.call(_route);
-    if (destination == GtePrimaryDestination.wallet &&
+    if (route.primaryDestination == GtePrimaryDestination.wallet &&
         widget.controller.isAuthenticated) {
       widget.controller.refreshAccount();
     }
   }
 
+  void _openPrimaryDestination(GtePrimaryDestination destination) {
+    _setRoute(_route.withPrimaryDestination(destination));
+  }
+
   void _openCompetitionDestination(CompetitionHubDestination destination) {
-    setState(() {
-      _route = _route.withCompetitionDestination(destination);
-    });
-    widget.onRouteChanged?.call(_route);
+    _setRoute(_route.withCompetitionDestination(destination));
   }
 
   void _openClubSubtab(ClubNavigationTab tab) {
@@ -680,6 +734,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       _clubInitialTab = tab;
       _clubHostSeed += 1;
       _route = const GteNavigationRoute.club();
+      _selectedPrimaryLane = GtePrimaryDestination.club;
     });
     widget.onRouteChanged?.call(_route);
   }
@@ -711,10 +766,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       return;
     }
     if (targetRoute != null) {
-      setState(() {
-        _route = targetRoute;
-      });
-      widget.onRouteChanged?.call(_route);
+      _setRoute(targetRoute);
     }
   }
 
@@ -752,12 +804,42 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
+  Widget _buildCapitalAction(BuildContext context) {
+    final bool isActive =
+        _route.primaryDestination == GtePrimaryDestination.wallet;
+    final Color accent = _routeAccentFor(context, GtePrimaryDestination.wallet);
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: IconButton(
+        tooltip: 'Capital',
+        onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
+        icon: Icon(
+          isActive
+              ? GtePrimaryDestination.wallet.selectedIcon
+              : GtePrimaryDestination.wallet.icon,
+          color: isActive ? accent : null,
+        ),
+      ),
+    );
+  }
+
   GteSyncStatusCard _buildModeSyncCard(BuildContext context) {
     final Color accent = _routeAccentFor(context, _route.primaryDestination);
     switch (_route.primaryDestination) {
+      case GtePrimaryDestination.competitions:
+        return GteSyncStatusCard(
+          title: 'Play lane',
+          status: _competitionController.discoveryError == null
+              ? 'Fixtures, brackets, and replay narratives are synced.'
+              : 'Play feed degraded. Showing the latest competition snapshot.',
+          syncedAt: _competitionController.discoverySyncedAt,
+          accent: accent,
+          isRefreshing: _competitionController.isLoadingDiscovery,
+          onRefresh: _competitionController.loadDiscovery,
+        );
       case GtePrimaryDestination.market:
         return GteSyncStatusCard(
-          title: 'Trading operations',
+          title: 'Market lane',
           status: widget.controller.marketError == null
               ? 'Quotes, order rails, and price tape are ready.'
               : 'Market feed degraded. Last good tape is still visible.',
@@ -766,16 +848,22 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           isRefreshing: widget.controller.isLoadingMarket,
           onRefresh: () => widget.controller.loadMarket(reset: true),
         );
-      case GtePrimaryDestination.competitions:
+      case GtePrimaryDestination.hub:
         return GteSyncStatusCard(
-          title: 'Live match center',
-          status: _competitionController.discoveryError == null
-              ? 'Fixtures, brackets, and replay narratives are synced.'
-              : 'Arena feed degraded. Showing the latest competition snapshot.',
-          syncedAt: _competitionController.discoverySyncedAt,
+          title: 'Hub lane',
+          status: widget.controller.isAuthenticated
+              ? 'Referral loops and creator growth signals are ready.'
+              : 'Hub preview is visible, but live community data opens after sign-in.',
+          syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
-          isRefreshing: _competitionController.isLoadingDiscovery,
-          onRefresh: _competitionController.loadDiscovery,
+          isRefreshing:
+              _referralController.isLoading || _creatorController.isLoading,
+          onRefresh: widget.controller.isAuthenticated
+              ? () {
+                  _referralController.load();
+                  _creatorController.load();
+                }
+              : null,
         );
       case GtePrimaryDestination.club:
         return GteSyncStatusCard(
@@ -790,10 +878,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(
-          title: 'Capital layer',
+          title: 'Capital access',
           status: widget.controller.isAuthenticated
               ? 'Balances, holdings, and ledgers are being protected and reconciled.'
-              : 'Wallet is in preview mode. Sign in to unlock funding and execution.',
+              : 'Capital is in preview mode. Sign in to unlock funding and execution.',
           syncedAt: widget.controller.portfolioSyncedAt ??
               widget.controller.ordersSyncedAt,
           accent: accent,
@@ -807,7 +895,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         return GteSyncStatusCard(
           title: 'Premium command deck',
           status:
-              'Every major GTEX surface stays visually distinct while sharing one premium shell.',
+              'Every GTEX lane stays visually distinct while sharing one premium shell.',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
           isRefreshing: widget.controller.isBootstrapping,

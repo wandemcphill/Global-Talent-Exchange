@@ -3,8 +3,9 @@ import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_d
 
 enum GtePrimaryDestination {
   home,
-  market,
   competitions,
+  market,
+  hub,
   club,
   wallet,
 }
@@ -14,14 +15,16 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return 'Home';
-      case GtePrimaryDestination.market:
-        return 'Trade';
       case GtePrimaryDestination.competitions:
-        return 'Arena';
+        return 'Play';
+      case GtePrimaryDestination.market:
+        return 'Market';
+      case GtePrimaryDestination.hub:
+        return 'Hub';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
-        return 'Wallet';
+        return 'Capital';
     }
   }
 
@@ -29,14 +32,16 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return 'home';
+      case GtePrimaryDestination.competitions:
+        return 'play';
       case GtePrimaryDestination.market:
         return 'market';
-      case GtePrimaryDestination.competitions:
-        return 'competitions';
+      case GtePrimaryDestination.hub:
+        return 'hub';
       case GtePrimaryDestination.club:
         return 'club';
       case GtePrimaryDestination.wallet:
-        return 'wallet';
+        return 'capital';
     }
   }
 
@@ -46,10 +51,12 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return Icons.home_outlined;
+      case GtePrimaryDestination.competitions:
+        return Icons.play_circle_outline;
       case GtePrimaryDestination.market:
         return Icons.show_chart_outlined;
-      case GtePrimaryDestination.competitions:
-        return Icons.emoji_events_outlined;
+      case GtePrimaryDestination.hub:
+        return Icons.groups_outlined;
       case GtePrimaryDestination.club:
         return Icons.shield_outlined;
       case GtePrimaryDestination.wallet:
@@ -57,16 +64,16 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     }
   }
 
-
-
   Color get accentColor {
     switch (this) {
       case GtePrimaryDestination.home:
         return const Color(0xFF72F0D8);
-      case GtePrimaryDestination.market:
-        return const Color(0xFF72F0D8);
       case GtePrimaryDestination.competitions:
         return const Color(0xFFB26DFF);
+      case GtePrimaryDestination.market:
+        return const Color(0xFF72F0D8);
+      case GtePrimaryDestination.hub:
+        return const Color(0xFF5FE3A1);
       case GtePrimaryDestination.club:
         return const Color(0xFF85B8FF);
       case GtePrimaryDestination.wallet:
@@ -78,10 +85,12 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return Icons.home;
+      case GtePrimaryDestination.competitions:
+        return Icons.play_circle;
       case GtePrimaryDestination.market:
         return Icons.show_chart;
-      case GtePrimaryDestination.competitions:
-        return Icons.emoji_events;
+      case GtePrimaryDestination.hub:
+        return Icons.groups;
       case GtePrimaryDestination.club:
         return Icons.shield;
       case GtePrimaryDestination.wallet:
@@ -109,6 +118,9 @@ class GteNavigationRoute {
           competitionDestination: destination,
         );
 
+  const GteNavigationRoute.hub()
+      : this._(primaryDestination: GtePrimaryDestination.hub);
+
   const GteNavigationRoute.club()
       : this._(primaryDestination: GtePrimaryDestination.club);
 
@@ -126,7 +138,7 @@ class GteNavigationRoute {
 
   String get path {
     if (isCompetitions) {
-      return '/app/competitions/${effectiveCompetitionDestination.pathSegment}';
+      return '/app/play/${effectiveCompetitionDestination.pathSegment}';
     }
     return primaryDestination.routePath;
   }
@@ -135,12 +147,14 @@ class GteNavigationRoute {
     switch (destination) {
       case GtePrimaryDestination.home:
         return const GteNavigationRoute.home();
-      case GtePrimaryDestination.market:
-        return const GteNavigationRoute.market();
       case GtePrimaryDestination.competitions:
         return GteNavigationRoute.competitions(
           destination: effectiveCompetitionDestination,
         );
+      case GtePrimaryDestination.market:
+        return const GteNavigationRoute.market();
+      case GtePrimaryDestination.hub:
+        return const GteNavigationRoute.hub();
       case GtePrimaryDestination.club:
         return const GteNavigationRoute.club();
       case GtePrimaryDestination.wallet:
@@ -172,24 +186,30 @@ class GteNavigationRoute {
       return const GteNavigationRoute.home();
     }
 
-    final List<String> normalizedSegments = segments.isNotEmpty && segments.first.toLowerCase() == 'app'
-        ? segments.sublist(1)
-        : segments;
+    final List<String> normalizedSegments =
+        segments.isNotEmpty && segments.first.toLowerCase() == 'app'
+            ? segments.sublist(1)
+            : segments;
     if (normalizedSegments.isEmpty) {
       return const GteNavigationRoute.home();
     }
 
     switch (normalizedSegments.first.toLowerCase()) {
-      case 'market':
-        return const GteNavigationRoute.market();
+      case 'play':
       case 'competitions':
         return GteNavigationRoute.competitions(
           destination: competitionHubDestinationFromPathSegment(
             normalizedSegments.length > 1 ? normalizedSegments[1] : null,
           ),
         );
+      case 'market':
+        return const GteNavigationRoute.market();
+      case 'hub':
+      case 'community':
+        return const GteNavigationRoute.hub();
       case 'club':
         return const GteNavigationRoute.club();
+      case 'capital':
       case 'wallet':
         return const GteNavigationRoute.wallet();
       case 'home':

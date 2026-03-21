@@ -1,6 +1,11 @@
-String gteFormatCredits(double value) {
+﻿String gteFormatCredits(double value) {
   final bool wholeNumber = value == value.roundToDouble();
   return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} cr';
+}
+
+String gteFormatFiat(double value, {String currency = 'NGN'}) {
+  final bool wholeNumber = value == value.roundToDouble();
+  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} $currency';
 }
 
 String gteFormatNullableCredits(double? value) {
@@ -26,6 +31,10 @@ String gteFormatDateTime(DateTime? value) {
   final String hour = utc.hour.toString().padLeft(2, '0');
   final String minute = utc.minute.toString().padLeft(2, '0');
   return '${utc.year}-$month-$day $hour:$minute UTC';
+}
+
+String gteFormatDate(DateTime? value) {
+  return gteFormatDateTime(value);
 }
 
 String gteFormatOrderStatus(String rawStatus) {
