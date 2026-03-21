@@ -128,8 +128,8 @@ class ComponentWeightsPayload(BaseModel):
     @model_validator(mode="after")
     def validate_total_weight(self) -> "ComponentWeightsPayload":
         total = round(self.ftv_weight + self.msv_weight + self.sgv_weight + self.egv_weight, 6)
-        if abs(total - 1.0) > 0.001:
-            raise ValueError("Component weights must sum to 1.0.")
+        if total <= 0 or total > 1.001:
+            raise ValueError("Component weights must sum to more than 0 and no more than 1.0.")
         return self
 
 
@@ -243,8 +243,8 @@ class ValueWeightProfilePayload(BaseModel):
     @model_validator(mode="after")
     def validate_total_weight(self) -> "ValueWeightProfilePayload":
         total = round(self.ftv_weight + self.msv_weight + self.sgv_weight + self.egv_weight, 6)
-        if abs(total - 1.0) > 0.001:
-            raise ValueError("Weight profile components must sum to 1.0.")
+        if total <= 0 or total > 1.001:
+            raise ValueError("Weight profile components must sum to more than 0 and no more than 1.0.")
         return self
 
     def to_domain(self) -> ValueWeightProfile:

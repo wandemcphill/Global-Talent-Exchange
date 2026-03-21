@@ -20,6 +20,7 @@ from .models import (
     ValueBreakdown,
     ValueSnapshot,
 )
+from .pricing_curve import interpolate_gtex_price_from_eur_value
 
 PRICE_RELEVANT_DEMAND_KEYS = ("purchases", "sales", "follows")
 WASH_TRADE_LOOKBACK = timedelta(hours=36)
@@ -37,6 +38,13 @@ MIN_MARKET_GUARD_MULTIPLIER = 0.25
 TOP_HOLDER_SOFT_CAP = 0.25
 TOP_3_HOLDERS_SOFT_CAP = 0.60
 MAX_HOLDER_CONCENTRATION_PENALTY = 0.35
+LIQUIDITY_BAND_UPDATE_CAPS = {
+    "entry": 0.15,
+    "growth": 0.12,
+    "premium": 0.10,
+    "bluechip": 0.07,
+    "marquee": 0.05,
+}
 
 POSITION_BASE_VALUES_EUR = {
     "goalkeeper": 7_500_000.0,
@@ -63,7 +71,7 @@ PROFILE_PRODUCTION_CAPS = {
 def credits_from_real_world_value(real_world_value_eur: float, eur_per_credit: int = 100_000) -> float:
     if real_world_value_eur <= 0:
         return 0.0
-    return round(real_world_value_eur / eur_per_credit, 2)
+    return interpolate_gtex_price_from_eur_value(real_world_value_eur)
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +117,7 @@ class TrendAssessment:
 @dataclass(frozen=True, slots=True)
 class ResolvedWeights:
     code: str
+    base_weight: float
     ftv_weight: float
     msv_weight: float
     sgv_weight: float
@@ -187,6 +196,7 @@ class ValueEngine:
         previous_ftv_credits = payload.previous_ftv_credits if payload.previous_ftv_credits is not None else baseline_credits
         previous_ftv_credits = max(previous_ftv_credits, floor_from_baseline)
         previous_published_credits = self._resolve_previous_published_credits(payload, baseline_credits)
+        band_update_cap_pct = self._resolve_update_cycle_cap(payload.liquidity_band)
 
         trend = self._compute_momentum(payload.historical_values, as_of=payload.as_of)
         anchor_adjustment_pct = self._anchor_adjustment(previous_ftv_credits, baseline_credits)
@@ -204,7 +214,7 @@ class ValueEngine:
             + injury_adjustment_pct
             + momentum_adjustment_pct
         )
-        truth_capped_adjustment_pct = self._clamp(truth_uncapped_adjustment_pct, self.config.daily_movement_cap)
+        truth_capped_adjustment_pct = self._clamp(truth_uncapped_adjustment_pct, band_update_cap_pct)
         truth_movement_pct = truth_capped_adjustment_pct * self.config.smoothing_factor
         football_truth_value_credits = round(
             max(previous_ftv_credits * (1.0 + truth_movement_pct), floor_from_baseline),
@@ -283,7 +293,8 @@ class ValueEngine:
         )
 
         blended_target_credits = round(
-            (football_truth_value_credits * resolved_weights.ftv_weight)
+            (baseline_credits * resolved_weights.base_weight)
+            + (football_truth_value_credits * resolved_weights.ftv_weight)
             + (market_signal_value_credits * resolved_weights.msv_weight)
             + (scouting_signal_value_credits * resolved_weights.sgv_weight)
             + (egame_signal_value_credits * resolved_weights.egv_weight),
@@ -298,7 +309,7 @@ class ValueEngine:
         )
 
         uncapped_adjustment_pct = self._target_delta_pct(previous_published_credits, band_limited_target_credits)
-        capped_adjustment_pct = self._clamp(uncapped_adjustment_pct, self.config.daily_movement_cap)
+        capped_adjustment_pct = self._clamp(uncapped_adjustment_pct, band_update_cap_pct)
         smoothed_adjustment_pct = capped_adjustment_pct * self.config.smoothing_factor
         published_floor_credits = max(market_signal_floor, price_band_floor_credits)
         target_credits = round(
@@ -360,6 +371,7 @@ class ValueEngine:
             config_version=self.config.config_version,
             breakdown=ValueBreakdown(
                 baseline_credits=baseline_credits,
+                base_reference_weight=round(resolved_weights.base_weight, 4),
                 football_truth_value_credits=football_truth_value_credits,
                 market_signal_value_credits=market_signal_value_credits,
                 published_card_value_credits=target_credits,
@@ -383,6 +395,7 @@ class ValueEngine:
                 truth_capped_adjustment_pct=round(truth_capped_adjustment_pct, 4),
                 uncapped_adjustment_pct=round(uncapped_adjustment_pct, 4),
                 capped_adjustment_pct=round(capped_adjustment_pct, 4),
+                band_update_cap_pct=round(band_update_cap_pct, 4),
                 trade_trust_score=round(manipulation_assessment.trade_trust_score, 4),
                 trusted_trade_count=manipulation_assessment.trusted_trade_count,
                 suspicious_trade_count=manipulation_assessment.suspicious_trade_count,
@@ -1013,6 +1026,12 @@ class ValueEngine:
         lookup_key = self._normalize_lookup_key(liquidity_band)
         return self.config.liquidity_band_market_weights.get(lookup_key, self.config.default_liquidity_weight)
 
+    def _resolve_update_cycle_cap(self, liquidity_band: str | None) -> float:
+        if liquidity_band is None:
+            return self.config.daily_movement_cap
+        lookup_key = self._normalize_lookup_key(liquidity_band)
+        return LIQUIDITY_BAND_UPDATE_CAPS.get(lookup_key, self.config.daily_movement_cap)
+
     def _resolve_price_band_limit(self, liquidity_band: str | None):
         lookup_key = self._normalize_lookup_key(liquidity_band) if liquidity_band is not None else "default"
         price_band_lookup = {limit.code: limit for limit in self.config.price_band_limits}
@@ -1040,8 +1059,10 @@ class ValueEngine:
                 best_match = profile
                 best_specificity = specificity
         chosen = best_match or self.config.weight_profiles[0]
+        base_weight = max(1.0 - (chosen.ftv_weight + chosen.msv_weight + chosen.sgv_weight + chosen.egv_weight), 0.0)
         return ResolvedWeights(
             code=chosen.code,
+            base_weight=round(base_weight, 6),
             ftv_weight=chosen.ftv_weight,
             msv_weight=chosen.msv_weight,
             sgv_weight=chosen.sgv_weight,

@@ -110,6 +110,14 @@ def _validate_fraction_sum(name: str, values: Mapping[str, float], *, target: fl
         raise ValueError(f"Config section '{name}' must sum to {target}, got {total}.")
 
 
+def _validate_weight_budget(name: str, values: Mapping[str, float]) -> None:
+    total = round(sum(values.values()), 6)
+    if total <= 0:
+        raise ValueError(f"Config section '{name}' must reserve a positive non-baseline weight budget.")
+    if total > 1.001:
+        raise ValueError(f"Config section '{name}' must sum to 1.0 or less, got {total}.")
+
+
 @dataclass(frozen=True, slots=True)
 class PlayerUniverseWeightingConfig:
     target_player_count: int
@@ -693,7 +701,7 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         raise ValueError("Value engine FTV/MSV blend weights must each be between 0 and 1.")
     if weighting.ftv_weight + weighting.msv_weight <= 0:
         raise ValueError("Value engine FTV/MSV legacy weights must sum to a positive value.")
-    _validate_fraction_sum(
+    _validate_weight_budget(
         "component_weights",
         {
             "ftv_weight": weighting.ftv_weight,
@@ -720,7 +728,7 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
     if len({profile.code for profile in weighting.weight_profiles}) != len(weighting.weight_profiles):
         raise ValueError("Value engine weight profile codes must be unique.")
     for profile in weighting.weight_profiles:
-        _validate_fraction_sum(
+        _validate_weight_budget(
             f"weight_profiles.{profile.code}",
             {
                 "ftv_weight": profile.ftv_weight,

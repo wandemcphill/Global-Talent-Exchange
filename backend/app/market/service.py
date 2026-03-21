@@ -26,6 +26,7 @@ from backend.app.market.repositories import (
 )
 from backend.app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
 from backend.app.pricing.service import MarketPricingService, PricingValidationError
+from backend.app.value_engine.pricing_curve import round_gtex_display_value
 from backend.app.value_engine.scoring import credits_from_real_world_value
 from sqlalchemy.orm import Session
 
@@ -951,15 +952,15 @@ class MarketPlayerQueryService:
                 holder_count=self._coerce_int(breakdown_payload.get("holder_count")),
                 top_holder_share_pct=self._coerce_float(breakdown_payload.get("top_holder_share_pct")),
                 top_3_holder_share_pct=self._coerce_float(breakdown_payload.get("top_3_holder_share_pct")),
-                snapshot_market_price_credits=self._coerce_float(
+                snapshot_market_price_credits=round_gtex_display_value(self._coerce_float(
                     breakdown_payload.get("snapshot_market_price_credits")
-                ),
-                quoted_market_price_credits=self._coerce_float(
+                )),
+                quoted_market_price_credits=round_gtex_display_value(self._coerce_float(
                     breakdown_payload.get("quoted_market_price_credits")
-                ),
-                trusted_trade_price_credits=self._coerce_float(
+                )),
+                trusted_trade_price_credits=round_gtex_display_value(self._coerce_float(
                     breakdown_payload.get("trusted_trade_price_credits")
-                ),
+                )),
                 trade_trust_score=self._coerce_float(breakdown_payload.get("trade_trust_score")),
             ),
             value=MarketPlayerValueProfile(
@@ -1111,14 +1112,20 @@ class MarketPlayerQueryService:
         return MarketPlayerHistoryPoint(
             snapshot_id=snapshot.id,
             as_of=snapshot.as_of,
-            current_value_credits=snapshot.target_credits,
-            previous_value_credits=snapshot.previous_credits,
+            current_value_credits=round_gtex_display_value(snapshot.target_credits) or snapshot.target_credits,
+            previous_value_credits=round_gtex_display_value(snapshot.previous_credits) or snapshot.previous_credits,
             movement_pct=snapshot.movement_pct,
-            football_truth_value_credits=snapshot.football_truth_value_credits,
-            market_signal_value_credits=snapshot.market_signal_value_credits,
-            published_card_value_credits=self._coerce_float(
+            football_truth_value_credits=(
+                round_gtex_display_value(snapshot.football_truth_value_credits)
+                or snapshot.football_truth_value_credits
+            ),
+            market_signal_value_credits=(
+                round_gtex_display_value(snapshot.market_signal_value_credits)
+                or snapshot.market_signal_value_credits
+            ),
+            published_card_value_credits=round_gtex_display_value(self._coerce_float(
                 breakdown_payload.get("published_card_value_credits")
-            ) or snapshot.target_credits,
+            ) or snapshot.target_credits),
             trend_score=global_scouting_index,
             global_scouting_index=global_scouting_index,
             previous_global_scouting_index=self._coerce_float(
@@ -1300,16 +1307,16 @@ class MarketPlayerQueryService:
 
     def _current_value_credits(self, record: MarketPlayerRecord) -> float | None:
         if record.summary is not None:
-            return record.summary.current_value_credits
+            return round_gtex_display_value(record.summary.current_value_credits)
         if record.latest_snapshot is not None:
-            return record.latest_snapshot.target_credits
+            return round_gtex_display_value(record.latest_snapshot.target_credits)
         return None
 
     def _previous_value_credits(self, record: MarketPlayerRecord) -> float | None:
         if record.summary is not None:
-            return record.summary.previous_value_credits
+            return round_gtex_display_value(record.summary.previous_value_credits)
         if record.latest_snapshot is not None:
-            return record.latest_snapshot.previous_credits
+            return round_gtex_display_value(record.latest_snapshot.previous_credits)
         return None
 
     def _movement_pct(self, record: MarketPlayerRecord) -> float | None:
@@ -1321,29 +1328,29 @@ class MarketPlayerQueryService:
 
     def _football_truth_value_credits(self, record: MarketPlayerRecord) -> float | None:
         summary_payload = self._summary_payload(record)
-        value = self._coerce_float(summary_payload.get("football_truth_value_credits"))
+        value = round_gtex_display_value(self._coerce_float(summary_payload.get("football_truth_value_credits")))
         if value is not None:
             return value
         if record.latest_snapshot is not None:
-            return record.latest_snapshot.football_truth_value_credits
+            return round_gtex_display_value(record.latest_snapshot.football_truth_value_credits)
         return None
 
     def _market_signal_value_credits(self, record: MarketPlayerRecord) -> float | None:
         summary_payload = self._summary_payload(record)
-        value = self._coerce_float(summary_payload.get("market_signal_value_credits"))
+        value = round_gtex_display_value(self._coerce_float(summary_payload.get("market_signal_value_credits")))
         if value is not None:
             return value
         if record.latest_snapshot is not None:
-            return record.latest_snapshot.market_signal_value_credits
+            return round_gtex_display_value(record.latest_snapshot.market_signal_value_credits)
         return None
 
     def _published_card_value_credits(self, record: MarketPlayerRecord) -> float | None:
         summary_payload = self._summary_payload(record)
-        value = self._coerce_float(summary_payload.get("published_card_value_credits"))
+        value = round_gtex_display_value(self._coerce_float(summary_payload.get("published_card_value_credits")))
         if value is not None:
             return value
         breakdown_payload = self._breakdown_payload(record)
-        breakdown_value = self._coerce_float(breakdown_payload.get("published_card_value_credits"))
+        breakdown_value = round_gtex_display_value(self._coerce_float(breakdown_payload.get("published_card_value_credits")))
         if breakdown_value is not None:
             return breakdown_value
         return self._current_value_credits(record)
@@ -1391,11 +1398,11 @@ class MarketPlayerQueryService:
     def _reference_price(self, record: MarketPlayerRecord) -> float | None:
         published_value = self._published_card_value_credits(record)
         if published_value is not None and published_value > 0:
-            return round(published_value, 2)
+            return round_gtex_display_value(published_value)
         if record.summary is not None and record.summary.current_value_credits > 0:
-            return round(float(record.summary.current_value_credits), 2)
+            return round_gtex_display_value(float(record.summary.current_value_credits))
         if record.player.market_value_eur is not None and record.player.market_value_eur > 0:
-            return round(credits_from_real_world_value(record.player.market_value_eur), 2)
+            return round_gtex_display_value(credits_from_real_world_value(record.player.market_value_eur))
         return None
 
     def _pricing_symbol(self, record: MarketPlayerRecord) -> str | None:
