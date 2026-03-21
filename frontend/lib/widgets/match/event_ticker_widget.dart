@@ -31,14 +31,30 @@ class EventTickerWidget extends StatelessWidget {
           Icon(activeEvent.icon, color: accent, size: 18),
           const SizedBox(width: 10),
           Flexible(
-            child: Text(
-              activeEvent.bannerText,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  activeEvent.bannerText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                if (activeEvent.isDataUnavailable) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Viewer placeholder',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white70,
+                          letterSpacing: 0.3,
+                        ),
                   ),
+                ],
+              ],
             ),
           ),
         ],

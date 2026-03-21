@@ -106,6 +106,7 @@ class MatchViewerEventView(CommonSchema):
     commentary: str
     emphasis_level: int = Field(default=1, ge=1, le=3)
     highlighted_player_ids: list[str] = Field(default_factory=list)
+    flags: list[str] = Field(default_factory=list)
 
 
 class MatchTimelineFrameView(CommonSchema):
@@ -116,6 +117,7 @@ class MatchTimelineFrameView(CommonSchema):
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
     home_attacks_right: bool
+    possession_side: MatchViewerSide = MatchViewerSide.HOME
     active_event_id: str | None = None
     event_banner: str | None = None
     players: list[MatchViewerPlayerFrameView] = Field(default_factory=list)
@@ -132,4 +134,3 @@ class MatchViewStateView(CommonSchema):
     away_team: MatchViewerTeamView
     events: list[MatchViewerEventView] = Field(default_factory=list)
     frames: list[MatchTimelineFrameView] = Field(default_factory=list)
-

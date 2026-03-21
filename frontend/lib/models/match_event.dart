@@ -69,6 +69,7 @@ class MatchEvent {
     required this.commentary,
     required this.emphasisLevel,
     required this.highlightedPlayerIds,
+    required this.flags,
     this.teamId,
     this.teamName,
     this.primaryPlayerId,
@@ -96,6 +97,7 @@ class MatchEvent {
   final String commentary;
   final int emphasisLevel;
   final List<String> highlightedPlayerIds;
+  final List<String> flags;
 
   bool get isMajor =>
       type == MatchViewerEventType.goal ||
@@ -103,6 +105,8 @@ class MatchEvent {
       type == MatchViewerEventType.miss ||
       type == MatchViewerEventType.redCard ||
       type == MatchViewerEventType.offside;
+
+  bool get isDataUnavailable => flags.contains('data_unavailable');
 
   IconData get icon {
     switch (type) {
@@ -147,6 +151,10 @@ class MatchEvent {
           const <Object?>[],
       label: 'highlighted player ids',
     );
+    final List<Object?> rawFlags = GteJson.list(
+      GteJson.value(json, <String>['flags']) ?? const <Object?>[],
+      label: 'match event flags',
+    );
     return MatchEvent(
       id: GteJson.string(json, <String>['event_id', 'eventId']),
       sequence: GteJson.integer(json, <String>['sequence']),
@@ -187,6 +195,10 @@ class MatchEvent {
         fallback: 1,
       ),
       highlightedPlayerIds: rawHighlighted
+          .map((Object? value) => value.toString())
+          .where((String value) => value.trim().isNotEmpty)
+          .toList(growable: false),
+      flags: rawFlags
           .map((Object? value) => value.toString())
           .where((String value) => value.trim().isNotEmpty)
           .toList(growable: false),

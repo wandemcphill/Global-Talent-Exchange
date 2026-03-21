@@ -42,6 +42,7 @@ from app.player_cards.router import router as player_cards_router
 from app.players.router import router as players_router
 from app.policies.router import admin_router as admin_policies_router, router as policies_router
 from app.routes.player_lifecycle import router as player_lifecycle_router
+from app.routes.player_agency import router as player_agency_router
 from app.portfolios.router import router as portfolios_router
 from app.realtime.router import router as realtime_router
 from app.reward_engine.router import admin_router as reward_engine_admin_router, router as reward_engine_router
@@ -246,6 +247,7 @@ DOMAIN_MODULES = (
     DomainModule(name="admin_analytics", router=analytics_admin_router),
     DomainModule(name="players", router=players_router),
     DomainModule(name="player_lifecycle", router=player_lifecycle_router),
+    DomainModule(name="player_agency", router=player_agency_router),
     DomainModule(name="football_events", router=football_events_router, on_startup=(_seed_football_event_defaults,)),
     DomainModule(name="football_events_admin", router=football_events_admin_router),
     DomainModule(name="clubs", router=clubs_router),

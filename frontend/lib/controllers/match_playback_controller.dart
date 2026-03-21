@@ -5,6 +5,10 @@ import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 
 class MatchPlaybackController extends ChangeNotifier {
+  static const int maxFrameGapMs = 2200;
+  static const Duration _maxInterpolationGap =
+      Duration(milliseconds: maxFrameGapMs);
+
   MatchPlaybackController({
     required TickerProvider vsync,
     required this.viewState,
@@ -42,8 +46,11 @@ class MatchPlaybackController extends ChangeNotifier {
 
   double get interpolationT => _framePair.$3;
 
-  MatchTimelineFrame get displayFrame =>
-      leftFrame.interpolate(rightFrame, interpolationT);
+  MatchTimelineFrame get displayFrame => leftFrame.interpolate(
+        rightFrame,
+        interpolationT,
+        maxGap: _maxInterpolationGap,
+      );
 
   MatchEvent? get activeEvent {
     final MatchEvent? exact = viewState.eventById(rightFrame.activeEventId);

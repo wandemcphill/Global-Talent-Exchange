@@ -188,6 +188,7 @@ class MatchViewerMapper {
         commentary: 'Kickoff',
         emphasisLevel: 1,
         highlightedPlayerIds: <String>[],
+        flags: <String>[],
       ),
     ];
 
@@ -227,6 +228,7 @@ class MatchViewerMapper {
           commentary: item.detail,
           emphasisLevel: _emphasisForType(type),
           highlightedPlayerIds: const <String>[],
+          flags: const <String>[],
         ),
       );
     }
@@ -253,6 +255,7 @@ class MatchViewerMapper {
           commentary: 'Halftime',
           emphasisLevel: 1,
           highlightedPlayerIds: const <String>[],
+          flags: const <String>[],
         ),
       );
     }
@@ -278,9 +281,113 @@ class MatchViewerMapper {
         commentary: snapshot.isFinal ? 'Fulltime' : 'Live match',
         emphasisLevel: 1,
         highlightedPlayerIds: const <String>[],
+        flags: const <String>[],
       ),
     );
-    return events;
+    return _normalizeFallbackEvents(
+      _ensureFallbackOffsidePlaceholder(
+        events: events,
+        snapshot: snapshot,
+        durationSeconds: durationSeconds,
+      ),
+    );
+  }
+
+  static List<MatchEvent> _ensureFallbackOffsidePlaceholder({
+    required List<MatchEvent> events,
+    required LiveMatchSnapshot snapshot,
+    required int durationSeconds,
+  }) {
+    if (events.any(
+        (MatchEvent event) => event.type == MatchViewerEventType.offside)) {
+      return events;
+    }
+
+    final int placeholderMinute =
+        snapshot.minute <= 6 ? max(1, snapshot.minute) : 6;
+    final String teamId =
+        snapshot.homeScore > snapshot.awayScore ? 'away' : 'home';
+    final String teamName =
+        teamId == 'home' ? snapshot.homeTeam : snapshot.awayTeam;
+    int homeScore = 0;
+    int awayScore = 0;
+    for (final MatchEvent event in events) {
+      if (event.minute > placeholderMinute) {
+        break;
+      }
+      homeScore = event.homeScore;
+      awayScore = event.awayScore;
+    }
+
+    return <MatchEvent>[
+      ...events,
+      MatchEvent(
+        id: 'offside-placeholder',
+        sequence: events.length,
+        type: MatchViewerEventType.offside,
+        minute: placeholderMinute,
+        addedTime: 0,
+        clockLabel: '$placeholderMinute\'',
+        timeSeconds: ((placeholderMinute / max(1, snapshot.minute)) *
+                (durationSeconds - 20))
+            .clamp(8, durationSeconds - 24)
+            .toDouble(),
+        teamId: teamId,
+        teamName: teamName,
+        primaryPlayerId: null,
+        primaryPlayerName: null,
+        secondaryPlayerId: null,
+        secondaryPlayerName: null,
+        homeScore: homeScore,
+        awayScore: awayScore,
+        bannerText: 'Offside (data unavailable)',
+        commentary:
+            'Simulation replay does not yet emit offside events. Viewer placeholder inserted to validate the offside path.',
+        emphasisLevel: 2,
+        highlightedPlayerIds: const <String>[],
+        flags: const <String>['data_unavailable'],
+      ),
+    ];
+  }
+
+  static List<MatchEvent> _normalizeFallbackEvents(List<MatchEvent> events) {
+    final List<MatchEvent> ordered = List<MatchEvent>.from(events)
+      ..sort((MatchEvent left, MatchEvent right) {
+        final int timeCompare = left.timeSeconds.compareTo(right.timeSeconds);
+        if (timeCompare != 0) {
+          return timeCompare;
+        }
+        final int minuteCompare = left.minute.compareTo(right.minute);
+        if (minuteCompare != 0) {
+          return minuteCompare;
+        }
+        return left.sequence.compareTo(right.sequence);
+      });
+    return List<MatchEvent>.generate(ordered.length, (int index) {
+      final MatchEvent event = ordered[index];
+      return MatchEvent(
+        id: event.id,
+        sequence: index,
+        type: event.type,
+        minute: event.minute,
+        addedTime: event.addedTime,
+        clockLabel: event.clockLabel,
+        timeSeconds: event.timeSeconds,
+        teamId: event.teamId,
+        teamName: event.teamName,
+        primaryPlayerId: event.primaryPlayerId,
+        primaryPlayerName: event.primaryPlayerName,
+        secondaryPlayerId: event.secondaryPlayerId,
+        secondaryPlayerName: event.secondaryPlayerName,
+        homeScore: event.homeScore,
+        awayScore: event.awayScore,
+        bannerText: event.bannerText,
+        commentary: event.commentary,
+        emphasisLevel: event.emphasisLevel,
+        highlightedPlayerIds: event.highlightedPlayerIds,
+        flags: event.flags,
+      );
+    }, growable: false);
   }
 
   static MatchViewerEventType _viewerTypeFromLiveEvent(LiveMatchEvent item) {
@@ -457,6 +564,11 @@ class MatchViewerMapper {
     MatchEvent? event,
   }) {
     final bool homeAttacksRight = clockMinute < 45;
+    final MatchViewerSide possessionSide = _possessionSideForFrame(
+      event: event,
+      stage: stage,
+      clockMinute: clockMinute,
+    );
     final MatchViewerPoint homeTarget = _eventTarget(
       side: MatchViewerSide.home,
       homeAttacksRight: homeAttacksRight,
@@ -473,6 +585,7 @@ class MatchViewerMapper {
         players: homePlayers,
         homeAttacksRight: homeAttacksRight,
         event: event,
+        possessionSide: possessionSide,
         target: homeTarget,
         stage: stage,
       ),
@@ -481,13 +594,16 @@ class MatchViewerMapper {
         players: awayPlayers,
         homeAttacksRight: !homeAttacksRight,
         event: event,
+        possessionSide: possessionSide,
         target: awayTarget,
         stage: stage,
       ),
     ];
+    final List<MatchViewerPlayerFrame> resolvedPlayers =
+        _resolveFallbackCollisions(players);
     final MatchViewerBallFrame ball = _ballForFrame(
       event: event,
-      players: players,
+      players: resolvedPlayers,
       phase: phase,
       homeAttacksRight: homeAttacksRight,
       stage: stage,
@@ -500,11 +616,25 @@ class MatchViewerMapper {
       homeScore: homeScore,
       awayScore: awayScore,
       homeAttacksRight: homeAttacksRight,
+      possessionSide: possessionSide,
       activeEventId: stage == 'pre' ? null : event?.id,
       eventBanner: stage == 'pre' ? null : event?.bannerText,
-      players: players,
+      players: resolvedPlayers,
       ball: ball,
     );
+  }
+
+  static MatchViewerSide _possessionSideForFrame({
+    required MatchEvent? event,
+    required String stage,
+    required double clockMinute,
+  }) {
+    if (stage == 'reset') {
+      return clockMinute >= 45 ? MatchViewerSide.away : MatchViewerSide.home;
+    }
+    return event?.teamId == 'away'
+        ? MatchViewerSide.away
+        : MatchViewerSide.home;
   }
 
   static MatchViewerPhase _phaseForEvent(MatchViewerEventType type) {
@@ -527,6 +657,7 @@ class MatchViewerMapper {
     required String teamId,
     required List<_FallbackPlayer> players,
     required bool homeAttacksRight,
+    required MatchViewerSide possessionSide,
     required MatchViewerPoint target,
     required String stage,
     MatchEvent? event,
@@ -538,6 +669,8 @@ class MatchViewerMapper {
       final MatchViewerPoint anchor = anchors[index];
       MatchViewerPoint position = anchor;
       MatchViewerPlayerState state = MatchViewerPlayerState.idle;
+      final bool ownsPossession = player.side == possessionSide;
+      final double direction = homeAttacksRight ? 1 : -1;
       if (stage == 'reset' && index > 0) {
         position = MatchViewerPoint.lerp(
           anchor,
@@ -548,7 +681,21 @@ class MatchViewerMapper {
           player.role == MatchViewerRole.forward ? 0.45 : 0.18,
         );
         state = MatchViewerPlayerState.moving;
-      } else if (event != null && event.teamId == teamId) {
+      } else {
+        final double shapeShift = player.role == MatchViewerRole.goalkeeper
+            ? 0
+            : ownsPossession
+                ? 2.6
+                : -1.8;
+        position = MatchViewerPoint(
+          x: (anchor.x + (shapeShift * direction)).clamp(0, 100).toDouble(),
+          y: anchor.y,
+        );
+        state = ownsPossession
+            ? MatchViewerPlayerState.moving
+            : MatchViewerPlayerState.defending;
+      }
+      if (event != null && event.teamId == teamId) {
         final double intensity = stage == 'pre'
             ? 0.22
             : stage == 'event'
@@ -596,6 +743,45 @@ class MatchViewerMapper {
         anchorPosition: anchor,
       );
     });
+  }
+
+  static List<MatchViewerPlayerFrame> _resolveFallbackCollisions(
+    List<MatchViewerPlayerFrame> players,
+  ) {
+    final List<MatchViewerPoint> positions = players
+        .map((MatchViewerPlayerFrame player) => player.position)
+        .toList();
+    for (int index = 0; index < players.length; index += 1) {
+      for (int otherIndex = index + 1;
+          otherIndex < players.length;
+          otherIndex += 1) {
+        if (players[index].teamId != players[otherIndex].teamId) {
+          continue;
+        }
+        final double deltaX = positions[otherIndex].x - positions[index].x;
+        final double deltaY = positions[otherIndex].y - positions[index].y;
+        final double distanceSquared = (deltaX * deltaX) + (deltaY * deltaY);
+        if (distanceSquared >= 14) {
+          continue;
+        }
+        final double fraction = _stableFraction(
+          '${players[index].playerId}:${players[otherIndex].playerId}',
+        );
+        final double offsetX = (2.4 * fraction) - 1.2;
+        final double offsetY = (2.4 * (1 - fraction)) - 1.2;
+        positions[index] = MatchViewerPoint(
+          x: (positions[index].x - offsetX).clamp(0, 100).toDouble(),
+          y: (positions[index].y - offsetY).clamp(0, 100).toDouble(),
+        );
+        positions[otherIndex] = MatchViewerPoint(
+          x: (positions[otherIndex].x + offsetX).clamp(0, 100).toDouble(),
+          y: (positions[otherIndex].y + offsetY).clamp(0, 100).toDouble(),
+        );
+      }
+    }
+    return List<MatchViewerPlayerFrame>.generate(players.length, (int index) {
+      return players[index].copyWith(position: positions[index]);
+    }, growable: false);
   }
 
   static MatchViewerBallFrame _ballForFrame({
@@ -719,6 +905,15 @@ class MatchViewerMapper {
       return MatchPlayerLine.midfield;
     }
     return MatchPlayerLine.attack;
+  }
+
+  static double _stableFraction(String seed) {
+    int hash = 2166136261;
+    for (final int codeUnit in seed.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 16777619) & 0x7fffffff;
+    }
+    return hash / 0x7fffffff;
   }
 }
 

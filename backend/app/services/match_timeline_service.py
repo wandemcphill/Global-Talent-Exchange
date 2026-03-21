@@ -236,6 +236,7 @@ class MatchTimelineService:
                     )
                     if player_id is not None
                 ],
+                flags=[],
             ),
             source_type=event.event_type.value,
             team_side=None,
@@ -278,6 +279,7 @@ class MatchTimelineService:
                     for player_id in (event.player_id, event.secondary_player_id)
                     if player_id is not None
                 ],
+                flags=[],
             ),
             source_type=event.event_type,
             team_side=None,
@@ -321,6 +323,7 @@ class MatchTimelineService:
                         commentary="Kickoff",
                         emphasis_level=1,
                         highlighted_player_ids=[],
+                        flags=[],
                     ),
                     source_type="kickoff",
                     team_side=None,
@@ -350,6 +353,7 @@ class MatchTimelineService:
                         commentary="Halftime",
                         emphasis_level=1,
                         highlighted_player_ids=[],
+                        flags=[],
                     ),
                     source_type="halftime",
                     team_side=None,
@@ -378,6 +382,7 @@ class MatchTimelineService:
                         commentary="Fulltime",
                         emphasis_level=1,
                         highlighted_player_ids=[],
+                        flags=[],
                     ),
                     source_type="fulltime",
                     team_side=None,
@@ -598,6 +603,7 @@ class MatchTimelineService:
             home_score=home_score,
             away_score=away_score,
             home_attacks_right=home_attacks_right,
+            possession_side=possession_side,
             active_event_id=active_event.view.event_id if active_event is not None else None,
             event_banner=active_event.view.banner_text if active_event is not None and stage in {"event", "post"} else None,
             players=[MatchViewerPlayerFrameView.model_validate(item) for item in player_payloads],

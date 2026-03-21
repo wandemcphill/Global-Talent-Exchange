@@ -253,6 +253,7 @@ class MatchTimelineFrame {
     required this.homeScore,
     required this.awayScore,
     required this.homeAttacksRight,
+    required this.possessionSide,
     required this.players,
     required this.ball,
     this.activeEventId,
@@ -266,6 +267,7 @@ class MatchTimelineFrame {
   final int homeScore;
   final int awayScore;
   final bool homeAttacksRight;
+  final MatchViewerSide possessionSide;
   final String? activeEventId;
   final String? eventBanner;
   final List<MatchViewerPlayerFrame> players;
@@ -294,6 +296,13 @@ class MatchTimelineFrame {
         <String>['home_attacks_right', 'homeAttacksRight'],
         fallback: true,
       ),
+      possessionSide: matchViewerSideFromString(
+        GteJson.string(
+          json,
+          <String>['possession_side', 'possessionSide'],
+          fallback: 'home',
+        ),
+      ),
       activeEventId: GteJson.stringOrNull(
           json, <String>['active_event_id', 'activeEventId']),
       eventBanner:
@@ -309,8 +318,13 @@ class MatchTimelineFrame {
 
   MatchTimelineFrame interpolate(
     MatchTimelineFrame next,
-    double t,
-  ) {
+    double t, {
+    Duration maxGap = const Duration(milliseconds: 2200),
+  }) {
+    final double gapSeconds = next.timeSeconds - timeSeconds;
+    if (gapSeconds > (maxGap.inMilliseconds / 1000)) {
+      return t < 0.5 ? this : next;
+    }
     if (players.length != next.players.length) {
       return this;
     }
@@ -341,6 +355,7 @@ class MatchTimelineFrame {
       homeScore: homeScore,
       awayScore: awayScore,
       homeAttacksRight: homeAttacksRight,
+      possessionSide: t < 0.5 ? possessionSide : next.possessionSide,
       activeEventId: activeEventId,
       eventBanner: eventBanner,
       players: interpolatedPlayers,

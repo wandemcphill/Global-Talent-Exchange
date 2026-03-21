@@ -377,6 +377,15 @@ class _EventTile extends StatelessWidget {
                         color: Colors.white70,
                       ),
                 ),
+                if (event.isDataUnavailable) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Data unavailable placeholder',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white60,
+                        ),
+                  ),
+                ],
               ],
             ),
           ),

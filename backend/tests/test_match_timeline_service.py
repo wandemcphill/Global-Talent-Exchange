@@ -6,7 +6,7 @@ from app.match_engine.services.match_simulation_service import MatchSimulationSe
 from app.match_engine.simulation.models import MatchEventType, TacticalStyle
 from app.replay_archive.schemas import ReplayArchiveRecord
 from app.services.match_timeline_service import MatchTimelineService
-from app.schemas.match_viewer import MatchViewerEventType
+from app.schemas.match_viewer import MatchViewerEventType, MatchViewerSide
 from backend.tests.match_engine.helpers import build_request, build_team
 
 
@@ -103,7 +103,123 @@ def test_match_timeline_service_surfaces_major_event_types_across_replays() -> N
 
 def test_match_timeline_service_builds_archive_fallback() -> None:
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=27))
-    record = ReplayArchiveRecord.model_validate(
+    record = _build_archive_record(replay_payload, presentation_duration_minutes=4)
+
+    view_state = MatchTimelineService().build_from_archive_record(record)
+
+    assert view_state.source == "replay_archive"
+    assert view_state.home_team.team_name == replay_payload.visual_identity.home_team.team_name
+    assert view_state.away_team.team_name == replay_payload.visual_identity.away_team.team_name
+    assert view_state.frames[-1].home_score == replay_payload.summary.home_score
+    assert view_state.frames[-1].away_score == replay_payload.summary.away_score
+
+
+def test_match_timeline_service_handles_stress_profiles_back_to_back() -> None:
+    simulation_service = MatchSimulationService()
+    timeline_service = MatchTimelineService()
+
+    requests = [
+        build_request(
+            seed=81,
+            home_team=build_team(
+                "home",
+                "North City",
+                86,
+                formation="4-3-3",
+                style=TacticalStyle.ATTACKING,
+                pressing=90,
+                aggression=95,
+                discipline=16,
+            ),
+            away_team=build_team(
+                "away",
+                "South Town",
+                84,
+                formation="3-5-2",
+                style=TacticalStyle.ATTACKING,
+                pressing=88,
+                aggression=93,
+                discipline=18,
+            ),
+        ),
+        build_request(
+            seed=82,
+            home_team=build_team(
+                "home",
+                "North City",
+                80,
+                formation="4-4-2",
+                style=TacticalStyle.BALANCED,
+                pressing=38,
+                aggression=22,
+                discipline=92,
+            ),
+            away_team=build_team(
+                "away",
+                "South Town",
+                79,
+                formation="4-2-3-1",
+                style=TacticalStyle.BALANCED,
+                pressing=35,
+                aggression=24,
+                discipline=94,
+            ),
+        ),
+        *[build_request(seed=seed) for seed in range(83, 89)],
+    ]
+
+    for request in requests:
+        replay_payload = simulation_service.build_replay_payload(request)
+        view_state = timeline_service.build_from_replay_payload(replay_payload)
+
+        assert view_state.frames
+        assert view_state.events
+        assert view_state.frames[-1].home_score == replay_payload.summary.home_score
+        assert view_state.frames[-1].away_score == replay_payload.summary.away_score
+        assert all(frame.possession_side in {MatchViewerSide.HOME, MatchViewerSide.AWAY} for frame in view_state.frames)
+        assert max(len(frame.players) for frame in view_state.frames) <= 22
+
+
+def test_match_timeline_service_builds_long_archive_replay() -> None:
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=91))
+    record = _build_archive_record(
+        replay_payload,
+        presentation_duration_minutes=8,
+        is_final=True,
+    )
+
+    view_state = MatchTimelineService().build_from_archive_record(record)
+
+    assert view_state.duration_seconds == 480
+    assert view_state.frames[-1].time_seconds >= 480
+    assert all(frame.possession_side in {MatchViewerSide.HOME, MatchViewerSide.AWAY} for frame in view_state.frames)
+
+
+def _archive_event_type(event_type: MatchEventType) -> str | None:
+    mapping = {
+        MatchEventType.GOAL: "goals",
+        MatchEventType.PENALTY_SCORED: "penalties",
+        MatchEventType.GOALKEEPER_SAVE: "missed_chances",
+        MatchEventType.DOUBLE_SAVE: "missed_chances",
+        MatchEventType.MISSED_CHANCE: "missed_chances",
+        MatchEventType.MISSED_BIG_CHANCE: "missed_chances",
+        MatchEventType.WOODWORK: "missed_chances",
+        MatchEventType.PENALTY_MISSED: "penalties",
+        MatchEventType.RED_CARD: "red_cards",
+        MatchEventType.YELLOW_CARD: "yellow_cards",
+        MatchEventType.SUBSTITUTION: "substitutions",
+        MatchEventType.INJURY: "injuries",
+    }
+    return mapping.get(event_type)
+
+
+def _build_archive_record(
+    replay_payload,
+    *,
+    presentation_duration_minutes: int,
+    is_final: bool = False,
+) -> ReplayArchiveRecord:
+    return ReplayArchiveRecord.model_validate(
         {
             "replay_id": "replay:match-001",
             "version": 1,
@@ -148,11 +264,11 @@ def test_match_timeline_service_builds_archive_fallback() -> None:
                 "season_id": "season-001",
                 "stage_name": "Regular",
                 "round_number": 1,
-                "is_final": False,
+                "is_final": is_final,
                 "is_cup_match": False,
                 "competition_allows_public": True,
                 "allow_early_round_public": False,
-                "presentation_duration_minutes": 4,
+                "presentation_duration_minutes": presentation_duration_minutes,
                 "replay_visibility": "competition",
                 "resolved_visibility": "competition",
                 "public_metadata_visible": True,
@@ -160,30 +276,3 @@ def test_match_timeline_service_builds_archive_fallback() -> None:
             },
         }
     )
-
-    view_state = MatchTimelineService().build_from_archive_record(record)
-
-    assert view_state.source == "replay_archive"
-    assert view_state.home_team.team_name == replay_payload.visual_identity.home_team.team_name
-    assert view_state.away_team.team_name == replay_payload.visual_identity.away_team.team_name
-    assert view_state.frames[-1].home_score == replay_payload.summary.home_score
-    assert view_state.frames[-1].away_score == replay_payload.summary.away_score
-
-
-def _archive_event_type(event_type: MatchEventType) -> str | None:
-    mapping = {
-        MatchEventType.GOAL: "goals",
-        MatchEventType.PENALTY_SCORED: "penalties",
-        MatchEventType.GOALKEEPER_SAVE: "missed_chances",
-        MatchEventType.DOUBLE_SAVE: "missed_chances",
-        MatchEventType.MISSED_CHANCE: "missed_chances",
-        MatchEventType.MISSED_BIG_CHANCE: "missed_chances",
-        MatchEventType.WOODWORK: "missed_chances",
-        MatchEventType.PENALTY_MISSED: "penalties",
-        MatchEventType.RED_CARD: "red_cards",
-        MatchEventType.YELLOW_CARD: "yellow_cards",
-        MatchEventType.SUBSTITUTION: "substitutions",
-        MatchEventType.INJURY: "injuries",
-    }
-    return mapping.get(event_type)
-
