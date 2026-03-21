@@ -132,7 +132,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Fund wallet')),
+      appBar: AppBar(title: const Text('Top Up Wallet')),
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
@@ -150,7 +150,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                 const GteSurfacePanel(
                   accentColor: GteShellTheme.accentCapital,
                   child: Text(
-                    'Checking deposit access before manual funding opens...',
+                    'Checking top-up access before bank transfer opens...',
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -178,9 +178,9 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        compliance?.requiredPolicyAcceptancesMissing == null
+                        compliance.requiredPolicyAcceptancesMissing <= 0
                             ? 'Complete required policy acceptances to unlock deposits.'
-                            : 'Complete ${compliance!.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
+                            : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
                       ),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
@@ -200,12 +200,12 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const GteStatePanel(
-                  title: 'Deposit requests stay locked',
-                  message:
-                      'Manual bank transfer instructions and exact payment references appear only after compliance review unlocks deposits for this account.',
-                  icon: Icons.lock_outline,
-                ),
+                  const GteStatePanel(
+                    title: 'Top-ups stay locked',
+                    message:
+                        'Manual bank transfer instructions and exact payment references appear only after compliance review unlocks deposits for this account.',
+                    icon: Icons.lock_outline,
+                  ),
               ] else if (!compliancePending && !complianceUnavailable)
                 GteSurfacePanel(
                   emphasized: true,
@@ -213,11 +213,11 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text('Create a deposit request',
+                      Text('Top up by bank transfer',
                           style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 8),
                       Text(
-                        'Manual bank transfers require an exact payment reference. We will generate the amount and reference for you.',
+                        'We will generate the exact amount and payment reference for you.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -269,7 +269,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                           label: Text(
                             _isSubmitting
                                 ? 'Generating instructions...'
-                                : 'Generate payment instructions',
+                                : 'Get bank transfer details',
                           ),
                         ),
                       ),

@@ -41,7 +41,7 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Deposit history'),
+        title: const Text('Top Up History'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
@@ -58,7 +58,7 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
             return const Center(
               child: GteStatePanel(
                 title: 'No deposits yet',
-                message: 'Create a funding request to start crediting your wallet.',
+                message: 'Start a top-up to get your first wallet credit moving.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             );

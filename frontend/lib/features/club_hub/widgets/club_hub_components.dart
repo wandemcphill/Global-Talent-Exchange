@@ -19,26 +19,45 @@ class ClubHubStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color accent = tokens.accentClub;
+
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 260),
       child: GteSurfacePanel(
+        accentColor: accent,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, color: GteShellTheme.accent),
-            const SizedBox(height: 16),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(tokens.radiusMedium - 2),
+                color: accent.withValues(alpha: 0.14),
+                border: Border.all(color: accent.withValues(alpha: 0.2)),
+              ),
+              child: Icon(icon, color: accent),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              label.toUpperCase(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: accent,
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 10),
             Text(
               value,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 6),
             Text(
-              label,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
               detail,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -65,9 +84,24 @@ class ClubHubMetricRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium,
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: GteShellTheme.accentClub,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
@@ -95,15 +129,18 @@ class ClubHubPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: GteShellTheme.panelStrong.withValues(alpha: 0.96),
-        border: Border.all(color: GteShellTheme.stroke),
+        color: GteShellTheme.accentClub.withValues(alpha: 0.14),
+        border:
+            Border.all(color: GteShellTheme.accentClub.withValues(alpha: 0.22)),
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: GteShellTheme.accentClub,
+            ),
       ),
     );
   }

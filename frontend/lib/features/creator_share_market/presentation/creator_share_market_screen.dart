@@ -89,8 +89,8 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
             appBar: AppBar(
               title: Text(
                 widget.clubId == null
-                    ? 'Creator share market'
-                    : '${widget.clubName ?? widget.clubId} creator shares',
+                    ? 'Fan Share Market'
+                    : '${widget.clubName ?? widget.clubId} fan shares',
               ),
               actions: <Widget>[
                 IconButton(
@@ -117,9 +117,9 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
         GtexHeroBanner(
           eyebrow: 'CREATOR SHARE MARKET',
           title:
-              'Ownership, governance policy, and fan benefits sit on one ledger.',
+              'Back creator clubs and own a piece of the rise.',
           description:
-              'This market reads the canonical share market, creator-controlled shares, and preserved ownership ledger from the backend. There is no parallel client-side valuation or treasury logic here.',
+              'See share price, fan perks, and club control in one market view.',
           accent: const Color(0xFF79D8C3),
           chips: <Widget>[
             GteMetricChip(
@@ -139,7 +139,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               FilledButton.icon(
                 onPressed: () => _openClub(context, widget.currentClubId!),
                 icon: const Icon(Icons.shield_outlined),
-                label: const Text('Open my club'),
+                label: const Text('My club'),
               ),
             if (!_hasAuth && widget.onOpenLogin != null)
               FilledButton.tonalIcon(
@@ -153,7 +153,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               TextField(
                 controller: _clubLookupController,
                 decoration: const InputDecoration(
-                  labelText: 'Open club by id',
+                  labelText: 'Find club by id',
                   hintText: 'club-123',
                 ),
               ),
@@ -164,7 +164,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                         _openClub(context, _clubLookupController.text.trim())
                     : widget.onOpenLogin,
                 icon: const Icon(Icons.open_in_new),
-                label: Text(_hasAuth ? 'Open market' : 'Sign in to open'),
+                label: Text(_hasAuth ? 'Open club' : 'Sign in to open'),
               ),
             ],
           ),
@@ -174,7 +174,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
           GteStatePanel(
             title: 'Sign in required',
             message:
-                'The creator share market is authenticated because it includes viewer holdings, benefits, and purchase access.',
+                'Sign in to see your holdings, perks, and buy access.',
             actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
             onAction: widget.onOpenLogin,
             icon: Icons.lock_outline,
@@ -183,7 +183,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
           const GteStatePanel(
             title: 'Choose a club',
             message:
-                'Open a creator club by id or jump straight into your current club share market from the button above.',
+                'Open a creator club by id or jump into your current club share market.',
             icon: Icons.account_balance_outlined,
           ),
       ],
@@ -197,7 +197,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
         child: GteStatePanel(
           title: 'Sign in required',
           message:
-              'Creator share holdings, benefits, and purchases are only available to authenticated users.',
+              'Sign in to see holdings, perks, and buy shares.',
           actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
           onAction: widget.onOpenLogin,
           icon: Icons.lock_outline,
@@ -216,7 +216,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
         child: GteStatePanel(
           title: 'Loading share market',
           message:
-              'Holdings, benefits, governance policy, and distribution history are loading.',
+              'Holdings, perks, and payout history are loading.',
           icon: Icons.candlestick_chart,
           isLoading: true,
         ),
@@ -227,7 +227,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
       return Padding(
         padding: const EdgeInsets.all(20),
         child: GteStatePanel(
-          title: 'Creator share market unavailable',
+          title: 'Fan Share Market unavailable',
           message: _controller.marketError!,
           actionLabel: 'Retry',
           onAction: () => _load(clubId),
@@ -254,8 +254,8 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                 const SizedBox(height: 8),
                 Text(
                   market == null
-                      ? 'No fan-share issuance is live for this club yet.'
-                      : 'Read share price, creator control, holder benefits, governance limits, and revenue distributions from one canonical surface.',
+                      ? 'No fan shares are live for this club yet.'
+                      : 'See price, fan perks, club control, and payout history in one place.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 14),
@@ -276,7 +276,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                           : market.sharesRemaining.toString(),
                     ),
                     GteMetricChip(
-                      label: 'Creator control',
+                      label: 'Club control',
                       value: market == null
                           ? '--'
                           : '${market.creatorControlledShares} (${(market.creatorControlBps / 100).toStringAsFixed(1)}%)',
@@ -305,7 +305,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                       FilledButton.tonalIcon(
                         onPressed: () => _showIssueDialog(context, clubId),
                         icon: const Icon(Icons.add_chart_outlined),
-                        label: const Text('Issue market'),
+                        label: const Text('Open sale'),
                       ),
                     if (_isAdmin)
                       OutlinedButton.icon(
@@ -337,12 +337,12 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
           if (market == null)
             GteStatePanel(
               title: canIssue
-                  ? 'No market issued yet'
-                  : 'No creator share market is live',
+                  ? 'No share sale yet'
+                  : 'No fan share sale live',
               message: canIssue
-                  ? 'Issue the primary share market for this club to expose price, supply, governance, and holder benefits.'
-                  : 'This club has not issued creator shares yet.',
-              actionLabel: canIssue ? 'Issue market' : null,
+                  ? 'Open this club share sale to set price, supply, club control, and fan perks.'
+                  : 'This club has not opened fan shares yet.',
+              actionLabel: canIssue ? 'Open sale' : null,
               onAction:
                   canIssue ? () => _showIssueDialog(context, clubId) : null,
               icon: Icons.account_balance_outlined,
@@ -396,7 +396,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Issue creator share market',
+                'Open fan share sale',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
@@ -452,7 +452,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                   }
                   Navigator.of(context).pop(true);
                 },
-                child: const Text('Issue market'),
+                child: const Text('Open sale'),
               ),
             ],
           ),
@@ -463,7 +463,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     maxSharesController.dispose();
     maxPerFanController.dispose();
     if (submitted == true && mounted) {
-      AppFeedback.showSuccess(context, 'Creator share market issued.');
+      AppFeedback.showSuccess(context, 'Fan share sale is live.');
     }
   }
 
@@ -495,7 +495,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Share price: ${gteFormatCredits(market.sharePriceCoin)} â€¢ Remaining supply: ${market.sharesRemaining}',
+                'Share price: ${gteFormatCredits(market.sharePriceCoin)} | Left: ${market.sharesRemaining}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
@@ -534,7 +534,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     );
     shareCountController.dispose();
     if (submitted == true && mounted) {
-      AppFeedback.showSuccess(context, 'Share purchase submitted.');
+      AppFeedback.showSuccess(context, 'Share order sent.');
     }
   }
 

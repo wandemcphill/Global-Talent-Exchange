@@ -19,6 +19,7 @@ class ClubHubHeaderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return GteSurfacePanel(
       emphasized: true,
+      accentColor: GteShellTheme.accentClub,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           final bool stacked = constraints.maxWidth < 760;
@@ -37,6 +38,28 @@ class ClubHubHeaderCard extends StatelessWidget {
           final Widget summary = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: GteShellTheme.accentClub.withValues(alpha: 0.14),
+                  border: Border.all(
+                    color: GteShellTheme.accentClub.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Text(
+                  'CLUB HQ',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: GteShellTheme.accentClub,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -50,7 +73,8 @@ class ClubHubHeaderCard extends StatelessWidget {
                   ),
                   _HeaderMetaPill(
                     icon: Icons.emoji_events_outlined,
-                    label: '${data.trophyCabinet.majorHonorsCount} major honors',
+                    label:
+                        '${data.trophyCabinet.majorHonorsCount} major honors',
                   ),
                 ],
               ),
@@ -63,6 +87,11 @@ class ClubHubHeaderCard extends StatelessWidget {
               Text(
                 data.countryName ?? 'Global club profile',
                 style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Keep the badge, locker room, and transfer posture readable from one home base.',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 20),
               Wrap(

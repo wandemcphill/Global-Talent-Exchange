@@ -16,28 +16,57 @@ class GteMetricChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color tone =
-        positive ? GteShellTheme.positive : GteShellTheme.negative;
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color tone = positive ? tokens.positive : tokens.accentWarm;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      constraints: const BoxConstraints(minWidth: 108),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.09),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: tone.withValues(alpha: 0.28)),
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(tokens.radiusMedium - 2),
+        border: Border.all(color: tone.withValues(alpha: 0.24)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: tone.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tone,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label.toUpperCase(),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: tokens.textMuted,
+                        letterSpacing: 0.9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
           Text(
             value,
-            style:
-                Theme.of(context).textTheme.titleMedium?.copyWith(color: tone),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: tokens.textPrimary,
+                ),
           ),
         ],
       ),

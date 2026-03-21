@@ -31,6 +31,7 @@ import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
+import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
@@ -75,165 +76,31 @@ class GteNavigationShellScreen extends StatefulWidget {
       _GteNavigationShellScreenState();
 }
 
-class _ShellRouteHeader extends StatelessWidget {
-  const _ShellRouteHeader({
-    required this.route,
-    required this.isAuthenticated,
-    required this.openOrderCount,
-    required this.onOpenLogin,
-  });
-
-  final GteNavigationRoute route;
-  final bool isAuthenticated;
-  final int openOrderCount;
-  final Future<bool> Function({GteNavigationRoute? targetRoute}) onOpenLogin;
-
-  @override
-  Widget build(BuildContext context) {
-    final _ShellHeaderCopy copy =
-        _ShellHeaderCopy.fromRoute(route, isAuthenticated, openOrderCount);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withValues(alpha: 0.035),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            copy.eyebrow,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: route.primaryDestination.accentColor,
-                  letterSpacing: 1.1,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(copy.title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 6),
-          Text(copy.detail, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              ...copy.chips.map((String chip) => _ShellHeaderChip(
-                  label: chip, tone: route.primaryDestination.accentColor)),
-              if (!isAuthenticated)
-                FilledButton.tonal(
-                  onPressed: () => onOpenLogin(targetRoute: route),
-                  child: const Text('Sign in for full access'),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
+Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
+  final tokens = GteShellTheme.tokensOf(context);
+  switch (destination) {
+    case GtePrimaryDestination.home:
+    case GtePrimaryDestination.market:
+      return tokens.accent;
+    case GtePrimaryDestination.competitions:
+      return tokens.accentArena;
+    case GtePrimaryDestination.community:
+      return tokens.accentCommunity;
+    case GtePrimaryDestination.club:
+      return tokens.accentClub;
+    case GtePrimaryDestination.wallet:
+      return tokens.accentCapital;
   }
 }
 
-class _ShellHeaderChip extends StatelessWidget {
-  const _ShellHeaderChip({required this.label, required this.tone});
-
-  final String label;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: tone.withValues(alpha: 0.12),
-        border: Border.all(color: tone.withValues(alpha: 0.22)),
-      ),
-      child: Text(label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: tone)),
-    );
-  }
-}
-
-class _ShellHeaderCopy {
-  const _ShellHeaderCopy({
-    required this.eyebrow,
-    required this.title,
-    required this.detail,
-    required this.chips,
-  });
-
-  final String eyebrow;
-  final String title;
-  final String detail;
-  final List<String> chips;
-
-  factory _ShellHeaderCopy.fromRoute(
-      GteNavigationRoute route, bool isAuthenticated, int openOrderCount) {
-    switch (route.primaryDestination) {
-      case GtePrimaryDestination.home:
-        return const _ShellHeaderCopy(
-          eyebrow: 'COMMAND DECK',
-          title: 'Start from the clearest route, not the loudest one.',
-          detail:
-              'Home now prioritizes the next best move, then lets quieter signals sit lower in the stack.',
-          chips: <String>[
-            'Market distinct',
-            'Arena distinct',
-            'Capital distinct'
-          ],
-        );
-      case GtePrimaryDestination.market:
-        return const _ShellHeaderCopy(
-          eyebrow: 'TRADING FLOOR',
-          title:
-              'The tape is built for speed, confidence, and clean execution.',
-          detail:
-              'Market screens stay denser and sharper than the arena so price discovery never feels theatrical.',
-          chips: <String>[
-            'Terminal rhythm',
-            'Liquidity cues',
-            'Execution first'
-          ],
-        );
-      case GtePrimaryDestination.competitions:
-        return const _ShellHeaderCopy(
-          eyebrow: 'LIVE MATCH CENTER',
-          title:
-              'Fixtures, replays, and broadcast-style storylines stay in one arena lane.',
-          detail:
-              'This route is designed to feel cinematic and alive, not like the market wearing football boots.',
-          chips: <String>['Live now', 'Up next', 'Replay lane'],
-        );
-      case GtePrimaryDestination.community:
-        return const _ShellHeaderCopy(
-          eyebrow: 'COMMUNITY GRID',
-          title:
-              'Signals, governance, and creator activity stay social without losing structure.',
-          detail:
-              'Community surfaces keep discovery, moderation, and governance in one lane instead of scattering them across the shell.',
-          chips: <String>['Discovery', 'Threads', 'Governance'],
-        );
-      case GtePrimaryDestination.club:
-        return const _ShellHeaderCopy(
-          eyebrow: 'CLUB SYSTEMS',
-          title: 'Institution, identity, and culture have their own lane.',
-          detail:
-              'Club surfaces should feel aspirational and structured, separate from both market tension and match-night drama.',
-          chips: <String>['Identity', 'Dynasty', 'Trophies'],
-        );
-      case GtePrimaryDestination.wallet:
-        return _ShellHeaderCopy(
-          eyebrow: 'CAPITAL LAYER',
-          title: 'Cash, exposure, and ledger trust stay readable at a glance.',
-          detail: isAuthenticated
-              ? 'Open orders: $openOrderCount. Wallet surfaces are deliberately quieter than the market and cleaner than the arena.'
-              : 'Preview mode keeps the capital room visible while balances and ledger actions stay protected until sign-in.',
-          chips: <String>['Cash vs reserve', 'Holdings view', 'Ledger clarity'],
-        );
-    }
-  }
-}
+const List<GtePrimaryDestination> _shellPrimaryDestinations =
+    <GtePrimaryDestination>[
+  GtePrimaryDestination.home,
+  GtePrimaryDestination.competitions,
+  GtePrimaryDestination.market,
+  GtePrimaryDestination.community,
+  GtePrimaryDestination.club,
+];
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late GteNavigationRoute _route;
@@ -310,10 +177,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   @override
   Widget build(BuildContext context) {
     final bool compactViewport = MediaQuery.sizeOf(context).height < 720;
+    final tokens = GteShellTheme.tokensOf(context);
     final EdgeInsets topSectionPadding = compactViewport
         ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
         : const EdgeInsets.fromLTRB(20, 12, 20, 0);
     final double sectionGap = compactViewport ? 0 : 8;
+    final bool showShellStatusCard =
+        _route.primaryDestination != GtePrimaryDestination.home;
     return Container(
       decoration: gteBackdropDecoration(),
       child: Scaffold(
@@ -329,10 +199,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const Text('Global Talent Exchange'),
+                    Text(_routeTitle()),
                     Text(
-                      _route.path,
-                      style: const TextStyle(fontSize: 12),
+                      _routeContextLine(),
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
@@ -346,6 +216,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                 if (widget.controller.isAuthenticated) {
                   return Row(
                     children: <Widget>[
+                      _buildThemePickerAction(context),
+                      _buildCapitalAction(),
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
                         child: Center(
@@ -499,11 +371,18 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                 }
                 return Padding(
                   padding: const EdgeInsets.only(right: 16),
-                  child: FilledButton(
-                    onPressed: () {
-                      _openLogin();
-                    },
-                    child: const Text('Sign in'),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _buildThemePickerAction(context),
+                      _buildCapitalAction(),
+                      FilledButton(
+                        onPressed: () {
+                          _openLogin();
+                        },
+                        child: const Text('Sign in'),
+                      ),
+                    ],
                   ),
                 );
               },
@@ -520,20 +399,13 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
             return Column(
               children: <Widget>[
-                Padding(
-                  padding: topSectionPadding,
-                  child: _ShellRouteHeader(
-                    route: _route,
-                    isAuthenticated: widget.controller.isAuthenticated,
-                    openOrderCount: widget.controller.openOrders.length,
-                    onOpenLogin: _openLogin,
+                if (showShellStatusCard) ...<Widget>[
+                  Padding(
+                    padding: topSectionPadding,
+                    child: _buildModeSyncCard(context),
                   ),
-                ),
-                Padding(
-                  padding: topSectionPadding,
-                  child: _buildModeSyncCard(),
-                ),
-                SizedBox(height: sectionGap),
+                  SizedBox(height: sectionGap),
+                ],
                 Expanded(
                   child: PageStorage(
                     bucket: _pageStorageBucket,
@@ -618,33 +490,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         ),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
-            color: GteShellTheme.panel.withValues(alpha: 0.96),
+            color: tokens.panel.withValues(alpha: 0.96),
             border: Border(
-                top: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+              top: BorderSide(color: tokens.stroke.withValues(alpha: 0.45)),
+            ),
             boxShadow: <BoxShadow>[
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.28),
+                color: tokens.shadow.withValues(alpha: 0.28),
                 blurRadius: 24,
                 offset: const Offset(0, -10),
               ),
             ],
           ),
-          child: NavigationBar(
-            selectedIndex: GtePrimaryDestination.values.indexOf(
-              _route.primaryDestination,
-            ),
-            onDestinationSelected: (int index) {
-              _openPrimaryDestination(GtePrimaryDestination.values[index]);
-            },
-            destinations: GtePrimaryDestination.values
-                .map(
-                  (GtePrimaryDestination destination) => NavigationDestination(
-                    icon: Icon(destination.icon),
-                    selectedIcon: Icon(destination.selectedIcon),
-                    label: destination.label,
-                  ),
-                )
-                .toList(growable: false),
+          child: _ShellBottomNav(
+            currentDestination: _route.primaryDestination,
+            onOpenPrimaryDestination: _openPrimaryDestination,
           ),
         ),
       ),
@@ -680,7 +540,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           message:
               'Guest preview mode does not expose a canonical club. Sign in to continue with a real club context or create one first.',
           icon: Icons.login_outlined,
-          accentColor: const Color(0xFF85B8FF),
+          accentColor: _routeAccentFor(context, GtePrimaryDestination.club),
           actionLabel: 'Sign in',
           onAction: () {
             _openLogin(targetRoute: const GteNavigationRoute.club());
@@ -710,7 +570,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             message:
                 'Guest preview mode does not expose a canonical club. Sign in to continue with a real club context or create one first.',
             icon: Icons.login_outlined,
-            accentColor: const Color(0xFF72F0D8),
+            accentColor: _routeAccentFor(context, GtePrimaryDestination.home),
             actionLabel: 'Sign in',
             onAction: () {
               _openLogin(targetRoute: const GteNavigationRoute.home());
@@ -736,6 +596,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       ),
       onOpenCompetitionsTab: () => _openPrimaryDestination(
         GtePrimaryDestination.competitions,
+      ),
+      onOpenMarketTab: () => _openPrimaryDestination(
+        GtePrimaryDestination.market,
+      ),
+      onOpenHubTab: () => _openPrimaryDestination(
+        GtePrimaryDestination.community,
+      ),
+      onOpenWalletTab: () => _openPrimaryDestination(
+        GtePrimaryDestination.wallet,
       ),
       onOpenClubSubtab: _openClubSubtab,
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
@@ -987,12 +856,71 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
-  GteSyncStatusCard _buildModeSyncCard() {
-    final Color accent = _route.primaryDestination.accentColor;
+  Future<void> _openThemePicker(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (BuildContext context) => const GteThemePickerSheet(),
+    );
+  }
+
+  Widget _buildThemePickerAction(BuildContext context) {
+    final String label = GteShellTheme.definitionOf(context).metadata.label;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: IconButton(
+        tooltip: 'Theme: $label',
+        onPressed: () => _openThemePicker(context),
+        icon: const Icon(Icons.palette_outlined),
+      ),
+    );
+  }
+
+  Widget _buildCapitalAction() {
+    final bool isActive =
+        _route.primaryDestination == GtePrimaryDestination.wallet;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: IconButton(
+        tooltip: 'Capital room',
+        onPressed: () => _openPrimaryDestination(GtePrimaryDestination.wallet),
+        icon: Icon(
+          isActive
+              ? GtePrimaryDestination.wallet.selectedIcon
+              : GtePrimaryDestination.wallet.icon,
+          color: isActive ? GtePrimaryDestination.wallet.accentColor : null,
+        ),
+      ),
+    );
+  }
+
+  String _routeTitle() {
+    if (_route.primaryDestination == GtePrimaryDestination.home) {
+      return 'Home Lobby';
+    }
+    if (_route.primaryDestination == GtePrimaryDestination.wallet) {
+      return 'Capital Room';
+    }
+    return _route.primaryDestination.label;
+  }
+
+  String _routeContextLine() {
+    final String? clubName = _canonicalClubName()?.trim();
+    if (clubName != null && clubName.isNotEmpty) {
+      return clubName;
+    }
+    if (widget.controller.isAuthenticated) {
+      return widget.controller.session?.user.username ?? 'Signed in';
+    }
+    return 'Guest preview';
+  }
+
+  GteSyncStatusCard _buildModeSyncCard(BuildContext context) {
+    final Color accent = _routeAccentFor(context, _route.primaryDestination);
     switch (_route.primaryDestination) {
       case GtePrimaryDestination.market:
         return GteSyncStatusCard(
-          title: 'Trading operations',
+          title: 'Transfer market',
           status: widget.controller.marketError == null
               ? 'Quotes, order rails, and price tape are ready.'
               : 'Market feed degraded. Last good tape is still visible.',
@@ -1003,7 +931,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.competitions:
         return GteSyncStatusCard(
-          title: 'Live match center',
+          title: 'Play center',
           status: _competitionController.discoveryError == null
               ? 'Fixtures, brackets, and replay narratives are synced.'
               : 'Arena feed degraded. Showing the latest competition snapshot.',
@@ -1014,7 +942,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.community:
         return GteSyncStatusCard(
-          title: 'Community network',
+          title: 'Hub pulse',
           status: widget.controller.isAuthenticated
               ? 'Discovery, creator, and governance surfaces are available.'
               : 'Community is in preview mode. Sign in to unlock participation rails.',
@@ -1025,7 +953,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.club:
         return GteSyncStatusCard(
-          title: 'Club systems',
+          title: 'Club builder',
           status: widget.controller.isAuthenticated
               ? 'Identity, squad, and culture surfaces are unlocked.'
               : 'Guest preview mode is active. Sign in for writable club controls.',
@@ -1036,7 +964,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(
-          title: 'Capital layer',
+          title: 'Capital room',
           status: widget.controller.isAuthenticated
               ? 'Balances, holdings, and ledgers are being protected and reconciled.'
               : 'Wallet is in preview mode. Sign in to unlock funding and execution.',
@@ -1080,5 +1008,111 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   String? _canonicalClubName() {
     return _identity().clubName;
+  }
+}
+
+class _ShellBottomNav extends StatelessWidget {
+  const _ShellBottomNav({
+    required this.currentDestination,
+    required this.onOpenPrimaryDestination,
+  });
+
+  final GtePrimaryDestination currentDestination;
+  final ValueChanged<GtePrimaryDestination> onOpenPrimaryDestination;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        child: Row(
+          children: <Widget>[
+            ..._shellPrimaryDestinations.map(
+              (GtePrimaryDestination destination) => Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: _ShellNavChip(
+                  destination: destination,
+                  isActive: currentDestination == destination,
+                  onTap: () => onOpenPrimaryDestination(destination),
+                ),
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 26,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              color: tokens.stroke.withValues(alpha: 0.5),
+            ),
+            _ShellNavChip(
+              destination: GtePrimaryDestination.wallet,
+              isActive: currentDestination == GtePrimaryDestination.wallet,
+              onTap: () =>
+                  onOpenPrimaryDestination(GtePrimaryDestination.wallet),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShellNavChip extends StatelessWidget {
+  const _ShellNavChip({
+    required this.destination,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final GtePrimaryDestination destination;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color tone = _routeAccentFor(context, destination);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: isActive
+                ? tone.withValues(alpha: 0.18)
+                : tokens.panelElevated.withValues(alpha: 0.78),
+            border: Border.all(
+              color: isActive
+                  ? tone.withValues(alpha: 0.45)
+                  : tokens.stroke.withValues(alpha: 0.65),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                isActive ? destination.selectedIcon : destination.icon,
+                size: 18,
+                color: isActive ? tone : tokens.textMuted,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                destination.label,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: isActive ? tone : tokens.textPrimary,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

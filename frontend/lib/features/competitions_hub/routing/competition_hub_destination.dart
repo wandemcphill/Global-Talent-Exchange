@@ -76,58 +76,58 @@ extension CompetitionHubDestinationX on CompetitionHubDestination {
       case CompetitionHubDestination.worldSuperCup:
         return 'Persistent global slot reserved for activation.';
       case CompetitionHubDestination.academy:
-        return 'Beginner-friendly routes and development lanes.';
+        return 'Rookie cups and development runs.';
     }
   }
 
   String get hubDescription {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Route into every competition program from one switchboard, then drill into the active cards that matter right now.';
+        return 'Jump between every competition from one matchday board, then dive into what is live now.';
       case CompetitionHubDestination.leagues:
-        return 'Persistent league routing for season-based standings, ladder movement, and verified scoring windows.';
+        return 'Track title races, points tables, and season momentum.';
       case CompetitionHubDestination.championsLeague:
-        return 'Premium creator competitions and elite brackets staged as the continental layer of the hub.';
+        return 'Elite creator cups and continental nights.';
       case CompetitionHubDestination.gtexFastCup:
-        return 'Fast-turnaround knockout cups that keep entry, fill, and result cycles short.';
+        return 'Quick-fire knockout cups with fast entry and fast results.';
       case CompetitionHubDestination.worldSuperCup:
-        return 'Global prestige lane kept visible in navigation even when the event is between seasons.';
+        return 'The world stage stays on the board even between seasons.';
       case CompetitionHubDestination.academy:
-        return 'Development-first competitions for rookie onboarding, low-friction entry, and academy progression.';
+        return 'Starter competitions for rookies, easy entry, and academy growth.';
     }
   }
 
   String get emptyTitle {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Competition map is warming up';
+        return 'Arena is warming up';
       case CompetitionHubDestination.leagues:
-        return 'No league routes are visible';
+        return 'No league races live';
       case CompetitionHubDestination.championsLeague:
-        return 'Champions League slate is not populated yet';
+        return 'No Champions League nights yet';
       case CompetitionHubDestination.gtexFastCup:
-        return 'Fast Cup brackets are between windows';
+        return 'Fast Cup is between rounds';
       case CompetitionHubDestination.worldSuperCup:
-        return 'World Super Cup is inactive';
+        return 'World Super Cup off-season';
       case CompetitionHubDestination.academy:
-        return 'Academy routes are not visible yet';
+        return 'No academy cups live';
     }
   }
 
   String get emptyMessage {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Pull to refresh when new competitions publish.';
+        return 'Pull to refresh when new cups go live.';
       case CompetitionHubDestination.leagues:
-        return 'League cards will appear here as soon as a season feed is published.';
+        return 'League cards show up here when a new season opens.';
       case CompetitionHubDestination.championsLeague:
-        return 'The elite route stays ready even while the current Champions League slate is light.';
+        return 'Champions League cards return when the next slate is live.';
       case CompetitionHubDestination.gtexFastCup:
-        return 'Fast Cup cards return as soon as a short-format bracket opens.';
+        return 'Fast Cup cards return when the next bracket opens.';
       case CompetitionHubDestination.worldSuperCup:
-        return 'The tab remains visible by design so the global slot never disappears from the top-level map.';
+        return 'The tab stays live so the world stage never disappears.';
       case CompetitionHubDestination.academy:
-        return 'Academy cards appear when beginner-friendly routes or rookie programs are live.';
+        return 'Academy cards appear when rookie routes open.';
     }
   }
 

@@ -12,7 +12,7 @@ class GteSyncStatusCard extends StatelessWidget {
     required this.status,
     this.detail,
     this.syncedAt,
-    this.accent = GteShellTheme.accent,
+    this.accent,
     this.onRefresh,
     this.isRefreshing = false,
   });
@@ -21,25 +21,27 @@ class GteSyncStatusCard extends StatelessWidget {
   final String status;
   final String? detail;
   final DateTime? syncedAt;
-  final Color accent;
+  final Color? accent;
   final FutureOr<void> Function()? onRefresh;
   final bool isRefreshing;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final tokens = GteShellTheme.tokensOf(context);
+    final Color resolvedAccent = accent ?? tokens.accent;
     return GteSurfacePanel(
-      accentColor: accent,
+      accentColor: resolvedAccent,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: <Widget>[
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.14),
+              color: resolvedAccent.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(Icons.sync, color: accent, size: 18),
+            child: Icon(Icons.sync, color: resolvedAccent, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -51,7 +53,7 @@ class GteSyncStatusCard extends StatelessWidget {
                 Text(
                   status,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: GteShellTheme.textPrimary,
+                    color: tokens.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -64,9 +66,11 @@ class GteSyncStatusCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           FilledButton.tonalIcon(
-            onPressed: isRefreshing || onRefresh == null ? null : () {
-              onRefresh!.call();
-            },
+            onPressed: isRefreshing || onRefresh == null
+                ? null
+                : () {
+                    onRefresh!.call();
+                  },
             icon: isRefreshing
                 ? const SizedBox(
                     width: 14,

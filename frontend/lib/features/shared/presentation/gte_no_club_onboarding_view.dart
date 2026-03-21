@@ -18,7 +18,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Widget> overviewChips = <Widget>[
       if (onBrowseClubMarket != null)
-        const Chip(label: Text('1. Browse club market')),
+        const Chip(label: Text('1. Browse Club Market')),
       if (onExploreArena != null) const Chip(label: Text('2. Explore Arena')),
     ];
     final List<Widget> overviewActions = <Widget>[
@@ -26,7 +26,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
         FilledButton.icon(
           onPressed: onBrowseClubMarket,
           icon: const Icon(Icons.storefront_outlined),
-          label: const Text('Browse club market'),
+          label: const Text('Browse Club Market'),
         ),
       if (onExploreArena != null)
         FilledButton.tonalIcon(
@@ -38,21 +38,21 @@ class GteNoClubOnboardingView extends StatelessWidget {
     final List<Widget> cards = <Widget>[
       if (onBrowseClubMarket != null)
         _NoClubActionCard(
-          eyebrow: 'WORKING PATH',
-          title: 'Browse club market',
+          eyebrow: 'PLAY NOW',
+          title: 'Browse Club Market',
           detail:
-              'Open the public club-sale listings now to inspect live club visibility, valuations, and market posture without a linked club.',
+              'Scout live club prices and sale notes even before you own a club.',
           icon: Icons.storefront_outlined,
           accent: GteShellTheme.accentWarm,
-          actionLabel: 'Browse club market',
+          actionLabel: 'Browse Club Market',
           onTap: onBrowseClubMarket!,
         ),
       if (onExploreArena != null)
         _NoClubActionCard(
-          eyebrow: 'WORKING PATH',
+          eyebrow: 'PLAY NOW',
           title: 'Explore Arena',
           detail:
-              'Open competition routes while club linking is still pending. Arena browsing is live and does not require a canonical club.',
+              'Jump into cups and live match nights while club linking is still pending.',
           icon: Icons.stadium_outlined,
           accent: GteShellTheme.accentArena,
           actionLabel: 'Explore Arena',
@@ -80,12 +80,12 @@ class GteNoClubOnboardingView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'This signed-in session has no canonical club yet',
+                  'Your club spot is still open',
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Club-scoped workspaces stay locked until this account is linked to a club. Use a real public route below instead of getting stranded behind disabled controls.',
+                  'Club-only actions stay locked until this account is linked to a club. Until then, jump into the live routes below.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 18),
