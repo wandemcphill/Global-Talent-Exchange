@@ -53,6 +53,7 @@ class GteExchangeController extends ChangeNotifier {
   String? portfolioError;
   String? ordersError;
   String? orderError;
+  String? adminBuybackError;
   String? complianceError;
 
   GteAuthSession? session;
@@ -67,6 +68,10 @@ class GteExchangeController extends ChangeNotifier {
   int openOrderTotal = 0;
 
   final Map<String, GteOrderRecord> _ordersById = <String, GteOrderRecord>{};
+  final Map<String, GteAdminBuybackPreview> _adminBuybackPreviewsByOrderId =
+      <String, GteAdminBuybackPreview>{};
+  final Set<String> _loadingAdminBuybackPreviewOrderIds = <String>{};
+  final Set<String> _executingAdminBuybackOrderIds = <String>{};
   final List<String> _recentOrderIds = <String>[];
   final List<String> _openOrderIds = <String>[];
   bool _hasLoadedOrdersOnce = false;
@@ -90,6 +95,15 @@ class GteExchangeController extends ChangeNotifier {
   List<GteOrderRecord> get recentOrders => _ordersForIds(_recentOrderIds);
 
   List<GteOrderRecord> get openOrders => _ordersForIds(_openOrderIds);
+
+  GteAdminBuybackPreview? adminBuybackPreviewForOrder(String orderId) =>
+      _adminBuybackPreviewsByOrderId[orderId];
+
+  bool isLoadingAdminBuybackPreview(String orderId) =>
+      _loadingAdminBuybackPreviewOrderIds.contains(orderId);
+
+  bool isExecutingAdminBuyback(String orderId) =>
+      _executingAdminBuybackOrderIds.contains(orderId);
 
   bool get hasLoadedOrders =>
       isLoadingOrders ||
@@ -353,6 +367,7 @@ class GteExchangeController extends ChangeNotifier {
     portfolioError = null;
     ordersError = null;
     orderError = null;
+    adminBuybackError = null;
     complianceError = null;
     recentOrderTotal = 0;
     openOrderTotal = 0;
@@ -360,6 +375,9 @@ class GteExchangeController extends ChangeNotifier {
     _openOrderIds.clear();
     _hasLoadedOrdersOnce = false;
     _ordersById.clear();
+    _adminBuybackPreviewsByOrderId.clear();
+    _loadingAdminBuybackPreviewOrderIds.clear();
+    _executingAdminBuybackOrderIds.clear();
     _bootstrapFuture = null;
     _portfolioFuture = null;
     _ordersFuture = null;
@@ -604,6 +622,56 @@ class GteExchangeController extends ChangeNotifier {
       return null;
     } finally {
       isCancellingOrder = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GteAdminBuybackPreview?> loadAdminBuybackPreview(String orderId) async {
+    if (!isAuthenticated ||
+        _loadingAdminBuybackPreviewOrderIds.contains(orderId)) {
+      return _adminBuybackPreviewsByOrderId[orderId];
+    }
+    _loadingAdminBuybackPreviewOrderIds.add(orderId);
+    adminBuybackError = null;
+    notifyListeners();
+    try {
+      final GteAdminBuybackPreview preview =
+          await _api.fetchAdminBuybackPreview(orderId);
+      _adminBuybackPreviewsByOrderId[orderId] = preview;
+      return preview;
+    } catch (error) {
+      adminBuybackError = AppFeedback.messageFor(error);
+      return null;
+    } finally {
+      _loadingAdminBuybackPreviewOrderIds.remove(orderId);
+      notifyListeners();
+    }
+  }
+
+  Future<GteAdminBuybackExecution?> executeAdminBuyback(String orderId) async {
+    if (!isAuthenticated || _executingAdminBuybackOrderIds.contains(orderId)) {
+      return null;
+    }
+    _executingAdminBuybackOrderIds.add(orderId);
+    adminBuybackError = null;
+    notifyListeners();
+    try {
+      final GteAdminBuybackExecution execution =
+          await _api.executeAdminBuyback(orderId);
+      _adminBuybackPreviewsByOrderId[orderId] = execution.preview;
+      _mergeOrder(execution.order);
+      await _refreshTradingState(
+        playerId: execution.order.playerId,
+        refreshPlayer:
+            selectedPlayer?.detail.playerId == execution.order.playerId,
+      );
+      return execution;
+    } catch (error) {
+      adminBuybackError = AppFeedback.messageFor(error);
+      notifyListeners();
+      return null;
+    } finally {
+      _executingAdminBuybackOrderIds.remove(orderId);
       notifyListeners();
     }
   }

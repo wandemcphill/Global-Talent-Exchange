@@ -2272,6 +2272,91 @@ class GteMockApi implements GteApiRepository {
         .toList(growable: false);
   }
 
+  String _liquidityBandForPrice(double fairValue) {
+    if (fairValue >= 1000) {
+      return 'marquee';
+    }
+    if (fairValue >= 400) {
+      return 'bluechip';
+    }
+    if (fairValue >= 150) {
+      return 'premium';
+    }
+    if (fairValue >= 50) {
+      return 'growth';
+    }
+    return 'entry';
+  }
+
+  String _payoutBandForPrice(double fairValue) {
+    switch (_liquidityBandForPrice(fairValue)) {
+      case 'entry':
+        return 'A';
+      case 'growth':
+        return 'B';
+      case 'premium':
+        return 'C';
+      case 'bluechip':
+        return 'D';
+      case 'marquee':
+        return 'E';
+    }
+    return 'C';
+  }
+
+  double _adminBuybackPayoutRatio(double fairValue) {
+    switch (_payoutBandForPrice(fairValue)) {
+      case 'A':
+        return 0.45;
+      case 'B':
+        return 0.58;
+      case 'C':
+        return 0.66;
+      case 'D':
+        return 0.72;
+      case 'E':
+        return 0.75;
+    }
+    return 0.66;
+  }
+
+  void _adjustHoldingQuantity(
+    String playerId,
+    double deltaQuantity, {
+    required double currentPrice,
+  }) {
+    final List<GtePortfolioHolding> nextHoldings =
+        List<GtePortfolioHolding>.of(_portfolio.holdings, growable: true);
+    final int index = nextHoldings
+        .indexWhere((GtePortfolioHolding holding) => holding.playerId == playerId);
+    if (index == -1) {
+      return;
+    }
+    final GtePortfolioHolding existing = nextHoldings[index];
+    final double nextQuantity = math.max(0, existing.quantity + deltaQuantity);
+    if (nextQuantity <= 0) {
+      nextHoldings.removeAt(index);
+    } else {
+      final double marketValue = nextQuantity * currentPrice;
+      final double unrealizedPl =
+          (currentPrice - existing.averageCost) * nextQuantity;
+      final double costBasis = existing.averageCost * nextQuantity;
+      nextHoldings[index] = GtePortfolioHolding(
+        playerId: existing.playerId,
+        quantity: nextQuantity,
+        averageCost: existing.averageCost,
+        currentPrice: currentPrice,
+        marketValue: marketValue,
+        unrealizedPl: unrealizedPl,
+        unrealizedPlPercent:
+            costBasis <= 0 ? 0 : (unrealizedPl / costBasis) * 100,
+      );
+    }
+    _portfolio = GtePortfolioView(
+      holdings: List<GtePortfolioHolding>.unmodifiable(nextHoldings),
+    );
+  }
+
   void _rebuildPortfolioSummary() {
     final double totalMarketValue = _portfolio.holdings.fold<double>(
       0.0,
