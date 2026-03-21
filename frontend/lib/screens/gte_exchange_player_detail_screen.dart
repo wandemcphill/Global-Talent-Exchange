@@ -96,6 +96,7 @@ class _GteExchangePlayerDetailScreenState
 
             final GteOrderRecord? order =
                 widget.controller.orderForPlayer(widget.playerId);
+            _maybeLoadAdminBuybackPreview(order);
             return RefreshIndicator(
               onRefresh: _refreshSnapshot,
               child: SingleChildScrollView(
@@ -157,11 +158,25 @@ class _GteExchangePlayerDetailScreenState
                         playerLabel: snapshot.detail.identity.playerName,
                         isRefreshing: widget.controller.isRefreshingOrder,
                         isCancelling: widget.controller.isCancellingOrder,
+                        adminBuybackPreview: widget.controller
+                            .adminBuybackPreviewForOrder(order.id),
+                        isLoadingAdminBuybackPreview: widget.controller
+                            .isLoadingAdminBuybackPreview(order.id),
+                        isExecutingAdminBuyback:
+                            widget.controller.isExecutingAdminBuyback(order.id),
+                        adminBuybackError:
+                            widget.controller.adminBuybackError,
                         onRefresh: () {
                           _refreshOrder(order);
                         },
                         onCancel: () {
                           _cancelOrder(order);
+                        },
+                        onLoadAdminBuybackPreview: () {
+                          widget.controller.loadAdminBuybackPreview(order.id);
+                        },
+                        onExecuteAdminBuyback: () {
+                          _executeAdminBuyback(order);
                         },
                       )
                     else if (widget.controller.isAuthenticated)
@@ -284,7 +299,7 @@ class _GteExchangePlayerDetailScreenState
               ),
               if (widget.controller.walletSummary != null)
                 GteMetricChip(
-                  label: 'Cash',
+                  label: 'GTEX Coin',
                   value: gteFormatCredits(
                       widget.controller.walletSummary!.availableBalance),
                 ),
@@ -759,6 +774,20 @@ class _GteExchangePlayerDetailScreenState
     );
   }
 
+  void _maybeLoadAdminBuybackPreview(GteOrderRecord? order) {
+    if (order == null ||
+        !widget.controller.isAuthenticated ||
+        order.side != GteOrderSide.sell ||
+        !order.canCancel ||
+        widget.controller.adminBuybackPreviewForOrder(order.id) != null ||
+        widget.controller.isLoadingAdminBuybackPreview(order.id)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.controller.loadAdminBuybackPreview(order.id);
+    });
+  }
+
   Future<void> _openTicket() async {
     final GtePlayerMarketSnapshot? snapshot = widget.controller.selectedPlayer;
     if (snapshot == null) {
@@ -819,6 +848,21 @@ class _GteExchangePlayerDetailScreenState
       SnackBar(
         content: Text(
             'Order updated: ${gteFormatOrderStatus(cancelled.status.name)}.'),
+      ),
+    );
+  }
+
+  Future<void> _executeAdminBuyback(GteOrderRecord order) async {
+    final GteAdminBuybackExecution? execution =
+        await widget.controller.executeAdminBuyback(order.id);
+    if (!mounted || execution == null) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Admin quick exit completed for ${gteFormatCredits(execution.total)}.',
+        ),
       ),
     );
   }
