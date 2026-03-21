@@ -130,32 +130,32 @@ class SimulationTickSummary:
 
 SIMULATION_USER_SPECS: tuple[SimulationUserSpec, ...] = (
     SimulationUserSpec(
-        email="maker.alpha@demo.gte.local",
+        email="simulation.maker.alpha@gte.local",
         username="sim_maker_alpha",
         display_name="Simulation Maker Alpha",
     ),
     SimulationUserSpec(
-        email="maker.beta@demo.gte.local",
+        email="simulation.maker.beta@gte.local",
         username="sim_maker_beta",
         display_name="Simulation Maker Beta",
     ),
     SimulationUserSpec(
-        email="maker.gamma@demo.gte.local",
+        email="simulation.maker.gamma@gte.local",
         username="sim_maker_gamma",
         display_name="Simulation Maker Gamma",
     ),
     SimulationUserSpec(
-        email="taker.alpha@demo.gte.local",
+        email="simulation.taker.alpha@gte.local",
         username="sim_taker_alpha",
         display_name="Simulation Taker Alpha",
     ),
     SimulationUserSpec(
-        email="taker.beta@demo.gte.local",
+        email="simulation.taker.beta@gte.local",
         username="sim_taker_beta",
         display_name="Simulation Taker Beta",
     ),
     SimulationUserSpec(
-        email="taker.gamma@demo.gte.local",
+        email="simulation.taker.gamma@gte.local",
         username="sim_taker_gamma",
         display_name="Simulation Taker Gamma",
     ),
@@ -532,7 +532,7 @@ class DemoMarketSimulationService:
                 wallet_service.ensure_default_accounts(session, user)
                 session.flush()
 
-            self._rebalance_user_credit_wallet(
+            self._rebalance_user_wallets(
                 session,
                 wallet_service=wallet_service,
                 user=user,
@@ -579,7 +579,7 @@ class DemoMarketSimulationService:
             session.execute(delete(Order).where(Order.id.in_(order_ids)))
 
         for spec, user in zip(SIMULATION_USER_SPECS, simulation_users, strict=True):
-            self._rebalance_user_credit_wallet(
+            self._rebalance_user_wallets(
                 session,
                 wallet_service=wallet_service,
                 user=user,
@@ -737,7 +737,7 @@ class DemoMarketSimulationService:
             ask_levels += 1
         return bid_levels, ask_levels
 
-    def _rebalance_user_credit_wallet(
+    def _rebalance_user_wallets(
         self,
         session: Session,
         *,
@@ -746,22 +746,23 @@ class DemoMarketSimulationService:
         available_target: Decimal,
         escrow_target: Decimal,
     ) -> None:
-        available_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-        escrow_account = wallet_service.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
-        self._rebalance_account(
-            session,
-            account=available_account,
-            target_balance=available_target,
-            wallet_service=wallet_service,
-            actor=user,
-        )
-        self._rebalance_account(
-            session,
-            account=escrow_account,
-            target_balance=escrow_target,
-            wallet_service=wallet_service,
-            actor=user,
-        )
+        for unit in (LedgerUnit.COIN, LedgerUnit.CREDIT):
+            available_account = wallet_service.get_user_account(session, user, unit)
+            escrow_account = wallet_service.get_user_escrow_account(session, user, unit)
+            self._rebalance_account(
+                session,
+                account=available_account,
+                target_balance=available_target,
+                wallet_service=wallet_service,
+                actor=user,
+            )
+            self._rebalance_account(
+                session,
+                account=escrow_account,
+                target_balance=escrow_target,
+                wallet_service=wallet_service,
+                actor=user,
+            )
 
     def _ensure_user_position_inventory(
         self,

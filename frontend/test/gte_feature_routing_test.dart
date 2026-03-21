@@ -375,11 +375,10 @@ void main() {
             clubId: null,
             clubName: null,
           ),
-        );
-        await tester.pumpAndSettle();
-      },
-      createHttpClient: (SecurityContext? _) => _ProbeHttpClient(probe),
+        ),
+      ),
     );
+    await tester.pumpAndSettle();
 
     expect(find.text('NO CLUB ONBOARDING'), findsOneWidget);
     expect(

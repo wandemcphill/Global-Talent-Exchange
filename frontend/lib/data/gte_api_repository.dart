@@ -389,7 +389,8 @@ abstract class GteApiRepository {
 
   Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(String withdrawalId);
 
-  Future<GteDepositRequest> createDepositRequest(GteDepositCreateRequest request);
+  Future<GteDepositRequest> createDepositRequest(
+      GteDepositCreateRequest request);
 
   Future<GteDepositRequest> submitDepositRequest(
       String depositId, GteDepositSubmitRequest request);
@@ -755,10 +756,13 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request(
           'GET',
           '/policies/documents/$documentKey',
-          query: <String, Object?>{if (versionLabel != null) 'version_label': versionLabel},
+          query: <String, Object?>{
+            if (versionLabel != null) 'version_label': versionLabel
+          },
         ),
       ),
-      () => fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
+      () =>
+          fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
     );
   }
 
@@ -777,7 +781,8 @@ class GteReliableApiRepository implements GteApiRepository {
     return _withFallback<List<GtePolicyRequirementSummary>>(
       () async {
         final List<Object?> payload = GteJson.list(
-          await _request('GET', '/policies/me/requirements', requiresAuth: true),
+          await _request('GET', '/policies/me/requirements',
+              requiresAuth: true),
           label: 'policy requirements',
         );
         return payload
@@ -824,10 +829,13 @@ class GteReliableApiRepository implements GteApiRepository {
           label: 'policy acceptance response',
         );
         return GtePolicyAcceptanceSummary(
-          documentKey: GteJson.string(payload, <String>['document_key', 'documentKey']),
+          documentKey:
+              GteJson.string(payload, <String>['document_key', 'documentKey']),
           title: documentKey,
-          versionLabel: GteJson.string(payload, <String>['version_label', 'versionLabel']),
-          acceptedAt: GteJson.dateTimeOrNull(payload, <String>['accepted_at', 'acceptedAt']),
+          versionLabel: GteJson.string(
+              payload, <String>['version_label', 'versionLabel']),
+          acceptedAt: GteJson.dateTimeOrNull(
+              payload, <String>['accepted_at', 'acceptedAt']),
         );
       },
       () => fixtures.acceptPolicyDocument(documentKey, versionLabel),

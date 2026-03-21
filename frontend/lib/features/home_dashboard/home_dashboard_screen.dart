@@ -652,7 +652,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (username.isNotEmpty) {
       return username;
     }
-    return 'Demo Fan';
+    return 'Preview User';
   }
 
   String _formatClubName(String clubId) {

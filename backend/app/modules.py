@@ -420,7 +420,7 @@ def _seed_regen_universe_preseeded_national_u17_pool(app, context) -> None:
 
 def _seed_football_event_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.football_events_engine.service import RealWorldFootballEventService
+        from app.football_events_engine.service import RealWorldFootballEventService
 
         service = RealWorldFootballEventService(session)
         service.seed_defaults()
@@ -429,7 +429,7 @@ def _seed_football_event_defaults(app, context) -> None:
 
 def _seed_world_simulation_defaults(app, context) -> None:
     with context.database.session_factory() as session:
-        from backend.app.world_simulation.service import FootballWorldService
+        from app.world_simulation.service import FootballWorldService
 
         service = FootballWorldService(session)
         service.seed_defaults()

@@ -43,7 +43,7 @@ def create_demo_simulation_app(
         session_factory=database_session_factory,
     )
 
-    demo_simulation_enabled = _get_bool("GTE_DEMO_SIMULATION_ENABLED", True)
+    demo_simulation_enabled = _get_bool("GTE_DEMO_SIMULATION_ENABLED", False)
     bootstrap_demo = _get_bool("GTE_DEMO_SIMULATION_BOOTSTRAP", False)
     seed_liquidity_on_boot = _get_bool("GTE_DEMO_SIMULATION_SEED_ON_BOOT", False)
     demo_player_count = _get_int("GTE_DEMO_SIMULATION_PLAYER_COUNT", 24)

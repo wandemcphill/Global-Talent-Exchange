@@ -486,27 +486,27 @@ class DemoBootstrapSummary:
 
 DEMO_USER_SPECS: tuple[DemoUserSpec, ...] = (
     DemoUserSpec(
-        email="fan@demo.gte.local",
-        username="demo_fan",
-        display_name="Demo Fan",
+        email="seed.fan@gte.local",
+        username="seed_fan",
+        display_name="Seed Fan",
         role=UserRole.USER,
         provider=PaymentProvider.MONNIFY,
         coin_balance=Decimal("150.0000"),
         credit_balance=Decimal("1200.0000"),
     ),
     DemoUserSpec(
-        email="scout@demo.gte.local",
-        username="demo_scout",
-        display_name="Demo Scout",
+        email="seed.scout@gte.local",
+        username="seed_scout",
+        display_name="Seed Scout",
         role=UserRole.USER,
         provider=PaymentProvider.FLUTTERWAVE,
         coin_balance=Decimal("90.0000"),
         credit_balance=Decimal("850.0000"),
     ),
     DemoUserSpec(
-        email="admin@demo.gte.local",
-        username="demo_admin",
-        display_name="Demo Admin",
+        email="seed.admin@gte.local",
+        username="seed_admin",
+        display_name="Seed Admin",
         role=UserRole.ADMIN,
         provider=PaymentProvider.PAYSTACK,
         coin_balance=Decimal("500.0000"),
@@ -1259,8 +1259,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
     parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
     parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local demo users for login flows.")
-    parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo users, holdings, and optional liquidity.")
+    parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic seed users when auth fixtures are bootstrapped.")
+    parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable player, holding, and optional liquidity fixtures.")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
     parser.add_argument("--featured-limit", type=int, default=DEFAULT_FEATURED_PLAYER_LIMIT, help="Number of featured players to include in the summary output.")
     parser.add_argument("--with-liquidity", action=argparse.BooleanOptionalAction, default=False, help="Also seed deterministic exchange-side liquidity and trade history.")

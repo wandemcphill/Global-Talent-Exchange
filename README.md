@@ -35,7 +35,7 @@ cd frontend
 flutter pub get
 flutter analyze
 flutter test
-flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=liveThenFixture
+flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live
 ```
 
 If the Android wrapper is incomplete, regenerate it locally with `flutter create . --platforms=android`.
@@ -57,8 +57,9 @@ This creates:
 - a curated 120-player demo market slice with visible Bands A-E supply coverage
 - 100+ players visible on the first market load in the current app flow
 - precomputed value snapshots and player summaries
-- seeded market holdings for the demo users' `/api/portfolio/snapshot` view
-- wallet balances and ledger entries for each demo user
+- synthetic local-only QA users for market and portfolio checks
+- seeded market holdings for the synthetic QA users' `/api/portfolio/snapshot` view
+- wallet balances and ledger entries for the synthetic QA users
 - seeded buy ladders and sell ladders in the exchange order book
 - seeded trade executions for ticker volume/history
 - 30 higher-activity and 60 thinner-book seeded player markets for local demos and tests
@@ -265,7 +266,7 @@ $token = (
     -Method Post `
     -Uri http://127.0.0.1:8000/auth/login `
     -ContentType "application/json" `
-    -Body '{"email":"fan@demo.gte.local","password":"DemoPass123"}'
+    -Body '{"email":"seed.fan@gte.local","password":"DemoPass123"}'
 ).access_token
 ```
 

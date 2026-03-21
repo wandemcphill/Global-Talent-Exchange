@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../../data/gte_api_repository.dart';
 import '../../widgets/gte_route_integrity_screen.dart';
