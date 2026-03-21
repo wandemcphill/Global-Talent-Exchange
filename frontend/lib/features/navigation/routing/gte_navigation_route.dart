@@ -23,7 +23,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.hub:
         return 'Hub';
       case GtePrimaryDestination.community:
-        return 'Community';
+        return 'Hub';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:

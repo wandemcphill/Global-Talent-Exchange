@@ -79,7 +79,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wallet overview'),
+        title: const Text('Club Wallet'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
@@ -199,7 +199,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                     value: gteFormatCredits(
                                         overview.availableBalance),
                                     caption:
-                                        'Tradeable balance for market and competitions.',
+                                        'Balance ready for market and competitions.',
                                     accent: GteShellTheme.accentCapital,
                                   ),
                                 ],
@@ -263,10 +263,15 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             ),
                           ),
                         Text(
-                          'Source-tagged history',
+                          'Money moves',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
+                        Text(
+                          'Every wallet event stays readable by source so rewards, top-ups, and transfers do not blur together.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
                         if (ledgerSnapshot.connectionState ==
                                 ConnectionState.waiting &&
                             !ledgerSnapshot.hasData)
@@ -344,6 +349,36 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   }
 }
 
+class _WalletTag extends StatelessWidget {
+  const _WalletTag({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.14),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1,
+            ),
+      ),
+    );
+  }
+}
+
 class _MetricTile extends StatelessWidget {
   const _MetricTile({required this.label, required this.value});
 
@@ -357,14 +392,21 @@ class _MetricTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.white.withValues(alpha: 0.03),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
+          border: Border.all(
+              color: GteShellTheme.accentCapital.withValues(alpha: 0.12)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 6),
+            Text(
+              label.toUpperCase(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
             Text(value, style: Theme.of(context).textTheme.titleMedium),
           ],
         ),
@@ -390,6 +432,7 @@ class _WalletTransactionTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GteSurfacePanel(
+        accentColor: accent,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -417,6 +460,7 @@ class _WalletTransactionTile extends StatelessWidget {
                       gteFormatDateTime(transaction.createdAt),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    const SizedBox(height: 4),
                   ],
                 ],
               ),

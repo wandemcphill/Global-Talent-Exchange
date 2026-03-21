@@ -1032,7 +1032,7 @@ class _ArenaRoutePanel extends StatelessWidget {
 
   String _hostDescription() {
     if (!widget.isAuthenticated) {
-      return 'Hosting opens only after sign-in, so guest preview mode keeps the live creator flow locked.';
+      return 'Sign in to host your own cup.';
     }
     if (widget.isCheckingCreatorAccess) {
       return 'Creator access is being checked before the live host flow is exposed.';
@@ -1065,7 +1065,7 @@ class _ArenaRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Arena extensions',
+            'More arena routes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
@@ -1086,28 +1086,28 @@ class _ArenaRoutePanel extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: null,
                 icon: const Icon(Icons.insights_outlined),
-                label: const Text('Fan predictions (live match only)'),
+                label: const Text('Predictions (live only)'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenNationsCup,
                 icon: const Icon(Icons.flag_outlined),
-                label: const Text('Nations cup'),
+                label: const Text('Nations Cup'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenWorldSimulation,
                 icon: const Icon(Icons.public_outlined),
-                label: const Text('World simulation'),
+                label: const Text('World'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenTransferCenter,
                 icon: const Icon(Icons.event_note_outlined),
-                label: const Text('Transfer center'),
+                label: const Text('Transfer hub'),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+            'Predictions unlock once a live-match route sends a match id.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
