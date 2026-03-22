@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
@@ -9,6 +10,11 @@ from sqlalchemy import create_engine
 from app.core.config import load_settings
 
 SMOKE_DEMO_PLAYER_COUNT = 12
+DEFAULT_TEST_DATABASE_URL = (
+    f"sqlite+pysqlite:///{(Path(__file__).resolve().parents[2] / '.tmp_pytest_default.db').as_posix()}"
+)
+
+os.environ.setdefault("GTE_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
 
 
 @pytest.fixture(scope="module")
