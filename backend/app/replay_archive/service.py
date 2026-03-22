@@ -6,15 +6,15 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.core.events import DomainEvent
-from backend.app.replay_archive.persistence import (
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.core.events import DomainEvent
+from app.replay_archive.persistence import (
     DatabaseReplayArchiveRepository,
     InMemoryReplayArchiveRepository,
     ReplayArchiveRepository,
 )
-from backend.app.replay_archive.policy import SpectatorVisibilityPolicyService
-from backend.app.replay_archive.schemas import (
+from app.replay_archive.policy import SpectatorVisibilityPolicyService
+from app.replay_archive.schemas import (
     CompetitionContextView,
     CountdownUpdatePayload,
     CountdownView,
@@ -114,6 +114,7 @@ class ReplayArchiveService:
             home_club=ingest.home_club,
             away_club=ingest.away_club,
             scoreline=ingest.scoreline,
+            visual_identity=ingest.visual_identity,
             timeline=ingest.timeline,
             scorers=self._filter_timeline(ingest.timeline, event_types={"goals"}),
             assisters=self._filter_timeline(ingest.timeline, event_types={"assists"}),
@@ -344,7 +345,7 @@ def ensure_replay_archive(app: FastAPI) -> ReplayArchiveService:
         app.state.event_publisher.subscribe(replay_archive.handle_event)
         app.state._replay_archive_subscribed = True
     if hasattr(app.state, "event_publisher"):
-        from backend.app.match_engine.services import ensure_local_match_execution_runtime
+        from app.match_engine.services import ensure_local_match_execution_runtime
 
         ensure_local_match_execution_runtime(app)
     return replay_archive

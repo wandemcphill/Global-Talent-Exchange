@@ -4,11 +4,11 @@ from typing import Literal
 
 from pydantic import Field
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.common.enums.academy_program_type import AcademyProgramType
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.common.enums.academy_program_type import AcademyProgramType
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.common.schemas.base import CommonSchema
 
 
 class CreateSponsorshipContractRequest(CommonSchema):

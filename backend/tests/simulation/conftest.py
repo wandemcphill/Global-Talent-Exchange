@@ -6,11 +6,11 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.main import create_app
-from backend.app.simulation.runtime import replace_market_engine
-from backend.app.simulation.service import DemoMarketSimulationService
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.main import create_app
+from app.simulation.runtime import replace_market_engine
+from app.simulation.service import DemoMarketSimulationService
 
 
 @pytest.fixture(scope="module")

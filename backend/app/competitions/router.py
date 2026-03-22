@@ -3,13 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.competitions.schemas import CompetitionView
-from backend.app.competitions.service import CompetitionQueryService
-from backend.app.manager_market.schemas import CompetitionAdminUpdateRequest, CompetitionAdminView, CompetitionOrchestrationView, CompetitionRuntimeView
-from backend.app.manager_market.service import ManagerMarketService
-from backend.app.models.user import User
-from backend.app.wallets.service import WalletService
+from app.auth.dependencies import get_current_admin, get_session
+from app.competitions.schemas import CompetitionView
+from app.competitions.service import CompetitionQueryService
+from app.manager_market.schemas import CompetitionAdminUpdateRequest, CompetitionAdminView, CompetitionOrchestrationView, CompetitionRuntimeView
+from app.manager_market.service import ManagerMarketService
+from app.models.user import User
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/competitions", tags=["competitions"])
 

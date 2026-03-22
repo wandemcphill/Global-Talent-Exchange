@@ -4,11 +4,11 @@ from datetime import datetime
 
 from pydantic import Field
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.common.enums.scout_assignment_status import ScoutAssignmentStatus
-from backend.app.common.enums.scouting_region_type import ScoutingRegionType
-from backend.app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.common.enums.scout_assignment_status import ScoutAssignmentStatus
+from app.common.enums.scouting_region_type import ScoutingRegionType
+from app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
+from app.common.schemas.base import CommonSchema
 
 
 class ScoutingRegionView(CommonSchema):

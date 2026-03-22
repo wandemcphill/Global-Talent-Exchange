@@ -33,6 +33,7 @@ from .scouting_region_type import ScoutingRegionType
 from .share_code_type import ShareCodeType
 from .sponsorship_asset_type import SponsorshipAssetType
 from .sponsorship_status import SponsorshipStatus
+from .sponsorship_surface import SponsorshipSurface
 from .transfer_bid_status import TransferBidStatus
 from .transfer_window_status import TransferWindowStatus
 from .trophy_type import TrophyType
@@ -72,6 +73,7 @@ __all__ = [
     "ShareCodeType",
     "SponsorshipAssetType",
     "SponsorshipStatus",
+    "SponsorshipSurface",
     "TransferBidStatus",
     "TransferWindowStatus",
     "TrophyType",

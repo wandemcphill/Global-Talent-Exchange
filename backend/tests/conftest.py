@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.main import create_app
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.main import create_app
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 
@@ -16,11 +16,13 @@ SMOKE_DEMO_PLAYER_COUNT = 12
 @pytest.fixture(scope="module")
 def test_settings(tmp_path_factory: pytest.TempPathFactory):
     database_path = tmp_path_factory.mktemp("gte-app") / "gte_app.db"
+    media_root = tmp_path_factory.mktemp("gte-media")
     database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
     return load_settings(
         environ={
             **os.environ,
             "GTE_DATABASE_URL": database_url,
+            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
         }
     )
 

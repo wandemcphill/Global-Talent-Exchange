@@ -5,9 +5,9 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile, PrestigeTier, ReputationEventLog, ReputationSnapshot
-from backend.app.club_identity.reputation.prestige_tier_service import PrestigeTierService
-from backend.app.club_identity.reputation.schemas import (
+from app.club_identity.models.reputation import ClubReputationProfile, PrestigeTier, ReputationEventLog, ReputationSnapshot
+from app.club_identity.reputation.prestige_tier_service import PrestigeTierService
+from app.club_identity.reputation.schemas import (
     ClubPrestigeView,
     ClubReputationHistoryView,
     ClubReputationView,

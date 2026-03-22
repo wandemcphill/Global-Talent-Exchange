@@ -225,7 +225,7 @@ def upgrade() -> None:
         sa.Column("config_version", sa.String(length=64), nullable=True),
         sa.Column("target_player_id", sa.String(length=36), nullable=True),
         sa.Column("payload_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("is_override", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_override", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["actor_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["target_player_id"], ["ingestion_players.id"], ondelete="SET NULL"),

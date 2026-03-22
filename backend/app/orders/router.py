@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.matching.service import InvalidOrderTransitionError, OrderBookSnapshot
-from backend.app.models.user import User
-from backend.app.orders.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.matching.service import InvalidOrderTransitionError, OrderBookSnapshot
+from app.models.user import User
+from app.orders.schemas import (
     OrderAcceptedView,
     OrderBookLevelView,
     OrderBookView,
@@ -16,9 +16,9 @@ from backend.app.orders.schemas import (
     OrderListView,
     OrderView,
 )
-from backend.app.orders.models import OrderStatus
-from backend.app.orders.service import OrderNotFoundError, OrderPlacementError, OrderService, PlayerNotFoundError
-from backend.app.wallets.service import LedgerError
+from app.orders.models import OrderStatus
+from app.orders.service import OrderNotFoundError, OrderPlacementError, OrderService, PlayerNotFoundError
+from app.wallets.service import LedgerError
 
 router = APIRouter(tags=["orders"])
 legacy_router = APIRouter(prefix="/orders")

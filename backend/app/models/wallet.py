@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, JSON, Numeric, String, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.user import User
+    from app.models.user import User
 
 
 class LedgerUnit(StrEnum):
@@ -33,6 +33,32 @@ class LedgerEntryReason(StrEnum):
     TRADE_SETTLEMENT = "trade_settlement"
     COMPETITION_ENTRY = "competition_entry"
     COMPETITION_REWARD = "competition_reward"
+
+
+class LedgerSourceTag(StrEnum):
+    FANCOIN_PURCHASE = "fancoin_purchase"
+    MARKET_TOPUP = "market_topup"
+    PLATFORM_COMPETITION_REWARD = "platform_competition_reward"
+    NATIONAL_COMPETITION_REWARD = "national_competition_reward"
+    GTEX_PLATFORM_GIFT_INCOME = "gtex_platform_gift_income"
+    USER_HOSTED_GIFT_INCOME_FANCOIN = "user_hosted_gift_income_fancoin"
+    MATCH_VIEW_REVENUE = "match_view_revenue"
+    HOSTING_FEE_SPEND = "hosting_fee_spend"
+    USER_COMPETITION_ENTRY_SPEND = "user_competition_entry_spend"
+    VIDEO_VIEW_SPEND = "video_view_spend"
+    STADIUM_UPGRADE_SPEND = "stadium_upgrade_spend"
+    COSMETIC_SPEND = "cosmetic_spend"
+    PLAYER_CARD_SALE = "player_card_sale"
+    PLAYER_CARD_PURCHASE = "player_card_purchase"
+    CLUB_SALE_SALE = "club_sale_sale"
+    CLUB_SALE_PURCHASE = "club_sale_purchase"
+    CLUB_SALE_PLATFORM_FEE = "club_sale_platform_fee"
+    TRADING_FEE_BURN = "trading_fee_burn"
+    GIFT_RAKE_BURN = "gift_rake_burn"
+    WITHDRAWAL_FEE_BURN = "withdrawal_fee_burn"
+    PROMO_POOL_CREDIT = "promo_pool_credit"
+    ADMIN_ADJUSTMENT = "admin_adjustment"
+    HIGHLIGHT_DOWNLOAD_SPEND = "highlight_download_spend"
 
 
 class PaymentProvider(StrEnum):
@@ -113,6 +139,12 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     unit: Mapped[LedgerUnit] = mapped_column(
         Enum(LedgerUnit, name="ledger_unit", native_enum=False),
         nullable=False,
+    )
+    source_tag: Mapped[LedgerSourceTag] = mapped_column(
+        Enum(LedgerSourceTag, name="ledger_source_tag", native_enum=False),
+        nullable=False,
+        default=LedgerSourceTag.ADMIN_ADJUSTMENT,
+        server_default=LedgerSourceTag.ADMIN_ADJUSTMENT.value,
     )
     reason: Mapped[LedgerEntryReason] = mapped_column(
         Enum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False),

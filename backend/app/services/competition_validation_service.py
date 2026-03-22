@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.config.competition_constants import (
+from app.common.enums.competition_status import CompetitionStatus
+from app.config.competition_constants import (
     USER_COMPETITION_MAX_ENTRY_FEE_MINOR,
     USER_COMPETITION_MAX_HOST_CREATION_FEE_MINOR,
     USER_COMPETITION_MAX_PLATFORM_FEE_BPS,
     USER_COMPETITION_MIN_PARTICIPANTS,
 )
-from backend.app.models.competition import Competition
-from backend.app.schemas.competition_core import CompetitionCreateRequest, CompetitionUpdateRequest
-from backend.app.schemas.competition_financials import CompetitionFeeSummary
-from backend.app.schemas.competition_rules import CompetitionRuleSetPayload
-from backend.app.services.competition_rules_engine import CompetitionRulesEngine, CompetitionRulesError
+from app.models.competition import Competition
+from app.schemas.competition_core import CompetitionCreateRequest, CompetitionUpdateRequest
+from app.schemas.competition_financials import CompetitionFeeSummary
+from app.schemas.competition_rules import CompetitionRuleSetPayload
+from app.services.competition_rules_engine import CompetitionRulesEngine, CompetitionRulesError
 
 
 class CompetitionValidationError(ValueError):
@@ -143,6 +143,8 @@ class CompetitionValidationService:
         return {
             CompetitionStatus.LOCKED,
             CompetitionStatus.IN_PROGRESS,
+            CompetitionStatus.SEEDED,
+            CompetitionStatus.LIVE,
             CompetitionStatus.COMPLETED,
             CompetitionStatus.CANCELLED,
             CompetitionStatus.REFUNDED,

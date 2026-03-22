@@ -8,15 +8,15 @@ from uuid import uuid4
 
 from fastapi import Request
 
-from backend.app.schemas.creator_requests import CreatorProfileCreateRequest, CreatorProfileUpdateRequest
-from backend.app.schemas.creator_responses import CreatorSummaryView
-from backend.app.schemas.referral_requests import (
+from app.schemas.creator_requests import CreatorProfileCreateRequest, CreatorProfileUpdateRequest
+from app.schemas.creator_responses import CreatorSummaryView
+from app.schemas.referral_requests import (
     AttributionCaptureRequest,
     ShareCodeCreateRequest,
     ShareCodeRedeemRequest,
     ShareCodeUpdateRequest,
 )
-from backend.app.schemas.referral_responses import (
+from app.schemas.referral_responses import (
     AttributionView,
     ReferralInviteView,
     ReferralRewardView,
@@ -167,10 +167,10 @@ class ReferralOrchestrator:
     """GTEX creator profiles, share codes, invite attribution, and referral rewards are community-growth features tied to qualified participation milestones in creator competitions and other skill-based platform activity. They are not betting affiliate flows, house-banked wagering products, or cash-settled prediction mechanics."""
 
     def __init__(self, store: ReferralStore | None = None) -> None:
-        from backend.app.services.creator_competition_link_service import CreatorCompetitionLinkService
-        from backend.app.services.creator_profile_service import CreatorProfileService
-        from backend.app.services.referral_attribution_service import ReferralAttributionService
-        from backend.app.services.referral_reward_service import ReferralRewardService
+        from app.services.creator_competition_link_service import CreatorCompetitionLinkService
+        from app.services.creator_profile_service import CreatorProfileService
+        from app.services.referral_attribution_service import ReferralAttributionService
+        from app.services.referral_reward_service import ReferralRewardService
 
         self.store = store or ReferralStore()
         self.creator_profiles = CreatorProfileService(self.store)

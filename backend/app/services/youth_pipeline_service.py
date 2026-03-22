@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from functools import lru_cache
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.schemas.scouting_core import YouthPipelineSnapshotView
-from backend.app.services.club_finance_service import ClubOpsStore, get_club_ops_store
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.schemas.scouting_core import YouthPipelineSnapshotView
+from app.services.club_finance_service import ClubOpsStore, get_club_ops_store
 
 
 def _utcnow() -> datetime:

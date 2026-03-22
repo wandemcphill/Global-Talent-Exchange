@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 import unittest
 from unittest.mock import MagicMock
 
-from backend.app.ingestion.models import MarketSignal
-from backend.app.value_engine.service import IngestionValueSnapshotRepository
+from app.ingestion.models import MarketSignal
+from app.value_engine.service import IngestionValueSnapshotRepository
 
 
 class IngestionValueSnapshotRepositoryTests(unittest.TestCase):

@@ -5,13 +5,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.market.models import (
+from app.market.models import (
     ListingStatus,
     ListingType,
     OfferStatus,
     TradeIntentDirection,
     TradeIntentStatus,
 )
+from app.schemas.avatar import PlayerAvatarView
 
 
 class ListingCreate(BaseModel):
@@ -125,6 +126,7 @@ class MarketPlayerListItemView(BaseModel):
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    avatar: PlayerAvatarView
 
 
 class MarketPlayerListView(BaseModel):
@@ -158,6 +160,7 @@ class MarketPlayerIdentityView(BaseModel):
     current_competition_id: str | None
     current_competition_name: str | None
     image_url: str | None
+    avatar: PlayerAvatarView
 
 
 class MarketPlayerMarketProfileView(BaseModel):
@@ -199,6 +202,10 @@ class MarketPlayerTrendProfileView(BaseModel):
     previous_global_scouting_index: float | None
     global_scouting_index_movement_pct: float | None
     drivers: tuple[str, ...]
+    active_real_world_flags: tuple[str, ...] = ()
+    recommendation_priority_delta: float = 0.0
+    market_buzz_score: float = 0.0
+    temporary_form_boost: float = 0.0
 
 
 class MarketPlayerDetailView(BaseModel):

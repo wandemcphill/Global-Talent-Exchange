@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from backend.app.competition_engine.queue_contracts import SUPPORTED_MATCH_MOMENTS
-from backend.app.config.competition_constants import (
+from app.competition_engine.queue_contracts import SUPPORTED_MATCH_MOMENTS
+from app.config.competition_constants import (
     FINAL_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MIN_MINUTES,
 )
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     FastCup,
     FastCupBracket,
     FastCupEntrant,

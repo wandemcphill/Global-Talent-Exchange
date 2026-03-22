@@ -1,4 +1,4 @@
-from backend.app.core.database import (
+from app.core.database import (
     DatabaseRuntime,
     build_alembic_config,
     create_database_engine,

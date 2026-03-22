@@ -9,10 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
-from backend.app.club_identity.reputation.router import router
-from backend.app.db import get_session
-from backend.app.models.base import Base
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
+from app.club_identity.reputation.router import router
+from app.db import get_session
+from app.models.base import Base
 
 
 @pytest.fixture()

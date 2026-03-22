@@ -1,8 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from backend.app.models.user import KycStatus, User
+from app.models.user import KycStatus, User
 
 
 class UserNotFoundError(LookupError):

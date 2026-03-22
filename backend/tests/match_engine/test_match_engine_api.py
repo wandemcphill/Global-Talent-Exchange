@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.match_engine.api.router import router
+from app.match_engine.api.router import router
 from backend.tests.match_engine.helpers import build_request
 
 

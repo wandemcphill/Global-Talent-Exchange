@@ -2,9 +2,9 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from backend.app.core.config import PriceBandLimit, ValueWeightProfile
-from backend.app.ingestion.models import CompetitionContext, NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
-from backend.app.value_engine.models import (
+from app.core.config import PriceBandLimit, ValueWeightProfile
+from app.ingestion.models import CompetitionContext, NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
+from app.value_engine.models import (
     DemandSignal,
     EGameSignal,
     HistoricalValuePoint,
@@ -15,7 +15,7 @@ from backend.app.value_engine.models import (
     ScoutingSignal,
     TradePrint,
 )
-from backend.app.value_engine.scoring import ValueEngine, credits_from_real_world_value
+from app.value_engine.scoring import ValueEngine, credits_from_real_world_value
 
 
 class ValueEngineScoringTests(unittest.TestCase):

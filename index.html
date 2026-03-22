@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GTEX | Global Talent Exchange</title>
+  <meta
+    name="description"
+    content="GTEX is a football-tech platform built to spotlight talent, connect opportunity, and drive discovery from one mobile experience."
+  >
+  <meta name="theme-color" content="#04070c">
+  <meta property="og:image" content="frontend/assets/branding/gtex_logo.png">
+  <link rel="icon" type="image/png" href="frontend/assets/branding/gtex_icon.png">
+  <link rel="apple-touch-icon" href="frontend/assets/branding/gtex_icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="#hero" aria-label="GTEX home">
+        <img
+          class="brand-image"
+          src="frontend/assets/branding/gtex_logo.png"
+          alt="GTEX | Global Talent Exchange"
+          width="682"
+          height="239"
+        >
+      </a>
+
+      <nav class="nav" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#install">Install</a>
+        <a href="#download">Download</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero section" id="hero">
+        <div class="hero-copy reveal">
+          <img
+            class="hero-brand"
+            src="frontend/assets/branding/gtex_logo.png"
+            alt="GTEX | Global Talent Exchange"
+            width="682"
+            height="239"
+          >
+          <p class="eyebrow">FOOTBALL x DISCOVERY x MOBILE</p>
+          <h1 class="visually-hidden">GTEX</h1>
+          <p class="tagline">Global Talent Exchange for the next generation of football visibility.</p>
+          <p class="hero-text">
+            GTEX brings players, scouts, fans, and opportunities into one sharp mobile experience built for discovery,
+            competition, and momentum.
+          </p>
+
+          <div class="hero-actions">
+            <button class="button button-primary js-apk-button" type="button">Download Android APK</button>
+            <a class="button button-secondary" href="#install">How to Install</a>
+          </div>
+
+          <p class="helper-text">
+            APK URL:
+            <code id="apk-url-display">Not configured</code>
+          </p>
+
+          <ul class="hero-points" aria-label="GTEX highlights">
+            <li>Talent discovery in one flow</li>
+            <li>Android-first access for fast rollout</li>
+            <li>Built for lightweight GitHub Pages hosting</li>
+          </ul>
+        </div>
+
+        <div class="hero-visual reveal" aria-hidden="true">
+          <div class="stadium-card">
+            <div class="stadium-card__top">
+              <span>LIVE PLATFORM PREVIEW</span>
+              <span>APK READY</span>
+            </div>
+
+            <div class="pitch">
+              <div class="pitch-ring pitch-ring--one"></div>
+              <div class="pitch-ring pitch-ring--two"></div>
+              <div class="pitch-center"></div>
+            </div>
+
+            <div class="stadium-card__stats">
+              <div>
+                <strong>24/7</strong>
+                <span>Discovery cycle</span>
+              </div>
+              <div>
+                <strong>Mobile</strong>
+                <span>Optimized first</span>
+              </div>
+              <div>
+                <strong>Direct</strong>
+                <span>APK distribution</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="section-heading reveal">
+          <p class="eyebrow">CORE VALUE</p>
+          <h2>Why GTEX stands out</h2>
+          <p>
+            A focused product story for football communities that need visibility, structure, and easy mobile access.
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card reveal">
+            <span class="feature-index">01</span>
+            <h3>Talent Discovery</h3>
+            <p>Help players get noticed with a platform centered on visibility, profile strength, and opportunity flow.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">02</span>
+            <h3>Competition Energy</h3>
+            <p>Present the app as a live, football-native environment where momentum and participation feel immediate.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">03</span>
+            <h3>Fast Android Reach</h3>
+            <p>Share the APK directly with users who want quick install access without a complex release pipeline.</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">04</span>
+            <h3>Simple Deployment</h3>
+            <p>Host the landing page for free on GitHub Pages with only three static files and no backend dependency.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="screenshots">
+        <div class="section-heading reveal">
+          <p class="eyebrow">PRODUCT PREVIEW</p>
+          <h2>See GTEX in action</h2>
+          <p>Add your launch screenshots to the <code>images</code> folder and keep the same file names for a quick swap.</p>
+        </div>
+
+        <div class="shots-grid">
+          <figure class="shot-card reveal">
+            <img
+              class="shot-image"
+              src="images/gtex-shot-1.png"
+              alt="GTEX home and discovery feed screen"
+              data-fallback-title="Screenshot unavailable"
+              data-fallback-path="images/gtex-shot-1.png"
+              loading="lazy"
+            >
+            <figcaption>Discovery feed and featured talent visibility.</figcaption>
+          </figure>
+
+          <figure class="shot-card reveal">
+            <img
+              class="shot-image"
+              src="images/gtex-shot-2.png"
+              alt="GTEX player profile screen"
+              data-fallback-title="Screenshot unavailable"
+              data-fallback-path="images/gtex-shot-2.png"
+              loading="lazy"
+            >
+            <figcaption>Player profile, stats, and profile highlights.</figcaption>
+          </figure>
+
+          <figure class="shot-card reveal">
+            <img
+              class="shot-image"
+              src="images/gtex-shot-3.png"
+              alt="GTEX competition or match hub screen"
+              data-fallback-title="Screenshot unavailable"
+              data-fallback-path="images/gtex-shot-3.png"
+              loading="lazy"
+            >
+            <figcaption>Competition activity, match updates, and momentum.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section install-section" id="install">
+        <div class="section-heading reveal">
+          <p class="eyebrow">ANDROID INSTALL</p>
+          <h2>How to install on Android</h2>
+          <p>A short guide for first-time users installing the GTEX APK directly on Android.</p>
+        </div>
+
+        <div class="install-grid">
+          <article class="install-step reveal">
+            <span>Step 1</span>
+            <h3>Tap the APK link</h3>
+            <p>Use the main download button or scan the QR code from another device.</p>
+          </article>
+
+          <article class="install-step reveal">
+            <span>Step 2</span>
+            <h3>Allow install permission</h3>
+            <p>If prompted, enable installs from your browser or file manager in Android settings.</p>
+          </article>
+
+          <article class="install-step reveal">
+            <span>Step 3</span>
+            <h3>Open the downloaded file</h3>
+            <p>Locate the APK in your downloads folder and confirm installation.</p>
+          </article>
+
+          <article class="install-step reveal">
+            <span>Step 4</span>
+            <h3>Launch GTEX</h3>
+            <p>Open the app, sign in or create an account, and start exploring the ecosystem.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section download-section" id="download">
+        <div class="download-panel reveal">
+          <div class="download-copy">
+            <p class="eyebrow">DIRECT ACCESS</p>
+            <h2>Download the GTEX Android APK</h2>
+            <p>
+              One APK link powers every download button on this page. Update <code>APK_URL</code> in
+              <code>script.js</code> and drop your images into the <code>images</code> folder.
+            </p>
+
+            <div class="download-actions">
+              <button class="button button-primary js-apk-button" type="button">Get The APK</button>
+              <a class="button button-secondary" href="#screenshots">View Screenshots</a>
+            </div>
+
+            <p class="status-note" id="download-status">
+              Android APK download will be enabled once the release URL is added.
+            </p>
+          </div>
+
+          <aside class="qr-card" aria-label="QR code download area">
+            <div class="qr-frame">
+              <img
+                class="qr-image"
+                src="images/gtex-qr.png"
+                alt="QR code to download the GTEX Android APK"
+                data-fallback-title="QR code unavailable"
+                data-fallback-path="images/gtex-qr.png"
+                loading="lazy"
+              >
+            </div>
+            <p>Place your QR asset at <code>images/gtex-qr.png</code> so mobile users can scan and install.</p>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p class="footer-brand">&copy; <span id="year"></span> GTEX | Global Talent Exchange</p>
+      <p>Early access release. APK availability, visuals, and in-app features may change as GTEX continues to evolve.</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

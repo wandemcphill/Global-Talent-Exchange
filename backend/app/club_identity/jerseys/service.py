@@ -4,8 +4,8 @@ from dataclasses import dataclass, replace
 from hashlib import sha256
 import math
 
-from backend.app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
-from backend.app.club_identity.models.jersey_models import (
+from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
+from app.club_identity.models.jersey_models import (
     BadgePlacement,
     BadgeProfile,
     BadgeShape,

@@ -6,8 +6,8 @@ from typing import Any
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, JSON, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.share_code_type import ShareCodeType
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.share_code_type import ShareCodeType
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ShareCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):

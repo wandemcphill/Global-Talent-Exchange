@@ -4,8 +4,8 @@ from datetime import date
 
 from sqlalchemy import func, select
 
-from backend.app.ingestion.models import Competition, Country, Player, PlayerClubTenure, PlayerVerification
-from backend.app.ingestion.player_universe_seeder import (
+from app.ingestion.models import Competition, Country, Player, PlayerClubTenure, PlayerVerification
+from app.ingestion.player_universe_seeder import (
     COUNTRY_SPECS,
     PHASE_THREE_PROVIDER_NAME,
     PHASE_THREE_REFERENCE_DATE,

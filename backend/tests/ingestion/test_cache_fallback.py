@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.cache.redis_helpers import HotReadCache, NullCacheBackend, build_cache_backend
+from app.cache.redis_helpers import HotReadCache, NullCacheBackend, build_cache_backend
 
 
 def test_cache_backend_falls_back_to_null_when_redis_unavailable() -> None:

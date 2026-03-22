@@ -5,10 +5,10 @@ from decimal import Decimal
 
 from pydantic import Field
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.common.enums.competition_status import CompetitionStatus
-from backend.app.common.enums.competition_visibility import CompetitionVisibility
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_status import CompetitionStatus
+from app.common.enums.competition_visibility import CompetitionVisibility
+from app.common.schemas.base import CommonSchema
 
 
 class PayoutBreakdown(CommonSchema):

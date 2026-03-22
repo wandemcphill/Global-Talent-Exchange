@@ -9,22 +9,22 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-import backend.app.players.read_models  # noqa: F401
-import backend.app.value_engine.read_models  # noqa: F401
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.auth.service import AuthService
-from backend.app.ingestion.models import Player
-from backend.app.models.base import Base
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.settlement.service import SettlementService, TradeExecution
-from backend.app.wallets.router import router
-from backend.app.wallets.service import LedgerPosting, WalletService
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+import app.players.read_models  # noqa: F401
+import app.value_engine.read_models  # noqa: F401
+from app.auth.dependencies import get_current_user, get_session
+from app.auth.service import AuthService
+from app.ingestion.models import Player
+from app.models.base import Base
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.players.read_models import PlayerSummaryReadModel
+from app.settlement.service import SettlementService, TradeExecution
+from app.wallets.router import router
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()

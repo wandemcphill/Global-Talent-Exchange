@@ -1,5 +1,5 @@
-from backend.app.club_identity.trophies.router import router
-from backend.app.club_identity.trophies.service import (
+from app.club_identity.trophies.router import router
+from app.club_identity.trophies.service import (
     ClubHonorsNotFoundError,
     DuplicateTrophyAwardError,
     TrophyCabinetService,

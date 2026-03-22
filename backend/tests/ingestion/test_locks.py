@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.ingestion.locks import IngestionLockManager
+from app.ingestion.locks import IngestionLockManager
 
 
 def test_duplicate_lock_prevention(session_factory) -> None:

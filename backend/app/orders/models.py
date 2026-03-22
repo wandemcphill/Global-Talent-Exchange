@@ -6,8 +6,8 @@ from enum import StrEnum
 from sqlalchemy import Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from backend.app.models.wallet import LedgerUnit
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.wallet import LedgerUnit
 
 
 class OrderSide(StrEnum):
@@ -58,7 +58,7 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             values_callable=lambda enum_type: [member.value for member in enum_type],
         ),
         nullable=False,
-        default=LedgerUnit.CREDIT,
+        default=LedgerUnit.COIN,
     )
     reserved_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))
     status: Mapped[OrderStatus] = mapped_column(

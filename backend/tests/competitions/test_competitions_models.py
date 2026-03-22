@@ -7,11 +7,11 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 import pytest
 
-from backend.app.core.database import build_alembic_config
-from backend.app.models.base import Base
-from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
-from backend.app.schemas.competition_core import CompetitionCreateRequest
-from backend.app.services.competition_creation_service import CompetitionCreationService
+from app.core.database import build_alembic_config
+from app.models.base import Base
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.schemas.competition_core import CompetitionCreateRequest
+from app.services.competition_creation_service import CompetitionCreationService
 
 
 def _league_request() -> CompetitionCreateRequest:

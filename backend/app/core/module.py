@@ -7,7 +7,7 @@ from typing import Callable
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 
-from backend.app.core.container import ApplicationContext
+from app.core.container import ApplicationContext
 
 ModuleHook = Callable[[FastAPI, ApplicationContext], None]
 

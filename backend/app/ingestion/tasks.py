@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from backend.app.cache.redis_helpers import build_cache_backend
-from backend.app.ingestion.constants import DEFAULT_PROVIDER_NAME
-from backend.app.ingestion.service import IngestionService
+from app.cache.redis_helpers import build_cache_backend
+from app.ingestion.constants import DEFAULT_PROVIDER_NAME
+from app.ingestion.service import IngestionService
 
 
 def _run_with_session(session_factory, operation: Callable[[IngestionService], Any], *, cache_backend=None) -> Any:

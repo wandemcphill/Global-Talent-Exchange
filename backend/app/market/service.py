@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.market.models import (
+from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.market.models import (
     Listing,
     ListingStatus,
     ListingType,
@@ -17,16 +18,18 @@ from backend.app.market.models import (
     TradeIntentStatus,
     utcnow,
 )
-from backend.app.market.projections import MarketSummaryProjector
-from backend.app.market.repositories import (
+from app.market.projections import MarketSummaryProjector
+from app.market.repositories import (
     InMemoryMarketRepository,
     MarketPlayerRecord,
     MarketRepository,
     SqlAlchemyMarketPlayerRepository,
 )
-from backend.app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
-from backend.app.pricing.service import MarketPricingService, PricingValidationError
-from backend.app.value_engine.scoring import credits_from_real_world_value
+from app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
+from app.pricing.service import MarketPricingService, PricingValidationError
+from app.schemas.avatar import PlayerAvatarView
+from app.services.avatar_service import AvatarIdentityInput, AvatarService
+from app.value_engine.scoring import credits_from_real_world_value
 from sqlalchemy.orm import Session
 
 
@@ -740,6 +743,7 @@ class MarketPlayerListItem:
     trend_score: float | None
     market_interest_score: int | None
     average_rating: float | None
+    avatar: PlayerAvatarView
 
 
 @dataclass(frozen=True, slots=True)
@@ -771,6 +775,7 @@ class MarketPlayerIdentity:
     current_competition_id: str | None
     current_competition_name: str | None
     image_url: str | None
+    avatar: PlayerAvatarView
 
 
 @dataclass(frozen=True, slots=True)
@@ -809,6 +814,10 @@ class MarketPlayerTrendProfile:
     previous_global_scouting_index: float | None
     global_scouting_index_movement_pct: float | None
     drivers: tuple[str, ...]
+    active_real_world_flags: tuple[str, ...] = ()
+    recommendation_priority_delta: float = 0.0
+    market_buzz_score: float = 0.0
+    temporary_form_boost: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -849,6 +858,8 @@ class MarketPlayerQueryService:
     repository: SqlAlchemyMarketPlayerRepository | None = None
     market_engine: MarketEngine | None = None
     today: date | None = None
+    avatar_service: AvatarService | None = None
+    _real_world_impact_cache: dict[str, PlayerRealWorldImpact] = field(init=False, default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if self.repository is None:
@@ -857,6 +868,8 @@ class MarketPlayerQueryService:
             self.market_engine = MarketEngine()
         if self.today is None:
             self.today = date.today()
+        if self.avatar_service is None:
+            self.avatar_service = AvatarService()
 
     def list_players(
         self,
@@ -915,6 +928,7 @@ class MarketPlayerQueryService:
         player = record.player
         summary_payload = self._summary_payload(record)
         breakdown_payload = self._breakdown_payload(record)
+        real_world_impact = self._real_world_impact(player.id)
 
         return MarketPlayerDetail(
             player_id=player.id,
@@ -942,6 +956,7 @@ class MarketPlayerQueryService:
                     else None
                 ),
                 image_url=self._image_url(record),
+                avatar=self._avatar(record),
             ),
             market_profile=MarketPlayerMarketProfile(
                 is_tradable=player.is_tradable,
@@ -988,6 +1003,10 @@ class MarketPlayerQueryService:
                 previous_global_scouting_index=self._previous_global_scouting_index(record),
                 global_scouting_index_movement_pct=self._global_scouting_index_movement_pct(record),
                 drivers=self._drivers(record),
+                active_real_world_flags=real_world_impact.active_flag_codes,
+                recommendation_priority_delta=real_world_impact.recommendation_priority_delta,
+                market_buzz_score=real_world_impact.market_buzz_score,
+                temporary_form_boost=real_world_impact.gameplay_effect_total,
             ),
         )
 
@@ -1103,6 +1122,7 @@ class MarketPlayerQueryService:
                 else None
             ),
             average_rating=record.summary.average_rating if record.summary is not None else None,
+            avatar=self._avatar(record),
         )
 
     def _build_history_point(self, snapshot: Any) -> MarketPlayerHistoryPoint:
@@ -1405,6 +1425,7 @@ class MarketPlayerQueryService:
         market_interest = float(record.summary.market_interest_score) if record.summary is not None else 0.0
         discovery_trend = self._trend_score(record) or 0.0
         book_signal = float(snapshot.best_bid is not None) + float(snapshot.best_ask is not None)
+        real_world_impact = self._real_world_impact(record.player.id)
         return round(
             (snapshot.volume_24h * 5.0)
             + abs(snapshot.day_change_percent)
@@ -1412,7 +1433,21 @@ class MarketPlayerQueryService:
             + (discovery_trend / 10.0)
             + book_signal,
             4,
+        ) + round(
+            (len(real_world_impact.active_flag_codes) * 2.0)
+            + max(real_world_impact.market_buzz_score, 0.0)
+            + max(real_world_impact.recommendation_priority_delta, 0.0)
+            + max(real_world_impact.market_effect_total, 0.0),
+            4,
         )
+
+    def _real_world_impact(self, player_id: str) -> PlayerRealWorldImpact:
+        cached = self._real_world_impact_cache.get(player_id)
+        if cached is not None:
+            return cached
+        impact = RealWorldFootballEventService(self.session).get_player_impact(player_id)
+        self._real_world_impact_cache[player_id] = impact
+        return impact
 
     def _supply_tier_payload(self, record: MarketPlayerRecord) -> dict[str, Any] | None:
         summary_payload = self._summary_payload(record)
@@ -1476,6 +1511,23 @@ class MarketPlayerQueryService:
         if record.latest_snapshot is not None:
             return record.latest_snapshot.as_of
         return None
+
+    def _avatar(self, record: MarketPlayerRecord) -> PlayerAvatarView:
+        summary_payload = self._summary_payload(record)
+        return self.avatar_service.build_from_payload(
+            AvatarIdentityInput(
+                player_id=record.player.id,
+                player_name=record.player.full_name,
+                position=record.player.position,
+                normalized_position=record.player.normalized_position,
+                nationality=record.player.country.name if record.player.country is not None else None,
+                nationality_code=self._nationality_code(record),
+                birth_year=record.player.date_of_birth.year if record.player.date_of_birth is not None else None,
+                preferred_foot=record.player.preferred_foot,
+                avatar_seed_token=summary_payload.get("avatar_seed_token"),
+                avatar_dna_seed=summary_payload.get("avatar_dna_seed"),
+            )
+        )
 
     def _image_url(self, record: MarketPlayerRecord) -> str | None:
         candidates = sorted(

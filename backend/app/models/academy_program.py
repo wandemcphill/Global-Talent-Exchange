@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Enum, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.academy_program_type import AcademyProgramType
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.academy_program_type import AcademyProgramType
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.academy_player import AcademyPlayer
-    from backend.app.models.academy_training_cycle import AcademyTrainingCycle
+    from app.models.academy_player import AcademyPlayer
+    from app.models.academy_training_cycle import AcademyTrainingCycle
 
 
 class AcademyProgram(UUIDPrimaryKeyMixin, TimestampMixin, Base):

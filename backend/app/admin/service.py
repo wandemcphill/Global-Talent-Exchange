@@ -7,12 +7,14 @@ from pathlib import Path
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import (
+from app.core.config import (
     LIQUIDITY_BANDS_FILE,
+    PLAYER_CARD_MARKET_INTEGRITY_FILE,
     SUPPLY_TIERS_FILE,
     SUSPICION_THRESHOLDS_FILE,
     VALUE_ENGINE_WEIGHTING_FILE,
     LiquidityBandsConfig,
+    PlayerCardMarketIntegrityConfig,
     Settings,
     SupplyTiersConfig,
     SuspicionThresholdsConfig,
@@ -20,7 +22,7 @@ from backend.app.core.config import (
     load_settings,
     reset_settings_cache,
 )
-from backend.app.ingestion.market_profile import PlayerMarketProfileService
+from app.ingestion.market_profile import PlayerMarketProfileService
 
 
 def _toml_scalar(value: object) -> str:
@@ -92,6 +94,25 @@ def render_suspicion_thresholds_config(config: SuspicionThresholdsConfig) -> str
         f"holder_concentration_share = {_toml_scalar(config.holder_concentration_share)}",
         f"circular_trade_min_cycle_length = {_toml_scalar(config.circular_trade_min_cycle_length)}",
         f"circular_trade_min_repetitions = {_toml_scalar(config.circular_trade_min_repetitions)}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def render_player_card_market_integrity_config(config: PlayerCardMarketIntegrityConfig) -> str:
+    lines = [
+        f"sale_reference_lookback_days = {_toml_scalar(config.sale_reference_lookback_days)}",
+        f"minimum_reference_sales = {_toml_scalar(config.minimum_reference_sales)}",
+        f"listing_price_floor_ratio = {_toml_scalar(config.listing_price_floor_ratio)}",
+        f"listing_price_ceiling_ratio = {_toml_scalar(config.listing_price_ceiling_ratio)}",
+        f"relist_cooldown_minutes = {_toml_scalar(config.relist_cooldown_minutes)}",
+        f"pair_trade_lookback_hours = {_toml_scalar(config.pair_trade_lookback_hours)}",
+        f"pair_trade_alert_threshold = {_toml_scalar(config.pair_trade_alert_threshold)}",
+        f"asset_churn_window_hours = {_toml_scalar(config.asset_churn_window_hours)}",
+        f"asset_churn_alert_threshold = {_toml_scalar(config.asset_churn_alert_threshold)}",
+        f"circular_trade_window_hours = {_toml_scalar(config.circular_trade_window_hours)}",
+        f"price_spike_alert_ratio = {_toml_scalar(config.price_spike_alert_ratio)}",
+        f"volume_cluster_window_minutes = {_toml_scalar(config.volume_cluster_window_minutes)}",
+        f"volume_cluster_trade_threshold = {_toml_scalar(config.volume_cluster_trade_threshold)}",
     ]
     return "\n".join(lines) + "\n"
 
@@ -262,6 +283,20 @@ class ConfigAdminService:
         _write_file(
             current_settings.config_root / SUSPICION_THRESHOLDS_FILE,
             render_suspicion_thresholds_config(config),
+        )
+        refreshed_settings = self._reload_settings(current_settings)
+        self._apply_runtime_settings(app, refreshed_settings)
+        return refreshed_settings
+
+    def update_player_card_market_integrity(
+        self,
+        app: FastAPI,
+        config: PlayerCardMarketIntegrityConfig,
+    ) -> Settings:
+        current_settings = app.state.settings
+        _write_file(
+            current_settings.config_root / PLAYER_CARD_MARKET_INTEGRITY_FILE,
+            render_player_card_market_integrity_config(config),
         )
         refreshed_settings = self._reload_settings(current_settings)
         self._apply_runtime_settings(app, refreshed_settings)

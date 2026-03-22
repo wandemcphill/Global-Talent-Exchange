@@ -7,13 +7,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.router import login_user, register_user
-from backend.app.auth.schemas import LoginRequest, RegisterRequest
-from backend.app.auth.service import AuthService
-from backend.app.main import create_app
-from backend.app.models import Base
-from backend.app.models.user import User
-from backend.app.users.router import read_current_user
+from app.auth.router import login_user, register_user
+from app.auth.schemas import LoginRequest, RegisterRequest
+from app.auth.service import AuthService
+from app.main import create_app
+from app.models import Base
+from app.models.user import User
+from app.users.router import read_current_user
 
 
 @pytest.fixture()
@@ -101,6 +101,9 @@ def test_api_auth_me_returns_authenticated_user(app_client) -> None:
         "id": user_id,
         "email": "fan@example.com",
         "username": "fanuser",
+        "full_name": "Fan User",
+        "phone_number": "0000000000",
+        "age_confirmed_at": response.json()["age_confirmed_at"],
         "display_name": "Fan User",
         "avatar_url": None,
         "favourite_club": None,
@@ -135,6 +138,9 @@ def test_api_auth_me_patch_updates_allowed_profile_fields(app_client) -> None:
         "id": user_id,
         "email": "fan@example.com",
         "username": "fanuser",
+        "full_name": "Fan User",
+        "phone_number": "0000000000",
+        "age_confirmed_at": response.json()["age_confirmed_at"],
         "display_name": "Updated Fan",
         "avatar_url": "https://cdn.example.com/avatar.png",
         "favourite_club": "Arsenal",

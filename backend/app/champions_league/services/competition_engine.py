@@ -5,17 +5,17 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Iterable
 
-from backend.app.champions_league.models.domain import KnockoutBracket, KnockoutTie, MatchStage, PlayoffBracket
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import (
+from app.champions_league.models.domain import KnockoutBracket, KnockoutTie, MatchStage, PlayoffBracket
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import (
     CompetitionDispatchRequest,
     CompetitionEngineBatch,
     CompetitionScheduleRequest,
     ScheduledFixture,
 )
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
 
 
 @dataclass(slots=True)

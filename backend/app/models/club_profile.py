@@ -5,8 +5,8 @@ from datetime import date
 from sqlalchemy import Date, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -29,6 +29,9 @@ class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     secondary_color: Mapped[str] = mapped_column(String(16), nullable=False)
     accent_color: Mapped[str] = mapped_column(String(16), nullable=False)
     home_venue_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    region_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    city_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     visibility: Mapped[str] = mapped_column(
         String(16),

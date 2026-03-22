@@ -7,8 +7,8 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.club_identity.models.dynasty_models import ClubDynastySeasonSummary
-from backend.app.club_identity.models.reputation import ReputationEventLog, ReputationSnapshot
+from app.club_identity.models.dynasty_models import ClubDynastySeasonSummary
+from app.club_identity.models.reputation import ReputationEventLog, ReputationSnapshot
 
 
 class DynastyReadRepository(Protocol):

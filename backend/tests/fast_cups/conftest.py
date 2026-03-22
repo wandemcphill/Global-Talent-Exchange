@@ -6,9 +6,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.fast_cups.api.router import router
-from backend.app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupEntrant
-from backend.app.fast_cups.services.ecosystem import FastCupEcosystemService
+from app.fast_cups.api.router import router
+from app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupEntrant
+from app.fast_cups.services.ecosystem import FastCupEcosystemService
 
 BASE_NOW = datetime(2026, 7, 1, 12, 2, tzinfo=UTC)
 

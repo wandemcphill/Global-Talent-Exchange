@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.common.enums.club_finance_account_type import ClubFinanceAccountType
+from app.common.enums.club_finance_account_type import ClubFinanceAccountType
 
 
 def test_finance_service_tracks_opening_budget_and_cashflow(club_ops_services) -> None:

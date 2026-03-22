@@ -11,10 +11,13 @@ class GteShellTheme {
   static const Color accentWarm = Color(0xFFFFC56A);
   static const Color accentArena = Color(0xFFB26DFF);
   static const Color accentCapital = Color(0xFFFFD66B);
+  static const Color accentCommunity = Color(0xFF5FE3A1);
+  static const Color accentAdmin = Color(0xFFFF8F6B);
   static const Color textPrimary = Color(0xFFF4F7FB);
   static const Color textMuted = Color(0xFF9EADC8);
   static const Color positive = Color(0xFF73F7AF);
   static const Color negative = Color(0xFFFF8B8B);
+  static const Color warning = Color(0xFFFFC56A);
 
   static ThemeData build() {
     const ColorScheme colorScheme = ColorScheme.dark(

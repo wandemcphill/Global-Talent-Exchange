@@ -5,15 +5,16 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_profile import ClubProfile
-from backend.app.schemas.club_identity_core import ClubBrandingAssetCore, ClubIdentityThemeCore, ClubProfileCore
-from backend.app.schemas.club_requests import BrandingUpsertRequest, ClubCreateRequest, ClubUpdateRequest
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.club_reputation_service import ClubReputationService
-from backend.app.services.club_trophy_service import ClubTrophyService
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_profile import ClubProfile
+from app.schemas.club_identity_core import ClubBrandingAssetCore, ClubIdentityThemeCore, ClubProfileCore
+from app.schemas.club_requests import BrandingUpsertRequest, ClubCreateRequest, ClubUpdateRequest
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.regen_bootstrap_service import RegenBootstrapService
+from app.services.club_reputation_service import ClubReputationService
+from app.services.club_trophy_service import ClubTrophyService
 
 
 @dataclass(slots=True)
@@ -34,6 +35,9 @@ class ClubBrandingService:
             secondary_color=payload.secondary_color,
             accent_color=payload.accent_color,
             home_venue_name=payload.home_venue_name,
+            country_code=payload.country_code.upper() if payload.country_code else None,
+            region_name=payload.region_name,
+            city_name=payload.city_name,
             description=payload.description,
             visibility=payload.visibility.value,
             founded_at=payload.founded_at,
@@ -43,6 +47,8 @@ class ClubBrandingService:
         ClubReputationService(self.session).ensure_profile(club.id)
         ClubDynastyService(self.session).ensure_progress(club.id)
         ClubTrophyService(self.session).ensure_cabinet(club.id)
+        self.session.flush()
+        RegenBootstrapService(self.session).bootstrap_for_new_club(club)
         self.session.commit()
         self.session.refresh(club)
         return club
@@ -59,6 +65,8 @@ class ClubBrandingService:
         for field_name, value in updates.items():
             if field_name == "visibility" and isinstance(value, ClubIdentityVisibility):
                 value = value.value
+            if field_name == "country_code" and isinstance(value, str):
+                value = value.upper()
             setattr(club, field_name, value)
         self.session.commit()
         self.session.refresh(club)

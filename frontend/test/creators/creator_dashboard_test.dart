@@ -20,11 +20,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Creator dashboard'), findsOneWidget);
+    expect(find.text('Creator command deck'), findsOneWidget);
     expect(find.text('Maya Scout'), findsOneWidget);
     expect(find.text('Creator stats'), findsOneWidget);
     expect(find.text('Growth summary'), findsOneWidget);
-    expect(find.text('Creator competitions'), findsWidgets);
+    expect(find.text('LIVE CREATOR COMPETITIONS'), findsOneWidget);
     expect(find.text('Spring Scout Sprint'), findsOneWidget);
   });
 
@@ -44,8 +44,8 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    expect(find.text('Creator profile'), findsOneWidget);
-    expect(find.text('Creator profile link'), findsOneWidget);
+    expect(find.text('Creator profile deck'), findsOneWidget);
+    expect(find.text('PUBLIC CREATOR LINK'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -54,7 +54,6 @@ void main() {
     await tester.tap(find.text('Share').first);
     await tester.pumpAndSettle();
     expect(find.text('Creator competition share'), findsOneWidget);
-    expect(find.text('Invite friends to join creator competition'),
-        findsOneWidget);
+    expect(find.text('Share creator competition invite'), findsOneWidget);
   });
 }

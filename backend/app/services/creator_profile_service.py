@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from backend.app.services.referral_orchestrator import (
+from app.services.referral_orchestrator import (
     CreatorProfileRecord,
     ReferralActionError,
     ReferralStore,

@@ -9,15 +9,15 @@ from typing import Protocol
 from sqlalchemy import DateTime, JSON, String, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
-from backend.app.competitions.models.league_events import LeagueSeasonEvent
-from backend.app.competitions.models.league_events import (
+from app.competitions.models.league_events import LeagueSeasonEvent
+from app.competitions.models.league_events import (
     LeagueClubOptOutEvent,
     LeagueFixtureCompletedEvent,
     LeaguePlayerStatsRecordedEvent,
     LeagueRegisteredClubEventData,
     LeagueSeasonRegisteredEvent,
 )
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 
 class LeagueEventRepository(Protocol):

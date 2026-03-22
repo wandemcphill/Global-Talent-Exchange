@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from backend.app.fast_cups.api.schemas import (
+from app.fast_cups.api.schemas import (
     FastCupBracketView,
     FastCupPreviewView,
     FastCupResultSummaryView,
@@ -13,7 +13,7 @@ from backend.app.fast_cups.api.schemas import (
     RegistrationCountdownView,
     UpcomingFastCupsView,
 )
-from backend.app.fast_cups.models.domain import (
+from app.fast_cups.models.domain import (
     ClubCompetitionWindow,
     FastCupDivision,
     FastCupEntrant,
@@ -21,7 +21,7 @@ from backend.app.fast_cups.models.domain import (
     FastCupStateError,
     FastCupValidationError,
 )
-from backend.app.fast_cups.services.ecosystem import (
+from app.fast_cups.services.ecosystem import (
     FastCupEcosystemService,
     build_fast_cup_ecosystem_for_session,
 )

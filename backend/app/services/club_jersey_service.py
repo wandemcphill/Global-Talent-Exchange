@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.schemas.club_branding_core import ClubJerseyDesignCore
-from backend.app.schemas.club_requests import JerseyCreateRequest, JerseyUpdateRequest
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.schemas.club_branding_core import ClubJerseyDesignCore
+from app.schemas.club_requests import JerseyCreateRequest, JerseyUpdateRequest
 
 
 @dataclass(slots=True)

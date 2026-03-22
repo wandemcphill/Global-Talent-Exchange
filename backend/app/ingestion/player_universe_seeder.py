@@ -11,7 +11,7 @@ from uuid import uuid4
 from sqlalchemy import delete, insert, or_, select
 from sqlalchemy.orm import Session
 
-from backend.app.core.config import Settings, load_settings
+from app.core.config import Settings, load_settings
 
 from .models import (
     Club,
@@ -1128,15 +1128,15 @@ class VerifiedPlayerUniverseSeeder:
 
     def _sample_age(self, *, rng: random.Random, format_type: str, domestic_level: int | None) -> int:
         if format_type == "academy_league":
-            ranges = ((16, 17, 0.42), (18, 19, 0.46), (20, 21, 0.10), (22, 23, 0.02))
+            ranges = ((15, 16, 0.28), (17, 18, 0.40), (19, 20, 0.24), (21, 23, 0.08))
         elif format_type == "reserve_league":
-            ranges = ((17, 18, 0.24), (19, 20, 0.34), (21, 22, 0.26), (23, 24, 0.14), (25, 27, 0.02))
+            ranges = ((16, 17, 0.14), (18, 19, 0.28), (20, 21, 0.30), (22, 23, 0.18), (24, 27, 0.10))
         elif format_type == "pathway_league":
-            ranges = ((17, 18, 0.22), (19, 20, 0.30), (21, 22, 0.28), (23, 24, 0.16), (25, 27, 0.04))
+            ranges = ((16, 17, 0.18), (18, 19, 0.28), (20, 21, 0.28), (22, 23, 0.18), (24, 27, 0.08))
         elif domestic_level == 1:
-            ranges = ((17, 19, 0.16), (20, 21, 0.24), (22, 23, 0.20), (24, 27, 0.24), (28, 31, 0.12), (32, 35, 0.04))
+            ranges = ((16, 18, 0.12), (19, 21, 0.24), (22, 23, 0.20), (24, 27, 0.24), (28, 31, 0.14), (32, 35, 0.06))
         else:
-            ranges = ((17, 19, 0.20), (20, 21, 0.28), (22, 23, 0.22), (24, 27, 0.18), (28, 31, 0.09), (32, 35, 0.03))
+            ranges = ((16, 18, 0.16), (19, 21, 0.28), (22, 23, 0.22), (24, 27, 0.18), (28, 31, 0.11), (32, 35, 0.05))
         roll = rng.random()
         threshold = 0.0
         for minimum, maximum, share in ranges:

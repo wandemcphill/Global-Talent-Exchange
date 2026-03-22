@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import ForeignKey, Numeric, String, event
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 
 class TradeExecution(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

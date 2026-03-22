@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher
-from backend.app.leagues.competition_engine import LeagueCompetitionEngineService
-from backend.app.leagues.models import LeagueClub
-from backend.app.leagues.repository import InMemoryLeagueEventRepository
-from backend.app.leagues.service import LeagueSeasonLifecycleService
+from app.common.enums.fixture_window import FixtureWindow
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.leagues.competition_engine import LeagueCompetitionEngineService
+from app.leagues.models import LeagueClub
+from app.leagues.repository import InMemoryLeagueEventRepository
+from app.leagues.service import LeagueSeasonLifecycleService
 
 
 def test_league_competition_engine_builds_shared_schedule_batch() -> None:

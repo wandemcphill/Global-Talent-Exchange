@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from backend.app.fast_cups.models.domain import FastCup, FastCupStatus, RegistrationCountdown
+from app.fast_cups.models.domain import FastCup, FastCupStatus, RegistrationCountdown
 
 
 class RegistrationCountdownService:

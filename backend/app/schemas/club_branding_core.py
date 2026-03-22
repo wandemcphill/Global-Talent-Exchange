@@ -5,9 +5,9 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.enums.club_cosmetic_purchase_type import ClubCosmeticPurchaseType
-from backend.app.common.enums.jersey_slot_type import JerseySlotType
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.club_cosmetic_purchase_type import ClubCosmeticPurchaseType
+from app.common.enums.jersey_slot_type import JerseySlotType
+from app.common.schemas.base import CommonSchema
 
 
 class _ClubOrmSchema(CommonSchema):

@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from threading import RLock
 
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.schemas.competition import (
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.schemas.competition import (
     CalendarConflict,
     CompetitionReference,
     CompetitionWindowAssignment,

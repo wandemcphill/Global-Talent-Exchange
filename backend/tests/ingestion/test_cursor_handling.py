@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from backend.app.cache.redis_helpers import NullCacheBackend
-from backend.app.ingestion.models import ProviderSyncCursor
-from backend.app.ingestion.service import IngestionService
+from app.cache.redis_helpers import NullCacheBackend
+from app.ingestion.models import ProviderSyncCursor
+from app.ingestion.service import IngestionService
 
 
 def test_incremental_sync_updates_cursor_and_can_resume(session) -> None:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from backend.app.common.enums.trophy_type import TrophyType
-from backend.app.schemas.club_requests import ClubCreateRequest
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.club_reputation_service import ClubReputationService
-from backend.app.services.club_trophy_service import ClubTrophyService
+from app.common.enums.trophy_type import TrophyType
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.club_reputation_service import ClubReputationService
+from app.services.club_trophy_service import ClubTrophyService
 
 
 def _create_club(session) -> str:

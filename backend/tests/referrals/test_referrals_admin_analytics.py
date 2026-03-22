@@ -6,11 +6,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.routes.admin_referrals import router as admin_referrals_router
-from backend.app.routes.creators import router as creators_router
-from backend.app.routes.referrals import router as referrals_router
-from backend.app.services.referral_orchestrator import ReferralOrchestrator
+from app.auth.dependencies import get_current_user
+from app.routes.admin_referrals import router as admin_referrals_router
+from app.routes.creators import router as creators_router
+from app.routes.referrals import router as referrals_router
+from app.services.referral_orchestrator import ReferralOrchestrator
 
 
 @dataclass(frozen=True, slots=True)

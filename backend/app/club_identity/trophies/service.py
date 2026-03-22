@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from backend.app.club_identity.models.trophy_models import (
+from app.club_identity.models.trophy_models import (
     ClubHonorsSummary,
     ClubTrophyWin,
     HonorsTimeline,
@@ -16,7 +16,7 @@ from backend.app.club_identity.models.trophy_models import (
     TrophyScope,
     TrophySeasonCount,
 )
-from backend.app.club_identity.trophies.repository import TrophyRepository, get_trophy_repository
+from app.club_identity.trophies.repository import TrophyRepository, get_trophy_repository
 
 
 class TrophyDefinitionNotFoundError(LookupError):

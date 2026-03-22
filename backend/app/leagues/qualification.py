@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from backend.app.leagues.models import LeagueAutoEntrySlot, LeagueStandingRow
+from app.leagues.models import LeagueAutoEntrySlot, LeagueStandingRow
 
 
 class LeagueQualificationService:

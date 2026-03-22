@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.clubs.schemas import ClubView
-from backend.app.clubs.service import ClubQueryService
+from app.auth.dependencies import get_session
+from app.clubs.schemas import ClubView
+from app.clubs.service import ClubQueryService
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 

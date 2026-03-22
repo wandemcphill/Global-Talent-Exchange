@@ -5,10 +5,15 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.routes.creators import router as creators_router
-from backend.app.routes.referrals import router as referrals_router
+import app.models  # noqa: F401
+from app.models.base import Base
+from app.auth.dependencies import get_current_user, get_session
+from app.routes.creators import router as creators_router
+from app.routes.referrals import router as referrals_router
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +26,15 @@ class StubUser:
 
 @pytest.fixture()
 def referral_api():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = SessionLocal()
+
     app = FastAPI()
     app.include_router(creators_router)
     app.include_router(referrals_router)
@@ -57,7 +71,13 @@ def referral_api():
     def override_current_user():
         return app.state.current_user
 
+    def override_session():
+        yield session
+
     app.dependency_overrides[get_current_user] = override_current_user
+    app.dependency_overrides[get_session] = override_session
 
     with TestClient(app) as client:
-        yield app, client, users
+        yield app, client, users, session
+
+    session.close()

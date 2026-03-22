@@ -3,9 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.players.schemas import PlayerSummaryView
-from backend.app.players.service import PlayerSummaryQueryService
+from app.auth.dependencies import get_session
+from app.players.schemas import PlayerSummaryView
+from app.players.service import PlayerSummaryQueryService
 
 router = APIRouter(prefix="/players", tags=["players"])
 

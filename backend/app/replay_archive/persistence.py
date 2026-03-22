@@ -8,8 +8,8 @@ from typing import Protocol
 from sqlalchemy import Boolean, DateTime, Integer, JSON, String, UniqueConstraint, and_, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
-from backend.app.replay_archive.schemas import CountdownView, ReplayArchiveRecord
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.replay_archive.schemas import CountdownView, ReplayArchiveRecord
 
 
 class ReplayArchiveRecordRow(UUIDPrimaryKeyMixin, Base):
@@ -28,6 +28,7 @@ class ReplayArchiveRecordRow(UUIDPrimaryKeyMixin, Base):
     home_club_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     away_club_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     scoreline_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    visual_identity_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     timeline_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
     scorers_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
     assisters_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
@@ -115,6 +116,11 @@ class DatabaseReplayArchiveRepository:
             home_club_json=record.home_club.model_dump(mode="json"),
             away_club_json=record.away_club.model_dump(mode="json"),
             scoreline_json=record.scoreline.model_dump(mode="json"),
+            visual_identity_json=(
+                record.visual_identity.model_dump(mode="json")
+                if record.visual_identity is not None
+                else None
+            ),
             timeline_json=[event.model_dump(mode="json") for event in record.timeline],
             scorers_json=[event.model_dump(mode="json") for event in record.scorers],
             assisters_json=[event.model_dump(mode="json") for event in record.assisters],
@@ -219,6 +225,7 @@ def _record_from_row(row: ReplayArchiveRecordRow) -> ReplayArchiveRecord:
             "home_club": row.home_club_json,
             "away_club": row.away_club_json,
             "scoreline": row.scoreline_json,
+            "visual_identity": row.visual_identity_json,
             "timeline": row.timeline_json,
             "scorers": row.scorers_json,
             "assisters": row.assisters_json,

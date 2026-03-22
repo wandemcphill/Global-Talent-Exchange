@@ -4,6 +4,7 @@ import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_d
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_dto.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_repository.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/jersey_set_dto.dart';
+import 'package:gte_frontend/features/club_identity/jerseys/data/jersey_variant_dto.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_controller.dart';
 
 void main() {

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from decimal import Decimal
 
@@ -7,10 +7,11 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-from backend.app.auth.service import AuthService
-from backend.app.models import Base, LedgerEntry, LedgerEntryReason, LedgerUnit, PaymentStatus
-from backend.app.wallets.service import (
+from app.auth.service import AuthService
+from app.models import Base, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentStatus
+from app.wallets.service import (
     InsufficientBalanceError,
+    LedgerError,
     LedgerPosting,
     UnbalancedTransactionError,
     WalletService,
@@ -105,8 +106,8 @@ def test_append_transaction_rejects_negative_balance_for_user_accounts(session) 
 def test_request_payout_holds_total_and_tracks_fee(session) -> None:
     user = _create_user(session)
     service = WalletService()
-    user_account = service.get_user_account(session, user, LedgerUnit.CREDIT)
-    platform_account = service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
     service.append_transaction(
         session,
         postings=[
@@ -129,18 +130,72 @@ def test_request_payout_holds_total_and_tracks_fee(session) -> None:
     )
     session.commit()
 
-    escrow_account = service.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+    escrow_account = service.get_user_escrow_account(session, user, LedgerUnit.COIN)
+    hold_entries = session.scalars(
+        select(LedgerEntry).where(LedgerEntry.transaction_id == result.payout_request.hold_transaction_id)
+    ).all()
     assert result.fee_amount == Decimal("2.0000")
     assert result.total_debit == Decimal("22.0000")
     assert service.get_balance(session, user_account) == Decimal("78.0000")
     assert service.get_balance(session, escrow_account) == Decimal("22.0000")
+    assert sum(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == Decimal("0.0000")
+    assert sum(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN) == Decimal("0.0000")
+    assert sorted(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == [
+        Decimal("-20.0000"),
+        Decimal("20.0000"),
+    ]
+    assert sorted(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN) == [
+        Decimal("-2.0000"),
+        Decimal("2.0000"),
+    ]
+
+
+def test_complete_payout_request_tags_only_fee_entries_as_fee_burn(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("100")),
+            LedgerPosting(account=platform_account, amount=Decimal("-100")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-complete-payout",
+        actor=user,
+    )
+    result = service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("20"),
+        destination_reference="bank:0012345678",
+        withdrawal_fee_bps=1000,
+        minimum_fee=Decimal("0.0000"),
+        source_scope="trade",
+        actor=user,
+    )
+    payout_request = service.complete_payout_request(session, result.payout_request, actor=user)
+    session.commit()
+
+    settlement_entries = session.scalars(
+        select(LedgerEntry).where(LedgerEntry.transaction_id == payout_request.settlement_transaction_id)
+    ).all()
+    assert sorted(entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == [
+        Decimal("-20.0000"),
+        Decimal("20.0000"),
+    ]
+    assert sorted(entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN) == [
+        Decimal("-2.0000"),
+        Decimal("2.0000"),
+    ]
 
 
 def test_request_competition_payout_requires_reward_balance(session) -> None:
     user = _create_user(session)
     service = WalletService()
-    user_account = service.get_user_account(session, user, LedgerUnit.CREDIT)
-    platform_account = service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
     service.append_transaction(
         session,
         postings=[
@@ -160,5 +215,33 @@ def test_request_competition_payout_requires_reward_balance(session) -> None:
             withdrawal_fee_bps=1000,
             minimum_fee=Decimal("0.0000"),
             source_scope="competition",
+            actor=user,
+        )
+
+
+def test_request_payout_rejects_unknown_source_scope(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("25")),
+            LedgerPosting(account=platform_account, amount=Decimal("-25")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-scope",
+        actor=user,
+    )
+    with pytest.raises(LedgerError, match="Withdrawal source must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward"):
+        service.request_payout(
+            session,
+            user=user,
+            amount=Decimal("5"),
+            destination_reference="bank:0012345678",
+            withdrawal_fee_bps=1000,
+            minimum_fee=Decimal("0.0000"),
+            source_scope="bonus",
             actor=user,
         )

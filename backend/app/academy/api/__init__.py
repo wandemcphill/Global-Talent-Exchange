@@ -1,3 +1,3 @@
-from backend.app.academy.api.router import router
+from app.academy.api.router import router
 
 __all__ = ["router"]

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.world_super_cup.services.calendar import WorldSuperCupCalendarService
-from backend.app.world_super_cup.services.tournament import WorldSuperCupService
+from app.common.enums.fixture_window import FixtureWindow
+from app.world_super_cup.services.calendar import WorldSuperCupCalendarService
+from app.world_super_cup.services.tournament import WorldSuperCupService
 
 
 def test_world_super_cup_schedule_packs_into_three_days() -> None:

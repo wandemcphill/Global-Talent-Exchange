@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from threading import RLock
 
-from backend.app.core.events import DomainEvent
+from app.core.events import DomainEvent
 
 
 @dataclass(slots=True)

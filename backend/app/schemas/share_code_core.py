@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import Field, model_validator
 
-from backend.app.common.enums.share_code_type import ShareCodeType
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.share_code_type import ShareCodeType
+from app.common.schemas.base import CommonSchema
 
 
 class ShareCodeCore(CommonSchema):

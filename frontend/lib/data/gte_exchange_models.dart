@@ -1,4 +1,5 @@
 import 'gte_models.dart';
+import '../models/player_avatar.dart';
 
 class GteMarketPlayersQuery {
   const GteMarketPlayersQuery({
@@ -35,6 +36,7 @@ class GteMarketPlayerListItem {
     required this.trendScore,
     required this.marketInterestScore,
     required this.averageRating,
+    this.avatar,
   });
 
   final String playerId;
@@ -48,6 +50,7 @@ class GteMarketPlayerListItem {
   final double trendScore;
   final int marketInterestScore;
   final double? averageRating;
+  final PlayerAvatar? avatar;
 
   bool get isRising => movementPct > 0;
 
@@ -73,6 +76,8 @@ class GteMarketPlayerListItem {
       ),
       averageRating:
           _nullableNumber(json, <String>['average_rating', 'averageRating']),
+      avatar:
+          PlayerAvatar.fromJsonOrNull(GteJson.value(json, <String>['avatar'])),
     );
   }
 }
@@ -124,6 +129,7 @@ class GteMarketPlayerIdentity {
     required this.currentCompetitionId,
     required this.currentCompetitionName,
     required this.imageUrl,
+    this.avatar,
   });
 
   final String playerName;
@@ -145,6 +151,7 @@ class GteMarketPlayerIdentity {
   final String? currentCompetitionId;
   final String? currentCompetitionName;
   final String? imageUrl;
+  final PlayerAvatar? avatar;
 
   factory GteMarketPlayerIdentity.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -190,6 +197,8 @@ class GteMarketPlayerIdentity {
         <String>['current_competition_name', 'currentCompetitionName'],
       ),
       imageUrl: GteJson.stringOrNull(json, <String>['image_url', 'imageUrl']),
+      avatar:
+          PlayerAvatar.fromJsonOrNull(GteJson.value(json, <String>['avatar'])),
     );
   }
 }
@@ -337,8 +346,8 @@ class GteMarketPlayerValue {
         json,
         <String>['egame_signal_value_credits', 'egameSignalValueCredits'],
       ),
-      confidenceScore:
-          _nullableNumber(json, <String>['confidence_score', 'confidenceScore']),
+      confidenceScore: _nullableNumber(
+          json, <String>['confidence_score', 'confidenceScore']),
       confidenceTier: GteJson.stringOrNull(
         json,
         <String>['confidence_tier', 'confidenceTier'],
@@ -489,8 +498,6 @@ class GteMarketPlayerDetailView {
   }
 }
 
-
-
 class GteLifecycleBadgeView {
   const GteLifecycleBadgeView({
     required this.status,
@@ -507,7 +514,8 @@ class GteLifecycleBadgeView {
   final DateTime? until;
 
   factory GteLifecycleBadgeView.fromJson(Object? value) {
-    final Map<String, Object?> json = GteJson.map(value, label: 'lifecycle badge');
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'lifecycle badge');
     return GteLifecycleBadgeView(
       status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
       label: GteJson.string(json, <String>['label'], fallback: 'Unknown'),
@@ -532,7 +540,8 @@ class GteContractBadgeView {
   final DateTime? endsOn;
 
   factory GteContractBadgeView.fromJson(Object? value) {
-    final Map<String, Object?> json = GteJson.map(value, label: 'contract badge');
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'contract badge');
     return GteContractBadgeView(
       status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
       label: GteJson.string(json, <String>['label'], fallback: 'Unknown'),
@@ -558,14 +567,203 @@ class GteTransferStatusView {
   final String? lastBidStatus;
 
   factory GteTransferStatusView.fromJson(Object? value) {
-    final Map<String, Object?> json = GteJson.map(value, label: 'transfer status');
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'transfer status');
     return GteTransferStatusView(
       windowOpen: GteJson.boolean(json, <String>['window_open', 'windowOpen']),
       eligible: GteJson.boolean(json, <String>['eligible']),
       reason: GteJson.stringOrNull(json, <String>['reason']),
-      windowLabel: GteJson.stringOrNull(json, <String>['window_label', 'windowLabel']),
-      lastBidStatus: GteJson.stringOrNull(json, <String>['last_bid_status', 'lastBidStatus']),
+      windowLabel:
+          GteJson.stringOrNull(json, <String>['window_label', 'windowLabel']),
+      lastBidStatus: GteJson.stringOrNull(
+          json, <String>['last_bid_status', 'lastBidStatus']),
     );
+  }
+}
+
+class GtePlayerAgencyPressureView {
+  const GtePlayerAgencyPressureView({
+    required this.currentState,
+    required this.transferDesire,
+    required this.activeTransferRequest,
+    required this.refusesNewContract,
+    required this.endOfContractPressure,
+  });
+
+  final String currentState;
+  final double transferDesire;
+  final bool activeTransferRequest;
+  final bool refusesNewContract;
+  final bool endOfContractPressure;
+
+  factory GtePlayerAgencyPressureView.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'agency pressure state');
+    return GtePlayerAgencyPressureView(
+      currentState:
+          GteJson.string(json, <String>['current_state', 'currentState']),
+      transferDesire: GteJson.number(
+        json,
+        <String>['transfer_desire', 'transferDesire'],
+        fallback: 0,
+      ),
+      activeTransferRequest: GteJson.boolean(
+        json,
+        <String>['active_transfer_request', 'activeTransferRequest'],
+        fallback: false,
+      ),
+      refusesNewContract: GteJson.boolean(
+        json,
+        <String>['refuses_new_contract', 'refusesNewContract'],
+        fallback: false,
+      ),
+      endOfContractPressure: GteJson.boolean(
+        json,
+        <String>['end_of_contract_pressure', 'endOfContractPressure'],
+        fallback: false,
+      ),
+    );
+  }
+}
+
+class GtePlayerAgencyTeamDynamicsView {
+  const GtePlayerAgencyTeamDynamicsView({
+    required this.active,
+    required this.moralePenalty,
+    required this.chemistryPenalty,
+  });
+
+  final bool active;
+  final double moralePenalty;
+  final double chemistryPenalty;
+
+  factory GtePlayerAgencyTeamDynamicsView.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'team dynamics');
+    return GtePlayerAgencyTeamDynamicsView(
+      active: GteJson.boolean(json, <String>['active'], fallback: false),
+      moralePenalty: GteJson.number(
+        json,
+        <String>['morale_penalty', 'moralePenalty'],
+        fallback: 0,
+      ),
+      chemistryPenalty: GteJson.number(
+        json,
+        <String>['chemistry_penalty', 'chemistryPenalty'],
+        fallback: 0,
+      ),
+    );
+  }
+}
+
+class GtePlayerAgencySummary {
+  const GtePlayerAgencySummary({
+    required this.status,
+    required this.lifecyclePhase,
+    required this.transferListed,
+    required this.freeAgent,
+    required this.retirementPressure,
+    this.agencyMessage,
+    this.pressureState,
+    this.teamDynamics,
+  });
+
+  final String status;
+  final String lifecyclePhase;
+  final bool transferListed;
+  final bool freeAgent;
+  final bool retirementPressure;
+  final String? agencyMessage;
+  final GtePlayerAgencyPressureView? pressureState;
+  final GtePlayerAgencyTeamDynamicsView? teamDynamics;
+
+  factory GtePlayerAgencySummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'player agency summary');
+    return GtePlayerAgencySummary(
+      status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
+      lifecyclePhase: GteJson.string(
+        json,
+        <String>['lifecycle_phase', 'lifecyclePhase'],
+        fallback: 'unknown',
+      ),
+      transferListed: GteJson.boolean(
+        json,
+        <String>['transfer_listed', 'transferListed'],
+        fallback: false,
+      ),
+      freeAgent: GteJson.boolean(json, <String>['free_agent', 'freeAgent'],
+          fallback: false),
+      retirementPressure: GteJson.boolean(
+        json,
+        <String>['retirement_pressure', 'retirementPressure'],
+        fallback: false,
+      ),
+      agencyMessage: GteJson.stringOrNull(
+          json, <String>['agency_message', 'agencyMessage']),
+      pressureState: GteJson.value(
+                  json, <String>['pressure_state', 'pressureState']) ==
+              null
+          ? null
+          : GtePlayerAgencyPressureView.fromJson(
+              GteJson.value(json, <String>['pressure_state', 'pressureState']),
+            ),
+      teamDynamics:
+          GteJson.value(json, <String>['team_dynamics', 'teamDynamics']) == null
+              ? null
+              : GtePlayerAgencyTeamDynamicsView.fromJson(
+                  GteJson.value(
+                      json, <String>['team_dynamics', 'teamDynamics']),
+                ),
+    );
+  }
+
+  String get transferStanceLabel {
+    if (freeAgent) {
+      return 'Free agent';
+    }
+    if (pressureState?.activeTransferRequest == true || transferListed) {
+      return 'Wants move';
+    }
+    if ((pressureState?.transferDesire ?? 0) >= 0.65) {
+      return 'Open to move';
+    }
+    return 'Stable';
+  }
+
+  String get contractStanceLabel {
+    if (freeAgent) {
+      return 'Unsigned';
+    }
+    if (pressureState?.refusesNewContract == true) {
+      return 'Holding out';
+    }
+    if (pressureState?.endOfContractPressure == true) {
+      return 'Expiry pressure';
+    }
+    return 'Open to renew';
+  }
+
+  String? get moraleLabel {
+    final GtePlayerAgencyTeamDynamicsView? dynamics = teamDynamics;
+    if (dynamics == null) {
+      return null;
+    }
+    if (!dynamics.active) {
+      return 'Stable';
+    }
+    if (dynamics.moralePenalty >= 0.5 || dynamics.chemistryPenalty >= 0.5) {
+      return 'Under strain';
+    }
+    return 'Monitor';
+  }
+
+  String? get reasonSnippet {
+    final String? trimmed = agencyMessage?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
   }
 }
 
@@ -581,11 +779,14 @@ class GteLifecycleEventItem {
   final DateTime? occurredOn;
 
   factory GteLifecycleEventItem.fromJson(Object? value) {
-    final Map<String, Object?> json = GteJson.map(value, label: 'lifecycle event');
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'lifecycle event');
     return GteLifecycleEventItem(
       eventType: GteJson.string(json, <String>['event_type', 'eventType']),
-      summary: GteJson.string(json, <String>['summary'], fallback: 'Lifecycle event'),
-      occurredOn: GteJson.dateTimeOrNull(json, <String>['occurred_on', 'occurredOn']),
+      summary: GteJson.string(json, <String>['summary'],
+          fallback: 'Lifecycle event'),
+      occurredOn:
+          GteJson.dateTimeOrNull(json, <String>['occurred_on', 'occurredOn']),
     );
   }
 }
@@ -598,6 +799,7 @@ class GtePlayerLifecycleSnapshot {
     required this.transferStatus,
     required this.recentEvents,
     this.contractBadge,
+    this.agencySummary,
   });
 
   final String playerId;
@@ -606,23 +808,37 @@ class GtePlayerLifecycleSnapshot {
   final GteTransferStatusView transferStatus;
   final List<GteLifecycleEventItem> recentEvents;
   final GteContractBadgeView? contractBadge;
+  final GtePlayerAgencySummary? agencySummary;
 
   factory GtePlayerLifecycleSnapshot.fromJson(Object? value) {
-    final Map<String, Object?> json = GteJson.map(value, label: 'player lifecycle snapshot');
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'player lifecycle snapshot');
     return GtePlayerLifecycleSnapshot(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       playerName: GteJson.string(json, <String>['player_name', 'playerName']),
       availabilityBadge: GteLifecycleBadgeView.fromJson(
-        GteJson.value(json, <String>['availability_badge', 'availabilityBadge']) ?? const <String, Object?>{},
+        GteJson.value(
+                json, <String>['availability_badge', 'availabilityBadge']) ??
+            const <String, Object?>{},
       ),
       transferStatus: GteTransferStatusView.fromJson(
-        GteJson.value(json, <String>['transfer_status', 'transferStatus']) ?? const <String, Object?>{},
+        GteJson.value(json, <String>['transfer_status', 'transferStatus']) ??
+            const <String, Object?>{},
       ),
-      contractBadge: GteJson.value(json, <String>['contract_badge', 'contractBadge']) == null
+      contractBadge: GteJson.value(
+                  json, <String>['contract_badge', 'contractBadge']) ==
+              null
           ? null
           : GteContractBadgeView.fromJson(
               GteJson.value(json, <String>['contract_badge', 'contractBadge']),
             ),
+      agencySummary:
+          GteJson.value(json, <String>['regen_summary', 'regenSummary']) == null
+              ? null
+              : GtePlayerAgencySummary.fromJson(
+                  GteJson.value(
+                      json, <String>['regen_summary', 'regenSummary']),
+                ),
       recentEvents: GteJson.typedList(
         json,
         <String>['recent_events', 'recentEvents'],

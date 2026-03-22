@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     CHAMPIONS_LEAGUE_FUND_PCT,
     LEAGUE_WINNER_PCT,
     TOP_ASSIST_PCT,
     TOP_SCORER_PCT,
 )
-from backend.app.leagues.models import (
+from app.leagues.models import (
     LeagueAwardResult,
     LeagueAwardWinner,
     LeagueChampionPrize,

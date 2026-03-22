@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.trophy_type import TrophyType
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.models.club_trophy_cabinet import ClubTrophyCabinet
-from backend.app.schemas.club_trophy_core import ClubTrophyCabinetCore, ClubTrophyCore
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.club_reputation_event_service import ClubReputationEventService
+from app.common.enums.trophy_type import TrophyType
+from app.models.club_profile import ClubProfile
+from app.models.club_trophy import ClubTrophy
+from app.models.club_trophy_cabinet import ClubTrophyCabinet
+from app.schemas.club_trophy_core import ClubTrophyCabinetCore, ClubTrophyCore
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.club_reputation_event_service import ClubReputationEventService
 
 _PRESTIGE_WEIGHT_BY_TROPHY_TYPE: dict[TrophyType, int] = {
     TrophyType.LEAGUE_TITLE: 140,

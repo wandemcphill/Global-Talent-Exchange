@@ -7,10 +7,10 @@ from typing import Any
 from sqlalchemy import DateTime, Enum, ForeignKey, JSON, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.referral_event_type import ReferralEventType
-from backend.app.common.enums.referral_reward_status import ReferralRewardStatus
-from backend.app.common.enums.referral_reward_type import ReferralRewardType
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.referral_event_type import ReferralEventType
+from app.common.enums.referral_reward_status import ReferralRewardStatus
+from app.common.enums.referral_reward_type import ReferralRewardType
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ReferralReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):

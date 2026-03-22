@@ -83,7 +83,8 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
             child: GteStatePanel(
               eyebrow: 'CLUB SYSTEMS',
               title: 'Loading club identity command room',
-              message: 'Squad, prestige, trophies, and history surfaces are being assembled for a cleaner club lane.',
+              message:
+                  'Squad, prestige, trophies, and history surfaces are being assembled for a cleaner club lane.',
               icon: Icons.shield_outlined,
               accentColor: Color(0xFF85B8FF),
               isLoading: true,
@@ -120,14 +121,15 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
                 onRefresh: _controller.refresh,
               ),
             ),
-
             if (!widget.isAuthenticated)
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
                 child: GteStatePanel(
                   eyebrow: 'GUEST PREVIEW',
-                  title: 'Club identity is open for scouting, but edits stay protected.',
-                  message: 'Browse squad mood, history, and prestige from the public concourse. Sign in to reshape branding, dynasty, and reputation layers.',
+                  title:
+                      'Club identity is open for scouting, but edits stay protected.',
+                  message:
+                      'Browse squad mood, history, and prestige from the public concourse. Sign in to reshape branding, dynasty, and reputation layers.',
                   icon: Icons.lock_outline,
                   accentColor: Color(0xFF85B8FF),
                 ),
@@ -157,6 +159,7 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
                   onOpenDynasty: () => _openDynasty(context),
                   onOpenEraHistory: () => _openEraHistory(context),
                   onOpenPurchaseHistory: () => _openPurchaseHistory(context),
+                  navigationDependencies: widget.navigationDependencies,
                 ),
               ),
             ),
@@ -167,7 +170,8 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
   }
 
   Future<void> _openIdentity(BuildContext context) {
-    final GteNavigationDependencies? dependencies = widget.navigationDependencies;
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
     if (dependencies != null) {
       return GteNavigationHelpers.pushRoute<void>(
         context,
@@ -187,7 +191,8 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
   }
 
   Future<void> _openReputation(BuildContext context) {
-    final GteNavigationDependencies? dependencies = widget.navigationDependencies;
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
     if (dependencies != null) {
       return GteNavigationHelpers.pushRoute<void>(
         context,
@@ -207,7 +212,8 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
   }
 
   Future<void> _openTrophies(BuildContext context) {
-    final GteNavigationDependencies? dependencies = widget.navigationDependencies;
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
     if (dependencies != null) {
       return GteNavigationHelpers.pushRoute<void>(
         context,
@@ -227,7 +233,8 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
   }
 
   Future<void> _openDynasty(BuildContext context) {
-    final GteNavigationDependencies? dependencies = widget.navigationDependencies;
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
     if (dependencies != null) {
       return GteNavigationHelpers.pushRoute<void>(
         context,
@@ -247,7 +254,8 @@ class _ClubHubScreenState extends State<ClubHubScreen> {
   }
 
   Future<void> _openEraHistory(BuildContext context) {
-    final GteNavigationDependencies? dependencies = widget.navigationDependencies;
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
     if (dependencies != null) {
       return GteNavigationHelpers.pushRoute<void>(
         context,

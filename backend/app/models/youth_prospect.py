@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Enum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.scout_assignment import ScoutAssignment
-    from backend.app.models.youth_prospect_report import YouthProspectReport
+    from app.models.scout_assignment import ScoutAssignment
+    from app.models.youth_prospect_report import YouthProspectReport
 
 
 class YouthProspect(UUIDPrimaryKeyMixin, TimestampMixin, Base):

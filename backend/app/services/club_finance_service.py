@@ -8,15 +8,15 @@ from functools import lru_cache
 from threading import RLock
 from uuid import uuid4
 
-from backend.app.common.enums.club_finance_account_type import ClubFinanceAccountType
-from backend.app.common.enums.club_finance_entry_type import ClubFinanceEntryType
-from backend.app.schemas.club_finance_core import (
+from app.common.enums.club_finance_account_type import ClubFinanceAccountType
+from app.common.enums.club_finance_entry_type import ClubFinanceEntryType
+from app.schemas.club_finance_core import (
     ClubBudgetSnapshotView,
     ClubCashflowSummaryView,
     ClubFinanceAccountView,
     ClubFinanceLedgerEntryView,
 )
-from backend.app.schemas.club_ops_responses import ClubFinanceLedgerResponse, ClubFinanceOverviewResponse
+from app.schemas.club_ops_responses import ClubFinanceLedgerResponse, ClubFinanceOverviewResponse
 
 _DEFAULT_CURRENCY = "USD"
 _OPENING_BALANCE_MINOR = 1_500_000
@@ -86,6 +86,14 @@ class ClubOpsStore:
     prospects_by_club: dict[str, dict[str, object]] = field(default_factory=dict)
     prospect_reports_by_prospect: dict[str, list[object]] = field(default_factory=dict)
     youth_pipeline_by_club: dict[str, object] = field(default_factory=dict)
+    regen_profiles_by_club: dict[str, dict[str, object]] = field(default_factory=dict)
+    academy_intake_batches_by_club: dict[str, dict[str, object]] = field(default_factory=dict)
+    academy_candidates_by_club: dict[str, dict[str, object]] = field(default_factory=dict)
+    regen_generation_events_by_club: dict[str, list[object]] = field(default_factory=dict)
+    season_regen_generation_counts: dict[str, int] = field(default_factory=dict)
+    owner_son_lifetime_counts_by_user: dict[str, int] = field(default_factory=dict)
+    owner_son_pending_requests_by_club: dict[str, list[object]] = field(default_factory=dict)
+    owner_son_fulfilled_requests_by_club: dict[str, list[object]] = field(default_factory=dict)
     club_labels: dict[str, str] = field(default_factory=dict)
     lock: RLock = field(default_factory=RLock)
 
@@ -101,6 +109,8 @@ class ClubFinanceService:
             club_ids.update(self.store.academy_players_by_club)
             club_ids.update(self.store.scouting_assignments_by_club)
             club_ids.update(self.store.prospects_by_club)
+            club_ids.update(self.store.regen_profiles_by_club)
+            club_ids.update(self.store.academy_intake_batches_by_club)
         return tuple(sorted(club_ids))
 
     def get_finance_overview(self, club_id: str) -> ClubFinanceOverviewResponse:
@@ -373,6 +383,10 @@ class ClubFinanceService:
             self.store.scouting_assignments_by_club.setdefault(club_id, {})
             self.store.prospects_by_club.setdefault(club_id, {})
             self.store.youth_pipeline_by_club.setdefault(club_id, None)
+            self.store.regen_profiles_by_club.setdefault(club_id, {})
+            self.store.academy_intake_batches_by_club.setdefault(club_id, {})
+            self.store.academy_candidates_by_club.setdefault(club_id, {})
+            self.store.regen_generation_events_by_club.setdefault(club_id, [])
 
         self.record_manual_adjustment(
             club_id,

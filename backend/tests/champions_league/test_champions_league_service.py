@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from backend.app.common.enums.qualification_status import QualificationStatus as SharedQualificationStatus
-from backend.app.champions_league.models.domain import QualificationStatus
-from backend.app.champions_league.services.tournament import ChampionsLeagueService, LeaguePhaseTableService
+from app.common.enums.qualification_status import QualificationStatus as SharedQualificationStatus
+from app.champions_league.models.domain import QualificationStatus
+from app.champions_league.services.tournament import ChampionsLeagueService, LeaguePhaseTableService
 
 
 def test_48_to_36_pathway(build_candidates) -> None:
@@ -89,7 +89,7 @@ def test_champions_league_reuses_shared_qualification_status_enum() -> None:
 
 
 def _match(match_id: str, home_club_id: str, away_club_id: str, home_goals: int, away_goals: int):
-    from backend.app.champions_league.models.domain import LeagueMatchResult
+    from app.champions_league.models.domain import LeagueMatchResult
 
     return LeagueMatchResult(
         match_id=match_id,

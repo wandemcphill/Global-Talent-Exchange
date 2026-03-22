@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.scout_assignment import ScoutAssignment
-    from backend.app.models.youth_prospect import YouthProspect
+    from app.models.scout_assignment import ScoutAssignment
+    from app.models.youth_prospect import YouthProspect
 
 
 class YouthProspectReport(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

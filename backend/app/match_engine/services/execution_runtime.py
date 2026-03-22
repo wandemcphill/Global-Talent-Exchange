@@ -9,12 +9,12 @@ from typing import Any
 from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import ScheduledFixture
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import ScheduledFixture
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.queue_contracts import (
     BracketAdvancementJob,
     InMemoryQueuePublisher,
     MatchSimulationJob,
@@ -22,14 +22,16 @@ from backend.app.competition_engine.queue_contracts import (
     PayoutSettlementJob,
     QueuedJobRecord,
 )
-from backend.app.core.events import DomainEvent, EventPublisher
-from backend.app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
-from backend.app.leagues.service import LeagueSeasonLifecycleService
-from backend.app.match_engine.schemas import MatchReplayPayloadView
-from backend.app.match_engine.services.match_simulation_service import MatchSimulationService
-from backend.app.match_engine.services.team_factory import SyntheticSquadFactory
-from backend.app.match_engine.simulation.models import MatchEventType
-from backend.app.services.player_lifecycle_service import PlayerLifecycleService
+from app.core.events import DomainEvent, EventPublisher
+from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
+from app.leagues.service import LeagueSeasonLifecycleService
+from app.match_engine.schemas import MatchReplayPayloadView
+from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.models.competition_match import CompetitionMatch
+from app.services.match_timeline_service import MatchTimelineService
+from app.match_engine.services.team_factory import SyntheticSquadFactory
+from app.match_engine.simulation.models import MatchEventType
+from app.services.player_lifecycle_service import PlayerLifecycleService
 
 
 @dataclass(slots=True)
@@ -226,6 +228,7 @@ class LocalMatchExecutionWorker:
             request = self.team_factory.build_request(job)
             replay_payload = self.match_service.build_replay_payload(request)
             self._persist_player_lifecycle_incidents(job, replay_payload)
+            self._persist_match_viewer_payload(job, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.simulation.completed",
                 job,
@@ -377,6 +380,29 @@ class LocalMatchExecutionWorker:
                 match_date=job.match_date,
                 replay_payload=replay_payload,
             )
+        finally:
+            session.close()
+
+    def _persist_match_viewer_payload(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        if self.session_factory is None:
+            return
+        session = self.session_factory()
+        try:
+            match = session.get(CompetitionMatch, job.fixture_id)
+            if match is None:
+                return
+            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
+            match.metadata_json = {
+                **(match.metadata_json or {}),
+                "match_viewer": viewer_payload.model_dump(mode="json"),
+            }
+            session.commit()
+        except Exception:
+            session.rollback()
         finally:
             session.close()
 
@@ -645,6 +671,11 @@ class LocalMatchExecutionWorker:
                 "home_goals": replay_payload.summary.home_score,
                 "away_goals": replay_payload.summary.away_score,
             },
+            "visual_identity": (
+                replay_payload.visual_identity.model_dump(mode="json")
+                if replay_payload.visual_identity is not None
+                else None
+            ),
             "participant_user_ids": [
                 user_id
                 for user_id in (job.home_user_id, job.away_user_id)
@@ -714,6 +745,8 @@ class LocalMatchExecutionWorker:
         mapping = {
             MatchEventType.GOAL: "goals",
             MatchEventType.MISSED_CHANCE: "missed_chances",
+            MatchEventType.WOODWORK: "missed_chances",
+            MatchEventType.DOUBLE_SAVE: "missed_chances",
             MatchEventType.YELLOW_CARD: "yellow_cards",
             MatchEventType.RED_CARD: "red_cards",
             MatchEventType.SUBSTITUTION: "substitutions",

@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 
 class CreatorProfileView(CommonSchema):
@@ -45,3 +45,17 @@ class CreatorSummaryView(CommonSchema):
     pending_rewards: int = 0
     approved_rewards: int = 0
     featured_competitions: list[CreatorCompetitionView] = Field(default_factory=list)
+
+
+class CreatorFinanceSummaryView(CommonSchema):
+    currency: str = "credits"
+    total_gift_income: Decimal = Decimal("0.0000")
+    total_reward_income: Decimal = Decimal("0.0000")
+    total_withdrawn_gross: Decimal = Decimal("0.0000")
+    total_withdrawal_fees: Decimal = Decimal("0.0000")
+    total_withdrawn_net: Decimal = Decimal("0.0000")
+    pending_withdrawals: Decimal = Decimal("0.0000")
+    active_competitions: int = 0
+    attributed_signups: int = 0
+    qualified_joins: int = 0
+    insights: list[str] = Field(default_factory=list)

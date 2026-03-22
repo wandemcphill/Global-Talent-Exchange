@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.ingestion.normalizers import (
+from app.ingestion.normalizers import (
     normalize_club_name,
     normalize_competition_payload,
     normalize_player_payload,

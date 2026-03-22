@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
-from backend.app.fast_cups.models.domain import FastCup, FastCupDivision
+from app.fast_cups.models.domain import FastCup, FastCupDivision
 
 
 class FastCupRepository(Protocol):

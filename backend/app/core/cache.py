@@ -8,7 +8,7 @@ from typing import Any, Protocol
 from redis import Redis
 from redis.exceptions import RedisError
 
-from backend.app.core.config import Settings, get_settings
+from app.core.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 

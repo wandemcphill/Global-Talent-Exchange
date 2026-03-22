@@ -2,7 +2,7 @@
 
 ## Status
 
-The backend is ready for the frontend MVP screens listed below against seeded demo data.
+The backend is ready for the frontend MVP screens listed below against seeded local QA data.
 
 Demo seed guarantees:
 
@@ -10,22 +10,22 @@ Demo seed guarantees:
 - at least one falling player in `/api/market/players`
 - at least one liquid player with a tight spread and multi-level order book
 - at least one illiquid player with a wide spread and shallow order book
-- seeded portfolio holdings for the demo user
-- seeded cash wallet balance for the demo user
+- seeded portfolio holdings for the local seed user
+- seeded cash wallet balance for the local seed user
 
-Auth prerequisite:
+Auth prerequisite for local seeded environments:
 
 - `POST /auth/login`
-- Demo credentials:
-  - `fan@demo.gte.local` / `DemoPass123`
-  - `scout@demo.gte.local` / `DemoPass123`
-  - `admin@demo.gte.local` / `DemoPass123`
+- Local seed credentials:
+  - `seed.fan@gte.local` / `DemoPass123`
+  - `seed.scout@gte.local` / `DemoPass123`
+  - `seed.admin@gte.local` / `DemoPass123`
 
 Login request:
 
 ```json
 {
-  "email": "fan@demo.gte.local",
+  "email": "seed.fan@gte.local",
   "password": "DemoPass123"
 }
 ```
@@ -38,10 +38,10 @@ Login response:
   "token_type": "bearer",
   "expires_in": 3600,
   "user": {
-    "id": "<demo_user_id>",
-    "email": "fan@demo.gte.local",
-    "username": "demo_fan",
-    "display_name": "Demo Fan",
+    "id": "<seed_user_id>",
+    "email": "seed.fan@gte.local",
+    "username": "seed_fan",
+    "display_name": "Seed Fan",
     "role": "user",
     "kyc_status": "pending",
     "is_active": true

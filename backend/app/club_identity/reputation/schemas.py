@@ -5,7 +5,7 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.club_identity.models.reputation import PrestigeTier
+from app.club_identity.models.reputation import PrestigeTier
 
 
 class ContinentalStage(str, Enum):

@@ -4,17 +4,17 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from uuid import uuid4
 
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.schemas.club_ops_requests import CreateSponsorshipContractRequest, UpdateSponsorshipContractRequest
-from backend.app.schemas.club_ops_responses import ClubSponsorshipCatalogResponse, ClubSponsorshipOverviewResponse
-from backend.app.schemas.sponsorship_core import (
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.schemas.club_ops_requests import CreateSponsorshipContractRequest, UpdateSponsorshipContractRequest
+from app.schemas.club_ops_responses import ClubSponsorshipCatalogResponse, ClubSponsorshipOverviewResponse
+from app.schemas.sponsorship_core import (
     ClubSponsorshipAssetView,
     ClubSponsorshipContractView,
 )
-from backend.app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
-from backend.app.services.sponsorship_catalog_service import SponsorshipCatalogService, get_sponsorship_catalog_service
-from backend.app.services.sponsorship_payout_service import SponsorshipPayoutService, get_sponsorship_payout_service
+from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
+from app.services.sponsorship_catalog_service import SponsorshipCatalogService, get_sponsorship_catalog_service
+from app.services.sponsorship_payout_service import SponsorshipPayoutService, get_sponsorship_payout_service
 
 
 def _utcnow() -> datetime:

@@ -5,10 +5,10 @@ from typing import Any
 
 from pydantic import Field
 
-from backend.app.common.enums.club_brand_asset_type import ClubBrandAssetType
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.common.enums.jersey_slot_type import JerseySlotType
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.club_brand_asset_type import ClubBrandAssetType
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.common.enums.jersey_slot_type import JerseySlotType
+from app.common.schemas.base import CommonSchema
 
 
 class ClubCreateRequest(CommonSchema):
@@ -20,6 +20,9 @@ class ClubCreateRequest(CommonSchema):
     secondary_color: str = Field(min_length=3, max_length=16)
     accent_color: str = Field(min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
+    country_code: str | None = Field(default=None, max_length=8)
+    region_name: str | None = Field(default=None, max_length=120)
+    city_name: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility = ClubIdentityVisibility.PUBLIC
     founded_at: date | None = None
@@ -33,6 +36,9 @@ class ClubUpdateRequest(CommonSchema):
     secondary_color: str | None = Field(default=None, min_length=3, max_length=16)
     accent_color: str | None = Field(default=None, min_length=3, max_length=16)
     home_venue_name: str | None = Field(default=None, max_length=120)
+    country_code: str | None = Field(default=None, max_length=8)
+    region_name: str | None = Field(default=None, max_length=120)
+    city_name: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility | None = None
     founded_at: date | None = None

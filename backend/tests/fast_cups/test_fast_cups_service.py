@@ -4,9 +4,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.fast_cups.models.domain import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.fast_cups.models.domain import (
     ClubCompetitionWindow,
     FastCupDivision,
     FastCupStateError,

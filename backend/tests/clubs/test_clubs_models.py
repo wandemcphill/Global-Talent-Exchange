@@ -3,21 +3,21 @@ from __future__ import annotations
 from alembic import command
 from sqlalchemy import create_engine, inspect
 
-from backend.app.core.database import build_alembic_config
-from backend.app.models.base import Base
-from backend.app.models.club_branding_asset import ClubBrandingAsset
-from backend.app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
-from backend.app.models.club_cosmetic_purchase import ClubCosmeticPurchase
-from backend.app.models.club_dynasty_milestone import ClubDynastyMilestone
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_identity_theme import ClubIdentityTheme
-from backend.app.models.club_jersey_design import ClubJerseyDesign
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_reputation_event import ClubReputationEvent
-from backend.app.models.club_reputation_snapshot import ClubReputationSnapshot
-from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.models.club_trophy_cabinet import ClubTrophyCabinet
+from app.core.database import build_alembic_config
+from app.models.base import Base
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_dynasty_milestone import ClubDynastyMilestone
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.models.club_reputation_event import ClubReputationEvent
+from app.models.club_reputation_snapshot import ClubReputationSnapshot
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_trophy import ClubTrophy
+from app.models.club_trophy_cabinet import ClubTrophyCabinet
 
 
 def test_alembic_upgrade_creates_club_progression_tables(tmp_path) -> None:

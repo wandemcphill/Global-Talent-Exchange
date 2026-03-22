@@ -1,9 +1,13 @@
 class CreatorProfile {
   const CreatorProfile({
     required this.creatorId,
+    required this.userId,
     required this.displayName,
     required this.handle,
     required this.shareCode,
+    required this.tier,
+    required this.status,
+    required this.revenueSharePercent,
     required this.headline,
     required this.bio,
     required this.communityTag,
@@ -11,13 +15,18 @@ class CreatorProfile {
     required this.stats,
     required this.growthSummary,
     required this.rewardSummary,
+    required this.financeSummary,
     required this.competitions,
   });
 
   final String creatorId;
+  final String userId;
   final String displayName;
   final String handle;
   final String shareCode;
+  final String tier;
+  final String status;
+  final double? revenueSharePercent;
   final String headline;
   final String bio;
   final String communityTag;
@@ -25,6 +34,7 @@ class CreatorProfile {
   final CreatorStats stats;
   final CreatorGrowthSummary growthSummary;
   final CreatorRewardSummary rewardSummary;
+  final CreatorFinanceSummary financeSummary;
   final List<CreatorCompetition> competitions;
 
   String get handleLabel => '@$handle';
@@ -72,6 +82,34 @@ class CreatorRewardSummary {
   final String lifetimeMilestoneRewards;
   final String competitionEntryCredits;
   final String ledgerStatus;
+}
+
+class CreatorFinanceSummary {
+  const CreatorFinanceSummary({
+    required this.currency,
+    required this.totalGiftIncome,
+    required this.totalRewardIncome,
+    required this.totalWithdrawnGross,
+    required this.totalWithdrawalFees,
+    required this.totalWithdrawnNet,
+    required this.pendingWithdrawals,
+    required this.activeCompetitions,
+    required this.attributedSignups,
+    required this.qualifiedJoins,
+    required this.insights,
+  });
+
+  final String currency;
+  final double totalGiftIncome;
+  final double totalRewardIncome;
+  final double totalWithdrawnGross;
+  final double totalWithdrawalFees;
+  final double totalWithdrawnNet;
+  final double pendingWithdrawals;
+  final int activeCompetitions;
+  final int attributedSignups;
+  final int qualifiedJoins;
+  final List<String> insights;
 }
 
 class CreatorCompetition {

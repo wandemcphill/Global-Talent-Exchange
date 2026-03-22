@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
-from backend.app.common.enums.qualification_status import QualificationStatus
+from app.common.enums.qualification_status import QualificationStatus
 
 
 class ChampionsLeagueValidationError(ValueError):

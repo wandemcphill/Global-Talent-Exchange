@@ -5,20 +5,20 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 import pytest
 
-from backend.app.core.database import build_alembic_config
-from backend.app.models import Base
-from backend.app.models.creator_campaign import CreatorCampaign
-from backend.app.models.creator_leaderboard_snapshot import CreatorLeaderboardSnapshot
-from backend.app.models.creator_profile import CreatorProfile
-from backend.app.models.referral_analytics_daily import ReferralAnalyticsDaily
-from backend.app.models.referral_attribution import ReferralAttribution
-from backend.app.models.referral_event import ReferralEvent
-from backend.app.models.referral_flag import ReferralFlag
-from backend.app.models.referral_reward import ReferralReward
-from backend.app.models.referral_reward_ledger import ReferralRewardLedger
-from backend.app.models.share_code import ShareCode
-from backend.app.services.share_code_generation_service import ShareCodeGenerationService
-from backend.app.schemas.share_code_core import ShareCodeGenerationRequest
+from app.core.database import build_alembic_config
+from app.models import Base
+from app.models.creator_campaign import CreatorCampaign
+from app.models.creator_leaderboard_snapshot import CreatorLeaderboardSnapshot
+from app.models.creator_profile import CreatorProfile
+from app.models.referral_analytics_daily import ReferralAnalyticsDaily
+from app.models.referral_attribution import ReferralAttribution
+from app.models.referral_event import ReferralEvent
+from app.models.referral_flag import ReferralFlag
+from app.models.referral_reward import ReferralReward
+from app.models.referral_reward_ledger import ReferralRewardLedger
+from app.models.share_code import ShareCode
+from app.services.share_code_generation_service import ShareCodeGenerationService
+from app.schemas.share_code_core import ShareCodeGenerationRequest
 
 
 def test_alembic_upgrade_creates_creator_referral_growth_tables(tmp_path) -> None:

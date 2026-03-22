@@ -4,8 +4,8 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
-from backend.app.ingestion.normalizers import normalize_recent_update_feed
-from backend.app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
+from app.ingestion.normalizers import normalize_recent_update_feed
+from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
 from .base import BaseFootballProvider
 

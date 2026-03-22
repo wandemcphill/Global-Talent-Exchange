@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.services.referral_orchestrator import CreatorCompetitionLinkRecord, ReferralStore
+from app.services.referral_orchestrator import CreatorCompetitionLinkRecord, ReferralStore
 
 
 class CreatorCompetitionLinkService:
@@ -93,7 +93,7 @@ class CreatorCompetitionLinkService:
     @staticmethod
     def _resolve_competition_title(competition_id: str) -> str:
         try:
-            from backend.app.services.competition_orchestrator import get_competition_orchestrator
+            from app.services.competition_orchestrator import get_competition_orchestrator
 
             competition = get_competition_orchestrator().get(competition_id, user_id=None, invite_code=None)
             if competition is not None:

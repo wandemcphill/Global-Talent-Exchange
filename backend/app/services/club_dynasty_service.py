@@ -6,11 +6,11 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.common.enums.dynasty_milestone_type import DynastyMilestoneType
-from backend.app.models.club_dynasty_milestone import ClubDynastyMilestone
-from backend.app.models.club_dynasty_progress import ClubDynastyProgress
-from backend.app.models.club_profile import ClubProfile
-from backend.app.schemas.club_dynasty_core import ClubDynastyMilestoneCore, ClubDynastyProgressCore
+from app.common.enums.dynasty_milestone_type import DynastyMilestoneType
+from app.models.club_dynasty_milestone import ClubDynastyMilestone
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_profile import ClubProfile
+from app.schemas.club_dynasty_core import ClubDynastyMilestoneCore, ClubDynastyProgressCore
 
 _LEVEL_THRESHOLDS: tuple[tuple[int, str], ...] = (
     (1800, "Legendary Legacy"),

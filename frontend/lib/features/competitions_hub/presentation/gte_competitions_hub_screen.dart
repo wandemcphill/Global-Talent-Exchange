@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/competitions_hub/data/competition_hub_curator.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart';
 import 'package:gte_frontend/widgets/competitions/competition_status_badge.dart';
 import 'package:gte_frontend/widgets/competitions/competition_visibility_chip.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
@@ -20,14 +26,22 @@ class GteCompetitionsHubScreen extends StatefulWidget {
     required this.currentDestination,
     required this.onDestinationChanged,
     this.isAuthenticated = false,
+    this.isCheckingCreatorAccess = false,
+    this.canHostCompetitions = false,
     this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
+    this.navigationDependencies,
   });
 
   final CompetitionController controller;
   final CompetitionHubDestination currentDestination;
   final ValueChanged<CompetitionHubDestination> onDestinationChanged;
   final bool isAuthenticated;
+  final bool isCheckingCreatorAccess;
+  final bool canHostCompetitions;
   final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenCreatorAccessRequest;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
   State<GteCompetitionsHubScreen> createState() =>
@@ -98,15 +112,18 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             children: <Widget>[
               GtexHeroBanner(
                 eyebrow: 'E-GAME ARENA',
-                title: 'Fixtures, brackets, storylines, and adaptive simulations live here.',
-                description: 'This surface is not the trading floor. It is the orchestration deck for leagues, cups, fast leagues, world super cups, and cinematic 3-5 minute match stories.',
+                title:
+                    'Fixtures, brackets, storylines, and adaptive simulations live here.',
+                description:
+                    'This surface is not the trading floor. It is the orchestration deck for leagues, cups, fast leagues, world super cups, and cinematic 3-5 minute match stories.',
                 accent: Colors.deepPurpleAccent,
                 chips: <Widget>[
                   GteMetricChip(
                     label: 'Visible',
-                    value: destination == CompetitionHubDestination.worldSuperCup
-                        ? worldSuperCupWatchlist.length.toString()
-                        : curated.length.toString(),
+                    value:
+                        destination == CompetitionHubDestination.worldSuperCup
+                            ? worldSuperCupWatchlist.length.toString()
+                            : curated.length.toString(),
                   ),
                   GteMetricChip(label: 'Open now', value: openCount.toString()),
                   GteMetricChip(
@@ -128,26 +145,33 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
                     color: Colors.white.withValues(alpha: 0.04),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.08)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Row(
                         children: <Widget>[
-                          Icon(destination.icon, color: Colors.deepPurpleAccent.shade100),
+                          Icon(destination.icon,
+                              color: Colors.deepPurpleAccent.shade100),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Text(destination.routePath, style: Theme.of(context).textTheme.titleMedium),
+                            child: Text(destination.routePath,
+                                style: Theme.of(context).textTheme.titleMedium),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Text(destination.hubDescription, style: Theme.of(context).textTheme.bodyMedium),
+                      Text(destination.hubDescription,
+                          style: Theme.of(context).textTheme.bodyMedium),
                       const SizedBox(height: 14),
-                      Text('Arena promise', style: Theme.of(context).textTheme.titleMedium),
+                      Text('Arena promise',
+                          style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
-                      Text('Adaptive qualification, realistic match probabilities, key moments, injuries, and manager fingerprints should all show up here in one smooth flow.', style: Theme.of(context).textTheme.bodyMedium),
+                      Text(
+                          'Adaptive qualification, realistic match probabilities, key moments, injuries, and manager fingerprints should all show up here in one smooth flow.',
+                          style: Theme.of(context).textTheme.bodyMedium),
                     ],
                   ),
                 ),
@@ -155,13 +179,22 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               const SizedBox(height: 20),
               GtexSignalStrip(
                 title: 'Live match center',
-                subtitle: 'Arena mode tracks which stories are live, which brackets are filling, and which formats are ready to burst into 3-5 minute highlight loops.',
+                subtitle:
+                    'Arena mode tracks which stories are live, which brackets are filling, and which formats are ready to burst into 3-5 minute highlight loops.',
                 accent: Colors.deepPurpleAccent,
                 tiles: <Widget>[
                   GtexSignalTile(
                     label: 'Featured fixture lane',
-                    value: competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).isNotEmpty ? 'LIVE NOW' : 'QUEUE READY',
-                    caption: competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).isNotEmpty
+                    value: competitions
+                            .where((CompetitionSummary item) =>
+                                item.status == CompetitionStatus.inProgress)
+                            .isNotEmpty
+                        ? 'LIVE NOW'
+                        : 'QUEUE READY',
+                    caption: competitions
+                            .where((CompetitionSummary item) =>
+                                item.status == CompetitionStatus.inProgress)
+                            .isNotEmpty
                         ? '${competitions.where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress).length} contests are already in motion.'
                         : 'No active fixture stream yet. Published contests become the next live watchlist.',
                     icon: Icons.live_tv_rounded,
@@ -170,14 +203,17 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                   GtexSignalTile(
                     label: 'Join pressure',
                     value: openCount > 0 ? '$openCount OPEN' : 'SEALED',
-                    caption: 'Open and published competitions stay separate from the market so match-night tension never feels like order entry.',
+                    caption:
+                        'Open and published competitions stay separate from the market so match-night tension never feels like order entry.',
                     icon: Icons.groups_2_outlined,
                     color: const Color(0xFFFFA3E0),
                   ),
                   GtexSignalTile(
                     label: 'Format spread',
-                    value: '${competitions.where((CompetitionSummary item) => item.isLeague).length}L / ${competitions.where((CompetitionSummary item) => item.isCup).length}C',
-                    caption: 'Leagues, cups, fast leagues, and future world-stage routes stay visible in one arena stack.',
+                    value:
+                        '${competitions.where((CompetitionSummary item) => item.isLeague).length}L / ${competitions.where((CompetitionSummary item) => item.isCup).length}C',
+                    caption:
+                        'Leagues, cups, fast leagues, and future world-stage routes stay visible in one arena stack.',
                     icon: Icons.emoji_events_outlined,
                     color: const Color(0xFF8ED8FF),
                   ),
@@ -194,6 +230,23 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                 isRefreshing: widget.controller.isLoadingDiscovery,
                 onRefresh: widget.controller.loadDiscovery,
               ),
+              if (widget.navigationDependencies != null) ...<Widget>[
+                const SizedBox(height: 20),
+                _ArenaRoutePanel(
+                  onOpenStreamerTournaments: () => _openFeatureRoute(
+                    const StreamerTournamentsListRouteData(),
+                  ),
+                  onOpenNationsCup: () => _openFeatureRoute(
+                    const NationalTeamCompetitionsRouteData(),
+                  ),
+                  onOpenWorldSimulation: () => _openFeatureRoute(
+                    const WorldOverviewRouteData(),
+                  ),
+                  onOpenTransferCenter: () => _openFeatureRoute(
+                    const FootballTransferCenterRouteData(),
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               GteSurfacePanel(
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -293,24 +346,49 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     }
   }
 
+  Future<void> _openFeatureRoute(GteAppRouteData route) {
+    final GteNavigationDependencies? dependencies =
+        widget.navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
+    );
+  }
+
   List<Widget> _buildOverview(
     BuildContext context,
     List<CompetitionSummary> competitions,
   ) {
+    final String hostDescription = _hostDescription();
     final List<CompetitionSummary> featured =
         competitionHubFeaturedCompetitions(competitions);
 
     final List<CompetitionSummary> liveBoard = competitions
-        .where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress || item.status == CompetitionStatus.openForJoin || item.status == CompetitionStatus.published)
+        .where((CompetitionSummary item) =>
+            item.status == CompetitionStatus.inProgress ||
+            item.status == CompetitionStatus.openForJoin ||
+            item.status == CompetitionStatus.published)
         .take(3)
         .toList(growable: false);
     final List<CompetitionSummary> recentlyFinal = competitions
-        .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
+        .where((CompetitionSummary item) =>
+            item.status == CompetitionStatus.completed)
         .take(3)
         .toList(growable: false);
     final List<CompetitionSummary> replayLane = featured
-        .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
+        .where((CompetitionSummary item) =>
+            item.status == CompetitionStatus.completed)
         .take(2)
+        .toList(growable: false);
+    final List<CompetitionSummary> gtexCompetitions =
+        competitions.where(_isGtexCompetition).take(4).toList(growable: false);
+    final List<CompetitionSummary> creatorCompetitions = competitions
+        .where((CompetitionSummary item) => !_isGtexCompetition(item))
+        .take(4)
         .toList(growable: false);
 
     return <Widget>[
@@ -361,17 +439,59 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         ),
       ),
       const SizedBox(height: 20),
+      GteSurfacePanel(
+        accentColor: GteShellTheme.accentArena,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Host your own competition',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hostDescription,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: _hostAction(),
+                  icon: Icon(_hostIcon()),
+                  label: Text(_hostLabel()),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    AppFeedback.showSuccess(
+                      context,
+                      'Invite codes are generated from the competition detail share screen.',
+                    );
+                  },
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Invite/join flow'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 20),
       if (liveBoard.isNotEmpty) ...<Widget>[
         const _ArenaSectionHeader(
           eyebrow: 'MATCHDAY BOARD',
           title: 'Live fixture desk',
-          description: 'A quick broadcast strip for the stories most likely to spill into highlights, results, and bracket movement.',
+          description:
+              'A quick broadcast strip for the stories most likely to spill into highlights, results, and bracket movement.',
         ),
         const SizedBox(height: 12),
         ...liveBoard.map(
           (CompetitionSummary item) => Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: _LiveFixtureCard(competition: item, onOpen: () => _openCompetition(item.id)),
+            child: _LiveFixtureCard(
+                competition: item, onOpen: () => _openCompetition(item.id)),
           ),
         ),
         const SizedBox(height: 4),
@@ -380,13 +500,15 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         const _ArenaSectionHeader(
           eyebrow: 'FINAL WHISTLE',
           title: 'Recently settled',
-          description: 'Completed contests stay visible so users can jump from result to replay lane without losing the competition context.',
+          description:
+              'Completed contests stay visible so users can jump from result to replay lane without losing the competition context.',
         ),
         const SizedBox(height: 12),
         ...recentlyFinal.map(
           (CompetitionSummary item) => Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: _LiveFixtureCard(competition: item, onOpen: () => _openCompetition(item.id)),
+            child: _LiveFixtureCard(
+                competition: item, onOpen: () => _openCompetition(item.id)),
           ),
         ),
         const SizedBox(height: 4),
@@ -397,43 +519,83 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
           message: CompetitionHubDestination.overview.emptyMessage,
           icon: Icons.emoji_events_outlined,
         )
-      else
-        ...<Widget>[
-          if (replayLane.isNotEmpty) ...<Widget>[
-            const _ArenaSectionHeader(
-              eyebrow: 'REPLAY LANE',
-              title: 'Highlight-ready competitions',
-              description: 'These contests are the cleanest handoff into 3-5 minute stories, recap reels, and manager-fingerprint review.',
-            ),
-            const SizedBox(height: 12),
-            ...replayLane.map(
-              (CompetitionSummary item) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _CompetitionCard(
-                  competition: item,
-                  contextLabel: 'Replay candidate',
-                  onOpen: () => _openCompetition(item.id),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-          ],
-          Text(
-            'Featured now',
-            style: Theme.of(context).textTheme.titleLarge,
+      else ...<Widget>[
+        if (gtexCompetitions.isNotEmpty) ...<Widget>[
+          const _ArenaSectionHeader(
+            eyebrow: 'GTEX COMPETITIONS',
+            title: 'Platform-run fixtures and promo pools',
+            description:
+                'GTEX competitions are funded by promotional pools and follow published rules.',
           ),
           const SizedBox(height: 12),
-          ...featured.map(
+          ...gtexCompetitions.map(
             (CompetitionSummary item) => Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: _CompetitionCard(
                 competition: item,
-                contextLabel: 'Featured competition',
+                contextLabel: 'GTEX competition',
                 onOpen: () => _openCompetition(item.id),
               ),
             ),
           ),
+          const SizedBox(height: 4),
         ],
+        if (creatorCompetitions.isNotEmpty) ...<Widget>[
+          const _ArenaSectionHeader(
+            eyebrow: 'CREATOR-HOSTED',
+            title: 'User-hosted competitions',
+            description:
+                'Creator competitions use published rules, transparent payouts, and invite-driven joins.',
+          ),
+          const SizedBox(height: 12),
+          ...creatorCompetitions.map(
+            (CompetitionSummary item) => Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _CompetitionCard(
+                competition: item,
+                contextLabel: 'Creator-hosted',
+                onOpen: () => _openCompetition(item.id),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+        if (replayLane.isNotEmpty) ...<Widget>[
+          const _ArenaSectionHeader(
+            eyebrow: 'REPLAY LANE',
+            title: 'Highlight-ready competitions',
+            description:
+                'These contests are the cleanest handoff into 3-5 minute stories, recap reels, and manager-fingerprint review.',
+          ),
+          const SizedBox(height: 12),
+          ...replayLane.map(
+            (CompetitionSummary item) => Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _CompetitionCard(
+                competition: item,
+                contextLabel: 'Replay candidate',
+                onOpen: () => _openCompetition(item.id),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+        Text(
+          'Featured now',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        ...featured.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _CompetitionCard(
+              competition: item,
+              contextLabel: 'Featured competition',
+              onOpen: () => _openCompetition(item.id),
+            ),
+          ),
+        ),
+      ],
     ];
   }
 
@@ -496,24 +658,23 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
           message: CompetitionHubDestination.worldSuperCup.emptyMessage,
           icon: Icons.public_outlined,
         )
-      else
-        ...<Widget>[
-          Text(
-            'Qualifying watchlist',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          ...worldSuperCupWatchlist.map(
-            (CompetitionSummary item) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _CompetitionCard(
-                competition: item,
-                contextLabel: 'World-stage watchlist',
-                onOpen: () => _openCompetition(item.id),
-              ),
+      else ...<Widget>[
+        Text(
+          'Qualifying watchlist',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        ...worldSuperCupWatchlist.map(
+          (CompetitionSummary item) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _CompetitionCard(
+              competition: item,
+              contextLabel: 'World-stage watchlist',
+              onOpen: () => _openCompetition(item.id),
             ),
           ),
-        ],
+        ),
+      ],
     ];
   }
 
@@ -533,13 +694,19 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     }
 
     final List<CompetitionSummary> liveNow = competitions
-        .where((CompetitionSummary item) => item.status == CompetitionStatus.inProgress)
+        .where((CompetitionSummary item) =>
+            item.status == CompetitionStatus.inProgress)
         .toList(growable: false);
     final List<CompetitionSummary> upNext = competitions
-        .where((CompetitionSummary item) => item.status == CompetitionStatus.openForJoin || item.status == CompetitionStatus.published || item.status == CompetitionStatus.filled || item.status == CompetitionStatus.locked)
+        .where((CompetitionSummary item) =>
+            item.status == CompetitionStatus.openForJoin ||
+            item.status == CompetitionStatus.published ||
+            item.status == CompetitionStatus.filled ||
+            item.status == CompetitionStatus.locked)
         .toList(growable: false);
     final List<CompetitionSummary> complete = competitions
-        .where((CompetitionSummary item) => item.status == CompetitionStatus.completed)
+        .where((CompetitionSummary item) =>
+            item.status == CompetitionStatus.completed)
         .toList(growable: false);
 
     return <Widget>[
@@ -547,13 +714,15 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         _ArenaSectionHeader(
           eyebrow: destination.label.toUpperCase(),
           title: 'Live now',
-          description: 'These contests are already in motion and should read like a match center first, not a lobby card.',
+          description:
+              'These contests are already in motion and should read like a match center first, not a lobby card.',
         ),
         const SizedBox(height: 12),
         ...liveNow.map(
           (CompetitionSummary item) => Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: _LiveFixtureCard(competition: item, onOpen: () => _openCompetition(item.id)),
+            child: _LiveFixtureCard(
+                competition: item, onOpen: () => _openCompetition(item.id)),
           ),
         ),
         const SizedBox(height: 4),
@@ -562,7 +731,8 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         _ArenaSectionHeader(
           eyebrow: destination.label.toUpperCase(),
           title: 'Up next',
-          description: 'Open, published, and locked competitions are grouped here so joinability is obvious in one scan.',
+          description:
+              'Open, published, and locked competitions are grouped here so joinability is obvious in one scan.',
         ),
         const SizedBox(height: 12),
         ...upNext.map(
@@ -581,7 +751,8 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         _ArenaSectionHeader(
           eyebrow: destination.label.toUpperCase(),
           title: 'Results and replays',
-          description: 'Settled competitions remain visible for recap, bragging rights, and highlight routing.',
+          description:
+              'Settled competitions remain visible for recap, bragging rights, and highlight routing.',
         ),
         const SizedBox(height: 12),
         ...complete.map(
@@ -604,7 +775,154 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         builder: (BuildContext context) => CompetitionDetailScreen(
           controller: widget.controller,
           competitionId: competitionId,
+          isAuthenticated: widget.isAuthenticated,
+          onOpenLogin: widget.onOpenLogin,
+          navigationDependencies: widget.navigationDependencies,
         ),
+      ),
+    );
+  }
+
+  bool _isGtexCompetition(CompetitionSummary item) {
+    final String label = item.creatorLabel.toLowerCase();
+    return label.contains('gtex') || label.contains('exchange');
+  }
+
+  Future<void> _openCreateCompetition() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => CompetitionCreateScreen(
+          controller: widget.controller,
+          isAuthenticated: widget.isAuthenticated,
+          isCheckingHostEligibility: widget.isCheckingCreatorAccess,
+          hostEligible: widget.canHostCompetitions,
+          onOpenLogin: widget.onOpenLogin,
+          onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
+        ),
+      ),
+    );
+  }
+
+  VoidCallback? _hostAction() {
+    if (!widget.isAuthenticated) {
+      return widget.onOpenLogin;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return null;
+    }
+    if (!widget.canHostCompetitions) {
+      return widget.onOpenCreatorAccessRequest;
+    }
+    return _openCreateCompetition;
+  }
+
+  String _hostLabel() {
+    if (!widget.isAuthenticated) {
+      return 'Sign in to host';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Checking creator access';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access to host';
+    }
+    return 'Host competition';
+  }
+
+  IconData _hostIcon() {
+    if (!widget.isAuthenticated) {
+      return Icons.login;
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return Icons.hourglass_top_outlined;
+    }
+    if (!widget.canHostCompetitions) {
+      return Icons.lock_outline;
+    }
+    return Icons.add;
+  }
+
+  String _hostDescription() {
+    if (!widget.isAuthenticated) {
+      return 'Hosting opens only after sign-in, so guest preview mode keeps the live creator flow locked.';
+    }
+    if (widget.isCheckingCreatorAccess) {
+      return 'Creator access is being checked before the live host flow is exposed.';
+    }
+    if (!widget.canHostCompetitions) {
+      return 'Request creator access before opening the live host flow. Arena does not late-fail hosting from this primary surface.';
+    }
+    return 'Create a creator competition, publish transparent rules, and share invite codes for private joins.';
+  }
+}
+
+class _ArenaRoutePanel extends StatelessWidget {
+  const _ArenaRoutePanel({
+    required this.onOpenStreamerTournaments,
+    required this.onOpenNationsCup,
+    required this.onOpenWorldSimulation,
+    required this.onOpenTransferCenter,
+  });
+
+  final VoidCallback onOpenStreamerTournaments;
+  final VoidCallback onOpenNationsCup;
+  final VoidCallback onOpenWorldSimulation;
+  final VoidCallback onOpenTransferCenter;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.accentArena,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Arena extensions',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'These routes open tournament, prediction, national-team, world, and transfer shells without disturbing the arena tab model.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onOpenStreamerTournaments,
+                icon: const Icon(Icons.live_tv_outlined),
+                label: const Text('Streamer tournaments'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: null,
+                icon: const Icon(Icons.insights_outlined),
+                label: const Text('Fan predictions (live match only)'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenNationsCup,
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Nations cup'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenWorldSimulation,
+                icon: const Icon(Icons.public_outlined),
+                label: const Text('World simulation'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenTransferCenter,
+                icon: const Icon(Icons.event_note_outlined),
+                label: const Text('Transfer center'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }
@@ -625,11 +943,12 @@ class _DestinationRouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String summary = destination == CompetitionHubDestination.worldSuperCup
-        ? 'Season inactive'
-        : count == 1
-            ? '1 competition'
-            : '$count competitions';
+    final String summary =
+        destination == CompetitionHubDestination.worldSuperCup
+            ? 'Season inactive'
+            : count == 1
+                ? '1 competition'
+                : '$count competitions';
     return GteSurfacePanel(
       onTap: onTap,
       child: Column(
@@ -765,7 +1084,8 @@ class _CompetitionCard extends StatelessWidget {
               value: competition.fillRate.clamp(0, 1),
               minHeight: 8,
               backgroundColor: Colors.white.withValues(alpha: 0.06),
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.deepPurpleAccent),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Colors.deepPurpleAccent),
             ),
           ),
           const SizedBox(height: 10),
@@ -828,9 +1148,9 @@ class _StatPill extends StatelessWidget {
   }
 }
 
-
 class _ArenaSectionHeader extends StatelessWidget {
-  const _ArenaSectionHeader({required this.eyebrow, required this.title, required this.description});
+  const _ArenaSectionHeader(
+      {required this.eyebrow, required this.title, required this.description});
 
   final String eyebrow;
   final String title;
@@ -875,19 +1195,32 @@ class _LiveFixtureCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(competition.name, style: Theme.of(context).textTheme.titleLarge),
+                    Text(competition.name,
+                        style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 6),
-                    Text('${competition.creatorLabel} • ${competition.safeFormatLabel}', style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                        '${competition.creatorLabel} â€¢ ${competition.safeFormatLabel}',
+                        style: Theme.of(context).textTheme.bodyMedium),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
                   color: accent.withValues(alpha: 0.14),
                 ),
-                child: Text(isFinal ? 'FINAL RESULT' : isLive ? 'LIVE MATCH CENTER' : 'UP NEXT', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: accent)),
+                child: Text(
+                    isFinal
+                        ? 'FINAL RESULT'
+                        : isLive
+                            ? 'LIVE MATCH CENTER'
+                            : 'UP NEXT',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(color: accent)),
               ),
             ],
           ),
@@ -906,10 +1239,21 @@ class _LiveFixtureCard extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              _StatPill(label: 'Bracket fill', value: '${(fillPct * 100).round()}%'),
-              _StatPill(label: 'Phase', value: isFinal ? 'Replay ready' : isLive ? 'Story active' : 'Join window'),
-              _StatPill(label: 'Entry', value: gteFormatCredits(competition.entryFee)),
-              _StatPill(label: 'Prize', value: gteFormatCredits(competition.prizePool)),
+              _StatPill(
+                  label: 'Bracket fill', value: '${(fillPct * 100).round()}%'),
+              _StatPill(
+                  label: 'Phase',
+                  value: isFinal
+                      ? 'Replay ready'
+                      : isLive
+                          ? 'Story active'
+                          : 'Join window'),
+              _StatPill(
+                  label: 'Entry',
+                  value: gteFormatCredits(competition.entryFee)),
+              _StatPill(
+                  label: 'Prize',
+                  value: gteFormatCredits(competition.prizePool)),
             ],
           ),
           const SizedBox(height: 14),

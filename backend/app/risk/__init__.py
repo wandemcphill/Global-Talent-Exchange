@@ -1,4 +1,4 @@
-from backend.app.risk.service import (
+from app.risk.service import (
     DuplicateSettlementError,
     InsufficientCashError,
     InsufficientHoldingsError,

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher, MatchSimulationJob
-from backend.app.core.events import InMemoryEventPublisher
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher, MatchSimulationJob
+from app.core.events import InMemoryEventPublisher
 
 
 def test_queue_publisher_emits_broker_ready_job_payload_for_worker_consumers() -> None:

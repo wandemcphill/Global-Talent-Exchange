@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from decimal import Decimal, ROUND_DOWN
 
-from backend.app.champions_league.models.domain import (
+from app.champions_league.models.domain import (
     AdvancementStatus,
     ChampionsLeagueValidationError,
     ClubCandidate,
@@ -23,7 +23,7 @@ from backend.app.champions_league.models.domain import (
     SettlementEventPlan,
     TierAllocation,
 )
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     CHAMPIONS_LEAGUE_DIRECT_SLOTS,
     CHAMPIONS_LEAGUE_FUND_PCT,
     CHAMPIONS_LEAGUE_LEAGUE_PHASE_TEAMS,

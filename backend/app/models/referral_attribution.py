@@ -6,8 +6,8 @@ from typing import Any
 from sqlalchemy import DateTime, Enum, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.referral_source_channel import ReferralSourceChannel
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+from app.common.enums.referral_source_channel import ReferralSourceChannel
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 
 class ReferralAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):

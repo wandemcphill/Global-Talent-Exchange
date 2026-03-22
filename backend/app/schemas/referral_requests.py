@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from backend.app.common.schemas.base import CommonSchema
+from app.common.schemas.base import CommonSchema
 
 ShareCodeType = Literal["user_referral", "creator_share", "competition_invite", "promo_code"]
 ReferralSourceChannel = Literal[

@@ -101,6 +101,24 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                 ),
                 const SizedBox(height: 16),
                 GteSurfacePanel(
+                  accentColor: GteShellTheme.accentWarm,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Icon(Icons.verified_outlined,
+                          color: GteShellTheme.accentWarm),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'GTEX promotional pools fund platform-run competitions. Outcomes follow published rules and verified performance, not betting odds.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                GteSurfacePanel(
                   child: CheckboxListTile(
                     value: _agreed,
                     contentPadding: EdgeInsets.zero,

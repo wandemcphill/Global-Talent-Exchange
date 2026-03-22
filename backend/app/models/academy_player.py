@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Enum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.academy_graduation_event import AcademyGraduationEvent
-    from backend.app.models.academy_player_progress import AcademyPlayerProgress
-    from backend.app.models.academy_program import AcademyProgram
+    from app.models.academy_graduation_event import AcademyGraduationEvent
+    from app.models.academy_player_progress import AcademyPlayerProgress
+    from app.models.academy_program import AcademyProgram
 
 
 class AcademyPlayer(UUIDPrimaryKeyMixin, TimestampMixin, Base):

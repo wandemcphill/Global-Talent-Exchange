@@ -3,12 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin
-from backend.app.db import get_session
-from backend.app.schemas.club_admin import AdminClubDetailView, BrandingModerationResultView, ModerateBrandingRequest
-from backend.app.schemas.club_analytics import ClubAnalyticsView, ClubSummaryView
-from backend.app.services.club_admin_service import ClubAdminService
-from backend.app.services.club_analytics_service import ClubAnalyticsService
+from app.auth.dependencies import get_current_admin
+from app.db import get_session
+from app.schemas.club_admin import AdminClubDetailView, BrandingModerationResultView, ModerateBrandingRequest
+from app.schemas.club_analytics import ClubAnalyticsView, ClubSummaryView
+from app.services.club_admin_service import ClubAdminService
+from app.services.club_analytics_service import ClubAnalyticsService
 
 router = APIRouter(prefix="/api/admin/clubs", tags=["admin-clubs"])
 

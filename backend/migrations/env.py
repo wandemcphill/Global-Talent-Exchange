@@ -7,17 +7,16 @@ import sys
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.append(str(BACKEND_DIR))
 
-from backend.app.db import get_database_url, get_target_metadata, load_model_modules  # noqa: E402
+from app.db import get_database_url, get_target_metadata, load_model_modules  # noqa: E402
 
 config = context.config
 
 load_model_modules()
-configured_url = config.get_main_option("sqlalchemy.url")
-if configured_url in {"", "sqlite:///./gte_backend.db", "sqlite+pysqlite:///./gte_backend.db"}:
+if not config.get_main_option("sqlalchemy.url"):
     config.set_main_option("sqlalchemy.url", get_database_url())
 
 if config.config_file_name is not None:

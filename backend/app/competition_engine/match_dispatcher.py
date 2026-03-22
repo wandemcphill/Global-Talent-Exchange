@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.schemas.competition import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.schemas.competition import (
     CompetitionDispatchRequest,
     CompetitionEngineBatch,
     ScheduledFixture,

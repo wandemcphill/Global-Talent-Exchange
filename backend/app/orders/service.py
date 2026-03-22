@@ -6,16 +6,16 @@ from typing import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.ingestion.models import Player
-from backend.app.ledger.models import LedgerEventType
-from backend.app.ledger.service import LedgerEventService
-from backend.app.matching.models import TradeExecution
-from backend.app.matching.service import ExecutionSnapshot, InvalidOrderTransitionError, MatchingService
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.ingestion.models import Player
+from app.ledger.models import LedgerEventType
+from app.ledger.service import LedgerEventService
+from app.matching.models import TradeExecution
+from app.matching.service import ExecutionSnapshot, InvalidOrderTransitionError, MatchingService
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 
@@ -70,7 +70,7 @@ class OrderService:
             quantity=normalized_quantity,
             filled_quantity=Decimal("0.0000"),
             max_price=normalized_max_price,
-            currency=LedgerUnit.CREDIT,
+            currency=LedgerUnit.COIN,
             reserved_amount=reserved_amount,
             status=OrderStatus.OPEN,
         )
@@ -201,6 +201,8 @@ class OrderService:
             amount=order.reserved_amount,
             reference=order.id,
             description=f"Reserve funds for order {order.id}",
+            unit=LedgerUnit.COIN,
+            source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
         )
         if not entries:
             return
@@ -225,13 +227,13 @@ class OrderService:
         if buyer is None or seller is None:
             raise OrderPlacementError("Execution references a missing user.")
 
-        buyer_escrow = self.wallet_service.get_user_escrow_account(session, buyer, LedgerUnit.CREDIT)
-        seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.CREDIT)
+        buyer_escrow = self.wallet_service.get_user_escrow_account(session, buyer, LedgerUnit.COIN)
+        seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.COIN)
         self.wallet_service.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=buyer_escrow, amount=-execution.notional),
-                LedgerPosting(account=seller_account, amount=execution.notional),
+                LedgerPosting(account=buyer_escrow, amount=-execution.notional, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
+                LedgerPosting(account=seller_account, amount=execution.notional, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
             ],
             reason=LedgerEntryReason.TRADE_SETTLEMENT,
             reference=execution.id,
@@ -340,13 +342,13 @@ class OrderService:
         user = session.get(User, order.user_id)
         if user is None:
             raise OrderPlacementError("Order references a missing user.")
-        available_account = self.wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-        escrow_account = self.wallet_service.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        available_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+        escrow_account = self.wallet_service.get_user_escrow_account(session, user, LedgerUnit.COIN)
         entries = self.wallet_service.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=escrow_account, amount=-release_amount),
-                LedgerPosting(account=available_account, amount=release_amount),
+                LedgerPosting(account=escrow_account, amount=-release_amount, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
+                LedgerPosting(account=available_account, amount=release_amount, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
             ],
             reason=LedgerEntryReason.WITHDRAWAL_SETTLEMENT,
             reference=order.id,

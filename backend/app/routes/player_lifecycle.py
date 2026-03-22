@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from backend.app.segments.player_lifecycle.segment_player_lifecycle import router
+from app.segments.player_lifecycle.segment_player_lifecycle import router
 
 __all__ = ["router"]

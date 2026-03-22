@@ -1,9 +1,14 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import 'gte_shell_theme.dart';
 import 'gte_surface_panel.dart';
+
+class GtexBrandAssets {
+  const GtexBrandAssets._();
+
+  static const String icon = 'assets/branding/gtex_icon.png';
+  static const String logo = 'assets/branding/gtex_logo.png';
+}
 
 class GtexLogoMark extends StatelessWidget {
   const GtexLogoMark({super.key, this.size = 56, this.compact = false});
@@ -13,60 +18,14 @@ class GtexLogoMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double outer = size;
-    final double inner = size * 0.62;
-    return SizedBox(
-      width: outer,
-      height: outer,
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          Container(
-            width: outer,
-            height: outer,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(outer * 0.34),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  Color(0xFF8EF9E4),
-                  Color(0xFF61B6FF),
-                  Color(0xFFFFC76B),
-                ],
-              ),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: GteShellTheme.accent.withValues(alpha: 0.28),
-                  blurRadius: outer * 0.34,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-          ),
-          Transform.rotate(
-            angle: -math.pi / 10,
-            child: Container(
-              width: inner,
-              height: inner,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(inner * 0.28),
-                color: GteShellTheme.background,
-              ),
-              child: Center(
-                child: Text(
-                  compact ? 'G' : 'GTEX',
-                  style: TextStyle(
-                    color: GteShellTheme.textPrimary,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: compact ? -0.8 : 0.6,
-                    fontSize: compact ? inner * 0.48 : inner * 0.18,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+    return SizedBox.square(
+      dimension: size,
+      child: Image.asset(
+        GtexBrandAssets.icon,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
+        semanticLabel: compact ? 'GTEX icon' : 'GTEX brand icon',
       ),
     );
   }
@@ -81,35 +40,29 @@ class GtexWordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    return Row(
+    final double logoHeight = compact ? 40 : 58;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        GtexLogoMark(size: compact ? 42 : 56, compact: true),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            ShaderMask(
-              shaderCallback: (Rect bounds) => const LinearGradient(
-                colors: <Color>[GteShellTheme.textPrimary, GteShellTheme.accent, GteShellTheme.accentWarm],
-              ).createShader(bounds),
-              child: Text(
-                'GLOBAL TALENT EXCHANGE',
-                style: (compact ? textTheme.titleMedium : textTheme.titleLarge)?.copyWith(
-                  letterSpacing: compact ? 0.8 : 1.2,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            if (showTagline)
-              Text(
-                'Trade football upside. Run the matchday universe.',
-                style: textTheme.bodySmall?.copyWith(color: GteShellTheme.textMuted),
-              ),
-          ],
+        SizedBox(
+          height: logoHeight,
+          child: Image.asset(
+            GtexBrandAssets.logo,
+            fit: BoxFit.contain,
+            alignment: Alignment.centerLeft,
+            filterQuality: FilterQuality.high,
+            isAntiAlias: true,
+            semanticLabel: 'GTEX logo',
+          ),
         ),
+        if (showTagline) ...<Widget>[
+          const SizedBox(height: 6),
+          Text(
+            'Trade football upside. Run the matchday universe.',
+            style: textTheme.bodySmall?.copyWith(color: GteShellTheme.textMuted),
+          ),
+        ],
       ],
     );
   }
@@ -171,45 +124,44 @@ class GtexHeroBanner extends StatelessWidget {
               left: -22,
               child: _GlowOrb(size: 168, color: GteShellTheme.accentWarm.withValues(alpha: 0.12)),
             ),
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.all(0),
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    final bool stacked = constraints.maxWidth < 900;
-                    final Widget main = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        GtexSectionBadge(label: eyebrow, color: accent),
-                        const SizedBox(height: 18),
-                        Text(title, style: Theme.of(context).textTheme.displaySmall),
-                        const SizedBox(height: 12),
-                        Text(description, style: Theme.of(context).textTheme.bodyLarge),
-                        const SizedBox(height: 18),
-                        Wrap(spacing: 10, runSpacing: 10, children: chips),
-                        if (actions.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 20),
-                          Wrap(spacing: 12, runSpacing: 12, children: actions),
-                        ],
+            Padding(
+              padding: const EdgeInsets.all(0),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool stacked = constraints.maxWidth < 900;
+                  final Widget main = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      GtexSectionBadge(label: eyebrow, color: accent),
+                      const SizedBox(height: 18),
+                      Text(title, style: Theme.of(context).textTheme.displaySmall),
+                      const SizedBox(height: 12),
+                      Text(description, style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 18),
+                      Wrap(spacing: 10, runSpacing: 10, children: chips),
+                      if (actions.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 20),
+                        Wrap(spacing: 12, runSpacing: 12, children: actions),
                       ],
-                    );
-                    final Widget right = sidePanel ?? _DefaultSignalPanel(accent: accent);
-                    if (stacked) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[main, const SizedBox(height: 18), right],
-                      );
-                    }
-                    return Row(
+                    ],
+                  );
+                  final Widget right =
+                      sidePanel ?? _DefaultSignalPanel(accent: accent);
+                  if (stacked) {
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Expanded(flex: 6, child: main),
-                        const SizedBox(width: 20),
-                        Expanded(flex: 4, child: right),
-                      ],
+                      children: <Widget>[main, const SizedBox(height: 18), right],
                     );
-                  },
-                ),
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(flex: 6, child: main),
+                      const SizedBox(width: 20),
+                      Expanded(flex: 4, child: right),
+                    ],
+                  );
+                },
               ),
             ),
           ],

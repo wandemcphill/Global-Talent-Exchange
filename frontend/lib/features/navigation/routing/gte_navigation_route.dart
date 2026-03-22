@@ -5,6 +5,7 @@ enum GtePrimaryDestination {
   home,
   market,
   competitions,
+  community,
   club,
   wallet,
 }
@@ -18,6 +19,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return 'Trade';
       case GtePrimaryDestination.competitions:
         return 'Arena';
+      case GtePrimaryDestination.community:
+        return 'Community';
       case GtePrimaryDestination.club:
         return 'Club';
       case GtePrimaryDestination.wallet:
@@ -33,6 +36,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return 'market';
       case GtePrimaryDestination.competitions:
         return 'competitions';
+      case GtePrimaryDestination.community:
+        return 'community';
       case GtePrimaryDestination.club:
         return 'club';
       case GtePrimaryDestination.wallet:
@@ -50,6 +55,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return Icons.show_chart_outlined;
       case GtePrimaryDestination.competitions:
         return Icons.emoji_events_outlined;
+      case GtePrimaryDestination.community:
+        return Icons.forum_outlined;
       case GtePrimaryDestination.club:
         return Icons.shield_outlined;
       case GtePrimaryDestination.wallet:
@@ -67,6 +74,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return const Color(0xFF72F0D8);
       case GtePrimaryDestination.competitions:
         return const Color(0xFFB26DFF);
+      case GtePrimaryDestination.community:
+        return const Color(0xFF5FE3A1);
       case GtePrimaryDestination.club:
         return const Color(0xFF85B8FF);
       case GtePrimaryDestination.wallet:
@@ -82,6 +91,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return Icons.show_chart;
       case GtePrimaryDestination.competitions:
         return Icons.emoji_events;
+      case GtePrimaryDestination.community:
+        return Icons.forum;
       case GtePrimaryDestination.club:
         return Icons.shield;
       case GtePrimaryDestination.wallet:
@@ -108,6 +119,9 @@ class GteNavigationRoute {
           primaryDestination: GtePrimaryDestination.competitions,
           competitionDestination: destination,
         );
+
+  const GteNavigationRoute.community()
+      : this._(primaryDestination: GtePrimaryDestination.community);
 
   const GteNavigationRoute.club()
       : this._(primaryDestination: GtePrimaryDestination.club);
@@ -141,6 +155,8 @@ class GteNavigationRoute {
         return GteNavigationRoute.competitions(
           destination: effectiveCompetitionDestination,
         );
+      case GtePrimaryDestination.community:
+        return const GteNavigationRoute.community();
       case GtePrimaryDestination.club:
         return const GteNavigationRoute.club();
       case GtePrimaryDestination.wallet:
@@ -188,6 +204,8 @@ class GteNavigationRoute {
             normalizedSegments.length > 1 ? normalizedSegments[1] : null,
           ),
         );
+      case 'community':
+        return const GteNavigationRoute.community();
       case 'club':
         return const GteNavigationRoute.club();
       case 'wallet':

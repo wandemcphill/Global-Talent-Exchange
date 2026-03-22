@@ -7,15 +7,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-from backend.app.auth.service import AuthService
-from backend.app.models.base import Base
-from backend.app.models.user import User
-from backend.app.risk.service import InsufficientCashError, InsufficientHoldingsError, RiskControlService
-from backend.app.wallets.service import WalletService
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+from app.auth.service import AuthService
+from app.models.base import Base
+from app.models.user import User
+from app.risk.service import InsufficientCashError, InsufficientHoldingsError, RiskControlService
+from app.wallets.service import WalletService
 
 
 @pytest.fixture()

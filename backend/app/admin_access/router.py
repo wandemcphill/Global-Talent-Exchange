@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from backend.app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_ROLE_PERMISSIONS
-from backend.app.auth.dependencies import get_current_super_admin, get_session
-from backend.app.auth.service import AuthService, AuthError, DuplicateUserError
-from backend.app.models.user import User, UserRole
+from app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_ROLE_PERMISSIONS
+from app.auth.dependencies import get_current_super_admin, get_session
+from app.auth.service import AuthService, AuthError, DuplicateUserError
+from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/api/admin/access", tags=["admin-access"])
 

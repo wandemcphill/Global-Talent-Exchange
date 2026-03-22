@@ -3,10 +3,10 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Mapping
 
-from backend.app.schemas.referral_analytics import CreatorLeaderboardEntryView, CreatorLeaderboardResponse
-from backend.app.services.referral_analytics_service import ReferralAnalyticsService
-from backend.app.services.referral_orchestrator import ReferralOrchestrator, utcnow
-from backend.app.services.referral_risk_service import ReferralRiskService
+from app.schemas.referral_analytics import CreatorLeaderboardEntryView, CreatorLeaderboardResponse
+from app.services.referral_analytics_service import ReferralAnalyticsService
+from app.services.referral_orchestrator import ReferralOrchestrator, utcnow
+from app.services.referral_risk_service import ReferralRiskService
 
 _FOUR_PLACES = Decimal("0.0001")
 

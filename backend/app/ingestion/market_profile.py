@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.core.config import Settings, get_settings
-from backend.app.ingestion.models import (
+from app.core.config import Settings, get_settings
+from app.ingestion.models import (
     Competition,
     LiquidityBand as LiquidityBandModel,
     MarketSignal,

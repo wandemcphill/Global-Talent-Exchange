@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from backend.app.ingestion.models import (
+from app.ingestion.models import (
     Club,
     Competition,
     Country,

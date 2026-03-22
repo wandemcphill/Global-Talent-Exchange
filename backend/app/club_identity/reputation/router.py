@@ -6,14 +6,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.reputation.schemas import (
+from app.club_identity.reputation.schemas import (
     ClubPrestigeView,
     ClubReputationView,
     ClubReputationHistoryView,
     PrestigeLeaderboardView,
 )
-from backend.app.club_identity.reputation.service import ClubReputationQueryService
-from backend.app.db import get_session
+from app.club_identity.reputation.service import ClubReputationQueryService
+from app.db import get_session
 
 router = APIRouter(prefix="/api", tags=["club-reputation"])
 

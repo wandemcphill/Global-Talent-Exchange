@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.market.models import ListingStatus, OfferStatus, TradeIntentStatus, utcnow
-from backend.app.market.read_models import MarketSummaryReadModel
+from app.market.models import ListingStatus, OfferStatus, TradeIntentStatus, utcnow
+from app.market.read_models import MarketSummaryReadModel
 
 
 @dataclass(slots=True)

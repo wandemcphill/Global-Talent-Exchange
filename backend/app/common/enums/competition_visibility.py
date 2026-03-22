@@ -7,6 +7,7 @@ class CompetitionVisibility(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     INVITE_ONLY = "invite_only"
+    GATED = "gated"
 
 
 __all__ = ["CompetitionVisibility"]

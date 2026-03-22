@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from backend.app.club_identity.trophies.schemas import (
+from app.club_identity.trophies.schemas import (
     HonorsTimelineView,
     SeasonHonorsArchiveView,
     SeasonHonorsRecordView,
@@ -13,7 +13,7 @@ from backend.app.club_identity.trophies.schemas import (
     TrophySeasonCountView,
     TrophyWinView,
 )
-from backend.app.club_identity.trophies.service import ClubHonorsNotFoundError, TrophyCabinetService
+from app.club_identity.trophies.service import ClubHonorsNotFoundError, TrophyCabinetService
 
 router = APIRouter(tags=["club-identity-trophies"])
 

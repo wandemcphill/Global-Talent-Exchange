@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
-from backend.app.main import create_app
+from app.main import create_app
 
 
 @pytest.fixture()

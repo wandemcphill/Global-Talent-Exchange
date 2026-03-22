@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     WORLD_SUPER_CUP_DIRECT_SLOTS,
     WORLD_SUPER_CUP_MAIN_TEAMS,
     WORLD_SUPER_CUP_PLAYOFF_TEAMS,
     WORLD_SUPER_CUP_PLAYOFF_WINNERS,
 )
-from backend.app.world_super_cup.models import ClubSeasonPerformance
-from backend.app.world_super_cup.services.calendar import WorldSuperCupCalendarService
-from backend.app.world_super_cup.services.qualification import QualificationCoefficientService
-from backend.app.world_super_cup.services.tournament import WorldSuperCupService
+from app.world_super_cup.models import ClubSeasonPerformance
+from app.world_super_cup.services.calendar import WorldSuperCupCalendarService
+from app.world_super_cup.services.qualification import QualificationCoefficientService
+from app.world_super_cup.services.tournament import WorldSuperCupService
 
 
 def test_world_super_cup_qualification_pipeline_keeps_32_club_integrity() -> None:

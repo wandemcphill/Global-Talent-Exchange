@@ -4,18 +4,18 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from uuid import uuid4
 
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.schemas.academy_core import AcademyPlayerView, AcademyProgramView
-from backend.app.schemas.club_ops_requests import (
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.schemas.academy_core import AcademyPlayerView, AcademyProgramView
+from app.schemas.club_ops_requests import (
     CreateAcademyPlayerRequest,
     CreateAcademyProgramRequest,
     UpdateAcademyPlayerRequest,
 )
-from backend.app.schemas.club_ops_responses import AcademyOverviewResponse, AcademyPlayersResponse, AcademyTrainingCyclesResponse
-from backend.app.services.academy_graduation_service import AcademyGraduationService, get_academy_graduation_service
-from backend.app.services.academy_progression_service import AcademyProgressionService, get_academy_progression_service
-from backend.app.services.academy_training_service import AcademyTrainingService, get_academy_training_service
-from backend.app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
+from app.schemas.club_ops_responses import AcademyOverviewResponse, AcademyPlayersResponse, AcademyTrainingCyclesResponse
+from app.services.academy_graduation_service import AcademyGraduationService, get_academy_graduation_service
+from app.services.academy_progression_service import AcademyProgressionService, get_academy_progression_service
+from app.services.academy_training_service import AcademyTrainingService, get_academy_training_service
+from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
 
 
 def _utcnow() -> datetime:

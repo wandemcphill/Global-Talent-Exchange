@@ -5,11 +5,11 @@ from decimal import Decimal
 
 from pydantic import Field
 
-from backend.app.academy.models import AcademySeasonStatus
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.qualification_status import QualificationStatus
-from backend.app.common.schemas.base import CommonSchema
+from app.academy.models import AcademySeasonStatus
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.qualification_status import QualificationStatus
+from app.common.schemas.base import CommonSchema
 
 
 class AcademyClubRequestView(CommonSchema):

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from sqlalchemy import func, select
 
-from backend.app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
-from backend.app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
-from backend.app.club_identity.reputation.season_reputation_rollup import SeasonReputationRollupService
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
+from app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
+from app.club_identity.reputation.season_reputation_rollup import SeasonReputationRollupService
 
 
 def test_multi_season_rollup_accumulates_and_stays_idempotent(session) -> None:

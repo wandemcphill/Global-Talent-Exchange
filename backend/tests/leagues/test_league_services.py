@@ -9,20 +9,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.config.competition_constants import LEAGUE_GROUP_SIZE, LEAGUE_MATCHES_PER_CLUB, LEAGUE_MATCH_WINDOWS_PER_DAY
-from backend.app.competition_engine import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher
-from backend.app.competitions.models.league_events import (
+from app.config.competition_constants import LEAGUE_GROUP_SIZE, LEAGUE_MATCHES_PER_CLUB, LEAGUE_MATCH_WINDOWS_PER_DAY
+from app.competition_engine import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.competitions.models.league_events import (
     LeagueFixtureCompletedEvent,
     LeagueRegisteredClubEventData,
     LeagueSeasonRegisteredEvent,
 )
-from backend.app.leagues.models import LeagueClub, LeaguePlayerContribution, LeagueStandingRow
-from backend.app.leagues.prizes import LeaguePrizeService
-from backend.app.leagues.qualification import LeagueQualificationService
-from backend.app.leagues.repository import DatabaseLeagueEventRepository, InMemoryLeagueEventRepository, LeagueEventRecord
-from backend.app.leagues.service import LeagueSeasonLifecycleService
-from backend.app.models.base import Base
+from app.leagues.models import LeagueClub, LeaguePlayerContribution, LeagueStandingRow
+from app.leagues.prizes import LeaguePrizeService
+from app.leagues.qualification import LeagueQualificationService
+from app.leagues.repository import DatabaseLeagueEventRepository, InMemoryLeagueEventRepository, LeagueEventRecord
+from app.leagues.service import LeagueSeasonLifecycleService
+from app.models.base import Base
 
 
 def _clubs(count: int) -> tuple[LeagueClub, ...]:

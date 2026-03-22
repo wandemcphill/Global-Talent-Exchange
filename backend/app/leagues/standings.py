@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.leagues.models import LeagueClub, LeagueFixture, LeagueStandingRow
+from app.leagues.models import LeagueClub, LeagueFixture, LeagueStandingRow
 
 
 class LeagueStandingsService:

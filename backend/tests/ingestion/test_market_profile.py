@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from backend.app.cache.redis_helpers import NullCacheBackend
-from backend.app.ingestion.models import Club, Competition, Country, InternalLeague, Player, PlayerSeasonStat
-from backend.app.ingestion.repository import IngestionRepository
-from backend.app.ingestion.service import IngestionService
+from app.cache.redis_helpers import NullCacheBackend
+from app.ingestion.models import Club, Competition, Country, InternalLeague, Player, PlayerSeasonStat
+from app.ingestion.repository import IngestionRepository
+from app.ingestion.service import IngestionService
 
 
 def test_market_profile_assigner_gives_obscure_players_lower_supply_and_tighter_liquidity(session) -> None:

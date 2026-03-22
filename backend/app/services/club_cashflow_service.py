@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from backend.app.schemas.club_finance_core import ClubCashflowSummaryView
-from backend.app.services.club_finance_service import ClubFinanceService, get_club_finance_service
+from app.schemas.club_finance_core import ClubCashflowSummaryView
+from app.services.club_finance_service import ClubFinanceService, get_club_finance_service
 
 
 class ClubCashflowService:

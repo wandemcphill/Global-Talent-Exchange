@@ -4,8 +4,25 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.schemas.competition_requests import (
+from app.competitions.creator_league_router import router as creator_league_router
+from app.common.enums.competition_format import CompetitionFormat
+from app.schemas.competition_lifecycle import (
+    CompetitionAdvanceRequest,
+    CompetitionFinalizeRequest,
+    CompetitionInviteAcceptRequest,
+    CompetitionMatchEventRequest,
+    CompetitionMatchEventView,
+    CompetitionMatchResultRequest,
+    CompetitionMatchView,
+    CompetitionRoundView,
+    CompetitionScheduleJobRequest,
+    CompetitionScheduleJobView,
+    CompetitionSchedulePreviewRequest,
+    CompetitionSchedulePreviewResponse,
+    CompetitionSeedRequest,
+    CompetitionStandingView,
+)
+from app.schemas.competition_requests import (
     CompetitionCreateRequest,
     CompetitionInviteCreateRequest,
     CompetitionJoinRequest,
@@ -13,21 +30,21 @@ from backend.app.schemas.competition_requests import (
     CompetitionPublishRequest,
     CompetitionUpdateRequest,
 )
-from backend.app.schemas.competition_responses import (
+from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
     CompetitionListResponse,
     CompetitionSummaryView,
 )
-from backend.app.services.competition_discovery_service import CompetitionDiscoveryFilter
-from backend.app.services.competition_orchestrator import (
+from app.services.competition_orchestrator import (
     CompetitionActionError,
     CompetitionOrchestrator,
     get_competition_orchestrator,
 )
 
 router = APIRouter(prefix="/api/competitions", tags=["competitions"])
+router.include_router(creator_league_router)
 
 
 @router.post("", response_model=CompetitionSummaryView, status_code=status.HTTP_201_CREATED)
@@ -86,14 +103,12 @@ def list_competitions(
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionListResponse:
     return orchestrator.list(
-        filters=CompetitionDiscoveryFilter(
-            public_only=public_only,
-            format=format,
-            fee_filter=fee_filter,
-            sort=sort,
-            creator_id=creator_id,
-            beginner_friendly=beginner_friendly,
-        )
+        public_only=public_only,
+        format=format,
+        fee_filter=fee_filter,
+        sort=sort,
+        creator_id=creator_id,
+        beginner_friendly=beginner_friendly,
     )
 
 
@@ -159,6 +174,18 @@ def list_competition_invites(
     return result
 
 
+@router.post("/{competition_id}/invites/accept", response_model=CompetitionSummaryView)
+def accept_competition_invite(
+    competition_id: str,
+    payload: CompetitionInviteAcceptRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    result = _handle_competition_errors(lambda: orchestrator.accept_invite(competition_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
 @router.get("/{competition_id}/summary", response_model=CompetitionSummaryView)
 def get_competition_summary(
     competition_id: str,
@@ -178,6 +205,172 @@ def get_competition_financials(
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionFinancialSummaryView:
     result = orchestrator.financials(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/rounds", response_model=tuple[CompetitionRoundView, ...])
+def get_competition_rounds(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> tuple[CompetitionRoundView, ...]:
+    result = orchestrator.rounds(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/fixtures", response_model=tuple[CompetitionMatchView, ...])
+def get_competition_fixtures(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> tuple[CompetitionMatchView, ...]:
+    result = orchestrator.fixtures(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/standings", response_model=tuple[CompetitionStandingView, ...])
+def get_competition_standings(
+    competition_id: str,
+    group_key: str | None = Query(default=None),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> tuple[CompetitionStandingView, ...]:
+    result = orchestrator.standings(competition_id, group_key=group_key)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/seed", response_model=CompetitionSummaryView)
+def seed_competition(
+    competition_id: str,
+    payload: CompetitionSeedRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    result = _handle_competition_errors(lambda: orchestrator.seed_competition(competition_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/launch", response_model=CompetitionSummaryView)
+def launch_competition(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    result = _handle_competition_errors(lambda: orchestrator.launch_competition(competition_id))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/advance", response_model=CompetitionSummaryView)
+def advance_competition(
+    competition_id: str,
+    payload: CompetitionAdvanceRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    result = _handle_competition_errors(lambda: orchestrator.advance_competition(competition_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/finalize", response_model=CompetitionSummaryView)
+def finalize_competition(
+    competition_id: str,
+    payload: CompetitionFinalizeRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    result = _handle_competition_errors(lambda: orchestrator.finalize_competition(competition_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/schedule/preview", response_model=CompetitionSchedulePreviewResponse)
+def preview_competition_schedule(
+    competition_id: str,
+    payload: CompetitionSchedulePreviewRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSchedulePreviewResponse:
+    result = _handle_competition_errors(lambda: orchestrator.schedule_preview(competition_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/schedule/jobs", response_model=CompetitionScheduleJobView)
+def create_competition_schedule_job(
+    competition_id: str,
+    payload: CompetitionScheduleJobRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionScheduleJobView:
+    result = _handle_competition_errors(lambda: orchestrator.create_schedule_job(competition_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/schedule/jobs", response_model=CompetitionScheduleJobView)
+def get_latest_schedule_job(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionScheduleJobView:
+    result = orchestrator.schedule_job_status(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/schedule/jobs/{job_id}", response_model=CompetitionScheduleJobView)
+def get_schedule_job_status(
+    competition_id: str,
+    job_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionScheduleJobView:
+    result = orchestrator.schedule_job_status(competition_id, job_id=job_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/matches/{match_id}/events", response_model=CompetitionMatchEventView, status_code=status.HTTP_201_CREATED)
+def record_match_event(
+    competition_id: str,
+    match_id: str,
+    payload: CompetitionMatchEventRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionMatchEventView:
+    result = _handle_competition_errors(lambda: orchestrator.record_match_event(competition_id, match_id, payload))
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/matches/{match_id}/events", response_model=tuple[CompetitionMatchEventView, ...])
+def list_match_events(
+    competition_id: str,
+    match_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> tuple[CompetitionMatchEventView, ...]:
+    result = orchestrator.list_match_events(competition_id, match_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.post("/{competition_id}/matches/{match_id}/result", response_model=CompetitionMatchView)
+def complete_match(
+    competition_id: str,
+    match_id: str,
+    payload: CompetitionMatchResultRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionMatchView:
+    result = _handle_competition_errors(lambda: orchestrator.complete_match(competition_id, match_id, payload))
     if result is None:
         raise _not_found(competition_id)
     return result

@@ -9,7 +9,7 @@ from typing import Any, TypeVar
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import utcnow
+from app.models.base import utcnow
 
 from .market_profile import PlayerMarketProfileService
 from .constants import DEFAULT_CURSOR_KEY, SYNC_RUN_STATUS_SUCCESS

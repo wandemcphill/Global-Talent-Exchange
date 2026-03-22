@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.core.events import DomainEvent
+from app.core.events import DomainEvent
 
 
 def test_my_notifications_cover_requested_competition_templates(app_client, participant_user) -> None:

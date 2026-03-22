@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 
-from backend.app.services.referral_orchestrator import (
+from app.services.referral_orchestrator import (
     AttributionRecord,
     ReferralStore,
     RewardLedgerRecord,

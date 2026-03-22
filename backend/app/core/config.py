@@ -11,8 +11,8 @@ import tomllib
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 DEFAULT_CONFIG_ROOT = BACKEND_ROOT / "config"
-DEFAULT_DATABASE_PATH = PROJECT_ROOT / "gte_backend.db"
-DEFAULT_DATABASE_URL = f"sqlite+pysqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+DEFAULT_DATABASE_URL = ""
+DATABASE_URL_ENV_VARS = ("DATABASE_URL", "GTE_DATABASE_URL")
 
 PLAYER_UNIVERSE_WEIGHTING_FILE = "player_universe_weighting.toml"
 SUPPLY_TIERS_FILE = "supply_tiers.toml"
@@ -20,6 +20,10 @@ LIQUIDITY_BANDS_FILE = "liquidity_bands.toml"
 IMAGE_POLICY_FILE = "image_policy.toml"
 VALUE_ENGINE_WEIGHTING_FILE = "value_engine_weighting.toml"
 SUSPICION_THRESHOLDS_FILE = "suspicion_thresholds.toml"
+PLAYER_CARD_MARKET_INTEGRITY_FILE = "player_card_market_integrity.toml"
+MEDIA_STORAGE_FILE = "media_storage.toml"
+SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
+REGEN_GENERATION_FILE = "regen_generation.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -38,6 +42,28 @@ def _get_int(environ: Mapping[str, str], name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def normalize_database_url(database_url: str) -> str:
+    normalized = database_url.strip()
+    if not normalized:
+        raise ValueError("DATABASE_URL must not be empty.")
+    if normalized.startswith("postgres://"):
+        return f"postgresql+psycopg://{normalized[len('postgres://'):]}"
+    if normalized.startswith("postgresql://"):
+        return f"postgresql+psycopg://{normalized[len('postgresql://'):]}"
+    return normalized
+
+
+def resolve_database_url(environ: Mapping[str, str]) -> str:
+    for name in DATABASE_URL_ENV_VARS:
+        value = environ.get(name)
+        if value and value.strip():
+            return normalize_database_url(value)
+    raise ValueError(
+        "DATABASE_URL is required for backend database access. "
+        "GTE_DATABASE_URL is accepted only as a legacy fallback."
+    )
 
 
 def _load_toml_document(path: Path) -> dict[str, object]:
@@ -195,6 +221,96 @@ class ImagePolicyConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaStorageConfig:
+    storage_root: Path
+    cdn_base_url: str | None
+    download_base_url: str
+    highlight_temp_prefix: str
+    highlight_archive_prefix: str
+    highlight_export_prefix: str
+    highlight_temp_ttl_hours: int
+    highlight_archive_ttl_days: int
+    download_expiry_minutes: int
+    download_rate_limit_count: int
+    download_rate_limit_window_minutes: int
+    watermark_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SponsorshipCampaignConfig:
+    code: str
+    name: str
+    sponsor_name: str
+    priority: int
+    is_internal: bool
+    surfaces: tuple[str, ...]
+    region_codes: tuple[str, ...]
+    competition_ids: tuple[str, ...]
+    stage_names: tuple[str, ...]
+    creative_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SponsorshipInventoryConfig:
+    default_campaign: str
+    surfaces: tuple[str, ...]
+    campaigns: tuple[SponsorshipCampaignConfig, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RegenCountryTuningConfig:
+    country_code: str
+    academy_quality_bias: float
+    elite_probability_boost: float
+    urban_bias: float
+    default_regions: tuple[str, ...]
+    default_cities: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RegenGenerationConfig:
+    academy_intakes_per_season: int
+    academy_intake_min_players: int
+    academy_intake_max_players: int
+    starter_regen_count: int
+    starter_age_min: int
+    starter_age_max: int
+    starter_gsi_min: int
+    starter_gsi_max: int
+    seasonal_supply_cap_ratio: float
+    base_elite_probability: float
+    max_elite_probability: float
+    default_active_player_base: int
+    market_fee_bps_default: int
+    market_fee_bps_min: int
+    market_fee_bps_max: int
+    ecosystem_target_regen_share: float
+    elite_regen_share_cap: float
+    demand_cooling_floor: float
+    regen_lifecycle_growth_months: int
+    regen_lifecycle_peak_months: int
+    regen_lifecycle_decline_months: int
+    regen_lifecycle_retirement_months: int
+    player_lifecycle_growth_max_age: int
+    player_lifecycle_peak_max_age: int
+    player_lifecycle_decline_max_age: int
+    lineage_base_probability: float
+    lineage_legend_probability: float
+    lineage_owner_probability: float
+    lineage_retired_regen_probability: float
+    lineage_hometown_probability: float
+    twin_probability: float
+    owner_son_lifetime_cap: int
+    owner_son_rival_club_chance: float
+    owner_son_paid_request_base_cost: int
+    owner_son_paid_request_name_cost: int
+    owner_son_paid_request_customization_cost: int
+    owner_son_paid_request_limit: int
+    default_country_code: str
+    country_tuning: tuple[RegenCountryTuningConfig, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class SuspicionThresholdsConfig:
     player_min_suspicious_events: int
     player_min_suspicious_share: float
@@ -209,6 +325,23 @@ class SuspicionThresholdsConfig:
     holder_concentration_share: float
     circular_trade_min_cycle_length: int
     circular_trade_min_repetitions: int
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerCardMarketIntegrityConfig:
+    sale_reference_lookback_days: int
+    minimum_reference_sales: int
+    listing_price_floor_ratio: float
+    listing_price_ceiling_ratio: float
+    relist_cooldown_minutes: int
+    pair_trade_lookback_hours: int
+    pair_trade_alert_threshold: int
+    asset_churn_window_hours: int
+    asset_churn_alert_threshold: int
+    circular_trade_window_hours: int
+    price_spike_alert_ratio: float
+    volume_cluster_window_minutes: int
+    volume_cluster_trade_threshold: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +409,9 @@ class Settings:
     database_url: str
     redis_url: str | None
     auth_secret: str
+    media_signing_secret: str
+    crypto_deposit_enabled: bool
+    crypto_provider_key: str
     run_migration_check: bool
     default_ingestion_provider: str
     provider_timeout_seconds: int
@@ -286,7 +422,11 @@ class Settings:
     supply_tiers: SupplyTiersConfig
     liquidity_bands: LiquidityBandsConfig
     image_policy: ImagePolicyConfig
+    media_storage: MediaStorageConfig
+    sponsorship_inventory: SponsorshipInventoryConfig
+    regen_generation: RegenGenerationConfig
     suspicion_thresholds: SuspicionThresholdsConfig
+    player_card_market_integrity: PlayerCardMarketIntegrityConfig
     value_engine_weighting: ValueEngineWeightingConfig
 
 
@@ -306,6 +446,421 @@ def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
         circular_trade_min_cycle_length=3,
         circular_trade_min_repetitions=1,
     )
+
+
+def _default_regen_generation_config() -> RegenGenerationConfig:
+    return RegenGenerationConfig(
+        academy_intakes_per_season=1,
+        academy_intake_min_players=2,
+        academy_intake_max_players=4,
+        starter_regen_count=2,
+        starter_age_min=25,
+        starter_age_max=30,
+        starter_gsi_min=50,
+        starter_gsi_max=68,
+        seasonal_supply_cap_ratio=0.025,
+        base_elite_probability=0.01,
+        max_elite_probability=0.12,
+        default_active_player_base=100_000,
+        market_fee_bps_default=4500,
+        market_fee_bps_min=4000,
+        market_fee_bps_max=5000,
+        ecosystem_target_regen_share=0.20,
+        elite_regen_share_cap=0.08,
+        demand_cooling_floor=0.55,
+        regen_lifecycle_growth_months=9,
+        regen_lifecycle_peak_months=21,
+        regen_lifecycle_decline_months=30,
+        regen_lifecycle_retirement_months=36,
+        player_lifecycle_growth_max_age=23,
+        player_lifecycle_peak_max_age=29,
+        player_lifecycle_decline_max_age=34,
+        lineage_base_probability=0.004,
+        lineage_legend_probability=0.55,
+        lineage_owner_probability=0.15,
+        lineage_retired_regen_probability=0.20,
+        lineage_hometown_probability=0.10,
+        twin_probability=0.002,
+        owner_son_lifetime_cap=3,
+        owner_son_rival_club_chance=0.12,
+        owner_son_paid_request_base_cost=125,
+        owner_son_paid_request_name_cost=25,
+        owner_son_paid_request_customization_cost=35,
+        owner_son_paid_request_limit=1,
+        default_country_code="NG",
+        country_tuning=(
+            RegenCountryTuningConfig(
+                country_code="NG",
+                academy_quality_bias=1.05,
+                elite_probability_boost=0.015,
+                urban_bias=0.10,
+                default_regions=("Lagos", "Enugu", "Kano"),
+                default_cities=("Lagos", "Enugu", "Kano"),
+            ),
+            RegenCountryTuningConfig(
+                country_code="GH",
+                academy_quality_bias=1.02,
+                elite_probability_boost=0.008,
+                urban_bias=0.06,
+                default_regions=("Greater Accra", "Ashanti"),
+                default_cities=("Accra", "Kumasi"),
+            ),
+            RegenCountryTuningConfig(
+                country_code="MA",
+                academy_quality_bias=1.01,
+                elite_probability_boost=0.006,
+                urban_bias=0.05,
+                default_regions=("Casablanca-Settat", "Rabat-Sale-Kenitra"),
+                default_cities=("Casablanca", "Rabat"),
+            ),
+        ),
+    )
+
+
+def _default_player_card_market_integrity_config() -> PlayerCardMarketIntegrityConfig:
+    return PlayerCardMarketIntegrityConfig(
+        sale_reference_lookback_days=14,
+        minimum_reference_sales=2,
+        listing_price_floor_ratio=0.60,
+        listing_price_ceiling_ratio=1.80,
+        relist_cooldown_minutes=30,
+        pair_trade_lookback_hours=168,
+        pair_trade_alert_threshold=3,
+        asset_churn_window_hours=24,
+        asset_churn_alert_threshold=6,
+        circular_trade_window_hours=24,
+        price_spike_alert_ratio=2.50,
+        volume_cluster_window_minutes=60,
+        volume_cluster_trade_threshold=12,
+    )
+
+
+def _default_media_storage_config(config_root: Path) -> MediaStorageConfig:
+    storage_root = BACKEND_ROOT / "storage"
+    return MediaStorageConfig(
+        storage_root=storage_root,
+        cdn_base_url=None,
+        download_base_url="/media-engine/downloads",
+        highlight_temp_prefix="media/highlights/temp",
+        highlight_archive_prefix="media/highlights/archive",
+        highlight_export_prefix="media/exports",
+        highlight_temp_ttl_hours=72,
+        highlight_archive_ttl_days=365,
+        download_expiry_minutes=15,
+        download_rate_limit_count=5,
+        download_rate_limit_window_minutes=10,
+        watermark_enabled=True,
+    )
+
+
+def load_media_storage_config(config_root: Path, environ: Mapping[str, str]) -> MediaStorageConfig:
+    document = _load_optional_toml_document(config_root / MEDIA_STORAGE_FILE) or {}
+    defaults = _default_media_storage_config(config_root)
+
+    raw_root = environ.get("GTE_MEDIA_STORAGE_ROOT") or document.get("storage_root")
+    if raw_root:
+        path = Path(str(raw_root))
+        if not path.is_absolute():
+            path = (PROJECT_ROOT / path).resolve()
+        storage_root = path
+    else:
+        storage_root = defaults.storage_root
+
+    cdn_base_url = environ.get("GTE_MEDIA_CDN_BASE_URL") or document.get("cdn_base_url") or defaults.cdn_base_url
+    download_base_url = environ.get("GTE_MEDIA_DOWNLOAD_BASE_URL") or document.get("download_base_url") or defaults.download_base_url
+
+    watermark_enabled_value = document.get("watermark_enabled")
+    if watermark_enabled_value is None:
+        watermark_enabled_value = defaults.watermark_enabled
+
+    return MediaStorageConfig(
+        storage_root=storage_root,
+        cdn_base_url=str(cdn_base_url) if cdn_base_url else None,
+        download_base_url=str(download_base_url),
+        highlight_temp_prefix=str(document.get("highlight_temp_prefix", defaults.highlight_temp_prefix)),
+        highlight_archive_prefix=str(document.get("highlight_archive_prefix", defaults.highlight_archive_prefix)),
+        highlight_export_prefix=str(document.get("highlight_export_prefix", defaults.highlight_export_prefix)),
+        highlight_temp_ttl_hours=int(document.get("highlight_temp_ttl_hours", defaults.highlight_temp_ttl_hours)),
+        highlight_archive_ttl_days=int(document.get("highlight_archive_ttl_days", defaults.highlight_archive_ttl_days)),
+        download_expiry_minutes=int(document.get("download_expiry_minutes", defaults.download_expiry_minutes)),
+        download_rate_limit_count=int(document.get("download_rate_limit_count", defaults.download_rate_limit_count)),
+        download_rate_limit_window_minutes=int(document.get("download_rate_limit_window_minutes", defaults.download_rate_limit_window_minutes)),
+        watermark_enabled=bool(watermark_enabled_value),
+    )
+
+
+def _default_sponsorship_inventory_config() -> SponsorshipInventoryConfig:
+    surfaces = (
+        "stadium_board",
+        "tunnel_walkout",
+        "replay_sting",
+        "halftime_overlay",
+        "lineup_strip",
+        "finals_trophy_backdrop",
+    )
+    return SponsorshipInventoryConfig(
+        default_campaign="gtex_internal",
+        surfaces=surfaces,
+        campaigns=(
+            SponsorshipCampaignConfig(
+                code="gtex_internal",
+                name="GTEX Internal Promo",
+                sponsor_name="GTEX",
+                priority=0,
+                is_internal=True,
+                surfaces=surfaces,
+                region_codes=(),
+                competition_ids=(),
+                stage_names=(),
+                creative_url=None,
+            ),
+        ),
+    )
+
+
+def load_sponsorship_inventory_config(config_root: Path) -> SponsorshipInventoryConfig:
+    document = _load_optional_toml_document(config_root / SPONSORSHIP_INVENTORY_FILE)
+    defaults = _default_sponsorship_inventory_config()
+    if not document:
+        return defaults
+
+    raw_surfaces = document.get("surfaces")
+    if raw_surfaces is None:
+        raw_surfaces = list(defaults.surfaces)
+    surfaces = _coerce_string_tuple(raw_surfaces, name="surfaces")
+    campaigns_raw = _require_array(document.get("campaigns", []), name="campaigns")
+    campaigns: list[SponsorshipCampaignConfig] = []
+    for item in campaigns_raw:
+        table = _require_table(item, name="campaigns[]")
+        code = _catalog_code(str(table.get("name") or table.get("code") or ""), table.get("code"))
+        campaigns.append(
+            SponsorshipCampaignConfig(
+                code=code,
+                name=str(table.get("name") or code),
+                sponsor_name=str(table.get("sponsor_name") or "GTEX"),
+                priority=int(table.get("priority", 0)),
+                is_internal=bool(table.get("internal", False)),
+                surfaces=_coerce_string_tuple(table.get("surfaces", list(surfaces)), name="campaigns[].surfaces"),
+                region_codes=_coerce_string_tuple(table.get("region_codes", []), name="campaigns[].region_codes"),
+                competition_ids=_coerce_string_tuple(table.get("competition_ids", []), name="campaigns[].competition_ids"),
+                stage_names=_coerce_string_tuple(table.get("stage_names", []), name="campaigns[].stage_names"),
+                creative_url=str(table.get("creative_url") or "") or None,
+            )
+        )
+    if not campaigns:
+        return defaults
+    if len({campaign.code for campaign in campaigns}) != len(campaigns):
+        raise ValueError("Sponsorship campaign codes must be unique.")
+    default_code = str(document.get("default_campaign") or defaults.default_campaign)
+    if default_code not in {campaign.code for campaign in campaigns}:
+        default_code = campaigns[0].code
+    return SponsorshipInventoryConfig(
+        default_campaign=default_code,
+        surfaces=surfaces,
+        campaigns=tuple(campaigns),
+    )
+
+
+def load_regen_generation_config(config_root: Path) -> RegenGenerationConfig:
+    document = _load_optional_toml_document(config_root / REGEN_GENERATION_FILE)
+    defaults = _default_regen_generation_config()
+    if not document:
+        return defaults
+
+    country_documents = _require_array(document.get("country_tuning", []), name="country_tuning")
+    country_tuning = tuple(
+        RegenCountryTuningConfig(
+            country_code=str(_require_table(item, name="country_tuning[]").get("country_code", "")).strip().upper(),
+            academy_quality_bias=float(_require_table(item, name="country_tuning[]").get("academy_quality_bias", 1.0)),
+            elite_probability_boost=float(
+                _require_table(item, name="country_tuning[]").get("elite_probability_boost", 0.0)
+            ),
+            urban_bias=float(_require_table(item, name="country_tuning[]").get("urban_bias", 0.0)),
+            default_regions=_coerce_string_tuple(
+                _require_table(item, name="country_tuning[]").get("default_regions", []),
+                name="country_tuning[].default_regions",
+            ),
+            default_cities=_coerce_string_tuple(
+                _require_table(item, name="country_tuning[]").get("default_cities", []),
+                name="country_tuning[].default_cities",
+            ),
+        )
+        for item in country_documents
+    ) or defaults.country_tuning
+
+    config = RegenGenerationConfig(
+        academy_intakes_per_season=int(
+            document.get("academy_intakes_per_season", defaults.academy_intakes_per_season)
+        ),
+        academy_intake_min_players=int(
+            document.get("academy_intake_min_players", defaults.academy_intake_min_players)
+        ),
+        academy_intake_max_players=int(
+            document.get("academy_intake_max_players", defaults.academy_intake_max_players)
+        ),
+        starter_regen_count=int(document.get("starter_regen_count", defaults.starter_regen_count)),
+        starter_age_min=int(document.get("starter_age_min", defaults.starter_age_min)),
+        starter_age_max=int(document.get("starter_age_max", defaults.starter_age_max)),
+        starter_gsi_min=int(document.get("starter_gsi_min", defaults.starter_gsi_min)),
+        starter_gsi_max=int(document.get("starter_gsi_max", defaults.starter_gsi_max)),
+        seasonal_supply_cap_ratio=float(
+            document.get("seasonal_supply_cap_ratio", defaults.seasonal_supply_cap_ratio)
+        ),
+        base_elite_probability=float(document.get("base_elite_probability", defaults.base_elite_probability)),
+        max_elite_probability=float(document.get("max_elite_probability", defaults.max_elite_probability)),
+        default_active_player_base=int(
+            document.get("default_active_player_base", defaults.default_active_player_base)
+        ),
+        market_fee_bps_default=int(document.get("market_fee_bps_default", defaults.market_fee_bps_default)),
+        market_fee_bps_min=int(document.get("market_fee_bps_min", defaults.market_fee_bps_min)),
+        market_fee_bps_max=int(document.get("market_fee_bps_max", defaults.market_fee_bps_max)),
+        ecosystem_target_regen_share=float(
+            document.get("ecosystem_target_regen_share", defaults.ecosystem_target_regen_share)
+        ),
+        elite_regen_share_cap=float(document.get("elite_regen_share_cap", defaults.elite_regen_share_cap)),
+        demand_cooling_floor=float(document.get("demand_cooling_floor", defaults.demand_cooling_floor)),
+        regen_lifecycle_growth_months=int(
+            document.get("regen_lifecycle_growth_months", defaults.regen_lifecycle_growth_months)
+        ),
+        regen_lifecycle_peak_months=int(
+            document.get("regen_lifecycle_peak_months", defaults.regen_lifecycle_peak_months)
+        ),
+        regen_lifecycle_decline_months=int(
+            document.get("regen_lifecycle_decline_months", defaults.regen_lifecycle_decline_months)
+        ),
+        regen_lifecycle_retirement_months=int(
+            document.get("regen_lifecycle_retirement_months", defaults.regen_lifecycle_retirement_months)
+        ),
+        player_lifecycle_growth_max_age=int(
+            document.get("player_lifecycle_growth_max_age", defaults.player_lifecycle_growth_max_age)
+        ),
+        player_lifecycle_peak_max_age=int(
+            document.get("player_lifecycle_peak_max_age", defaults.player_lifecycle_peak_max_age)
+        ),
+        player_lifecycle_decline_max_age=int(
+            document.get("player_lifecycle_decline_max_age", defaults.player_lifecycle_decline_max_age)
+        ),
+        lineage_base_probability=float(
+            document.get("lineage_base_probability", defaults.lineage_base_probability)
+        ),
+        lineage_legend_probability=float(
+            document.get("lineage_legend_probability", defaults.lineage_legend_probability)
+        ),
+        lineage_owner_probability=float(
+            document.get("lineage_owner_probability", defaults.lineage_owner_probability)
+        ),
+        lineage_retired_regen_probability=float(
+            document.get("lineage_retired_regen_probability", defaults.lineage_retired_regen_probability)
+        ),
+        lineage_hometown_probability=float(
+            document.get("lineage_hometown_probability", defaults.lineage_hometown_probability)
+        ),
+        twin_probability=float(document.get("twin_probability", defaults.twin_probability)),
+        owner_son_lifetime_cap=int(document.get("owner_son_lifetime_cap", defaults.owner_son_lifetime_cap)),
+        owner_son_rival_club_chance=float(
+            document.get("owner_son_rival_club_chance", defaults.owner_son_rival_club_chance)
+        ),
+        owner_son_paid_request_base_cost=int(
+            document.get("owner_son_paid_request_base_cost", defaults.owner_son_paid_request_base_cost)
+        ),
+        owner_son_paid_request_name_cost=int(
+            document.get("owner_son_paid_request_name_cost", defaults.owner_son_paid_request_name_cost)
+        ),
+        owner_son_paid_request_customization_cost=int(
+            document.get(
+                "owner_son_paid_request_customization_cost",
+                defaults.owner_son_paid_request_customization_cost,
+            )
+        ),
+        owner_son_paid_request_limit=int(
+            document.get("owner_son_paid_request_limit", defaults.owner_son_paid_request_limit)
+        ),
+        default_country_code=str(document.get("default_country_code", defaults.default_country_code)).strip().upper(),
+        country_tuning=country_tuning,
+    )
+    if config.academy_intakes_per_season <= 0:
+        raise ValueError("Regen config academy_intakes_per_season must be greater than zero.")
+    if config.academy_intake_min_players <= 0:
+        raise ValueError("Regen config academy_intake_min_players must be greater than zero.")
+    if config.academy_intake_max_players < config.academy_intake_min_players:
+        raise ValueError(
+            "Regen config academy_intake_max_players must be greater than or equal to academy_intake_min_players."
+        )
+    if config.starter_regen_count <= 0:
+        raise ValueError("Regen config starter_regen_count must be greater than zero.")
+    if config.starter_age_max < config.starter_age_min:
+        raise ValueError("Regen config starter_age_max must be greater than or equal to starter_age_min.")
+    if config.starter_gsi_max < config.starter_gsi_min:
+        raise ValueError("Regen config starter_gsi_max must be greater than or equal to starter_gsi_min.")
+    if config.regen_lifecycle_growth_months <= 0:
+        raise ValueError("Regen config regen_lifecycle_growth_months must be greater than zero.")
+    if config.regen_lifecycle_peak_months < config.regen_lifecycle_growth_months:
+        raise ValueError(
+            "Regen config regen_lifecycle_peak_months must be greater than or equal to regen_lifecycle_growth_months."
+        )
+    if config.regen_lifecycle_decline_months < config.regen_lifecycle_peak_months:
+        raise ValueError(
+            "Regen config regen_lifecycle_decline_months must be greater than or equal to regen_lifecycle_peak_months."
+        )
+    if config.regen_lifecycle_retirement_months < config.regen_lifecycle_decline_months:
+        raise ValueError(
+            "Regen config regen_lifecycle_retirement_months must be greater than or equal to regen_lifecycle_decline_months."
+        )
+    if config.player_lifecycle_peak_max_age < config.player_lifecycle_growth_max_age:
+        raise ValueError(
+            "Regen config player_lifecycle_peak_max_age must be greater than or equal to player_lifecycle_growth_max_age."
+        )
+    if config.player_lifecycle_decline_max_age < config.player_lifecycle_peak_max_age:
+        raise ValueError(
+            "Regen config player_lifecycle_decline_max_age must be greater than or equal to player_lifecycle_peak_max_age."
+        )
+    if not 0 < config.seasonal_supply_cap_ratio <= 1:
+        raise ValueError("Regen config seasonal_supply_cap_ratio must be between 0 and 1.")
+    if not 0 <= config.base_elite_probability <= 1:
+        raise ValueError("Regen config base_elite_probability must be between 0 and 1.")
+    if not 0 <= config.max_elite_probability <= 1:
+        raise ValueError("Regen config max_elite_probability must be between 0 and 1.")
+    if config.base_elite_probability > config.max_elite_probability:
+        raise ValueError("Regen config base_elite_probability must not exceed max_elite_probability.")
+    if config.default_active_player_base <= 0:
+        raise ValueError("Regen config default_active_player_base must be greater than zero.")
+    if not 0 <= config.market_fee_bps_min <= config.market_fee_bps_default <= config.market_fee_bps_max <= 10_000:
+        raise ValueError(
+            "Regen config market fee bps must satisfy 0 <= min <= default <= max <= 10000."
+        )
+    if not 0 < config.ecosystem_target_regen_share < 1:
+        raise ValueError("Regen config ecosystem_target_regen_share must be between 0 and 1.")
+    if not 0 < config.elite_regen_share_cap < 1:
+        raise ValueError("Regen config elite_regen_share_cap must be between 0 and 1.")
+    if not 0 < config.demand_cooling_floor <= 1:
+        raise ValueError("Regen config demand_cooling_floor must be between 0 and 1.")
+    if not 0 <= config.lineage_base_probability <= 1:
+        raise ValueError("Regen config lineage_base_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_legend_probability <= 1:
+        raise ValueError("Regen config lineage_legend_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_owner_probability <= 1:
+        raise ValueError("Regen config lineage_owner_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_retired_regen_probability <= 1:
+        raise ValueError("Regen config lineage_retired_regen_probability must be between 0 and 1.")
+    if not 0 <= config.lineage_hometown_probability <= 1:
+        raise ValueError("Regen config lineage_hometown_probability must be between 0 and 1.")
+    if not 0 <= config.twin_probability <= 1:
+        raise ValueError("Regen config twin_probability must be between 0 and 1.")
+    if config.owner_son_lifetime_cap < 0:
+        raise ValueError("Regen config owner_son_lifetime_cap must be zero or greater.")
+    if not 0 <= config.owner_son_rival_club_chance <= 1:
+        raise ValueError("Regen config owner_son_rival_club_chance must be between 0 and 1.")
+    if config.owner_son_paid_request_base_cost < 0:
+        raise ValueError("Regen config owner_son_paid_request_base_cost must be zero or greater.")
+    if config.owner_son_paid_request_name_cost < 0:
+        raise ValueError("Regen config owner_son_paid_request_name_cost must be zero or greater.")
+    if config.owner_son_paid_request_customization_cost < 0:
+        raise ValueError("Regen config owner_son_paid_request_customization_cost must be zero or greater.")
+    if config.owner_son_paid_request_limit <= 0:
+        raise ValueError("Regen config owner_son_paid_request_limit must be greater than zero.")
+    if len({item.country_code for item in config.country_tuning}) != len(config.country_tuning):
+        raise ValueError("Regen config country_tuning country codes must be unique.")
+    return config
 
 
 def _default_price_band_limits() -> tuple[PriceBandLimit, ...]:
@@ -521,6 +1076,82 @@ def load_suspicion_thresholds_config(config_root: Path) -> SuspicionThresholdsCo
     if thresholds.circular_trade_min_repetitions <= 0:
         raise ValueError("Suspicion thresholds circular_trade_min_repetitions must be greater than zero.")
     return thresholds
+
+
+def load_player_card_market_integrity_config(config_root: Path) -> PlayerCardMarketIntegrityConfig:
+    document = _load_optional_toml_document(config_root / PLAYER_CARD_MARKET_INTEGRITY_FILE)
+    defaults = _default_player_card_market_integrity_config()
+    if document is None:
+        return defaults
+
+    config = PlayerCardMarketIntegrityConfig(
+        sale_reference_lookback_days=int(
+            document.get("sale_reference_lookback_days", defaults.sale_reference_lookback_days)
+        ),
+        minimum_reference_sales=int(document.get("minimum_reference_sales", defaults.minimum_reference_sales)),
+        listing_price_floor_ratio=float(
+            document.get("listing_price_floor_ratio", defaults.listing_price_floor_ratio)
+        ),
+        listing_price_ceiling_ratio=float(
+            document.get("listing_price_ceiling_ratio", defaults.listing_price_ceiling_ratio)
+        ),
+        relist_cooldown_minutes=int(document.get("relist_cooldown_minutes", defaults.relist_cooldown_minutes)),
+        pair_trade_lookback_hours=int(
+            document.get("pair_trade_lookback_hours", defaults.pair_trade_lookback_hours)
+        ),
+        pair_trade_alert_threshold=int(
+            document.get("pair_trade_alert_threshold", defaults.pair_trade_alert_threshold)
+        ),
+        asset_churn_window_hours=int(
+            document.get("asset_churn_window_hours", defaults.asset_churn_window_hours)
+        ),
+        asset_churn_alert_threshold=int(
+            document.get("asset_churn_alert_threshold", defaults.asset_churn_alert_threshold)
+        ),
+        circular_trade_window_hours=int(
+            document.get("circular_trade_window_hours", defaults.circular_trade_window_hours)
+        ),
+        price_spike_alert_ratio=float(
+            document.get("price_spike_alert_ratio", defaults.price_spike_alert_ratio)
+        ),
+        volume_cluster_window_minutes=int(
+            document.get("volume_cluster_window_minutes", defaults.volume_cluster_window_minutes)
+        ),
+        volume_cluster_trade_threshold=int(
+            document.get("volume_cluster_trade_threshold", defaults.volume_cluster_trade_threshold)
+        ),
+    )
+    if config.sale_reference_lookback_days <= 0:
+        raise ValueError("Player card market integrity sale_reference_lookback_days must be greater than zero.")
+    if config.minimum_reference_sales <= 0:
+        raise ValueError("Player card market integrity minimum_reference_sales must be greater than zero.")
+    if not 0 < config.listing_price_floor_ratio <= 1:
+        raise ValueError("Player card market integrity listing_price_floor_ratio must be between 0 and 1.")
+    if config.listing_price_ceiling_ratio < 1:
+        raise ValueError("Player card market integrity listing_price_ceiling_ratio must be at least 1.")
+    if config.listing_price_ceiling_ratio <= config.listing_price_floor_ratio:
+        raise ValueError(
+            "Player card market integrity listing_price_ceiling_ratio must exceed listing_price_floor_ratio."
+        )
+    if config.relist_cooldown_minutes < 0:
+        raise ValueError("Player card market integrity relist_cooldown_minutes must be greater than or equal to zero.")
+    if config.pair_trade_lookback_hours <= 0:
+        raise ValueError("Player card market integrity pair_trade_lookback_hours must be greater than zero.")
+    if config.pair_trade_alert_threshold <= 1:
+        raise ValueError("Player card market integrity pair_trade_alert_threshold must be greater than one.")
+    if config.asset_churn_window_hours <= 0:
+        raise ValueError("Player card market integrity asset_churn_window_hours must be greater than zero.")
+    if config.asset_churn_alert_threshold <= 1:
+        raise ValueError("Player card market integrity asset_churn_alert_threshold must be greater than one.")
+    if config.circular_trade_window_hours <= 0:
+        raise ValueError("Player card market integrity circular_trade_window_hours must be greater than zero.")
+    if config.price_spike_alert_ratio <= 1:
+        raise ValueError("Player card market integrity price_spike_alert_ratio must be greater than one.")
+    if config.volume_cluster_window_minutes <= 0:
+        raise ValueError("Player card market integrity volume_cluster_window_minutes must be greater than zero.")
+    if config.volume_cluster_trade_threshold <= 1:
+        raise ValueError("Player card market integrity volume_cluster_trade_threshold must be greater than one.")
+    return config
 
 
 def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightingConfig:
@@ -760,9 +1391,12 @@ def load_settings(
         project_root=PROJECT_ROOT,
         backend_root=BACKEND_ROOT,
         config_root=resolved_config_root,
-        database_url=resolved_environ.get("GTE_DATABASE_URL", DEFAULT_DATABASE_URL),
+        database_url=resolve_database_url(resolved_environ),
         redis_url=resolved_environ.get("GTE_REDIS_URL"),
         auth_secret=resolved_environ.get("GTE_AUTH_SECRET", "gte-dev-secret-change-me"),
+        media_signing_secret=resolved_environ.get("GTE_MEDIA_SIGNING_SECRET", "gte-media-secret-change-me"),
+        crypto_deposit_enabled=_get_bool(resolved_environ, "GTE_CRYPTO_DEPOSIT_ENABLED", False),
+        crypto_provider_key=resolved_environ.get("GTE_CRYPTO_PROVIDER_KEY", "crypto_fiat"),
         run_migration_check=_get_bool(resolved_environ, "GTE_RUN_MIGRATION_CHECK", True),
         default_ingestion_provider=resolved_environ.get("GTE_INGESTION_PROVIDER", "mock"),
         provider_timeout_seconds=_get_int(resolved_environ, "GTE_PROVIDER_TIMEOUT_SECONDS", 20),
@@ -773,7 +1407,11 @@ def load_settings(
         supply_tiers=load_supply_tiers_config(resolved_config_root),
         liquidity_bands=load_liquidity_bands_config(resolved_config_root),
         image_policy=load_image_policy_config(resolved_config_root),
+        media_storage=load_media_storage_config(resolved_config_root, resolved_environ),
+        sponsorship_inventory=load_sponsorship_inventory_config(resolved_config_root),
+        regen_generation=load_regen_generation_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
+        player_card_market_integrity=load_player_card_market_integrity_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
     )
 

@@ -1,11 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from backend.app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
+from app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
 
 
 class WalletAccountBalance(BaseModel):
@@ -70,11 +71,162 @@ class PaymentEventCreate(BaseModel):
         return value
 
 
+class PurchaseOrderSourceScope(str, Enum):
+    WALLET = "wallet"
+    MARKET = "market"
+
+
+class PurchaseOrderQuoteRequest(BaseModel):
+    amount: Decimal
+    input_unit: str = Field(default="fiat")
+    provider_key: str = Field(min_length=2, max_length=64)
+    unit: LedgerUnit = LedgerUnit.CREDIT
+    source_scope: PurchaseOrderSourceScope = PurchaseOrderSourceScope.WALLET
+
+    @field_validator("input_unit")
+    @classmethod
+    def validate_input_unit(cls, value: str) -> str:
+        candidate = value.strip().lower()
+        if candidate not in {"fiat", "coin"}:
+            raise ValueError("input_unit must be fiat or coin")
+        return candidate
+
+    @field_validator("amount")
+    @classmethod
+    def validate_quote_amount(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("Purchase amount must be positive.")
+        return value
+
+
+class PurchaseOrderQuoteView(BaseModel):
+    amount_fiat: Decimal
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    currency_code: str
+    rate_value: Decimal
+    rate_direction: str
+    unit: LedgerUnit
+    processor_mode: str
+    payout_channel: str
+    provider_key: str
+    source_scope: PurchaseOrderSourceScope
+
+
+class PurchaseOrderCreateRequest(PurchaseOrderQuoteRequest):
+    provider_reference: str | None = Field(default=None, max_length=128)
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class PurchaseOrderView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    reference: str
+    status: str
+    provider_key: str
+    provider_reference: str | None
+    unit: LedgerUnit
+    amount_fiat: Decimal
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    currency_code: str
+    rate_value: Decimal
+    rate_direction: str
+    processor_mode: str
+    payout_channel: str
+    source_scope: PurchaseOrderSourceScope
+    ledger_transaction_id: str | None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    reviewed_at: datetime | None = None
+    approved_at: datetime | None = None
+    settled_at: datetime | None = None
+    failed_at: datetime | None = None
+    refunded_at: datetime | None = None
+    chargeback_at: datetime | None = None
+    reversed_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    expired_at: datetime | None = None
+
+
+class PurchaseOrderStatusUpdate(BaseModel):
+    status: str = Field(min_length=3, max_length=32)
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class MarketTopupSourceScope(str, Enum):
+    MARKET = "market"
+    PROMOTION = "promotion"
+    LIQUIDITY = "liquidity"
+
+
+class MarketTopupQuoteRequest(BaseModel):
+    amount: Decimal
+    fee_bps: int = Field(default=0, ge=0, le=10_000)
+    unit: LedgerUnit = LedgerUnit.COIN
+
+    @field_validator("amount")
+    @classmethod
+    def validate_topup_amount(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("Topup amount must be positive.")
+        return value
+
+
+class MarketTopupQuoteView(BaseModel):
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    unit: LedgerUnit
+
+
+class MarketTopupCreateRequest(MarketTopupQuoteRequest):
+    user_id: str = Field(min_length=1)
+    source_scope: MarketTopupSourceScope = MarketTopupSourceScope.MARKET
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class MarketTopupStatusUpdate(BaseModel):
+    status: str = Field(min_length=3, max_length=32)
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class MarketTopupView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    reference: str
+    status: str
+    user_id: str
+    unit: LedgerUnit
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    source_scope: MarketTopupSourceScope
+    processor_mode: str
+    payout_channel: str
+    ledger_transaction_id: str | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+    reviewed_at: datetime | None = None
+    approved_at: datetime | None = None
+    processed_at: datetime | None = None
+    settled_at: datetime | None = None
+    rejected_at: datetime | None = None
+    cancelled_at: datetime | None = None
+    reversed_at: datetime | None = None
+
+
 class WithdrawalRequestCreate(BaseModel):
     model_config = ConfigDict(title="WithdrawalRequestCreate")
 
     amount: Decimal
-    unit: LedgerUnit = LedgerUnit.CREDIT
+    unit: LedgerUnit = LedgerUnit.COIN
     destination_reference: str = Field(min_length=4, max_length=255)
     source_scope: str = Field(default="trade")
     notes: str | None = Field(default=None, max_length=255)
@@ -90,8 +242,8 @@ class WithdrawalRequestCreate(BaseModel):
     @classmethod
     def normalize_scope(cls, value: str) -> str:
         candidate = value.strip().lower()
-        if candidate not in {"trade", "competition"}:
-            raise ValueError("source_scope must be trade or competition")
+        if candidate not in {"trade", "competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"}:
+            raise ValueError("source_scope must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward")
         return candidate
 
 
@@ -178,6 +330,7 @@ class WalletLedgerEntryView(BaseModel):
                 "amount": "-50.0000",
                 "unit": "credit",
                 "reason": "withdrawal_hold",
+                "source_tag": "market_topup",
                 "reference": "ord-123",
                 "external_reference": None,
                 "description": "Reserved credits for open order",
@@ -192,6 +345,7 @@ class WalletLedgerEntryView(BaseModel):
     amount: Decimal
     unit: LedgerUnit
     reason: LedgerEntryReason
+    source_tag: LedgerSourceTag
     reference: str | None
     external_reference: str | None
     description: str | None
@@ -309,4 +463,15 @@ class WalletAdaptiveOverviewView(BaseModel):
     payouts_via_bank_transfer: bool = True
     egame_withdrawals_enabled: bool = False
     trade_withdrawals_enabled: bool = True
+    country_code: str = "GLOBAL"
     insights: list[WalletAdaptiveInsightView] = Field(default_factory=list)
+
+
+class WalletOverviewView(BaseModel):
+    available_balance: Decimal
+    pending_deposits: Decimal
+    pending_withdrawals: Decimal
+    total_inflow: Decimal
+    total_outflow: Decimal
+    withdrawable_now: Decimal
+    currency: LedgerUnit

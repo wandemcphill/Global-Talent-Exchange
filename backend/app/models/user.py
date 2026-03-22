@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.wallet import LedgerAccount, LedgerEntry, PaymentEvent, PayoutRequest
+    from app.models.wallet import LedgerAccount, LedgerEntry, PaymentEvent, PayoutRequest
 
 
 class UserRole(StrEnum):
@@ -22,7 +22,8 @@ class UserRole(StrEnum):
 class KycStatus(StrEnum):
     UNVERIFIED = "unverified"
     PENDING = "pending"
-    VERIFIED = "verified"
+    PARTIAL_VERIFIED_NO_ID = "partial_verified_no_id"
+    FULLY_VERIFIED = "fully_verified"
     REJECTED = "rejected"
 
 
@@ -31,6 +32,8 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -43,8 +46,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=KycStatus.UNVERIFIED,
     )
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    age_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     ledger_accounts: Mapped[list["LedgerAccount"]] = relationship(
         back_populates="owner",

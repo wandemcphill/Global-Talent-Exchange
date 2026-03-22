@@ -3,12 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.models.user import User
-from backend.app.portfolio.schemas import PortfolioHoldingView, PortfolioSummaryView, PortfolioView
-from backend.app.portfolio.service import PortfolioService
-from backend.app.wallets.schemas import PortfolioSnapshotView
-from backend.app.wallets.service import WalletService
+from app.auth.dependencies import get_current_user, get_session
+from app.models.user import User
+from app.portfolio.schemas import PortfolioHoldingView, PortfolioSummaryView, PortfolioView
+from app.portfolio.service import PortfolioService
+from app.wallets.schemas import PortfolioSnapshotView
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 

@@ -5,10 +5,10 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 import pytest
 
-from backend.app.core.database import build_alembic_config
-from backend.app.models.base import Base
-from backend.app.models.club_finance_account import ClubFinanceAccount
-from backend.app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
+from app.core.database import build_alembic_config
+from app.models.base import Base
+from app.models.club_finance_account import ClubFinanceAccount
+from app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
 
 
 def test_alembic_upgrade_creates_club_ops_tables(tmp_path) -> None:

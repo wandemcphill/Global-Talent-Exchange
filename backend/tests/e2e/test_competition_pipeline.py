@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import ScheduledFixture
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import ScheduledFixture
 
 
 def _assert_subsequence(event_names: list[str], required: tuple[str, ...]) -> None:

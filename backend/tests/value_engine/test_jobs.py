@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 import unittest
 
-from backend.app.ingestion.models import CompetitionContext, NormalizedMatchEvent
-from backend.app.value_engine.jobs import InMemoryValueSnapshotRepository, ValueSnapshotJob
-from backend.app.value_engine.models import DemandSignal, PlayerValueInput, ScoutingSignal
+from app.ingestion.models import CompetitionContext, NormalizedMatchEvent
+from app.value_engine.jobs import InMemoryValueSnapshotRepository, ValueSnapshotJob
+from app.value_engine.models import DemandSignal, PlayerValueInput, ScoutingSignal
 
 
 class ValueSnapshotJobTests(unittest.TestCase):

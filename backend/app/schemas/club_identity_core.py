@@ -5,9 +5,9 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.enums.club_brand_asset_type import ClubBrandAssetType
-from backend.app.common.enums.club_identity_visibility import ClubIdentityVisibility
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.club_brand_asset_type import ClubBrandAssetType
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.common.schemas.base import CommonSchema
 
 
 class _ClubOrmSchema(CommonSchema):
@@ -25,6 +25,9 @@ class ClubProfileCore(_ClubOrmSchema):
     secondary_color: str
     accent_color: str
     home_venue_name: str | None = None
+    country_code: str | None = None
+    region_name: str | None = None
+    city_name: str | None = None
     description: str | None = None
     visibility: ClubIdentityVisibility
     founded_at: date | None = None

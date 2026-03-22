@@ -6,8 +6,8 @@ from typing import Any
 from sqlalchemy import Enum, ForeignKey, JSON, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.common.enums.creator_profile_status import CreatorProfileStatus
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class CreatorProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):

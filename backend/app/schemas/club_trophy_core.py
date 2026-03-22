@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.enums.trophy_type import TrophyType
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.trophy_type import TrophyType
+from app.common.schemas.base import CommonSchema
 
 
 class _ClubOrmSchema(CommonSchema):

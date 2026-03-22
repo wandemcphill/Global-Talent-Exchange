@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.match_engine.schemas import ReplayEventLogEntryView
-from backend.app.match_engine.simulation.models import SimulationResult
+from app.match_engine.schemas import ReplayEventLogEntryView
+from app.match_engine.simulation.models import SimulationResult
 
 
 class ReplayEventLogBuilder:

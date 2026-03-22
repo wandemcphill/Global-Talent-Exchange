@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_share_code_api_creates_lists_updates_and_redeems_codes(referral_api) -> None:
-    app, client, users = referral_api
+    app, client, users, _session = referral_api
     app.state.current_user = users["owner"]
 
     create_response = client.post(
@@ -45,7 +45,7 @@ def test_share_code_api_creates_lists_updates_and_redeems_codes(referral_api) ->
 
 
 def test_share_code_api_blocks_self_referral_and_missing_codes(referral_api) -> None:
-    app, client, users = referral_api
+    app, client, users, _session = referral_api
     app.state.current_user = users["owner"]
     client.post(
         "/api/referrals/share-codes",

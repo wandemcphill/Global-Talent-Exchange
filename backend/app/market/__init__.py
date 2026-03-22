@@ -22,9 +22,9 @@ __all__ = [
 
 def __getattr__(name: str):
     if name in {"Listing", "ListingStatus", "ListingType", "Offer", "OfferStatus", "TradeIntent", "TradeIntentDirection", "TradeIntentStatus"}:
-        module = import_module("backend.app.market.models")
+        module = import_module("app.market.models")
         return getattr(module, name)
     if name in {"MarketConflictError", "MarketEngine", "MarketError", "MarketNotFoundError", "MarketPermissionError", "MarketValidationError"}:
-        module = import_module("backend.app.market.service")
+        module = import_module("app.market.service")
         return getattr(module, name)
     raise AttributeError(name)

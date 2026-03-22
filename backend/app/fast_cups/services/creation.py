@@ -3,15 +3,15 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from backend.app.config.competition_constants import (
+from app.config.competition_constants import (
     ACADEMY_BUY_IN_MULTIPLIER,
     FAST_CUP_REGISTRATION_INTERVAL_MINUTES,
     FINAL_PRESENTATION_MAX_MINUTES,
     LEAGUE_BUY_IN_TIERS,
     MATCH_PRESENTATION_MAX_MINUTES,
 )
-from backend.app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupSlot
-from backend.app.fast_cups.repositories.base import FastCupRepository
+from app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupSlot
+from app.fast_cups.repositories.base import FastCupRepository
 
 SUPPORTED_FAST_CUP_SIZES = (32, 64, 128, 256)
 DEFAULT_HORIZON_INTERVALS = 4

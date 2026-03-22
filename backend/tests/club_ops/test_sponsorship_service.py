@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.schemas.club_ops_requests import CreateSponsorshipContractRequest, UpdateSponsorshipContractRequest
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.schemas.club_ops_requests import CreateSponsorshipContractRequest, UpdateSponsorshipContractRequest
 
 
 def test_sponsorship_service_exposes_catalog_and_contract_state(club_ops_services) -> None:

@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.models.user import User
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
 
 from .schemas import (
     CircularTradeAlertView,

@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_admin, get_session
-from backend.app.models.user import User
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
 
 from .schemas import (
     AdminRoleCatalogUpdate,
@@ -33,7 +33,7 @@ from .schemas import (
     WithdrawalSummaryView,
 )
 from .service import AdminGodModeService, GodModeError, IntegrityBoundError, PermissionDeniedError
-from backend.app.wallets.service import InsufficientBalanceError, WalletService
+from app.wallets.service import InsufficientBalanceError, WalletService
 
 router = APIRouter(prefix="/api/admin/god-mode", tags=["admin-god-mode"])
 

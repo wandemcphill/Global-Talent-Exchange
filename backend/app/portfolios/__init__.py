@@ -1,3 +1,3 @@
-from backend.app.portfolios.service import PortfolioService
+from app.portfolios.service import PortfolioService
 
 __all__ = ["PortfolioService"]

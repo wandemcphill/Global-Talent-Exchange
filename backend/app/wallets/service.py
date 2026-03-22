@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass
@@ -9,14 +9,15 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.models.base import generate_uuid, utcnow
-from backend.app.models.user import User
-from backend.app.models.wallet import (
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.base import generate_uuid, utcnow
+from app.models.user import User
+from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
     LedgerEntry,
     LedgerEntryReason,
+    LedgerSourceTag,
     LedgerUnit,
     PaymentEvent,
     PaymentProvider,
@@ -44,6 +45,7 @@ class UnbalancedTransactionError(LedgerError):
 class LedgerPosting:
     account: LedgerAccount
     amount: Decimal
+    source_tag: LedgerSourceTag | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +163,36 @@ class WalletService:
             session.flush()
         return account
 
+    def ensure_platform_burn_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
+        code = f"platform:{unit.value}:burn"
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                code=code,
+                label=f"Platform {unit.value.capitalize()} Burn",
+                unit=unit,
+                kind=LedgerAccountKind.SYSTEM,
+                allow_negative=False,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
+    def ensure_promo_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
+        code = f"platform:{unit.value}:promo_pool"
+        account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
+        if account is None:
+            account = LedgerAccount(
+                code=code,
+                label=f"Platform {unit.value.capitalize()} Promo Pool",
+                unit=unit,
+                kind=LedgerAccountKind.SYSTEM,
+                allow_negative=False,
+            )
+            session.add(account)
+            session.flush()
+        return account
+
     def get_position_account(self, session: Session, user: User, player_id: str) -> LedgerAccount:
         code = self._position_account_code(user.id, player_id)
         account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code))
@@ -253,6 +285,11 @@ class WalletService:
 
         user_account = self.get_user_account(session, user, payment_event.unit)
         platform_account = self.ensure_platform_account(session, payment_event.unit)
+        source_tag = (
+            LedgerSourceTag.MARKET_TOPUP
+            if payment_event.unit == LedgerUnit.COIN
+            else LedgerSourceTag.FANCOIN_PURCHASE
+        )
         entries = self.append_transaction(
             session,
             postings=[
@@ -260,6 +297,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=-payment_event.amount),
             ],
             reason=LedgerEntryReason.DEPOSIT,
+            source_tag=source_tag,
             reference=payment_event.provider_reference,
             description=f"Verified {PaymentProvider(payment_event.provider).value} deposit",
             external_reference=payment_event.provider_reference,
@@ -285,7 +323,7 @@ class WalletService:
 
 
 
-    def competition_reward_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.CREDIT) -> Decimal:
+    def competition_reward_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
         account = self.get_user_account(session, user, unit)
         reward_total = session.scalar(
             select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(
@@ -296,7 +334,7 @@ class WalletService:
         )
         return self._normalize_amount(reward_total)
 
-    def competition_reward_withdrawable_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.CREDIT) -> Decimal:
+    def competition_reward_withdrawable_balance(self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
         rewards_total = self.competition_reward_balance(session, user, unit)
         requests = session.scalars(select(PayoutRequest).where(PayoutRequest.user_id == user.id, PayoutRequest.unit == unit)).all()
         reserved_or_paid = Decimal("0.0000")
@@ -324,7 +362,7 @@ class WalletService:
         user: User,
         amount: Decimal,
         destination_reference: str,
-        unit: LedgerUnit = LedgerUnit.CREDIT,
+        unit: LedgerUnit = LedgerUnit.COIN,
         source_scope: str = "trade",
         withdrawal_fee_bps: int = 1000,
         minimum_fee: Decimal = Decimal("5.0000"),
@@ -335,11 +373,13 @@ class WalletService:
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
             raise LedgerError("Withdrawal amount must be positive.")
-        if source_scope not in {"trade", "competition"}:
-            raise LedgerError("Withdrawal source must be trade or competition.")
+        if source_scope not in {"trade", "competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"}:
+            raise LedgerError("Withdrawal source must be trade, competition, user_hosted_gift, gtex_competition_gift, or national_reward.")
 
         user_account = self.get_user_account(session, user, unit)
         escrow_account = self.get_user_escrow_account(session, user, unit)
+        net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
+        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
         fee_amount = self._normalize_amount(max((normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)))
         total_debit = self._normalize_amount(normalized_amount + fee_amount)
         available_balance = self.get_balance(session, user_account)
@@ -351,13 +391,22 @@ class WalletService:
                 raise InsufficientBalanceError("Competition reward balance is lower than the requested e-game withdrawal.")
 
         reference = f"payout-request:{generate_uuid()}"
+        postings = [
+            LedgerPosting(account=user_account, amount=-normalized_amount, source_tag=net_tag),
+            LedgerPosting(account=escrow_account, amount=normalized_amount, source_tag=net_tag),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.extend(
+                [
+                    LedgerPosting(account=user_account, amount=-fee_amount, source_tag=fee_tag),
+                    LedgerPosting(account=escrow_account, amount=fee_amount, source_tag=fee_tag),
+                ]
+            )
         entries = self.append_transaction(
             session,
-            postings=[
-                LedgerPosting(account=user_account, amount=-total_debit),
-                LedgerPosting(account=escrow_account, amount=total_debit),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            source_tag=net_tag,
             reference=reference,
             description=f"Withdrawal hold for {source_scope} payout to {destination_reference}",
             external_reference=reference,
@@ -409,15 +458,30 @@ class WalletService:
         escrow_account = self.get_user_escrow_account(session, user, payout_request.unit)
         platform_account = self.ensure_platform_account(session, payout_request.unit)
         meta = self._parse_payout_meta(payout_request.notes)
-        total_debit = self._normalize_amount(meta.get("total_debit", payout_request.amount))
+        net_amount = self._normalize_amount(payout_request.amount)
+        total_debit = self._normalize_amount(meta.get("total_debit", net_amount))
+        fee_amount = self._normalize_amount(meta.get("fee_amount", total_debit - net_amount))
+        net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
+        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
+        if fee_amount < Decimal("0.0000"):
+            fee_amount = Decimal("0.0000")
         reference = f"payout-settlement:{payout_request.id}"
+        postings = [
+            LedgerPosting(account=escrow_account, amount=-net_amount, source_tag=net_tag),
+            LedgerPosting(account=platform_account, amount=net_amount, source_tag=net_tag),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.extend(
+                [
+                    LedgerPosting(account=escrow_account, amount=-fee_amount, source_tag=fee_tag),
+                    LedgerPosting(account=platform_account, amount=fee_amount, source_tag=fee_tag),
+                ]
+            )
         entries = self.append_transaction(
             session,
-            postings=[
-                LedgerPosting(account=escrow_account, amount=-total_debit),
-                LedgerPosting(account=platform_account, amount=total_debit),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.WITHDRAWAL_SETTLEMENT,
+            source_tag=net_tag,
             reference=reference,
             description=f"Withdrawal settled to {payout_request.destination_reference}",
             external_reference=reference,
@@ -435,15 +499,30 @@ class WalletService:
         escrow_account = self.get_user_escrow_account(session, user, payout_request.unit)
         user_account = self.get_user_account(session, user, payout_request.unit)
         meta = self._parse_payout_meta(payout_request.notes)
-        total_debit = self._normalize_amount(meta.get("total_debit", payout_request.amount))
+        net_amount = self._normalize_amount(payout_request.amount)
+        total_debit = self._normalize_amount(meta.get("total_debit", net_amount))
+        fee_amount = self._normalize_amount(meta.get("fee_amount", total_debit - net_amount))
+        net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
+        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
+        if fee_amount < Decimal("0.0000"):
+            fee_amount = Decimal("0.0000")
         reference = f"payout-release:{payout_request.id}"
+        postings = [
+            LedgerPosting(account=escrow_account, amount=-net_amount, source_tag=net_tag),
+            LedgerPosting(account=user_account, amount=net_amount, source_tag=net_tag),
+        ]
+        if fee_amount > Decimal("0.0000"):
+            postings.extend(
+                [
+                    LedgerPosting(account=escrow_account, amount=-fee_amount, source_tag=fee_tag),
+                    LedgerPosting(account=user_account, amount=fee_amount, source_tag=fee_tag),
+                ]
+            )
         entries = self.append_transaction(
             session,
-            postings=[
-                LedgerPosting(account=escrow_account, amount=-total_debit),
-                LedgerPosting(account=user_account, amount=total_debit),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=net_tag,
             reference=reference,
             description=f"Withdrawal released back to user after {failure_reason or 'cancel'}",
             external_reference=reference,
@@ -501,6 +580,7 @@ class WalletService:
         *,
         postings: list[LedgerPosting],
         reason: LedgerEntryReason,
+        source_tag: LedgerSourceTag | None = None,
         reference: str | None = None,
         description: str | None = None,
         external_reference: str | None = None,
@@ -519,7 +599,13 @@ class WalletService:
                 raise LedgerError("Zero-value ledger entries are not allowed.")
             if not posting.account.is_active:
                 raise LedgerError(f"Ledger account {posting.account.code} is inactive.")
-            normalized_postings.append(LedgerPosting(account=posting.account, amount=amount))
+            normalized_postings.append(
+                LedgerPosting(
+                    account=posting.account,
+                    amount=amount,
+                    source_tag=posting.source_tag,
+                )
+            )
             unit_set.add(posting.account.unit)
             total += amount
             delta_by_account[posting.account.id] += amount
@@ -536,20 +622,23 @@ class WalletService:
                 raise InsufficientBalanceError(f"Account {account.code} does not have enough balance.")
 
         transaction_id = generate_uuid()
-        entries = [
-            LedgerEntry(
-                transaction_id=transaction_id,
-                account_id=posting.account.id,
-                created_by_user_id=actor.id if actor is not None else None,
-                amount=posting.amount,
-                unit=posting.account.unit,
-                reason=reason,
-                reference=reference,
-                external_reference=external_reference,
-                description=description,
+        entries: list[LedgerEntry] = []
+        for posting in normalized_postings:
+            resolved_tag = posting.source_tag or source_tag or LedgerSourceTag.ADMIN_ADJUSTMENT
+            entries.append(
+                LedgerEntry(
+                    transaction_id=transaction_id,
+                    account_id=posting.account.id,
+                    created_by_user_id=actor.id if actor is not None else None,
+                    amount=posting.amount,
+                    unit=posting.account.unit,
+                    source_tag=resolved_tag,
+                    reason=reason,
+                    reference=reference,
+                    external_reference=external_reference,
+                    description=description,
+                )
             )
-            for posting in normalized_postings
-        ]
         session.add_all(entries)
         session.flush()
         self.event_publisher.publish(
@@ -558,12 +647,32 @@ class WalletService:
                 payload={
                     "transaction_id": transaction_id,
                     "reason": reason.value,
+                    "source_tag": source_tag.value if source_tag is not None else None,
                     "reference": reference,
                     "external_reference": external_reference,
                     "account_ids": [posting.account.id for posting in normalized_postings],
                 },
             )
         )
+        for entry in entries:
+            event_name = "wallet_credit_applied" if entry.amount > 0 else "wallet_debit_applied"
+            self.event_publisher.publish(
+                DomainEvent(
+                    name=event_name,
+                    payload={
+                        "transaction_id": entry.transaction_id,
+                        "entry_id": entry.id,
+                        "account_id": entry.account_id,
+                        "owner_user_id": entry.account.owner_user_id if entry.account else None,
+                        "amount": str(entry.amount),
+                        "unit": entry.unit.value if hasattr(entry.unit, "value") else str(entry.unit),
+                        "reason": entry.reason.value,
+                        "source_tag": entry.source_tag.value,
+                        "reference": entry.reference,
+                        "external_reference": entry.external_reference,
+                    },
+                )
+            )
         return entries
 
     def get_balance(self, session: Session, account: LedgerAccount) -> Decimal:
@@ -584,9 +693,9 @@ class WalletService:
         )
 
     def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
-        from backend.app.portfolio.service import PortfolioService
+        from app.portfolio.service import PortfolioService
 
-        summary = self.get_wallet_summary(session, user)
+        summary = self.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
         portfolio_snapshot = PortfolioService(wallet_service=self).build_for_user(session, user)
         return PortfolioSnapshot(
             user_id=user.id,
@@ -644,13 +753,15 @@ class WalletService:
         amount: Decimal,
         reference: str,
         description: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         reserved_amount = self._normalize_amount(amount)
         if reserved_amount <= Decimal("0.0000"):
             return []
 
-        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
-        escrow_account = self.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        available_account = self.get_user_account(session, user, unit)
+        escrow_account = self.get_user_escrow_account(session, user, unit)
         return self.append_transaction(
             session,
             postings=[
@@ -658,6 +769,7 @@ class WalletService:
                 LedgerPosting(account=escrow_account, amount=reserved_amount),
             ],
             reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             actor=user,
@@ -671,13 +783,15 @@ class WalletService:
         amount: Decimal,
         reference: str,
         description: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         released_amount = self._normalize_amount(amount)
         if released_amount <= Decimal("0.0000"):
             return []
 
-        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
-        escrow_account = self.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        available_account = self.get_user_account(session, user, unit)
+        escrow_account = self.get_user_escrow_account(session, user, unit)
         return self.append_transaction(
             session,
             postings=[
@@ -685,6 +799,7 @@ class WalletService:
                 LedgerPosting(account=available_account, amount=released_amount),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             actor=user,
@@ -699,13 +814,15 @@ class WalletService:
         reference: str,
         description: str,
         external_reference: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         settled_amount = self._normalize_amount(amount)
         if settled_amount <= Decimal("0.0000"):
             return []
 
-        escrow_account = self.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
-        platform_account = self.ensure_platform_account(session, LedgerUnit.CREDIT)
+        escrow_account = self.get_user_escrow_account(session, user, unit)
+        platform_account = self.ensure_platform_account(session, unit)
         return self.append_transaction(
             session,
             postings=[
@@ -713,6 +830,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=settled_amount),
             ],
             reason=self.trade_settlement_reason,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             external_reference=external_reference,
@@ -728,13 +846,15 @@ class WalletService:
         reference: str,
         description: str,
         external_reference: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         settled_amount = self._normalize_amount(amount)
         if settled_amount <= Decimal("0.0000"):
             return []
 
-        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
-        platform_account = self.ensure_platform_account(session, LedgerUnit.CREDIT)
+        available_account = self.get_user_account(session, user, unit)
+        platform_account = self.ensure_platform_account(session, unit)
         return self.append_transaction(
             session,
             postings=[
@@ -742,6 +862,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=settled_amount),
             ],
             reason=self.trade_settlement_reason,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             external_reference=external_reference,
@@ -757,13 +878,15 @@ class WalletService:
         reference: str,
         description: str,
         external_reference: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         credited_amount = self._normalize_amount(amount)
         if credited_amount <= Decimal("0.0000"):
             return []
 
-        available_account = self.get_user_account(session, user, LedgerUnit.CREDIT)
-        platform_account = self.ensure_platform_account(session, LedgerUnit.CREDIT)
+        available_account = self.get_user_account(session, user, unit)
+        platform_account = self.ensure_platform_account(session, unit)
         return self.append_transaction(
             session,
             postings=[
@@ -771,6 +894,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=-credited_amount),
             ],
             reason=self.trade_settlement_reason,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             external_reference=external_reference,
@@ -786,6 +910,7 @@ class WalletService:
         quantity: Decimal,
         reference: str,
         description: str,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         reserved_quantity = self._normalize_amount(quantity)
         if reserved_quantity <= Decimal("0.0000"):
@@ -800,6 +925,7 @@ class WalletService:
                 LedgerPosting(account=escrow_account, amount=reserved_quantity),
             ],
             reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             actor=user,
@@ -815,6 +941,7 @@ class WalletService:
         reference: str,
         description: str,
         external_reference: str,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         settled_quantity = self._normalize_amount(quantity)
         if settled_quantity <= Decimal("0.0000"):
@@ -829,6 +956,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=settled_quantity),
             ],
             reason=self.trade_settlement_reason,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             external_reference=external_reference,
@@ -845,6 +973,7 @@ class WalletService:
         reference: str,
         description: str,
         external_reference: str,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         settled_quantity = self._normalize_amount(quantity)
         if settled_quantity <= Decimal("0.0000"):
@@ -859,6 +988,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=settled_quantity),
             ],
             reason=self.trade_settlement_reason,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             external_reference=external_reference,
@@ -875,6 +1005,7 @@ class WalletService:
         reference: str,
         description: str,
         external_reference: str,
+        source_tag: LedgerSourceTag | None = None,
     ) -> list[LedgerEntry]:
         credited_quantity = self._normalize_amount(quantity)
         if credited_quantity <= Decimal("0.0000"):
@@ -889,6 +1020,7 @@ class WalletService:
                 LedgerPosting(account=platform_account, amount=-credited_quantity),
             ],
             reason=self.trade_settlement_reason,
+            source_tag=source_tag,
             reference=reference,
             description=description,
             external_reference=external_reference,
@@ -919,7 +1051,7 @@ class WalletService:
 
     def get_reserved_cash_balance(self, session: Session, user: User) -> Decimal:
         escrow_account = session.scalar(
-            select(LedgerAccount).where(LedgerAccount.code == self._user_escrow_account_code(user.id, LedgerUnit.CREDIT))
+            select(LedgerAccount).where(LedgerAccount.code == self._user_escrow_account_code(user.id, LedgerUnit.COIN))
         )
         if escrow_account is None:
             return Decimal("0.0000")

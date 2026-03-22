@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from backend.app.club_identity.models.dynasty_models import DynastyStatus, EraLabel
+from app.club_identity.models.dynasty_models import DynastyStatus, EraLabel
 
 
 class ClubDynastySeasonSummaryView(BaseModel):

@@ -8,17 +8,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher, MatchSimulationJob
-from backend.app.core.events import InMemoryEventPublisher
-from backend.app.ingestion.models import Player
-from backend.app.leagues.models import LeagueClub
-from backend.app.leagues.repository import InMemoryLeagueEventRepository
-from backend.app.leagues.service import LeagueSeasonLifecycleService
-from backend.app.match_engine.schemas import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.match_status import MatchStatus
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher, MatchSimulationJob
+from app.core.events import InMemoryEventPublisher
+from app.ingestion.models import Player
+from app.leagues.models import LeagueClub
+from app.leagues.repository import InMemoryLeagueEventRepository
+from app.leagues.service import LeagueSeasonLifecycleService
+from app.match_engine.schemas import (
     MatchEventTimelineView,
     MatchEventView,
     MatchFinalSummaryView,
@@ -28,21 +28,21 @@ from backend.app.match_engine.schemas import (
     MatchTeamStatsView,
     MatchTeamStrengthView,
 )
-from backend.app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
-from backend.app.match_engine.services.team_factory import SyntheticSquadFactory
-from backend.app.schemas.player_lifecycle import ContractCreateRequest, InjuryCreateRequest
-from backend.app.services.player_lifecycle_service import PlayerLifecycleService, PlayerLifecycleValidationError
-from backend.app.match_engine.simulation.models import MatchCompetitionType, MatchEventType, PlayerRole
-from backend.app.models.base import Base
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.player_contract import PlayerContract
-from backend.app.models.player_injury_case import PlayerInjuryCase
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.models.user import KycStatus, User, UserRole
-from backend.app.notifications.service import NotificationCenter
-from backend.app.replay_archive.persistence import InMemoryReplayArchiveRepository
-from backend.app.replay_archive.policy import SpectatorVisibilityPolicyService
-from backend.app.replay_archive.service import ReplayArchiveService
+from app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
+from app.match_engine.services.team_factory import SyntheticSquadFactory
+from app.schemas.player_lifecycle import ContractCreateRequest, InjuryCreateRequest
+from app.services.player_lifecycle_service import PlayerLifecycleService, PlayerLifecycleValidationError
+from app.match_engine.simulation.models import MatchCompetitionType, MatchEventType, PlayerRole
+from app.models.base import Base
+from app.models.club_profile import ClubProfile
+from app.models.player_contract import PlayerContract
+from app.models.player_injury_case import PlayerInjuryCase
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.user import KycStatus, User, UserRole
+from app.notifications.service import NotificationCenter
+from app.replay_archive.persistence import InMemoryReplayArchiveRepository
+from app.replay_archive.policy import SpectatorVisibilityPolicyService
+from app.replay_archive.service import ReplayArchiveService
 
 
 def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
@@ -109,6 +109,7 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
     assert latest_replay is not None
     assert latest_replay.competition_context.presentation_duration_minutes in {3, 4, 5}
     assert latest_replay.timeline
+    assert latest_replay.visual_identity is not None
 
     home_notifications = notifications.list_for_user("user-home", limit=20)
     template_keys = {item.template_key for item in home_notifications}

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import ScheduledFixture
-from backend.app.competition_engine.match_dispatcher import MatchDispatchContext, MatchDispatcher
-from backend.app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import ScheduledFixture
+from app.competition_engine.match_dispatcher import MatchDispatchContext, MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
 
 
 def test_match_dispatcher_publishes_queue_jobs_instead_of_running_inline() -> None:

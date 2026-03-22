@@ -4,6 +4,7 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/models/academy_models.dart';
 import 'package:gte_frontend/models/club_finance_models.dart';
+import 'package:gte_frontend/models/player_avatar.dart';
 import 'package:gte_frontend/models/scouting_models.dart';
 import 'package:gte_frontend/models/sponsorship_models.dart';
 
@@ -34,7 +35,8 @@ class ClubOpsApi {
     Duration latency = Duration.zero,
   }) {
     return ClubOpsApi._(
-      config: GteRepositoryConfig(baseUrl: baseUrl, mode: GteBackendMode.fixture),
+      config:
+          GteRepositoryConfig(baseUrl: baseUrl, mode: GteBackendMode.fixture),
       transport: _UnsupportedClubOpsTransport(),
       latency: latency,
     );
@@ -254,7 +256,8 @@ class ClubOpsApi {
     if (!json.containsKey('balance_summary') &&
         !json.containsKey('budget_allocations') &&
         !json.containsKey('ledger_entries')) {
-      throw const GteParsingException('Finance payload missing summary fields.');
+      throw const GteParsingException(
+          'Finance payload missing summary fields.');
     }
     final Map<String, Object?> balance =
         _asMap(json['balance_summary'] ?? json['summary']);
@@ -266,10 +269,10 @@ class ClubOpsApi {
         fallbackClubName ?? clubOpsDisplayClubName(fallbackClubId),
       ),
       balanceSummary: ClubBalanceSummary(
-        currentBalance: _number(
-            balance, <String>['current_balance', 'currentBalance'], 0),
-        operatingBudget:
-            _number(balance, <String>['operating_budget', 'operatingBudget'], 0),
+        currentBalance:
+            _number(balance, <String>['current_balance', 'currentBalance'], 0),
+        operatingBudget: _number(
+            balance, <String>['operating_budget', 'operatingBudget'], 0),
         reserveTarget:
             _number(balance, <String>['reserve_target', 'reserveTarget'], 0),
         monthlyIncome:
@@ -287,8 +290,8 @@ class ClubOpsApi {
             balance, <String>['next_payroll_amount', 'nextPayrollAmount'], 0),
         cashRunwayMonths: _number(
             balance, <String>['cash_runway_months', 'cashRunwayMonths'], 0),
-        balanceDeltaPercent: _number(
-            balance, <String>['balance_delta_percent', 'balanceDeltaPercent'], 0),
+        balanceDeltaPercent: _number(balance,
+            <String>['balance_delta_percent', 'balanceDeltaPercent'], 0),
       ),
       budgetAllocations:
           _categoryList(json['budget_allocations'] ?? json['budgetAllocation']),
@@ -361,10 +364,10 @@ class ClubOpsApi {
         developmentBudget: _number(
             pathway, <String>['development_budget', 'developmentBudget'], 0),
         squadSize: _integer(pathway, <String>['squad_size', 'squadSize'], 0),
-        promotionsThisSeason: _integer(
-            pathway, <String>['promotions_this_season', 'promotionsThisSeason'], 0),
-        graduationRatePercent: _number(
-            pathway, <String>['graduation_rate_percent', 'graduationRatePercent'], 0),
+        promotionsThisSeason: _integer(pathway,
+            <String>['promotions_this_season', 'promotionsThisSeason'], 0),
+        graduationRatePercent: _number(pathway,
+            <String>['graduation_rate_percent', 'graduationRatePercent'], 0),
         staffCoverageLabel: _string(
           pathway,
           <String>['staff_coverage_label', 'staffCoverageLabel'],
@@ -378,8 +381,8 @@ class ClubOpsApi {
       ),
       programs: _academyProgramList(json['programs']),
       players: _academyPlayerList(json['players']),
-      trainingCycles: _trainingCycleList(
-          json['training_cycles'] ?? json['trainingCycles']),
+      trainingCycles:
+          _trainingCycleList(json['training_cycles'] ?? json['trainingCycles']),
       promotions: _academyPromotionList(json['promotions']),
       notes: _stringList(json['notes']),
     );
@@ -425,13 +428,13 @@ class ClubOpsApi {
       throw const GteParsingException('Youth pipeline payload missing stages.');
     }
     return YouthPipelineSnapshot(
-      trackedProspects: _integer(
-          json, <String>['tracked_prospects', 'trackedProspects'], 0),
+      trackedProspects:
+          _integer(json, <String>['tracked_prospects', 'trackedProspects'], 0),
       shortlistedProspects: _integer(
           json, <String>['shortlisted_prospects', 'shortlistedProspects'], 0),
       trialists: _integer(json, <String>['trialists'], 0),
-      scholarshipOffers:
-          _integer(json, <String>['scholarship_offers', 'scholarshipOffers'], 0),
+      scholarshipOffers: _integer(
+          json, <String>['scholarship_offers', 'scholarshipOffers'], 0),
       promotedPlayers:
           _integer(json, <String>['promoted_players', 'promotedPlayers'], 0),
       conversionPercent:
@@ -444,7 +447,8 @@ class ClubOpsApi {
   ClubOpsAdminSnapshot _parseAdminSnapshot(Map<String, Object?> json) {
     if (!json.containsKey('clubs_monitored') &&
         !json.containsKey('clubsMonitored')) {
-      throw const GteParsingException('Club ops admin payload missing summary.');
+      throw const GteParsingException(
+          'Club ops admin payload missing summary.');
     }
     return ClubOpsAdminSnapshot(
       clubsMonitored:
@@ -455,39 +459,40 @@ class ClubOpsApi {
           _integer(json, <String>['active_contracts', 'activeContracts'], 0),
       academyPromotions: _integer(
           json, <String>['academy_promotions', 'academyPromotions'], 0),
-      activeAssignments:
-          _integer(json, <String>['active_assignments', 'activeAssignments'], 0),
-      youthConversionPercent: _number(
-          json, <String>['youth_conversion_percent', 'youthConversionPercent'], 0),
-      statusNotes:
-          _stringList(json['status_notes'] ?? json['statusNotes'] ?? json['notes']),
+      activeAssignments: _integer(
+          json, <String>['active_assignments', 'activeAssignments'], 0),
+      youthConversionPercent: _number(json,
+          <String>['youth_conversion_percent', 'youthConversionPercent'], 0),
+      statusNotes: _stringList(
+          json['status_notes'] ?? json['statusNotes'] ?? json['notes']),
     );
   }
 
-  ClubFinanceAnalyticsSnapshot _parseFinanceAnalytics(Map<String, Object?> json) {
+  ClubFinanceAnalyticsSnapshot _parseFinanceAnalytics(
+      Map<String, Object?> json) {
     if (!json.containsKey('average_monthly_balance') &&
         !json.containsKey('averageMonthlyBalance')) {
       throw const GteParsingException(
           'Finance analytics payload missing key metrics.');
     }
     return ClubFinanceAnalyticsSnapshot(
-      averageMonthlyBalance: _number(
-          json, <String>['average_monthly_balance', 'averageMonthlyBalance'], 0),
-      operatingMarginPercent: _number(
-          json, <String>['operating_margin_percent', 'operatingMarginPercent'], 0),
-      payrollSharePercent:
-          _number(json, <String>['payroll_share_percent', 'payrollSharePercent'], 0),
-      developmentSharePercent: _number(
-          json, <String>['development_share_percent', 'developmentSharePercent'], 0),
-      commercialSharePercent: _number(
-          json, <String>['commercial_share_percent', 'commercialSharePercent'], 0),
+      averageMonthlyBalance: _number(json,
+          <String>['average_monthly_balance', 'averageMonthlyBalance'], 0),
+      operatingMarginPercent: _number(json,
+          <String>['operating_margin_percent', 'operatingMarginPercent'], 0),
+      payrollSharePercent: _number(
+          json, <String>['payroll_share_percent', 'payrollSharePercent'], 0),
+      developmentSharePercent: _number(json,
+          <String>['development_share_percent', 'developmentSharePercent'], 0),
+      commercialSharePercent: _number(json,
+          <String>['commercial_share_percent', 'commercialSharePercent'], 0),
       revenueReliabilityLabel: _string(
         json,
         <String>['revenue_reliability_label', 'revenueReliabilityLabel'],
         'Stable renewals and matchday collections',
       ),
-      topExpenseLabel:
-          _string(json, <String>['top_expense_label', 'topExpenseLabel'], 'Payroll'),
+      topExpenseLabel: _string(
+          json, <String>['top_expense_label', 'topExpenseLabel'], 'Payroll'),
       categoryMix: _categoryList(json['category_mix'] ?? json['categoryMix']),
       quarterlyCashflow: _cashflowList(
           json['quarterly_cashflow'] ?? json['quarterlyCashflow']),
@@ -502,21 +507,20 @@ class ClubOpsApi {
           'Sponsorship analytics payload missing revenue totals.');
     }
     return SponsorshipAnalyticsSnapshot(
-      totalRevenue:
-          _number(json, <String>['total_revenue', 'totalRevenue'], 0),
+      totalRevenue: _number(json, <String>['total_revenue', 'totalRevenue'], 0),
       averageContractValue: _number(
           json, <String>['average_contract_value', 'averageContractValue'], 0),
-      renewalRatePercent:
-          _number(json, <String>['renewal_rate_percent', 'renewalRatePercent'], 0),
-      assetUtilizationPercent: _number(
-          json, <String>['asset_utilization_percent', 'assetUtilizationPercent'], 0),
+      renewalRatePercent: _number(
+          json, <String>['renewal_rate_percent', 'renewalRatePercent'], 0),
+      assetUtilizationPercent: _number(json,
+          <String>['asset_utilization_percent', 'assetUtilizationPercent'], 0),
       pendingReviews:
           _integer(json, <String>['pending_reviews', 'pendingReviews'], 0),
       flaggedAssets:
           _integer(json, <String>['flagged_assets', 'flaggedAssets'], 0),
-      topContracts: _contractList(json['top_contracts'] ?? json['topContracts']),
-      reviewQueue:
-          _assetSlotList(json['review_queue'] ?? json['reviewQueue']),
+      topContracts:
+          _contractList(json['top_contracts'] ?? json['topContracts']),
+      reviewQueue: _assetSlotList(json['review_queue'] ?? json['reviewQueue']),
     );
   }
 
@@ -527,12 +531,12 @@ class ClubOpsApi {
           'Academy analytics payload missing conversion metrics.');
     }
     return AcademyAnalyticsSnapshot(
-      conversionRatePercent: _number(
-          json, <String>['conversion_rate_percent', 'conversionRatePercent'], 0),
+      conversionRatePercent: _number(json,
+          <String>['conversion_rate_percent', 'conversionRatePercent'], 0),
       retentionRatePercent: _number(
           json, <String>['retention_rate_percent', 'retentionRatePercent'], 0),
-      averageReadinessScore: _integer(
-          json, <String>['average_readiness_score', 'averageReadinessScore'], 0),
+      averageReadinessScore: _integer(json,
+          <String>['average_readiness_score', 'averageReadinessScore'], 0),
       promotionsThisSeason: _integer(
           json, <String>['promotions_this_season', 'promotionsThisSeason'], 0),
       pathwayHealthLabel: _string(
@@ -553,15 +557,22 @@ class ClubOpsApi {
     }
     return ScoutingAnalyticsSnapshot(
       assignmentCompletionPercent: _number(
-          json, <String>['assignment_completion_percent', 'assignmentCompletionPercent'], 0),
-      regionalCoveragePercent: _number(
-          json, <String>['regional_coverage_percent', 'regionalCoveragePercent'], 0),
-      shortlistToTrialPercent: _number(
-          json, <String>['shortlist_to_trial_percent', 'shortlistToTrialPercent'], 0),
+          json,
+          <String>[
+            'assignment_completion_percent',
+            'assignmentCompletionPercent'
+          ],
+          0),
+      regionalCoveragePercent: _number(json,
+          <String>['regional_coverage_percent', 'regionalCoveragePercent'], 0),
+      shortlistToTrialPercent: _number(json,
+          <String>['shortlist_to_trial_percent', 'shortlistToTrialPercent'], 0),
       trialToScholarshipPercent: _number(
-          json, <String>['trial_to_scholarship_percent', 'trialToScholarshipPercent'], 0),
-      youthConversionPercent: _number(
-          json, <String>['youth_conversion_percent', 'youthConversionPercent'], 0),
+          json,
+          <String>['trial_to_scholarship_percent', 'trialToScholarshipPercent'],
+          0),
+      youthConversionPercent: _number(json,
+          <String>['youth_conversion_percent', 'youthConversionPercent'], 0),
       funnel: _pipelineStages(json['funnel']),
       assignmentLoad:
           _assignmentList(json['assignment_load'] ?? json['assignmentLoad']),
@@ -569,373 +580,361 @@ class ClubOpsApi {
   }
 
   List<FinanceCategoryBreakdown> _categoryList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return FinanceCategoryBreakdown(
-            label: _string(json, <String>['label', 'name'], 'Unlabeled'),
-            amount: _number(json, <String>['amount', 'value'], 0),
-            sharePercent:
-                _number(json, <String>['share_percent', 'sharePercent'], 0),
-            detail: _nullableString(json, <String>['detail', 'note']),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return FinanceCategoryBreakdown(
+        label: _string(json, <String>['label', 'name'], 'Unlabeled'),
+        amount: _number(json, <String>['amount', 'value'], 0),
+        sharePercent:
+            _number(json, <String>['share_percent', 'sharePercent'], 0),
+        detail: _nullableString(json, <String>['detail', 'note']),
+      );
+    }).toList(growable: false);
   }
 
   List<CashflowPoint> _cashflowList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return CashflowPoint(
-            label: _string(json, <String>['label'], 'Window'),
-            inflow: _number(json, <String>['inflow'], 0),
-            outflow: _number(json, <String>['outflow'], 0),
-            closingBalance:
-                _number(json, <String>['closing_balance', 'closingBalance'], 0),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return CashflowPoint(
+        label: _string(json, <String>['label'], 'Window'),
+        inflow: _number(json, <String>['inflow'], 0),
+        outflow: _number(json, <String>['outflow'], 0),
+        closingBalance:
+            _number(json, <String>['closing_balance', 'closingBalance'], 0),
+      );
+    }).toList(growable: false);
   }
 
   List<LedgerEntry> _ledgerList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          final String typeValue =
-              _string(json, <String>['type'], 'expense').toLowerCase();
-          return LedgerEntry(
-            id: _string(json, <String>['id'], 'ledger'),
-            title: _string(json, <String>['title'], 'Ledger entry'),
-            category: _string(json, <String>['category'], 'General'),
-            counterparty:
-                _string(json, <String>['counterparty'], 'Club operations'),
-            type: typeValue == 'income'
-                ? LedgerEntryType.income
-                : LedgerEntryType.expense,
-            amount: _number(json, <String>['amount'], 0),
-            runningBalance:
-                _number(json, <String>['running_balance', 'runningBalance'], 0),
-            occurredAt:
-                _dateTime(json, <String>['occurred_at', 'occurredAt'], DateTime.utc(2026, 3, 1)),
-            note: _string(json, <String>['note'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      final String typeValue =
+          _string(json, <String>['type'], 'expense').toLowerCase();
+      return LedgerEntry(
+        id: _string(json, <String>['id'], 'ledger'),
+        title: _string(json, <String>['title'], 'Ledger entry'),
+        category: _string(json, <String>['category'], 'General'),
+        counterparty:
+            _string(json, <String>['counterparty'], 'Club operations'),
+        type: typeValue == 'income'
+            ? LedgerEntryType.income
+            : LedgerEntryType.expense,
+        amount: _number(json, <String>['amount'], 0),
+        runningBalance:
+            _number(json, <String>['running_balance', 'runningBalance'], 0),
+        occurredAt: _dateTime(json, <String>['occurred_at', 'occurredAt'],
+            DateTime.utc(2026, 3, 1)),
+        note: _string(json, <String>['note'], ''),
+      );
+    }).toList(growable: false);
   }
 
   List<SponsorshipPackage> _packageList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return SponsorshipPackage(
-            id: _string(json, <String>['id'], 'package'),
-            name: _string(json, <String>['name'], 'Package'),
-            tierLabel: _string(json, <String>['tier_label', 'tierLabel'], 'Club'),
-            description:
-                _string(json, <String>['description'], 'Sponsorship package'),
-            value: _number(json, <String>['value'], 0),
-            durationMonths:
-                _integer(json, <String>['duration_months', 'durationMonths'], 12),
-            assetCount: _integer(json, <String>['asset_count', 'assetCount'], 0),
-            inventorySummary: _string(
-                json, <String>['inventory_summary', 'inventorySummary'], ''),
-            deliverables:
-                _stringList(json['deliverables'] ?? json['deliverableList']),
-            isFeatured:
-                _boolean(json, <String>['is_featured', 'isFeatured'], false),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return SponsorshipPackage(
+        id: _string(json, <String>['id'], 'package'),
+        name: _string(json, <String>['name'], 'Package'),
+        tierLabel: _string(json, <String>['tier_label', 'tierLabel'], 'Club'),
+        description:
+            _string(json, <String>['description'], 'Sponsorship package'),
+        value: _number(json, <String>['value'], 0),
+        durationMonths:
+            _integer(json, <String>['duration_months', 'durationMonths'], 12),
+        assetCount: _integer(json, <String>['asset_count', 'assetCount'], 0),
+        inventorySummary: _string(
+            json, <String>['inventory_summary', 'inventorySummary'], ''),
+        deliverables:
+            _stringList(json['deliverables'] ?? json['deliverableList']),
+        isFeatured:
+            _boolean(json, <String>['is_featured', 'isFeatured'], false),
+      );
+    }).toList(growable: false);
   }
 
   List<SponsorshipContract> _contractList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return SponsorshipContract(
-            id: _string(json, <String>['id'], 'contract'),
-            sponsorName:
-                _string(json, <String>['sponsor_name', 'sponsorName'], 'Sponsor'),
-            packageName:
-                _string(json, <String>['package_name', 'packageName'], 'Package'),
-            status: _contractStatus(
-                _string(json, <String>['status'], 'active').toLowerCase()),
-            totalValue:
-                _number(json, <String>['total_value', 'totalValue'], 0),
-            startDate:
-                _dateTime(json, <String>['start_date', 'startDate'], DateTime.utc(2026, 1, 1)),
-            endDate:
-                _dateTime(json, <String>['end_date', 'endDate'], DateTime.utc(2026, 12, 31)),
-            renewalWindowLabel: _string(
-              json,
-              <String>['renewal_window_label', 'renewalWindowLabel'],
-              'Review 60 days before expiry',
-            ),
-            visibilityLabel: _string(
-              json,
-              <String>['visibility_label', 'visibilityLabel'],
-              'High visibility',
-            ),
-            contactName:
-                _string(json, <String>['contact_name', 'contactName'], ''),
-            moderationState: _moderationState(
-              _string(
-                json,
-                <String>['moderation_state', 'moderationState'],
-                'approved',
-              ),
-            ),
-            deliverables: _stringList(json['deliverables']),
-            notes: _stringList(json['notes']),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return SponsorshipContract(
+        id: _string(json, <String>['id'], 'contract'),
+        sponsorName:
+            _string(json, <String>['sponsor_name', 'sponsorName'], 'Sponsor'),
+        packageName:
+            _string(json, <String>['package_name', 'packageName'], 'Package'),
+        status: _contractStatus(
+            _string(json, <String>['status'], 'active').toLowerCase()),
+        totalValue: _number(json, <String>['total_value', 'totalValue'], 0),
+        startDate: _dateTime(json, <String>['start_date', 'startDate'],
+            DateTime.utc(2026, 1, 1)),
+        endDate: _dateTime(
+            json, <String>['end_date', 'endDate'], DateTime.utc(2026, 12, 31)),
+        renewalWindowLabel: _string(
+          json,
+          <String>['renewal_window_label', 'renewalWindowLabel'],
+          'Review 60 days before expiry',
+        ),
+        visibilityLabel: _string(
+          json,
+          <String>['visibility_label', 'visibilityLabel'],
+          'High visibility',
+        ),
+        contactName: _string(json, <String>['contact_name', 'contactName'], ''),
+        moderationState: _moderationState(
+          _string(
+            json,
+            <String>['moderation_state', 'moderationState'],
+            'approved',
+          ),
+        ),
+        deliverables: _stringList(json['deliverables']),
+        notes: _stringList(json['notes']),
+      );
+    }).toList(growable: false);
   }
 
   List<SponsorAssetSlot> _assetSlotList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return SponsorAssetSlot(
-            id: _string(json, <String>['id'], 'slot'),
-            surfaceName:
-                _string(json, <String>['surface_name', 'surfaceName'], 'Asset slot'),
-            placementLabel: _string(
-                json, <String>['placement_label', 'placementLabel'], ''),
-            visibilityLabel: _string(
-                json, <String>['visibility_label', 'visibilityLabel'], ''),
-            moderationState: _moderationState(
-              _string(
-                json,
-                <String>['moderation_state', 'moderationState'],
-                'approved',
-              ),
-            ),
-            sponsorName:
-                _nullableString(json, <String>['sponsor_name', 'sponsorName']),
-            note: _nullableString(json, <String>['note']),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return SponsorAssetSlot(
+        id: _string(json, <String>['id'], 'slot'),
+        surfaceName: _string(
+            json, <String>['surface_name', 'surfaceName'], 'Asset slot'),
+        placementLabel:
+            _string(json, <String>['placement_label', 'placementLabel'], ''),
+        visibilityLabel:
+            _string(json, <String>['visibility_label', 'visibilityLabel'], ''),
+        moderationState: _moderationState(
+          _string(
+            json,
+            <String>['moderation_state', 'moderationState'],
+            'approved',
+          ),
+        ),
+        sponsorName:
+            _nullableString(json, <String>['sponsor_name', 'sponsorName']),
+        note: _nullableString(json, <String>['note']),
+      );
+    }).toList(growable: false);
   }
 
   List<AcademyProgram> _academyProgramList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return AcademyProgram(
-            id: _string(json, <String>['id'], 'program'),
-            name: _string(json, <String>['name'], 'Program'),
-            ageBand: _string(json, <String>['age_band', 'ageBand'], ''),
-            focusArea:
-                _string(json, <String>['focus_area', 'focusArea'], ''),
-            staffLead:
-                _string(json, <String>['staff_lead', 'staffLead'], ''),
-            weeklyHours:
-                _integer(json, <String>['weekly_hours', 'weeklyHours'], 0),
-            enrolledPlayers: _integer(
-                json, <String>['enrolled_players', 'enrolledPlayers'], 0),
-            statusLabel:
-                _string(json, <String>['status_label', 'statusLabel'], ''),
-            outcomeLabel:
-                _string(json, <String>['outcome_label', 'outcomeLabel'], ''),
-            description: _string(json, <String>['description'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return AcademyProgram(
+        id: _string(json, <String>['id'], 'program'),
+        name: _string(json, <String>['name'], 'Program'),
+        ageBand: _string(json, <String>['age_band', 'ageBand'], ''),
+        focusArea: _string(json, <String>['focus_area', 'focusArea'], ''),
+        staffLead: _string(json, <String>['staff_lead', 'staffLead'], ''),
+        weeklyHours: _integer(json, <String>['weekly_hours', 'weeklyHours'], 0),
+        enrolledPlayers:
+            _integer(json, <String>['enrolled_players', 'enrolledPlayers'], 0),
+        statusLabel: _string(json, <String>['status_label', 'statusLabel'], ''),
+        outcomeLabel:
+            _string(json, <String>['outcome_label', 'outcomeLabel'], ''),
+        description: _string(json, <String>['description'], ''),
+      );
+    }).toList(growable: false);
   }
 
   List<AcademyPlayer> _academyPlayerList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return AcademyPlayer(
-            id: _string(json, <String>['id'], 'player'),
-            name: _string(json, <String>['name'], 'Academy player'),
-            position: _string(json, <String>['position'], 'CM'),
-            age: _integer(json, <String>['age'], 0),
-            pathwayStage:
-                _string(json, <String>['pathway_stage', 'pathwayStage'], ''),
-            potentialBand:
-                _string(json, <String>['potential_band', 'potentialBand'], ''),
-            developmentProgressPercent: _number(
-              json,
-              <String>[
-                'development_progress_percent',
-                'developmentProgressPercent'
-              ],
-              0,
-            ),
-            readinessScore:
-                _integer(json, <String>['readiness_score', 'readinessScore'], 0),
-            minutesTarget:
-                _integer(json, <String>['minutes_target', 'minutesTarget'], 0),
-            statusLabel:
-                _string(json, <String>['status_label', 'statusLabel'], ''),
-            nextMilestone:
-                _string(json, <String>['next_milestone', 'nextMilestone'], ''),
-            strengths: _stringList(json['strengths']),
-            focusAreas: _stringList(json['focus_areas'] ?? json['focusAreas']),
-            promotedToSenior: _boolean(
-              json,
-              <String>['promoted_to_senior', 'promotedToSenior'],
-              false,
-            ),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return AcademyPlayer(
+        id: _string(json, <String>['id'], 'player'),
+        name: _string(json, <String>['name'], 'Academy player'),
+        position: _string(json, <String>['position'], 'CM'),
+        age: _integer(json, <String>['age'], 0),
+        pathwayStage:
+            _string(json, <String>['pathway_stage', 'pathwayStage'], ''),
+        potentialBand:
+            _string(json, <String>['potential_band', 'potentialBand'], ''),
+        developmentProgressPercent: _number(
+          json,
+          <String>[
+            'development_progress_percent',
+            'developmentProgressPercent'
+          ],
+          0,
+        ),
+        readinessScore:
+            _integer(json, <String>['readiness_score', 'readinessScore'], 0),
+        minutesTarget:
+            _integer(json, <String>['minutes_target', 'minutesTarget'], 0),
+        statusLabel: _string(json, <String>['status_label', 'statusLabel'], ''),
+        nextMilestone:
+            _string(json, <String>['next_milestone', 'nextMilestone'], ''),
+        strengths: _stringList(json['strengths']),
+        focusAreas: _stringList(json['focus_areas'] ?? json['focusAreas']),
+        playerId: _nullableString(json, <String>[
+          'player_id',
+          'playerId',
+          'canonical_player_id',
+          'canonicalPlayerId',
+        ]),
+        secondaryPositions: _stringList(
+            json['secondary_positions'] ?? json['secondaryPositions']),
+        nationality: _nullableString(json, <String>['nationality']),
+        nationalityCode: _nullableString(
+            json, <String>['nationality_code', 'nationalityCode']),
+        dominantFoot: _nullableString(json, <String>[
+          'dominant_foot',
+          'dominantFoot',
+          'preferred_foot',
+          'preferredFoot',
+        ]),
+        roleArchetype: _nullableString(
+            json, <String>['role_archetype', 'roleArchetype', 'archetype']),
+        formationSlots:
+            _stringList(json['formation_slots'] ?? json['formationSlots']),
+        squadEligible:
+            _nullableBoolean(json, <String>['squad_eligible', 'squadEligible']),
+        avatarSeedToken: _nullableString(
+            json, <String>['avatar_seed_token', 'avatarSeedToken']),
+        avatarDnaSeed:
+            _nullableString(json, <String>['avatar_dna_seed', 'avatarDnaSeed']),
+        avatar: PlayerAvatar.fromJsonOrNull(json['avatar']),
+        currentValueCredits: _nullableNumber(json, <String>[
+          'current_value_credits',
+          'currentValueCredits',
+          'latest_value_credits',
+          'latestValueCredits',
+        ]),
+        promotedToSenior: _boolean(
+          json,
+          <String>['promoted_to_senior', 'promotedToSenior'],
+          false,
+        ),
+      );
+    }).toList(growable: false);
   }
 
   List<TrainingCycle> _trainingCycleList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return TrainingCycle(
-            id: _string(json, <String>['id'], 'cycle'),
-            title: _string(json, <String>['title'], 'Training cycle'),
-            phaseLabel:
-                _string(json, <String>['phase_label', 'phaseLabel'], ''),
-            focus: _string(json, <String>['focus'], ''),
-            cohortLabel:
-                _string(json, <String>['cohort_label', 'cohortLabel'], ''),
-            startDate:
-                _dateTime(json, <String>['start_date', 'startDate'], DateTime.utc(2026, 3, 1)),
-            endDate:
-                _dateTime(json, <String>['end_date', 'endDate'], DateTime.utc(2026, 3, 14)),
-            attendancePercent:
-                _number(json, <String>['attendance_percent', 'attendancePercent'], 0),
-            intensityLabel: _string(
-                json, <String>['intensity_label', 'intensityLabel'], ''),
-            expectedPromotionCount: _integer(
-              json,
-              <String>['expected_promotion_count', 'expectedPromotionCount'],
-              0,
-            ),
-            objective: _string(json, <String>['objective'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return TrainingCycle(
+        id: _string(json, <String>['id'], 'cycle'),
+        title: _string(json, <String>['title'], 'Training cycle'),
+        phaseLabel: _string(json, <String>['phase_label', 'phaseLabel'], ''),
+        focus: _string(json, <String>['focus'], ''),
+        cohortLabel: _string(json, <String>['cohort_label', 'cohortLabel'], ''),
+        startDate: _dateTime(json, <String>['start_date', 'startDate'],
+            DateTime.utc(2026, 3, 1)),
+        endDate: _dateTime(
+            json, <String>['end_date', 'endDate'], DateTime.utc(2026, 3, 14)),
+        attendancePercent: _number(
+            json, <String>['attendance_percent', 'attendancePercent'], 0),
+        intensityLabel:
+            _string(json, <String>['intensity_label', 'intensityLabel'], ''),
+        expectedPromotionCount: _integer(
+          json,
+          <String>['expected_promotion_count', 'expectedPromotionCount'],
+          0,
+        ),
+        objective: _string(json, <String>['objective'], ''),
+      );
+    }).toList(growable: false);
   }
 
   List<AcademyPromotion> _academyPromotionList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return AcademyPromotion(
-            playerName:
-                _string(json, <String>['player_name', 'playerName'], ''),
-            destination:
-                _string(json, <String>['destination'], 'Senior squad'),
-            occurredAt:
-                _dateTime(json, <String>['occurred_at', 'occurredAt'], DateTime.utc(2026, 3, 1)),
-            note: _string(json, <String>['note'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return AcademyPromotion(
+        playerName: _string(json, <String>['player_name', 'playerName'], ''),
+        destination: _string(json, <String>['destination'], 'Senior squad'),
+        occurredAt: _dateTime(json, <String>['occurred_at', 'occurredAt'],
+            DateTime.utc(2026, 3, 1)),
+        note: _string(json, <String>['note'], ''),
+      );
+    }).toList(growable: false);
   }
 
   List<ScoutAssignment> _assignmentList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return ScoutAssignment(
-            id: _string(json, <String>['id'], 'assignment'),
-            scoutName: _string(json, <String>['scout_name', 'scoutName'], ''),
-            region: _string(json, <String>['region'], ''),
-            competition:
-                _string(json, <String>['competition'], 'Youth competition'),
-            focusArea:
-                _string(json, <String>['focus_area', 'focusArea'], ''),
-            priorityLabel:
-                _string(json, <String>['priority_label', 'priorityLabel'], ''),
-            statusLabel:
-                _string(json, <String>['status_label', 'statusLabel'], ''),
-            dueDate:
-                _dateTime(json, <String>['due_date', 'dueDate'], DateTime.utc(2026, 3, 20)),
-            activeProspects:
-                _integer(json, <String>['active_prospects', 'activeProspects'], 0),
-            travelWindow:
-                _string(json, <String>['travel_window', 'travelWindow'], ''),
-            objective: _string(json, <String>['objective'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return ScoutAssignment(
+        id: _string(json, <String>['id'], 'assignment'),
+        scoutName: _string(json, <String>['scout_name', 'scoutName'], ''),
+        region: _string(json, <String>['region'], ''),
+        competition:
+            _string(json, <String>['competition'], 'Youth competition'),
+        focusArea: _string(json, <String>['focus_area', 'focusArea'], ''),
+        priorityLabel:
+            _string(json, <String>['priority_label', 'priorityLabel'], ''),
+        statusLabel: _string(json, <String>['status_label', 'statusLabel'], ''),
+        dueDate: _dateTime(
+            json, <String>['due_date', 'dueDate'], DateTime.utc(2026, 3, 20)),
+        activeProspects:
+            _integer(json, <String>['active_prospects', 'activeProspects'], 0),
+        travelWindow:
+            _string(json, <String>['travel_window', 'travelWindow'], ''),
+        objective: _string(json, <String>['objective'], ''),
+      );
+    }).toList(growable: false);
   }
 
   List<Prospect> _prospectList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return Prospect(
-            id: _string(json, <String>['id'], 'prospect'),
-            name: _string(json, <String>['name'], 'Prospect'),
-            position: _string(json, <String>['position'], 'CM'),
-            age: _integer(json, <String>['age'], 0),
-            region: _string(json, <String>['region'], ''),
-            currentClub:
-                _string(json, <String>['current_club', 'currentClub'], ''),
-            stage: _prospectStage(_string(json, <String>['stage'], 'monitored')),
-            readinessScore:
-                _integer(json, <String>['readiness_score', 'readinessScore'], 0),
-            developmentProjection: _string(
-              json,
-              <String>['development_projection', 'developmentProjection'],
-              '',
-            ),
-            pathwayFitLabel:
-                _string(json, <String>['pathway_fit_label', 'pathwayFitLabel'], ''),
-            nextAction:
-                _string(json, <String>['next_action', 'nextAction'], ''),
-            availabilityLabel: _string(
-                json, <String>['availability_label', 'availabilityLabel'], ''),
-            lastUpdated:
-                _dateTime(json, <String>['last_updated', 'lastUpdated'], DateTime.utc(2026, 3, 1)),
-            strengths: _stringList(json['strengths']),
-            focusAreas: _stringList(json['focus_areas'] ?? json['focusAreas']),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return Prospect(
+        id: _string(json, <String>['id'], 'prospect'),
+        name: _string(json, <String>['name'], 'Prospect'),
+        position: _string(json, <String>['position'], 'CM'),
+        age: _integer(json, <String>['age'], 0),
+        region: _string(json, <String>['region'], ''),
+        currentClub: _string(json, <String>['current_club', 'currentClub'], ''),
+        stage: _prospectStage(_string(json, <String>['stage'], 'monitored')),
+        readinessScore:
+            _integer(json, <String>['readiness_score', 'readinessScore'], 0),
+        developmentProjection: _string(
+          json,
+          <String>['development_projection', 'developmentProjection'],
+          '',
+        ),
+        pathwayFitLabel:
+            _string(json, <String>['pathway_fit_label', 'pathwayFitLabel'], ''),
+        nextAction: _string(json, <String>['next_action', 'nextAction'], ''),
+        availabilityLabel: _string(
+            json, <String>['availability_label', 'availabilityLabel'], ''),
+        lastUpdated: _dateTime(json, <String>['last_updated', 'lastUpdated'],
+            DateTime.utc(2026, 3, 1)),
+        strengths: _stringList(json['strengths']),
+        focusAreas: _stringList(json['focus_areas'] ?? json['focusAreas']),
+      );
+    }).toList(growable: false);
   }
 
   List<ProspectReport> _reportList(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return ProspectReport(
-            id: _string(json, <String>['id'], 'report'),
-            prospectId:
-                _string(json, <String>['prospect_id', 'prospectId'], ''),
-            scoutName: _string(json, <String>['scout_name', 'scoutName'], ''),
-            headline: _string(json, <String>['headline'], ''),
-            createdAt:
-                _dateTime(json, <String>['created_at', 'createdAt'], DateTime.utc(2026, 3, 1)),
-            overallFit:
-                _string(json, <String>['overall_fit', 'overallFit'], ''),
-            technicalNote:
-                _string(json, <String>['technical_note', 'technicalNote'], ''),
-            physicalNote:
-                _string(json, <String>['physical_note', 'physicalNote'], ''),
-            characterNote:
-                _string(json, <String>['character_note', 'characterNote'], ''),
-            recommendation:
-                _string(json, <String>['recommendation'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return ProspectReport(
+        id: _string(json, <String>['id'], 'report'),
+        prospectId: _string(json, <String>['prospect_id', 'prospectId'], ''),
+        scoutName: _string(json, <String>['scout_name', 'scoutName'], ''),
+        headline: _string(json, <String>['headline'], ''),
+        createdAt: _dateTime(json, <String>['created_at', 'createdAt'],
+            DateTime.utc(2026, 3, 1)),
+        overallFit: _string(json, <String>['overall_fit', 'overallFit'], ''),
+        technicalNote:
+            _string(json, <String>['technical_note', 'technicalNote'], ''),
+        physicalNote:
+            _string(json, <String>['physical_note', 'physicalNote'], ''),
+        characterNote:
+            _string(json, <String>['character_note', 'characterNote'], ''),
+        recommendation: _string(json, <String>['recommendation'], ''),
+      );
+    }).toList(growable: false);
   }
 
   List<YouthPipelineStage> _pipelineStages(Object? value) {
-    return _asList(value)
-        .map((Object? item) {
-          final Map<String, Object?> json = _asMap(item);
-          return YouthPipelineStage(
-            label: _string(json, <String>['label'], 'Stage'),
-            count: _integer(json, <String>['count'], 0),
-            description: _string(json, <String>['description'], ''),
-          );
-        })
-        .toList(growable: false);
+    return _asList(value).map((Object? item) {
+      final Map<String, Object?> json = _asMap(item);
+      return YouthPipelineStage(
+        label: _string(json, <String>['label'], 'Stage'),
+        count: _integer(json, <String>['count'], 0),
+        description: _string(json, <String>['description'], ''),
+      );
+    }).toList(growable: false);
   }
 }
 
@@ -998,6 +997,23 @@ double _number(Map<String, Object?> json, List<String> keys, double fallback) {
   return fallback;
 }
 
+double? _nullableNumber(Map<String, Object?> json, List<String> keys) {
+  for (final String key in keys) {
+    final Object? raw = json[key];
+    if (raw == null) {
+      continue;
+    }
+    if (raw is num) {
+      return raw.toDouble();
+    }
+    final double? parsed = double.tryParse(raw.toString());
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
 int _integer(Map<String, Object?> json, List<String> keys, int fallback) {
   for (final String key in keys) {
     final Object? raw = json[key];
@@ -1036,6 +1052,26 @@ bool _boolean(Map<String, Object?> json, List<String> keys, bool fallback) {
     }
   }
   return fallback;
+}
+
+bool? _nullableBoolean(Map<String, Object?> json, List<String> keys) {
+  for (final String key in keys) {
+    final Object? raw = json[key];
+    if (raw == null) {
+      continue;
+    }
+    if (raw is bool) {
+      return raw;
+    }
+    final String normalized = raw.toString().toLowerCase().trim();
+    if (<String>{'true', '1', 'yes'}.contains(normalized)) {
+      return true;
+    }
+    if (<String>{'false', '0', 'no'}.contains(normalized)) {
+      return false;
+    }
+  }
+  return null;
 }
 
 DateTime _dateTime(

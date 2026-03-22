@@ -6,10 +6,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.fast_cups.models.domain import FastCupDivision, FastCupEntrant
-from backend.app.fast_cups.repositories.database import FastCupRecord
-from backend.app.fast_cups.services.ecosystem import build_fast_cup_ecosystem_for_session
-from backend.app.models.base import Base
+from app.fast_cups.models.domain import FastCupDivision, FastCupEntrant
+from app.fast_cups.repositories.database import FastCupRecord
+from app.fast_cups.services.ecosystem import build_fast_cup_ecosystem_for_session
+from app.models.base import Base
 
 
 def test_fast_cup_ecosystem_persists_generated_cups_and_registrations() -> None:

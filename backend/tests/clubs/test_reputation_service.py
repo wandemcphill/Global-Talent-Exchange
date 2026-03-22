@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from backend.app.schemas.club_requests import ClubCreateRequest
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_reputation_event_service import ClubReputationEventService
-from backend.app.services.club_reputation_service import ClubReputationService
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_reputation_event_service import ClubReputationEventService
+from app.services.club_reputation_service import ClubReputationService
 
 
 def _create_club(session) -> str:

@@ -1,1 +1,1 @@
-from backend.app.ingestion.schemas import *  # noqa: F401,F403
+from app.ingestion.schemas import *  # noqa: F401,F403

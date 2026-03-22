@@ -1,6 +1,6 @@
-from backend.app.leagues.router import router
-from backend.app.leagues.competition_engine import LeagueCompetitionEngineService
-from backend.app.leagues.service import (
+from app.leagues.router import router
+from app.leagues.competition_engine import LeagueCompetitionEngineService
+from app.leagues.service import (
     LeagueSeasonLifecycleService,
     LeagueSeasonNotFoundError,
     LeagueValidationError,

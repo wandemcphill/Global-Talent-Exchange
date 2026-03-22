@@ -5,9 +5,9 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.qualification_status import QualificationStatus
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.qualification_status import QualificationStatus
 
 
 class AcademyValidationError(ValueError):

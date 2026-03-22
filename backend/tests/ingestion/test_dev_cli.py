@@ -7,15 +7,15 @@ import sys
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.matching.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-import backend.app.players.read_models  # noqa: F401
-import backend.app.value_engine.read_models  # noqa: F401
-from backend.app.ingestion.demo_bootstrap import DEFAULT_DEMO_PASSWORD
-from backend.app.ingestion.dev_cli import (
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.matching.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+import app.players.read_models  # noqa: F401
+import app.value_engine.read_models  # noqa: F401
+from app.ingestion.demo_bootstrap import DEFAULT_DEMO_PASSWORD
+from app.ingestion.dev_cli import (
     bootstrap_demo_database,
     build_parser,
     migrate_database,
@@ -28,12 +28,12 @@ from backend.app.ingestion.dev_cli import (
     run_simulation_ticks_database,
     seed_demo_liquidity_database,
 )
-from backend.app.ingestion.models import Player
-from backend.app.matching.models import TradeExecution
-from backend.app.models.user import User
-from backend.app.models.wallet import PaymentEvent
-from backend.app.orders.models import Order
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.ingestion.models import Player
+from app.matching.models import TradeExecution
+from app.models.user import User
+from app.models.wallet import PaymentEvent
+from app.orders.models import Order
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 def test_reset_local_database_removes_sqlite_database_and_sidecars(tmp_path: Path) -> None:

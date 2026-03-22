@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.champions_league.models.domain import (
+from app.champions_league.models.domain import (
     AdvancementStatus,
     ChampionsLeagueValidationError,
     ClubCandidate,

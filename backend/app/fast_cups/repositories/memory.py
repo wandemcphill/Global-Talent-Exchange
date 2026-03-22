@@ -4,8 +4,8 @@ from dataclasses import replace
 from datetime import datetime
 from threading import RLock
 
-from backend.app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupNotFoundError
-from backend.app.fast_cups.repositories.base import FastCupRepository
+from app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupNotFoundError
+from app.fast_cups.repositories.base import FastCupRepository
 
 
 class InMemoryFastCupRepository(FastCupRepository):

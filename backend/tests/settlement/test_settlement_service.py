@@ -7,20 +7,20 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.ledger.models  # noqa: F401
-import backend.app.models  # noqa: F401
-import backend.app.orders.models  # noqa: F401
-from backend.app.auth.service import AuthService
-from backend.app.ingestion.models import Player
-from backend.app.models.base import Base
-from backend.app.models.user import User
-from backend.app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.orders.service import OrderService
-from backend.app.risk.service import DuplicateSettlementError
-from backend.app.settlement.service import SettlementService
-from backend.app.wallets.service import LedgerPosting, WalletService
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+from app.auth.service import AuthService
+from app.ingestion.models import Player
+from app.models.base import Base
+from app.models.user import User
+from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.orders.service import OrderService
+from app.risk.service import DuplicateSettlementError
+from app.settlement.service import SettlementService
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
@@ -61,8 +61,8 @@ def _create_player(session, *, provider_external_id: str = "settlement-player") 
 
 def _fund_user(session, user: User, *, amount: Decimal) -> None:
     wallet_service = WalletService()
-    user_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
     wallet_service.append_transaction(
         session,
         postings=[
@@ -109,7 +109,7 @@ def test_successful_settlement_path(session) -> None:
     session.refresh(order)
 
     wallet_service = WalletService()
-    wallet_summary = wallet_service.get_wallet_summary(session, user)
+    wallet_summary = wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
 
     assert order.status is OrderStatus.FILLED
     assert wallet_summary.available_balance == Decimal("82.0000")

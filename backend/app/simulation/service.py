@@ -8,20 +8,20 @@ import random
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.auth.security import hash_password
-from backend.app.auth.service import AuthService
-from backend.app.core.events import EventPublisher, InMemoryEventPublisher
-from backend.app.ingestion.models import Player
-from backend.app.ledger.models import LedgerEventRecord
-from backend.app.market.service import MarketEngine
-from backend.app.matching.models import TradeExecution
-from backend.app.matching.service import MatchingService
-from backend.app.models.user import User, UserRole
-from backend.app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerUnit
-from backend.app.orders.models import Order, OrderSide, OrderStatus
-from backend.app.orders.service import OrderService
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.wallets.service import LedgerPosting, WalletService
+from app.auth.security import hash_password
+from app.auth.service import AuthService
+from app.core.events import EventPublisher, InMemoryEventPublisher
+from app.ingestion.models import Player
+from app.ledger.models import LedgerEventRecord
+from app.market.service import MarketEngine
+from app.matching.models import TradeExecution
+from app.matching.service import MatchingService
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.orders.models import Order, OrderSide, OrderStatus
+from app.orders.service import OrderService
+from app.players.read_models import PlayerSummaryReadModel
+from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 PRICE_QUANTUM = Decimal("1")
@@ -126,32 +126,32 @@ class SimulationTickSummary:
 
 SIMULATION_USER_SPECS: tuple[SimulationUserSpec, ...] = (
     SimulationUserSpec(
-        email="maker.alpha@demo.gte.local",
+        email="simulation.maker.alpha@gte.local",
         username="sim_maker_alpha",
         display_name="Simulation Maker Alpha",
     ),
     SimulationUserSpec(
-        email="maker.beta@demo.gte.local",
+        email="simulation.maker.beta@gte.local",
         username="sim_maker_beta",
         display_name="Simulation Maker Beta",
     ),
     SimulationUserSpec(
-        email="maker.gamma@demo.gte.local",
+        email="simulation.maker.gamma@gte.local",
         username="sim_maker_gamma",
         display_name="Simulation Maker Gamma",
     ),
     SimulationUserSpec(
-        email="taker.alpha@demo.gte.local",
+        email="simulation.taker.alpha@gte.local",
         username="sim_taker_alpha",
         display_name="Simulation Taker Alpha",
     ),
     SimulationUserSpec(
-        email="taker.beta@demo.gte.local",
+        email="simulation.taker.beta@gte.local",
         username="sim_taker_beta",
         display_name="Simulation Taker Beta",
     ),
     SimulationUserSpec(
-        email="taker.gamma@demo.gte.local",
+        email="simulation.taker.gamma@gte.local",
         username="sim_taker_gamma",
         display_name="Simulation Taker Gamma",
     ),
@@ -512,7 +512,7 @@ class DemoMarketSimulationService:
                 wallet_service.ensure_default_accounts(session, user)
                 session.flush()
 
-            self._rebalance_user_credit_wallet(
+            self._rebalance_user_wallets(
                 session,
                 wallet_service=wallet_service,
                 user=user,
@@ -559,7 +559,7 @@ class DemoMarketSimulationService:
             session.execute(delete(Order).where(Order.id.in_(order_ids)))
 
         for spec, user in zip(SIMULATION_USER_SPECS, simulation_users, strict=True):
-            self._rebalance_user_credit_wallet(
+            self._rebalance_user_wallets(
                 session,
                 wallet_service=wallet_service,
                 user=user,
@@ -701,7 +701,7 @@ class DemoMarketSimulationService:
             ask_levels += 1
         return bid_levels, ask_levels
 
-    def _rebalance_user_credit_wallet(
+    def _rebalance_user_wallets(
         self,
         session: Session,
         *,
@@ -710,22 +710,23 @@ class DemoMarketSimulationService:
         available_target: Decimal,
         escrow_target: Decimal,
     ) -> None:
-        available_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-        escrow_account = wallet_service.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
-        self._rebalance_account(
-            session,
-            account=available_account,
-            target_balance=available_target,
-            wallet_service=wallet_service,
-            actor=user,
-        )
-        self._rebalance_account(
-            session,
-            account=escrow_account,
-            target_balance=escrow_target,
-            wallet_service=wallet_service,
-            actor=user,
-        )
+        for unit in (LedgerUnit.COIN, LedgerUnit.CREDIT):
+            available_account = wallet_service.get_user_account(session, user, unit)
+            escrow_account = wallet_service.get_user_escrow_account(session, user, unit)
+            self._rebalance_account(
+                session,
+                account=available_account,
+                target_balance=available_target,
+                wallet_service=wallet_service,
+                actor=user,
+            )
+            self._rebalance_account(
+                session,
+                account=escrow_account,
+                target_balance=escrow_target,
+                wallet_service=wallet_service,
+                actor=user,
+            )
 
     def _rebalance_account(
         self,
@@ -748,6 +749,7 @@ class DemoMarketSimulationService:
                 LedgerPosting(account=platform_account, amount=-delta),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=f"simulation-rebalance-{account.code}",
             description="Simulation wallet rebalance",
             actor=actor,

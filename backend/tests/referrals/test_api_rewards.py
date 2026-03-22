@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_reward_api_surfaces_pending_and_approved_rewards_for_referrers_and_creators(referral_api) -> None:
-    app, client, users = referral_api
+    app, client, users, _session = referral_api
 
     app.state.current_user = users["creator"]
     client.post(

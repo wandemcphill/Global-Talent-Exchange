@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Boolean, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class CompetitionRuleSet(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -29,3 +29,8 @@ class CompetitionRuleSet(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     cup_extra_time: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     cup_penalties: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     cup_allowed_participant_sizes: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    group_stage_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    group_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    group_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    group_advance_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    knockout_bracket_size: Mapped[int | None] = mapped_column(Integer, nullable=True)

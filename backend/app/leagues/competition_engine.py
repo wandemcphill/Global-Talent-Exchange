@@ -4,17 +4,17 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.competition import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.competition import (
     CompetitionDispatchRequest,
     CompetitionEngineBatch,
     CompetitionScheduleRequest,
     ScheduledFixture,
 )
-from backend.app.competition_engine.match_dispatcher import MatchDispatcher
-from backend.app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
-from backend.app.leagues.models import LeagueFixture, LeagueSeasonState
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.scheduler import CompetitionScheduler, CompetitionWindowResolver
+from app.leagues.models import LeagueFixture, LeagueSeasonState
 
 
 @dataclass(slots=True)

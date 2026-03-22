@@ -5,19 +5,29 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.schemas.player_lifecycle import (
+from app.auth.dependencies import get_session
+from app.schemas.player_lifecycle import (
+    BigClubApproachRequest,
     CareerEntryView,
     ContractCreateRequest,
     ContractRenewRequest,
     ContractSummaryView,
     ContractView,
+    CurrencyConversionQuoteView,
     InjuryCaseView,
     InjuryCreateRequest,
     InjuryRecoveryRequest,
     PlayerAvailabilityView,
     PlayerCareerSummaryView,
     PlayerLifecycleEventView,
+    RegenBidEvaluationView,
+    RegenBidResolutionView,
+    RegenContractOfferMarketView,
+    RegenContractOfferQuoteRequest,
+    RegenLifecycleView,
+    RegenPressureResolutionRequest,
+    RegenSpecialTrainingRequest,
+    RegenTransferListingRequest,
     PlayerOverviewView,
     PlayerLifecycleSnapshotView,
     TransferBidAcceptRequest,
@@ -26,7 +36,7 @@ from backend.app.schemas.player_lifecycle import (
     TransferBidView,
     TransferWindowView,
 )
-from backend.app.services.player_lifecycle_service import (
+from app.services.player_lifecycle_service import (
     PlayerLifecycleNotFoundError,
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
@@ -269,5 +279,115 @@ def reject_transfer_bid(
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.reject_bid(window_id, bid_id, payload))
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.get("/api/players/{player_id}/regen", response_model=RegenLifecycleView | None)
+def get_player_regen_summary(
+    player_id: str,
+    as_of: date | None = Query(default=None),
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenLifecycleView | None:
+    try:
+        return service.get_regen_summary(player_id, on_date=as_of)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.get("/api/players/{player_id}/regen/offer-market", response_model=RegenContractOfferMarketView)
+def get_regen_offer_market(
+    player_id: str,
+    as_of: date | None = Query(default=None),
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenContractOfferMarketView:
+    try:
+        return service.get_regen_offer_market(player_id, on_date=as_of)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/players/{player_id}/regen/contract-offers/quote", response_model=CurrencyConversionQuoteView)
+def quote_regen_contract_offer(
+    player_id: str,
+    payload: RegenContractOfferQuoteRequest,
+    service: PlayerLifecycleService = Depends(_service),
+) -> CurrencyConversionQuoteView:
+    try:
+        return service.quote_regen_contract_offer(player_id, payload)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/players/{player_id}/regen/transfer-listing", response_model=RegenLifecycleView)
+def update_regen_transfer_listing(
+    player_id: str,
+    payload: RegenTransferListingRequest,
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenLifecycleView:
+    try:
+        return service.update_regen_transfer_listing(player_id, payload)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/players/{player_id}/regen/big-club-approaches", response_model=RegenLifecycleView)
+def record_big_club_approach(
+    player_id: str,
+    payload: BigClubApproachRequest,
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenLifecycleView:
+    try:
+        return service.record_big_club_approach(player_id, payload)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/players/{player_id}/regen/pressure-resolution", response_model=RegenLifecycleView)
+def apply_regen_pressure_resolution(
+    player_id: str,
+    payload: RegenPressureResolutionRequest,
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenLifecycleView:
+    try:
+        return service.apply_regen_pressure_resolution(player_id, payload)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/players/{player_id}/regen/special-training", response_model=RegenLifecycleView)
+def apply_regen_special_training(
+    player_id: str,
+    payload: RegenSpecialTrainingRequest,
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenLifecycleView:
+    try:
+        return service.apply_regen_special_training(player_id, payload)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.get("/api/transfers/windows/{window_id}/players/{player_id}/regen-bid-evaluations", response_model=tuple[RegenBidEvaluationView, ...])
+def get_regen_bid_evaluations(
+    window_id: str,
+    player_id: str,
+    as_of: date | None = Query(default=None),
+    service: PlayerLifecycleService = Depends(_service),
+) -> tuple[RegenBidEvaluationView, ...]:
+    try:
+        return service.evaluate_regen_bids(window_id, player_id, reference_on=as_of)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/transfers/windows/{window_id}/players/{player_id}/resolve-regen-bid", response_model=RegenBidResolutionView)
+def resolve_regen_bid(
+    window_id: str,
+    player_id: str,
+    as_of: date | None = Query(default=None),
+    service: PlayerLifecycleService = Depends(_service),
+) -> RegenBidResolutionView:
+    try:
+        return service.resolve_regen_bid(window_id, player_id, reference_on=as_of)
     except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
         _raise_for_lifecycle_error(exc)

@@ -5,8 +5,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.app.models.user import KycStatus, UserRole
-from backend.app.users.schemas import UserPublic
+from app.models.user import KycStatus, UserRole
+from app.users.schemas import UserPublic
 
 PROTECTED_PROFILE_FIELDS = frozenset(
     {
@@ -16,6 +16,9 @@ PROTECTED_PROFILE_FIELDS = frozenset(
         "is_active",
         "kyc_status",
         "last_login_at",
+        "full_name",
+        "phone_number",
+        "age_confirmed_at",
         "password",
         "password_hash",
         "role",
@@ -27,9 +30,12 @@ PROTECTED_PROFILE_FIELDS = frozenset(
 
 class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=320)
-    username: str = Field(min_length=3, max_length=64)
+    full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    phone_number: str | None = Field(default=None, min_length=6, max_length=32)
+    is_over_18: bool = Field(default=True)
+    region_code: str = Field(min_length=2, max_length=8)
+    username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
-    display_name: str | None = Field(default=None, max_length=120)
 
     @field_validator("email")
     @classmethod
@@ -43,19 +49,38 @@ class RegisterRequest(BaseModel):
 
     @field_validator("username")
     @classmethod
-    def normalize_username(cls, value: str) -> str:
+    def normalize_username(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         candidate = value.strip().lower()
         if not candidate:
-            raise ValueError("Username is required.")
+            return None
         return candidate
 
-    @field_validator("display_name")
+    @field_validator("full_name")
     @classmethod
-    def normalize_display_name(cls, value: str | None) -> str | None:
+    def normalize_full_name(cls, value: str | None) -> str | None:
         if value is None:
             return None
         candidate = value.strip()
         return candidate or None
+
+    @field_validator("phone_number")
+    @classmethod
+    def normalize_phone_number(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
+
+    @field_validator("region_code")
+    @classmethod
+    def normalize_region_code(cls, value: str) -> str:
+        candidate = value.strip().upper()
+        if not candidate:
+            raise ValueError("Region code is required.")
+        return candidate
+
 
 
 class LoginRequest(BaseModel):
@@ -101,10 +126,14 @@ class CurrentUserResponse(BaseModel):
     id: str
     email: str
     username: str
+    full_name: str | None
+    phone_number: str | None
+    age_confirmed_at: datetime | None
     display_name: str | None
     avatar_url: str | None
     favourite_club: str | None
     nationality: str | None
+    region_code: str | None = None
     preferred_position: str | None
     role: UserRole
     kyc_status: KycStatus

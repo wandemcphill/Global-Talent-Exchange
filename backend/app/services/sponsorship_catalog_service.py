@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.schemas.sponsorship_core import ClubSponsorshipPackageView
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.schemas.sponsorship_core import ClubSponsorshipPackageView
 
 
 class SponsorshipCatalogService:

@@ -10,9 +10,9 @@ from typing import Any, Sequence
 
 from sqlalchemy.engine.url import make_url
 
-from backend.app.core.config import DEFAULT_DATABASE_URL, PROJECT_ROOT
-from backend.app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
-from backend.app.ingestion.demo_bootstrap import (
+from app.core.config import DEFAULT_DATABASE_URL, PROJECT_ROOT
+from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
+from app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_BATCH_SIZE,
     DEFAULT_DEMO_PASSWORD,
     DEFAULT_DEMO_PLAYER_COUNT,
@@ -21,7 +21,7 @@ from backend.app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_SIGNAL_PROVIDER,
     seed_demo_data,
 )
-from backend.app.simulation.service import (
+from app.simulation.service import (
     DEFAULT_ILLIQUID_PLAYER_COUNT,
     DEFAULT_LIQUID_PLAYER_COUNT,
     DEFAULT_TICK_COUNT,
@@ -38,7 +38,7 @@ DEV_CLI_EPILOG = """Common local demo flows:
     python backend/scripts/dev.py rebuild-demo-market --seed 20260311
     python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
 
-  Refresh exchange activity without rebuilding demo users/players:
+  Refresh exchange activity without rebuilding the seeded player universe:
     python backend/scripts/dev.py seed-demo-liquidity --seed 20260311
     python backend/scripts/dev.py simulation-ticks --count 5 --start-tick 1 --seed 20260311
 """
@@ -236,9 +236,9 @@ def run_backend_server(
     database_url: str,
 ) -> int:
     app_target = (
-        "backend.app.simulation.app_factory:create_demo_simulation_app"
+        "app.simulation.app_factory:create_demo_simulation_app"
         if demo_simulation
-        else "backend.app.main:app"
+        else "app.main:app"
     )
     command = [
         sys.executable,
@@ -307,7 +307,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     seed_parser = subparsers.add_parser(
         "seed-demo",
-        help="Seed demo users, wallets, holdings, and a sample player subset.",
+        help="Seed synthetic local QA users, holdings, and a sample player subset.",
         description="Seed the core demo dataset without resetting the database first.",
         formatter_class=_HelpFormatter,
     )
@@ -315,8 +315,8 @@ def build_parser() -> argparse.ArgumentParser:
     seed_parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
     seed_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
     seed_parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    seed_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local demo users for login flows.")
-    seed_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo users, players, holdings, and liquidity.")
+    seed_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic QA users for login flows.")
+    seed_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable seeded users, players, holdings, and liquidity.")
     seed_parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
     seed_parser.add_argument("--with-liquidity", action=argparse.BooleanOptionalAction, default=False, help="Also seed deterministic exchange-side liquidity and trade history.")
     seed_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
@@ -325,14 +325,14 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap_parser = subparsers.add_parser(
         "bootstrap-demo",
         help="Reset the local SQLite database, migrate to head, and seed the demo dataset.",
-        description="Cleanly rebuild the local SQLite database and seed demo users, players, and holdings.",
+        description="Cleanly rebuild the local SQLite database and seed synthetic QA users, players, and holdings.",
         formatter_class=_HelpFormatter,
     )
     bootstrap_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
     bootstrap_parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
     bootstrap_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
     bootstrap_parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    bootstrap_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local demo users for login flows.")
+    bootstrap_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic QA users for login flows.")
     bootstrap_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo data.")
     bootstrap_parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
     bootstrap_parser.add_argument("--reset-db", action=argparse.BooleanOptionalAction, default=True, help="Delete the SQLite database file before migrating and seeding.")
@@ -378,7 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     rebuild_parser = subparsers.add_parser(
         "rebuild-demo-market",
-        help="Reset the local demo database, seed demo users/players/holdings, and add demo liquidity.",
+        help="Reset the local demo database, seed synthetic QA users/players/holdings, and add demo liquidity.",
         description="One-command rebuild for the local fake market used by frontend demos and QA.",
         formatter_class=_HelpFormatter,
     )
@@ -386,7 +386,7 @@ def build_parser() -> argparse.ArgumentParser:
     rebuild_parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
     rebuild_parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
     rebuild_parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    rebuild_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local demo users for login flows.")
+    rebuild_parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic QA users for login flows.")
     rebuild_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo data and liquidity.")
     rebuild_parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
     rebuild_parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
@@ -403,7 +403,7 @@ def build_parser() -> argparse.ArgumentParser:
     runserver_parser.add_argument("--port", type=int, default=8000, help="Port to bind.")
     runserver_parser.add_argument("--reload", action=argparse.BooleanOptionalAction, default=True, help="Enable uvicorn autoreload for local development.")
     runserver_parser.add_argument("--demo-simulation", action=argparse.BooleanOptionalAction, default=False, help="Use the demo simulation app factory so the in-memory market engine replays seeded data on boot.")
-    runserver_parser.add_argument("--demo-bootstrap", action=argparse.BooleanOptionalAction, default=False, help="Seed demo users, wallets, holdings, and players during app startup before replaying the market.")
+    runserver_parser.add_argument("--demo-bootstrap", action=argparse.BooleanOptionalAction, default=False, help="Seed synthetic QA users, wallets, holdings, and players during app startup before replaying the market.")
     runserver_parser.add_argument("--demo-seed-liquidity-on-boot", action=argparse.BooleanOptionalAction, default=False, help="Refresh exchange-side liquidity on app boot instead of only replaying the database state.")
     runserver_parser.add_argument("--demo-player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Player count used only when --demo-bootstrap is enabled.")
     runserver_parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed used for demo bootstrap and simulation replay settings.")

@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from backend.app.auth.dependencies import get_current_admin
-from backend.app.models.user import User
-from backend.app.schemas.club_ops_admin import ClubOpsSummaryView
-from backend.app.schemas.club_ops_analytics import (
+from app.auth.dependencies import get_current_admin
+from app.models.user import User
+from app.schemas.club_ops_admin import ClubOpsSummaryView
+from app.schemas.club_ops_analytics import (
     ClubAcademyAnalyticsView,
     ClubFinanceAnalyticsView,
     ClubScoutingAnalyticsView,
     ClubSponsorshipAnalyticsView,
 )
-from backend.app.services.club_ops_admin_service import ClubOpsAdminService, get_club_ops_admin_service
-from backend.app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
+from app.services.club_ops_admin_service import ClubOpsAdminService, get_club_ops_admin_service
+from app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
 
 router = APIRouter(prefix="/api/admin/clubs", tags=["admin-club-ops"])
 

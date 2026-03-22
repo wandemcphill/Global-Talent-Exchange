@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 
 class YouthPipelineSnapshot(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):

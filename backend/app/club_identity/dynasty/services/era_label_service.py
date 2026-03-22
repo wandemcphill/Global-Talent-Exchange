@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.club_identity.models.dynasty_models import (
+from app.club_identity.models.dynasty_models import (
     DynastyAssessment,
     DynastyStatus,
     DynastyWindowMetrics,

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.common.enums.competition_format import CompetitionFormat
-from backend.app.models.competition import Competition
-from backend.app.models.competition_prize_rule import CompetitionPrizeRule
-from backend.app.models.competition_rule_set import CompetitionRuleSet
-from backend.app.models.competition_wallet_ledger import CompetitionWalletLedger
-from backend.app.models.base import generate_uuid
-from backend.app.schemas.competition_core import CompetitionCreateRequest
-from backend.app.services.competition_rules_engine import CompetitionRulesEngine
-from backend.app.services.competition_validation_service import CompetitionValidationService
+from app.common.enums.competition_format import CompetitionFormat
+from app.models.competition import Competition
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.base import generate_uuid
+from app.schemas.competition_core import CompetitionCreateRequest
+from app.services.competition_rules_engine import CompetitionRulesEngine
+from app.services.competition_validation_service import CompetitionValidationService
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +40,7 @@ class CompetitionCreationService:
             host_user_id=payload.core.host_user_id,
             name=payload.core.name,
             description=payload.core.description,
+            competition_type=payload.core.format.value,
             format=payload.core.format.value,
             visibility=payload.core.visibility.value,
             status=payload.core.status.value,
@@ -48,6 +49,7 @@ class CompetitionCreationService:
             currency=payload.financials.currency,
             entry_fee_minor=payload.financials.entry_fee_minor,
             platform_fee_bps=payload.financials.platform_fee_bps,
+            host_fee_bps=0,
             host_creation_fee_minor=payload.financials.host_creation_fee_minor,
             gross_pool_minor=validation.fee_summary.gross_pool_minor,
             net_prize_pool_minor=validation.fee_summary.net_prize_pool_minor,

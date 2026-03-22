@@ -6,15 +6,15 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.club_profile import ClubProfile
-from backend.app.models.club_showcase_snapshot import ClubShowcaseSnapshot
-from backend.app.models.club_trophy import ClubTrophy
-from backend.app.schemas.club_identity_core import ClubBrandingAssetCore
-from backend.app.schemas.club_responses import ClubShowcaseView
-from backend.app.schemas.club_trophy_core import ClubTrophyCore
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_dynasty_service import ClubDynastyService
-from backend.app.services.club_reputation_service import ClubReputationService
+from app.models.club_profile import ClubProfile
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_trophy import ClubTrophy
+from app.schemas.club_identity_core import ClubBrandingAssetCore
+from app.schemas.club_responses import ClubShowcaseView
+from app.schemas.club_trophy_core import ClubTrophyCore
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.club_reputation_service import ClubReputationService
 
 
 @dataclass(slots=True)

@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from backend.app.cache.redis_helpers import build_cache_backend
-from backend.app.core.jobs import BackgroundJobBackend, InlineJobBackend
-from backend.app.ingestion.constants import DEFAULT_PROVIDER_NAME
-from backend.app.ingestion.locks import IngestionLockManager, LockAcquisitionError
-from backend.app.ingestion.tasks import (
+from app.cache.redis_helpers import build_cache_backend
+from app.core.jobs import BackgroundJobBackend, InlineJobBackend
+from app.ingestion.constants import DEFAULT_PROVIDER_NAME
+from app.ingestion.locks import IngestionLockManager, LockAcquisitionError
+from app.ingestion.tasks import (
     run_bootstrap_sync,
     run_club_refresh,
     run_competition_refresh,
     run_incremental_sync,
     run_player_refresh,
 )
-from backend.app.models.base import utcnow
+from app.models.base import utcnow
 
 
 @dataclass(slots=True)

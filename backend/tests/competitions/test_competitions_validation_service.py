@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from backend.app.models.competition import Competition
-from backend.app.schemas.competition_core import CompetitionCreateRequest, CompetitionUpdateRequest
-from backend.app.services.competition_validation_service import (
+from app.models.competition import Competition
+from app.schemas.competition_core import CompetitionCreateRequest, CompetitionUpdateRequest
+from app.services.competition_validation_service import (
     CompetitionValidationError,
     CompetitionValidationService,
 )

@@ -4,10 +4,10 @@ from datetime import date, datetime
 
 from pydantic import Field, model_validator
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.common.enums.match_status import MatchStatus
-from backend.app.common.enums.replay_visibility import ReplayVisibility
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.fixture_window import FixtureWindow
+from app.common.enums.match_status import MatchStatus
+from app.common.enums.replay_visibility import ReplayVisibility
 
 from .base import CommonSchema
 

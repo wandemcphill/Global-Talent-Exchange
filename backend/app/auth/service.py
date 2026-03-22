@@ -5,12 +5,13 @@ import re
 from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
 
-from backend.app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
-from backend.app.admin_godmode.service import AdminGodModeService
-from backend.app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
-from backend.app.models.base import utcnow
-from backend.app.models.user import User, UserRole
-from backend.app.wallets.service import WalletService
+from app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
+from app.admin_godmode.service import AdminGodModeService
+from app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
+from app.models.base import generate_uuid, utcnow
+from app.models.user import User, UserRole
+from app.policies.service import PolicyService
+from app.wallets.service import WalletService
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
 PROFILE_MUTABLE_FIELDS = (
@@ -49,33 +50,53 @@ class AuthService:
         session: Session,
         *,
         email: str,
-        username: str,
+        full_name: str | None = None,
+        phone_number: str | None = None,
+        is_over_18: bool = True,
+        region_code: str | None = None,
+        username: str | None = None,
         password: str,
         display_name: str | None = None,
         role: UserRole = UserRole.USER,
     ) -> User:
         normalized_email = self._normalize_email(email)
-        normalized_username = self._normalize_username(username)
+        if not is_over_18:
+            raise AuthError("You must be at least 18 years old to sign up.")
+        normalized_username = self._normalize_username(username) if username else None
         self._validate_password(password)
 
-        existing_user = session.scalar(
-            select(User).where((User.email == normalized_email) | (User.username == normalized_username))
-        )
+        resolved_full_name = (full_name or display_name or normalized_username or normalized_email.split("@", 1)[0]).strip()
+        if not resolved_full_name:
+            raise AuthError("Full name is required.")
+        resolved_phone_number = (phone_number or "0000000000").strip()
+        if not resolved_phone_number:
+            resolved_phone_number = "0000000000"
+
+        existing_user = session.scalar(select(User).where(User.email == normalized_email))
         if existing_user is not None:
-            if existing_user.email == normalized_email:
-                raise DuplicateUserError("Email address is already registered.")
-            raise DuplicateUserError("Username is already taken.")
+            raise DuplicateUserError("Email address is already registered.")
+
+        if normalized_username is None:
+            normalized_username = self._generate_unique_username(session, resolved_full_name, normalized_email)
+        else:
+            existing_username = session.scalar(select(User).where(User.username == normalized_username))
+            if existing_username is not None:
+                raise DuplicateUserError("Username is already taken.")
 
         user = User(
             email=normalized_email,
             username=normalized_username,
-            display_name=display_name or normalized_username,
+            full_name=resolved_full_name,
+            phone_number=resolved_phone_number,
+            display_name=display_name or resolved_full_name or normalized_username,
             password_hash=hash_password(password),
             role=role,
+            age_confirmed_at=utcnow(),
         )
         session.add(user)
         session.flush()
         self.wallet_service.ensure_default_accounts(session, user)
+        PolicyService(session).ensure_user_region_profile(user=user, region_code=region_code)
         session.flush()
         return user
 
@@ -134,14 +155,19 @@ class AuthService:
 
     def get_current_user_profile(self, session: Session, user: User) -> CurrentUserResponse:
         profile_fields = self._get_profile_fields(session, user.id)
+        region_code = PolicyService(session).resolve_country_code_for_user(user=user)
         return CurrentUserResponse(
             id=user.id,
             email=user.email,
             username=user.username,
+            full_name=user.full_name,
+            phone_number=user.phone_number,
+            age_confirmed_at=user.age_confirmed_at,
             display_name=profile_fields["display_name"],
             avatar_url=profile_fields["avatar_url"],
             favourite_club=profile_fields["favourite_club"],
             nationality=profile_fields["nationality"],
+            region_code=region_code,
             preferred_position=profile_fields["preferred_position"],
             role=user.role,
             kyc_status=user.kyc_status,
@@ -202,6 +228,9 @@ class AuthService:
             return self.register_user(
                 session,
                 email=normalized_email,
+                full_name=display_name,
+                phone_number="0000000000",
+                is_over_18=True,
                 username=normalized_username,
                 password=password,
                 display_name=display_name,
@@ -215,6 +244,8 @@ class AuthService:
             existing_user.is_active = True
         if not existing_user.display_name:
             existing_user.display_name = display_name
+        if not existing_user.full_name:
+            existing_user.full_name = display_name
         session.flush()
         return existing_user
 
@@ -249,6 +280,23 @@ class AuthService:
         candidate = value.strip().lower()
         if not USERNAME_PATTERN.fullmatch(candidate):
             raise AuthError("Username may only contain letters, numbers, dots, hyphens, and underscores.")
+        return candidate
+
+    def _generate_unique_username(self, session: Session, full_name: str, email: str) -> str:
+        base = full_name.strip().lower()
+        if not base:
+            base = email.split("@", maxsplit=1)[0].strip().lower()
+        slug = re.sub(r"[^a-z0-9_.-]+", ".", base).strip(".-_")
+        if len(slug) < 3:
+            slug = f"user-{generate_uuid()[:8]}"
+        slug = slug[:56]
+        candidate = slug
+        suffix = 1
+        while session.scalar(select(User).where(User.username == candidate)) is not None:
+            candidate = f"{slug}-{suffix}"
+            suffix += 1
+            if len(candidate) > 64:
+                candidate = f"{slug[:56]}-{generate_uuid()[:6]}"
         return candidate
 
     @staticmethod

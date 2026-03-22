@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from backend.app.schemas.creator_core import CreatorProfileCore
-from backend.app.schemas.referral_core import ReferralValidationResult
-from backend.app.schemas.share_code_core import ShareCodeCore
+from app.schemas.creator_core import CreatorProfileCore
+from app.schemas.referral_core import ReferralValidationResult
+from app.schemas.share_code_core import ShareCodeCore
 
 
 @dataclass(slots=True)

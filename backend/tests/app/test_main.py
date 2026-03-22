@@ -8,17 +8,17 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, text
 
-from backend.app.auth.dependencies import get_session
-from backend.app.auth.router import register_user
-from backend.app.auth.schemas import RegisterRequest
-from backend.app.cache.redis_helpers import NullCacheBackend
-from backend.app.core.database import DatabaseRuntime, build_alembic_config
-from backend.app.ingestion.service import IngestionService
-from backend.app.main import create_app
-from backend.app.market.router import create_listing
-from backend.app.market.schemas import ListingCreate
-from backend.app.models.user import User
-from backend.app.wallets.router import list_wallet_accounts
+from app.auth.dependencies import get_session
+from app.auth.router import register_user
+from app.auth.schemas import RegisterRequest
+from app.cache.redis_helpers import NullCacheBackend
+from app.core.database import DatabaseRuntime, build_alembic_config
+from app.ingestion.service import IngestionService
+from app.main import create_app
+from app.market.router import create_listing
+from app.market.schemas import ListingCreate
+from app.models.user import User
+from app.wallets.router import list_wallet_accounts
 
 
 @pytest.fixture()
@@ -63,6 +63,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "match_engine" in app.state.domain_modules
         assert "canonical_clubs" in app.state.domain_modules
         assert "player_lifecycle" in app.state.domain_modules
+        assert "player_agency" in app.state.domain_modules
         assert "club_identity" in app.state.domain_modules
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules
@@ -104,6 +105,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/admin/config/supply-tiers" in paths
     assert "/admin/config/liquidity-bands" in paths
     assert "/admin/config/suspicion-thresholds" in paths
+    assert "/admin/config/player-card-market-integrity" in paths
     assert "/admin/config/value-controls" in paths
     assert "/wallets/accounts" in paths
     assert "/wallets/payment-events" in paths
@@ -159,7 +161,15 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/clubs/{club_id}/dynasty/history" in paths
     assert "/api/clubs/{club_id}/eras" in paths
     assert "/api/leaderboards/dynasties" in paths
+    assert "/api/clubs/{club_id}/trophy-cabinet" in paths
     assert "/api/clubs/{club_id}/identity" in paths
+    assert "/api/clubs/{club_id}/valuation" in paths
+    assert "/api/clubs/sale-market/listings" in paths
+    assert "/api/clubs/{club_id}/sale-market" in paths
+    assert "/api/clubs/{club_id}/sale-market/listing" in paths
+    assert "/api/clubs/{club_id}/sale-market/inquiries" in paths
+    assert "/api/clubs/{club_id}/sale-market/offers" in paths
+    assert "/api/clubs/{club_id}/sale-market/transfer" in paths
     assert "/api/clubs/{club_id}/jerseys" in paths
     assert "/api/clubs/{club_id}/badge" in paths
     assert "/api/creators/profile" in paths
@@ -174,6 +184,9 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/replays/public/featured" in paths
     assert "/api/replays/public/featured" in paths
     assert "/api/players/{player_id}/career" in paths
+    assert "/api/players/{player_id}/agency" in paths
+    assert "/api/players/{player_id}/agency/contract-decision" in paths
+    assert "/api/players/{player_id}/agency/transfer-decision" in paths
     assert "/api/players/{player_id}/contracts" in paths
     assert "/api/players/{player_id}/injuries" in paths
     assert "/api/transfers/windows" in paths

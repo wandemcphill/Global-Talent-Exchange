@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from backend.app.common.enums.fixture_window import FixtureWindow
-from backend.app.fast_cups.models.domain import FastCupDivision
-from backend.app.fast_cups.services.competition_engine import FastCupCompetitionEngineService
+from app.common.enums.fixture_window import FixtureWindow
+from app.fast_cups.models.domain import FastCupDivision
+from app.fast_cups.services.competition_engine import FastCupCompetitionEngineService
 
 
 def test_fast_cup_competition_engine_batches_simulated_bracket(select_cup, fill_cup, ecosystem, base_now) -> None:

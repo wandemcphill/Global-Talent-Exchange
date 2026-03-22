@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.schemas.club_ops_requests import CreateScoutAssignmentRequest
+from app.schemas.club_ops_requests import CreateScoutAssignmentRequest
 
 
 def test_scouting_service_generates_deterministic_prospects_and_spend(club_ops_services) -> None:

@@ -10,9 +10,10 @@ void main() {
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'demo-user',
-      currentUserName: 'Demo Fan',
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
     );
+    await controller.openCompetition('ugc-101');
 
     await tester.pumpWidget(
       MaterialApp(
@@ -25,6 +26,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Transparent financials'),
+      300,
+    );
     expect(find.text('Transparent financials'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Transparent payout'),

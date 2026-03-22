@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import distinct, func, select
 from sqlalchemy.orm import Session
 
-from backend.app.ingestion.models import Competition, Country, Season, TeamStanding
+from app.ingestion.models import Competition, Country, Season, TeamStanding
 
 
 @dataclass(slots=True)

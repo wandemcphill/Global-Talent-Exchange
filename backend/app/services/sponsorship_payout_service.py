@@ -5,9 +5,9 @@ from functools import lru_cache
 from math import ceil
 from uuid import uuid4
 
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.schemas.sponsorship_core import ClubSponsorshipContractView, ClubSponsorshipPayoutView
-from backend.app.services.club_finance_service import ClubFinanceService, get_club_finance_service
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.schemas.sponsorship_core import ClubSponsorshipContractView, ClubSponsorshipPayoutView
+from app.services.club_finance_service import ClubFinanceService, get_club_finance_service
 
 
 def _utcnow() -> datetime:

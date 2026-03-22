@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from backend.app.services.referral_orchestrator import (
+from app.services.referral_orchestrator import (
     AttributionRecord,
     ReferralActionError,
     ReferralStore,

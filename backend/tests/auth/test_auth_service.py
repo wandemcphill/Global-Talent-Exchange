@@ -5,10 +5,10 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.app.auth.schemas import CurrentUserUpdateRequest
-from backend.app.auth.security import decode_access_token, verify_password
-from backend.app.auth.service import AuthService, DuplicateUserError, InvalidCredentialsError
-from backend.app.models import Base, LedgerAccount, LedgerUnit
+from app.auth.schemas import CurrentUserUpdateRequest
+from app.auth.security import decode_access_token, verify_password
+from app.auth.service import AuthService, DuplicateUserError, InvalidCredentialsError
+from app.models import Base, LedgerAccount, LedgerUnit
 
 
 @pytest.fixture()

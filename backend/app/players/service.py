@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.ingestion.models import Match, Player, PlayerMatchStat, PlayerSeasonStat
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.value_engine.models import ValueSnapshot
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.ingestion.models import Match, Player, PlayerMatchStat, PlayerSeasonStat
+from app.players.read_models import PlayerSummaryReadModel
+from app.value_engine.models import ValueSnapshot
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 @dataclass(slots=True)
@@ -31,9 +31,9 @@ class PlayerSummaryProjector:
 
         latest_match_stat = self._latest_match_stat(player.match_stats)
         latest_season_stat = self._latest_season_stat(player.season_stats)
-        competition = None
+        competition = player.current_competition
         if latest_match_stat is not None and latest_match_stat.match is not None:
-            competition = latest_match_stat.match.competition
+            competition = latest_match_stat.match.competition or competition
 
         summary = session.get(PlayerSummaryReadModel, snapshot.player_id)
         if summary is None:
@@ -60,7 +60,8 @@ class PlayerSummaryProjector:
         summary.movement_pct = snapshot.movement_pct
         summary.average_rating = self._resolve_average_rating(latest_match_stat, latest_season_stat)
         summary.market_interest_score = int(round(sum(max(signal.score, 0.0) for signal in player.market_signals)))
-        summary.summary_json = {
+        summary_payload = dict(summary.summary_json) if isinstance(summary.summary_json, dict) else {}
+        summary_payload.update({
             "position": player.normalized_position or player.position,
             "drivers": list(snapshot.drivers),
             "reason_codes": list(snapshot.reason_codes),
@@ -103,7 +104,8 @@ class PlayerSummaryProjector:
                 if player.liquidity_band is not None
                 else None
             ),
-        }
+        })
+        summary.summary_json = summary_payload
         session.flush()
         return summary
 

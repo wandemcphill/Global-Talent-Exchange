@@ -5,8 +5,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.ledger.models import LedgerEventRecord, LedgerEventType
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.ledger.models import LedgerEventRecord, LedgerEventType
 
 
 @dataclass(slots=True)

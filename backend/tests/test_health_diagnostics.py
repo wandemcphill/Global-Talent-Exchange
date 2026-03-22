@@ -1,4 +1,4 @@
-from backend.app.main import create_app
+from app.main import create_app
 from fastapi.testclient import TestClient
 
 def test_diagnostics_endpoint_available() -> None:

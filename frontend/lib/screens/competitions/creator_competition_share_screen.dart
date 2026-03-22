@@ -150,7 +150,7 @@ class _CreatorCompetitionShareScreenState
       return;
     }
     final String message =
-        'Join creator competition "${share.competition.title}" with code ${share.shareCode}. Invite link: ${share.shareUrl}';
+        'Share creator competition "${share.competition.title}" with code ${share.shareCode}. Invite link: ${share.shareUrl}';
     await Clipboard.setData(ClipboardData(text: message));
     if (!mounted) {
       return;

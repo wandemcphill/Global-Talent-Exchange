@@ -12,19 +12,23 @@ class GteExchangeController extends ChangeNotifier {
   }) : _api = api;
 
   final GteExchangeApiClient _api;
+  GteExchangeApiClient get api => _api;
   final GteRequestGate _marketGate = GteRequestGate();
   final GteRequestGate _playerGate = GteRequestGate();
   final GteRequestGate _portfolioGate = GteRequestGate();
   final GteRequestGate _ordersGate = GteRequestGate();
   final GteRequestGate _authGate = GteRequestGate();
+  final GteRequestGate _complianceGate = GteRequestGate();
 
   Future<void>? _bootstrapFuture;
   Future<void>? _portfolioFuture;
   Future<void>? _ordersFuture;
+  Future<void>? _complianceFuture;
   DateTime? marketSyncedAt;
   DateTime? playerSyncedAt;
   DateTime? portfolioSyncedAt;
   DateTime? ordersSyncedAt;
+  DateTime? complianceSyncedAt;
 
   bool isBootstrapping = false;
   bool isLoadingMarket = false;
@@ -36,6 +40,7 @@ class GteExchangeController extends ChangeNotifier {
   bool isSubmittingOrder = false;
   bool isRefreshingOrder = false;
   bool isCancellingOrder = false;
+  bool isLoadingCompliance = false;
 
   String marketSearch = '';
   String selectedCandleInterval = '1h';
@@ -46,6 +51,7 @@ class GteExchangeController extends ChangeNotifier {
   String? portfolioError;
   String? ordersError;
   String? orderError;
+  String? complianceError;
 
   GteAuthSession? session;
   GteMarketPlayerListView? marketPage;
@@ -53,6 +59,8 @@ class GteExchangeController extends ChangeNotifier {
   GteWalletSummary? walletSummary;
   GtePortfolioView? portfolio;
   GtePortfolioSummary? portfolioSummary;
+  GteComplianceStatus? complianceStatus;
+  List<GtePolicyRequirementSummary> policyRequirements = const <GtePolicyRequirementSummary>[];
   int recentOrderTotal = 0;
   int openOrderTotal = 0;
 
@@ -65,6 +73,10 @@ class GteExchangeController extends ChangeNotifier {
       marketPage?.items ?? const <GteMarketPlayerListItem>[];
 
   bool get isAuthenticated => session != null;
+
+  bool get isAdmin => session?.user.role == 'admin';
+
+  String? get accessToken => session?.accessToken;
 
   bool get hasMorePlayers {
     if (marketPage == null) {
@@ -268,10 +280,53 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       session = nextSession;
-      await _refreshTradingState(
-        playerId: selectedPlayer?.detail.playerId,
-        refreshPlayer: selectedPlayer != null,
+      await Future.wait<void>(<Future<void>>[
+        _refreshTradingState(
+          playerId: selectedPlayer?.detail.playerId,
+          refreshPlayer: selectedPlayer != null,
+        ),
+        refreshCompliance(),
+      ]);
+    } catch (error) {
+      if (_authGate.isActive(requestId)) {
+        authError = AppFeedback.messageFor(error);
+      }
+    } finally {
+      if (_authGate.isActive(requestId)) {
+        isSigningIn = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> register({
+    required String fullName,
+    required String phoneNumber,
+    required String email,
+    required String password,
+    required bool isOver18,
+    String? username,
+  }) async {
+    final int requestId = _authGate.begin();
+    authError = null;
+    isSigningIn = true;
+    notifyListeners();
+
+    try {
+      final GteAuthSession nextSession = await _api.register(
+        fullName: fullName,
+        phoneNumber: phoneNumber,
+        email: email,
+        password: password,
+        isOver18: isOver18,
+        username: username,
       );
+      if (!_authGate.isActive(requestId)) {
+        return;
+      }
+      session = nextSession;
+      authError = null;
+      await refreshAccount();
     } catch (error) {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
@@ -290,10 +345,13 @@ class GteExchangeController extends ChangeNotifier {
     walletSummary = null;
     portfolio = null;
     portfolioSummary = null;
+    complianceStatus = null;
+    policyRequirements = const <GtePolicyRequirementSummary>[];
     authError = null;
     portfolioError = null;
     ordersError = null;
     orderError = null;
+    complianceError = null;
     recentOrderTotal = 0;
     openOrderTotal = 0;
     _recentOrderIds.clear();
@@ -307,6 +365,7 @@ class GteExchangeController extends ChangeNotifier {
     playerSyncedAt = null;
     portfolioSyncedAt = null;
     ordersSyncedAt = null;
+    complianceSyncedAt = null;
     notifyListeners();
   }
 
@@ -314,7 +373,53 @@ class GteExchangeController extends ChangeNotifier {
     if (!isAuthenticated) {
       return;
     }
-    await _refreshTradingState();
+    await Future.wait<void>(<Future<void>>[
+      _refreshTradingState(),
+      refreshCompliance(),
+    ]);
+  }
+
+  Future<void> refreshCompliance() {
+    if (!isAuthenticated) {
+      return Future<void>.value();
+    }
+    if (_complianceFuture != null) {
+      return _complianceFuture!;
+    }
+    final int requestId = _complianceGate.begin();
+    complianceError = null;
+    isLoadingCompliance = true;
+    notifyListeners();
+
+    final Future<void> task = () async {
+      try {
+        final List<dynamic> payload =
+            await Future.wait<dynamic>(<Future<dynamic>>[
+          _api.fetchComplianceStatus(),
+          _api.fetchPolicyRequirements(),
+        ]);
+        if (!_complianceGate.isActive(requestId)) {
+          return;
+        }
+        complianceStatus = payload[0] as GteComplianceStatus;
+        policyRequirements =
+            payload[1] as List<GtePolicyRequirementSummary>;
+        complianceSyncedAt = DateTime.now().toUtc();
+      } catch (error) {
+        if (_complianceGate.isActive(requestId)) {
+          complianceError = AppFeedback.messageFor(error);
+        }
+      } finally {
+        if (_complianceGate.isActive(requestId)) {
+          isLoadingCompliance = false;
+          notifyListeners();
+        }
+        _complianceFuture = null;
+      }
+    }();
+
+    _complianceFuture = task;
+    return task;
   }
 
   Future<void> loadPortfolio() {

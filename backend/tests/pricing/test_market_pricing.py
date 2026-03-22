@@ -9,18 +9,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.ingestion.models  # noqa: F401
-import backend.app.market.read_models  # noqa: F401
-import backend.app.players.read_models  # noqa: F401
-import backend.app.value_engine.read_models  # noqa: F401
-from backend.app.auth.dependencies import get_session
-from backend.app.ingestion.models import Player
-from backend.app.market.projections import MarketSummaryProjector
-from backend.app.market.router import router
-from backend.app.market.service import MarketEngine
-from backend.app.models.base import Base
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+import app.ingestion.models  # noqa: F401
+import app.market.read_models  # noqa: F401
+import app.players.read_models  # noqa: F401
+import app.value_engine.read_models  # noqa: F401
+from app.auth.dependencies import get_session
+from app.ingestion.models import Player
+from app.market.projections import MarketSummaryProjector
+from app.market.router import router
+from app.market.service import MarketEngine
+from app.models.base import Base
+from app.players.read_models import PlayerSummaryReadModel
+from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 @pytest.fixture()

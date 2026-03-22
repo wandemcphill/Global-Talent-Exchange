@@ -6,11 +6,11 @@ from functools import lru_cache
 from hashlib import sha256
 from uuid import uuid4
 
-from backend.app.common.enums.scout_assignment_status import ScoutAssignmentStatus
-from backend.app.common.enums.scouting_region_type import ScoutingRegionType
-from backend.app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
-from backend.app.schemas.club_ops_requests import CreateScoutAssignmentRequest
-from backend.app.schemas.scouting_core import ScoutAssignmentView, ScoutingRegionView
+from app.common.enums.scout_assignment_status import ScoutAssignmentStatus
+from app.common.enums.scouting_region_type import ScoutingRegionType
+from app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
+from app.schemas.club_ops_requests import CreateScoutAssignmentRequest
+from app.schemas.scouting_core import ScoutAssignmentView, ScoutingRegionView
 
 _FIRST_NAMES = ("Ayo", "Luka", "Noah", "Tobi", "Leo", "Kofi", "Musa", "Zane")
 _LAST_NAMES = ("Mensah", "Okafor", "Kane", "Diallo", "Silva", "Bello", "Costa", "Adeyemi")

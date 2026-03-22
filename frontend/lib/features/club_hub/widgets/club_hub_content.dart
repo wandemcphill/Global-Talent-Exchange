@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_controller.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/widgets/club_hub_components.dart';
 import 'package:gte_frontend/features/club_hub/widgets/club_hub_header_card.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
@@ -8,6 +10,7 @@ import 'package:gte_frontend/features/club_identity/jerseys/widgets/identity_col
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/club_catalog_models.dart';
 import 'package:gte_frontend/models/club_models.dart';
 import 'package:gte_frontend/widgets/clubs/featured_trophy_card.dart';
@@ -32,6 +35,7 @@ class ClubHubContent extends StatelessWidget {
     required this.onOpenEraHistory,
     required this.onOpenPurchaseHistory,
     this.onOpenLogin,
+    this.navigationDependencies,
   });
 
   final ClubController controller;
@@ -47,9 +51,15 @@ class ClubHubContent extends StatelessWidget {
   final VoidCallback onOpenDynasty;
   final VoidCallback onOpenEraHistory;
   final VoidCallback onOpenPurchaseHistory;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
   Widget build(BuildContext context) {
+    final bool canOpenOwnerOffers =
+        isAuthenticated && navigationDependencies?.currentClubId == data.clubId;
+    final String ownerOffersMessage = !isAuthenticated
+        ? 'Sign in with the club owner account before opening the owner offer inbox.'
+        : 'Switch into this club owner workspace before opening the owner offer inbox.';
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -117,6 +127,42 @@ class ClubHubContent extends StatelessWidget {
           selectedTab: selectedTab,
           onSelected: onTabSelected,
         ),
+        if (navigationDependencies != null) ...<Widget>[
+          const SizedBox(height: 18),
+          _ClubRoutePanel(
+            onOpenCreatorStadium: () => _openFeatureRoute(
+              context,
+              CreatorStadiumClubRouteData(
+                clubId: data.clubId,
+                clubName: data.clubName,
+              ),
+            ),
+            onOpenClubSaleDetail: () => _openFeatureRoute(
+              context,
+              ClubSaleMarketDetailRouteData(
+                clubId: data.clubId,
+                clubName: data.clubName,
+              ),
+            ),
+            onOpenOwnerOffers: canOpenOwnerOffers
+                ? () => _openFeatureRoute(
+                      context,
+                      ClubSaleMarketOwnerOffersRouteData(
+                        clubId: data.clubId,
+                        clubName: data.clubName,
+                      ),
+                    )
+                : null,
+            ownerOffersMessage: ownerOffersMessage,
+            onOpenWorldContext: () => _openFeatureRoute(
+              context,
+              WorldClubContextRouteData(
+                clubId: data.clubId,
+                clubName: data.clubName,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 18),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
@@ -145,6 +191,21 @@ class ClubHubContent extends StatelessWidget {
       case ClubNavigationTab.history:
         return _buildHistoryTab(context);
     }
+  }
+
+  Future<void> _openFeatureRoute(
+    BuildContext context,
+    GteAppRouteData route,
+  ) {
+    final GteNavigationDependencies? dependencies = navigationDependencies;
+    if (dependencies == null) {
+      return Future<void>.value();
+    }
+    return GteNavigationHelpers.pushRoute<void>(
+      context,
+      route: route,
+      dependencies: dependencies,
+    );
   }
 
   Widget _buildSquadTab(BuildContext context) {
@@ -532,7 +593,7 @@ class ClubHubContent extends StatelessWidget {
   Widget _buildTrophiesTab(BuildContext context) {
     final trophyCabinet = data.trophyCabinet;
     if (trophyCabinet.isEmpty) {
-      return const Padding(
+      return Padding(
         key: ValueKey<String>('club-tab-trophies'),
         padding: EdgeInsets.zero,
         child: GteStatePanel(
@@ -540,6 +601,8 @@ class ClubHubContent extends StatelessWidget {
           message:
               'The shell is ready for the first breakthrough. Honors, timelines, and dynasty pressure will populate here as results land.',
           icon: Icons.auto_awesome_outlined,
+          actionLabel: 'View trophies',
+          onAction: onOpenTrophies,
         ),
       );
     }
@@ -606,30 +669,30 @@ class ClubHubContent extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               ...trophyCabinet.summaryOutputs.take(3).map(
-                (String summary) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Icon(
-                          Icons.emoji_events_outlined,
-                          size: 16,
-                          color: GteShellTheme.accentWarm,
-                        ),
+                    (String summary) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: Icon(
+                              Icons.emoji_events_outlined,
+                              size: 16,
+                              color: GteShellTheme.accentWarm,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              summary,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          summary,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
             ],
           ),
         ),
@@ -731,30 +794,30 @@ class ClubHubContent extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               ...profile.reasons.take(3).map(
-                (String reason) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Icon(
-                          Icons.timeline_outlined,
-                          size: 16,
-                          color: GteShellTheme.accent,
-                        ),
+                    (String reason) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: Icon(
+                              Icons.timeline_outlined,
+                              size: 16,
+                              color: GteShellTheme.accent,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              reason,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          reason,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
             ],
           ),
         ),
@@ -917,34 +980,34 @@ class ClubHubContent extends StatelessWidget {
   ) {
     final List<ClubHistoryEntry> entries = <ClubHistoryEntry>[
       ...value.reputation.recentEvents.take(3).map(
-        (ReputationEventDto event) => ClubHistoryEntry(
-          title: event.title,
-          subtitle: '${event.category.label} | ${event.description}',
-          when: event.occurredAt,
-          whenLabel: event.seasonLabel,
-          icon: event.category.icon,
-        ),
-      ),
+            (ReputationEventDto event) => ClubHistoryEntry(
+              title: event.title,
+              subtitle: '${event.category.label} | ${event.description}',
+              when: event.occurredAt,
+              whenLabel: event.seasonLabel,
+              icon: event.category.icon,
+            ),
+          ),
       ...value.trophyCabinet.recentHonors.take(3).map(
-        (TrophyItemDto honor) => ClubHistoryEntry(
-          title: honor.trophyName,
-          subtitle:
-              '${honor.seasonLabel} | ${honor.competitionRegion} | ${honor.finalResultSummary}',
-          when: honor.earnedAt,
-          whenLabel: honor.seasonLabel,
-          icon: Icons.emoji_events_outlined,
-        ),
-      ),
+            (TrophyItemDto honor) => ClubHistoryEntry(
+              title: honor.trophyName,
+              subtitle:
+                  '${honor.seasonLabel} | ${honor.competitionRegion} | ${honor.finalResultSummary}',
+              when: honor.earnedAt,
+              whenLabel: honor.seasonLabel,
+              icon: Icons.emoji_events_outlined,
+            ),
+          ),
       ...controller.purchaseHistory.take(2).map(
-        (ClubPurchaseRecord record) => ClubHistoryEntry(
-          title: record.itemTitle,
-          subtitle: '${record.category} | ${record.statusLabel}',
-          when: record.purchasedAt,
-          whenLabel: MaterialLocalizations.of(context)
-              .formatShortDate(record.purchasedAt),
-          icon: Icons.receipt_long_outlined,
-        ),
-      ),
+            (ClubPurchaseRecord record) => ClubHistoryEntry(
+              title: record.itemTitle,
+              subtitle: '${record.category} | ${record.statusLabel}',
+              when: record.purchasedAt,
+              whenLabel: MaterialLocalizations.of(context)
+                  .formatShortDate(record.purchasedAt),
+              icon: Icons.receipt_long_outlined,
+            ),
+          ),
     ];
 
     entries.sort((ClubHistoryEntry left, ClubHistoryEntry right) {
@@ -958,11 +1021,13 @@ class ClubHubContent extends StatelessWidget {
     if (value.dynastyProfile.activeDynastyFlag) {
       return const TacticsBlueprint(
         shape: '4-2-3-1',
-        shapeDetail: 'Keeps the badge balanced while still pressing for control.',
+        shapeDetail:
+            'Keeps the badge balanced while still pressing for control.',
         pressLine: 'Front-foot press',
         pressDetail: 'The club sets traps high and squeezes exits immediately.',
         tempo: 'Quick circulation',
-        tempoDetail: 'Possession moves fast enough to pin elite opponents back.',
+        tempoDetail:
+            'Possession moves fast enough to pin elite opponents back.',
         width: 'Wide overloads',
         widthDetail: 'Full width creates isolation for top-end finishers.',
         tags: <String>['Era protection', 'Control', 'Pressure'],
@@ -976,13 +1041,16 @@ class ClubHubContent extends StatelessWidget {
     if (tier.index >= PrestigeTier.elite.index) {
       return const TacticsBlueprint(
         shape: '4-3-3',
-        shapeDetail: 'A flexible triangle through midfield keeps the game vertical.',
+        shapeDetail:
+            'A flexible triangle through midfield keeps the game vertical.',
         pressLine: 'Counter press',
-        pressDetail: 'The first five seconds after turnovers are the main trigger.',
+        pressDetail:
+            'The first five seconds after turnovers are the main trigger.',
         tempo: 'Balanced vertical',
         tempoDetail: 'The club can settle but still attacks space early.',
         width: 'Touchline discipline',
-        widthDetail: 'Wingers stay honest to stretch the line before cutting in.',
+        widthDetail:
+            'Wingers stay honest to stretch the line before cutting in.',
         tags: <String>['Progression', 'Balance', 'Transition'],
         notes: <String>[
           'Prestige has reached the point where the club can dictate stretches of the game.',
@@ -993,11 +1061,14 @@ class ClubHubContent extends StatelessWidget {
     }
     return const TacticsBlueprint(
       shape: '4-4-2',
-      shapeDetail: 'A stable frame while the club compounds reputation and depth.',
+      shapeDetail:
+          'A stable frame while the club compounds reputation and depth.',
       pressLine: 'Mid-block',
-      pressDetail: 'The team waits for clear triggers instead of chasing chaos.',
+      pressDetail:
+          'The team waits for clear triggers instead of chasing chaos.',
       tempo: 'Measured build',
-      tempoDetail: 'Circulation is patient enough to avoid exposing the back line.',
+      tempoDetail:
+          'Circulation is patient enough to avoid exposing the back line.',
       width: 'Compact first',
       widthDetail: 'The block protects central lanes before expanding outward.',
       tags: <String>['Structure', 'Growth', 'Discipline'],
@@ -1006,6 +1077,77 @@ class ClubHubContent extends StatelessWidget {
         'Identity and reputation cues are visible here even before a dedicated tactics editor lands.',
         'This layout keeps tactical ownership inside the club hub rather than scattering it across routes.',
       ],
+    );
+  }
+}
+
+class _ClubRoutePanel extends StatelessWidget {
+  const _ClubRoutePanel({
+    required this.onOpenCreatorStadium,
+    required this.onOpenClubSaleDetail,
+    required this.onOpenOwnerOffers,
+    required this.ownerOffersMessage,
+    required this.onOpenWorldContext,
+  });
+
+  final VoidCallback onOpenCreatorStadium;
+  final VoidCallback onOpenClubSaleDetail;
+  final VoidCallback? onOpenOwnerOffers;
+  final String ownerOffersMessage;
+  final VoidCallback onOpenWorldContext;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteSurfacePanel(
+      accentColor: const Color(0xFF85B8FF),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Club extensions',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Owner routes for stadium monetization, club sales, offer review, and world context stay one click from the hub.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onOpenCreatorStadium,
+                icon: const Icon(Icons.stadium_outlined),
+                label: const Text('Creator stadium'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenClubSaleDetail,
+                icon: const Icon(Icons.sell_outlined),
+                label: const Text('Club sale detail'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenOwnerOffers,
+                icon: const Icon(Icons.inbox_outlined),
+                label: const Text('Owner-only inbox'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onOpenWorldContext,
+                icon: const Icon(Icons.public_outlined),
+                label: const Text('World context'),
+              ),
+            ],
+          ),
+          if (onOpenOwnerOffers == null) ...<Widget>[
+            const SizedBox(height: 10),
+            Text(
+              ownerOffersMessage,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

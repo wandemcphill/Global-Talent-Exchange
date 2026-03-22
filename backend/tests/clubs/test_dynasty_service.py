@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from backend.app.common.enums.dynasty_milestone_type import DynastyMilestoneType
-from backend.app.schemas.club_requests import ClubCreateRequest
-from backend.app.services.club_branding_service import ClubBrandingService
-from backend.app.services.club_dynasty_service import ClubDynastyService
+from app.common.enums.dynasty_milestone_type import DynastyMilestoneType
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
+from app.services.club_dynasty_service import ClubDynastyService
 
 
 def _create_club(session) -> str:

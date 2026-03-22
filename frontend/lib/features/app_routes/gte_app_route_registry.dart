@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/app_routes/gte_feature_route_support.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
@@ -15,7 +20,16 @@ import 'package:gte_frontend/features/club_identity/reputation/presentation/repu
 import 'package:gte_frontend/features/club_identity/trophies/presentation/honors_timeline_screen.dart';
 import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
 import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_leaderboard_screen.dart';
+import 'package:gte_frontend/features/club_sale_market/club_sale_market.dart';
+import 'package:gte_frontend/features/creator_league_admin/creator_league_admin.dart';
+import 'package:gte_frontend/features/creator_share_market/creator_share_market.dart';
+import 'package:gte_frontend/features/creator_stadium_monetization/creator_stadium_monetization.dart';
+import 'package:gte_frontend/features/fan_prediction/fan_prediction.dart';
+import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
+import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
+import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
 import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
@@ -23,6 +37,8 @@ import 'package:gte_frontend/screens/competitions/competition_join_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
+
+part 'gte_feature_route_builders.dart';
 
 class GteAppRouteRegistry {
   const GteAppRouteRegistry({
@@ -82,6 +98,17 @@ class GteAppRouteRegistry {
   }
 
   Widget buildScreen(BuildContext context, GteAppRouteData route) {
+    final VoidCallback? openLogin = dependencies.onOpenLogin == null
+        ? null
+        : () {
+            dependencies.onOpenLogin!.call(context);
+          };
+    final VoidCallback? openCreatorAccessRequest =
+        dependencies.onOpenCreatorAccessRequest == null
+            ? null
+            : () {
+                dependencies.onOpenCreatorAccessRequest!.call(context);
+              };
     if (route is CompetitionsDiscoveryRouteData) {
       return CompetitionDiscoveryScreen(
         baseUrl: dependencies.apiBaseUrl,
@@ -89,7 +116,10 @@ class GteAppRouteRegistry {
         currentUserId: dependencies.currentUserId,
         currentUserName: dependencies.currentUserName,
         isAuthenticated: dependencies.isAuthenticated,
-        onOpenLogin: dependencies.onOpenLogin,
+        isCheckingCreatorAccess: dependencies.isCheckingCreatorAccess,
+        canHostCompetitions: dependencies.canHostCompetitions,
+        onOpenLogin: openLogin,
+        onOpenCreatorAccessRequest: openCreatorAccessRequest,
       );
     }
     if (route is CompetitionCreateRouteData) {
@@ -131,7 +161,10 @@ class GteAppRouteRegistry {
         currentUserId: dependencies.currentUserId,
         currentUserName: dependencies.currentUserName,
         isAuthenticated: dependencies.isAuthenticated,
-        onOpenLogin: dependencies.onOpenLogin,
+        isCheckingCreatorAccess: dependencies.isCheckingCreatorAccess,
+        canHostCompetitions: dependencies.canHostCompetitions,
+        onOpenLogin: openLogin,
+        onOpenCreatorAccessRequest: openCreatorAccessRequest,
       );
     }
     if (route is ClubIdentityJerseysRouteData) {
@@ -251,6 +284,164 @@ class GteAppRouteRegistry {
         clubName: route.clubName,
       );
     }
+    if (route is StreamerTournamentsListRouteData) {
+      return _buildStreamerTournamentsListScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is StreamerTournamentDetailRouteData) {
+      return _buildStreamerTournamentDetailScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is FanPredictionMatchRouteData) {
+      return _buildFanPredictionMatchScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is PlayerCardsBrowseRouteData) {
+      return _buildPlayerCardsBrowseScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is PlayerCardDetailRouteData) {
+      return _buildPlayerCardDetailScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is PlayerCardsInventoryRouteData) {
+      return _buildPlayerCardsInventoryScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is CreatorShareMarketClubRouteData) {
+      return _buildCreatorShareMarketClubScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is CreatorShareMarketAdminControlRouteData) {
+      return _buildCreatorShareMarketAdminControlScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is ClubSaleMarketListingsRouteData) {
+      return _buildClubSaleMarketListingsScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is ClubSaleMarketDetailRouteData) {
+      return _buildClubSaleMarketDetailScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is ClubSaleMarketOwnerOffersRouteData) {
+      return _buildClubSaleMarketOwnerOffersScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is WorldOverviewRouteData) {
+      return _buildWorldOverviewScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is WorldClubContextRouteData) {
+      return _buildWorldClubContextScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is WorldCompetitionContextRouteData) {
+      return _buildWorldCompetitionContextScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is NationalTeamCompetitionsRouteData) {
+      return _buildNationalTeamCompetitionsScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is NationalTeamEntryRouteData) {
+      return _buildNationalTeamEntryScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is NationalTeamHistoryRouteData) {
+      return _buildNationalTeamHistoryScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is FootballTransferCenterRouteData) {
+      return _buildFootballTransferCenterScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is CreatorStadiumClubRouteData) {
+      return _buildCreatorStadiumClubScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is CreatorStadiumMatchRouteData) {
+      return _buildCreatorStadiumMatchScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is CreatorStadiumAdminControlRouteData) {
+      return _buildCreatorStadiumAdminControlScreen(
+        context,
+        dependencies,
+      );
+    }
+    if (route is CreatorLeagueFinancialReportRouteData) {
+      return _buildCreatorLeagueFinancialReportScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is CreatorLeagueSettlementsRouteData) {
+      return _buildCreatorLeagueSettlementsScreen(
+        context,
+        dependencies,
+        route,
+      );
+    }
+    if (route is GiftStabilizerRouteData) {
+      return _buildGiftStabilizerScreen(
+        context,
+        dependencies,
+      );
+    }
     return _RouteStateScreen(
       title: 'Route unavailable',
       message: 'No renderer is registered for ${route.name}.',
@@ -367,7 +558,25 @@ class _CompetitionCreateRouteScreenState
 
   @override
   Widget build(BuildContext context) {
-    return CompetitionCreateScreen(controller: _controller);
+    final VoidCallback? openLogin = widget.dependencies.onOpenLogin == null
+        ? null
+        : () {
+            widget.dependencies.onOpenLogin!.call(context);
+          };
+    final VoidCallback? openCreatorAccessRequest =
+        widget.dependencies.onOpenCreatorAccessRequest == null
+            ? null
+            : () {
+                widget.dependencies.onOpenCreatorAccessRequest!.call(context);
+              };
+    return CompetitionCreateScreen(
+      controller: _controller,
+      isAuthenticated: widget.dependencies.isAuthenticated,
+      isCheckingHostEligibility: widget.dependencies.isCheckingCreatorAccess,
+      hostEligible: widget.dependencies.canHostCompetitions,
+      onOpenLogin: openLogin,
+      onOpenCreatorAccessRequest: openCreatorAccessRequest,
+    );
   }
 }
 
@@ -410,6 +619,7 @@ class _CompetitionDetailRouteScreenState
     return CompetitionDetailScreen(
       controller: _controller,
       competitionId: widget.route.competitionId,
+      navigationDependencies: widget.dependencies,
     );
   }
 }

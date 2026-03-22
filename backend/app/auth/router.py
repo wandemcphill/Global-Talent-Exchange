@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_current_user, get_session
-from backend.app.auth.schemas import (
+from app.auth.dependencies import get_current_user, get_session
+from app.auth.schemas import (
     ChangePasswordRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
@@ -12,10 +12,11 @@ from backend.app.auth.schemas import (
     RegisterRequest,
     TokenResponse,
 )
-from backend.app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
-from backend.app.models.user import User
-from backend.app.users.schemas import UserPublic
-from backend.app.wallets.service import WalletService
+from app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
+from app.analytics.service import AnalyticsService
+from app.models.user import User
+from app.users.schemas import UserPublic
+from app.wallets.service import WalletService
 
 router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
@@ -35,14 +36,24 @@ def register_user(
     request: Request = None,
 ) -> TokenResponse:
     service = _build_auth_service(request)
+    analytics = AnalyticsService()
     try:
+        analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email})
+        if not payload.is_over_18:
+            analytics.track_event(session, name="underage_signup_blocked", user_id=None, metadata={"email": payload.email})
+            raise AuthError("You must be at least 18 years old to sign up.")
         user = service.register_user(
             session,
             email=payload.email,
+            full_name=payload.full_name,
+            phone_number=payload.phone_number,
+            is_over_18=payload.is_over_18,
+            region_code=payload.region_code,
             username=payload.username,
             password=payload.password,
-            display_name=payload.display_name,
+            display_name=payload.full_name,
         )
+        analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
         token, expires_in = service.issue_access_token(user)
         session.commit()
         session.refresh(user)
@@ -69,15 +80,19 @@ def login_user(
     request: Request = None,
 ) -> TokenResponse:
     service = _build_auth_service(request)
+    analytics = AnalyticsService()
     try:
         user = service.authenticate_user(session, email=payload.email, password=payload.password)
+        analytics.track_event(session, name="login_success", user_id=user.id, metadata={})
         token, expires_in = service.issue_access_token(user)
         session.commit()
         session.refresh(user)
     except InvalidCredentialsError as exc:
+        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         session.rollback()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AuthError as exc:
+        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Enum, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.app.common.enums.scouting_region_type import ScoutingRegionType
-from backend.app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.common.enums.scouting_region_type import ScoutingRegionType
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from backend.app.models.scout_assignment import ScoutAssignment
+    from app.models.scout_assignment import ScoutAssignment
 
 
 class ScoutingRegion(UUIDPrimaryKeyMixin, TimestampMixin, Base):

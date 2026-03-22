@@ -15,20 +15,20 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings
+from app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings, normalize_database_url
 
 MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
-    "backend.app.models",
-    "backend.app.club_identity.models.reputation",
-    "backend.app.fast_cups.repositories.database",
-    "backend.app.ingestion.models",
-    "backend.app.leagues.repository",
-    "backend.app.market.read_models",
-    "backend.app.players.read_models",
-    "backend.app.replay_archive.persistence",
-    "backend.app.value_engine.read_models",
+    "app.models",
+    "app.club_identity.models.reputation",
+    "app.fast_cups.repositories.database",
+    "app.ingestion.models",
+    "app.leagues.repository",
+    "app.market.read_models",
+    "app.players.read_models",
+    "app.replay_archive.persistence",
+    "app.value_engine.read_models",
 )
 
 
@@ -42,7 +42,7 @@ def load_model_modules() -> None:
 
 
 def create_database_engine(database_url: str | None = None) -> Engine:
-    resolved_url = database_url or get_database_url()
+    resolved_url = normalize_database_url(database_url or get_database_url())
     _ensure_sqlite_database_path(resolved_url)
     connect_args = {"check_same_thread": False} if resolved_url.startswith("sqlite") else {}
     engine_kwargs: dict[str, object] = {"connect_args": connect_args}
@@ -81,7 +81,7 @@ def build_alembic_config(database_url: str | None = None) -> Config:
     config = Config(str(ALEMBIC_INI_PATH.resolve()))
     config.set_main_option("script_location", str(MIGRATIONS_ROOT.resolve()))
     config.set_main_option("prepend_sys_path", str(PROJECT_ROOT.resolve()))
-    config.set_main_option("sqlalchemy.url", database_url or get_database_url())
+    config.set_main_option("sqlalchemy.url", normalize_database_url(database_url or get_database_url()))
     return config
 
 
@@ -104,7 +104,8 @@ def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, .
     database_engine = engine or get_engine()
     config = build_alembic_config(str(database_engine.url))
     script = ScriptDirectory.from_config(config)
-    target_heads = tuple(sorted(script.get_heads()))
+    target_head = script.get_current_head()
+    target_heads = (target_head,) if target_head is not None else tuple()
 
     with database_engine.connect() as connection:
         current_heads = tuple(sorted(MigrationContext.configure(connection).get_current_heads()))
@@ -125,7 +126,7 @@ def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, .
 
 def get_target_metadata() -> MetaData:
     load_model_modules()
-    from backend.app.models import Base
+    from app.models import Base
 
     return Base.metadata
 

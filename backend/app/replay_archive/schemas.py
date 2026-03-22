@@ -5,11 +5,12 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from backend.app.common.enums.competition_type import CompetitionType
-from backend.app.common.enums.replay_visibility import ReplayVisibility
-from backend.app.common.schemas.base import CommonSchema
-from backend.app.competition_engine.queue_contracts import SUPPORTED_MATCH_MOMENTS
-from backend.app.config.competition_constants import (
+from app.common.enums.competition_type import CompetitionType
+from app.common.enums.replay_visibility import ReplayVisibility
+from app.common.schemas.base import CommonSchema
+from app.match_engine.schemas import MatchVisualIdentityView
+from app.competition_engine.queue_contracts import SUPPORTED_MATCH_MOMENTS
+from app.config.competition_constants import (
     FINAL_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MIN_MINUTES,
@@ -87,6 +88,7 @@ class ReplayArchiveIngest(CommonSchema):
     home_club: ReplayClubView
     away_club: ReplayClubView
     scoreline: ReplayScoreline
+    visual_identity: MatchVisualIdentityView | None = None
     timeline: tuple[ReplayMomentView, ...]
     participant_user_ids: tuple[str, ...] = ()
     competition_context: CompetitionContextView
@@ -121,6 +123,7 @@ class ReplayArchiveRecord(CommonSchema):
     home_club: ReplayClubView
     away_club: ReplayClubView
     scoreline: ReplayScoreline
+    visual_identity: MatchVisualIdentityView | None = None
     timeline: tuple[ReplayMomentView, ...]
     scorers: tuple[ReplayMomentView, ...] = ()
     assisters: tuple[ReplayMomentView, ...] = ()

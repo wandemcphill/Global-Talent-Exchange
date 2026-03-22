@@ -12,8 +12,8 @@ void main() {
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'demo-user',
-      currentUserName: 'Demo Fan',
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
     );
 
     await tester.pumpWidget(
@@ -21,6 +21,8 @@ void main() {
         theme: GteShellTheme.build(),
         home: CompetitionCreateScreen(
           controller: controller,
+          isAuthenticated: true,
+          hostEligible: true,
         ),
       ),
     );
@@ -58,5 +60,39 @@ void main() {
 
     expect(find.text('Share competition'), findsOneWidget);
     expect(find.text('Invite code'), findsOneWidget);
+  });
+
+  testWidgets('create flow stays locked for non-eligible users',
+      (WidgetTester tester) async {
+    final CompetitionController controller = CompetitionController(
+      api: CompetitionApi.fixture(),
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
+    );
+    bool openedCreatorAccess = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: CompetitionCreateScreen(
+          controller: controller,
+          isAuthenticated: true,
+          hostEligible: false,
+          onOpenCreatorAccessRequest: () {
+            openedCreatorAccess = true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Creator access required to host'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Preview & publish'), findsNothing);
+
+    await tester.tap(find.text('Request creator access'));
+    await tester.pumpAndSettle();
+
+    expect(openedCreatorAccess, isTrue);
   });
 }

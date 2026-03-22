@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.app.providers import FootballDataAdapter, MockFootballProvider, ProviderRegistry
+from app.providers import FootballDataAdapter, MockFootballProvider, ProviderRegistry
 
 
 def test_provider_registry_creates_known_providers() -> None:

@@ -6,19 +6,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from backend.app.club_identity.dynasty.api.schemas import (
+from app.club_identity.dynasty.api.schemas import (
     ClubDynastyProfileView,
     ClubDynastyHistoryView,
     DynastyEraView,
     DynastyStreaksView,
     DynastyLeaderboardEntryView,
 )
-from backend.app.club_identity.dynasty.dependencies import get_dynasty_repository
-from backend.app.club_identity.dynasty.repository import DynastyReadRepository
-from backend.app.club_identity.dynasty.services.dynasty_detector import DynastyQueryService
-from backend.app.club_identity.models.dynasty_models import DynastyStatus, EraLabel
-from backend.app.db import get_session
-from backend.app.models.club_profile import ClubProfile
+from app.club_identity.dynasty.dependencies import get_dynasty_repository
+from app.club_identity.dynasty.repository import DynastyReadRepository
+from app.club_identity.dynasty.services.dynasty_detector import DynastyQueryService
+from app.club_identity.models.dynasty_models import DynastyStatus, EraLabel
+from app.db import get_session
+from app.models.club_profile import ClubProfile
 
 router = APIRouter(prefix="/api", tags=["club-identity-dynasty"])
 

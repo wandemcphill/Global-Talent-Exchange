@@ -1,3 +1,5 @@
+import 'player_avatar.dart';
+
 class AcademyDashboard {
   const AcademyDashboard({
     required this.clubId,
@@ -79,6 +81,18 @@ class AcademyPlayer {
     required this.nextMilestone,
     required this.strengths,
     required this.focusAreas,
+    this.playerId,
+    this.secondaryPositions = const <String>[],
+    this.nationality,
+    this.nationalityCode,
+    this.dominantFoot,
+    this.roleArchetype,
+    this.formationSlots = const <String>[],
+    this.squadEligible,
+    this.avatarSeedToken,
+    this.avatarDnaSeed,
+    this.avatar,
+    this.currentValueCredits,
     this.promotedToSenior = false,
   });
 
@@ -95,7 +109,24 @@ class AcademyPlayer {
   final String nextMilestone;
   final List<String> strengths;
   final List<String> focusAreas;
+  final String? playerId;
+  final List<String> secondaryPositions;
+  final String? nationality;
+  final String? nationalityCode;
+  final String? dominantFoot;
+  final String? roleArchetype;
+  final List<String> formationSlots;
+  final bool? squadEligible;
+  final String? avatarSeedToken;
+  final String? avatarDnaSeed;
+  final PlayerAvatar? avatar;
+  final double? currentValueCredits;
   final bool promotedToSenior;
+
+  String get canonicalPlayerId {
+    final String? candidate = playerId?.trim();
+    return candidate == null || candidate.isEmpty ? id : candidate;
+  }
 }
 
 class TrainingCycle {

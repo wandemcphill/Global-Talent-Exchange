@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from backend.app.world_super_cup.models import (
+from app.world_super_cup.models import (
     GroupStanding,
     KnockoutBracket,
     KnockoutMatch,
@@ -11,7 +11,7 @@ from backend.app.world_super_cup.models import (
     QualifiedClub,
     TrophyCeremonyMetadata,
 )
-from backend.app.world_super_cup.services.match_resolution import resolve_seeded_score
+from app.world_super_cup.services.match_resolution import resolve_seeded_score
 
 
 @dataclass(slots=True)

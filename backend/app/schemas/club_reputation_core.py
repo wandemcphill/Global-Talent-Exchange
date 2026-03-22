@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import ConfigDict, Field
 
-from backend.app.common.enums.club_reputation_tier import ClubReputationTier
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.club_reputation_tier import ClubReputationTier
+from app.common.schemas.base import CommonSchema
 
 
 class _ClubOrmSchema(CommonSchema):

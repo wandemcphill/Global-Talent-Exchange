@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from backend.app.schemas.club_ops_admin import ClubOpsSummaryView, SponsorModerationQueueItemView
-from backend.app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
-from backend.app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
+from app.schemas.club_ops_admin import ClubOpsSummaryView, SponsorModerationQueueItemView
+from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service, get_club_ops_store
+from app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
 
 
 class ClubOpsAdminService:

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.models.base import utcnow
+from app.models.base import utcnow
 
 from .constants import DEFAULT_LOCK_TTL_SECONDS
 from .models import IngestionJobLock

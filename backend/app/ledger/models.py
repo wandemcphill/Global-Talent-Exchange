@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import DateTime, Enum, ForeignKey, JSON, String, event, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend.app.models.base import Base, UUIDPrimaryKeyMixin
+from app.models.base import Base, UUIDPrimaryKeyMixin
 
 
 class LedgerEventType(StrEnum):

@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from uuid import uuid4
 
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.schemas.club_ops_requests import UpdateYouthProspectRequest
-from backend.app.schemas.scouting_core import YouthProspectReportView, YouthProspectView
-from backend.app.services.club_finance_service import ClubOpsStore, get_club_ops_store
-from backend.app.services.scout_assignment_service import ProspectBlueprint
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.schemas.club_ops_requests import UpdateYouthProspectRequest
+from app.schemas.scouting_core import YouthProspectReportView, YouthProspectView
+from app.services.club_finance_service import ClubOpsStore, get_club_ops_store
+from app.services.scout_assignment_service import ProspectBlueprint
 
 
 def _utcnow() -> datetime:

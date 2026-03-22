@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from backend.app.world_super_cup.models import TournamentPlan
-from backend.app.world_super_cup.services.calendar import WorldSuperCupCalendarService
-from backend.app.world_super_cup.services.ceremony import TrophyCeremonyService
-from backend.app.world_super_cup.services.group_stage import GroupStageService
-from backend.app.world_super_cup.services.knockout import KnockoutService
-from backend.app.world_super_cup.services.qualification import WorldSuperCupQualificationService
-from backend.app.world_super_cup.services.sample_data import build_demo_season_results
+from app.world_super_cup.models import TournamentPlan
+from app.world_super_cup.services.calendar import WorldSuperCupCalendarService
+from app.world_super_cup.services.ceremony import TrophyCeremonyService
+from app.world_super_cup.services.group_stage import GroupStageService
+from app.world_super_cup.services.knockout import KnockoutService
+from app.world_super_cup.services.qualification import WorldSuperCupQualificationService
+from app.world_super_cup.services.sample_data import build_demo_season_results
 
 
 @dataclass(slots=True)

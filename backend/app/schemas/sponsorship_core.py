@@ -4,9 +4,9 @@ from datetime import datetime
 
 from pydantic import Field
 
-from backend.app.common.enums.sponsorship_asset_type import SponsorshipAssetType
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.common.schemas.base import CommonSchema
+from app.common.enums.sponsorship_asset_type import SponsorshipAssetType
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.common.schemas.base import CommonSchema
 
 
 class ClubSponsorshipPackageView(CommonSchema):

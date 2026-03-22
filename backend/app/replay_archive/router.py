@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from backend.app.auth.dependencies import get_current_user
-from backend.app.models.user import User
-from backend.app.replay_archive.schemas import CountdownView, ReplayArchiveRecord, ReplaySummaryView
-from backend.app.replay_archive.service import ensure_replay_archive
+from app.auth.dependencies import get_current_user
+from app.models.user import User
+from app.replay_archive.schemas import CountdownView, ReplayArchiveRecord, ReplaySummaryView
+from app.replay_archive.service import ensure_replay_archive
 
 router = APIRouter(prefix="/replays", tags=["replay-archive"])
 

@@ -4,9 +4,10 @@ from dataclasses import replace
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.core.config import (
+from app.core.config import (
     LiquidityBand,
     LiquidityBandsConfig,
+    PlayerCardMarketIntegrityConfig,
     PriceBandLimit,
     SupplyTier,
     SupplyTiersConfig,
@@ -101,6 +102,33 @@ class SuspicionThresholdsPayload(BaseModel):
 
     def to_domain(self) -> SuspicionThresholdsConfig:
         return SuspicionThresholdsConfig(**self.model_dump())
+
+
+class PlayerCardMarketIntegrityPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sale_reference_lookback_days: int = Field(gt=0)
+    minimum_reference_sales: int = Field(gt=0)
+    listing_price_floor_ratio: float = Field(gt=0, le=1)
+    listing_price_ceiling_ratio: float = Field(ge=1)
+    relist_cooldown_minutes: int = Field(ge=0)
+    pair_trade_lookback_hours: int = Field(gt=0)
+    pair_trade_alert_threshold: int = Field(gt=1)
+    asset_churn_window_hours: int = Field(gt=0)
+    asset_churn_alert_threshold: int = Field(gt=1)
+    circular_trade_window_hours: int = Field(gt=0)
+    price_spike_alert_ratio: float = Field(gt=1)
+    volume_cluster_window_minutes: int = Field(gt=0)
+    volume_cluster_trade_threshold: int = Field(gt=1)
+
+    @model_validator(mode="after")
+    def validate_ratios(self) -> "PlayerCardMarketIntegrityPayload":
+        if self.listing_price_ceiling_ratio <= self.listing_price_floor_ratio:
+            raise ValueError("listing_price_ceiling_ratio must exceed listing_price_floor_ratio.")
+        return self
+
+    def to_domain(self) -> PlayerCardMarketIntegrityConfig:
+        return PlayerCardMarketIntegrityConfig(**self.model_dump())
 
 
 class FtvMsvBlendWeightsPayload(BaseModel):

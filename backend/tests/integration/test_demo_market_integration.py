@@ -6,18 +6,18 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
-from backend.app.core.config import load_settings
-from backend.app.ingestion.demo_bootstrap import DemoBootstrapService
-from backend.app.ingestion.dev_cli import (
+from app.core.config import load_settings
+from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.ingestion.dev_cli import (
     migrate_database,
     rebuild_demo_market,
     reset_local_database,
     run_simulation_ticks_database,
     seed_demo_liquidity_database,
 )
-from backend.app.main import create_app
-from backend.app.simulation.app_factory import create_demo_simulation_app
-from backend.app.simulation.service import DemoMarketSimulationService
+from app.main import create_app
+from app.simulation.app_factory import create_demo_simulation_app
+from app.simulation.service import DemoMarketSimulationService
 
 
 def test_login_returns_access_token_for_demo_user(integration_client, demo_secondary_user) -> None:

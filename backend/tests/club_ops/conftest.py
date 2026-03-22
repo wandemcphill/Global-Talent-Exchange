@@ -6,11 +6,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from backend.app.auth.dependencies import get_current_admin
-from backend.app.common.enums.academy_player_status import AcademyPlayerStatus
-from backend.app.common.enums.player_pathway_stage import PlayerPathwayStage
-from backend.app.common.enums.sponsorship_status import SponsorshipStatus
-from backend.app.schemas.club_ops_requests import (
+from app.auth.dependencies import get_current_admin
+from app.common.enums.academy_player_status import AcademyPlayerStatus
+from app.common.enums.player_pathway_stage import PlayerPathwayStage
+from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.schemas.club_ops_requests import (
     CreateAcademyPlayerRequest,
     CreateAcademyProgramRequest,
     CreateScoutAssignmentRequest,
@@ -19,24 +19,25 @@ from backend.app.schemas.club_ops_requests import (
     UpdateSponsorshipContractRequest,
     UpdateYouthProspectRequest,
 )
-from backend.app.routes.admin_club_ops import router as admin_club_ops_router
-from backend.app.routes.club_ops import router as club_ops_router
-from backend.app.services.academy_graduation_service import AcademyGraduationService, get_academy_graduation_service
-from backend.app.services.academy_progression_service import AcademyProgressionService, get_academy_progression_service
-from backend.app.services.academy_service import AcademyService, get_academy_service
-from backend.app.services.academy_training_service import AcademyTrainingService, get_academy_training_service
-from backend.app.services.club_budget_service import ClubBudgetService, get_club_budget_service
-from backend.app.services.club_cashflow_service import ClubCashflowService, get_club_cashflow_service
-from backend.app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service
-from backend.app.services.club_ops_admin_service import ClubOpsAdminService, get_club_ops_admin_service
-from backend.app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
-from backend.app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
-from backend.app.services.scout_assignment_service import ScoutAssignmentService, get_scout_assignment_service
-from backend.app.services.scouting_service import ScoutingService, get_scouting_service
-from backend.app.services.sponsorship_catalog_service import SponsorshipCatalogService, get_sponsorship_catalog_service
-from backend.app.services.sponsorship_payout_service import SponsorshipPayoutService, get_sponsorship_payout_service
-from backend.app.services.youth_pipeline_service import YouthPipelineService, get_youth_pipeline_service
-from backend.app.services.youth_prospect_service import YouthProspectService, get_youth_prospect_service
+from app.routes.admin_club_ops import router as admin_club_ops_router
+from app.routes.club_ops import router as club_ops_router
+from app.services.academy_graduation_service import AcademyGraduationService, get_academy_graduation_service
+from app.services.academy_progression_service import AcademyProgressionService, get_academy_progression_service
+from app.services.academy_service import AcademyService, get_academy_service
+from app.services.academy_training_service import AcademyTrainingService, get_academy_training_service
+from app.services.club_budget_service import ClubBudgetService, get_club_budget_service
+from app.services.club_cashflow_service import ClubCashflowService, get_club_cashflow_service
+from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service
+from app.services.club_ops_admin_service import ClubOpsAdminService, get_club_ops_admin_service
+from app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
+from app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
+from app.services.regen_service import RegenService
+from app.services.scout_assignment_service import ScoutAssignmentService, get_scout_assignment_service
+from app.services.scouting_service import ScoutingService, get_scouting_service
+from app.services.sponsorship_catalog_service import SponsorshipCatalogService, get_sponsorship_catalog_service
+from app.services.sponsorship_payout_service import SponsorshipPayoutService, get_sponsorship_payout_service
+from app.services.youth_pipeline_service import YouthPipelineService, get_youth_pipeline_service
+from app.services.youth_prospect_service import YouthProspectService, get_youth_prospect_service
 
 
 def build_club_ops_services() -> dict[str, object]:
@@ -73,6 +74,7 @@ def build_club_ops_services() -> dict[str, object]:
         pipeline_service=pipeline,
         academy_service=academy,
     )
+    regen = RegenService(store=store)
     analytics = ClubOpsAnalyticsService(store=store, finance_service=finance)
     admin = ClubOpsAdminService(store=store, finance_service=finance, analytics_service=analytics)
     return {
@@ -91,6 +93,7 @@ def build_club_ops_services() -> dict[str, object]:
         "prospect": prospect,
         "pipeline": pipeline,
         "scouting": scouting,
+        "regen": regen,
         "analytics": analytics,
         "admin": admin,
         "admin_user": SimpleNamespace(id="admin-1", role="admin", is_admin=True),

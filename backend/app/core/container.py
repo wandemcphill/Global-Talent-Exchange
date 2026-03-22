@@ -5,20 +5,20 @@ from dataclasses import dataclass
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.core.cache import CacheBackend, build_cache_backend
-from backend.app.core.config import Settings, get_settings
-from backend.app.core.database import DatabaseRuntime
-from backend.app.core.events import InMemoryEventPublisher
-from backend.app.core.jobs import InlineJobBackend
-from backend.app.ingestion.pipeline import NormalizedMatchEventPipeline
-from backend.app.jobs import IngestionJobRunner
-from backend.app.market.projections import MarketSummaryProjector
-from backend.app.market.repositories import InMemoryMarketRepository
-from backend.app.market.service import MarketEngine
-from backend.app.notifications.service import NotificationCenter
-from backend.app.players.service import PlayerSummaryProjector
-from backend.app.realtime.service import RealtimeHub
-from backend.app.value_engine.service import IngestionValueEngineBridge
+from app.core.cache import CacheBackend, build_cache_backend
+from app.core.config import Settings, get_settings
+from app.core.database import DatabaseRuntime
+from app.core.events import InMemoryEventPublisher
+from app.core.jobs import InlineJobBackend
+from app.ingestion.pipeline import NormalizedMatchEventPipeline
+from app.jobs import IngestionJobRunner
+from app.market.projections import MarketSummaryProjector
+from app.market.repositories import InMemoryMarketRepository
+from app.market.service import MarketEngine
+from app.notifications.service import NotificationCenter
+from app.players.service import PlayerSummaryProjector
+from app.realtime.service import RealtimeHub
+from app.value_engine.service import IngestionValueEngineBridge
 
 
 @dataclass(slots=True)

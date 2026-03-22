@@ -1,4 +1,4 @@
-from backend.app.ledger.models import LedgerEventRecord, LedgerEventType
-from backend.app.ledger.service import LedgerEventService
+from app.ledger.models import LedgerEventRecord, LedgerEventType
+from app.ledger.service import LedgerEventService
 
 __all__ = ["LedgerEventRecord", "LedgerEventService", "LedgerEventType"]

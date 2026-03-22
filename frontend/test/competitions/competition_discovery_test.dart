@@ -10,8 +10,8 @@ void main() {
       (WidgetTester tester) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'demo-user',
-      currentUserName: 'Demo Fan',
+      currentUserId: 'fixture-user',
+      currentUserName: 'Fixture Trader',
     );
 
     await tester.pumpWidget(
@@ -19,32 +19,32 @@ void main() {
         theme: GteShellTheme.build(),
         home: CompetitionDiscoveryScreen(
           controller: controller,
-          currentUserId: 'demo-user',
-          currentUserName: 'Demo Fan',
-          isAuthenticated: false,
+          currentUserId: 'fixture-user',
+          currentUserName: 'Fixture Trader',
+          isAuthenticated: true,
+          canHostCompetitions: true,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Community competitions'), findsOneWidget);
-    expect(find.text('Trending'), findsOneWidget);
-    expect(find.text('Paid competitions'), findsOneWidget);
-    expect(find.text('Creator competitions'), findsWidgets);
-    expect(find.text('Coastal Creator Cup'), findsOneWidget);
+    expect(find.text('Create competition'), findsOneWidget);
 
-    await tester.drag(
-      find.byType(SingleChildScrollView).first,
-      const Offset(-400, 0),
+    await tester.dragUntilVisible(
+      find.text('Creator competitions'),
+      find.byType(ListView).first,
+      const Offset(0, -300),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Creator competitions').last);
+    await tester.tap(find.text('Creator competitions'));
     await tester.pumpAndSettle();
+
+    expect(find.text('Coastal Creator Cup'), findsOneWidget);
 
     await tester.dragUntilVisible(
       find.text('Weekend Creator Cup'),
-      find.byType(ListView),
+      find.byType(ListView).first,
       const Offset(0, -300),
     );
 

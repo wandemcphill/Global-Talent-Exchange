@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from backend.app.models.user import User
-from backend.app.wallets.service import WalletService
+from app.models.user import User
+from app.wallets.service import WalletService
 
 
 @dataclass(slots=True)
