@@ -35,6 +35,11 @@ reference_very_stale_days = 60
 reference_stale_blend = 0.45
 participant_diversity_scale = 6.0
 order_book_wide_spread_bps = 1800
+real_player_bridge_enabled = true
+real_player_bridge_version = "real-player-bridge-v1"
+real_player_bridge_smoothing_factor = 0.35
+real_player_bridge_floor_ratio = 0.85
+real_player_bridge_ceiling_ratio = 1.15
 
 [component_weights]
 ftv_weight = 0.70
@@ -99,6 +104,17 @@ growth = 0.30
 premium = 0.50
 bluechip = 0.65
 marquee = 0.80
+
+[real_player_bridge_reference_weights]
+direct_verified_reference = 0.90
+inferred_reference = 0.65
+heuristic_only = 0.30
+
+[real_player_bridge_tier_multipliers]
+elite = 1.06
+featured = 1.03
+core = 1.00
+watchlist = 0.97
 
 [[weight_profiles]]
 code = "default"

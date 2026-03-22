@@ -19,6 +19,7 @@ from app.ingestion.real_player_ingestion_service import (
 )
 from app.models.base import Base
 from app.models.player_cards import PlayerMarketValueSnapshot
+from app.models.real_player_import_batch import RealPlayerImportBatch, RealPlayerImportRow
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
@@ -266,6 +267,13 @@ def test_write_batch_persists_authoritative_snapshots_and_passes_audit() -> None
             assert session.scalar(select(func.count()).select_from(Player).where(Player.is_real_player.is_(True))) == 2
             assert session.scalar(select(func.count()).select_from(PlayerValueSnapshotRecord)) == 2
             assert session.scalar(select(func.count()).select_from(PlayerMarketValueSnapshot)) == 2
+            assert session.scalar(select(func.count()).select_from(RealPlayerImportBatch)) == 1
+            assert session.scalar(select(func.count()).select_from(RealPlayerImportRow)) == 2
+            imported_rows = list(session.scalars(select(RealPlayerImportRow).order_by(RealPlayerImportRow.row_number.asc())))
+            assert all(row.review_status == "resolved" for row in imported_rows)
+            assert all(row.status == "imported" for row in imported_rows)
+            assert all(row.gtex_player_id for row in imported_rows)
+            assert all(row.exact_identity_key or row.name_birthyear_club_key for row in imported_rows)
             summary = session.scalar(
                 select(PlayerSummaryReadModel)
                 .join(Player, Player.id == PlayerSummaryReadModel.player_id)
@@ -298,6 +306,84 @@ def test_write_batch_prevents_duplicates_on_refresh_existing() -> None:
         assert second.duplicates_prevented == 2
         assert second.audit is not None
         assert second.audit.all_checks_passed is True
+    finally:
+        engine.dispose()
+
+
+def test_write_batch_persists_open_review_rows_when_ambiguity_blocks_commit() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            nigeria = Country(
+                source_provider="test-source",
+                provider_external_id="NG",
+                name="Nigeria",
+                alpha2_code="NG",
+            )
+            session.add(nigeria)
+            session.flush()
+            session.add_all(
+                [
+                    Player(
+                        source_provider="legacy-source",
+                        provider_external_id="legacy-chukwueze-a",
+                        full_name="Samuel Chukwueze",
+                        canonical_display_name="Samuel Chukwueze",
+                        country=nigeria,
+                        position="Winger",
+                        normalized_position="forward",
+                        date_of_birth=date(1999, 5, 22),
+                        is_real_player=True,
+                    ),
+                    Player(
+                        source_provider="legacy-source",
+                        provider_external_id="legacy-chukwueze-b",
+                        full_name="Samuel Chukwueze",
+                        canonical_display_name="Samuel Chukwueze",
+                        country=nigeria,
+                        position="Winger",
+                        normalized_position="forward",
+                        date_of_birth=date(1999, 5, 22),
+                        is_real_player=True,
+                    ),
+                ]
+            )
+            session.commit()
+
+        request = RealPlayerIngestionRequest.model_validate(
+            {
+                "mode": "curated_seed",
+                "ingestion_batch_id": "ambiguous-review-batch",
+                "as_of": "2026-03-22T12:00:00+00:00",
+                "players": [
+                    {
+                        "source_name": "curated-feed",
+                        "source_player_key": "chukwueze-ambiguous-001",
+                        "canonical_name": "Samuel Chukwueze",
+                        "nationality": "Nigeria",
+                        "nationality_code": "NG",
+                        "date_of_birth": "1999-05-22",
+                        "primary_position": "Winger",
+                    }
+                ],
+            }
+        )
+
+        service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
+        with pytest.raises(RealPlayerBatchBlockedError):
+            service.write_batch(request)
+
+        with session_factory() as session:
+            batch = session.scalar(select(RealPlayerImportBatch).where(RealPlayerImportBatch.batch_key == "ambiguous-review-batch"))
+            assert batch is not None
+            assert batch.status == "completed_with_errors"
+            row = session.scalar(select(RealPlayerImportRow).where(RealPlayerImportRow.batch_id == batch.id))
+            assert row is not None
+            assert row.review_status == "open"
+            assert row.status == "skipped"
+            assert row.match_action == "ambiguous"
+            assert row.exact_identity_key == "samuel chukwueze|1999-05-22"
+            assert len(row.candidate_players_json) == 2
     finally:
         engine.dispose()
 

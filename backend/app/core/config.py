@@ -383,18 +383,35 @@ class ValueEngineWeightingConfig:
     reference_stale_blend: float
     participant_diversity_scale: float
     order_book_wide_spread_bps: int
+    real_player_bridge_enabled: bool
+    real_player_bridge_version: str
+    real_player_bridge_smoothing_factor: float
+    real_player_bridge_floor_ratio: float
+    real_player_bridge_ceiling_ratio: float
     competition_multipliers: dict[str, float]
     award_impacts: dict[str, float]
     demand_weights: dict[str, float]
     gsi_signal_weights: dict[str, float]
     egame_signal_weights: dict[str, float]
     liquidity_band_market_weights: dict[str, float]
+    real_player_bridge_reference_weights: dict[str, float]
+    real_player_bridge_tier_multipliers: dict[str, float]
     ftv_weight: float
     msv_weight: float
     sgv_weight: float
     egv_weight: float
     weight_profiles: tuple[ValueWeightProfile, ...]
     price_band_limits: tuple[PriceBandLimit, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RealPlayerImportConfig:
+    provider_name: str
+    batch_size: int
+    max_pages_per_run: int
+    rate_limit_per_minute: int
+    timeout_seconds: int
+    cursor_key: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -415,10 +432,12 @@ class Settings:
     run_migration_check: bool
     run_startup_seeding: bool
     default_ingestion_provider: str
+    real_player_mapping_auto_create_missing_entities: bool
     provider_timeout_seconds: int
     football_data_base_url: str
     football_data_api_key: str | None
     value_snapshot_lookback_days: int
+    real_player_import: RealPlayerImportConfig
     player_universe_weighting: PlayerUniverseWeightingConfig
     supply_tiers: SupplyTiersConfig
     liquidity_bands: LiquidityBandsConfig
@@ -1261,6 +1280,11 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         reference_stale_blend=float(document.get("reference_stale_blend", 0.45)),
         participant_diversity_scale=float(document.get("participant_diversity_scale", 6.0)),
         order_book_wide_spread_bps=int(document.get("order_book_wide_spread_bps", 1800)),
+        real_player_bridge_enabled=bool(document.get("real_player_bridge_enabled", False)),
+        real_player_bridge_version=str(document.get("real_player_bridge_version", "real-player-bridge-v1")),
+        real_player_bridge_smoothing_factor=float(document.get("real_player_bridge_smoothing_factor", 0.35)),
+        real_player_bridge_floor_ratio=float(document.get("real_player_bridge_floor_ratio", 0.85)),
+        real_player_bridge_ceiling_ratio=float(document.get("real_player_bridge_ceiling_ratio", 1.15)),
         competition_multipliers=_coerce_float_map(
             document.get("competition_multipliers", {}),
             name="competition_multipliers",
@@ -1272,6 +1296,14 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         liquidity_band_market_weights=_coerce_float_map(
             document.get("liquidity_band_market_weights", {}),
             name="liquidity_band_market_weights",
+        ),
+        real_player_bridge_reference_weights=_coerce_float_map(
+            document.get("real_player_bridge_reference_weights", {}),
+            name="real_player_bridge_reference_weights",
+        ),
+        real_player_bridge_tier_multipliers=_coerce_float_map(
+            document.get("real_player_bridge_tier_multipliers", {}),
+            name="real_player_bridge_tier_multipliers",
         ),
         ftv_weight=default_ftv_weight,
         msv_weight=default_msv_weight,
@@ -1325,6 +1357,26 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         raise ValueError("Value engine participant_diversity_scale must be greater than zero.")
     if weighting.order_book_wide_spread_bps <= 0:
         raise ValueError("Value engine order_book_wide_spread_bps must be greater than zero.")
+    if not 0 < weighting.real_player_bridge_smoothing_factor <= 1:
+        raise ValueError("Value engine real_player_bridge_smoothing_factor must be between 0 and 1.")
+    if not 0 < weighting.real_player_bridge_floor_ratio <= 1:
+        raise ValueError("Value engine real_player_bridge_floor_ratio must be between 0 and 1.")
+    if weighting.real_player_bridge_ceiling_ratio < 1:
+        raise ValueError("Value engine real_player_bridge_ceiling_ratio must be greater than or equal to 1.")
+    if weighting.real_player_bridge_ceiling_ratio < weighting.real_player_bridge_floor_ratio:
+        raise ValueError(
+            "Value engine real_player_bridge_ceiling_ratio must be greater than or equal to real_player_bridge_floor_ratio."
+        )
+    for key, value in weighting.real_player_bridge_reference_weights.items():
+        if not 0 <= value <= 1:
+            raise ValueError(
+                f"Value engine real_player_bridge_reference_weights[{key}] must be between 0 and 1."
+            )
+    for key, value in weighting.real_player_bridge_tier_multipliers.items():
+        if value <= 0:
+            raise ValueError(
+                f"Value engine real_player_bridge_tier_multipliers[{key}] must be greater than zero."
+            )
     if not 0 <= weighting.ftv_weight <= 1 or not 0 <= weighting.msv_weight <= 1:
         raise ValueError("Value engine FTV/MSV blend weights must each be between 0 and 1.")
     if weighting.ftv_weight + weighting.msv_weight <= 0:
@@ -1381,6 +1433,26 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
     return weighting
 
 
+def load_real_player_import_config(
+    environ: Mapping[str, str],
+    *,
+    default_provider_name: str,
+    default_timeout_seconds: int,
+) -> RealPlayerImportConfig:
+    cursor_key = environ.get("GTE_REAL_PLAYER_IMPORT_CURSOR_KEY", "real-player-directory").strip()
+    return RealPlayerImportConfig(
+        provider_name=environ.get("GTE_REAL_PLAYER_IMPORT_PROVIDER", default_provider_name).strip() or default_provider_name,
+        batch_size=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE", 250)),
+        max_pages_per_run=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_MAX_PAGES_PER_RUN", 40)),
+        rate_limit_per_minute=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_RATE_LIMIT_PER_MINUTE", 120)),
+        timeout_seconds=max(
+            1,
+            _get_int(environ, "GTE_REAL_PLAYER_IMPORT_TIMEOUT_SECONDS", default_timeout_seconds),
+        ),
+        cursor_key=cursor_key or "real-player-directory",
+    )
+
+
 def load_settings(
     *,
     environ: Mapping[str, str] | None = None,
@@ -1388,6 +1460,8 @@ def load_settings(
 ) -> Settings:
     resolved_environ = os.environ if environ is None else environ
     resolved_config_root = _resolve_config_root(resolved_environ, config_root)
+    default_ingestion_provider = resolved_environ.get("GTE_INGESTION_PROVIDER", "mock")
+    provider_timeout_seconds = _get_int(resolved_environ, "GTE_PROVIDER_TIMEOUT_SECONDS", 20)
     return Settings(
         app_name=resolved_environ.get("GTE_APP_NAME", "Global Talent Exchange API"),
         app_version=resolved_environ.get("GTE_APP_VERSION", "0.1.0"),
@@ -1408,11 +1482,21 @@ def load_settings(
             "RUN_STARTUP_SEEDING",
             _get_bool(resolved_environ, "GTE_RUN_STARTUP_SEEDING", True),
         ),
-        default_ingestion_provider=resolved_environ.get("GTE_INGESTION_PROVIDER", "mock"),
-        provider_timeout_seconds=_get_int(resolved_environ, "GTE_PROVIDER_TIMEOUT_SECONDS", 20),
+        default_ingestion_provider=default_ingestion_provider,
+        real_player_mapping_auto_create_missing_entities=_get_bool(
+            resolved_environ,
+            "GTE_REAL_PLAYER_MAPPING_AUTO_CREATE_MISSING_ENTITIES",
+            False,
+        ),
+        provider_timeout_seconds=provider_timeout_seconds,
         football_data_base_url=resolved_environ.get("FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"),
         football_data_api_key=resolved_environ.get("FOOTBALL_DATA_API_KEY"),
         value_snapshot_lookback_days=_get_int(resolved_environ, "GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS", 7),
+        real_player_import=load_real_player_import_config(
+            resolved_environ,
+            default_provider_name=default_ingestion_provider,
+            default_timeout_seconds=provider_timeout_seconds,
+        ),
         player_universe_weighting=load_player_universe_weighting_config(resolved_config_root),
         supply_tiers=load_supply_tiers_config(resolved_config_root),
         liquidity_bands=load_liquidity_bands_config(resolved_config_root),

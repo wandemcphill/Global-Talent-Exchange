@@ -45,6 +45,44 @@ class PlayerValueSnapshotRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     reason_codes_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
 
 
+class RealPlayerValueLineageRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "real_player_value_lineages"
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", name="uq_real_player_value_lineages_snapshot_id"),
+        UniqueConstraint("player_id", "as_of", "snapshot_type", name="uq_real_player_value_lineages_player_as_of_type"),
+    )
+
+    player_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    snapshot_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("player_value_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    snapshot_type: Mapped[str] = mapped_column(String(32), nullable=False, default="intraday", server_default="intraday", index=True)
+    config_version: Mapped[str] = mapped_column(String(64), nullable=False, default="baseline-v1", server_default="baseline-v1")
+    adapter_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    adapter_version: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_reference_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_reference_origin: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_market_value_eur: Mapped[float] = mapped_column(Float, nullable=False)
+    bridge_market_value_eur: Mapped[float] = mapped_column(Float, nullable=False)
+    base_value_credits: Mapped[float] = mapped_column(Float, nullable=False)
+    floor_credits: Mapped[float] = mapped_column(Float, nullable=False)
+    ceiling_credits: Mapped[float] = mapped_column(Float, nullable=False)
+    previous_bridge_market_value_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    smoothing_factor: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    inputs_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    components_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    explanation_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+
+
 class PlayerValueDailyCloseRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "player_value_daily_closes"
     __table_args__ = (

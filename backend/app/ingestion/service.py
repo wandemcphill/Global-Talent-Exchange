@@ -83,6 +83,7 @@ class IngestionService:
         )
         self.provider_registry = provider_registry or ProviderRegistry()
         self.cache = HotReadCache(cache_backend or NullCacheBackend())
+        self.settings = settings
         self.logger = logger
 
     def bootstrap_sync(
@@ -92,7 +93,7 @@ class IngestionService:
         competition_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
-        provider = self.provider_registry.create(provider_name)
+        provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
             job_name="bootstrap_sync",
@@ -130,7 +131,7 @@ class IngestionService:
         competition_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
-        provider = self.provider_registry.create(provider_name)
+        provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
             job_name="match_sync",
@@ -161,7 +162,7 @@ class IngestionService:
         competition_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
-        provider = self.provider_registry.create(provider_name)
+        provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
             job_name="standings_sync",
@@ -194,7 +195,7 @@ class IngestionService:
         player_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
-        provider = self.provider_registry.create(provider_name)
+        provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
             job_name="player_stats_sync",
@@ -226,7 +227,7 @@ class IngestionService:
         provider_name: str = DEFAULT_PROVIDER_NAME,
         cursor_key: str = DEFAULT_CURSOR_KEY,
     ) -> SyncExecutionSummary:
-        provider = self.provider_registry.create(provider_name)
+        provider = self.provider_registry.create(provider_name, settings=self.settings)
         existing_cursor = self.repository.get_cursor(
             provider_name=provider_name,
             entity_type=INCREMENTAL_ENTITY_TYPE,
@@ -382,7 +383,7 @@ class IngestionService:
         )
 
     def inspect_provider_health(self, *, provider_name: str = DEFAULT_PROVIDER_NAME) -> ProviderHealthSnapshot:
-        provider = self.provider_registry.create(provider_name)
+        provider = self.provider_registry.create(provider_name, settings=self.settings)
         return provider.healthcheck()
 
     def get_last_cursor(

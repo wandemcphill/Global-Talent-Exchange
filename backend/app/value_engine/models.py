@@ -7,6 +7,70 @@ from app.ingestion.models import NormalizedAwardEvent, NormalizedMatchEvent, Nor
 
 
 @dataclass(frozen=True, slots=True)
+class RealPlayerValuationBridgeResult:
+    adapter_code: str
+    adapter_version: str
+    source_market_value_eur: float
+    source_reference_weight: float
+    source_reference_tier: str
+    source_reference_origin: str
+    profile_baseline_market_value_eur: float
+    scarcity_multiplier: float
+    profile_completeness_multiplier: float
+    age_curve_multiplier: float
+    competition_quality_multiplier: float
+    club_quality_multiplier: float
+    visibility_multiplier: float
+    floor_market_value_eur: float
+    ceiling_market_value_eur: float
+    unclamped_market_value_eur: float
+    bridge_market_value_eur: float
+    base_value_credits: float
+    floor_credits: float
+    ceiling_credits: float
+    previous_bridge_market_value_eur: float | None = None
+    smoothing_factor: float = 0.0
+    actions: tuple[str, ...] = ()
+    inputs: dict[str, object] = field(default_factory=dict)
+    components: dict[str, float] = field(default_factory=dict)
+    explanation: tuple[str, ...] = ()
+
+    def as_breakdown_payload(self) -> dict[str, object]:
+        return {
+            "adapter_code": self.adapter_code,
+            "adapter_version": self.adapter_version,
+            "source_market_value_eur": round(self.source_market_value_eur, 2),
+            "source_reference_weight": round(self.source_reference_weight, 4),
+            "source_reference_tier": self.source_reference_tier,
+            "source_reference_origin": self.source_reference_origin,
+            "profile_baseline_market_value_eur": round(self.profile_baseline_market_value_eur, 2),
+            "scarcity_multiplier": round(self.scarcity_multiplier, 4),
+            "profile_completeness_multiplier": round(self.profile_completeness_multiplier, 4),
+            "age_curve_multiplier": round(self.age_curve_multiplier, 4),
+            "competition_quality_multiplier": round(self.competition_quality_multiplier, 4),
+            "club_quality_multiplier": round(self.club_quality_multiplier, 4),
+            "visibility_multiplier": round(self.visibility_multiplier, 4),
+            "floor_market_value_eur": round(self.floor_market_value_eur, 2),
+            "ceiling_market_value_eur": round(self.ceiling_market_value_eur, 2),
+            "unclamped_market_value_eur": round(self.unclamped_market_value_eur, 2),
+            "bridge_market_value_eur": round(self.bridge_market_value_eur, 2),
+            "base_value_credits": round(self.base_value_credits, 2),
+            "floor_credits": round(self.floor_credits, 2),
+            "ceiling_credits": round(self.ceiling_credits, 2),
+            "previous_bridge_market_value_eur": (
+                round(self.previous_bridge_market_value_eur, 2)
+                if self.previous_bridge_market_value_eur is not None
+                else None
+            ),
+            "smoothing_factor": round(self.smoothing_factor, 4),
+            "actions": self.actions,
+            "inputs": dict(self.inputs),
+            "components": dict(self.components),
+            "explanation": self.explanation,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class DemandSignal:
     purchases: int = 0
     sales: int = 0
@@ -185,6 +249,7 @@ class PlayerValueInput:
     market_pulse: MarketPulse = field(default_factory=MarketPulse)
     profile_context: PlayerProfileContext = field(default_factory=PlayerProfileContext)
     reference_context: ReferenceValueContext | None = None
+    real_player_valuation: RealPlayerValuationBridgeResult | None = None
     historical_values: tuple[HistoricalValuePoint, ...] = ()
     snapshot_type: str = "intraday"
     candidate_reasons: tuple[str, ...] = ()
@@ -260,6 +325,7 @@ class ValueBreakdown:
     weight_profile_code: str = "default"
     reason_codes: tuple[str, ...] = ()
     integrity_flags: tuple[str, ...] = ()
+    real_player_valuation: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +374,7 @@ class ValueSnapshot:
     global_scouting_index_breakdown: ScoutingIndexBreakdown
     drivers: tuple[str, ...]
     reason_codes: tuple[str, ...]
+    real_player_valuation: RealPlayerValuationBridgeResult | None = None
 
     @property
     def published_card_value_credits(self) -> float:

@@ -8,12 +8,13 @@ from app.ingestion.normalizers import normalize_recent_update_feed
 from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
 from .base import BaseFootballProvider
+from .import_models import RealPlayerSourceItem, RealPlayerSourcePage
 
 
 class MockFootballProvider(BaseFootballProvider):
     name = "mock"
 
-    def __init__(self) -> None:
+    def __init__(self, *, settings=None) -> None:
         self._countries = [
             {"id": "ENG", "name": " England ", "countryCode": "GB", "code": "ENG"},
             {"id": "ESP", "name": "Spain", "countryCode": "ES", "code": "ESP"},
@@ -285,3 +286,83 @@ class MockFootballProvider(BaseFootballProvider):
             payload["updates"] = []
             payload["cursor"] = cursor
         return normalize_recent_update_feed(self.name, payload)
+
+    def fetch_player_directory_page(
+        self,
+        *,
+        cursor: str | None = None,
+        batch_size: int = 100,
+        timeout_seconds: int | None = None,
+        rate_limit_per_minute: int | None = None,
+    ) -> RealPlayerSourcePage:
+        del timeout_seconds, rate_limit_per_minute
+        directory = self._build_player_directory()
+        offset = max(0, int(cursor or "0"))
+        page_items = tuple(directory[offset : offset + batch_size])
+        next_offset = offset + len(page_items)
+        exhausted = next_offset >= len(directory)
+        return RealPlayerSourcePage(
+            provider_name=self.name,
+            items=page_items,
+            next_cursor=None if exhausted else str(next_offset),
+            exhausted=exhausted,
+            source_version="mock-directory-v1",
+        )
+
+    def _build_player_directory(self) -> list[RealPlayerSourceItem]:
+        country_codes = {
+            str(country.get("name") or "").strip().lower(): str(country.get("countryCode") or "").strip().upper() or None
+            for country in self._countries
+        }
+        competition_by_club: dict[str, tuple[str | None, str | None, str | None]] = {}
+        for (competition_id, season_id), clubs in self._clubs.items():
+            competition = next(
+                (item for item in self._competitions if str(item.get("id") or "").strip() == str(competition_id)),
+                {},
+            )
+            competition_name = str(competition.get("name") or "").strip() or None
+            for club in clubs:
+                club_id = str(club.get("id") or "").strip()
+                if club_id and club_id not in competition_by_club:
+                    competition_by_club[club_id] = (competition_id, competition_name, season_id)
+
+        club_names = {
+            str(club.get("id") or "").strip(): str(club.get("name") or "").strip() or None
+            for clubs in self._clubs.values()
+            for club in clubs
+        }
+
+        items: list[RealPlayerSourceItem] = []
+        for club_id in sorted(self._players):
+            competition_id, competition_name, season_id = competition_by_club.get(club_id, (None, None, None))
+            for player in self._players[club_id]:
+                player_name = str(player.get("name") or "").strip()
+                birth_date = str(player.get("dateOfBirth") or "").strip()
+                nationality_name = str(player.get("nationality") or "").strip() or None
+                payload = deepcopy(player)
+                payload["provider_player_id"] = str(player.get("id") or "").strip()
+                payload["currentClub"] = {"id": club_id, "name": club_names.get(club_id)}
+                payload["currentCompetition"] = {"id": competition_id, "name": competition_name}
+                payload["season"] = {"id": season_id}
+                items.append(
+                    RealPlayerSourceItem(
+                        provider_player_id=str(player.get("id") or "").strip(),
+                        full_name=player_name,
+                        first_name=str(player.get("firstName") or "").strip() or None,
+                        last_name=str(player.get("lastName") or "").strip() or None,
+                        short_name=str(player.get("shortName") or "").strip() or None,
+                        display_position=str(player.get("position") or "").strip() or None,
+                        nationality_name=nationality_name,
+                        nationality_code=country_codes.get((nationality_name or "").lower()),
+                        date_of_birth=datetime.fromisoformat(birth_date).date() if birth_date else None,
+                        current_club_id=club_id,
+                        current_club_name=club_names.get(club_id),
+                        current_competition_id=competition_id,
+                        current_competition_name=competition_name,
+                        current_season_id=season_id,
+                        metadata_json={"mock_source": True},
+                        raw_payload=payload,
+                    )
+                )
+        items.sort(key=lambda item: item.provider_player_id)
+        return items

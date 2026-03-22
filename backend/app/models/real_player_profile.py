@@ -15,6 +15,8 @@ class RealPlayerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_real_player_profiles_player_id", "gtex_player_id"),
         Index("ix_real_player_profiles_source_name_key", "source_name", "source_player_key"),
         Index("ix_real_player_profiles_refreshed_at", "source_last_refreshed_at"),
+        Index("ix_real_player_profiles_batch_id", "ingestion_batch_id"),
+        Index("ix_real_player_profiles_pricing_snapshot_id", "pricing_snapshot_id"),
     )
 
     gtex_player_id: Mapped[str] = mapped_column(

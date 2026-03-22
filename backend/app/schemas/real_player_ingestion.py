@@ -19,11 +19,13 @@ class RealPlayerSeedInput(BaseModel):
     source_name: str
     source_player_key: str
     canonical_name: str
+    display_name: str | None = None
     known_aliases: list[str] = Field(default_factory=list)
     nationality: str | None = None
     nationality_code: str | None = None
     date_of_birth: date | None = None
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
+    age: int | None = Field(default=None, ge=13, le=60)
     dominant_foot: str | None = None
     primary_position: str | None = None
     secondary_positions: list[str] = Field(default_factory=list)
@@ -46,6 +48,7 @@ class RealPlayerSeedInput(BaseModel):
     identity_confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     is_verified_real_player: bool = True
     real_player_tier: str | None = None
+    player_import_item_id: str | None = None
 
     @model_validator(mode="after")
     def normalize_payload(self) -> "RealPlayerSeedInput":

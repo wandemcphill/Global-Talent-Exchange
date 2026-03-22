@@ -44,10 +44,12 @@ from app.value_engine.models import (
     TradePrint,
     ValueSnapshot,
 )
+from app.value_engine.real_player_bridge import RealPlayerValuationAdapter
 from app.value_engine.read_models import (
     PlayerValueAdminAuditRecord,
     PlayerValueDailyCloseRecord,
     PlayerValueRecomputeCandidateRecord,
+    RealPlayerValueLineageRecord,
     PlayerValueRunRecord,
     PlayerValueSnapshotRecord,
 )
@@ -219,6 +221,13 @@ class IngestionValueSnapshotRepository:
             player_window=player_window,
             as_of=as_of,
         )
+        real_player_valuation = self._build_real_player_valuation(
+            player=player,
+            profile_context=profile_context,
+            reference_context=reference_context,
+            reference_market_value_eur=reference_market_value_eur,
+            previous_snapshot=previous_snapshot,
+        )
 
         return PlayerValueInput(
             player_id=player.id,
@@ -254,6 +263,7 @@ class IngestionValueSnapshotRepository:
             market_pulse=self._build_market_pulse(player.market_signals, window_start=window_start, as_of=as_of),
             profile_context=profile_context,
             reference_context=reference_context,
+            real_player_valuation=real_player_valuation,
             historical_values=historical_values,
             snapshot_type=self.snapshot_type,
             candidate_reasons=self.candidate_reasons_by_player.get(player.id, ()),
@@ -324,7 +334,12 @@ class IngestionValueSnapshotRepository:
             snapshot_record.reason_codes_json = list(snapshot.reason_codes)
 
         self.session.flush()
-        self._upsert_daily_close(snapshot)
+        self._upsert_real_player_lineage(
+            snapshot=snapshot,
+            snapshot_record=snapshot_record,
+            breakdown_payload=breakdown_payload,
+        )
+        self._upsert_daily_close(snapshot, breakdown_payload=breakdown_payload)
         self._mark_candidate_completed(snapshot.player_id, processed_at=snapshot.as_of)
         if self.summary_projector is not None:
             self.summary_projector.project(
@@ -548,6 +563,26 @@ class IngestionValueSnapshotRepository:
             transfer_interest_score=float(self._latest_signal_score(player.market_signals, {"transfer_interest_score", "transfer_room_adds", "transfer_room_interest"}, as_of=as_of) or 0.0),
             profile_completeness_score=float(player.profile_completeness_score or 55.0),
             player_class=self._player_class(player=player, season_stat=season_stat, as_of=as_of),
+        )
+
+    def _build_real_player_valuation(
+        self,
+        *,
+        player: Player,
+        profile_context: PlayerProfileContext,
+        reference_context: ReferenceValueContext,
+        reference_market_value_eur: float,
+        previous_snapshot: PlayerValueSnapshotRecord | None,
+    ):
+        adapter = RealPlayerValuationAdapter(
+            config=self.settings.value_engine_weighting if self.settings is not None else get_settings().value_engine_weighting
+        )
+        return adapter.build(
+            player=player,
+            profile=profile_context,
+            reference_context=reference_context,
+            reference_market_value_eur=reference_market_value_eur,
+            previous_snapshot=previous_snapshot,
         )
 
     def _build_transfer_events(
@@ -983,14 +1018,14 @@ class IngestionValueSnapshotRepository:
             key=lambda item: (_coerce_utc(item.as_of), _coerce_utc(item.created_at), item.id),
         )
 
-    def _upsert_daily_close(self, snapshot: ValueSnapshot) -> None:
+    def _upsert_daily_close(self, snapshot: ValueSnapshot, *, breakdown_payload: dict | None = None) -> None:
         close_date = snapshot.as_of.date()
         statement = select(PlayerValueDailyCloseRecord).where(
             PlayerValueDailyCloseRecord.player_id == snapshot.player_id,
             PlayerValueDailyCloseRecord.close_date == close_date,
         )
         close_record = self.session.scalar(statement)
-        breakdown_payload = asdict(snapshot.breakdown)
+        resolved_breakdown_payload = breakdown_payload if breakdown_payload is not None else asdict(snapshot.breakdown)
         if close_record is None:
             close_record = PlayerValueDailyCloseRecord(
                 player_id=snapshot.player_id,
@@ -1009,7 +1044,7 @@ class IngestionValueSnapshotRepository:
                 trend_direction=snapshot.trend_direction,
                 trend_confidence=snapshot.trend_confidence,
                 reason_codes_json=list(snapshot.reason_codes),
-                breakdown_json=breakdown_payload,
+                breakdown_json=resolved_breakdown_payload,
             )
             self.session.add(close_record)
             return
@@ -1027,7 +1062,72 @@ class IngestionValueSnapshotRepository:
         close_record.trend_direction = snapshot.trend_direction
         close_record.trend_confidence = snapshot.trend_confidence
         close_record.reason_codes_json = list(snapshot.reason_codes)
-        close_record.breakdown_json = breakdown_payload
+        close_record.breakdown_json = resolved_breakdown_payload
+
+    def _upsert_real_player_lineage(
+        self,
+        *,
+        snapshot: ValueSnapshot,
+        snapshot_record: PlayerValueSnapshotRecord,
+        breakdown_payload: dict,
+    ) -> None:
+        valuation = snapshot.real_player_valuation
+        if valuation is None:
+            return
+
+        statement = select(RealPlayerValueLineageRecord).where(
+            RealPlayerValueLineageRecord.snapshot_id == snapshot_record.id
+        )
+        lineage_record = self.session.scalar(statement)
+        if lineage_record is None:
+            lineage_record = RealPlayerValueLineageRecord(
+                player_id=snapshot.player_id,
+                snapshot_id=snapshot_record.id,
+                as_of=snapshot.as_of,
+                snapshot_type=snapshot.snapshot_type,
+                config_version=snapshot.config_version,
+                adapter_code=valuation.adapter_code,
+                adapter_version=valuation.adapter_version,
+                source_reference_tier=valuation.source_reference_tier,
+                source_reference_origin=valuation.source_reference_origin,
+                source_market_value_eur=valuation.source_market_value_eur,
+                bridge_market_value_eur=valuation.bridge_market_value_eur,
+                base_value_credits=valuation.base_value_credits,
+                floor_credits=valuation.floor_credits,
+                ceiling_credits=valuation.ceiling_credits,
+                previous_bridge_market_value_eur=valuation.previous_bridge_market_value_eur,
+                smoothing_factor=valuation.smoothing_factor,
+                inputs_json=dict(valuation.inputs),
+                components_json=dict(valuation.components),
+                explanation_json=list(valuation.explanation),
+            )
+            self.session.add(lineage_record)
+        else:
+            lineage_record.player_id = snapshot.player_id
+            lineage_record.as_of = snapshot.as_of
+            lineage_record.snapshot_type = snapshot.snapshot_type
+            lineage_record.config_version = snapshot.config_version
+            lineage_record.adapter_code = valuation.adapter_code
+            lineage_record.adapter_version = valuation.adapter_version
+            lineage_record.source_reference_tier = valuation.source_reference_tier
+            lineage_record.source_reference_origin = valuation.source_reference_origin
+            lineage_record.source_market_value_eur = valuation.source_market_value_eur
+            lineage_record.bridge_market_value_eur = valuation.bridge_market_value_eur
+            lineage_record.base_value_credits = valuation.base_value_credits
+            lineage_record.floor_credits = valuation.floor_credits
+            lineage_record.ceiling_credits = valuation.ceiling_credits
+            lineage_record.previous_bridge_market_value_eur = valuation.previous_bridge_market_value_eur
+            lineage_record.smoothing_factor = valuation.smoothing_factor
+            lineage_record.inputs_json = dict(valuation.inputs)
+            lineage_record.components_json = dict(valuation.components)
+            lineage_record.explanation_json = list(valuation.explanation)
+
+        self.session.flush()
+        valuation_payload = dict(breakdown_payload.get("real_player_valuation") or {})
+        valuation_payload["lineage_id"] = lineage_record.id
+        breakdown_payload["real_player_valuation"] = valuation_payload
+        snapshot_record.breakdown_json = json.loads(json.dumps(breakdown_payload))
+        self.session.flush()
 
     def _mark_candidate_completed(self, player_id: str, *, processed_at: datetime) -> None:
         candidate = self.session.scalar(

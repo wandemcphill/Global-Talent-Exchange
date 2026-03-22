@@ -284,6 +284,30 @@ def test_load_settings_reads_run_startup_seeding_env_override() -> None:
     assert settings.run_startup_seeding is False
 
 
+def test_load_settings_reads_real_player_import_env_overrides() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_INGESTION_PROVIDER": "mock",
+            "GTE_PROVIDER_TIMEOUT_SECONDS": "18",
+            "GTE_REAL_PLAYER_IMPORT_PROVIDER": "football_data",
+            "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE": "320",
+            "GTE_REAL_PLAYER_IMPORT_MAX_PAGES_PER_RUN": "12",
+            "GTE_REAL_PLAYER_IMPORT_RATE_LIMIT_PER_MINUTE": "45",
+            "GTE_REAL_PLAYER_IMPORT_TIMEOUT_SECONDS": "27",
+            "GTE_REAL_PLAYER_IMPORT_CURSOR_KEY": "real-player-phase-a",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.real_player_import.provider_name == "football_data"
+    assert settings.real_player_import.batch_size == 320
+    assert settings.real_player_import.max_pages_per_run == 12
+    assert settings.real_player_import.rate_limit_per_minute == 45
+    assert settings.real_player_import.timeout_seconds == 27
+    assert settings.real_player_import.cursor_key == "real-player-phase-a"
+
+
 def test_default_supply_config_reduces_supply_for_obscure_players() -> None:
     settings = load_settings()
     supply_by_code = {tier.code: tier for tier in settings.supply_tiers.tiers}
@@ -299,6 +323,7 @@ def test_target_metadata_includes_phase_one_read_models() -> None:
     assert "player_summary_read_models" in metadata.tables
     assert "market_summary_read_models" in metadata.tables
     assert "player_value_snapshots" in metadata.tables
+    assert "real_player_import_staging" in metadata.tables
 
 
 def test_value_engine_uses_central_value_weighting_config() -> None:

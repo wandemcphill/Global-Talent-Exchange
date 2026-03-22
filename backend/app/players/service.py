@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.ingestion.models import Match, Player, PlayerMatchStat, PlayerSeasonStat
 from app.players.read_models import PlayerSummaryReadModel
-from app.players.schemas import PlayerSummaryView
+from app.players.schemas import PlayerSummaryView, RealPlayerSummaryIdentityView
 from app.schemas.regen_universe import RegenPlayerPrestigeSummaryView
 from app.regen_universe.service import RegenUniverseService
 from app.value_engine.models import ValueSnapshot
@@ -64,6 +64,11 @@ class PlayerSummaryProjector:
         summary.average_rating = self._resolve_average_rating(latest_match_stat, latest_season_stat)
         summary.market_interest_score = int(round(sum(max(signal.score, 0.0) for signal in player.market_signals)))
         summary_payload = dict(summary.summary_json) if isinstance(summary.summary_json, dict) else {}
+        real_player_valuation = (
+            snapshot_record.breakdown_json.get("real_player_valuation")
+            if isinstance(snapshot_record.breakdown_json, dict)
+            else None
+        )
         summary_payload.update({
             "position": player.normalized_position or player.position,
             "drivers": list(snapshot.drivers),
@@ -108,6 +113,8 @@ class PlayerSummaryProjector:
                 else None
             ),
         })
+        if isinstance(real_player_valuation, dict):
+            summary_payload["real_player_valuation"] = real_player_valuation
         summary.summary_json = summary_payload
         session.flush()
         return summary
@@ -165,7 +172,43 @@ class PlayerSummaryQueryService:
 
     def _build_view(self, summary: PlayerSummaryReadModel) -> PlayerSummaryView:
         payload = PlayerSummaryView.model_validate(summary)
+        player = self.session.get(Player, summary.player_id)
+        payload.is_real_player = bool(player.is_real_player) if player is not None else False
+        if payload.is_real_player and player is not None:
+            payload.identity_rail = "real_player_universe"
+            real_player_payload = self._build_real_player_summary_payload(player=player, summary=summary)
+            if real_player_payload is not None:
+                payload.real_player_universe = real_player_payload
+            return payload
+
         regen_payload = RegenUniverseService(self.session).get_player_prestige_summary(summary.player_id)
         if regen_payload is not None:
+            payload.identity_rail = "regen_universe"
             payload.regen_universe = RegenPlayerPrestigeSummaryView.model_validate(regen_payload)
         return payload
+
+    def _build_real_player_summary_payload(
+        self,
+        *,
+        player: Player,
+        summary: PlayerSummaryReadModel,
+    ) -> RealPlayerSummaryIdentityView | None:
+        summary_payload = dict(summary.summary_json) if isinstance(summary.summary_json, dict) else {}
+        real_player_payload = summary_payload.get("real_player_profile")
+        if isinstance(real_player_payload, dict):
+            return RealPlayerSummaryIdentityView.model_validate(real_player_payload)
+
+        return RealPlayerSummaryIdentityView.model_validate(
+            {
+                "is_real_player": True,
+                "real_player_tier": player.real_player_tier,
+                "canonical_display_name": player.canonical_display_name or player.full_name,
+                "identity_confidence_score": player.identity_confidence_score,
+                "source_last_refreshed_at": player.source_last_refreshed_at,
+                "real_world_club_name": player.real_world_club_name,
+                "real_world_league_name": player.real_world_league_name,
+                "current_market_reference_value": player.current_market_reference_value,
+                "market_reference_currency": player.market_reference_currency,
+                "normalization_profile_version": player.normalization_profile_version,
+            }
+        )

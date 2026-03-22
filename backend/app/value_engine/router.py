@@ -110,6 +110,7 @@ def _build_breakdown_payload(snapshot: Any) -> dict:
         "low_liquidity_penalty_pct": breakdown_json.get("low_liquidity_penalty_pct"),
         "suspicious_signal_suppression_multiplier": breakdown_json.get("suspicious_signal_suppression_multiplier"),
         "weight_profile_code": breakdown_json.get("weight_profile_code"),
+        "real_player_valuation": breakdown_json.get("real_player_valuation"),
     }
 
 

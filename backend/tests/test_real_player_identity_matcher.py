@@ -11,6 +11,7 @@ from app.core.database import load_model_modules
 from app.ingestion.models import Club, Country, Player
 from app.ingestion.real_player_identity_matcher import AmbiguousRealPlayerMatchError, RealPlayerIdentityMatcher
 from app.models.base import Base
+from app.models.real_player_import_batch import RealPlayerImportBatch, RealPlayerImportRow
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.schemas.real_player_ingestion import RealPlayerSeedInput
 
@@ -389,3 +390,127 @@ def test_identity_matcher_does_not_merge_distinct_players_without_exact_name_or_
 
         assert result.action == "create_new"
         assert result.player_id is None
+
+
+def test_identity_matcher_prefers_resolved_import_row_exact_identity_key(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="BR",
+            name="Brazil",
+            alpha2_code="BR",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="vinicius-main",
+            full_name="Vinicius Junior",
+            canonical_display_name="Vinicius Junior",
+            country=country,
+            position="Winger",
+            normalized_position="forward",
+            date_of_birth=date(2000, 7, 12),
+            is_real_player=True,
+        )
+        session.add_all([country, player])
+        session.flush()
+        batch = RealPlayerImportBatch(
+            batch_key="historical-batch",
+            provider_name="provider-a",
+            source_type="real_player_ingestion",
+            mode="curated_seed",
+            status="completed",
+        )
+        session.add(batch)
+        session.flush()
+        session.add(
+            RealPlayerImportRow(
+                batch_id=batch.id,
+                row_number=1,
+                source_name="provider-a",
+                source_player_key="vinicius-legacy-001",
+                canonical_name="Vinicius Junior",
+                status="imported",
+                match_action="matched_existing",
+                import_action="updated",
+                identity_confidence_score=0.98,
+                gtex_player_id=player.id,
+                normalized_full_name="vinicius junior",
+                normalized_display_name="vinicius junior",
+                name_token_signature="junior|vinicius",
+                exact_identity_key="vinicius junior|2000-07-12",
+                normalized_nationality="brazil",
+                nationality_code="BR",
+                primary_position_key="winger",
+                secondary_position_keys_json=[],
+                position_family="forward",
+                review_status="resolved",
+            )
+        )
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "provider-b",
+                "source_player_key": "vinicius-001",
+                "canonical_name": "Vinicius Junior",
+                "nationality": "Brazil",
+                "date_of_birth": "2000-07-12",
+                "primary_position": "Winger",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+        assert result.confidence_score == 0.98
+
+
+def test_identity_matcher_matches_birthyear_club_key_before_fuzzy_merge(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="CI",
+            name="Ivory Coast",
+            alpha2_code="CI",
+        )
+        club = Club(
+            source_provider="test-source",
+            provider_external_id="al-ahli",
+            name="Al Ahli",
+            slug="al-ahli",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="kessie-main",
+            full_name="Franck Kessie",
+            canonical_display_name="Franck Kessie",
+            country=country,
+            current_club=club,
+            position="Central Midfielder",
+            normalized_position="midfielder",
+            date_of_birth=date(1996, 12, 19),
+            is_real_player=True,
+        )
+        session.add_all([country, club, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "provider-a",
+                "source_player_key": "kessie-001",
+                "canonical_name": "Franck Kessie",
+                "nationality": "Ivory Coast",
+                "birth_year": 1996,
+                "primary_position": "CM",
+                "current_real_world_club": "Al Ahli",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+        assert result.confidence_score >= 0.88

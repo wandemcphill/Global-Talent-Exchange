@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -426,6 +427,7 @@ class ValueBreakdownView(BaseModel):
     low_liquidity_penalty_pct: float | None = None
     suspicious_signal_suppression_multiplier: float | None = None
     weight_profile_code: str | None = None
+    real_player_valuation: dict[str, Any] | None = None
 
 
 class ScoutingIndexBreakdownView(BaseModel):

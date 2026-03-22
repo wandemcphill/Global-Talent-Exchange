@@ -5,6 +5,8 @@ from datetime import date, datetime
 
 from app.schemas.real_player_ingestion import RealPlayerSeedInput
 
+from .real_player_identity_normalizer import NormalizedRealPlayerIdentity, normalize_real_player_identity
+
 
 NORMALIZATION_PROFILE_VERSION = "real_player_v1"
 
@@ -26,6 +28,8 @@ class RealPlayerNormalizedProfile:
     source_name: str
     source_player_key: str
     canonical_name: str
+    display_name: str
+    identity: NormalizedRealPlayerIdentity
     known_aliases: tuple[str, ...]
     nationality: str | None
     nationality_code: str | None
@@ -81,11 +85,12 @@ class RealPlayerNormalizationService:
     normalization_profile_version: str = NORMALIZATION_PROFILE_VERSION
 
     def normalize(self, payload: RealPlayerSeedInput, *, as_of: datetime) -> RealPlayerNormalizedProfile:
+        identity = normalize_real_player_identity(payload, as_of=as_of.date())
         competition_level = self._competition_level(payload.competition_level)
-        primary_position = self._primary_position(payload.primary_position)
-        secondary_positions = tuple(self._primary_position(position) for position in payload.secondary_positions)
-        normalized_position = self._position_family(primary_position)
-        age_years = self._age_years(payload.date_of_birth, payload.birth_year, as_of.date())
+        primary_position = identity.primary_position
+        secondary_positions = identity.secondary_positions
+        normalized_position = identity.position_family
+        age_years = identity.age_years
         competition_strength_score = _COMPETITION_STRENGTH_SCORES[competition_level]
         market_reference_currency = payload.market_reference_currency
         reference_market_value_eur = (
@@ -143,21 +148,23 @@ class RealPlayerNormalizationService:
         )
 
         return RealPlayerNormalizedProfile(
-            source_name=payload.source_name,
-            source_player_key=payload.source_player_key,
-            canonical_name=payload.canonical_name,
-            known_aliases=tuple(payload.known_aliases),
-            nationality=payload.nationality,
-            nationality_code=payload.nationality_code,
-            date_of_birth=payload.date_of_birth,
-            birth_year=payload.birth_year,
+            source_name=identity.source_name,
+            source_player_key=identity.source_player_key,
+            canonical_name=identity.canonical_name,
+            display_name=identity.display_name,
+            identity=identity,
+            known_aliases=identity.known_aliases,
+            nationality=identity.nationality,
+            nationality_code=identity.nationality_code,
+            date_of_birth=identity.date_of_birth,
+            birth_year=identity.birth_year,
             age_years=age_years,
-            dominant_foot=payload.dominant_foot,
+            dominant_foot=identity.dominant_foot,
             primary_position=primary_position,
             secondary_positions=secondary_positions,
             normalized_position=normalized_position,
-            current_real_world_club=payload.current_real_world_club,
-            current_real_world_league=payload.current_real_world_league,
+            current_real_world_club=identity.club_name,
+            current_real_world_league=identity.league_name,
             competition_level=competition_level,
             competition_strength_score=competition_strength_score,
             competition_strength_multiplier=round(0.75 + (competition_strength_score / 200.0), 3),
@@ -355,7 +362,7 @@ class RealPlayerNormalizationService:
     def _profile_completeness_score(self, payload: RealPlayerSeedInput) -> float:
         checks = (
             bool(payload.nationality or payload.nationality_code),
-            bool(payload.date_of_birth or payload.birth_year),
+            bool(payload.date_of_birth or payload.birth_year or payload.age),
             bool(payload.primary_position),
             bool(payload.current_real_world_club),
             bool(payload.current_real_world_league),

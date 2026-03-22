@@ -177,7 +177,12 @@ class ValueEngine:
     def build_snapshot(self, payload: PlayerValueInput) -> ValueSnapshot:
         profile = payload.profile_context
         reference_context = payload.reference_context or self._default_reference_context(payload)
-        seeded_reference_market_value_eur = self._seed_reference_market_value_eur(payload, reference_context, profile)
+        real_player_valuation = payload.real_player_valuation
+        seeded_reference_market_value_eur = (
+            round(real_player_valuation.bridge_market_value_eur, 2)
+            if real_player_valuation is not None
+            else self._seed_reference_market_value_eur(payload, reference_context, profile)
+        )
         baseline_credits = credits_from_real_world_value(
             seeded_reference_market_value_eur,
             eur_per_credit=self.config.baseline_eur_per_credit,
@@ -430,10 +435,16 @@ class ValueEngine:
                 weight_profile_code=resolved_weights.code,
                 reason_codes=reason_codes,
                 integrity_flags=manipulation_assessment.integrity_flags,
+                real_player_valuation=(
+                    real_player_valuation.as_breakdown_payload()
+                    if real_player_valuation is not None
+                    else None
+                ),
             ),
             global_scouting_index_breakdown=gsi_snapshot.breakdown,
             drivers=drivers,
             reason_codes=reason_codes,
+            real_player_valuation=real_player_valuation,
         )
 
     def _default_reference_context(self, payload: PlayerValueInput) -> ReferenceValueContext:
@@ -1119,6 +1130,13 @@ class ValueEngine:
             reason_codes.append("injury_absence_drag")
         if reference_context.is_stale:
             reason_codes.append("stale_reference_rebase")
+        if payload.real_player_valuation is not None:
+            if "floor_guard" in payload.real_player_valuation.actions:
+                reason_codes.append("real_player_bridge_floor_guard")
+            if "ceiling_guard" in payload.real_player_valuation.actions:
+                reason_codes.append("real_player_bridge_ceiling_guard")
+            if "smoothed" in payload.real_player_valuation.actions:
+                reason_codes.append("real_player_bridge_smoothed")
         if manipulation_assessment.holder_concentration_penalty_pct > 0:
             reason_codes.append("holder_concentration_penalty")
         if manipulation_assessment.thin_market:
@@ -1164,6 +1182,8 @@ class ValueEngine:
             drivers.append("egame_visibility")
         if payload.market_pulse.snapshot_price_credits() is not None:
             drivers.append("market_snapshot")
+        if payload.real_player_valuation is not None:
+            drivers.append("real_player_bridge")
         if payload.market_pulse.last_trade_price_credits is not None:
             drivers.append("last_trade_ignored")
             drivers.append("last_trade_context")

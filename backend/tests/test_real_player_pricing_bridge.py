@@ -15,7 +15,7 @@ from app.models.base import Base
 from app.players.read_models import PlayerSummaryReadModel
 from app.players.service import PlayerSummaryProjector
 from app.schemas.real_player_ingestion import RealPlayerIngestionRequest
-from app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.value_engine.read_models import PlayerValueSnapshotRecord, RealPlayerValueLineageRecord
 from app.value_engine.service import IngestionValueEngineBridge
 
 
@@ -130,6 +130,16 @@ def test_real_player_ingestion_invokes_authoritative_value_engine_bridge() -> No
             assert summary is not None
             assert float(summary.current_value_credits) == float(snapshot.target_credits)
             assert summary.summary_json["real_player_profile"]["pricing_snapshot_id"] == snapshot.id
+            lineage = session.scalar(
+                select(RealPlayerValueLineageRecord).where(RealPlayerValueLineageRecord.snapshot_id == snapshot.id)
+            )
+            assert lineage is not None
+            assert snapshot.breakdown_json["real_player_valuation"]["lineage_id"] == lineage.id
+            assert summary.summary_json["real_player_profile"]["valuation_lineage_id"] == lineage.id
+            assert summary.summary_json["real_player_valuation"]["lineage_id"] == lineage.id
+            assert float(lineage.base_value_credits) == float(
+                snapshot.breakdown_json["real_player_valuation"]["base_value_credits"]
+            )
     finally:
         engine.dispose()
 

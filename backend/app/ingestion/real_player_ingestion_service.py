@@ -22,12 +22,17 @@ from app.ingestion.models import (
     PlayerVerification,
     VerificationStatus,
 )
-from app.ingestion.normalizers import clean_name, slugify
 from app.ingestion.real_player_normalization_service import RealPlayerNormalizationService, RealPlayerNormalizedProfile
 from app.ingestion.real_player_signal_adapter import RealPlayerSignalAdapter
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_cards import PlayerMarketValueSnapshot, PlayerStatsSnapshot
 from app.models.player_contract import PlayerContract
+from app.models.real_player_import_batch import (
+    RealPlayerImportBatch,
+    RealPlayerImportBatchStatus,
+    RealPlayerImportRow,
+    RealPlayerImportRowStatus,
+)
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
@@ -50,6 +55,7 @@ from app.value_engine.models import ValueSnapshot
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 from app.value_engine.service import IngestionValueEngineBridge, IngestionValueSnapshotRepository
 
+from .real_player_canonical_mapping_service import CanonicalReferenceResolution, RealPlayerCanonicalMappingService
 from .real_player_identity_matcher import (
     AmbiguousRealPlayerMatchError,
     RealPlayerIdentityMatcher,
@@ -86,6 +92,7 @@ class StagedRealPlayer:
     identity_confidence_score: float
     profile_id: str
     normalized: RealPlayerNormalizedProfile
+    mapping_issues: tuple[RealPlayerBatchIssue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +100,7 @@ class PreparedRealPlayerBatch:
     report: RealPlayerDryRunReport
     staged_players: tuple[StagedRealPlayer, ...]
     preview_snapshots: dict[str, ValueSnapshot]
+    import_batch_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -103,6 +111,7 @@ class RealPlayerIngestionService:
     identity_matcher: RealPlayerIdentityMatcher = field(default_factory=RealPlayerIdentityMatcher)
     normalization_service: RealPlayerNormalizationService = field(default_factory=RealPlayerNormalizationService)
     signal_adapter: RealPlayerSignalAdapter = field(default_factory=RealPlayerSignalAdapter)
+    canonical_mapping_service: RealPlayerCanonicalMappingService | None = None
     summary_projector: PlayerSummaryProjector = field(default_factory=PlayerSummaryProjector)
     squad_assignment_service: SquadAssignmentService = field(default_factory=SquadAssignmentService)
     avatar_service: AvatarService = field(default_factory=AvatarService)
@@ -115,6 +124,8 @@ class RealPlayerIngestionService:
                 summary_projector=self.summary_projector,
                 default_lookback_days=self.settings.value_snapshot_lookback_days,
             )
+        if self.canonical_mapping_service is None:
+            self.canonical_mapping_service = RealPlayerCanonicalMappingService(settings=self.settings)
 
     def ingest(self, request: RealPlayerIngestionRequest) -> RealPlayerIngestionResult:
         write_report: RealPlayerWriteReport
@@ -175,6 +186,11 @@ class RealPlayerIngestionService:
                 )
                 if self._is_blocked(prepared.report):
                     transaction.rollback()
+                    self._persist_blocked_import_batch(
+                        request=request,
+                        report=prepared.report,
+                        as_of=as_of,
+                    )
                     raise RealPlayerBatchBlockedError(prepared.report)
 
                 ordered_snapshots = [prepared.preview_snapshots[item.gtex_player_id] for item in prepared.staged_players]
@@ -187,6 +203,13 @@ class RealPlayerIngestionService:
                     as_of=as_of,
                 )
                 player_ids = [item.gtex_player_id for item in prepared.staged_players]
+                self._complete_import_batch(
+                    session=session,
+                    import_batch_id=prepared.import_batch_id,
+                    report=prepared.report,
+                    item_results=item_results,
+                    error_message=None,
+                )
                 transaction.commit()
             except Exception:
                 if transaction.is_active:
@@ -223,6 +246,16 @@ class RealPlayerIngestionService:
         staged_players: list[StagedRealPlayer] = []
         preview_snapshots: dict[str, ValueSnapshot] = {}
         issues: list[RealPlayerBatchIssue] = []
+        row_numbers = {
+            (player.source_name, player.source_player_key): index
+            for index, player in enumerate(request.players, start=1)
+        }
+        import_batch = self._upsert_import_batch(
+            session=session,
+            request=request,
+            ingestion_batch_id=ingestion_batch_id,
+            as_of=as_of,
+        )
         normalized_row_count = 0
         matched_existing_count = 0
         new_identity_count = 0
@@ -231,6 +264,7 @@ class RealPlayerIngestionService:
         hard_failure_count = 0
         ordered_payloads = sorted(request.players, key=lambda item: (item.source_name, item.source_player_key))
         for payload in ordered_payloads:
+            row_number = row_numbers[(payload.source_name, payload.source_player_key)]
             try:
                 normalized = self.normalization_service.normalize(payload, as_of=as_of)
                 normalized_row_count += 1
@@ -243,10 +277,24 @@ class RealPlayerIngestionService:
                         message=f"Normalization failed: {exc}",
                     )
                 )
+                self._upsert_import_row(
+                    session=session,
+                    import_batch=import_batch,
+                    row_number=row_number,
+                    payload=payload,
+                    normalized=None,
+                    status=RealPlayerImportRowStatus.FAILED.value,
+                    match_action=None,
+                    import_action="blocked",
+                    confidence_score=None,
+                    review_status="open",
+                    review_reason="normalization_error",
+                    validation_errors=[f"Normalization failed: {exc}"],
+                )
                 continue
 
             try:
-                match = self.identity_matcher.match(session, payload)
+                match = self.identity_matcher.match(session, payload, normalized_identity=normalized.identity)
             except AmbiguousRealPlayerMatchError as exc:
                 ambiguous_match_count += 1
                 issues.append(
@@ -264,6 +312,33 @@ class RealPlayerIngestionService:
                         ],
                     )
                 )
+                self._upsert_import_row(
+                    session=session,
+                    import_batch=import_batch,
+                    row_number=row_number,
+                    payload=payload,
+                    normalized=normalized,
+                    status=RealPlayerImportRowStatus.SKIPPED.value,
+                    match_action="ambiguous",
+                    import_action="review_required",
+                    confidence_score=max((candidate.score for candidate in exc.candidates), default=None),
+                    review_status="open",
+                    review_reason=exc.reason,
+                    candidate_players=[
+                        {
+                            "player_id": candidate.player_id,
+                            "score": candidate.score,
+                            "reasons": list(candidate.reasons),
+                        }
+                        for candidate in exc.candidates
+                    ],
+                    audit_findings=[
+                        {
+                            "finding_type": "ambiguous_match",
+                            "reason": exc.reason,
+                        }
+                    ],
+                )
                 continue
             except Exception as exc:
                 hard_failure_count += 1
@@ -273,6 +348,20 @@ class RealPlayerIngestionService:
                         issue_type="match_error",
                         message=f"Identity match failed: {exc}",
                     )
+                )
+                self._upsert_import_row(
+                    session=session,
+                    import_batch=import_batch,
+                    row_number=row_number,
+                    payload=payload,
+                    normalized=normalized,
+                    status=RealPlayerImportRowStatus.FAILED.value,
+                    match_action=None,
+                    import_action="blocked",
+                    confidence_score=None,
+                    review_status="open",
+                    review_reason="match_error",
+                    validation_errors=[f"Identity match failed: {exc}"],
                 )
                 continue
 
@@ -291,12 +380,32 @@ class RealPlayerIngestionService:
                         gtex_player_id=match.player_id,
                     )
                 )
+                self._upsert_import_row(
+                    session=session,
+                    import_batch=import_batch,
+                    row_number=row_number,
+                    payload=payload,
+                    normalized=normalized,
+                    status=RealPlayerImportRowStatus.SKIPPED.value,
+                    match_action=match.action,
+                    import_action="blocked",
+                    confidence_score=match.confidence_score,
+                    review_status="open",
+                    review_reason="mode_error",
+                    validation_errors=[
+                        f"refresh_existing requires an existing source link for '{payload.canonical_name}'.",
+                    ],
+                    gtex_player_id=match.player_id,
+                    candidate_players=self._candidate_payloads(match.candidates),
+                )
                 continue
 
             try:
                 with session.begin_nested():
                     staged = self._stage_player(
                         session=session,
+                        import_batch=import_batch,
+                        row_number=row_number,
                         payload=payload,
                         normalized=normalized,
                         match=match,
@@ -305,6 +414,7 @@ class RealPlayerIngestionService:
                         as_of=as_of,
                     )
                 staged_players.append(staged)
+                issues.extend(staged.mapping_issues)
             except Exception as exc:
                 hard_failure_count += 1
                 issues.append(
@@ -314,6 +424,22 @@ class RealPlayerIngestionService:
                         message=f"Stage failed: {exc}",
                         gtex_player_id=match.player_id,
                     )
+                )
+                self._upsert_import_row(
+                    session=session,
+                    import_batch=import_batch,
+                    row_number=row_number,
+                    payload=payload,
+                    normalized=normalized,
+                    status=RealPlayerImportRowStatus.FAILED.value,
+                    match_action=match.action,
+                    import_action="blocked",
+                    confidence_score=match.confidence_score,
+                    review_status="open",
+                    review_reason="stage_error",
+                    validation_errors=[f"Stage failed: {exc}"],
+                    gtex_player_id=match.player_id,
+                    candidate_players=self._candidate_payloads(match.candidates),
                 )
 
         for staged in staged_players:
@@ -357,12 +483,15 @@ class RealPlayerIngestionService:
             report=report,
             staged_players=tuple(staged_players),
             preview_snapshots=preview_snapshots,
+            import_batch_id=import_batch.id,
         )
 
     def _stage_player(
         self,
         *,
         session: Session,
+        import_batch: RealPlayerImportBatch,
+        row_number: int,
         payload: RealPlayerSeedInput,
         normalized: RealPlayerNormalizedProfile,
         match,
@@ -370,9 +499,80 @@ class RealPlayerIngestionService:
         ingestion_batch_id: str,
         as_of: datetime,
     ) -> StagedRealPlayer:
-        country = self._resolve_country(session, payload)
-        competition = self._resolve_competition(session, payload, normalized, as_of=as_of)
-        club = self._resolve_club(session, payload, normalized, country=country, competition=competition, as_of=as_of)
+        if self.canonical_mapping_service is None:
+            raise RealPlayerIngestionError("Canonical mapping service is not configured.")
+
+        sample_payload = self._canonical_reference_sample_payload(payload)
+        country_resolution = self.canonical_mapping_service.resolve_country(
+            session,
+            source_name=payload.source_name,
+            provider_external_id=payload.nationality_code,
+            name=payload.nationality,
+            as_of=as_of,
+            sample_payload=sample_payload,
+        )
+        country = country_resolution.entity if isinstance(country_resolution.entity, Country) else None
+
+        competition_resolution = self.canonical_mapping_service.resolve_competition(
+            session,
+            source_name=payload.source_name,
+            provider_external_id=payload.current_real_world_league_key,
+            name=payload.current_real_world_league,
+            country=None,
+            country_code=None,
+            country_name=None,
+            as_of=as_of,
+            sample_payload=sample_payload,
+            auto_create_values={
+                "competition_type": "league",
+                "format_type": "real_world",
+                "is_major": normalized.competition_level in {"elite", "major", "continental"},
+                "is_tradable": True,
+                "competition_strength": normalized.competition_strength_multiplier,
+                "last_synced_at": as_of,
+            },
+        )
+        competition = competition_resolution.entity if isinstance(competition_resolution.entity, Competition) else None
+
+        club_resolution = self.canonical_mapping_service.resolve_club(
+            session,
+            source_name=payload.source_name,
+            provider_external_id=payload.current_real_world_club_key,
+            name=payload.current_real_world_club,
+            country=competition.country if competition is not None else None,
+            country_code=None,
+            country_name=None,
+            competition=competition,
+            competition_external_id=payload.current_real_world_league_key,
+            competition_name=payload.current_real_world_league,
+            as_of=as_of,
+            sample_payload=sample_payload,
+            auto_create_values={
+                "short_name": (payload.current_real_world_club or "")[:80] or None,
+                "popularity_score": normalized.club_strength_score,
+                "is_tradable": True,
+                "last_synced_at": as_of,
+            },
+        )
+        club = club_resolution.entity if isinstance(club_resolution.entity, Club) else None
+        if competition is None and club is not None and club.current_competition_id:
+            competition = session.get(Competition, club.current_competition_id)
+
+        mapping_issues = tuple(
+            issue
+            for issue in (
+                self._mapping_issue(payload=payload, entity_label="country", resolution=country_resolution),
+                self._mapping_issue(payload=payload, entity_label="competition", resolution=competition_resolution),
+                self._mapping_issue(payload=payload, entity_label="club", resolution=club_resolution),
+            )
+            if issue is not None
+        )
+        mapping_summary = {
+            "country": country_resolution.metadata(),
+            "competition": competition_resolution.metadata(),
+            "club": club_resolution.metadata(),
+        }
+
         player, action, was_real_player = self._upsert_player(
             session,
             payload=payload,
@@ -408,6 +608,7 @@ class RealPlayerIngestionService:
             normalized=normalized,
             ingestion_batch_id=ingestion_batch_id,
             ingestion_source_version=request.ingestion_source_version,
+            mapping_summary=mapping_summary,
             as_of=as_of,
         )
         self._upsert_tenure(session, player=player, payload=payload, club=club, as_of=as_of)
@@ -422,16 +623,34 @@ class RealPlayerIngestionService:
         )
         self._upsert_injury_status(session, player=player, payload=payload)
         self._upsert_market_signals(session, player=player, normalized=normalized, as_of=as_of)
+        self._upsert_import_row(
+            session=session,
+            import_batch=import_batch,
+            row_number=row_number,
+            payload=payload,
+            normalized=normalized,
+            status=RealPlayerImportRowStatus.MATCHED.value,
+            match_action=match.action,
+            import_action=action,
+            confidence_score=match.confidence_score,
+            review_status="resolved",
+            review_reason=None,
+            gtex_player_id=player.id,
+            source_link_id=source_link.id,
+            real_player_profile_id=profile.id,
+            candidate_players=self._candidate_payloads(match.candidates),
+        )
         return StagedRealPlayer(
             source_name=payload.source_name,
             source_player_key=payload.source_player_key,
-            canonical_name=payload.canonical_name,
+            canonical_name=normalized.canonical_name,
             gtex_player_id=player.id,
             action=action,
             match_action=match.action,
             identity_confidence_score=match.confidence_score,
             profile_id=profile.id,
             normalized=normalized,
+            mapping_issues=mapping_issues,
         )
 
     def _finalize_batch(
@@ -519,6 +738,16 @@ class RealPlayerIngestionService:
                 as_of=as_of,
             )
             profile.pricing_snapshot_id = snapshot_record.id
+            self._mark_import_row_imported(
+                session=session,
+                ingestion_batch_id=ingestion_batch_id,
+                staged=staged,
+                player_id=player.id,
+                profile_id=profile.id,
+                snapshot_id=snapshot_record.id,
+                confidence_score=staged.identity_confidence_score,
+                as_of=as_of,
+            )
 
             item_results.append(
                 RealPlayerIngestionItemResult(
@@ -759,37 +988,53 @@ class RealPlayerIngestionService:
             candidates=candidates or [],
         )
 
-    def _resolve_country(self, session: Session, payload: RealPlayerSeedInput) -> Country | None:
-        if not payload.nationality and not payload.nationality_code:
-            return None
-        normalized_code = (payload.nationality_code or "").upper() or None
-        normalized_name = clean_name(payload.nationality) or normalized_code
-        country = None
-        if normalized_code:
-            country = session.scalar(
-                select(Country).where(
-                    (Country.alpha2_code == normalized_code)
-                    | (Country.alpha3_code == normalized_code)
-                    | (Country.fifa_code == normalized_code)
-                )
-            )
-        if country is None and normalized_name:
-            country = session.scalar(select(Country).where(Country.name == normalized_name))
-        if country is not None:
-            return country
+    @staticmethod
+    def _canonical_reference_sample_payload(payload: RealPlayerSeedInput) -> dict[str, object]:
+        return {
+            "canonical_name": payload.canonical_name,
+            "nationality": payload.nationality,
+            "nationality_code": payload.nationality_code,
+            "current_real_world_club": payload.current_real_world_club,
+            "current_real_world_club_key": payload.current_real_world_club_key,
+            "current_real_world_league": payload.current_real_world_league,
+            "current_real_world_league_key": payload.current_real_world_league_key,
+        }
 
-        country = Country(
-            source_provider=payload.source_name,
-            provider_external_id=normalized_code or slugify(normalized_name),
-            name=normalized_name or "Unknown",
-            alpha2_code=normalized_code if normalized_code and len(normalized_code) == 2 else None,
-            alpha3_code=normalized_code if normalized_code and len(normalized_code) == 3 else None,
-            fifa_code=normalized_code if normalized_code and len(normalized_code) == 3 else None,
-            last_synced_at=datetime.now(UTC),
+    def _mapping_issue(
+        self,
+        *,
+        payload: RealPlayerSeedInput,
+        entity_label: str,
+        resolution: CanonicalReferenceResolution,
+    ) -> RealPlayerBatchIssue | None:
+        if resolution.status != "unresolved":
+            return None
+        reference_label = (
+            resolution.provider_label
+            or resolution.provider_external_id
+            or resolution.provider_reference_key
+            or entity_label
         )
-        session.add(country)
-        session.flush()
-        return country
+        reason = f" reason={resolution.reason_code}." if resolution.reason_code else ""
+        return self._issue(
+            payload=payload,
+            issue_type=f"unresolved_{entity_label}_mapping",
+            message=(
+                f"Canonical {entity_label} mapping for '{reference_label}' was not resolved. "
+                f"GTEX kept the raw provider reference only.{reason}"
+            ),
+        )
+
+    def _resolve_country(self, session: Session, payload: RealPlayerSeedInput) -> Country | None:
+        if self.canonical_mapping_service is None or (not payload.nationality and not payload.nationality_code):
+            return None
+        resolution = self.canonical_mapping_service.resolve_country(
+            session,
+            source_name=payload.source_name,
+            provider_external_id=payload.nationality_code,
+            name=payload.nationality,
+        )
+        return resolution.entity if isinstance(resolution.entity, Country) else None
 
     def _resolve_competition(
         self,
@@ -799,37 +1044,28 @@ class RealPlayerIngestionService:
         *,
         as_of: datetime,
     ) -> Competition | None:
-        if not payload.current_real_world_league:
+        if self.canonical_mapping_service is None or not payload.current_real_world_league:
             return None
-        provider_external_id = payload.current_real_world_league_key or slugify(payload.current_real_world_league)
-        competition = session.scalar(
-            select(Competition).where(
-                Competition.source_provider == payload.source_name,
-                Competition.provider_external_id == provider_external_id,
-            )
+        country = self._resolve_country(session, payload)
+        resolution = self.canonical_mapping_service.resolve_competition(
+            session,
+            source_name=payload.source_name,
+            provider_external_id=payload.current_real_world_league_key,
+            name=payload.current_real_world_league,
+            country=None,
+            country_code=None,
+            country_name=None,
+            as_of=as_of,
+            auto_create_values={
+                "competition_type": "league",
+                "format_type": "real_world",
+                "is_major": normalized.competition_level in {"elite", "major", "continental"},
+                "is_tradable": True,
+                "competition_strength": normalized.competition_strength_multiplier,
+                "last_synced_at": as_of,
+            },
         )
-        if competition is None:
-            competition = Competition(
-                source_provider=payload.source_name,
-                provider_external_id=provider_external_id,
-                name=clean_name(payload.current_real_world_league) or payload.current_real_world_league,
-                slug=slugify(payload.current_real_world_league),
-                competition_type="league",
-                format_type="real_world",
-                is_major=normalized.competition_level in {"elite", "major", "continental"},
-                is_tradable=True,
-                competition_strength=normalized.competition_strength_multiplier,
-                last_synced_at=as_of,
-            )
-            session.add(competition)
-            session.flush()
-        else:
-            competition.name = clean_name(payload.current_real_world_league) or payload.current_real_world_league
-            competition.slug = slugify(payload.current_real_world_league)
-            competition.competition_strength = normalized.competition_strength_multiplier
-            competition.is_major = normalized.competition_level in {"elite", "major", "continental"}
-            competition.last_synced_at = as_of
-        return competition
+        return resolution.entity if isinstance(resolution.entity, Competition) else None
 
     def _resolve_club(
         self,
@@ -841,39 +1077,28 @@ class RealPlayerIngestionService:
         competition: Competition | None,
         as_of: datetime,
     ) -> Club | None:
-        if not payload.current_real_world_club:
+        if self.canonical_mapping_service is None or not payload.current_real_world_club:
             return None
-        provider_external_id = payload.current_real_world_club_key or slugify(payload.current_real_world_club)
-        club = session.scalar(
-            select(Club).where(
-                Club.source_provider == payload.source_name,
-                Club.provider_external_id == provider_external_id,
-            )
+        resolution = self.canonical_mapping_service.resolve_club(
+            session,
+            source_name=payload.source_name,
+            provider_external_id=payload.current_real_world_club_key,
+            name=payload.current_real_world_club,
+            country=competition.country if competition is not None else country,
+            country_code=None,
+            country_name=None,
+            competition=competition,
+            competition_external_id=payload.current_real_world_league_key,
+            competition_name=payload.current_real_world_league,
+            as_of=as_of,
+            auto_create_values={
+                "short_name": (payload.current_real_world_club or "")[:80] or None,
+                "popularity_score": normalized.club_strength_score,
+                "is_tradable": True,
+                "last_synced_at": as_of,
+            },
         )
-        if club is None:
-            club = Club(
-                source_provider=payload.source_name,
-                provider_external_id=provider_external_id,
-                country_id=country.id if country is not None else None,
-                current_competition_id=competition.id if competition is not None else None,
-                name=clean_name(payload.current_real_world_club) or payload.current_real_world_club,
-                slug=slugify(payload.current_real_world_club),
-                short_name=(clean_name(payload.current_real_world_club) or payload.current_real_world_club)[:80],
-                popularity_score=normalized.club_strength_score,
-                is_tradable=True,
-                last_synced_at=as_of,
-            )
-            session.add(club)
-            session.flush()
-        else:
-            club.country_id = country.id if country is not None else club.country_id
-            club.current_competition_id = competition.id if competition is not None else None
-            club.name = clean_name(payload.current_real_world_club) or payload.current_real_world_club
-            club.slug = slugify(payload.current_real_world_club)
-            club.short_name = (clean_name(payload.current_real_world_club) or payload.current_real_world_club)[:80]
-            club.popularity_score = normalized.club_strength_score
-            club.last_synced_at = as_of
-        return club
+        return resolution.entity if isinstance(resolution.entity, Club) else None
 
     def _upsert_player(
         self,
@@ -899,30 +1124,30 @@ class RealPlayerIngestionService:
         else:
             action = "updated"
 
-        first_name, last_name = self._split_name(payload.canonical_name)
-        player.full_name = payload.canonical_name
+        first_name, last_name = self._split_name(normalized.canonical_name)
+        player.full_name = normalized.canonical_name
         player.first_name = first_name
         player.last_name = last_name
-        player.short_name = self._short_name(payload.canonical_name)
+        player.short_name = self._short_name(normalized.display_name)
         player.country_id = country.id if country is not None else None
         player.current_club_id = club.id if club is not None else None
         player.current_competition_id = competition.id if competition is not None else None
         player.position = normalized.primary_position
         player.normalized_position = normalized.normalized_position
-        player.date_of_birth = payload.date_of_birth
-        player.height_cm = payload.height_cm
+        player.date_of_birth = normalized.date_of_birth
+        player.height_cm = normalized.identity.height_cm
         player.weight_kg = payload.weight_kg
-        player.preferred_foot = payload.dominant_foot
+        player.preferred_foot = normalized.dominant_foot
         player.market_value_eur = normalized.reference_market_value_eur
         player.profile_completeness_score = normalized.profile_completeness_score
         player.is_tradable = True
         player.is_real_player = True
         player.real_player_tier = normalized.real_player_tier
-        player.canonical_display_name = payload.canonical_name
+        player.canonical_display_name = normalized.display_name
         player.identity_confidence_score = match.confidence_score
         player.source_last_refreshed_at = payload.source_last_refreshed_at or as_of
-        player.real_world_club_name = payload.current_real_world_club
-        player.real_world_league_name = payload.current_real_world_league
+        player.real_world_club_name = normalized.current_real_world_club
+        player.real_world_league_name = normalized.current_real_world_league
         player.current_market_reference_value = payload.current_market_reference_value
         player.market_reference_currency = payload.market_reference_currency
         player.normalization_profile_version = normalized.normalization_profile_version
@@ -974,18 +1199,18 @@ class RealPlayerIngestionService:
                 gtex_player_id=player.id,
                 source_name=payload.source_name,
                 source_player_key=payload.source_player_key,
-                canonical_name=payload.canonical_name,
+                canonical_name=normalized.canonical_name,
             )
             session.add(source_link)
         source_link.gtex_player_id = player.id
-        source_link.canonical_name = payload.canonical_name
-        source_link.known_aliases_json = list(payload.known_aliases)
-        source_link.nationality = payload.nationality
-        source_link.date_of_birth = payload.date_of_birth
-        source_link.birth_year = payload.birth_year
+        source_link.canonical_name = normalized.canonical_name
+        source_link.known_aliases_json = list(normalized.known_aliases)
+        source_link.nationality = normalized.nationality
+        source_link.date_of_birth = normalized.date_of_birth
+        source_link.birth_year = normalized.birth_year
         source_link.primary_position = normalized.primary_position
         source_link.secondary_positions_json = list(normalized.secondary_positions)
-        source_link.current_real_world_club = payload.current_real_world_club
+        source_link.current_real_world_club = normalized.current_real_world_club
         source_link.identity_confidence_score = confidence_score
         source_link.is_verified_real_player = payload.is_verified_real_player
         source_link.verification_state = "verified" if payload.is_verified_real_player else "pending"
@@ -1002,6 +1227,7 @@ class RealPlayerIngestionService:
         normalized: RealPlayerNormalizedProfile,
         ingestion_batch_id: str,
         ingestion_source_version: str | None,
+        mapping_summary: dict[str, dict[str, object]],
         as_of: datetime,
     ) -> RealPlayerProfile:
         profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.source_link_id == source_link.id))
@@ -1011,24 +1237,24 @@ class RealPlayerIngestionService:
                 source_link_id=source_link.id,
                 source_name=payload.source_name,
                 source_player_key=payload.source_player_key,
-                canonical_name=payload.canonical_name,
+                canonical_name=normalized.canonical_name,
             )
             session.add(profile)
         profile.gtex_player_id = player.id
         profile.source_name = payload.source_name
         profile.source_player_key = payload.source_player_key
-        profile.canonical_name = payload.canonical_name
-        profile.known_aliases_json = list(payload.known_aliases)
-        profile.nationality = payload.nationality
-        profile.birth_year = payload.birth_year
-        profile.date_of_birth = payload.date_of_birth
-        profile.dominant_foot = payload.dominant_foot
+        profile.canonical_name = normalized.canonical_name
+        profile.known_aliases_json = list(normalized.known_aliases)
+        profile.nationality = normalized.nationality
+        profile.birth_year = normalized.birth_year
+        profile.date_of_birth = normalized.date_of_birth
+        profile.dominant_foot = normalized.dominant_foot
         profile.primary_position = normalized.primary_position
         profile.secondary_positions_json = list(normalized.secondary_positions)
-        profile.height_cm = payload.height_cm
+        profile.height_cm = normalized.identity.height_cm
         profile.weight_kg = payload.weight_kg
-        profile.current_club_name = payload.current_real_world_club
-        profile.current_league_name = payload.current_real_world_league
+        profile.current_club_name = normalized.current_real_world_club
+        profile.current_league_name = normalized.current_real_world_league
         profile.competition_level = normalized.competition_level
         profile.appearances = normalized.appearances
         profile.minutes_played = normalized.minutes_played
@@ -1049,6 +1275,15 @@ class RealPlayerIngestionService:
             "real_player_tier": normalized.real_player_tier,
             "source_name": payload.source_name,
             "source_player_key": payload.source_player_key,
+            "display_name": normalized.display_name,
+            "identity_keys": {
+                "exact_identity_key": normalized.identity.exact_identity_key,
+                "name_birthyear_club_key": normalized.identity.name_birthyear_club_key,
+                "name_birthyear_nationality_key": normalized.identity.name_birthyear_nationality_key,
+                "club_reference_key": normalized.identity.club_reference_key,
+                "league_reference_key": normalized.identity.league_reference_key,
+            },
+            "canonical_mapping": mapping_summary,
         }
         profile.notes = "Normalized real-player profile. External reference value is an input signal only."
         session.flush()
@@ -1358,6 +1593,13 @@ class RealPlayerIngestionService:
                     "normalization_profile_version": player.normalization_profile_version,
                     "normalized_signals": staged.normalized.normalized_signals(),
                     "pricing_snapshot_id": snapshot_record.id,
+                    "valuation_lineage_id": (
+                        (
+                            snapshot_record.breakdown_json.get("real_player_valuation") or {}
+                        ).get("lineage_id")
+                        if isinstance(snapshot_record.breakdown_json, dict)
+                        else None
+                    ),
                 },
                 "ingestion_metadata": {
                     "ingestion_batch_id": ingestion_batch_id,
@@ -1368,6 +1610,311 @@ class RealPlayerIngestionService:
             }
         )
         summary.summary_json = summary_payload
+
+    def _upsert_import_batch(
+        self,
+        *,
+        session: Session,
+        request: RealPlayerIngestionRequest,
+        ingestion_batch_id: str,
+        as_of: datetime,
+    ) -> RealPlayerImportBatch:
+        provider_names = tuple(sorted({player.source_name for player in request.players}))
+        provider_name = provider_names[0] if len(provider_names) == 1 else "multi-source"
+        batch = session.scalar(select(RealPlayerImportBatch).where(RealPlayerImportBatch.batch_key == ingestion_batch_id))
+        if batch is None and request.ingestion_source_version:
+            batch = session.scalar(
+                select(RealPlayerImportBatch).where(
+                    RealPlayerImportBatch.provider_name == provider_name,
+                    RealPlayerImportBatch.provider_job_key == request.ingestion_source_version,
+                )
+            )
+        if batch is None:
+            batch = RealPlayerImportBatch(
+                batch_key=ingestion_batch_id,
+                provider_name=provider_name,
+                provider_job_key=request.ingestion_source_version,
+                source_type="real_player_ingestion",
+                mode=request.mode,
+                requested_at=as_of,
+            )
+            session.add(batch)
+        else:
+            batch.batch_key = batch.batch_key or ingestion_batch_id
+        batch.provider_name = provider_name
+        batch.provider_job_key = request.ingestion_source_version
+        batch.source_type = "real_player_ingestion"
+        batch.mode = request.mode
+        batch.status = RealPlayerImportBatchStatus.RUNNING.value
+        batch.started_at = as_of
+        batch.submitted_row_count = len(request.players)
+        batch.error_message = None
+        session.flush()
+        return batch
+
+    def _upsert_import_row(
+        self,
+        *,
+        session: Session,
+        import_batch: RealPlayerImportBatch,
+        row_number: int,
+        payload: RealPlayerSeedInput,
+        normalized: RealPlayerNormalizedProfile | None,
+        status: str,
+        match_action: str | None,
+        import_action: str | None,
+        confidence_score: float | None,
+        review_status: str,
+        review_reason: str | None,
+        validation_errors: list[str] | None = None,
+        audit_findings: list[dict[str, object]] | None = None,
+        candidate_players: list[dict[str, object]] | None = None,
+        gtex_player_id: str | None = None,
+        source_link_id: str | None = None,
+        real_player_profile_id: str | None = None,
+        authoritative_snapshot_id: str | None = None,
+        processed_at: datetime | None = None,
+    ) -> RealPlayerImportRow:
+        row = session.scalar(
+            select(RealPlayerImportRow).where(
+                RealPlayerImportRow.batch_id == import_batch.id,
+                RealPlayerImportRow.source_name == payload.source_name,
+                RealPlayerImportRow.source_player_key == payload.source_player_key,
+            )
+        )
+        if row is None:
+            row = RealPlayerImportRow(
+                batch_id=import_batch.id,
+                row_number=row_number,
+                source_name=payload.source_name,
+                source_player_key=payload.source_player_key,
+                canonical_name=(normalized.canonical_name if normalized is not None else payload.canonical_name),
+            )
+            session.add(row)
+        row.row_number = row_number
+        row.canonical_name = normalized.canonical_name if normalized is not None else payload.canonical_name
+        row.status = status
+        row.match_action = match_action
+        row.import_action = import_action
+        row.identity_confidence_score = confidence_score
+        row.gtex_player_id = gtex_player_id
+        row.source_link_id = source_link_id
+        row.real_player_profile_id = real_player_profile_id
+        row.authoritative_snapshot_id = authoritative_snapshot_id
+        row.player_import_item_id = payload.player_import_item_id
+        row.raw_payload_json = payload.model_dump(mode="json")
+        row.normalized_payload_json = (
+            {
+                "identity": normalized.identity.to_dict(),
+                "signals": normalized.normalized_signals(),
+                "real_player_tier": normalized.real_player_tier,
+                "competition_level": normalized.competition_level,
+            }
+            if normalized is not None
+            else {}
+        )
+        row.import_metadata_json = {
+            "player_import_item_id": payload.player_import_item_id,
+            "review_status": review_status,
+            "review_reason": review_reason,
+        }
+        row.validation_errors_json = list(validation_errors or [])
+        row.audit_findings_json = list(audit_findings or [])
+        row.candidate_players_json = list(candidate_players or [])
+        row.review_status = review_status
+        row.review_reason = review_reason
+        if normalized is not None:
+            row.normalized_full_name = normalized.identity.normalized_full_name
+            row.normalized_display_name = normalized.identity.normalized_display_name
+            row.name_token_signature = normalized.identity.name_token_signature
+            row.exact_identity_key = normalized.identity.exact_identity_key
+            row.name_birthyear_club_key = normalized.identity.name_birthyear_club_key
+            row.name_birthyear_nationality_key = normalized.identity.name_birthyear_nationality_key
+            row.normalized_nationality = normalized.identity.normalized_nationality
+            row.nationality_code = normalized.identity.nationality_code
+            row.primary_position_key = normalized.identity.primary_position_key
+            row.secondary_position_keys_json = list(normalized.identity.secondary_position_keys)
+            row.position_family = normalized.identity.position_family
+            row.dominant_foot = normalized.identity.dominant_foot
+            row.height_cm = normalized.identity.height_cm
+            row.club_reference_key = normalized.identity.club_reference_key
+            row.league_reference_key = normalized.identity.league_reference_key
+        row.processed_at = processed_at or row.processed_at
+        session.flush()
+        return row
+
+    def _mark_import_row_imported(
+        self,
+        *,
+        session: Session,
+        ingestion_batch_id: str,
+        staged: StagedRealPlayer,
+        player_id: str,
+        profile_id: str,
+        snapshot_id: str,
+        confidence_score: float,
+        as_of: datetime,
+    ) -> None:
+        row = session.scalar(
+            select(RealPlayerImportRow)
+            .join(RealPlayerImportBatch, RealPlayerImportBatch.id == RealPlayerImportRow.batch_id)
+            .where(
+                RealPlayerImportBatch.batch_key == ingestion_batch_id,
+                RealPlayerImportRow.source_name == staged.source_name,
+                RealPlayerImportRow.source_player_key == staged.source_player_key,
+            )
+        )
+        if row is None:
+            return
+        row.status = RealPlayerImportRowStatus.IMPORTED.value
+        row.import_action = staged.action
+        row.identity_confidence_score = confidence_score
+        row.gtex_player_id = player_id
+        row.real_player_profile_id = profile_id
+        row.authoritative_snapshot_id = snapshot_id
+        row.review_status = "resolved"
+        row.review_reason = None
+        row.processed_at = as_of
+
+    def _complete_import_batch(
+        self,
+        *,
+        session: Session,
+        import_batch_id: str | None,
+        report: RealPlayerDryRunReport,
+        item_results: list[RealPlayerIngestionItemResult],
+        error_message: str | None,
+    ) -> None:
+        if import_batch_id is None:
+            return
+        batch = session.get(RealPlayerImportBatch, import_batch_id)
+        if batch is None:
+            return
+        batch.normalized_row_count = report.normalized_row_count
+        batch.matched_existing_count = report.matched_existing_count
+        batch.created_player_count = sum(1 for item in item_results if item.action == "created")
+        batch.updated_player_count = sum(1 for item in item_results if item.action == "updated")
+        batch.skipped_row_count = max(report.source_row_count - len(item_results), 0)
+        batch.failed_row_count = report.hard_failure_count + report.ambiguous_match_count + report.missing_pricing_snapshot_count
+        batch.authoritative_snapshot_count = len(item_results)
+        batch.completed_at = report.as_of
+        batch.status = (
+            RealPlayerImportBatchStatus.COMPLETED.value
+            if batch.failed_row_count == 0
+            else RealPlayerImportBatchStatus.COMPLETED_WITH_ERRORS.value
+        )
+        batch.summary_json = {
+            "source_row_count": report.source_row_count,
+            "normalized_row_count": report.normalized_row_count,
+            "matched_existing_count": report.matched_existing_count,
+            "new_identity_count": report.new_identity_count,
+            "ambiguous_match_count": report.ambiguous_match_count,
+            "missing_pricing_snapshot_count": report.missing_pricing_snapshot_count,
+            "hard_failure_count": report.hard_failure_count,
+        }
+        batch.error_message = error_message
+
+    def _persist_blocked_import_batch(
+        self,
+        *,
+        request: RealPlayerIngestionRequest,
+        report: RealPlayerDryRunReport,
+        as_of: datetime,
+    ) -> None:
+        issue_by_key = {
+            (issue.source_name, issue.source_player_key): issue
+            for issue in report.issues
+        }
+        row_numbers = {
+            (player.source_name, player.source_player_key): index
+            for index, player in enumerate(request.players, start=1)
+        }
+        with self.session_factory() as session:
+            transaction = self._begin_session_transaction(session)
+            try:
+                batch = self._upsert_import_batch(
+                    session=session,
+                    request=request,
+                    ingestion_batch_id=report.ingestion_batch_id,
+                    as_of=as_of,
+                )
+                for payload in request.players:
+                    key = (payload.source_name, payload.source_player_key)
+                    issue = issue_by_key.get(key)
+                    try:
+                        normalized = self.normalization_service.normalize(payload, as_of=as_of)
+                    except Exception:
+                        normalized = None
+                    status = RealPlayerImportRowStatus.MATCHED.value if issue is None else (
+                        RealPlayerImportRowStatus.SKIPPED.value if issue.issue_type == "ambiguous_match" else RealPlayerImportRowStatus.FAILED.value
+                    )
+                    review_status = "open" if issue is not None else "resolved"
+                    review_reason = issue.issue_type if issue is not None else None
+                    candidate_players = (
+                        [
+                            {
+                                "player_id": candidate.player_id,
+                                "score": candidate.score,
+                                "reasons": list(candidate.reasons),
+                            }
+                            for candidate in issue.candidates
+                        ]
+                        if issue is not None
+                        else []
+                    )
+                    self._upsert_import_row(
+                        session=session,
+                        import_batch=batch,
+                        row_number=row_numbers[key],
+                        payload=payload,
+                        normalized=normalized,
+                        status=status,
+                        match_action="ambiguous" if issue is not None and issue.issue_type == "ambiguous_match" else None,
+                        import_action="blocked",
+                        confidence_score=max((candidate["score"] for candidate in candidate_players), default=None),
+                        review_status=review_status,
+                        review_reason=review_reason,
+                        validation_errors=[issue.message] if issue is not None else [],
+                        audit_findings=(
+                            [{"finding_type": issue.issue_type, "message": issue.message}]
+                            if issue is not None
+                            else []
+                        ),
+                        candidate_players=candidate_players,
+                        gtex_player_id=issue.gtex_player_id if issue is not None else None,
+                        processed_at=as_of,
+                    )
+                self._complete_import_batch(
+                    session=session,
+                    import_batch_id=batch.id,
+                    report=report,
+                    item_results=[],
+                    error_message=(
+                        "Real-player batch blocked before commit."
+                        if report.hard_failure_count or report.missing_pricing_snapshot_count or report.ambiguous_match_count
+                        else None
+                    ),
+                )
+                if report.hard_failure_count or report.missing_pricing_snapshot_count:
+                    batch.status = RealPlayerImportBatchStatus.FAILED.value
+                else:
+                    batch.status = RealPlayerImportBatchStatus.COMPLETED_WITH_ERRORS.value
+                transaction.commit()
+            except Exception:
+                if transaction.is_active:
+                    transaction.rollback()
+                raise
+
+    @staticmethod
+    def _candidate_payloads(candidates: tuple[RealPlayerBatchIssueCandidate, ...] | tuple) -> list[dict[str, object]]:
+        return [
+            {
+                "player_id": candidate.player_id,
+                "score": candidate.score,
+                "reasons": list(candidate.reasons),
+            }
+            for candidate in candidates
+        ]
 
     def _split_name(self, canonical_name: str) -> tuple[str | None, str | None]:
         parts = canonical_name.split()

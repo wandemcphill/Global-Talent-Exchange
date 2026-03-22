@@ -28,6 +28,7 @@ MODEL_MODULES = (
     "app.club_identity.models.reputation",
     "app.fast_cups.repositories.database",
     "app.ingestion.models",
+    "app.ingestion.real_player_import_models",
     "app.leagues.repository",
     "app.market.read_models",
     "app.players.read_models",

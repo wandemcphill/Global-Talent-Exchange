@@ -5,6 +5,7 @@ from typing import Any
 
 from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
+from .import_models import RealPlayerSourcePage
 
 class ProviderConfigurationError(RuntimeError):
     pass
@@ -59,3 +60,13 @@ class BaseFootballProvider(ABC):
     @abstractmethod
     def fetch_recent_updates(self, cursor: str | None) -> RecentUpdateFeed:
         raise NotImplementedError
+
+    def fetch_player_directory_page(
+        self,
+        *,
+        cursor: str | None = None,
+        batch_size: int = 100,
+        timeout_seconds: int | None = None,
+        rate_limit_per_minute: int | None = None,
+    ) -> RealPlayerSourcePage:
+        raise NotImplementedError(f"Provider '{self.name}' does not support real-player directory imports.")

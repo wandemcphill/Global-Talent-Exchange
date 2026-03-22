@@ -18,6 +18,7 @@ def _seed_summary(
     player_name: str,
     current_value_credits: float,
     movement_pct: float,
+    summary_json: dict | None = None,
 ) -> PlayerSummaryReadModel:
     return PlayerSummaryReadModel(
         player_id=player_id,
@@ -30,7 +31,7 @@ def _seed_summary(
         movement_pct=movement_pct,
         average_rating=7.8,
         market_interest_score=85,
-        summary_json={"position": "forward"},
+        summary_json=summary_json or {"position": "forward"},
     )
 
 
@@ -68,6 +69,21 @@ def test_player_summaries_expose_regen_universe_only_for_regen_players() -> None
                     player_name="Victor Real Summary",
                     current_value_credits=410.0,
                     movement_pct=5.0,
+                    summary_json={
+                        "position": "forward",
+                        "real_player_profile": {
+                            "is_real_player": True,
+                            "is_verified_real_player": True,
+                            "canonical_display_name": "Victor Real Summary",
+                            "real_player_tier": "featured",
+                            "source_name": "curated-feed",
+                            "source_player_key": "victor-real-summary",
+                            "real_world_club_name": "Launch Club A",
+                            "real_world_league_name": "Launch League Elite",
+                            "current_market_reference_value": 60000000,
+                            "market_reference_currency": "EUR",
+                        },
+                    },
                 ),
             ]
         )
@@ -98,11 +114,21 @@ def test_player_summaries_expose_regen_universe_only_for_regen_players() -> None
 
         assert regen_player.id in by_player_id
         assert "player-real-summary" in by_player_id
+        assert regen_payload["identity_rail"] == "regen_universe"
+        assert regen_payload["is_real_player"] is False
         assert regen_payload["regen_universe"] is not None
         assert regen_payload["regen_universe"]["total_awards"] >= 1
         assert regen_payload["regen_universe"]["latest_overall_ranking"] is not None
+        assert regen_payload["real_player_universe"] is None
+        assert real_payload["identity_rail"] == "real_player_universe"
+        assert real_payload["is_real_player"] is True
+        assert real_payload["real_player_universe"] is not None
+        assert real_payload["real_player_universe"]["source_name"] == "curated-feed"
         assert real_payload["regen_universe"] is None
+        assert by_player_id[regen_player.id]["identity_rail"] == "regen_universe"
+        assert by_player_id["player-real-summary"]["identity_rail"] == "real_player_universe"
         assert by_player_id[regen_player.id]["regen_universe"] is not None
+        assert by_player_id["player-real-summary"]["real_player_universe"] is not None
         assert by_player_id["player-real-summary"]["regen_universe"] is None
     finally:
         session.close()

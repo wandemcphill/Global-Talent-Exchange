@@ -121,6 +121,14 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("card_swap_listings")
     assert inspector.has_table("card_swap_executions")
     assert inspector.has_table("card_marketplace_audit_events")
+    assert inspector.has_table("real_player_import_batches")
+    assert inspector.has_table("real_player_import_rows")
+    assert inspector.has_table("real_player_import_staging")
+    assert inspector.has_table("real_player_reference_mappings")
+    assert inspector.has_table("real_player_unresolved_references")
+    assert inspector.has_table("real_player_value_lineages")
+    assert inspector.has_table("real_player_source_links")
+    assert inspector.has_table("real_player_profiles")
 
     creator_league_config_columns = {column["name"] for column in inspector.get_columns("creator_league_configs")}
     assert {
@@ -251,6 +259,159 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
         "status_to",
         "payload_json",
     } <= club_sale_audit_columns
+
+    real_player_import_batch_columns = {column["name"] for column in inspector.get_columns("real_player_import_batches")}
+    assert {
+        "batch_key",
+        "provider_name",
+        "provider_job_key",
+        "source_type",
+        "mode",
+        "status",
+        "requested_at",
+        "submitted_row_count",
+        "normalized_row_count",
+        "matched_existing_count",
+        "created_player_count",
+        "updated_player_count",
+        "authoritative_snapshot_count",
+        "metadata_json",
+        "summary_json",
+    } <= real_player_import_batch_columns
+
+    real_player_import_row_columns = {column["name"] for column in inspector.get_columns("real_player_import_rows")}
+    assert {
+        "batch_id",
+        "row_number",
+        "source_name",
+        "source_player_key",
+        "canonical_name",
+        "status",
+        "match_action",
+        "import_action",
+        "gtex_player_id",
+        "source_link_id",
+        "real_player_profile_id",
+        "authoritative_snapshot_id",
+        "player_import_item_id",
+        "exact_identity_key",
+        "name_birthyear_club_key",
+        "name_birthyear_nationality_key",
+        "secondary_position_keys_json",
+        "raw_payload_json",
+        "normalized_payload_json",
+        "candidate_players_json",
+        "review_status",
+        "audit_findings_json",
+    } <= real_player_import_row_columns
+
+    real_player_import_staging_columns = {column["name"] for column in inspector.get_columns("real_player_import_staging")}
+    assert {
+        "provider_name",
+        "provider_player_id",
+        "provider_club_id",
+        "provider_competition_id",
+        "provider_season_id",
+        "full_name",
+        "import_state",
+        "last_import_cursor",
+        "source_payload_hash",
+        "last_import_run_id",
+        "latest_payload_json",
+        "metadata_json",
+    } <= real_player_import_staging_columns
+
+    real_player_reference_mapping_columns = {
+        column["name"] for column in inspector.get_columns("real_player_reference_mappings")
+    }
+    assert {
+        "source_name",
+        "entity_type",
+        "provider_external_id",
+        "provider_reference_key",
+        "normalized_label",
+        "canonical_country_id",
+        "canonical_competition_id",
+        "canonical_club_id",
+        "mapping_status",
+        "resolution_method",
+        "confidence_score",
+        "is_active",
+        "metadata_json",
+    } <= real_player_reference_mapping_columns
+
+    real_player_unresolved_reference_columns = {
+        column["name"] for column in inspector.get_columns("real_player_unresolved_references")
+    }
+    assert {
+        "source_name",
+        "entity_type",
+        "provider_external_id",
+        "provider_reference_key",
+        "normalized_label",
+        "reason_code",
+        "status",
+        "occurrence_count",
+        "first_seen_at",
+        "last_seen_at",
+        "resolved_at",
+        "canonical_country_id",
+        "canonical_competition_id",
+        "canonical_club_id",
+        "sample_payload_json",
+        "metadata_json",
+    } <= real_player_unresolved_reference_columns
+
+    real_player_value_lineage_columns = {column["name"] for column in inspector.get_columns("real_player_value_lineages")}
+    assert {
+        "player_id",
+        "snapshot_id",
+        "as_of",
+        "snapshot_type",
+        "config_version",
+        "adapter_code",
+        "adapter_version",
+        "source_reference_tier",
+        "source_market_value_eur",
+        "bridge_market_value_eur",
+        "base_value_credits",
+        "floor_credits",
+        "ceiling_credits",
+        "inputs_json",
+        "components_json",
+        "explanation_json",
+    } <= real_player_value_lineage_columns
+
+    real_player_profile_indexes = {index["name"] for index in inspector.get_indexes("real_player_profiles")}
+    assert {
+        "ix_real_player_profiles_batch_id",
+        "ix_real_player_profiles_pricing_snapshot_id",
+    } <= real_player_profile_indexes
+
+    real_player_import_row_indexes = {index["name"] for index in inspector.get_indexes("real_player_import_rows")}
+    assert {
+        "ix_real_player_import_rows_batch_status",
+        "ix_real_player_import_rows_exact_identity_key",
+        "ix_real_player_import_rows_review_status",
+    } <= real_player_import_row_indexes
+
+    real_player_reference_mapping_indexes = {
+        index["name"] for index in inspector.get_indexes("real_player_reference_mappings")
+    }
+    assert {
+        "ix_real_player_reference_mappings_entity_type",
+        "ix_real_player_reference_mappings_status",
+        "ix_real_player_reference_mappings_provider_external_id",
+    } <= real_player_reference_mapping_indexes
+
+    real_player_value_lineage_indexes = {
+        index["name"] for index in inspector.get_indexes("real_player_value_lineages")
+    }
+    assert {
+        "ix_real_player_value_lineages_player_id",
+        "ix_real_player_value_lineages_snapshot_id",
+        "ix_real_player_value_lineages_snapshot_type",
+    } <= real_player_value_lineage_indexes
 
     with engine.connect() as connection:
         versions = connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()
