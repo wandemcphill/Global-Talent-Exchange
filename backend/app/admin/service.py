@@ -229,6 +229,7 @@ def _settings_environ(settings: Settings) -> dict[str, str]:
         "GTE_DATABASE_URL": settings.database_url,
         "GTE_AUTH_SECRET": settings.auth_secret,
         "GTE_RUN_MIGRATION_CHECK": "1" if settings.run_migration_check else "0",
+        "RUN_STARTUP_SEEDING": "1" if settings.run_startup_seeding else "0",
         "GTE_INGESTION_PROVIDER": settings.default_ingestion_provider,
         "GTE_PROVIDER_TIMEOUT_SECONDS": str(settings.provider_timeout_seconds),
         "FOOTBALL_DATA_BASE_URL": settings.football_data_base_url,

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import datetime, timezone
+import logging
+import os
 
 from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
@@ -12,8 +14,10 @@ from app.auth.dependencies import get_session
 from app.auth.router import register_user
 from app.auth.schemas import RegisterRequest
 from app.cache.redis_helpers import NullCacheBackend
+from app.core.config import load_settings
 from app.core.database import DatabaseRuntime, build_alembic_config
 from app.ingestion.service import IngestionService
+import app.main as main_module
 from app.main import create_app
 from app.market.router import create_listing
 from app.market.schemas import ListingCreate
@@ -225,6 +229,57 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
             }
         },
     }
+
+
+def test_startup_logs_completion_and_skips_non_local_seeding(tmp_path, caplog, monkeypatch) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-log-test.db').as_posix()}"
+    media_root = tmp_path / "media"
+    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda session_factory: None)
+    settings = load_settings(
+        environ={
+            **os.environ,
+            "GTE_APP_ENV": "development",
+            "GTE_DATABASE_URL": database_url,
+            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+        }
+    )
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(settings=settings, engine=engine, run_migration_check=False)
+
+    with caplog.at_level(logging.INFO):
+        with TestClient(app):
+            app.state.deferred_startup_thread.join(timeout=5)
+
+    messages = [record.getMessage() for record in caplog.records]
+
+    assert "app.startup.complete" in messages
+    assert any(message.startswith("app.startup.seed.skipped") for message in messages)
+
+
+def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, caplog, monkeypatch) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-seeding-disabled.db').as_posix()}"
+    media_root = tmp_path / "media"
+    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda session_factory: None)
+    settings = load_settings(
+        environ={
+            **os.environ,
+            "GTE_APP_ENV": "local",
+            "GTE_DATABASE_URL": database_url,
+            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+            "RUN_STARTUP_SEEDING": "false",
+        }
+    )
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(settings=settings, engine=engine, run_migration_check=False)
+
+    with caplog.at_level(logging.INFO):
+        with TestClient(app):
+            app.state.deferred_startup_thread.join(timeout=5)
+
+    messages = [record.getMessage() for record in caplog.records]
+
+    assert "app.startup.complete" in messages
+    assert any(message == "app.startup.seed.skipped seed=policy_documents reason=disabled" for message in messages)
 
 
 @pytest.mark.anyio

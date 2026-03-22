@@ -4,7 +4,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import import_module
+import logging
+import os
 from pathlib import Path
+import time
 
 from alembic import command
 from alembic.config import Config
@@ -13,6 +16,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import MetaData, create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings, normalize_database_url
@@ -31,6 +35,10 @@ MODEL_MODULES = (
     "app.replay_archive.persistence",
     "app.value_engine.read_models",
 )
+DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10
+DEFAULT_DATABASE_INIT_RETRIES = 3
+DEFAULT_DATABASE_INIT_RETRY_DELAY_SECONDS = 2.0
+logger = logging.getLogger(__name__)
 
 
 def get_database_url() -> str:
@@ -44,10 +52,17 @@ def load_model_modules() -> None:
 
 def create_database_engine(database_url: str | None = None) -> Engine:
     resolved_url = normalize_database_url(database_url or get_database_url())
+    resolved_engine_url = make_url(resolved_url)
     _ensure_sqlite_database_path(resolved_url)
     connect_args = {"check_same_thread": False} if resolved_url.startswith("sqlite") else {}
     engine_kwargs: dict[str, object] = {"connect_args": connect_args}
     if not resolved_url.startswith("sqlite"):
+        if "connect_timeout" not in resolved_engine_url.query:
+            connect_args["connect_timeout"] = _get_int_env(
+                "GTE_DATABASE_CONNECT_TIMEOUT_SECONDS",
+                DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS,
+                minimum=1,
+            )
         engine_kwargs["pool_pre_ping"] = True
     return create_engine(resolved_url, **engine_kwargs)
 
@@ -91,13 +106,56 @@ def initialize_database_connection(
     *,
     run_migration_check: bool = True,
 ) -> Engine:
-    load_model_modules()
     database_engine = engine or get_engine()
-    if run_migration_check:
-        ensure_database_schema_current(database_engine)
-    with database_engine.connect() as connection:
-        connection.execute(text("SELECT 1"))
-    return database_engine
+    max_attempts = _get_int_env("GTE_DATABASE_INIT_RETRIES", DEFAULT_DATABASE_INIT_RETRIES, minimum=1)
+    retry_delay_seconds = _get_float_env(
+        "GTE_DATABASE_INIT_RETRY_DELAY_SECONDS",
+        DEFAULT_DATABASE_INIT_RETRY_DELAY_SECONDS,
+        minimum=0.0,
+    )
+
+    logger.info(
+        "database.initialize.begin engine_url=%s run_migration_check=%s max_attempts=%s",
+        database_engine.url.render_as_string(hide_password=True),
+        run_migration_check,
+        max_attempts,
+    )
+    logger.info("database.initialize.model_import.begin")
+    load_model_modules()
+    logger.info("database.initialize.model_import.complete")
+
+    last_error: OperationalError | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            logger.info("database.initialize.attempt.begin attempt=%s max_attempts=%s", attempt, max_attempts)
+            if run_migration_check:
+                logger.info("database.initialize.migration_check.begin attempt=%s", attempt)
+                ensure_database_schema_current(database_engine)
+                logger.info("database.initialize.migration_check.complete attempt=%s", attempt)
+            with database_engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            logger.info("database.initialize.attempt.complete attempt=%s max_attempts=%s", attempt, max_attempts)
+            logger.info("database.initialize.complete")
+            return database_engine
+        except OperationalError as exc:
+            last_error = exc
+            logger.warning(
+                "database.initialize.attempt.failed attempt=%s max_attempts=%s error=%s",
+                attempt,
+                max_attempts,
+                exc,
+            )
+            if attempt >= max_attempts:
+                break
+            if retry_delay_seconds > 0:
+                time.sleep(retry_delay_seconds)
+        except Exception:
+            logger.exception("database.initialize.failed")
+            raise
+
+    logger.error("database.initialize.exhausted_retries max_attempts=%s", max_attempts)
+    assert last_error is not None
+    raise last_error
 
 
 def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, ...]:
@@ -142,6 +200,36 @@ def _ensure_sqlite_database_path(database_url: str) -> None:
     if not database_path.is_absolute():
         database_path = (Path.cwd() / database_path).resolve()
     database_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _get_int_env(name: str, default: int, *, minimum: int | None = None) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning("database.config.invalid_int name=%s value=%s default=%s", name, raw_value, default)
+        return default
+    if minimum is not None and value < minimum:
+        logger.warning("database.config.int_below_minimum name=%s value=%s minimum=%s", name, value, minimum)
+        return minimum
+    return value
+
+
+def _get_float_env(name: str, default: float, *, minimum: float | None = None) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    try:
+        value = float(raw_value)
+    except ValueError:
+        logger.warning("database.config.invalid_float name=%s value=%s default=%s", name, raw_value, default)
+        return default
+    if minimum is not None and value < minimum:
+        logger.warning("database.config.float_below_minimum name=%s value=%s minimum=%s", name, value, minimum)
+        return minimum
+    return value
 
 
 @dataclass(slots=True)

@@ -413,6 +413,7 @@ class Settings:
     crypto_deposit_enabled: bool
     crypto_provider_key: str
     run_migration_check: bool
+    run_startup_seeding: bool
     default_ingestion_provider: str
     provider_timeout_seconds: int
     football_data_base_url: str
@@ -428,6 +429,10 @@ class Settings:
     suspicion_thresholds: SuspicionThresholdsConfig
     player_card_market_integrity: PlayerCardMarketIntegrityConfig
     value_engine_weighting: ValueEngineWeightingConfig
+
+    @property
+    def environment(self) -> str:
+        return self.app_env
 
 
 def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
@@ -1398,6 +1403,11 @@ def load_settings(
         crypto_deposit_enabled=_get_bool(resolved_environ, "GTE_CRYPTO_DEPOSIT_ENABLED", False),
         crypto_provider_key=resolved_environ.get("GTE_CRYPTO_PROVIDER_KEY", "crypto_fiat"),
         run_migration_check=_get_bool(resolved_environ, "GTE_RUN_MIGRATION_CHECK", True),
+        run_startup_seeding=_get_bool(
+            resolved_environ,
+            "RUN_STARTUP_SEEDING",
+            _get_bool(resolved_environ, "GTE_RUN_STARTUP_SEEDING", True),
+        ),
         default_ingestion_provider=resolved_environ.get("GTE_INGESTION_PROVIDER", "mock"),
         provider_timeout_seconds=_get_int(resolved_environ, "GTE_PROVIDER_TIMEOUT_SECONDS", 20),
         football_data_base_url=resolved_environ.get("FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"),

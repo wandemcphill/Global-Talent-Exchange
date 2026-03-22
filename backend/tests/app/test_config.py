@@ -269,6 +269,19 @@ def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None
     assert settings.value_engine_weighting.msv_weight == 0.38
     assert settings.value_engine_weighting.price_band_limits[-1].code == "marquee"
     assert settings.value_engine_weighting.price_band_limits[-1].max_ratio == 1.28
+    assert settings.run_startup_seeding is True
+
+
+def test_load_settings_reads_run_startup_seeding_env_override() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "RUN_STARTUP_SEEDING": "false",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.run_startup_seeding is False
 
 
 def test_default_supply_config_reduces_supply_for_obscure_players() -> None:

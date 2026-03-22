@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 
 from app.core import database as database_module
 from app.main import create_app
@@ -51,3 +52,37 @@ def test_create_app_registers_world_simulation_routes_without_running_lifespan()
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
     assert "/api/world/cultures" in route_paths
+
+
+def test_initialize_database_connection_retries_operational_error(monkeypatch) -> None:
+    url = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False}).url
+    attempts = {"count": 0}
+
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def execute(self, _statement) -> None:
+            return None
+
+    def _connect():
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise OperationalError("SELECT 1", None, RuntimeError("db unavailable"))
+        return _Connection()
+
+    engine = SimpleNamespace(url=url, connect=_connect)
+
+    monkeypatch.setattr(database_module, "load_model_modules", lambda: None)
+    monkeypatch.setattr(database_module, "ensure_database_schema_current", lambda _engine: ("rev-a",))
+    monkeypatch.setattr(database_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setenv("GTE_DATABASE_INIT_RETRIES", "3")
+    monkeypatch.setenv("GTE_DATABASE_INIT_RETRY_DELAY_SECONDS", "0")
+
+    initialized_engine = database_module.initialize_database_connection(engine=engine, run_migration_check=True)
+
+    assert initialized_engine is engine
+    assert attempts["count"] == 3

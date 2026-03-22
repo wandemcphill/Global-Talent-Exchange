@@ -49,13 +49,29 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
+        logger.info("app.startup.begin")
+        try:
+            logger.info("app.startup.database_initialize.begin")
+            initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
+            logger.info("app.startup.database_initialize.complete")
+        except Exception:
+            logger.exception("app.startup.database_initialize.failed")
+            raise
+
+        logger.info("app.startup.application_state_bind.begin")
         _bind_application_state(app, context=context, engine=initialized_engine, modules=modules)
+        logger.info("app.startup.application_state_bind.complete")
+
+        logger.info("app.startup.deferred_startup.begin")
         _start_deferred_startup(app, context=context, modules=modules)
+        logger.info("app.startup.deferred_startup.complete")
+        logger.info("app.startup.complete")
         try:
             yield
         finally:
+            logger.info("app.shutdown.begin")
             run_module_hooks(app, context, modules, phase="shutdown")
+            logger.info("app.shutdown.complete")
 
     app = FastAPI(
         title=resolved_settings.app_name,
@@ -112,6 +128,7 @@ def _start_deferred_startup(
     context: ApplicationContext,
     modules: tuple[DomainModule, ...],
 ) -> None:
+    logger.info("app.startup.deferred_startup.thread_create")
     startup_thread = Thread(
         target=_run_deferred_startup,
         kwargs={"app": app, "context": context, "modules": modules},
@@ -120,6 +137,7 @@ def _start_deferred_startup(
     )
     app.state.deferred_startup_thread = startup_thread
     startup_thread.start()
+    logger.info("app.startup.deferred_startup.thread_started thread_name=%s", startup_thread.name)
 
 
 def _run_deferred_startup(
@@ -129,8 +147,13 @@ def _run_deferred_startup(
     modules: tuple[DomainModule, ...],
 ) -> None:
     try:
+        logger.info("app.startup.bootstrap.begin")
+        logger.info("app.startup.initial_admin.begin")
         _ensure_initial_admin(context.database.session_factory)
+        logger.info("app.startup.initial_admin.complete")
+        logger.info("app.startup.module_hooks.begin")
         run_module_hooks(app, context, modules, phase="startup")
+        logger.info("app.startup.module_hooks.complete")
         logger.info("app.startup.bootstrap_complete")
     except Exception:
         logger.exception("app.startup.bootstrap_failed")

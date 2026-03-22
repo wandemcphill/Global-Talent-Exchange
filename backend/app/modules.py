@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter
 
 from app.academy.api.router import router as academy_router
@@ -76,6 +78,8 @@ from app.world_super_cup.api.router import router as world_super_cup_router
 from app.treasury.router import router as treasury_router
 from app.integrations.payments.router import router as payments_router
 
+logger = logging.getLogger(__name__)
+
 
 def _with_api_alias(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
@@ -88,107 +92,156 @@ def _initialize_replay_archive(app, _context) -> None:
     ensure_replay_archive(app)
 
 
-def _seed_policy_documents(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.policies.service import PolicyService
+def _run_startup_seed(context, *, seed_name: str, seed_action) -> None:
+    if not context.settings.run_startup_seeding:
+        logger.info("app.startup.seed.skipped seed=%s reason=disabled", seed_name)
+        return
+    if context.settings.environment != "local":
+        logger.info(
+            "app.startup.seed.skipped seed=%s environment=%s",
+            seed_name,
+            context.settings.environment,
+        )
+        return
+    logger.info("app.startup.seed.begin seed=%s", seed_name)
+    seed_action()
+    logger.info("app.startup.seed.complete seed=%s", seed_name)
 
-        service = PolicyService(session)
-        service.seed_defaults()
-        session.commit()
+
+def _seed_policy_documents(app, context) -> None:
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.policies.service import PolicyService
+
+            service = PolicyService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="policy_documents", seed_action=_seed)
 
 
 
 
 def _seed_economy_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.economy.service import EconomyConfigService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.economy.service import EconomyConfigService
 
-        service = EconomyConfigService(session)
-        service.seed_defaults()
-        session.commit()
+            service = EconomyConfigService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="economy_defaults", seed_action=_seed)
 
 
 
 
 def _seed_calendar_engine_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.calendar_engine.service import CalendarEngineService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.calendar_engine.service import CalendarEngineService
 
-        service = CalendarEngineService(session)
-        service.seed_defaults()
-        session.commit()
+            service = CalendarEngineService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="calendar_engine_defaults", seed_action=_seed)
 
 
 def _seed_daily_challenges(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.daily_challenge_engine.service import DailyChallengeService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.daily_challenge_engine.service import DailyChallengeService
 
-        service = DailyChallengeService(session)
-        service.seed_defaults()
-        session.commit()
+            service = DailyChallengeService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="daily_challenges", seed_action=_seed)
 
 
 def _seed_hosted_competitions(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.hosted_competition_engine.service import HostedCompetitionService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.hosted_competition_engine.service import HostedCompetitionService
 
-        service = HostedCompetitionService(session)
-        service.seed_defaults()
-        session.commit()
+            service = HostedCompetitionService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="hosted_competitions", seed_action=_seed)
 
 def _seed_discovery_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.discovery_engine.service import DiscoveryEngineService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.discovery_engine.service import DiscoveryEngineService
 
-        service = DiscoveryEngineService(session)
-        service.seed_defaults()
-        session.commit()
+            service = DiscoveryEngineService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="discovery_defaults", seed_action=_seed)
 
 
 
 
 def _seed_sponsorship_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.sponsorship_engine.service import SponsorshipEngineService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.sponsorship_engine.service import SponsorshipEngineService
 
-        service = SponsorshipEngineService(session)
-        service.seed_defaults()
-        session.commit()
+            service = SponsorshipEngineService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="sponsorship_defaults", seed_action=_seed)
 
 def _seed_admin_engine_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.admin_engine.service import AdminEngineService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.admin_engine.service import AdminEngineService
 
-        service = AdminEngineService(session)
-        service.seed_defaults()
-        session.commit()
+            service = AdminEngineService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="admin_engine_defaults", seed_action=_seed)
 
 
 def _seed_football_event_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.football_events_engine.service import RealWorldFootballEventService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.football_events_engine.service import RealWorldFootballEventService
 
-        service = RealWorldFootballEventService(session)
-        service.seed_defaults()
-        session.commit()
+            service = RealWorldFootballEventService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="football_event_defaults", seed_action=_seed)
 
 
 def _seed_world_simulation_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.world_simulation.service import FootballWorldService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.world_simulation.service import FootballWorldService
 
-        service = FootballWorldService(session)
-        service.seed_defaults()
-        session.commit()
+            service = FootballWorldService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="world_simulation_defaults", seed_action=_seed)
 
 
 def _seed_regen_universe_defaults(app, context) -> None:
-    with context.database.session_factory() as session:
-        from app.regen_universe.service import RegenUniverseService
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.regen_universe.service import RegenUniverseService
 
-        service = RegenUniverseService(session)
-        service.seed_defaults()
-        session.commit()
+            service = RegenUniverseService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="regen_universe_defaults", seed_action=_seed)
 
 
 DOMAIN_MODULES = (
