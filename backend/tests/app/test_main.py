@@ -67,6 +67,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "club_identity" in app.state.domain_modules
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules
+        assert "regen_universe" in app.state.domain_modules
         assert "creators" in app.state.domain_modules
         assert "referrals" in app.state.domain_modules
         assert "admin_referrals" in app.state.domain_modules
@@ -114,6 +115,10 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/wallets/ledger" in paths
     assert "/api/wallets/payment-events" in paths
     assert "/players/summaries/recent" in paths
+    assert "/regen-universe/awards" in paths
+    assert "/api/regen-universe/awards" in paths
+    assert "/regen-universe/rankings" in paths
+    assert "/regen-universe/hall-of-fame" in paths
     assert "/clubs/{club_id}" in paths
     assert "/api/competitions" in paths
     assert "/api/competitions/{competition_id}" in paths

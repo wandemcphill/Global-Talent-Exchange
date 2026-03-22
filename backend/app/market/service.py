@@ -29,6 +29,7 @@ from app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, Play
 from app.pricing.service import MarketPricingService, PricingValidationError
 from app.schemas.avatar import PlayerAvatarView
 from app.services.avatar_service import AvatarIdentityInput, AvatarService
+from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.scoring import credits_from_real_world_value
 from sqlalchemy.orm import Session
 
@@ -1027,7 +1028,7 @@ class MarketPlayerQueryService:
 
         return self.market_engine.get_player_pricing_snapshot(
             asset_id=player_id,
-            reference_price=self._reference_price(record),
+            reference_price=self._require_reference_price(record),
             symbol=self._pricing_symbol(record),
         )
 
@@ -1041,7 +1042,7 @@ class MarketPlayerQueryService:
                 asset_id=player_id,
                 interval=interval,
                 limit=limit,
-                reference_price=self._reference_price(record),
+                reference_price=self._require_reference_price(record),
                 symbol=self._pricing_symbol(record),
             )
         except PricingValidationError as exc:
@@ -1053,9 +1054,12 @@ class MarketPlayerQueryService:
 
         mover_items: list[MarketMoverItem] = []
         for record in self.repository.list_player_records():
+            reference_price = self._reference_price(record)
+            if reference_price is None and record.player.is_real_player:
+                continue
             snapshot = self.market_engine.get_player_pricing_snapshot(
                 asset_id=record.player.id,
-                reference_price=self._reference_price(record),
+                reference_price=reference_price,
                 symbol=self._pricing_symbol(record),
             )
             mover_items.append(
@@ -1409,14 +1413,27 @@ class MarketPlayerQueryService:
         return ()
 
     def _reference_price(self, record: MarketPlayerRecord) -> float | None:
-        published_value = self._published_card_value_credits(record)
-        if published_value is not None and published_value > 0:
-            return round(published_value, 2)
-        if record.summary is not None and record.summary.current_value_credits > 0:
-            return round(float(record.summary.current_value_credits), 2)
+        authoritative_value = authoritative_reference_credits(
+            summary=record.summary,
+            latest_snapshot=record.latest_snapshot,
+            summary_payload=self._summary_payload(record),
+            breakdown_payload=self._breakdown_payload(record),
+        )
+        if authoritative_value is not None:
+            return authoritative_value
+        if record.player.is_real_player:
+            return None
         if record.player.market_value_eur is not None and record.player.market_value_eur > 0:
             return round(credits_from_real_world_value(record.player.market_value_eur), 2)
         return None
+
+    def _require_reference_price(self, record: MarketPlayerRecord) -> float | None:
+        reference_price = self._reference_price(record)
+        if reference_price is None and record.player.is_real_player:
+            raise MarketValidationError(
+                f"Authoritative pricing is unavailable for real player '{record.player.id}'."
+            )
+        return reference_price
 
     def _pricing_symbol(self, record: MarketPlayerRecord) -> str | None:
         return record.player.short_name

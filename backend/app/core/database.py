@@ -27,6 +27,7 @@ MODEL_MODULES = (
     "app.leagues.repository",
     "app.market.read_models",
     "app.players.read_models",
+    "app.regen_universe.models",
     "app.replay_archive.persistence",
     "app.value_engine.read_models",
 )

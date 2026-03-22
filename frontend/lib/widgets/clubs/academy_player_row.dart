@@ -42,18 +42,26 @@ class AcademyPlayerRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(player.name,
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  player.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 4),
                 Text(
                   metadataLine,
                   style: Theme.of(context).textTheme.bodyMedium,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 if (extraLine.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 4),
                   Text(
                     extraLine,
                     style: Theme.of(context).textTheme.bodySmall,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],

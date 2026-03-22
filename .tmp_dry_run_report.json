@@ -1,0 +1,152 @@
+{
+  "runner_mode": "dry-run",
+  "request_mode": "curated_seed",
+  "database_url": "sqlite:///C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/gte_backend.db",
+  "batch_path": "C:\\Users\\ayomc\\Desktop\\GLOBAL TALENT EXCHANGE\\backend\\data\\real_player_batches\\first_batch.json",
+  "ingestion_batch_id": "real-player-792e99c27a81",
+  "ambiguous_matches": 0,
+  "missing_pricing_snapshots": 0,
+  "hard_failures": 0,
+  "verdict": "pass",
+  "error_message": null,
+  "preflight_rows": [
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "bassey-001",
+      "canonical_name": "Calvin Bassey",
+      "resolved_action": "create_new",
+      "gtex_player_id": null,
+      "confidence_score": 0.96,
+      "audit_status": "pass",
+      "candidate_ids": []
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "iwobi-001",
+      "canonical_name": "Alex Iwobi",
+      "resolved_action": "create_new",
+      "gtex_player_id": null,
+      "confidence_score": 0.96,
+      "audit_status": "pass",
+      "candidate_ids": []
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "messi-001",
+      "canonical_name": "Lionel Messi",
+      "resolved_action": "create_new",
+      "gtex_player_id": null,
+      "confidence_score": 0.96,
+      "audit_status": "pass",
+      "candidate_ids": []
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "osimhen-001",
+      "canonical_name": "Victor Osimhen",
+      "resolved_action": "create_new",
+      "gtex_player_id": null,
+      "confidence_score": 0.96,
+      "audit_status": "pass",
+      "candidate_ids": []
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "ronaldo-001",
+      "canonical_name": "Cristiano Ronaldo",
+      "resolved_action": "create_new",
+      "gtex_player_id": null,
+      "confidence_score": 0.96,
+      "audit_status": "pass",
+      "candidate_ids": []
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "vinicius-001",
+      "canonical_name": "Vin\u00edcius J\u00fanior",
+      "resolved_action": "create_new",
+      "gtex_player_id": null,
+      "confidence_score": 0.96,
+      "audit_status": "pass",
+      "candidate_ids": []
+    }
+  ],
+  "execution_rows": [
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "bassey-001",
+      "canonical_name": "Calvin Bassey",
+      "resolved_action": "created",
+      "gtex_player_id": "293bc01a-3d6a-4d92-ae08-5a00088825f9",
+      "confidence_score": 0.96,
+      "pricing_snapshot_id": "55d456fa-6ae2-4db6-bfdf-61c561f6b562",
+      "pricing_status": "present",
+      "audit_status": "pass",
+      "commit_status": "rolled_back"
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "iwobi-001",
+      "canonical_name": "Alex Iwobi",
+      "resolved_action": "created",
+      "gtex_player_id": "3cfae609-c7fa-4b09-bd8c-104b17e55597",
+      "confidence_score": 0.96,
+      "pricing_snapshot_id": "ebead2a9-81e6-49c8-a618-2e7b35dc90ee",
+      "pricing_status": "present",
+      "audit_status": "pass",
+      "commit_status": "rolled_back"
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "messi-001",
+      "canonical_name": "Lionel Messi",
+      "resolved_action": "created",
+      "gtex_player_id": "ff54bf66-3e66-4ba2-9f6c-e64c30d0e57f",
+      "confidence_score": 0.96,
+      "pricing_snapshot_id": "70c647b5-a8ae-4131-8689-bf90882854fa",
+      "pricing_status": "present",
+      "audit_status": "pass",
+      "commit_status": "rolled_back"
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "osimhen-001",
+      "canonical_name": "Victor Osimhen",
+      "resolved_action": "created",
+      "gtex_player_id": "2b886e8f-e7dd-4366-8637-2ec1aba37479",
+      "confidence_score": 0.96,
+      "pricing_snapshot_id": "db334157-dfcb-46da-8c61-9c9177d3a484",
+      "pricing_status": "present",
+      "audit_status": "pass",
+      "commit_status": "rolled_back"
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "ronaldo-001",
+      "canonical_name": "Cristiano Ronaldo",
+      "resolved_action": "created",
+      "gtex_player_id": "f2df0404-1b3a-4024-bec4-bcd9bf7e8745",
+      "confidence_score": 0.96,
+      "pricing_snapshot_id": "8b201f6d-83a7-4fab-a55e-5c3b887ff56e",
+      "pricing_status": "present",
+      "audit_status": "pass",
+      "commit_status": "rolled_back"
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "vinicius-001",
+      "canonical_name": "Vin\u00edcius J\u00fanior",
+      "resolved_action": "created",
+      "gtex_player_id": "903e2f94-93d7-483f-bbe7-4bef7e7e807d",
+      "confidence_score": 0.96,
+      "pricing_snapshot_id": "01321e30-5a23-4bbe-a6d9-cc8e33bddb21",
+      "pricing_status": "present",
+      "audit_status": "pass",
+      "commit_status": "rolled_back"
+    }
+  ],
+  "duplicate_findings": [],
+  "ambiguous_findings": [],
+  "pricing_findings": [],
+  "stability_findings": []
+}

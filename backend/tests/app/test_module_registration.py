@@ -30,6 +30,7 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
         "club_identity",
         "replay_archive",
         "notifications",
+        "regen_universe",
     }.issubset(registered_modules)
     assert "/leagues/register" in openapi_paths
     assert "/champions-league/qualification-map" in openapi_paths
@@ -40,6 +41,7 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/api/clubs/{club_id}/reputation" in openapi_paths
     assert "/api/clubs/{club_id}/dynasty" in openapi_paths
     assert "/api/clubs/{club_id}/identity" in openapi_paths
+    assert "/regen-universe/awards" in openapi_paths
     assert "/replays/public/featured" in openapi_paths
     assert "/notifications/me" in openapi_paths
 
@@ -53,6 +55,7 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
         champions_league_response = client.post("/champions-league/qualification-map", json={})
         academy_response = client.post("/academy/season-summary", json={})
         match_engine_response = client.post("/match-engine/summary", json={})
+        regen_universe_response = client.get("/regen-universe/awards")
 
     assert world_super_cup_response.status_code == 200
     assert fast_cups_response.status_code == 200
@@ -61,3 +64,4 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert champions_league_response.status_code == 422
     assert academy_response.status_code == 422
     assert match_engine_response.status_code == 422
+    assert regen_universe_response.status_code == 200

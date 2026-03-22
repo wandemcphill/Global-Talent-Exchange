@@ -27,6 +27,7 @@ from app.pricing.models import (
     PlayerPricingSnapshot,
     PricingHistoryPoint,
 )
+from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 from app.value_engine.scoring import credits_from_real_world_value
 
@@ -353,23 +354,23 @@ class MarketPricingService:
             )
             summary = session.get(PlayerSummaryReadModel, player_id)
 
-        reference_candidates: tuple[float | None, ...] = (
-            self._coerce_float(
-                (latest_snapshot.breakdown_json or {}).get("published_card_value_credits")
-                if latest_snapshot is not None
-                else None
-            ),
-            self._coerce_float(latest_snapshot.target_credits if latest_snapshot is not None else None),
-            self._coerce_float(summary.current_value_credits if summary is not None else None),
-            self._coerce_float(
-                credits_from_real_world_value(player.market_value_eur)
-                if player.market_value_eur is not None
-                else None
-            ),
+        authoritative_reference = authoritative_reference_credits(
+            summary=summary,
+            latest_snapshot=latest_snapshot,
+            summary_payload=summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else {},
+            breakdown_payload=latest_snapshot.breakdown_json if latest_snapshot is not None and isinstance(latest_snapshot.breakdown_json, dict) else {},
         )
-        for candidate in reference_candidates:
-            if candidate is not None and candidate > 0:
-                return round(candidate, 2), player.short_name
+        if authoritative_reference is not None:
+            return authoritative_reference, player.short_name
+        if player.is_real_player:
+            return None, player.short_name
+        fallback_reference = self._coerce_float(
+            credits_from_real_world_value(player.market_value_eur)
+            if player.market_value_eur is not None
+            else None
+        )
+        if fallback_reference is not None and fallback_reference > 0:
+            return round(fallback_reference, 2), player.short_name
         return None, player.short_name
 
     def _bucket_start(self, timestamp: datetime, bucket_size: timedelta) -> datetime:

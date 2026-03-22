@@ -97,9 +97,9 @@ def test_real_player_ingestion_invokes_authoritative_value_engine_bridge() -> No
                 self.wrapped = wrapped
                 self.calls: list[dict] = []
 
-            def run(self, **kwargs):
+            def preview_player(self, session, **kwargs):
                 self.calls.append(kwargs)
-                return self.wrapped.run(**kwargs)
+                return self.wrapped.preview_player(session, **kwargs)
 
         spy_bridge = _SpyBridge(wrapped_bridge)
         service = RealPlayerIngestionService(
@@ -111,9 +111,9 @@ def test_real_player_ingestion_invokes_authoritative_value_engine_bridge() -> No
         result = service.ingest(_request())
 
         assert result.authoritative_snapshots_seeded == 2
-        assert len(spy_bridge.calls) == 1
-        assert len(spy_bridge.calls[0]["player_ids"]) == 2
-        assert spy_bridge.calls[0]["triggered_by"] == "real_player_ingestion_service"
+        assert len(spy_bridge.calls) == 2
+        assert {call["player_id"] for call in spy_bridge.calls} == set(result.player_ids)
+        assert {call["snapshot_type"] for call in spy_bridge.calls} == {"intraday"}
 
         with session_factory() as session:
             snapshot = session.scalar(
@@ -138,8 +138,8 @@ def test_real_player_ingestion_fails_when_bridge_returns_no_snapshots() -> None:
     engine, session_factory = _session_factory()
     try:
         class _EmptyBridge:
-            def run(self, **_kwargs):
-                return []
+            def preview_player(self, _session, **_kwargs):
+                return None
 
         service = RealPlayerIngestionService(
             session_factory=session_factory,

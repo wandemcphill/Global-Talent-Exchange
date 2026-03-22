@@ -45,14 +45,14 @@ class GteMarketPlayerListItem {
   final String? nationality;
   final String? currentClubName;
   final int age;
-  final double currentValueCredits;
-  final double movementPct;
-  final double trendScore;
-  final int marketInterestScore;
+  final double? currentValueCredits;
+  final double? movementPct;
+  final double? trendScore;
+  final int? marketInterestScore;
   final double? averageRating;
   final PlayerAvatar? avatar;
 
-  bool get isRising => movementPct > 0;
+  bool get isRising => (movementPct ?? 0) > 0;
 
   factory GteMarketPlayerListItem.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -65,12 +65,12 @@ class GteMarketPlayerListItem {
       currentClubName: GteJson.stringOrNull(
           json, <String>['current_club_name', 'currentClubName']),
       age: GteJson.integer(json, <String>['age']),
-      currentValueCredits: GteJson.number(
+      currentValueCredits: _nullableNumber(
           json, <String>['current_value_credits', 'currentValueCredits']),
       movementPct:
-          GteJson.number(json, <String>['movement_pct', 'movementPct']),
-      trendScore: GteJson.number(json, <String>['trend_score', 'trendScore']),
-      marketInterestScore: GteJson.integer(
+          _nullableNumber(json, <String>['movement_pct', 'movementPct']),
+      trendScore: _nullableNumber(json, <String>['trend_score', 'trendScore']),
+      marketInterestScore: _nullableInteger(
         json,
         <String>['market_interest_score', 'marketInterestScore'],
       ),
@@ -292,9 +292,9 @@ class GteMarketPlayerValue {
 
   final String? lastSnapshotId;
   final DateTime? lastSnapshotAt;
-  final double currentValueCredits;
+  final double? currentValueCredits;
   final double? previousValueCredits;
-  final double movementPct;
+  final double? movementPct;
   final double? footballTruthValueCredits;
   final double? marketSignalValueCredits;
   final double? publishedCardValueCredits;
@@ -316,7 +316,7 @@ class GteMarketPlayerValue {
           json, <String>['last_snapshot_id', 'lastSnapshotId']),
       lastSnapshotAt: GteJson.dateTimeOrNull(
           json, <String>['last_snapshot_at', 'lastSnapshotAt']),
-      currentValueCredits: GteJson.number(
+      currentValueCredits: _nullableNumber(
         json,
         <String>['current_value_credits', 'currentValueCredits'],
       ),
@@ -325,7 +325,7 @@ class GteMarketPlayerValue {
         <String>['previous_value_credits', 'previousValueCredits'],
       ),
       movementPct:
-          GteJson.number(json, <String>['movement_pct', 'movementPct']),
+          _nullableNumber(json, <String>['movement_pct', 'movementPct']),
       footballTruthValueCredits: _nullableNumber(
         json,
         <String>['football_truth_value_credits', 'footballTruthValueCredits'],
@@ -389,8 +389,8 @@ class GteMarketPlayerTrend {
     required this.movementTags,
   });
 
-  final double trendScore;
-  final int marketInterestScore;
+  final double? trendScore;
+  final int? marketInterestScore;
   final double? averageRating;
   final double globalScoutingIndex;
   final double? previousGlobalScoutingIndex;
@@ -407,8 +407,8 @@ class GteMarketPlayerTrend {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'market player trend');
     return GteMarketPlayerTrend(
-      trendScore: GteJson.number(json, <String>['trend_score', 'trendScore']),
-      marketInterestScore: GteJson.integer(
+      trendScore: _nullableNumber(json, <String>['trend_score', 'trendScore']),
+      marketInterestScore: _nullableInteger(
         json,
         <String>['market_interest_score', 'marketInterestScore'],
       ),

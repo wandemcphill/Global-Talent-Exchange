@@ -455,7 +455,7 @@ class _PlayerCardMarketplaceScreenState
                     ),
                     title: Text(contract.playerName),
                     subtitle: Text(
-                      '${contract.contractStatus.toUpperCase()} â€¢ ${gteFormatCredits(contract.effectiveLoanFeeCredits)} â€¢ due ${gteFormatDateTime(contract.dueAt)}',
+                      '${contract.contractStatus.toUpperCase()} | ${gteFormatCredits(contract.effectiveLoanFeeCredits)} | due ${gteFormatDateTime(contract.dueAt)}',
                     ),
                     trailing: Wrap(
                       spacing: 8,
@@ -672,7 +672,7 @@ class _PlayerCardMarketplaceScreenState
       title: 'Buy sale listing',
       fields: <Widget>[
         Text(
-          '${listing.playerName} â€¢ ${gteFormatCredits(listing.salePriceCredits ?? 0)} per card',
+          '${listing.playerName} | ${gteFormatCredits(listing.salePriceCredits ?? 0)} per card',
         ),
         const SizedBox(height: 12),
         TextField(
@@ -988,15 +988,15 @@ class _ExecutionSummaryPanel extends StatelessWidget {
           const SizedBox(height: 12),
           if (sale != null)
             Text(
-              'Sale: ${gteFormatCredits(sale.grossCredits)} gross â€¢ fee ${gteFormatCredits(sale.feeCredits)} â€¢ seller net ${gteFormatCredits(sale.sellerNetCredits)}',
+              'Sale: ${gteFormatCredits(sale.grossCredits)} gross | fee ${gteFormatCredits(sale.feeCredits)} | seller net ${gteFormatCredits(sale.sellerNetCredits)}',
             ),
           if (contract != null)
             Text(
-              'Loan: ${contract.contractStatus.toUpperCase()} â€¢ lender net ${gteFormatCredits(contract.lenderNetCredits)} â€¢ fee ${gteFormatCredits(contract.platformFeeCredits)}',
+              'Loan: ${contract.contractStatus.toUpperCase()} | lender net ${gteFormatCredits(contract.lenderNetCredits)} | fee ${gteFormatCredits(contract.platformFeeCredits)}',
             ),
           if (swap != null)
             Text(
-              'Swap: ${swap.status.toUpperCase()} â€¢ owner card ${swap.ownerPlayerCardId} for ${swap.counterpartyPlayerCardId}',
+              'Swap: ${swap.status.toUpperCase()} | owner card ${swap.ownerPlayerCardId} for ${swap.counterpartyPlayerCardId}',
             ),
         ],
       ),
@@ -1040,12 +1040,18 @@ class _MarketplaceListingTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(listing.playerName,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      listing.playerName,
+                      style: Theme.of(context).textTheme.titleLarge,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      '${listing.tierName} â€¢ ${listing.clubName ?? 'Unknown club'} â€¢ ${listing.position ?? 'n/a'}',
+                      '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
                       style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -1134,7 +1140,7 @@ class _HoldingTile extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 6),
                     Text(
-                      '${holding.tierName} â€¢ ${holding.quantityAvailable}/${holding.quantityTotal} available',
+                      '${holding.tierName} | ${holding.quantityAvailable}/${holding.quantityTotal} available',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],

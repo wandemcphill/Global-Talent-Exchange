@@ -381,16 +381,18 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
     switch (_selectedLens) {
       case _MarketLens.risers:
         return players
-            .where((GteMarketPlayerListItem player) => player.movementPct > 0)
+            .where((GteMarketPlayerListItem player) =>
+                (player.movementPct ?? 0) > 0)
             .toList(growable: false);
       case _MarketLens.fallers:
         return players
-            .where((GteMarketPlayerListItem player) => player.movementPct < 0)
+            .where((GteMarketPlayerListItem player) =>
+                (player.movementPct ?? 0) < 0)
             .toList(growable: false);
       case _MarketLens.highInterest:
         return players
             .where((GteMarketPlayerListItem player) =>
-                player.marketInterestScore >= 70)
+                (player.marketInterestScore ?? 0) >= 70)
             .toList(growable: false);
       case _MarketLens.all:
         return players;
@@ -615,14 +617,16 @@ class _MarketLensCounts {
     return _MarketLensCounts(
       total: players.length,
       risers: players
-          .where((GteMarketPlayerListItem player) => player.movementPct > 0)
+          .where(
+              (GteMarketPlayerListItem player) => (player.movementPct ?? 0) > 0)
           .length,
       fallers: players
-          .where((GteMarketPlayerListItem player) => player.movementPct < 0)
+          .where(
+              (GteMarketPlayerListItem player) => (player.movementPct ?? 0) < 0)
           .length,
       highInterest: players
           .where((GteMarketPlayerListItem player) =>
-              player.marketInterestScore >= 70)
+              (player.marketInterestScore ?? 0) >= 70)
           .length,
     );
   }
@@ -636,16 +640,24 @@ class _PlayerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color movementColor =
-        player.isRising ? GteShellTheme.positive : GteShellTheme.negative;
+    final Color movementColor = player.movementPct == null
+        ? GteShellTheme.accent
+        : player.isRising
+            ? GteShellTheme.positive
+            : GteShellTheme.negative;
     final avatar = AvatarMapper.fromMarketListItem(player);
-    final String demandLabel = player.marketInterestScore >= 80
-        ? 'HEAVY FLOW'
-        : player.marketInterestScore >= 55
-            ? 'ACTIVE FLOW'
-            : 'THIN FLOW';
-    final bool looksIlliquid =
-        player.marketInterestScore < 35 && player.trendScore < 4;
+    final int? marketInterestScore = player.marketInterestScore;
+    final double? trendScore = player.trendScore;
+    final String demandLabel = marketInterestScore == null
+        ? 'FORMING FLOW'
+        : marketInterestScore >= 80
+            ? 'HEAVY FLOW'
+            : marketInterestScore >= 55
+                ? 'ACTIVE FLOW'
+                : 'THIN FLOW';
+    final bool looksIlliquid = marketInterestScore != null && trendScore != null
+        ? marketInterestScore < 35 && trendScore < 4
+        : false;
     return GteSurfacePanel(
       onTap: onTap,
       accentColor: movementColor,
@@ -660,8 +672,12 @@ class _PlayerCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(player.playerName,
-                        style: Theme.of(context).textTheme.headlineSmall),
+                    Text(
+                      player.playerName,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       <String>[
@@ -670,8 +686,10 @@ class _PlayerCard extends StatelessWidget {
                         if (player.nationality != null) player.nationality!,
                         if (player.position != null) player.position!,
                         'Age ${player.age}',
-                      ].join(' Ã¢â‚¬Â¢ '),
+                      ].join(' | '),
                       style: Theme.of(context).textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -699,7 +717,7 @@ class _PlayerCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(gteFormatCredits(player.currentValueCredits),
+                  Text(gteFormatNullableCredits(player.currentValueCredits),
                       style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 6),
                   Container(
@@ -710,7 +728,7 @@ class _PlayerCard extends StatelessWidget {
                       color: movementColor.withValues(alpha: 0.12),
                     ),
                     child: Text(
-                      gteFormatMovement(player.movementPct),
+                      gteFormatNullableMovement(player.movementPct),
                       style: Theme.of(context)
                           .textTheme
                           .labelLarge
@@ -727,11 +745,13 @@ class _PlayerCard extends StatelessWidget {
               Expanded(
                 child: _MicroBookStat(
                   label: 'Trend pressure',
-                  value: player.trendScore >= 7
-                      ? 'ACCELERATING'
-                      : player.trendScore >= 4
-                          ? 'BUILDING'
-                          : 'QUIET',
+                  value: trendScore == null
+                      ? 'FORMING'
+                      : trendScore >= 7
+                          ? 'ACCELERATING'
+                          : trendScore >= 4
+                              ? 'BUILDING'
+                              : 'QUIET',
                   color: movementColor,
                 ),
               ),
@@ -739,11 +759,13 @@ class _PlayerCard extends StatelessWidget {
               Expanded(
                 child: _MicroBookStat(
                   label: 'Scout demand',
-                  value: player.marketInterestScore >= 70
-                      ? 'HEAVY'
-                      : player.marketInterestScore >= 40
-                          ? 'ACTIVE'
-                          : 'LIGHT',
+                  value: marketInterestScore == null
+                      ? 'FORMING'
+                      : marketInterestScore >= 70
+                          ? 'HEAVY'
+                          : marketInterestScore >= 40
+                              ? 'ACTIVE'
+                              : 'LIGHT',
                   color: GteShellTheme.accentWarm,
                 ),
               ),
@@ -764,18 +786,23 @@ class _PlayerCard extends StatelessWidget {
               children: <Widget>[
                 GteMetricChip(
                     label: 'Trend score',
-                    value: player.trendScore.toStringAsFixed(1)),
+                    value: player.trendScore?.toStringAsFixed(1) ?? '--'),
                 GteMetricChip(
                     label: 'Interest',
-                    value: player.marketInterestScore.toString()),
+                    value: player.marketInterestScore?.toString() ?? '--'),
                 GteMetricChip(label: 'Flow', value: demandLabel),
                 GteMetricChip(
                     label: 'Rating',
                     value: player.averageRating?.toStringAsFixed(1) ?? '--'),
                 GteMetricChip(
-                    label: 'Market state',
-                    value: player.isRising ? 'BID UP' : 'CHECK OFFER',
-                    positive: player.isRising),
+                  label: 'Market state',
+                  value: player.movementPct == null
+                      ? 'FORMING'
+                      : player.isRising
+                          ? 'BID UP'
+                          : 'CHECK OFFER',
+                  positive: player.isRising,
+                ),
               ],
             ),
           ),
@@ -784,11 +811,13 @@ class _PlayerCard extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  looksIlliquid
-                      ? 'Liquidity looks light. Open the detail view to inspect quote quality, spreads, and timing before you commit.'
-                      : player.isRising
-                          ? 'Momentum is tilting upward. Open the detail view for quote depth and order entry.'
-                          : 'Price is cooling. Open the detail view to inspect quote quality and timing.',
+                  player.movementPct == null || trendScore == null
+                      ? 'Pricing signals are still forming. Open the detail view to inspect the latest mapped value, avatar payload, and market context.'
+                      : looksIlliquid
+                          ? 'Liquidity looks light. Open the detail view to inspect quote quality, spreads, and timing before you commit.'
+                          : player.isRising
+                              ? 'Momentum is tilting upward. Open the detail view for quote depth and order entry.'
+                              : 'Price is cooling. Open the detail view to inspect quote quality and timing.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

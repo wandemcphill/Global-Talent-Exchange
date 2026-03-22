@@ -89,6 +89,11 @@ def lifecycle_session() -> Session:
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def _configure_test_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+
+
 @pytest.fixture()
 def lifecycle_service(lifecycle_session: Session) -> PlayerLifecycleService:
     return PlayerLifecycleService(lifecycle_session)

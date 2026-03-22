@@ -1,0 +1,167 @@
+{
+  "mode": "curated_seed",
+  "ingestion_source_version": "first-batch-v1",
+  "as_of": "2026-03-22T12:00:00+00:00",
+  "players": [
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "messi-001",
+      "canonical_name": "Lionel Messi",
+      "known_aliases": [
+        "Lionel Andres Messi",
+        "L. Messi"
+      ],
+      "nationality": "Argentina",
+      "nationality_code": "AR",
+      "date_of_birth": "1987-06-24",
+      "dominant_foot": "left",
+      "primary_position": "Winger",
+      "secondary_positions": [
+        "Attacking Midfielder"
+      ],
+      "current_real_world_club": "Inter Miami",
+      "current_real_world_league": "Major League Soccer",
+      "competition_level": "major",
+      "appearances": 29,
+      "minutes_played": 2320,
+      "goals": 18,
+      "assists": 11,
+      "current_market_reference_value": 18000000,
+      "market_reference_currency": "EUR",
+      "identity_confidence_score": 0.99
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "ronaldo-001",
+      "canonical_name": "Cristiano Ronaldo",
+      "known_aliases": [
+        "Cristiano Ronaldo dos Santos Aveiro",
+        "C. Ronaldo"
+      ],
+      "nationality": "Portugal",
+      "nationality_code": "PT",
+      "date_of_birth": "1985-02-05",
+      "dominant_foot": "right",
+      "primary_position": "Striker",
+      "secondary_positions": [
+        "Winger"
+      ],
+      "current_real_world_club": "Al Nassr",
+      "current_real_world_league": "Saudi Pro League",
+      "competition_level": "major",
+      "appearances": 31,
+      "minutes_played": 2640,
+      "goals": 24,
+      "assists": 6,
+      "current_market_reference_value": 15000000,
+      "market_reference_currency": "EUR",
+      "identity_confidence_score": 0.99
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "osimhen-001",
+      "canonical_name": "Victor Osimhen",
+      "known_aliases": [
+        "V. Osimhen"
+      ],
+      "nationality": "Nigeria",
+      "nationality_code": "NG",
+      "date_of_birth": "1998-12-29",
+      "dominant_foot": "right",
+      "primary_position": "Striker",
+      "secondary_positions": [
+        "Winger"
+      ],
+      "current_real_world_club": "Galatasaray",
+      "current_real_world_league": "Super Lig",
+      "competition_level": "top_flight",
+      "appearances": 31,
+      "minutes_played": 2410,
+      "goals": 19,
+      "assists": 4,
+      "current_market_reference_value": 60000000,
+      "market_reference_currency": "EUR",
+      "identity_confidence_score": 0.99
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "iwobi-001",
+      "canonical_name": "Alex Iwobi",
+      "known_aliases": [
+        "Alexander Iwobi"
+      ],
+      "nationality": "Nigeria",
+      "nationality_code": "NG",
+      "date_of_birth": "1996-05-03",
+      "dominant_foot": "right",
+      "primary_position": "Winger",
+      "secondary_positions": [
+        "Attacking Midfielder"
+      ],
+      "current_real_world_club": "Fulham",
+      "current_real_world_league": "Premier League",
+      "competition_level": "elite",
+      "appearances": 29,
+      "minutes_played": 2280,
+      "goals": 6,
+      "assists": 7,
+      "current_market_reference_value": 18000000,
+      "market_reference_currency": "EUR",
+      "identity_confidence_score": 0.99
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "bassey-001",
+      "canonical_name": "Calvin Bassey",
+      "known_aliases": [
+        "Calvin Chinedu Bassey"
+      ],
+      "nationality": "Nigeria",
+      "nationality_code": "NG",
+      "birth_year": 1999,
+      "dominant_foot": "left",
+      "primary_position": "Centre-Back",
+      "secondary_positions": [
+        "Full-Back"
+      ],
+      "current_real_world_club": "Fulham",
+      "current_real_world_league": "Premier League",
+      "competition_level": "elite",
+      "appearances": 30,
+      "minutes_played": 2550,
+      "goals": 1,
+      "assists": 2,
+      "clean_sheets": 11,
+      "current_market_reference_value": 22000000,
+      "market_reference_currency": "EUR",
+      "identity_confidence_score": 0.99
+    },
+    {
+      "source_name": "curated-feed",
+      "source_player_key": "vinicius-001",
+      "canonical_name": "Vinícius Júnior",
+      "known_aliases": [
+        "Vinicius Jr",
+        "Vinicius Junior"
+      ],
+      "nationality": "Brazil",
+      "nationality_code": "BR",
+      "date_of_birth": "2000-07-12",
+      "dominant_foot": "right",
+      "primary_position": "Winger",
+      "secondary_positions": [
+        "Striker"
+      ],
+      "current_real_world_club": "Real Madrid",
+      "current_real_world_league": "La Liga",
+      "competition_level": "elite",
+      "appearances": 28,
+      "minutes_played": 2235,
+      "goals": 16,
+      "assists": 9,
+      "current_market_reference_value": 170000000,
+      "market_reference_currency": "EUR",
+      "identity_confidence_score": 0.99
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import hashlib
 import json
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
@@ -25,23 +25,35 @@ from app.ingestion.models import (
 from app.ingestion.normalizers import clean_name, slugify
 from app.ingestion.real_player_normalization_service import RealPlayerNormalizationService, RealPlayerNormalizedProfile
 from app.ingestion.real_player_signal_adapter import RealPlayerSignalAdapter
+from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_cards import PlayerMarketValueSnapshot, PlayerStatsSnapshot
+from app.models.player_contract import PlayerContract
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
 from app.players.service import PlayerSummaryProjector
 from app.schemas.real_player_ingestion import (
+    RealPlayerBatchIssue,
+    RealPlayerBatchIssueCandidate,
+    RealPlayerDryRunReport,
     RealPlayerIngestionItemResult,
     RealPlayerIngestionMode,
     RealPlayerIngestionRequest,
     RealPlayerIngestionResult,
+    RealPlayerPostWriteAuditResult,
     RealPlayerSeedInput,
+    RealPlayerWriteReport,
 )
+from app.services.avatar_service import AvatarService
 from app.services.squad_assignment_service import SquadAssignmentService
+from app.value_engine.models import ValueSnapshot
 from app.value_engine.read_models import PlayerValueSnapshotRecord
-from app.value_engine.service import IngestionValueEngineBridge
+from app.value_engine.service import IngestionValueEngineBridge, IngestionValueSnapshotRepository
 
-from .real_player_identity_matcher import RealPlayerIdentityMatcher
+from .real_player_identity_matcher import (
+    AmbiguousRealPlayerMatchError,
+    RealPlayerIdentityMatcher,
+)
 
 
 class RealPlayerIngestionError(ValueError):
@@ -52,15 +64,35 @@ class RealPlayerPricingError(RealPlayerIngestionError):
     pass
 
 
+class RealPlayerBatchBlockedError(RealPlayerIngestionError):
+    def __init__(self, report: RealPlayerDryRunReport) -> None:
+        self.report = report
+        super().__init__(
+            "Real-player batch write aborted: "
+            f"{report.ambiguous_match_count} ambiguous, "
+            f"{report.missing_pricing_snapshot_count} missing authoritative pricing snapshots, "
+            f"{report.hard_failure_count} hard failures."
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class StagedRealPlayer:
     source_name: str
     source_player_key: str
+    canonical_name: str
     gtex_player_id: str
     action: str
+    match_action: str
     identity_confidence_score: float
     profile_id: str
     normalized: RealPlayerNormalizedProfile
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedRealPlayerBatch:
+    report: RealPlayerDryRunReport
+    staged_players: tuple[StagedRealPlayer, ...]
+    preview_snapshots: dict[str, ValueSnapshot]
 
 
 @dataclass(slots=True)
@@ -73,6 +105,7 @@ class RealPlayerIngestionService:
     signal_adapter: RealPlayerSignalAdapter = field(default_factory=RealPlayerSignalAdapter)
     summary_projector: PlayerSummaryProjector = field(default_factory=PlayerSummaryProjector)
     squad_assignment_service: SquadAssignmentService = field(default_factory=SquadAssignmentService)
+    avatar_service: AvatarService = field(default_factory=AvatarService)
 
     def __post_init__(self) -> None:
         if self.value_engine_bridge is None:
@@ -84,47 +117,84 @@ class RealPlayerIngestionService:
             )
 
     def ingest(self, request: RealPlayerIngestionRequest) -> RealPlayerIngestionResult:
+        write_report: RealPlayerWriteReport
+        try:
+            write_report = self.write_batch(request)
+        except RealPlayerBatchBlockedError as exc:
+            self._raise_blocked_ingestion_error(exc.report)
+            raise AssertionError("unreachable")
+        return RealPlayerIngestionResult(
+            mode=write_report.mode,
+            ingestion_batch_id=write_report.ingestion_batch_id,
+            ingestion_source_version=write_report.ingestion_source_version,
+            as_of=write_report.as_of,
+            players_processed=write_report.players_processed,
+            players_created=write_report.players_created,
+            players_updated=write_report.players_updated,
+            authoritative_snapshots_seeded=write_report.pricing_snapshots_resolved,
+            player_ids=list(write_report.player_ids),
+            results=list(write_report.results),
+        )
+
+    def validate(self, request: RealPlayerIngestionRequest) -> RealPlayerDryRunReport:
         if self.value_engine_bridge is None:
             raise RealPlayerIngestionError("Authoritative value engine bridge is not configured.")
         if not request.players:
             raise RealPlayerIngestionError("At least one real player payload is required.")
-
         as_of = request.as_of or datetime.now(UTC)
         ingestion_batch_id = request.ingestion_batch_id or f"real-player-{uuid4().hex[:12]}"
-        staged_players = self._stage_players(
-            request=request,
-            ingestion_batch_id=ingestion_batch_id,
-            as_of=as_of,
-        )
-        player_ids = [item.gtex_player_id for item in staged_players]
-        snapshots = self.value_engine_bridge.run(
-            as_of=as_of,
-            lookback_days=request.lookback_days,
-            player_ids=player_ids,
-            run_type="manual_rebuild",
-            triggered_by="real_player_ingestion_service",
-            notes={
-                "ingestion_mode": request.mode,
-                "ingestion_batch_id": ingestion_batch_id,
-                "ingestion_source_version": request.ingestion_source_version,
-                "player_count": len(player_ids),
-            },
-        )
-        snapshot_player_ids = {snapshot.player_id for snapshot in snapshots}
-        missing_snapshot_ids = [player_id for player_id in player_ids if player_id not in snapshot_player_ids]
-        if missing_snapshot_ids:
-            raise RealPlayerPricingError(
-                "Authoritative value engine produced no snapshots for "
-                f"{missing_snapshot_ids}. No fallback pricing path was used."
-            )
+        with self.session_factory() as session:
+            transaction = self._begin_session_transaction(session)
+            try:
+                prepared = self._prepare_batch(
+                    session=session,
+                    request=request,
+                    ingestion_batch_id=ingestion_batch_id,
+                    as_of=as_of,
+                )
+                return prepared.report
+            finally:
+                if transaction.is_active:
+                    transaction.rollback()
 
-        item_results = self._finalize_batch(
-            staged_players=staged_players,
-            request=request,
-            ingestion_batch_id=ingestion_batch_id,
-            as_of=as_of,
-        )
-        return RealPlayerIngestionResult(
+    def write_batch(self, request: RealPlayerIngestionRequest) -> RealPlayerWriteReport:
+        if self.value_engine_bridge is None:
+            raise RealPlayerIngestionError("Authoritative value engine bridge is not configured.")
+        if not request.players:
+            raise RealPlayerIngestionError("At least one real player payload is required.")
+        as_of = request.as_of or datetime.now(UTC)
+        ingestion_batch_id = request.ingestion_batch_id or f"real-player-{uuid4().hex[:12]}"
+        with self.session_factory() as session:
+            transaction = self._begin_session_transaction(session)
+            try:
+                prepared = self._prepare_batch(
+                    session=session,
+                    request=request,
+                    ingestion_batch_id=ingestion_batch_id,
+                    as_of=as_of,
+                )
+                if self._is_blocked(prepared.report):
+                    transaction.rollback()
+                    raise RealPlayerBatchBlockedError(prepared.report)
+
+                ordered_snapshots = [prepared.preview_snapshots[item.gtex_player_id] for item in prepared.staged_players]
+                self._persist_authoritative_snapshots(session, snapshots=ordered_snapshots)
+                item_results = self._finalize_batch(
+                    session=session,
+                    staged_players=list(prepared.staged_players),
+                    request=request,
+                    ingestion_batch_id=ingestion_batch_id,
+                    as_of=as_of,
+                )
+                player_ids = [item.gtex_player_id for item in prepared.staged_players]
+                transaction.commit()
+            except Exception:
+                if transaction.is_active:
+                    transaction.rollback()
+                raise
+
+        audit = self._audit_batch(player_ids=player_ids, as_of=as_of)
+        return RealPlayerWriteReport(
             mode=request.mode,
             ingestion_batch_id=ingestion_batch_id,
             ingestion_source_version=request.ingestion_source_version,
@@ -132,193 +202,562 @@ class RealPlayerIngestionService:
             players_processed=len(item_results),
             players_created=sum(1 for item in item_results if item.action == "created"),
             players_updated=sum(1 for item in item_results if item.action == "updated"),
-            authoritative_snapshots_seeded=len(item_results),
+            identities_linked=len(item_results),
+            duplicates_prevented=prepared.report.matched_existing_count,
+            pricing_snapshots_resolved=len(item_results),
+            avatars_assigned=max(len(item_results) - audit.players_missing_avatar_seed_count, 0),
+            agency_profiles_created_or_attached=audit.agency_linkage_present_count,
             player_ids=player_ids,
             results=item_results,
+            audit=audit,
         )
 
-    def _stage_players(
+    def _prepare_batch(
         self,
         *,
+        session: Session,
         request: RealPlayerIngestionRequest,
         ingestion_batch_id: str,
         as_of: datetime,
-    ) -> list[StagedRealPlayer]:
+    ) -> PreparedRealPlayerBatch:
         staged_players: list[StagedRealPlayer] = []
+        preview_snapshots: dict[str, ValueSnapshot] = {}
+        issues: list[RealPlayerBatchIssue] = []
+        normalized_row_count = 0
+        matched_existing_count = 0
+        new_identity_count = 0
+        ambiguous_match_count = 0
+        missing_pricing_snapshot_count = 0
+        hard_failure_count = 0
         ordered_payloads = sorted(request.players, key=lambda item: (item.source_name, item.source_player_key))
-        with self.session_factory() as session:
-            for payload in ordered_payloads:
-                match = self.identity_matcher.match(session, payload)
-                if request.mode == RealPlayerIngestionMode.REFRESH_EXISTING.value and match.action != "source_link":
-                    raise RealPlayerIngestionError(
-                        f"refresh_existing requires an existing source link for '{payload.canonical_name}'."
-                    )
+        for payload in ordered_payloads:
+            try:
                 normalized = self.normalization_service.normalize(payload, as_of=as_of)
-                country = self._resolve_country(session, payload)
-                competition = self._resolve_competition(session, payload, normalized, as_of=as_of)
-                club = self._resolve_club(session, payload, normalized, country=country, competition=competition, as_of=as_of)
-                player, action, was_real_player = self._upsert_player(
-                    session,
-                    payload=payload,
-                    normalized=normalized,
-                    country=country,
-                    competition=competition,
-                    club=club,
-                    match=match,
-                    as_of=as_of,
-                )
-                if action == "updated" and not was_real_player:
-                    self._purge_seeded_supporting_records(session, player=player, source_name=payload.source_name)
-                self._upsert_verification(
-                    session,
-                    player=player,
-                    source_name=payload.source_name,
-                    confidence_score=match.confidence_score,
-                    is_verified_real_player=payload.is_verified_real_player,
-                    as_of=as_of,
-                )
-                source_link = self._upsert_source_link(
-                    session,
-                    player=player,
-                    payload=payload,
-                    normalized=normalized,
-                    confidence_score=match.confidence_score,
-                )
-                profile = self._upsert_profile(
-                    session,
-                    player=player,
-                    source_link=source_link,
-                    payload=payload,
-                    normalized=normalized,
-                    ingestion_batch_id=ingestion_batch_id,
-                    ingestion_source_version=request.ingestion_source_version,
-                    as_of=as_of,
-                )
-                self._upsert_tenure(session, player=player, payload=payload, club=club, as_of=as_of)
-                self._upsert_season_stat(
-                    session,
-                    player=player,
-                    payload=payload,
-                    normalized=normalized,
-                    club=club,
-                    competition=competition,
-                    as_of=as_of,
-                )
-                self._upsert_injury_status(session, player=player, payload=payload)
-                self._upsert_market_signals(session, player=player, normalized=normalized, as_of=as_of)
-                staged_players.append(
-                    StagedRealPlayer(
-                        source_name=payload.source_name,
-                        source_player_key=payload.source_player_key,
-                        gtex_player_id=player.id,
-                        action=action,
-                        identity_confidence_score=match.confidence_score,
-                        profile_id=profile.id,
-                        normalized=normalized,
+                normalized_row_count += 1
+            except Exception as exc:
+                hard_failure_count += 1
+                issues.append(
+                    self._issue(
+                        payload=payload,
+                        issue_type="normalization_error",
+                        message=f"Normalization failed: {exc}",
                     )
                 )
-            session.commit()
-        return staged_players
+                continue
+
+            try:
+                match = self.identity_matcher.match(session, payload)
+            except AmbiguousRealPlayerMatchError as exc:
+                ambiguous_match_count += 1
+                issues.append(
+                    self._issue(
+                        payload=payload,
+                        issue_type="ambiguous_match",
+                        message=f"Ambiguous identity match for '{payload.canonical_name}'.",
+                        candidates=[
+                            RealPlayerBatchIssueCandidate(
+                                player_id=candidate.player_id,
+                                score=candidate.score,
+                                reasons=list(candidate.reasons),
+                            )
+                            for candidate in exc.candidates
+                        ],
+                    )
+                )
+                continue
+            except Exception as exc:
+                hard_failure_count += 1
+                issues.append(
+                    self._issue(
+                        payload=payload,
+                        issue_type="match_error",
+                        message=f"Identity match failed: {exc}",
+                    )
+                )
+                continue
+
+            if match.action in {"source_link", "matched_existing"}:
+                matched_existing_count += 1
+            else:
+                new_identity_count += 1
+
+            if request.mode == RealPlayerIngestionMode.REFRESH_EXISTING.value and match.action != "source_link":
+                hard_failure_count += 1
+                issues.append(
+                    self._issue(
+                        payload=payload,
+                        issue_type="mode_error",
+                        message=f"refresh_existing requires an existing source link for '{payload.canonical_name}'.",
+                        gtex_player_id=match.player_id,
+                    )
+                )
+                continue
+
+            try:
+                with session.begin_nested():
+                    staged = self._stage_player(
+                        session=session,
+                        payload=payload,
+                        normalized=normalized,
+                        match=match,
+                        request=request,
+                        ingestion_batch_id=ingestion_batch_id,
+                        as_of=as_of,
+                    )
+                staged_players.append(staged)
+            except Exception as exc:
+                hard_failure_count += 1
+                issues.append(
+                    self._issue(
+                        payload=payload,
+                        issue_type="stage_error",
+                        message=f"Stage failed: {exc}",
+                        gtex_player_id=match.player_id,
+                    )
+                )
+
+        for staged in staged_players:
+            try:
+                snapshot = self._preview_authoritative_snapshot(
+                    session=session,
+                    player_id=staged.gtex_player_id,
+                    as_of=as_of,
+                    lookback_days=request.lookback_days,
+                )
+                preview_snapshots[staged.gtex_player_id] = snapshot
+            except Exception as exc:
+                missing_pricing_snapshot_count += 1
+                issues.append(
+                    self._issue(
+                        source_name=staged.source_name,
+                        source_player_key=staged.source_player_key,
+                        canonical_name=staged.canonical_name,
+                        issue_type="missing_pricing_snapshot",
+                        message=f"Authoritative pricing preview failed: {exc}. No fallback pricing path was used.",
+                        gtex_player_id=staged.gtex_player_id,
+                    )
+                )
+
+        report = RealPlayerDryRunReport(
+            mode=request.mode,
+            ingestion_batch_id=ingestion_batch_id,
+            ingestion_source_version=request.ingestion_source_version,
+            as_of=as_of,
+            source_row_count=len(request.players),
+            normalized_row_count=normalized_row_count,
+            matched_existing_count=matched_existing_count,
+            new_identity_count=new_identity_count,
+            ambiguous_match_count=ambiguous_match_count,
+            missing_pricing_snapshot_count=missing_pricing_snapshot_count,
+            hard_failure_count=hard_failure_count,
+            staged_player_ids=[item.gtex_player_id for item in staged_players],
+            issues=issues,
+        )
+        return PreparedRealPlayerBatch(
+            report=report,
+            staged_players=tuple(staged_players),
+            preview_snapshots=preview_snapshots,
+        )
+
+    def _stage_player(
+        self,
+        *,
+        session: Session,
+        payload: RealPlayerSeedInput,
+        normalized: RealPlayerNormalizedProfile,
+        match,
+        request: RealPlayerIngestionRequest,
+        ingestion_batch_id: str,
+        as_of: datetime,
+    ) -> StagedRealPlayer:
+        country = self._resolve_country(session, payload)
+        competition = self._resolve_competition(session, payload, normalized, as_of=as_of)
+        club = self._resolve_club(session, payload, normalized, country=country, competition=competition, as_of=as_of)
+        player, action, was_real_player = self._upsert_player(
+            session,
+            payload=payload,
+            normalized=normalized,
+            country=country,
+            competition=competition,
+            club=club,
+            match=match,
+            as_of=as_of,
+        )
+        if action == "updated" and not was_real_player:
+            self._purge_seeded_supporting_records(session, player=player, source_name=payload.source_name)
+        self._upsert_verification(
+            session,
+            player=player,
+            source_name=payload.source_name,
+            confidence_score=match.confidence_score,
+            is_verified_real_player=payload.is_verified_real_player,
+            as_of=as_of,
+        )
+        source_link = self._upsert_source_link(
+            session,
+            player=player,
+            payload=payload,
+            normalized=normalized,
+            confidence_score=match.confidence_score,
+        )
+        profile = self._upsert_profile(
+            session,
+            player=player,
+            source_link=source_link,
+            payload=payload,
+            normalized=normalized,
+            ingestion_batch_id=ingestion_batch_id,
+            ingestion_source_version=request.ingestion_source_version,
+            as_of=as_of,
+        )
+        self._upsert_tenure(session, player=player, payload=payload, club=club, as_of=as_of)
+        self._upsert_season_stat(
+            session,
+            player=player,
+            payload=payload,
+            normalized=normalized,
+            club=club,
+            competition=competition,
+            as_of=as_of,
+        )
+        self._upsert_injury_status(session, player=player, payload=payload)
+        self._upsert_market_signals(session, player=player, normalized=normalized, as_of=as_of)
+        return StagedRealPlayer(
+            source_name=payload.source_name,
+            source_player_key=payload.source_player_key,
+            canonical_name=payload.canonical_name,
+            gtex_player_id=player.id,
+            action=action,
+            match_action=match.action,
+            identity_confidence_score=match.confidence_score,
+            profile_id=profile.id,
+            normalized=normalized,
+        )
 
     def _finalize_batch(
         self,
         *,
+        session: Session,
         staged_players: list[StagedRealPlayer],
         request: RealPlayerIngestionRequest,
         ingestion_batch_id: str,
         as_of: datetime,
     ) -> list[RealPlayerIngestionItemResult]:
         player_ids = [item.gtex_player_id for item in staged_players]
+        player_records = {
+            record.player_id: record
+            for record in session.scalars(
+                select(PlayerValueSnapshotRecord).where(
+                    PlayerValueSnapshotRecord.player_id.in_(tuple(player_ids)),
+                    PlayerValueSnapshotRecord.as_of == as_of,
+                    PlayerValueSnapshotRecord.snapshot_type == "intraday",
+                )
+            )
+        }
+        summaries = {
+            summary.player_id: summary
+            for summary in session.scalars(
+                select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(tuple(player_ids)))
+            )
+        }
+
+        item_results: list[RealPlayerIngestionItemResult] = []
+        for staged in staged_players:
+            player = session.get(Player, staged.gtex_player_id)
+            if player is None:
+                raise RealPlayerIngestionError(f"Player '{staged.gtex_player_id}' disappeared before projection.")
+            snapshot_record = player_records.get(staged.gtex_player_id)
+            if snapshot_record is None:
+                raise RealPlayerPricingError(
+                    f"Authoritative value snapshot record was not found for player '{staged.gtex_player_id}'."
+                )
+            summary = summaries.get(staged.gtex_player_id)
+            if summary is None:
+                raise RealPlayerPricingError(
+                    f"Player summary projection was not produced for player '{staged.gtex_player_id}'."
+                )
+            profile = session.get(RealPlayerProfile, staged.profile_id)
+            if profile is None:
+                raise RealPlayerIngestionError(f"Real player profile '{staged.profile_id}' was not found.")
+
+            assignment_profile = self.squad_assignment_service.build_profile(
+                player_id=player.id,
+                primary_position=player.position,
+                normalized_position=player.normalized_position,
+                preferred_foot=player.preferred_foot,
+                age=staged.normalized.age_years or 24,
+                current_club_id=player.current_club_id,
+            )
+            avatar_seed_token, avatar_dna_seed = self._avatar_seed(
+                source_name=staged.source_name,
+                source_player_key=staged.source_player_key,
+                canonical_name=staged.normalized.canonical_name,
+            )
+            self._upsert_stats_snapshot(
+                session,
+                player=player,
+                staged=staged,
+                assignment_profile=assignment_profile,
+                as_of=as_of,
+            )
+            self._upsert_market_value_snapshot(
+                session,
+                player_id=player.id,
+                snapshot_record=snapshot_record,
+                as_of=as_of,
+            )
+            self._enrich_summary(
+                player=player,
+                summary=summary,
+                staged=staged,
+                assignment_profile=assignment_profile,
+                avatar_seed_token=avatar_seed_token,
+                avatar_dna_seed=avatar_dna_seed,
+                snapshot_record=snapshot_record,
+                request=request,
+                ingestion_batch_id=ingestion_batch_id,
+                as_of=as_of,
+            )
+            profile.pricing_snapshot_id = snapshot_record.id
+
+            item_results.append(
+                RealPlayerIngestionItemResult(
+                    source_name=staged.source_name,
+                    source_player_key=staged.source_player_key,
+                    gtex_player_id=player.id,
+                    action=staged.action,
+                    pricing_snapshot_id=snapshot_record.id,
+                    authoritative_price_credits=float(snapshot_record.target_credits),
+                    identity_confidence_score=staged.identity_confidence_score,
+                )
+            )
+        session.flush()
+        return item_results
+
+    def _persist_authoritative_snapshots(self, session: Session, *, snapshots: list[ValueSnapshot]) -> None:
+        repository = IngestionValueSnapshotRepository(
+            session=session,
+            summary_projector=self.summary_projector,
+            settings=self.settings,
+        )
+        for snapshot in snapshots:
+            repository.save_snapshot(snapshot)
+
+    def _preview_authoritative_snapshot(
+        self,
+        *,
+        session: Session,
+        player_id: str,
+        as_of: datetime,
+        lookback_days: int | None,
+    ) -> ValueSnapshot:
+        if self.value_engine_bridge is None:
+            raise RealPlayerIngestionError("Authoritative value engine bridge is not configured.")
+        if not hasattr(self.value_engine_bridge, "preview_player"):
+            raise RealPlayerPricingError("Authoritative value engine bridge does not support preview_player.")
+        snapshot = self.value_engine_bridge.preview_player(
+            session,
+            player_id=player_id,
+            as_of=as_of,
+            lookback_days=lookback_days,
+            snapshot_type="intraday",
+        )
+        if snapshot is None:
+            raise RealPlayerPricingError("Authoritative value engine preview produced no snapshot.")
+        return snapshot
+
+    def _audit_batch(self, *, player_ids: list[str], as_of: datetime) -> RealPlayerPostWriteAuditResult:
+        if not player_ids:
+            return RealPlayerPostWriteAuditResult(
+                duplicate_canonical_identity_count=0,
+                players_missing_authoritative_price_count=0,
+                players_missing_market_snapshot_count=0,
+                players_missing_avatar_seed_count=0,
+                agency_linkage_required_count=0,
+                agency_linkage_present_count=0,
+                agency_linkage_missing_count=0,
+                all_checks_passed=True,
+            )
+
         with self.session_factory() as session:
-            player_records = {
-                record.player_id: record
-                for record in session.scalars(
-                    select(PlayerValueSnapshotRecord).where(
-                        PlayerValueSnapshotRecord.player_id.in_(tuple(player_ids)),
-                        PlayerValueSnapshotRecord.as_of == as_of,
-                        PlayerValueSnapshotRecord.snapshot_type == "intraday",
-                    )
+            player_id_tuple = tuple(player_ids)
+            players = {
+                player.id: player
+                for player in session.scalars(
+                    select(Player).where(Player.id.in_(player_id_tuple))
                 )
             }
             summaries = {
                 summary.player_id: summary
                 for summary in session.scalars(
-                    select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(tuple(player_ids)))
+                    select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_id_tuple))
+                )
+            }
+            authoritative_snapshots = {
+                record.player_id
+                for record in session.scalars(
+                    select(PlayerValueSnapshotRecord).where(
+                        PlayerValueSnapshotRecord.player_id.in_(player_id_tuple),
+                        PlayerValueSnapshotRecord.as_of == as_of,
+                        PlayerValueSnapshotRecord.snapshot_type == "intraday",
+                    )
+                )
+            }
+            market_snapshots = {
+                snapshot.player_id
+                for snapshot in session.scalars(
+                    select(PlayerMarketValueSnapshot).where(
+                        PlayerMarketValueSnapshot.player_id.in_(player_id_tuple),
+                        PlayerMarketValueSnapshot.as_of == as_of,
+                    )
+                )
+            }
+            agency_states = {
+                state.player_id
+                for state in session.scalars(
+                    select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(player_id_tuple))
+                )
+            }
+            contracted_players = {
+                contract.player_id
+                for contract in session.scalars(
+                    select(PlayerContract).where(
+                        PlayerContract.player_id.in_(player_id_tuple),
+                        PlayerContract.status.in_(("active", "expiring")),
+                    )
                 )
             }
 
-            item_results: list[RealPlayerIngestionItemResult] = []
-            for staged in staged_players:
-                player = session.get(Player, staged.gtex_player_id)
-                if player is None:
-                    raise RealPlayerIngestionError(f"Player '{staged.gtex_player_id}' disappeared before projection.")
-                snapshot_record = player_records.get(staged.gtex_player_id)
-                if snapshot_record is None:
-                    raise RealPlayerPricingError(
-                        f"Authoritative value snapshot record was not found for player '{staged.gtex_player_id}'."
-                    )
-                summary = summaries.get(staged.gtex_player_id)
-                if summary is None:
-                    raise RealPlayerPricingError(
-                        f"Player summary projection was not produced for player '{staged.gtex_player_id}'."
-                    )
-                profile = session.get(RealPlayerProfile, staged.profile_id)
-                if profile is None:
-                    raise RealPlayerIngestionError(f"Real player profile '{staged.profile_id}' was not found.")
+            duplicate_groups: dict[str, set[str]] = {}
+            players_missing_avatar_seed_count = 0
+            agency_required_ids: set[str] = set()
 
-                assignment_profile = self.squad_assignment_service.build_profile(
-                    player_id=player.id,
-                    primary_position=player.position,
-                    normalized_position=player.normalized_position,
-                    preferred_foot=player.preferred_foot,
-                    age=staged.normalized.age_years or 24,
-                    current_club_id=player.current_club_id,
+            for player_id in player_ids:
+                player = players.get(player_id)
+                summary = summaries.get(player_id)
+                canonical_name = (
+                    (player.canonical_display_name or player.full_name).strip().casefold()
+                    if player is not None and (player.canonical_display_name or player.full_name)
+                    else ""
                 )
-                avatar_seed_token, avatar_dna_seed = self._avatar_seed(
-                    source_name=staged.source_name,
-                    source_player_key=staged.source_player_key,
-                    canonical_name=staged.normalized.canonical_name,
-                )
-                self._upsert_stats_snapshot(
-                    session,
-                    player=player,
-                    staged=staged,
-                    assignment_profile=assignment_profile,
-                    as_of=as_of,
-                )
-                self._upsert_market_value_snapshot(
-                    session,
-                    player_id=player.id,
-                    snapshot_record=snapshot_record,
-                    as_of=as_of,
-                )
-                self._enrich_summary(
-                    player=player,
-                    summary=summary,
-                    staged=staged,
-                    assignment_profile=assignment_profile,
-                    avatar_seed_token=avatar_seed_token,
-                    avatar_dna_seed=avatar_dna_seed,
-                    snapshot_record=snapshot_record,
-                    request=request,
-                    ingestion_batch_id=ingestion_batch_id,
-                    as_of=as_of,
-                )
-                profile.pricing_snapshot_id = snapshot_record.id
+                if canonical_name:
+                    duplicate_groups.setdefault(canonical_name, set()).add(player_id)
 
-                item_results.append(
-                    RealPlayerIngestionItemResult(
-                        source_name=staged.source_name,
-                        source_player_key=staged.source_player_key,
-                        gtex_player_id=player.id,
-                        action=staged.action,
-                        pricing_snapshot_id=snapshot_record.id,
-                        authoritative_price_credits=float(snapshot_record.target_credits),
-                        identity_confidence_score=staged.identity_confidence_score,
-                    )
-                )
-            session.commit()
-        return item_results
+                if player is not None and (player.current_club_profile_id is not None or player_id in contracted_players):
+                    agency_required_ids.add(player_id)
+
+                summary_payload = dict(summary.summary_json) if summary is not None and isinstance(summary.summary_json, dict) else {}
+                avatar_seed_token = str(summary_payload.get("avatar_seed_token") or "").strip()
+                avatar_dna_seed = str(summary_payload.get("avatar_dna_seed") or "").strip()
+                if player is None or not avatar_seed_token or not avatar_dna_seed:
+                    players_missing_avatar_seed_count += 1
+                    continue
+                avatar = self.avatar_service.build_from_player(player, summary_payload=summary_payload)
+                if not avatar.seed_token or avatar.seed_token != avatar_seed_token:
+                    players_missing_avatar_seed_count += 1
+
+            duplicate_canonical_identity_count = sum(
+                max(len(group_player_ids) - 1, 0)
+                for group_player_ids in duplicate_groups.values()
+                if len(group_player_ids) > 1
+            )
+            players_missing_authoritative_price_count = sum(1 for player_id in player_ids if player_id not in authoritative_snapshots)
+            players_missing_market_snapshot_count = sum(1 for player_id in player_ids if player_id not in market_snapshots)
+            agency_linkage_present_count = sum(1 for player_id in agency_required_ids if player_id in agency_states)
+            agency_linkage_missing_count = max(len(agency_required_ids) - agency_linkage_present_count, 0)
+
+            return RealPlayerPostWriteAuditResult(
+                duplicate_canonical_identity_count=duplicate_canonical_identity_count,
+                players_missing_authoritative_price_count=players_missing_authoritative_price_count,
+                players_missing_market_snapshot_count=players_missing_market_snapshot_count,
+                players_missing_avatar_seed_count=players_missing_avatar_seed_count,
+                agency_linkage_required_count=len(agency_required_ids),
+                agency_linkage_present_count=agency_linkage_present_count,
+                agency_linkage_missing_count=agency_linkage_missing_count,
+                all_checks_passed=(
+                    duplicate_canonical_identity_count == 0
+                    and players_missing_authoritative_price_count == 0
+                    and players_missing_market_snapshot_count == 0
+                    and players_missing_avatar_seed_count == 0
+                    and agency_linkage_missing_count == 0
+                ),
+            )
+
+    def _raise_blocked_ingestion_error(self, report: RealPlayerDryRunReport) -> None:
+        if report.missing_pricing_snapshot_count:
+            blocked_players = [
+                issue.gtex_player_id or issue.source_player_key
+                for issue in report.issues
+                if issue.issue_type == "missing_pricing_snapshot"
+            ]
+            raise RealPlayerPricingError(
+                "Authoritative value engine produced no snapshots for "
+                f"{blocked_players}. No fallback pricing path was used."
+            )
+        if report.ambiguous_match_count:
+            blocked_players = [
+                issue.canonical_name
+                for issue in report.issues
+                if issue.issue_type == "ambiguous_match"
+            ]
+            raise RealPlayerIngestionError(
+                f"Ambiguous identity matches detected for {blocked_players}."
+            )
+        blocked_messages = [issue.message for issue in report.issues]
+        raise RealPlayerIngestionError(
+            f"Real-player ingestion preflight failed with {report.hard_failure_count} hard failures: {blocked_messages}"
+        )
+
+    @staticmethod
+    def _is_blocked(report: RealPlayerDryRunReport) -> bool:
+        return any(
+            (
+                report.ambiguous_match_count,
+                report.missing_pricing_snapshot_count,
+                report.hard_failure_count,
+            )
+        )
+
+    @staticmethod
+    def _begin_session_transaction(session: Session):
+        bind = session.get_bind()
+        if bind is not None and bind.dialect.name == "sqlite":
+            in_transaction = False
+            if hasattr(bind, "in_transaction"):
+                in_transaction = bool(bind.in_transaction())
+            if in_transaction:
+                return session.begin_nested()
+            session.execute(text("BEGIN"))
+            transaction = session.get_transaction()
+            if transaction is None:
+                raise RealPlayerIngestionError("Failed to begin outer transaction for real-player ingestion.")
+            return transaction
+        return session.begin()
+
+    def _issue(
+        self,
+        *,
+        payload: RealPlayerSeedInput | None = None,
+        source_name: str | None = None,
+        source_player_key: str | None = None,
+        canonical_name: str | None = None,
+        issue_type: str,
+        message: str,
+        gtex_player_id: str | None = None,
+        candidates: list[RealPlayerBatchIssueCandidate] | None = None,
+    ) -> RealPlayerBatchIssue:
+        resolved_source_name = source_name or (payload.source_name if payload is not None else "")
+        resolved_source_player_key = source_player_key or (payload.source_player_key if payload is not None else "")
+        resolved_canonical_name = canonical_name or (payload.canonical_name if payload is not None else "")
+        return RealPlayerBatchIssue(
+            source_name=resolved_source_name,
+            source_player_key=resolved_source_player_key,
+            canonical_name=resolved_canonical_name,
+            issue_type=issue_type,
+            message=message,
+            gtex_player_id=gtex_player_id,
+            candidates=candidates or [],
+        )
 
     def _resolve_country(self, session: Session, payload: RealPlayerSeedInput) -> Country | None:
         if not payload.nationality and not payload.nationality_code:

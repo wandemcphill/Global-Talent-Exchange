@@ -194,3 +194,198 @@ def test_identity_matcher_raises_for_ambiguous_candidates(session_factory) -> No
 
         with pytest.raises(AmbiguousRealPlayerMatchError):
             matcher.match(session, payload)
+
+
+def test_identity_matcher_matches_accented_name_via_safe_normalization(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="BR",
+            name="Brazil",
+            alpha2_code="BR",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="vinicius-main",
+            full_name="Vinicius Junior",
+            country=country,
+            position="Winger",
+            normalized_position="forward",
+            date_of_birth=date(2000, 7, 12),
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "vinicius-001",
+                "canonical_name": "Vinícius Júnior",
+                "nationality": "Brazil",
+                "date_of_birth": "2000-07-12",
+                "primary_position": "Winger",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+
+
+def test_identity_matcher_matches_normalized_name_without_club_anchor(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="BR",
+            name="Brazil",
+            alpha2_code="BR",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="vinicius-main",
+            full_name="Vinícius Júnior",
+            canonical_display_name="Vinícius Júnior",
+            country=country,
+            position="Winger",
+            normalized_position="forward",
+            date_of_birth=date(2000, 7, 12),
+            is_real_player=True,
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "vinicius-junior-001",
+                "canonical_name": "Vinicius Junior",
+                "nationality": "Brazil",
+                "birth_year": 2000,
+                "primary_position": "Winger",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+
+
+def test_identity_matcher_matches_hyphen_and_spacing_variant_without_alias(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="DZ",
+            name="Algeria",
+            alpha2_code="DZ",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="compound-main",
+            full_name="Ait El Haj Abakar",
+            country=country,
+            position="Winger",
+            normalized_position="forward",
+            date_of_birth=date(2001, 1, 1),
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "compound-001",
+                "canonical_name": "Ait El-Haj Abakar",
+                "nationality": "Algeria",
+                "date_of_birth": "2001-01-01",
+                "primary_position": "Winger",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+
+
+def test_identity_matcher_uses_short_name_as_alias_match(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="PT",
+            name="Portugal",
+            alpha2_code="PT",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="ronaldo-main",
+            full_name="Cristiano Ronaldo dos Santos Aveiro",
+            short_name="Cristiano Ronaldo",
+            country=country,
+            position="Striker",
+            normalized_position="forward",
+            date_of_birth=date(1985, 2, 5),
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "ronaldo-001",
+                "canonical_name": "Cristiano Ronaldo",
+                "nationality": "Portugal",
+                "date_of_birth": "1985-02-05",
+                "primary_position": "Striker",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+        assert result.confidence_score >= matcher.confident_match_threshold
+
+
+def test_identity_matcher_does_not_merge_distinct_players_without_exact_name_or_alias(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="NG",
+            name="Nigeria",
+            alpha2_code="NG",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="moreno-main",
+            full_name="Alex Moreno",
+            short_name="Alex Moreno",
+            country=country,
+            position="Full-Back",
+            normalized_position="defender",
+            date_of_birth=date(1996, 5, 3),
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "iwobi-001",
+                "canonical_name": "Alex Iwobi",
+                "nationality": "Nigeria",
+                "date_of_birth": "1996-05-03",
+                "primary_position": "Winger",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "create_new"
+        assert result.player_id is None

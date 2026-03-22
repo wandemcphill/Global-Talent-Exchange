@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.ingestion.models import Match, Player, PlayerMatchStat, PlayerSeasonStat
 from app.players.read_models import PlayerSummaryReadModel
+from app.players.schemas import PlayerSummaryView
+from app.schemas.regen_universe import RegenPlayerPrestigeSummaryView
+from app.regen_universe.service import RegenUniverseService
 from app.value_engine.models import ValueSnapshot
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
@@ -150,3 +153,19 @@ class PlayerSummaryQueryService:
             .limit(limit)
         )
         return list(self.session.scalars(statement))
+
+    def get_summary_view(self, player_id: str) -> PlayerSummaryView | None:
+        summary = self.get_summary(player_id)
+        if summary is None:
+            return None
+        return self._build_view(summary)
+
+    def list_recent_views(self, limit: int = 20) -> list[PlayerSummaryView]:
+        return [self._build_view(item) for item in self.list_recent(limit)]
+
+    def _build_view(self, summary: PlayerSummaryReadModel) -> PlayerSummaryView:
+        payload = PlayerSummaryView.model_validate(summary)
+        regen_payload = RegenUniverseService(self.session).get_player_prestige_summary(summary.player_id)
+        if regen_payload is not None:
+            payload.regen_universe = RegenPlayerPrestigeSummaryView.model_validate(regen_payload)
+        return payload

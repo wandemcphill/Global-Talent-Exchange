@@ -41,6 +41,7 @@ from app.notifications.router import notifications_router
 from app.player_cards.router import router as player_cards_router
 from app.players.router import router as players_router
 from app.policies.router import admin_router as admin_policies_router, router as policies_router
+from app.regen_universe.router import admin_router as regen_universe_admin_router, router as regen_universe_router
 from app.routes.player_lifecycle import router as player_lifecycle_router
 from app.routes.player_agency import router as player_agency_router
 from app.portfolios.router import router as portfolios_router
@@ -181,6 +182,15 @@ def _seed_world_simulation_defaults(app, context) -> None:
         session.commit()
 
 
+def _seed_regen_universe_defaults(app, context) -> None:
+    with context.database.session_factory() as session:
+        from app.regen_universe.service import RegenUniverseService
+
+        service = RegenUniverseService(session)
+        service.seed_defaults()
+        session.commit()
+
+
 DOMAIN_MODULES = (
     DomainModule(name="health", router=health_router),
     DomainModule(name="observability", router=observability_router),
@@ -246,6 +256,8 @@ DOMAIN_MODULES = (
     DomainModule(name="analytics", router=analytics_router),
     DomainModule(name="admin_analytics", router=analytics_admin_router),
     DomainModule(name="players", router=players_router),
+    DomainModule(name="regen_universe", router=_with_api_alias(regen_universe_router), on_startup=(_seed_regen_universe_defaults,)),
+    DomainModule(name="regen_universe_admin", router=regen_universe_admin_router),
     DomainModule(name="player_lifecycle", router=player_lifecycle_router),
     DomainModule(name="player_agency", router=player_agency_router),
     DomainModule(name="football_events", router=football_events_router, on_startup=(_seed_football_event_defaults,)),

@@ -850,6 +850,8 @@ class PlayerLifecycleService:
         pressure.last_big_club_id = approaching_club.id
         if not approach.resisted and pressure.unresolved_since is None:
             pressure.unresolved_since = datetime.combine(effective_date, datetime.min.time())
+        if not approach.resisted:
+            pressure.last_resolved_at = None
         current_salary = current_contract.wage_amount if current_contract is not None else Decimal("0.0000")
         uplift_multiplier = Decimal("1.0") + (Decimal(str(approach.salary_expectation_delta_pct)) / Decimal("100"))
         pressure.salary_expectation_fancoin_per_year = max(
@@ -2382,6 +2384,22 @@ class PlayerLifecycleService:
         reference_on: date,
         contract_summary: ContractSummaryView | None,
     ) -> RegenTransferPressureState:
+        def _pressure_rank(raw_state: str) -> int:
+            return {
+                "content": 0,
+                "monitoring_situation": 1,
+                "attracted_by_bigger_club": 2,
+                "considering_transfer": 3,
+                "transfer_requested": 4,
+                "unsettled": 5,
+            }.get(raw_state, 0)
+
+        def _float_or_zero(value: float | None) -> float:
+            return float(value) if value is not None else 0.0
+
+        def _decimal_or_zero(value: Decimal | None) -> Decimal:
+            return value if value is not None else Decimal("0.0000")
+
         _player, _regen, agency_personality, agency_state, transfer_request = self._agency_service().sync(
             player.id,
             reference_on=reference_on,
@@ -2396,42 +2414,162 @@ class PlayerLifecycleService:
                 metadata_json={},
             )
             self.session.add(pressure)
+        existing_metadata = dict(pressure.metadata_json or {})
+        existing_unresolved_bonus = float(existing_metadata.get("unresolved_bonus") or 0.0)
+        existing_relief_score = float(existing_metadata.get("relief_score") or 0.0)
+        manual_transfer_request = bool(existing_metadata.get("manual_transfer_request", False))
+        previous_state = pressure.current_state or "content"
+        previous_ambition_pressure = _float_or_zero(pressure.ambition_pressure)
+        previous_transfer_desire = _float_or_zero(pressure.transfer_desire)
+        previous_prestige_dissatisfaction = _float_or_zero(pressure.prestige_dissatisfaction)
+        previous_title_frustration = _float_or_zero(pressure.title_frustration)
+        previous_pressure_score = _float_or_zero(pressure.pressure_score)
+        previous_active_transfer_request = pressure.active_transfer_request
+        previous_refuses_new_contract = pressure.refuses_new_contract
+        previous_end_of_contract_pressure = pressure.end_of_contract_pressure
+        previous_unresolved_since = pressure.unresolved_since
+        previous_last_big_club_id = pressure.last_big_club_id
+        previous_last_resolved_at = pressure.last_resolved_at
+        previous_salary_expectation = _decimal_or_zero(pressure.salary_expectation_fancoin_per_year)
         current_contract = contract_summary.active_contract if contract_summary is not None else None
         current_salary = current_contract.wage_amount if current_contract is not None else Decimal("0.0000")
         visibility = self._ensure_offer_visibility_state(regen, reference_on=reference_on, current_salary=current_salary)
         current_club_id = current_contract.club_id if current_contract is not None else player.current_club_profile_id
+        current_club_context = self._regen_club_context(current_club_id, regen)
         pressure.current_club_id = current_club_id
-        pressure.current_state = {
+        baseline_state = {
             "no_action": "content",
             "private_unrest": "monitoring_situation",
             "agent_warning": "considering_transfer",
             "transfer_request": "transfer_requested",
             "public_unhappy_state": "unsettled",
         }.get(agency_state.transfer_request_status, "content")
-        pressure.ambition_pressure = clamp(max(0.0, agency_personality.ambition - agency_state.club_project_belief))
-        pressure.transfer_desire = agency_state.transfer_appetite
-        pressure.prestige_dissatisfaction = clamp(max(0.0, agency_personality.ambition - agency_state.club_project_belief) + (100.0 - agency_state.club_project_belief) * 0.35)
-        pressure.title_frustration = clamp(max(0.0, agency_personality.trophy_hunger - agency_state.club_project_belief))
-        pressure.pressure_score = transfer_request.decision_score
-        pressure.salary_expectation_fancoin_per_year = max(agency_state.salary_expectation_amount, visibility.minimum_salary_fancoin_per_year)
-        pressure.active_transfer_request = agency_state.transfer_request_status in {"transfer_request", "public_unhappy_state"}
-        pressure.refuses_new_contract = agency_state.contract_stance in {"open_market", "requests_renegotiation"} and agency_state.wage_satisfaction < 55.0
+        baseline_ambition_pressure = clamp(
+            max(0.0, agency_personality.ambition - agency_state.club_project_belief)
+        )
+        baseline_transfer_desire = _float_or_zero(agency_state.transfer_appetite)
+        baseline_prestige_dissatisfaction = clamp(
+            max(0.0, agency_personality.ambition - agency_state.club_project_belief)
+            + (100.0 - agency_state.club_project_belief) * 0.35
+        )
+        baseline_title_frustration = clamp(
+            max(0.0, agency_personality.trophy_hunger - agency_state.club_project_belief)
+        )
+        pressure_resolved = (
+            previous_last_resolved_at is not None
+            and (previous_unresolved_since is None or previous_last_resolved_at > previous_unresolved_since)
+            and not manual_transfer_request
+        )
+        computed = compute_transfer_pressure(
+            TransferPressureInputs(
+                current_state=baseline_state if pressure_resolved else previous_state,
+                ambition_pressure=(
+                    baseline_ambition_pressure
+                    if pressure_resolved
+                    else max(previous_ambition_pressure, baseline_ambition_pressure)
+                ),
+                transfer_desire=(
+                    baseline_transfer_desire
+                    if pressure_resolved
+                    else max(previous_transfer_desire, baseline_transfer_desire)
+                ),
+                prestige_dissatisfaction=max(
+                    baseline_prestige_dissatisfaction,
+                    0.0 if pressure_resolved else previous_prestige_dissatisfaction,
+                ),
+                title_frustration=max(
+                    baseline_title_frustration,
+                    0.0 if pressure_resolved else previous_title_frustration,
+                ),
+                salary_expectation_fancoin_per_year=max(
+                    previous_salary_expectation,
+                    _decimal_or_zero(agency_state.salary_expectation_amount),
+                    _decimal_or_zero(visibility.minimum_salary_fancoin_per_year),
+                ),
+                current_salary_fancoin_per_year=current_salary,
+                ambition=agency_personality.ambition,
+                loyalty=agency_personality.loyalty,
+                trophy_hunger=agency_personality.trophy_hunger,
+                greed=agency_personality.greed,
+                current_club_prestige=float(current_club_context["prestige"]),
+                current_club_trophies=float(current_club_context["trophy_score"]),
+                days_remaining=contract_summary.days_remaining if contract_summary is not None else None,
+                unresolved_bonus=existing_unresolved_bonus,
+                relief_score=existing_relief_score,
+            )
+        )
+        if pressure_resolved:
+            pressure.current_state = (
+                previous_state
+                if _pressure_rank(previous_state) >= _pressure_rank(baseline_state)
+                else baseline_state
+            )
+        else:
+            pressure.current_state = (
+                computed.current_state
+                if _pressure_rank(computed.current_state) >= _pressure_rank(baseline_state)
+                else baseline_state
+            )
+        pressure.ambition_pressure = computed.ambition_pressure
+        pressure.transfer_desire = computed.transfer_desire
+        pressure.prestige_dissatisfaction = computed.prestige_dissatisfaction
+        pressure.title_frustration = computed.title_frustration
+        pressure.pressure_score = max(transfer_request.decision_score, computed.pressure_score)
+        pressure.salary_expectation_fancoin_per_year = computed.salary_expectation_fancoin_per_year
+        pressure.active_transfer_request = agency_state.transfer_request_status in {
+            "transfer_request",
+            "public_unhappy_state",
+        }
+        if not pressure_resolved:
+            pressure.active_transfer_request = pressure.active_transfer_request or computed.active_transfer_request
+        pressure.refuses_new_contract = (
+            agency_state.contract_stance in {"open_market", "requests_renegotiation"}
+            and agency_state.wage_satisfaction < 55.0
+        )
+        if not pressure_resolved:
+            pressure.refuses_new_contract = pressure.refuses_new_contract or computed.refuses_new_contract
         pressure.end_of_contract_pressure = bool(
             contract_summary is not None
             and contract_summary.days_remaining is not None
             and contract_summary.days_remaining <= 180
             and agency_state.contract_stance in {"open_market", "requests_upgrade", "requests_renegotiation"}
         )
+        if previous_last_big_club_id is not None:
+            pressure.last_big_club_id = previous_last_big_club_id
+        if manual_transfer_request:
+            pressure.current_state = "transfer_requested"
+            pressure.active_transfer_request = True
+            pressure.refuses_new_contract = True
+        elif (
+            previous_unresolved_since is not None
+            and (previous_last_resolved_at is None or previous_unresolved_since >= previous_last_resolved_at)
+            and _pressure_rank(previous_state) > _pressure_rank(pressure.current_state)
+        ):
+            pressure.current_state = previous_state
+            pressure.active_transfer_request = previous_active_transfer_request or pressure.active_transfer_request
+            pressure.refuses_new_contract = previous_refuses_new_contract or pressure.refuses_new_contract
+            pressure.end_of_contract_pressure = (
+                previous_end_of_contract_pressure or pressure.end_of_contract_pressure
+            )
+            pressure.pressure_score = max(previous_pressure_score, pressure.pressure_score)
+        if pressure.active_transfer_request:
+            pressure.last_resolved_at = None
         if pressure.active_transfer_request and pressure.unresolved_since is None:
-            pressure.unresolved_since = datetime.combine(reference_on, datetime.min.time())
+            pressure.unresolved_since = previous_unresolved_since or datetime.combine(
+                reference_on, datetime.min.time()
+            )
         if not pressure.active_transfer_request and pressure.current_state in {"content", "monitoring_situation"}:
             pressure.last_resolved_at = datetime.combine(reference_on, datetime.min.time())
         pressure.metadata_json = {
+            **existing_metadata,
             "career_stage": agency_state.career_stage,
             "career_target_band": agency_state.career_target_band,
             "contract_stance": agency_state.contract_stance,
             "transfer_request_status": agency_state.transfer_request_status,
             "primary_reasons": [item.code for item in transfer_request.primary_reasons],
+            "manual_transfer_request": manual_transfer_request,
+            "unresolved_bonus": existing_unresolved_bonus,
+            "relief_score": existing_relief_score,
         }
         self.session.flush()
         return pressure

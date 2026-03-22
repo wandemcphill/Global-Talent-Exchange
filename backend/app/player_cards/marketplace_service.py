@@ -43,6 +43,7 @@ from app.player_cards.service import PlayerCardNotFoundError, PlayerCardPermissi
 from app.players.read_models import PlayerSummaryReadModel
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.avatar_service import AvatarIdentityInput, AvatarService
+from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.scoring import credits_from_real_world_value
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -283,8 +284,16 @@ class PlayerCardMarketplaceService:
 
     def _base_value_credits(self, context: dict[str, Any]) -> Decimal:
         summary = self.session.get(PlayerSummaryReadModel, context["player"].id)
-        if summary is not None and summary.current_value_credits > 0:
-            return self._normalize_amount(summary.current_value_credits)
+        authoritative_value = authoritative_reference_credits(
+            summary=summary,
+            summary_payload=summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else {},
+        )
+        if authoritative_value is not None:
+            return self._normalize_amount(authoritative_value)
+        if context["player"].is_real_player:
+            raise PlayerCardValidationError(
+                f"Authoritative pricing is unavailable for real player '{context['player'].id}'."
+            )
         if context["player"].market_value_eur and context["player"].market_value_eur > 0:
             return self._normalize_amount(credits_from_real_world_value(context["player"].market_value_eur))
         if context["tier"].base_mint_price_credits and Decimal(str(context["tier"].base_mint_price_credits)) > Decimal("0"):

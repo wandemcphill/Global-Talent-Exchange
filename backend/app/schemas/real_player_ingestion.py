@@ -91,6 +91,67 @@ class RealPlayerIngestionItemResult(BaseModel):
     identity_confidence_score: float
 
 
+class RealPlayerBatchIssueCandidate(BaseModel):
+    player_id: str
+    score: float
+    reasons: list[str] = Field(default_factory=list)
+
+
+class RealPlayerBatchIssue(BaseModel):
+    source_name: str
+    source_player_key: str
+    canonical_name: str
+    issue_type: str
+    message: str
+    gtex_player_id: str | None = None
+    candidates: list[RealPlayerBatchIssueCandidate] = Field(default_factory=list)
+
+
+class RealPlayerDryRunReport(BaseModel):
+    mode: str
+    ingestion_batch_id: str
+    ingestion_source_version: str | None = None
+    as_of: datetime
+    source_row_count: int
+    normalized_row_count: int
+    matched_existing_count: int
+    new_identity_count: int
+    ambiguous_match_count: int
+    missing_pricing_snapshot_count: int
+    hard_failure_count: int
+    staged_player_ids: list[str] = Field(default_factory=list)
+    issues: list[RealPlayerBatchIssue] = Field(default_factory=list)
+
+
+class RealPlayerPostWriteAuditResult(BaseModel):
+    duplicate_canonical_identity_count: int
+    players_missing_authoritative_price_count: int
+    players_missing_market_snapshot_count: int
+    players_missing_avatar_seed_count: int
+    agency_linkage_required_count: int
+    agency_linkage_present_count: int
+    agency_linkage_missing_count: int
+    all_checks_passed: bool
+
+
+class RealPlayerWriteReport(BaseModel):
+    mode: str
+    ingestion_batch_id: str
+    ingestion_source_version: str | None = None
+    as_of: datetime
+    players_processed: int
+    players_created: int
+    players_updated: int
+    identities_linked: int
+    duplicates_prevented: int
+    pricing_snapshots_resolved: int
+    avatars_assigned: int
+    agency_profiles_created_or_attached: int
+    player_ids: list[str] = Field(default_factory=list)
+    results: list[RealPlayerIngestionItemResult] = Field(default_factory=list)
+    audit: RealPlayerPostWriteAuditResult | None = None
+
+
 class RealPlayerIngestionResult(BaseModel):
     mode: str
     ingestion_batch_id: str
@@ -120,9 +181,14 @@ def _dedupe_strings(values: list[str]) -> list[str]:
 
 
 __all__ = [
+    "RealPlayerBatchIssue",
+    "RealPlayerBatchIssueCandidate",
+    "RealPlayerDryRunReport",
     "RealPlayerIngestionItemResult",
     "RealPlayerIngestionMode",
     "RealPlayerIngestionRequest",
     "RealPlayerIngestionResult",
+    "RealPlayerPostWriteAuditResult",
     "RealPlayerSeedInput",
+    "RealPlayerWriteReport",
 ]

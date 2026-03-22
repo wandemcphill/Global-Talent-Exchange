@@ -16,7 +16,7 @@ def list_recent_player_summaries(
     session: Session = Depends(get_session),
 ) -> list[PlayerSummaryView]:
     service = PlayerSummaryQueryService(session)
-    return [PlayerSummaryView.model_validate(item) for item in service.list_recent(limit)]
+    return service.list_recent_views(limit)
 
 
 @router.get("/{player_id}/summary", response_model=PlayerSummaryView)
@@ -24,7 +24,7 @@ def get_player_summary(
     player_id: str,
     session: Session = Depends(get_session),
 ) -> PlayerSummaryView:
-    summary = PlayerSummaryQueryService(session).get_summary(player_id)
+    summary = PlayerSummaryQueryService(session).get_summary_view(player_id)
     if summary is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player summary for {player_id} was not found")
-    return PlayerSummaryView.model_validate(summary)
+    return summary

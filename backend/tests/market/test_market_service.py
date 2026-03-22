@@ -643,6 +643,25 @@ def test_market_player_list_sorts_by_supported_keys(session) -> None:
     ]
 
 
+def test_market_player_list_supports_mixed_real_and_regen_with_nullable_rows(session) -> None:
+    _seed_market_player_catalog(session)
+    session.get(Player, "player-1").is_real_player = True
+    session.get(Player, "player-2").is_real_player = False
+    session.commit()
+
+    payload = _build_market_query_service(session).list_players(limit=10, sort="current_value")
+    by_id = {item.player_id: item for item in payload.items}
+
+    assert payload.total == 4
+    assert by_id["player-1"].current_value_credits == 220.0
+    assert by_id["player-2"].current_value_credits == 180.0
+    assert by_id["player-4"].current_value_credits is None
+    assert by_id["player-4"].movement_pct is None
+    assert by_id["player-4"].market_interest_score is None
+    assert by_id["player-1"].avatar.seed_token
+    assert by_id["player-2"].avatar.seed_token
+
+
 def test_market_player_detail_returns_composed_market_view(session) -> None:
     _seed_market_player_catalog(session)
 

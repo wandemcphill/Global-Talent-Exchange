@@ -38,6 +38,11 @@ def session():
         yield db_session
 
 
+@pytest.fixture(autouse=True)
+def _configure_test_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+
+
 def _create_user(session, *, user_id: str, email: str, username: str, role: UserRole = UserRole.USER) -> User:
     user = User(id=user_id, email=email, username=username, password_hash="hashed", role=role)
     session.add(user)

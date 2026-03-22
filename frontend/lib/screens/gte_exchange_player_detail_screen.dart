@@ -233,18 +233,26 @@ class _GteExchangePlayerDetailScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(identity.playerName,
-                        style: Theme.of(context).textTheme.displaySmall),
+                    Text(
+                      identity.playerName,
+                      style: Theme.of(context).textTheme.displaySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       identityLine.join(' | '),
                       style: Theme.of(context).textTheme.bodyLarge,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     if (identity.currentCompetitionName != null) ...<Widget>[
                       const SizedBox(height: 6),
                       Text(
                         identity.currentCompetitionName!,
                         style: Theme.of(context).textTheme.bodyMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ],
@@ -272,20 +280,20 @@ class _GteExchangePlayerDetailScreenState
             children: <Widget>[
               GteMetricChip(
                 label: 'Current value',
-                value: gteFormatCredits(value.currentValueCredits),
+                value: gteFormatNullableCredits(value.currentValueCredits),
               ),
               GteMetricChip(
                 label: 'Movement',
-                value: gteFormatMovement(value.movementPct),
-                positive: value.movementPct >= 0,
+                value: gteFormatNullableMovement(value.movementPct),
+                positive: (value.movementPct ?? 0) >= 0,
               ),
               GteMetricChip(
                 label: 'Trend score',
-                value: trend.trendScore.toStringAsFixed(1),
+                value: trend.trendScore?.toStringAsFixed(1) ?? '--',
               ),
               GteMetricChip(
                 label: 'Interest',
-                value: trend.marketInterestScore.toString(),
+                value: trend.marketInterestScore?.toString() ?? '--',
               ),
               GteMetricChip(
                 label: 'Liquidity',
@@ -376,7 +384,7 @@ class _GteExchangePlayerDetailScreenState
         pills: <Widget>[
           GteMetricChip(
               label: 'Current',
-              value: gteFormatCredits(value.currentValueCredits)),
+              value: gteFormatNullableCredits(value.currentValueCredits)),
           GteMetricChip(
               label: 'Football truth',
               value: gteFormatNullableCredits(value.footballTruthValueCredits)),

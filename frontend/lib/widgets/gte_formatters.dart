@@ -21,6 +21,13 @@ String gteFormatMovement(double fraction) {
   return '$sign${pct.toStringAsFixed(1)}%';
 }
 
+String gteFormatNullableMovement(double? fraction) {
+  if (fraction == null) {
+    return '--';
+  }
+  return gteFormatMovement(fraction);
+}
+
 String gteFormatDateTime(DateTime? value) {
   if (value == null) {
     return 'n/a';
@@ -44,7 +51,6 @@ String gteFormatOrderStatus(String rawStatus) {
   }).replaceAll('_', ' ');
   return spaced.toUpperCase();
 }
-
 
 String gteFormatRelativeTime(DateTime? value, {DateTime? now}) {
   if (value == null) {

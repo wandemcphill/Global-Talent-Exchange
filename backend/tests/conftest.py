@@ -7,8 +7,6 @@ import pytest
 from sqlalchemy import create_engine
 
 from app.core.config import load_settings
-from app.ingestion.demo_bootstrap import DemoBootstrapService
-from app.main import create_app
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 
@@ -29,6 +27,8 @@ def test_settings(tmp_path_factory: pytest.TempPathFactory):
 
 @pytest.fixture(scope="module")
 def app(test_settings):
+    from app.main import create_app
+
     engine = create_engine(test_settings.database_url, connect_args={"check_same_thread": False})
     application = create_app(settings=test_settings, engine=engine, run_migration_check=True)
     yield application
@@ -48,6 +48,8 @@ def app_session_factory(app, client):
 
 @pytest.fixture(scope="module")
 def demo_seed(app, client):
+    from app.ingestion.demo_bootstrap import DemoBootstrapService
+
     service = DemoBootstrapService(
         session_factory=app.state.session_factory,
         settings=app.state.settings,

@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.regen_universe import RegenPlayerPrestigeSummaryView
+
 
 class PlayerSummaryView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -22,4 +24,5 @@ class PlayerSummaryView(BaseModel):
     average_rating: float | None
     market_interest_score: int
     summary_json: dict
+    regen_universe: RegenPlayerPrestigeSummaryView | None = None
     updated_at: datetime

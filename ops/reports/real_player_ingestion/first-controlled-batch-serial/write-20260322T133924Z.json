@@ -1,0 +1,1534 @@
+{
+  "command": "write",
+  "generated_at": "2026-03-22T13:39:24Z",
+  "input_path": "C:\\Users\\ayomc\\Desktop\\GLOBAL TALENT EXCHANGE\\backend\\data\\real_player_batches\\first_controlled_batch_v1.json",
+  "report": {
+    "agency_profiles_created_or_attached": 0,
+    "as_of": "2026-03-22T12:00:00Z",
+    "audit": {
+      "agency_linkage_missing_count": 0,
+      "agency_linkage_present_count": 0,
+      "agency_linkage_required_count": 0,
+      "all_checks_passed": true,
+      "duplicate_canonical_identity_count": 0,
+      "players_missing_authoritative_price_count": 0,
+      "players_missing_avatar_seed_count": 0,
+      "players_missing_market_snapshot_count": 0
+    },
+    "avatars_assigned": 150,
+    "duplicates_prevented": 0,
+    "identities_linked": 150,
+    "ingestion_batch_id": "first-controlled-batch-serial",
+    "ingestion_source_version": "first-controlled-batch-v1",
+    "mode": "curated_seed",
+    "player_ids": [
+      "283f3656-d8a4-4a60-b005-504a4829b8ae",
+      "db7bf27a-cd3f-46d9-bde9-29d109bb9e66",
+      "bfb20e88-65ac-4097-81ce-f38e71a8b140",
+      "62c6ea2f-830c-4ba1-8a9b-96c20f4e9005",
+      "55a34e08-a599-4f2a-94ad-c78c37c08efd",
+      "5311be96-7707-4d74-aa59-a8c5ef28a0e0",
+      "2adb64ea-6a37-4fe8-ab29-26e393f39420",
+      "25f6a4fb-3f63-44c5-b8ae-fd799101f2d4",
+      "76b91b8b-1099-4a7b-a7dc-44d59865d06e",
+      "2f969a15-92d5-4ec1-8538-d7b2776651bf",
+      "418430cd-78ee-482c-bbed-b7dee387d8a4",
+      "8c14123d-0478-40af-ac98-eb2e425f8472",
+      "f1786a45-897b-49c7-9736-0672ea94dc54",
+      "7495ee84-efe0-4713-8bea-26412310e90f",
+      "9fa75f5e-6dab-4d86-a80e-5218d8dcad72",
+      "8523ad87-817f-4a9d-8c00-22d918fda311",
+      "1113999d-fbe7-4439-9452-c053b7e4f3b0",
+      "9f8f612a-89c9-4fe0-88ad-79dbf8ca76ec",
+      "04fb7c1e-5937-4f5a-b612-0e8c183becc6",
+      "785000fe-14ea-45ad-a19c-e7bd1eb31169",
+      "1483ce88-0c67-4907-a204-ce08113f059f",
+      "17635926-2d04-44e0-b455-cc0eb3eed2a4",
+      "031914c3-bbc1-405f-b403-31db89c640bd",
+      "85571e3e-ca84-42c7-b8b6-6a3ee2e3d365",
+      "ed0bafc0-16c1-42a2-89e5-925bc0e2b64a",
+      "0c7abe27-ca65-48d9-a8ad-b0e5df5be95a",
+      "e153e705-4630-4315-9699-b0d6f262628d",
+      "7af96ab6-229c-4aa9-a76c-8c79f46ab31f",
+      "f328ef31-0e16-466c-b865-6a3e74eef438",
+      "047e6ed8-a7bf-46ef-acb5-209c65c44e5f",
+      "eef04fab-0191-471e-bc4b-aa4f4d153362",
+      "ee1c329e-8de9-4e08-87fb-32f10beb117e",
+      "b436c133-f11c-4dea-a6e2-46c88a136e87",
+      "6ad49f44-42d0-4c82-bc64-400f74291bf6",
+      "133b8f02-804f-4d21-8d35-4aacbd2d970e",
+      "2946b4c5-5b91-4343-afef-6493caf8633a",
+      "c42bb52b-60f0-4164-a345-dcc630536ddf",
+      "bca19995-5b92-4f0a-a6b0-ba4e65c7e540",
+      "1d53385e-651f-45fa-ada8-02f115fe5b3b",
+      "86ed0d05-db72-42f9-8321-91d48c9db215",
+      "77d5b053-4537-4bfe-a7ee-b51af56dc47a",
+      "ef01ad8d-74b1-4e02-baad-28dfd8ae1073",
+      "1aa93f37-0238-4ff7-9940-e02d006e2843",
+      "a2d84c73-f53e-4c1e-97a0-71fb3b623696",
+      "fd7189f8-d03b-4fb2-847b-c0272fbf4cfb",
+      "f5f544a6-7e62-461c-880b-9ca6892e88d6",
+      "306f6843-f06c-4389-b5d3-c1307225aa27",
+      "7eac0d67-96f6-4f0d-869a-adab7d1bb147",
+      "fc6dc097-12d0-460e-bf3a-955fa581885b",
+      "0a7f5821-3073-4c10-8d30-56b74789da5e",
+      "1ac2e768-b9c2-4615-82d9-bc5df1237330",
+      "1e532d55-c115-452c-9f37-b417a7233741",
+      "e29cf542-6778-4109-a856-d9f56fee67a3",
+      "a8a2464a-a4cc-4f54-b974-10b3e16b36d9",
+      "85c75cf0-1087-4efa-a4a0-df0767c32862",
+      "3a1c6c3b-9947-46ad-9052-033c63797656",
+      "74949389-3063-4308-86db-7a38345eaad5",
+      "d17752dc-ed1c-4fa0-bcfe-87e1f31b1ee1",
+      "cf0cdc36-aa7e-44a6-8e07-244ec294718d",
+      "79e88d0d-8d56-43ee-ac84-5cf1d7a5249c",
+      "e8ccbcd7-542e-4a0b-9653-db142a3af7f0",
+      "2aacd081-962a-425b-a421-196d9c968571",
+      "8e35aa30-c3b8-44b0-a7e2-44b4cd3c89d4",
+      "929260ee-547e-4658-86c7-d1c90eda02fe",
+      "efe91d42-995d-44d6-a00a-896c84cba08e",
+      "092e0185-1bae-4d6f-8c90-aa8ef969a788",
+      "f3b08615-2a7b-4bf7-8f3d-0f79a874d7db",
+      "ba3810d4-315e-4c22-a063-4151b92b36e1",
+      "9f98d4d7-6805-4ce5-8abd-f98eeffcb997",
+      "aee7b65e-7ccd-4a0b-b47f-d51ba3cd918e",
+      "03c6f68f-6ab6-421e-b8a9-90ffc1479f3f",
+      "382fc329-1c07-42c0-bb0f-ab9fe18f48ad",
+      "c6b37ff9-a7e5-4e9c-a253-0f3da79e3478",
+      "ab07c77b-35cd-4500-bb63-cb1b56fca188",
+      "9df94714-62c5-48be-81ef-42f3e9816630",
+      "5c1e2ede-5557-4077-92d8-fbe76859885f",
+      "239788b4-ffdb-402a-b9ba-4899626b090b",
+      "393cc997-9dc6-42b9-acc4-cc425ae6f1e3",
+      "29bd6293-03b5-41f6-8e4e-1eea439562ad",
+      "cd658f49-d7c2-41a2-ac53-355b976f90e3",
+      "02294e71-1840-45af-813f-cd2aeb6b020b",
+      "ba56081c-47e0-4d87-afa8-752f9997162f",
+      "ffe891a0-0c13-41a9-aa94-21e866db4931",
+      "1a557530-8368-4d44-b96e-8ce88a801159",
+      "74c92d70-3344-446e-b4f3-5b0944cfb3bc",
+      "f090ce45-1209-4993-a2dd-a449c16537aa",
+      "bfa5d27e-bdb4-485d-9327-ac26ce43ff25",
+      "d4e3f5b4-bbe3-48bc-90d2-5cce562dbca6",
+      "e0679e36-3366-4f46-b874-b3f8a824eaf1",
+      "a1c3f194-785f-4dbd-8fbc-241aa6e36d6f",
+      "dc0424a4-9cfa-486c-bce8-025f7f4c07ca",
+      "91c2ea28-5d68-40d3-93ad-84d05f0e8c0a",
+      "4ca5139a-6e4a-4a8f-a91c-30b75e550f88",
+      "a884a00f-f7b6-4157-949d-d1c7feba6a6f",
+      "c429d336-3cb7-40e9-ba66-a9a083926615",
+      "624b3343-b981-4e22-b90b-dd41d400e4c2",
+      "7886b7c9-265e-48a7-9d99-d4d3a551ba2a",
+      "59bf6791-952a-4160-87b0-7182147deffa",
+      "52188351-fe17-4f35-a7d2-9de52a36fe9b",
+      "5e6137e2-1f48-4362-85dd-69f88924559a",
+      "32b1e3df-0adb-4ebc-9b23-03a39b91c03f",
+      "ef639b93-d1d7-4df1-b274-cd40ea7ab31f",
+      "965c7afc-b854-4085-ba64-f2230df21b29",
+      "05c89b35-8bf2-493d-b078-ffb4f827be45",
+      "9e163789-f71d-4e46-9cce-8b8906df682c",
+      "bcdb4235-a1d5-448a-a668-db004a52f78b",
+      "0c9cd47e-0500-40b6-9d49-f1277d8b6892",
+      "de644ef5-340e-4abd-b17f-5ef8eaf93d5b",
+      "6638ca8a-49f4-445b-8ccc-6b77f721095b",
+      "4ebf3906-f06c-47e8-b09a-b3550fc2713d",
+      "1e7bae1d-370d-4bda-8ab6-a0e40985bacc",
+      "5a5d5f24-35c1-41a3-9d81-67f85942230d",
+      "6d3e644c-da69-4514-ad39-9a8c945cc679",
+      "1423fcf7-71ce-4af2-be80-b322b8c30c09",
+      "48a5eea3-df9f-4c89-b9ab-fab0e0f5acb7",
+      "a68f4ade-bb97-433a-86b8-7a3772d563a2",
+      "e2f52e85-fc09-4116-a336-4a563b227211",
+      "0e5ca85a-9a30-4d7c-83fe-c222806fcb92",
+      "6f7816ff-f177-4385-b1a1-04b0687c3f79",
+      "e57122ae-a5e6-42be-810d-d09d73b8c1dc",
+      "67f7e3f1-cb49-41c7-8991-76a7216e3052",
+      "96b5756b-1386-41bd-bd68-bed004b8e634",
+      "204d3a13-d930-4dde-8be1-bb7aeb53ec1f",
+      "9524e576-5063-403d-8379-2501f421796b",
+      "44a317f8-305f-40c1-b510-5096f767184e",
+      "6efb14c6-00d6-46b6-bee7-22b0a84b15d8",
+      "41ae4fc9-58bc-44d4-b86c-86ae7b93492a",
+      "f6c07d50-0bb1-4cc3-8e4d-8c84610ac4e9",
+      "133d70ad-1501-4569-af4a-4cc9546250d2",
+      "629c0d00-509d-40db-a499-26d527ef459a",
+      "13668e2a-5e4b-4fe1-88d2-0937e2a77f7c",
+      "6b7610b3-5ad4-498e-84e4-13e1761b8fd3",
+      "8fd021ea-fc91-4bfe-adf8-ebecc0a85149",
+      "f1c39144-e044-4dc1-b861-2489b9cd059c",
+      "d10ffbf2-c911-4c6b-a812-94db3ed55b6a",
+      "96226ed3-d86f-4bf1-b697-88dde1a59fb7",
+      "20250cf4-fba2-4462-9253-834177edfecd",
+      "8b871289-11e6-4fb3-8dbf-2b63292530ea",
+      "68233866-1ecf-454a-acbc-010ea4e86198",
+      "d1d7ad53-937d-4a9a-8fe6-e7c64d4775a7",
+      "8efe2f56-d14d-4581-a1cc-b3e319c0b48d",
+      "2409d562-daab-4020-ad24-863e7eba3f6b",
+      "aacae34a-2e63-47b9-aa6b-fe3be8d7db40",
+      "7ebc7f23-c247-4a84-a2ee-931dc1feaa40",
+      "d7a9b91c-d94b-4a86-bfcc-63d6f4c66330",
+      "82af588a-82d8-4fbf-b0e4-7322b4eedfb0",
+      "d10c9687-07b4-47d7-bbe5-e5586bf7353c",
+      "5d5ac087-e397-47ef-a374-940a6dd6d172",
+      "ff22c01e-a3df-4316-b029-0e1e81d72c2d",
+      "73aa6b7c-b378-43b9-951e-7741b5e1ddec"
+    ],
+    "players_created": 150,
+    "players_processed": 150,
+    "players_updated": 0,
+    "pricing_snapshots_resolved": 150,
+    "results": [
+      {
+        "action": "created",
+        "authoritative_price_credits": 158.47,
+        "gtex_player_id": "283f3656-d8a4-4a60-b005-504a4829b8ae",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "56dac366-9925-4943-8b4f-3483456fc76a",
+        "source_name": "curated-feed",
+        "source_player_key": "alex-meret-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 169.07,
+        "gtex_player_id": "db7bf27a-cd3f-46d9-bde9-29d109bb9e66",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "3f497d17-fe60-4b12-a069-08ed7b6e1686",
+        "source_name": "curated-feed",
+        "source_player_key": "alisson-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 436.54,
+        "gtex_player_id": "bfb20e88-65ac-4097-81ce-f38e71a8b140",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "a3140381-6b48-40d9-aab3-b2641326a36b",
+        "source_name": "curated-feed",
+        "source_player_key": "antonio-nusa-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 246.05,
+        "gtex_player_id": "62c6ea2f-830c-4ba1-8a9b-96c20f4e9005",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "3a70c21b-cf5e-40f1-adb6-677a06e91bef",
+        "source_name": "curated-feed",
+        "source_player_key": "araujo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 374.38,
+        "gtex_player_id": "55a34e08-a599-4f2a-94ad-c78c37c08efd",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "9acd79e1-35a6-40b0-974f-815a72993a72",
+        "source_name": "curated-feed",
+        "source_player_key": "archie-gray-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 316.81,
+        "gtex_player_id": "5311be96-7707-4d74-aa59-a8c5ef28a0e0",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ebf9ac18-939a-4c39-92bb-f0acdbe4d380",
+        "source_name": "curated-feed",
+        "source_player_key": "arda-guler-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 355.21,
+        "gtex_player_id": "2adb64ea-6a37-4fe8-ab29-26e393f39420",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "c84783a4-815e-4263-bf3c-96a1cb5aeaa8",
+        "source_name": "curated-feed",
+        "source_player_key": "aribo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 473.75,
+        "gtex_player_id": "25f6a4fb-3f63-44c5-b8ae-fd799101f2d4",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "a72197e8-81ea-406d-80c0-ddb262c6fdba",
+        "source_name": "curated-feed",
+        "source_player_key": "awoniyi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 415.1,
+        "gtex_player_id": "76b91b8b-1099-4a7b-a7dc-44d59865d06e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ecafd971-dc4d-4e97-ae40-20241b0910a2",
+        "source_name": "curated-feed",
+        "source_player_key": "bardghji-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 255.32,
+        "gtex_player_id": "2f969a15-92d5-4ec1-8538-d7b2776651bf",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "89c3c6dd-72b7-4d92-aac3-b835f3457862",
+        "source_name": "curated-feed",
+        "source_player_key": "bassey-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 267.87,
+        "gtex_player_id": "418430cd-78ee-482c-bbed-b7dee387d8a4",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "7a64f51c-8b9a-4ef5-90a2-b75301834d26",
+        "source_name": "curated-feed",
+        "source_player_key": "bastoni-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 501.64,
+        "gtex_player_id": "8c14123d-0478-40af-ac98-eb2e425f8472",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "da8e36bc-4500-4465-b832-1c2e4ccd59f7",
+        "source_name": "curated-feed",
+        "source_player_key": "bellingham-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 346.33,
+        "gtex_player_id": "f1786a45-897b-49c7-9736-0672ea94dc54",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ca8c30ae-220d-4bf0-aa9f-b80c7b2d0cf4",
+        "source_name": "curated-feed",
+        "source_player_key": "ben-seghir-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 350.92,
+        "gtex_player_id": "7495ee84-efe0-4713-8bea-26412310e90f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "234cc71f-43d8-4c26-bb0e-d2a7c44b0a01",
+        "source_name": "curated-feed",
+        "source_player_key": "bennacer-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 376.66,
+        "gtex_player_id": "9fa75f5e-6dab-4d86-a80e-5218d8dcad72",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1ecf5f8c-1925-4b97-a3c2-9a894f68c3e2",
+        "source_name": "curated-feed",
+        "source_player_key": "bergvall-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 449.68,
+        "gtex_player_id": "8523ad87-817f-4a9d-8c00-22d918fda311",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "40258c15-d16e-4a8f-acf0-dd166c6ed1b9",
+        "source_name": "curated-feed",
+        "source_player_key": "bruno-guimaraes-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 351.03,
+        "gtex_player_id": "1113999d-fbe7-4439-9452-c053b7e4f3b0",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "cd824fc7-2f46-4447-a001-61cd606154db",
+        "source_name": "curated-feed",
+        "source_player_key": "buonanotte-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 397.79,
+        "gtex_player_id": "9f8f612a-89c9-4fe0-88ad-79dbf8ca76ec",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "28d41171-4928-4f28-a1b7-c590b8b0416d",
+        "source_name": "curated-feed",
+        "source_player_key": "caicedo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 247.67,
+        "gtex_player_id": "04fb7c1e-5937-4f5a-b612-0e8c183becc6",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "7b22d49a-602f-4334-90fe-333438f20958",
+        "source_name": "curated-feed",
+        "source_player_key": "caleb-okoli-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 457.44,
+        "gtex_player_id": "785000fe-14ea-45ad-a19c-e7bd1eb31169",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "2822f790-fdeb-4535-b236-2474a82fdbb2",
+        "source_name": "curated-feed",
+        "source_player_key": "calhanoglu-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 412.57,
+        "gtex_player_id": "1483ce88-0c67-4907-a204-ce08113f059f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "18e4b631-53b5-4836-9429-39c3511ad3c9",
+        "source_name": "curated-feed",
+        "source_player_key": "can-uzun-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 385.84,
+        "gtex_player_id": "17635926-2d04-44e0-b455-cc0eb3eed2a4",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "94fdf74a-efa1-436c-9ee8-5a6af0f239f0",
+        "source_name": "curated-feed",
+        "source_player_key": "carlos-forbs-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 399.35,
+        "gtex_player_id": "031914c3-bbc1-405f-b403-31db89c640bd",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "eea2b6dd-ff16-4dcb-83e9-7af6c7df9063",
+        "source_name": "curated-feed",
+        "source_player_key": "cherki-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 464.31,
+        "gtex_player_id": "85571e3e-ca84-42c7-b8b6-6a3ee2e3d365",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "3a1d24aa-cc15-4dea-998c-931d5925fac0",
+        "source_name": "curated-feed",
+        "source_player_key": "chukwueze-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 439.24,
+        "gtex_player_id": "ed0bafc0-16c1-42a2-89e5-925bc0e2b64a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4b10d1ae-8472-462b-ae71-7f176e98c8c8",
+        "source_name": "curated-feed",
+        "source_player_key": "conor-gallagher-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 228.08,
+        "gtex_player_id": "0c7abe27-ca65-48d9-a8ad-b0e5df5be95a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "cb463ce2-eceb-4579-a1dc-927f69c1d9a5",
+        "source_name": "curated-feed",
+        "source_player_key": "cubarsi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 598.64,
+        "gtex_player_id": "e153e705-4630-4315-9699-b0d6f262628d",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "558ea542-6547-4350-b590-2f909a7ecba5",
+        "source_name": "curated-feed",
+        "source_player_key": "darwin-nunez-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 167.46,
+        "gtex_player_id": "7af96ab6-229c-4aa9-a76c-8c79f46ab31f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "92ad4051-bac2-4209-ba2f-04a1550c467f",
+        "source_name": "curated-feed",
+        "source_player_key": "david-raya-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 444.81,
+        "gtex_player_id": "f328ef31-0e16-466c-b865-6a3e74eef438",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "723c0728-c024-4cbf-a186-9dc08fa645d5",
+        "source_name": "curated-feed",
+        "source_player_key": "de-bruyne-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 389.93,
+        "gtex_player_id": "047e6ed8-a7bf-46ef-acb5-209c65c44e5f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "bc150994-fa92-4290-a9da-aadb1772f82d",
+        "source_name": "curated-feed",
+        "source_player_key": "dele-bashiru-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 474.47,
+        "gtex_player_id": "eef04fab-0191-471e-bc4b-aa4f4d153362",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "7ec94021-598b-411d-8f80-18725e412f30",
+        "source_name": "curated-feed",
+        "source_player_key": "desire-doue-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 562.26,
+        "gtex_player_id": "ee1c329e-8de9-4e08-87fb-32f10beb117e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "6dda392f-fa29-4e38-9c6e-797e4efb07ae",
+        "source_name": "curated-feed",
+        "source_player_key": "dessers-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 398.74,
+        "gtex_player_id": "b436c133-f11c-4dea-a6e2-46c88a136e87",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "0b6b0b02-bcae-474d-a9d3-6ba3e7c74f55",
+        "source_name": "curated-feed",
+        "source_player_key": "diego-moreira-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 278.33,
+        "gtex_player_id": "6ad49f44-42d0-4c82-bc64-400f74291bf6",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "afed3302-afff-4312-8791-6e0e27fe0dff",
+        "source_name": "curated-feed",
+        "source_player_key": "dimarco-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 169.1,
+        "gtex_player_id": "133b8f02-804f-4d21-8d35-4aacbd2d970e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "dcd22cf1-677c-4b37-b4b1-5b7def5f4c85",
+        "source_name": "curated-feed",
+        "source_player_key": "diogo-costa-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 271.39,
+        "gtex_player_id": "2946b4c5-5b91-4343-afef-6493caf8633a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "f75c7d1d-7509-497b-bf80-e1e57bb1a3ba",
+        "source_name": "curated-feed",
+        "source_player_key": "dumfries-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 305.37,
+        "gtex_player_id": "c42bb52b-60f0-4164-a345-dcc630536ddf",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "9d732993-b0fd-4394-a9e7-f9dd3006f803",
+        "source_name": "curated-feed",
+        "source_player_key": "echeverri-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 405.89,
+        "gtex_player_id": "bca19995-5b92-4f0a-a6b0-ba4e65c7e540",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "b4cdd6e2-9913-450e-ba5d-54270541d390",
+        "source_name": "curated-feed",
+        "source_player_key": "el-khannouss-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 436.05,
+        "gtex_player_id": "1d53385e-651f-45fa-ada8-02f115fe5b3b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "5ed6181a-ef39-4a89-8890-dca33576c2a3",
+        "source_name": "curated-feed",
+        "source_player_key": "endrick-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 414.39,
+        "gtex_player_id": "86ed0d05-db72-42f9-8321-91d48c9db215",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "d0150ba8-6d83-48f8-b470-b6f823aaf2fe",
+        "source_name": "curated-feed",
+        "source_player_key": "enzo-fernandez-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 397.04,
+        "gtex_player_id": "77d5b053-4537-4bfe-a7ee-b51af56dc47a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "12b7e7e2-be88-4225-879c-2bda62f7eec2",
+        "source_name": "curated-feed",
+        "source_player_key": "estevao-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 276.06,
+        "gtex_player_id": "ef01ad8d-74b1-4e02-baad-28dfd8ae1073",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4958a198-5341-4b08-84a2-600a7df0b145",
+        "source_name": "curated-feed",
+        "source_player_key": "ethan-nwaneri-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 435.74,
+        "gtex_player_id": "1aa93f37-0238-4ff7-9940-e02d006e2843",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "b55ba9d9-f10f-413c-85fb-ed22d26d7f15",
+        "source_name": "curated-feed",
+        "source_player_key": "evan-ferguson-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 525.41,
+        "gtex_player_id": "a2d84c73-f53e-4c1e-97a0-71fb3b623696",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "604ebbc8-ca69-4b83-9cbc-1453b85edc42",
+        "source_name": "curated-feed",
+        "source_player_key": "ferran-torres-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 292.55,
+        "gtex_player_id": "fd7189f8-d03b-4fb2-847b-c0272fbf4cfb",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ce629ae2-489f-41df-9448-02121754adea",
+        "source_name": "curated-feed",
+        "source_player_key": "frimpong-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 565.84,
+        "gtex_player_id": "f5f544a6-7e62-461c-880b-9ca6892e88d6",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4c4a0e1e-7710-4cc5-8f52-4681ca9cfa5d",
+        "source_name": "curated-feed",
+        "source_player_key": "gakpo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 519.27,
+        "gtex_player_id": "306f6843-f06c-4389-b5d3-c1307225aa27",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "2ba92b2a-57b4-46c9-a205-440c8d65ebbe",
+        "source_name": "curated-feed",
+        "source_player_key": "garnacho-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 354.57,
+        "gtex_player_id": "7eac0d67-96f6-4f0d-869a-adab7d1bb147",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "307cddda-1bc4-4491-a348-f0d249e4bd60",
+        "source_name": "curated-feed",
+        "source_player_key": "geovany-quenda-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 461.69,
+        "gtex_player_id": "fc6dc097-12d0-460e-bf3a-955fa581885b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "c735c303-8281-4643-8fb3-f10e5c0298dc",
+        "source_name": "curated-feed",
+        "source_player_key": "gift-orban-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 426.41,
+        "gtex_player_id": "0a7f5821-3073-4c10-8d30-56b74789da5e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "83d08c5e-e0aa-47e2-b7b8-e88ce3d5c63f",
+        "source_name": "curated-feed",
+        "source_player_key": "gloukh-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 265.62,
+        "gtex_player_id": "1ac2e768-b9c2-4615-82d9-bc5df1237330",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "7d4d5e40-10c3-4e6e-a958-b8450d647b9e",
+        "source_name": "curated-feed",
+        "source_player_key": "goncalo-inacio-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 522.59,
+        "gtex_player_id": "1e532d55-c115-452c-9f37-b417a7233741",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "dd534589-70c0-4ccd-a7de-0cc927108fef",
+        "source_name": "curated-feed",
+        "source_player_key": "goncalo-ramos-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 261.04,
+        "gtex_player_id": "e29cf542-6778-4109-a856-d9f56fee67a3",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ca512472-4dad-49f0-b399-97dfdeea9990",
+        "source_name": "curated-feed",
+        "source_player_key": "guehi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 589.75,
+        "gtex_player_id": "a8a2464a-a4cc-4f54-b974-10b3e16b36d9",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "008fbac1-c21f-4878-a418-2f4dd1c54b3f",
+        "source_name": "curated-feed",
+        "source_player_key": "guirassy-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 670.08,
+        "gtex_player_id": "85c75cf0-1087-4efa-a4a0-df0767c32862",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "e97280aa-c187-400c-a093-c4b47f88c272",
+        "source_name": "curated-feed",
+        "source_player_key": "haaland-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 256.53,
+        "gtex_player_id": "3a1c6c3b-9947-46ad-9052-033c63797656",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "f6fcb704-c124-4650-9a57-f67bce104fa9",
+        "source_name": "curated-feed",
+        "source_player_key": "hato-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 257.13,
+        "gtex_player_id": "74949389-3063-4308-86db-7a38345eaad5",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "3e7808e1-5b0e-4093-b63e-35b65d4f00df",
+        "source_name": "curated-feed",
+        "source_player_key": "hincapie-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 444.14,
+        "gtex_player_id": "d17752dc-ed1c-4fa0-bcfe-87e1f31b1ee1",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "22aa3e8f-81a0-4edd-bb6b-22ae901a99a1",
+        "source_name": "curated-feed",
+        "source_player_key": "iheanacho-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 515.16,
+        "gtex_player_id": "cf0cdc36-aa7e-44a6-8e07-244ec294718d",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "81b364b4-1a8c-4f64-84ea-98c74ed10dd2",
+        "source_name": "curated-feed",
+        "source_player_key": "iwobi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 437.01,
+        "gtex_player_id": "79e88d0d-8d56-43ee-ac84-5cf1d7a5249c",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "08615b4b-f5a0-42bd-aa65-b2b220b1972f",
+        "source_name": "curated-feed",
+        "source_player_key": "jhon-duran-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 403.25,
+        "gtex_player_id": "e8ccbcd7-542e-4a0b-9653-db142a3af7f0",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ecf10a4d-da93-4508-ac96-cbcfba8b1b74",
+        "source_name": "curated-feed",
+        "source_player_key": "joao-neves-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 523.88,
+        "gtex_player_id": "2aacd081-962a-425b-a421-196d9c968571",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1c7eb4f2-a02c-4c15-8d10-55b481fa3d89",
+        "source_name": "curated-feed",
+        "source_player_key": "joao-pedro-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 603.62,
+        "gtex_player_id": "8e35aa30-c3b8-44b0-a7e2-44b4cd3c89d4",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "68b66cae-5d35-491d-89ff-00a4548ff15c",
+        "source_name": "curated-feed",
+        "source_player_key": "jonathan-david-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 167.19,
+        "gtex_player_id": "929260ee-547e-4658-86c7-d1c90eda02fe",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "326790a8-383c-4bda-9dff-1798d5e4cf4b",
+        "source_name": "curated-feed",
+        "source_player_key": "jose-sa-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 318.38,
+        "gtex_player_id": "efe91d42-995d-44d6-a00a-896c84cba08e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "73201d0e-a3ed-4389-a998-fefeb68c55de",
+        "source_name": "curated-feed",
+        "source_player_key": "julio-enciso-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 705.92,
+        "gtex_player_id": "092e0185-1bae-4d6f-8c90-aa8ef969a788",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "d30854fb-5daf-4f9d-b24d-a8ac93162d28",
+        "source_name": "curated-feed",
+        "source_player_key": "kane-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 304.99,
+        "gtex_player_id": "f3b08615-2a7b-4bf7-8f3d-0f79a874d7db",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "22de5b77-87b8-4d13-9d1b-7c98e2df61b1",
+        "source_name": "curated-feed",
+        "source_player_key": "kendry-paez-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 392.43,
+        "gtex_player_id": "ba3810d4-315e-4c22-a063-4151b92b36e1",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ca6d80c8-a128-4c8f-aaee-32a2dc21df4b",
+        "source_name": "curated-feed",
+        "source_player_key": "khephren-thuram-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 235.03,
+        "gtex_player_id": "9f98d4d7-6805-4ce5-8abd-f98eeffcb997",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1486331d-b209-4d47-bd38-313a3081a440",
+        "source_name": "curated-feed",
+        "source_player_key": "khusanov-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 263.59,
+        "gtex_player_id": "aee7b65e-7ccd-4a0b-b47f-d51ba3cd918e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "0ada5a72-ff5a-413b-a48d-29f8e60e7ab7",
+        "source_name": "curated-feed",
+        "source_player_key": "kim-min-jae-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 161.85,
+        "gtex_player_id": "03c6f68f-6ab6-421e-b8a9-90ffc1479f3f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "39c2d6e2-65b8-4dce-92f3-908053d12d0a",
+        "source_name": "curated-feed",
+        "source_player_key": "kobel-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 437.39,
+        "gtex_player_id": "382fc329-1c07-42c0-bb0f-ab9fe18f48ad",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "b3b4be22-1cea-4194-aaa5-f4ecae39374a",
+        "source_name": "curated-feed",
+        "source_player_key": "kokcu-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 527.12,
+        "gtex_player_id": "c6b37ff9-a7e5-4e9c-a253-0f3da79e3478",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "07387646-7e2f-49dd-b581-918013876356",
+        "source_name": "curated-feed",
+        "source_player_key": "kolo-muani-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 466.83,
+        "gtex_player_id": "ab07c77b-35cd-4500-bb63-cb1b56fca188",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4efeecd5-84dc-4fbc-afd1-8f49bd21ce03",
+        "source_name": "curated-feed",
+        "source_player_key": "koopmeiners-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 278.36,
+        "gtex_player_id": "9df94714-62c5-48be-81ef-42f3e9816630",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "2cd1d9da-b453-47bb-a585-af6dd08f14ef",
+        "source_name": "curated-feed",
+        "source_player_key": "kounde-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 607.84,
+        "gtex_player_id": "5c1e2ede-5557-4077-92d8-fbe76859885f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "50a02614-8d51-427e-a11b-4bc79e610a47",
+        "source_name": "curated-feed",
+        "source_player_key": "kvaratskhelia-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 504.59,
+        "gtex_player_id": "239788b4-ffdb-402a-b9ba-4899626b090b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "31cbf5de-3b36-4941-928f-7f7ee2bb6f3f",
+        "source_name": "curated-feed",
+        "source_player_key": "lamine-yamal-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 668.21,
+        "gtex_player_id": "393cc997-9dc6-42b9-acc4-cc425ae6f1e3",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "3ec76a64-54cf-4411-8ba9-2d552e63831a",
+        "source_name": "curated-feed",
+        "source_player_key": "lautaro-martinez-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 226.57,
+        "gtex_player_id": "29bd6293-03b5-41f6-8e4e-1eea439562ad",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "81d26545-dd47-4cff-ad51-f3da8cc96e51",
+        "source_name": "curated-feed",
+        "source_player_key": "lisandro-martinez-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 166.15,
+        "gtex_player_id": "cd658f49-d7c2-41a2-ac53-355b976f90e3",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "91347c35-58f7-4373-b82e-dd67b8a45478",
+        "source_name": "curated-feed",
+        "source_player_key": "livakovic-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 397.8,
+        "gtex_player_id": "02294e71-1840-45af-813f-cd2aeb6b020b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "35839480-d119-4b3b-a854-914c4ad85e1d",
+        "source_name": "curated-feed",
+        "source_player_key": "locatelli-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 595.18,
+        "gtex_player_id": "ba56081c-47e0-4d87-afa8-752f9997162f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "6e2a775f-2ada-44b0-b243-eb51a9f54ea2",
+        "source_name": "curated-feed",
+        "source_player_key": "lookman-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 450.75,
+        "gtex_player_id": "ffe891a0-0c13-41a9-aa94-21e866db4931",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "d363124f-b1dd-4006-b33f-e850f34d3d9a",
+        "source_name": "curated-feed",
+        "source_player_key": "mac-allister-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 161.85,
+        "gtex_player_id": "1a557530-8368-4d44-b96e-8ce88a801159",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "b2ebada9-f71c-4e83-a4d7-182ea2905eea",
+        "source_name": "curated-feed",
+        "source_player_key": "maignan-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 363.08,
+        "gtex_player_id": "74c92d70-3344-446e-b4f3-5b0944cfb3bc",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "8d561d00-8bcb-43df-b52b-50cf124c2e9e",
+        "source_name": "curated-feed",
+        "source_player_key": "mainoo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 246.34,
+        "gtex_player_id": "f090ce45-1209-4993-a2dd-a449c16537aa",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "cb5a096f-c292-4cd3-b09c-e77363124797",
+        "source_name": "curated-feed",
+        "source_player_key": "malo-gusto-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 168.37,
+        "gtex_player_id": "bfa5d27e-bdb4-485d-9327-ac26ce43ff25",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "17357c4f-428a-4878-bdd4-6dff3d417fcd",
+        "source_name": "curated-feed",
+        "source_player_key": "mamardashvili-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 601.33,
+        "gtex_player_id": "d4e3f5b4-bbe3-48bc-90d2-5cce562dbca6",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "0912fa7a-08dd-4724-81a7-456b762890ff",
+        "source_name": "curated-feed",
+        "source_player_key": "marcus-thuram-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 440.41,
+        "gtex_player_id": "e0679e36-3366-4f46-b874-b3f8a824eaf1",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "5289fb5e-56ad-4723-9716-78a6820c596a",
+        "source_name": "curated-feed",
+        "source_player_key": "mathys-tel-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 704.3,
+        "gtex_player_id": "a1c3f194-785f-4dbd-8fbc-241aa6e36d6f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ee5943d3-dcbc-4cfa-a906-d817e1c17b2b",
+        "source_name": "curated-feed",
+        "source_player_key": "mbappe-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 549.96,
+        "gtex_player_id": "dc0424a4-9cfa-486c-bce8-025f7f4c07ca",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "b5300500-49e6-4942-b3bc-6ec1eceb9e6c",
+        "source_name": "curated-feed",
+        "source_player_key": "mbeumo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 198.4,
+        "gtex_player_id": "91c2ea28-5d68-40d3-93ad-84d05f0e8c0a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "c9759836-1fea-4021-a744-0ceb17070f4c",
+        "source_name": "curated-feed",
+        "source_player_key": "mikayil-faye-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 524.0,
+        "gtex_player_id": "4ca5139a-6e4a-4a8f-a91c-30b75e550f88",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "f3f2a918-8b61-4293-add9-3c7dabe7b72d",
+        "source_name": "curated-feed",
+        "source_player_key": "moffi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 288.63,
+        "gtex_player_id": "a884a00f-f7b6-4157-949d-d1c7feba6a6f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "2c8a7846-0a82-4791-9002-9cc588e72810",
+        "source_name": "curated-feed",
+        "source_player_key": "moscardo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 535.88,
+        "gtex_player_id": "c429d336-3cb7-40e9-ba66-a9a083926615",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "98184bef-663d-47b8-9e4a-41e5b380c735",
+        "source_name": "curated-feed",
+        "source_player_key": "moses-simon-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 402.26,
+        "gtex_player_id": "624b3343-b981-4e22-b90b-dd41d400e4c2",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "0f19ce87-a55d-42c7-94ea-556d33c2e2b6",
+        "source_name": "curated-feed",
+        "source_player_key": "moukoko-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 465.41,
+        "gtex_player_id": "7886b7c9-265e-48a7-9d99-d4d3a551ba2a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "beef111e-5f22-42ed-a66e-13fc6a6581db",
+        "source_name": "curated-feed",
+        "source_player_key": "musiala-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 254.69,
+        "gtex_player_id": "59bf6791-952a-4160-87b0-7182147deffa",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "088f650b-9df4-4685-92a4-0b2c44ed7247",
+        "source_name": "curated-feed",
+        "source_player_key": "nathan-ake-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 479.61,
+        "gtex_player_id": "52188351-fe17-4f35-a7d2-9de52a36fe9b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "eb4267f5-c710-4817-8204-71c93f871cb2",
+        "source_name": "curated-feed",
+        "source_player_key": "nathan-tella-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 377.99,
+        "gtex_player_id": "5e6137e2-1f48-4362-85dd-69f88924559a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "0293dcfc-9d88-452e-9534-7c7858974200",
+        "source_name": "curated-feed",
+        "source_player_key": "ndidi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 235.96,
+        "gtex_player_id": "32b1e3df-0adb-4ebc-9b23-03a39b91c03f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "64fceba4-a9ea-4ac1-b397-3ded01d32dc9",
+        "source_name": "curated-feed",
+        "source_player_key": "nuno-mendes-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 163.33,
+        "gtex_player_id": "ef639b93-d1d7-4df1-b274-cd40ea7ab31f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "da1b1616-f85c-4941-a0d5-778c50948744",
+        "source_name": "curated-feed",
+        "source_player_key": "nwabali-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 485.36,
+        "gtex_player_id": "965c7afc-b854-4085-ba64-f2230df21b29",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "21f2dfef-0327-403b-b4b5-be99e3ddb44a",
+        "source_name": "curated-feed",
+        "source_player_key": "odegaard-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 160.1,
+        "gtex_player_id": "05c89b35-8bf2-493d-b078-ffb4f827be45",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "daa0937d-2732-4fc2-8ffa-d1f2fe81cfb3",
+        "source_name": "curated-feed",
+        "source_player_key": "okoye-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 266.35,
+        "gtex_player_id": "9e163789-f71d-4e46-9cce-8b8906df682c",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "6bbb29ec-341e-439a-bbfa-6df8ea3de7f3",
+        "source_name": "curated-feed",
+        "source_player_key": "ola-aina-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 172.97,
+        "gtex_player_id": "bcdb4235-a1d5-448a-a668-db004a52f78b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "88820d00-8afc-44ff-b773-acff2670a065",
+        "source_name": "curated-feed",
+        "source_player_key": "onana-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 496.0,
+        "gtex_player_id": "0c9cd47e-0500-40b6-9d49-f1277d8b6892",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "9a1047b3-30f1-4782-996a-b3a610cfdaf5",
+        "source_name": "curated-feed",
+        "source_player_key": "onuachu-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 383.84,
+        "gtex_player_id": "de644ef5-340e-4abd-b17f-5ef8eaf93d5b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "df33464f-b54c-4b36-ae38-e82774ab5037",
+        "source_name": "curated-feed",
+        "source_player_key": "onyedika-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 354.47,
+        "gtex_player_id": "6638ca8a-49f4-445b-8ccc-6b77f721095b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "8ea6cf78-0915-46ea-8873-052a2ad05ff4",
+        "source_name": "curated-feed",
+        "source_player_key": "onyeka-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 588.54,
+        "gtex_player_id": "4ebf3906-f06c-47e8-b09a-b3550fc2713d",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "dc6db79f-1741-45d2-9ff0-defbfec52bac",
+        "source_name": "curated-feed",
+        "source_player_key": "openda-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 262.8,
+        "gtex_player_id": "1e7bae1d-370d-4bda-8ab6-a0e40985bacc",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1a1f4b12-0d0c-462e-8bf6-1008138431a1",
+        "source_name": "curated-feed",
+        "source_player_key": "osayi-samuel-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 608.39,
+        "gtex_player_id": "5a5d5f24-35c1-41a3-9d81-67f85942230d",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "adc207b6-4a8a-4c3f-9b3a-78e7d3e2a710",
+        "source_name": "curated-feed",
+        "source_player_key": "osimhen-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 313.25,
+        "gtex_player_id": "6d3e644c-da69-4514-ad39-9a8c945cc679",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1d093ccf-a833-4547-9d5d-86b2fdb42364",
+        "source_name": "curated-feed",
+        "source_player_key": "ouedraogo-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 399.68,
+        "gtex_player_id": "1423fcf7-71ce-4af2-be80-b322b8c30c09",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "28705046-563d-4eb2-945f-afc6023cda80",
+        "source_name": "curated-feed",
+        "source_player_key": "palacios-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 479.6,
+        "gtex_player_id": "48a5eea3-df9f-4c89-b9ab-fab0e0f5acb7",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "33b5659d-0214-4d9e-ba89-83201f68d7e5",
+        "source_name": "curated-feed",
+        "source_player_key": "pedro-neto-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 433.79,
+        "gtex_player_id": "a68f4ade-bb97-433a-86b8-7a3772d563a2",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "8d9236cc-11cc-4d38-b612-6c31ad2f3b2b",
+        "source_name": "curated-feed",
+        "source_player_key": "reijnders-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 227.49,
+        "gtex_player_id": "e2f52e85-fc09-4116-a336-4a563b227211",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "71626f59-f5ae-4757-8bc0-340194b11aba",
+        "source_name": "curated-feed",
+        "source_player_key": "rico-lewis-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 467.78,
+        "gtex_player_id": "0e5ca85a-9a30-4d7c-83fe-c222806fcb92",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "67e240df-e737-4166-8997-9b3a8b1e6e9d",
+        "source_name": "curated-feed",
+        "source_player_key": "rodri-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 253.02,
+        "gtex_player_id": "6f7816ff-f177-4385-b1a1-04b0687c3f79",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "08e8d9db-e87c-4cce-8b6f-d758a35cbcf5",
+        "source_name": "curated-feed",
+        "source_player_key": "romero-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 638.32,
+        "gtex_player_id": "e57122ae-a5e6-42be-810d-d09d73b8c1dc",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "82e1ff3c-a510-4232-84ec-ca6d795bbd71",
+        "source_name": "curated-feed",
+        "source_player_key": "saka-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 682.08,
+        "gtex_player_id": "67f7e3f1-cb49-41c7-8991-76a7216e3052",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "23678453-9eb4-466e-8123-121bf8205424",
+        "source_name": "curated-feed",
+        "source_player_key": "salah-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 495.83,
+        "gtex_player_id": "96b5756b-1386-41bd-bd68-bed004b8e634",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "5bda4a0c-f997-47f9-aa2a-6dc9145dc041",
+        "source_name": "curated-feed",
+        "source_player_key": "santiago-castro-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 552.77,
+        "gtex_player_id": "204d3a13-d930-4dde-8be1-bb7aeb53ec1f",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "dd181df9-6049-44b1-9072-3483c701296e",
+        "source_name": "curated-feed",
+        "source_player_key": "savinho-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 252.63,
+        "gtex_player_id": "9524e576-5063-403d-8379-2501f421796b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "5cbae279-eb5b-4fa6-8226-44504bcdf6b6",
+        "source_name": "curated-feed",
+        "source_player_key": "semi-ajayi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 533.87,
+        "gtex_player_id": "44a317f8-305f-40c1-b510-5096f767184e",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1bba3126-fe01-430c-8eab-731312847b91",
+        "source_name": "curated-feed",
+        "source_player_key": "sesko-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 609.64,
+        "gtex_player_id": "6efb14c6-00d6-46b6-bee7-22b0a84b15d8",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "c07c674c-9b43-4fc0-ba97-73e98df1d84c",
+        "source_name": "curated-feed",
+        "source_player_key": "solanke-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 171.91,
+        "gtex_player_id": "41ae4fc9-58bc-44d4-b86c-86ae7b93492a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "a9b31ceb-cb7b-409c-9550-9724dbbf1530",
+        "source_name": "curated-feed",
+        "source_player_key": "sommer-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 434.26,
+        "gtex_player_id": "f6c07d50-0bb1-4cc3-8e4d-8c84610ac4e9",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "ef43ac5b-02ee-4105-8005-52cde2580385",
+        "source_name": "curated-feed",
+        "source_player_key": "szoboszlai-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 272.17,
+        "gtex_player_id": "133d70ad-1501-4569-af4a-4cc9546250d2",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "5be842eb-a97e-4269-a9b3-68feea4aaf85",
+        "source_name": "curated-feed",
+        "source_player_key": "tah-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 254.55,
+        "gtex_player_id": "629c0d00-509d-40db-a499-26d527ef459a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "e103813c-d570-4bf6-8a81-637b6ebeaab5",
+        "source_name": "curated-feed",
+        "source_player_key": "tapsoba-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 424.68,
+        "gtex_player_id": "13668e2a-5e4b-4fe1-88d2-0937e2a77f7c",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "62b465b3-baca-4bc0-8c50-662a91e5e2f2",
+        "source_name": "curated-feed",
+        "source_player_key": "tielemans-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 330.7,
+        "gtex_player_id": "6b7610b3-5ad4-498e-84e4-13e1761b8fd3",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4bc21892-0b08-42be-9965-86e1dcad447a",
+        "source_name": "curated-feed",
+        "source_player_key": "tom-bischof-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 384.65,
+        "gtex_player_id": "8fd021ea-fc91-4bfe-adf8-ebecc0a85149",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "40acefc4-5b39-4608-873f-7b7cf0bde617",
+        "source_name": "curated-feed",
+        "source_player_key": "tonali-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 254.43,
+        "gtex_player_id": "f1c39144-e044-4dc1-b861-2489b9cd059c",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "806f4703-6e0c-45a6-a917-6524957a1378",
+        "source_name": "curated-feed",
+        "source_player_key": "torunarigha-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 162.75,
+        "gtex_player_id": "d10ffbf2-c911-4c6b-a812-94db3ed55b6a",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4408f179-2acc-4f1e-ba75-f96e3059e229",
+        "source_name": "curated-feed",
+        "source_player_key": "trubin-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 257.58,
+        "gtex_player_id": "96226ed3-d86f-4bf1-b697-88dde1a59fb7",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "3dff27c8-9f65-48c6-961e-0432f94e9ceb",
+        "source_name": "curated-feed",
+        "source_player_key": "udogie-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 164.06,
+        "gtex_player_id": "20250cf4-fba2-4462-9253-834177edfecd",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "0b066d5c-97bd-4f11-bde0-fd2635455087",
+        "source_name": "curated-feed",
+        "source_player_key": "unai-simon-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 352.1,
+        "gtex_player_id": "8b871289-11e6-4fb3-8dbf-2b63292530ea",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "603fc2bb-fe24-40fd-acd1-5202bcaac8b6",
+        "source_name": "curated-feed",
+        "source_player_key": "valentin-carboni-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 470.64,
+        "gtex_player_id": "68233866-1ecf-454a-acbc-010ea4e86198",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "075f4131-e103-4c7e-9189-66834573c823",
+        "source_name": "curated-feed",
+        "source_player_key": "valverde-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 281.58,
+        "gtex_player_id": "d1d7ad53-937d-4a9a-8fe6-e7c64d4775a7",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "03ff4b63-7500-4532-beda-ede92894b0d1",
+        "source_name": "curated-feed",
+        "source_player_key": "van-dijk-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 635.24,
+        "gtex_player_id": "8efe2f56-d14d-4581-a1cc-b3e319c0b48d",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "db04e72a-be23-4ac7-bc46-faad361935e6",
+        "source_name": "curated-feed",
+        "source_player_key": "vinicius-junior-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 389.54,
+        "gtex_player_id": "2409d562-daab-4020-ad24-863e7eba3f6b",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "4a97ea6d-24cc-4c01-a91f-de080c556e0b",
+        "source_name": "curated-feed",
+        "source_player_key": "vitor-roque-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 591.58,
+        "gtex_player_id": "aacae34a-2e63-47b9-aa6b-fe3be8d7db40",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "6e886635-3984-4916-ac4f-32c2c67e8354",
+        "source_name": "curated-feed",
+        "source_player_key": "vlahovic-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 198.29,
+        "gtex_player_id": "7ebc7f23-c247-4a84-a2ee-931dc1feaa40",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "df2d1236-ec15-43f5-9297-9d22a92f6c06",
+        "source_name": "curated-feed",
+        "source_player_key": "vuskovic-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 482.29,
+        "gtex_player_id": "d7a9b91c-d94b-4a86-bfcc-63d6f4c66330",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "48be72b1-358e-42b2-893e-490c48bd3ef2",
+        "source_name": "curated-feed",
+        "source_player_key": "wirtz-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 406.67,
+        "gtex_player_id": "82af588a-82d8-4fbf-b0e4-7322b4eedfb0",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "1ea2fb8b-f6b9-45c0-a902-b9b5a34847a3",
+        "source_name": "curated-feed",
+        "source_player_key": "yangel-herrera-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 241.9,
+        "gtex_player_id": "d10c9687-07b4-47d7-bbe5-e5586bf7353c",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "11b111af-475e-438a-9086-56d7e2e76e71",
+        "source_name": "curated-feed",
+        "source_player_key": "zaidu-sanusi-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 396.68,
+        "gtex_player_id": "5d5ac087-e397-47ef-a374-940a6dd6d172",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "c0a9debc-3fc5-4886-863e-71a3bab3e110",
+        "source_name": "curated-feed",
+        "source_player_key": "zaire-emery-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 402.92,
+        "gtex_player_id": "ff22c01e-a3df-4316-b029-0e1e81d72c2d",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "b380cc2c-8e7a-4b36-bfed-5ea49be616ac",
+        "source_name": "curated-feed",
+        "source_player_key": "zielinski-001"
+      },
+      {
+        "action": "created",
+        "authoritative_price_credits": 239.59,
+        "gtex_player_id": "73aa6b7c-b378-43b9-951e-7741b5e1ddec",
+        "identity_confidence_score": 0.9,
+        "pricing_snapshot_id": "c94b2f3e-6f88-4032-bb74-3a64763a92e6",
+        "source_name": "curated-feed",
+        "source_player_key": "zinchenko-001"
+      }
+    ]
+  },
+  "status": "success"
+}

@@ -99,4 +99,49 @@ void main() {
     expect(snapshot.agencySummary!.contractStanceLabel, 'Holding out');
     expect(snapshot.agencySummary!.moraleLabel, 'Under strain');
   });
+
+  test('market list items tolerate nullable backend summary fields', () {
+    final GteMarketPlayerListItem item =
+        GteMarketPlayerListItem.fromJson(<String, Object?>{
+      'player_id': 'player-nullable',
+      'player_name': 'Mixed Surface Prospect',
+      'position': 'CM',
+      'nationality': 'Nigeria',
+      'current_club_name': 'Prestige FC',
+      'age': 19,
+      'current_value_credits': null,
+      'movement_pct': null,
+      'trend_score': null,
+      'market_interest_score': null,
+      'average_rating': null,
+    });
+
+    expect(item.currentValueCredits, isNull);
+    expect(item.movementPct, isNull);
+    expect(item.trendScore, isNull);
+    expect(item.marketInterestScore, isNull);
+    expect(item.isRising, isFalse);
+  });
+
+  test('lifecycle snapshot safely omits regen summary for real players', () {
+    final GtePlayerLifecycleSnapshot snapshot =
+        GtePlayerLifecycleSnapshot.fromJson(<String, Object?>{
+      'player_id': 'player-real-9',
+      'player_name': 'Victor Real Summary',
+      'availability_badge': <String, Object?>{
+        'status': 'available',
+        'label': 'Available',
+        'available': true,
+      },
+      'transfer_status': <String, Object?>{
+        'window_open': false,
+        'eligible': false,
+        'reason': 'Outside transfer window.',
+      },
+      'recent_events': const <Object?>[],
+    });
+
+    expect(snapshot.agencySummary, isNull);
+    expect(snapshot.transferStatus.reason, 'Outside transfer window.');
+  });
 }
