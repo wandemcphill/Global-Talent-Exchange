@@ -9,8 +9,8 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.ingestion.models import Player
-from backend.app.market.models import (
+from app.ingestion.models import Player
+from app.market.models import (
     Listing,
     ListingStatus,
     Offer,
@@ -19,16 +19,16 @@ from backend.app.market.models import (
     TradeIntentDirection,
     TradeIntentStatus,
 )
-from backend.app.players.read_models import PlayerSummaryReadModel
-from backend.app.pricing.models import (
+from app.players.read_models import PlayerSummaryReadModel
+from app.pricing.models import (
     CandleSeries,
     MarketCandle,
     PlayerExecution,
     PlayerPricingSnapshot,
     PricingHistoryPoint,
 )
-from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
-from backend.app.value_engine.scoring import credits_from_real_world_value
+from app.value_engine.read_models import PlayerValueSnapshotRecord
+from app.value_engine.scoring import credits_from_real_world_value
 
 SUPPORTED_CANDLE_INTERVALS: dict[str, timedelta] = {
     "1m": timedelta(minutes=1),

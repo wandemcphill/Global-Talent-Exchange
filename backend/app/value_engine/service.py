@@ -9,10 +9,10 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
-from backend.app.core.config import LiquidityBand as LiquidityBandConfig
-from backend.app.core.config import LiquidityBandsConfig, Settings, get_settings
-from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
-from backend.app.ingestion.models import (
+from app.core.config import LiquidityBand as LiquidityBandConfig
+from app.core.config import LiquidityBandsConfig, Settings, get_settings
+from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.ingestion.models import (
     Competition,
     CompetitionContext,
     InjuryStatus,
@@ -27,12 +27,12 @@ from backend.app.ingestion.models import (
     PlayerMatchStat,
     PlayerSeasonStat,
 )
-from backend.app.ingestion.pipeline import NormalizedMatchEventPipeline
-from backend.app.models.base import utcnow
-from backend.app.models.player_lifecycle_event import PlayerLifecycleEvent
-from backend.app.players.service import PlayerSummaryProjector
-from backend.app.value_engine.jobs import ValueSnapshotJob
-from backend.app.value_engine.models import (
+from app.ingestion.pipeline import NormalizedMatchEventPipeline
+from app.models.base import utcnow
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.players.service import PlayerSummaryProjector
+from app.value_engine.jobs import ValueSnapshotJob
+from app.value_engine.models import (
     DemandSignal,
     EGameSignal,
     HistoricalValuePoint,
@@ -44,14 +44,14 @@ from backend.app.value_engine.models import (
     TradePrint,
     ValueSnapshot,
 )
-from backend.app.value_engine.read_models import (
+from app.value_engine.read_models import (
     PlayerValueAdminAuditRecord,
     PlayerValueDailyCloseRecord,
     PlayerValueRecomputeCandidateRecord,
     PlayerValueRunRecord,
     PlayerValueSnapshotRecord,
 )
-from backend.app.value_engine.scoring import ValueEngine, credits_from_real_world_value
+from app.value_engine.scoring import ValueEngine, credits_from_real_world_value
 
 
 POSITION_BASE_VALUES_EUR = {
