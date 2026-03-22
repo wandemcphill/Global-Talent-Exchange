@@ -375,6 +375,8 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ingestion_players_internal_league_id", "internal_league_id"),
         Index("ix_ingestion_players_supply_tier_id", "supply_tier_id"),
         Index("ix_ingestion_players_liquidity_band_id", "liquidity_band_id"),
+        Index("ix_ingestion_players_is_real_player", "is_real_player"),
+        Index("ix_ingestion_players_canonical_display_name", "canonical_display_name"),
     )
 
     source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -428,6 +430,16 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     market_value_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     profile_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    is_real_player: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    real_player_tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    canonical_display_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    identity_confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_last_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    real_world_club_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    real_world_league_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    current_market_reference_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    market_reference_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    normalization_profile_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     country: Mapped[Country | None] = relationship(back_populates="players")

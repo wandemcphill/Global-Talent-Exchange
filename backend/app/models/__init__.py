@@ -157,6 +157,8 @@ from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, P
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_personality import PlayerPersonality
+from app.models.real_player_profile import RealPlayerProfile
+from app.models.real_player_source_link import RealPlayerSourceLink
 from app.models.player_cards import (
     PlayerAlias,
     PlayerMoniker,
