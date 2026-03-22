@@ -5,7 +5,9 @@ services:
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
     preDeployCommand: python -m alembic -c backend/migrations/alembic.ini upgrade head
-    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    # Gunicorn binds the port in the master process before the heavy FastAPI
+    # app import finishes, which avoids Render's cold-start port scan failures.
+    startCommand: gunicorn backend.app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 1 --timeout 180
     healthCheckPath: /health
     buildFilter:
       paths:
