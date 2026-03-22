@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
+from threading import Thread
 
 from fastapi import FastAPI
 from sqlalchemy.engine import Engine
@@ -21,6 +23,7 @@ INITIAL_ADMIN_EMAIL = "vidvimedialtd@gmail.com"
 INITIAL_ADMIN_PASSWORD = "NewPass1234!"
 INITIAL_ADMIN_USERNAME = "vidvimedialtd"
 INITIAL_ADMIN_DISPLAY_NAME = "GTEX God Mode Admin"
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -48,8 +51,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
         _bind_application_state(app, context=context, engine=initialized_engine, modules=modules)
-        _ensure_initial_admin(context.database.session_factory)
-        run_module_hooks(app, context, modules, phase="startup")
+        _start_deferred_startup(app, context=context, modules=modules)
         try:
             yield
         finally:
@@ -102,6 +104,36 @@ def _bind_application_state(
     app.state.value_engine_bridge = context.value_engine_bridge
     app.state.ingestion_job_runner = context.ingestion_job_runner
     app.state.domain_modules = tuple(module.name for module in modules)
+
+
+def _start_deferred_startup(
+    app: FastAPI,
+    *,
+    context: ApplicationContext,
+    modules: tuple[DomainModule, ...],
+) -> None:
+    startup_thread = Thread(
+        target=_run_deferred_startup,
+        kwargs={"app": app, "context": context, "modules": modules},
+        name="gtex-startup-bootstrap",
+        daemon=True,
+    )
+    app.state.deferred_startup_thread = startup_thread
+    startup_thread.start()
+
+
+def _run_deferred_startup(
+    *,
+    app: FastAPI,
+    context: ApplicationContext,
+    modules: tuple[DomainModule, ...],
+) -> None:
+    try:
+        _ensure_initial_admin(context.database.session_factory)
+        run_module_hooks(app, context, modules, phase="startup")
+        logger.info("app.startup.bootstrap_complete")
+    except Exception:
+        logger.exception("app.startup.bootstrap_failed")
 
 
 app = create_app()
