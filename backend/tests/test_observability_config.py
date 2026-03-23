@@ -1,10 +1,32 @@
 from __future__ import annotations
 
+from app.auth.service import AuthService
+from app.main import (
+    INITIAL_ADMIN_DISPLAY_NAME,
+    INITIAL_ADMIN_EMAIL,
+    INITIAL_ADMIN_PASSWORD,
+)
 from app.risk_ops_engine.service import RiskOpsService
 
 
+def _ensure_admin_ready(client) -> None:
+    startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
+    if startup_thread is not None and startup_thread.is_alive():
+        startup_thread.join(timeout=5)
+    with client.app.state.session_factory() as session:
+        AuthService().ensure_admin_user(
+            session,
+            email=INITIAL_ADMIN_EMAIL,
+            password=INITIAL_ADMIN_PASSWORD,
+            username="observability-test-admin",
+            display_name=INITIAL_ADMIN_DISPLAY_NAME,
+        )
+        session.commit()
+
+
 def _admin_headers(client) -> dict[str, str]:
-    response = client.post("/auth/login", json={"email": "vidvimedialtd@gmail.com", "password": "NewPass1234!"})
+    _ensure_admin_ready(client)
+    response = client.post("/auth/login", json={"email": INITIAL_ADMIN_EMAIL, "password": INITIAL_ADMIN_PASSWORD})
     assert response.status_code == 200, response.text
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

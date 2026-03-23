@@ -97,6 +97,12 @@ def _build_wallet_rail_service(request: Request | None, session: Session) -> Wal
     return WalletRailService(session=session, wallet_service=_build_wallet_service(request), event_publisher=event_publisher)
 
 
+def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
+    if value is None:
+        return Decimal("0.0000")
+    return Decimal(str(value)).quantize(Decimal("0.0001"))
+
+
 def _require_payment_rails_permission(request: Request, actor: User) -> None:
     service = AdminGodModeService(wallet_service=WalletService())
     state = service._load_state(request.app)
@@ -192,7 +198,7 @@ def _build_withdrawal_quote(*, request: Request | None, session: Session, curren
         currency_code=settings.currency_code,
         rate_value=Decimal(settings.withdrawal_rate_value),
         rate_direction=settings.withdrawal_rate_direction,
-        estimated_fiat_payout=treasury._normalize_amount(estimated_fiat if settings.withdrawal_rate_direction.value == "fiat_per_coin" else gross_amount / Decimal(settings.withdrawal_rate_value)),
+        estimated_fiat_payout=_normalize_amount(estimated_fiat),
         processor_mode=processor_mode,
         payout_channel=payout_channel,
         fee_bps=fee_bps,

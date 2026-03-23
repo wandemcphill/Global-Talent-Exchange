@@ -1,5 +1,29 @@
 from __future__ import annotations
 
+from app.auth.service import AuthService
+from app.economy.service import EconomyConfigService
+from app.main import (
+    INITIAL_ADMIN_DISPLAY_NAME,
+    INITIAL_ADMIN_EMAIL,
+    INITIAL_ADMIN_PASSWORD,
+)
+
+
+def _prepare_economy_defaults(client) -> None:
+    startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
+    if startup_thread is not None and startup_thread.is_alive():
+        startup_thread.join(timeout=5)
+    with client.app.state.session_factory() as session:
+        AuthService().ensure_admin_user(
+            session,
+            email=INITIAL_ADMIN_EMAIL,
+            password=INITIAL_ADMIN_PASSWORD,
+            username="economy-test-admin",
+            display_name=INITIAL_ADMIN_DISPLAY_NAME,
+        )
+        EconomyConfigService(session).seed_defaults()
+        session.commit()
+
 
 def _login(client, *, email: str, password: str) -> dict[str, str]:
     response = client.post("/auth/login", json={"email": email, "password": password})
@@ -9,6 +33,8 @@ def _login(client, *, email: str, password: str) -> dict[str, str]:
 
 
 def test_public_catalog_and_pricing_are_seeded(client) -> None:
+    _prepare_economy_defaults(client)
+
     gift_response = client.get("/economy/gift-catalog")
     assert gift_response.status_code == 200, gift_response.text
     gifts = gift_response.json()
@@ -21,7 +47,8 @@ def test_public_catalog_and_pricing_are_seeded(client) -> None:
 
 
 def test_admin_can_upsert_catalog_and_pricing(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    _prepare_economy_defaults(client)
+    headers = _login(client, email=INITIAL_ADMIN_EMAIL, password=INITIAL_ADMIN_PASSWORD)
 
     gift_response = client.post(
         "/admin/economy/gift-catalog",

@@ -1,7 +1,30 @@
 from __future__ import annotations
 
+from app.auth.service import AuthService
+from app.main import (
+    INITIAL_ADMIN_DISPLAY_NAME,
+    INITIAL_ADMIN_EMAIL,
+    INITIAL_ADMIN_PASSWORD,
+)
+
+
+def _ensure_admin_ready(client) -> None:
+    startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
+    if startup_thread is not None and startup_thread.is_alive():
+        startup_thread.join(timeout=5)
+    with client.app.state.session_factory() as session:
+        AuthService().ensure_admin_user(
+            session,
+            email=INITIAL_ADMIN_EMAIL,
+            password=INITIAL_ADMIN_PASSWORD,
+            username="story-feed-test-admin",
+            display_name=INITIAL_ADMIN_DISPLAY_NAME,
+        )
+        session.commit()
+
 
 def _login(client, *, email: str, password: str) -> dict[str, str]:
+    _ensure_admin_ready(client)
     response = client.post("/auth/login", json={"email": email, "password": password})
     assert response.status_code == 200, response.text
     token = response.json()["access_token"]

@@ -19,6 +19,7 @@ from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
 from app.models.base import Base
+from app.policies.service import PolicyService
 from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -73,10 +74,10 @@ def _create_player(session, *, provider_external_id: str = "player-wallet-1") ->
     return player
 
 
-def _fund_user(session, current_user, *, amount: Decimal) -> None:
+def _fund_user(session, current_user, *, amount: Decimal, unit: LedgerUnit = LedgerUnit.CREDIT) -> None:
     wallet_service = WalletService()
-    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.CREDIT)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = wallet_service.get_user_account(session, current_user, unit)
+    platform_account = wallet_service.ensure_platform_account(session, unit)
     wallet_service.append_transaction(
         session,
         postings=[
@@ -85,9 +86,25 @@ def _fund_user(session, current_user, *, amount: Decimal) -> None:
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="wallet-http-funding",
-        description="Seed wallet credits for testing",
+        description=f"Seed wallet {unit.value}s for testing",
         actor=current_user,
     )
+    session.commit()
+
+
+def _seed_policy_defaults(session, current_user) -> None:
+    service = PolicyService(session)
+    service.seed_defaults()
+    profile = service.ensure_user_region_profile(user=current_user, region_code="NG")
+    profile.region_code = "NG"
+    for version in service.list_missing_acceptances(user_id=current_user.id):
+        service.accept_document(
+            user_id=current_user.id,
+            document_key=version.document.document_key,
+            version_label=version.version_label,
+            ip_address=None,
+            device_id=None,
+        )
     session.commit()
 
 
@@ -141,7 +158,7 @@ def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_co
 def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
     client, session, current_user = api_context
     player = _create_player(session, provider_external_id="player-wallet-ledger")
-    _fund_user(session, current_user, amount=Decimal("100"))
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
 
     order_response = client.post(
         "/api/orders",
@@ -170,6 +187,7 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
         "amount",
         "unit",
         "reason",
+        "source_tag",
         "reference",
         "external_reference",
         "description",
@@ -331,11 +349,12 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
 
 def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None:
     client, session, current_user = api_context
-    _fund_user(session, current_user, amount=Decimal("120"))
+    _fund_user(session, current_user, amount=Decimal("120"), unit=LedgerUnit.COIN)
+    _seed_policy_defaults(session, current_user)
 
     from app.treasury.service import TreasuryService
     treasury = TreasuryService()
-    treasury.create_or_update_user_bank_account(
+    treasury.create_user_bank_account(
         session,
         user=current_user,
         bank_name="GT Bank",
@@ -343,6 +362,7 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
         account_name="Wallet HTTP",
         bank_code="058",
         currency_code="NGN",
+        set_active=True,
     )
     treasury.submit_kyc(
         session,
