@@ -88,13 +88,40 @@ class RealPlayerUniverseQueryService:
         return self._build_detail(*row)
 
     def _base_statement(self):
+        selected_profiles = self._selected_profiles_subquery()
         return (
             select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
-            .join(RealPlayerProfile, RealPlayerProfile.gtex_player_id == Player.id)
+            .join(selected_profiles, selected_profiles.c.gtex_player_id == Player.id)
+            .join(RealPlayerProfile, RealPlayerProfile.id == selected_profiles.c.profile_id)
             .join(RealPlayerSourceLink, RealPlayerSourceLink.id == RealPlayerProfile.source_link_id)
             .outerjoin(Country, Country.id == Player.country_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .where(Player.is_real_player.is_(True))
+        )
+
+    def _selected_profiles_subquery(self):
+        ranked_profiles = (
+            select(
+                RealPlayerProfile.id.label("profile_id"),
+                RealPlayerProfile.gtex_player_id.label("gtex_player_id"),
+                func.row_number()
+                .over(
+                    partition_by=RealPlayerProfile.gtex_player_id,
+                    order_by=(
+                        RealPlayerProfile.source_last_refreshed_at.is_(None),
+                        RealPlayerProfile.source_last_refreshed_at.desc(),
+                        RealPlayerProfile.updated_at.desc(),
+                        RealPlayerProfile.id.desc(),
+                    ),
+                )
+                .label("profile_rank"),
+            )
+            .subquery()
+        )
+        return (
+            select(ranked_profiles.c.profile_id, ranked_profiles.c.gtex_player_id)
+            .where(ranked_profiles.c.profile_rank == 1)
+            .subquery()
         )
 
     def _apply_filters(

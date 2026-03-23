@@ -294,7 +294,8 @@ async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and
                     email="fan@example.com",
                     username="fanuser",
                     password="SuperSecret1",
-                    display_name="Fan User",
+                    full_name="Fan User",
+                    region_code="NG",
                 ),
                 session,
             )

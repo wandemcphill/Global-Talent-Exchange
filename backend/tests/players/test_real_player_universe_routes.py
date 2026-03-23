@@ -370,3 +370,114 @@ def test_real_player_universe_detail_exposes_serialized_profile_and_rejects_non_
     finally:
         session.close()
         engine.dispose()
+
+
+def test_real_player_universe_routes_deduplicate_multi_provider_profiles() -> None:
+    engine, session = _build_session()
+    try:
+        _seed_real_player(
+            session=session,
+            player_id="player-saka",
+            provider_external_id="saka-001",
+            full_name="Bukayo Saka",
+            nationality="England",
+            nationality_code="GB",
+            date_of_birth=date(2001, 9, 5),
+            primary_position="Winger",
+            club_name="North London Reds",
+            league_name="Launch League Premier",
+            competition_level="elite",
+            current_value_credits=390.0,
+            market_reference_value=75_000_000,
+            source_last_refreshed_at=datetime(2026, 3, 22, 14, 0, tzinfo=timezone.utc),
+        )
+        player = session.get(Player, "player-saka")
+        assert player is not None
+
+        source_link = RealPlayerSourceLink(
+            id="source-link-player-saka-cache",
+            gtex_player_id=player.id,
+            source_name="footballsquads",
+            source_player_key="engprem-2023-2024-arsenal-bukayo-saka-2001-09-05",
+            canonical_name="Bukayo Saka",
+            known_aliases_json=["Bukayo"],
+            nationality="England",
+            date_of_birth=date(2001, 9, 5),
+            birth_year=2001,
+            primary_position="Central Midfielder",
+            current_real_world_club="North London Reds",
+            identity_confidence_score=0.96,
+            is_verified_real_player=True,
+            verification_state="verified",
+        )
+        session.add(source_link)
+        session.flush()
+
+        session.add(
+            RealPlayerProfile(
+                id="profile-player-saka-cache",
+                gtex_player_id=player.id,
+                source_link_id=source_link.id,
+                source_name="footballsquads",
+                source_player_key="engprem-2023-2024-arsenal-bukayo-saka-2001-09-05",
+                canonical_name="Bukayo Saka",
+                known_aliases_json=["Bukayo"],
+                nationality="England",
+                date_of_birth=date(2001, 9, 5),
+                birth_year=2001,
+                dominant_foot="left",
+                primary_position="Central Midfielder",
+                secondary_positions_json=["winger"],
+                current_club_name="North London Reds",
+                current_league_name="Launch League Premier",
+                competition_level="elite",
+                appearances=34,
+                minutes_played=2900,
+                goals=11,
+                assists=13,
+                clean_sheets=0,
+                current_market_reference_value=80_000_000,
+                market_reference_currency="EUR",
+                source_last_refreshed_at=datetime(2026, 3, 23, 10, 0, tzinfo=timezone.utc),
+                normalized_signals_json={"competition_level": "elite", "club_name": "North London Reds"},
+                ingestion_batch_id="wave-2-batch",
+                ingestion_source_version="wave-2-v1",
+                pricing_snapshot_id="snapshot-player-saka",
+                metadata_json={"thread": "wave2"},
+            )
+        )
+        session.commit()
+
+        app = FastAPI()
+        app.include_router(players_router)
+
+        def _session_override():
+            yield session
+
+        app.dependency_overrides[get_session] = _session_override
+
+        with TestClient(app) as client:
+            list_response = client.get("/players/real-universe", params={"limit": 10})
+            search_response = client.get("/players/real-universe/search", params={"search": "Bukayo Saka"})
+            detail_response = client.get("/players/real-universe/player-saka")
+
+        assert list_response.status_code == 200
+        assert search_response.status_code == 200
+        assert detail_response.status_code == 200
+
+        list_payload = list_response.json()
+        search_payload = search_response.json()
+        detail_payload = detail_response.json()
+
+        assert list_payload["total"] == 1
+        assert search_payload["total"] == 1
+        assert search_payload["items"][0]["player_id"] == "player-saka"
+        assert search_payload["items"][0]["source_name"] == "footballsquads"
+        assert search_payload["items"][0]["position"] == "Central Midfielder"
+        assert detail_payload["player_id"] == "player-saka"
+        assert detail_payload["source_name"] == "footballsquads"
+        assert detail_payload["source_player_key"] == "engprem-2023-2024-arsenal-bukayo-saka-2001-09-05"
+        assert detail_payload["primary_position"] == "Central Midfielder"
+    finally:
+        session.close()
+        engine.dispose()

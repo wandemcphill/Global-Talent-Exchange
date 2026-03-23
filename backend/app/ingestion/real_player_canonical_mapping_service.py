@@ -9,6 +9,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.ingestion.canonical_backfill_helpers import (
+    build_provider_reference_key,
+    prepare_club_create_plan,
+    prepare_competition_create_plan,
+    prepare_country_create_plan,
+)
 from app.ingestion.models import Club, Competition, Country
 from app.ingestion.normalizers import (
     clean_name,
@@ -67,32 +73,16 @@ class CanonicalReferenceInput:
 
     @property
     def provider_reference_key(self) -> str:
-        explicit_key = clean_name(self.provider_external_id)
-        if explicit_key:
-            return slugify(explicit_key)
-        parts: list[str] = []
-        if self.entity_type in {
-            CanonicalReferenceEntityType.COMPETITION.value,
-            CanonicalReferenceEntityType.CLUB.value,
-            CanonicalReferenceEntityType.TEAM_IDENTITY.value,
-        }:
-            if self.country_code:
-                parts.append(self.country_code)
-            elif self.country_name:
-                parts.append(self.country_name)
-        if self.entity_type in {
-            CanonicalReferenceEntityType.CLUB.value,
-            CanonicalReferenceEntityType.TEAM_IDENTITY.value,
-        }:
-            if self.competition_external_id:
-                parts.append(self.competition_external_id)
-            elif self.competition_display_name:
-                parts.append(self.competition_display_name)
-        if self.display_name:
-            parts.append(self.display_name)
-        if not parts and self.country_name:
-            parts.append(self.country_name)
-        return slugify("::".join(parts))
+        return build_provider_reference_key(
+            source_name=self.source_name,
+            entity_type=self.entity_type,
+            provider_external_id=self.provider_external_id,
+            display_name=self.display_name,
+            country_code=self.country_code,
+            country_name=self.country_name,
+            competition_external_id=self.competition_external_id,
+            competition_display_name=self.competition_display_name,
+        )
 
     @property
     def has_reference(self) -> bool:
@@ -410,15 +400,14 @@ class RealPlayerCanonicalMappingService:
                 )
 
         if self.auto_create_missing_entities:
-            created = Country(
-                source_provider=reference.source_name,
-                provider_external_id=reference.provider_external_id or reference.provider_reference_key,
-                name=normalized_name or reference.display_name or "Unknown",
-                alpha2_code=country_code if len(country_code) == 2 else None,
-                alpha3_code=country_code if len(country_code) == 3 else None,
-                fifa_code=country_code if len(country_code) == 3 else None,
-                last_synced_at=as_of,
+            create_plan = prepare_country_create_plan(
+                source_name=reference.source_name,
+                provider_external_id=reference.provider_external_id,
+                display_name=reference.display_name,
+                country_code=country_code,
+                extra_fields={"last_synced_at": as_of},
             )
+            created = Country(**create_plan.payload)
             session.add(created)
             session.flush()
             return self._persist_mapping(
@@ -517,14 +506,16 @@ class RealPlayerCanonicalMappingService:
             )
 
         if self.auto_create_missing_entities:
-            created = Competition(
-                source_provider=reference.source_name,
-                provider_external_id=reference.provider_external_id or reference.provider_reference_key,
+            create_plan = prepare_competition_create_plan(
+                source_name=reference.source_name,
+                provider_external_id=reference.provider_external_id,
+                display_name=reference.display_name,
                 country_id=country.id if country is not None else None,
-                name=normalized_name or reference.display_name or "Unknown Competition",
-                slug=slug,
-                **auto_create_values,
+                country_code=reference.country_code,
+                country_name=reference.country_name,
+                extra_fields=auto_create_values,
             )
+            created = Competition(**create_plan.payload)
             session.add(created)
             session.flush()
             return self._persist_mapping(
@@ -626,15 +617,19 @@ class RealPlayerCanonicalMappingService:
             )
 
         if self.auto_create_missing_entities:
-            created = Club(
-                source_provider=reference.source_name,
-                provider_external_id=reference.provider_external_id or reference.provider_reference_key,
+            create_plan = prepare_club_create_plan(
+                source_name=reference.source_name,
+                provider_external_id=reference.provider_external_id,
+                display_name=reference.display_name,
                 country_id=country.id if country is not None else None,
-                current_competition_id=competition.id if competition is not None else None,
-                name=normalized_name or reference.display_name or "Unknown Club",
-                slug=slug,
-                **auto_create_values,
+                country_code=reference.country_code,
+                country_name=reference.country_name,
+                competition_id=competition.id if competition is not None else None,
+                competition_external_id=reference.competition_external_id,
+                competition_display_name=reference.competition_display_name,
+                extra_fields=auto_create_values,
             )
+            created = Club(**create_plan.payload)
             session.add(created)
             session.flush()
             return self._persist_mapping(

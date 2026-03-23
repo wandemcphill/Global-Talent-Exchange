@@ -17,6 +17,7 @@ from app.ingestion.models import Player
 from app.market.repositories import SqlAlchemyMarketPlayerRepository
 from app.market.service import MarketPlayerQueryService
 from app.models.player_cards import PlayerMarketValueSnapshot
+from app.models.regen import RegenProfile
 from app.models.real_player_profile import RealPlayerProfile
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.authority import authoritative_reference_credits
@@ -29,6 +30,8 @@ IDENTICAL_VALUE_CLUSTER_THRESHOLD = 3
 IDENTICAL_VALUE_CLUSTER_RATIO = 0.25
 MAX_FINDINGS_PER_RULE = 5
 NEARBY_COMPARATOR_LIMIT = 3
+AGE_DECLINE_MIN_OLDER_AGE = 27
+AGE_DECLINE_AUTHORITATIVE_SUPPORT_MARGIN = 0.09
 
 
 def _coerce_float(value: object) -> float | None:
@@ -258,6 +261,28 @@ class _AuditedBatchPlayer:
     comparator_values: tuple[float, ...] = ()
 
 
+def _audited_metric(item: _AuditedBatchPlayer, key: str) -> float | None:
+    snapshot = item.authoritative_snapshot or item.summary_snapshot
+    if snapshot is not None and hasattr(snapshot, key):
+        value = _coerce_float(getattr(snapshot, key))
+        if value is not None:
+            return value
+    for payload in (
+        _breakdown_payload(snapshot),
+        _summary_payload(item.summary),
+    ):
+        value = _coerce_float(payload.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _materially_exceeds(left: float | None, right: float | None, *, margin: float = AGE_DECLINE_AUTHORITATIVE_SUPPORT_MARGIN) -> bool:
+    if left is None or right is None or right <= 0:
+        return False
+    return left > right * (1.0 + margin)
+
+
 @dataclass(slots=True)
 class RealPlayerBatchAuditService:
     session_factory: sessionmaker[Session]
@@ -351,13 +376,19 @@ class RealPlayerBatchAuditService:
                 )
 
             report_as_of = self._resolve_as_of(audited_players)
-            regen_pool = self._load_regen_pool(session, as_of=report_as_of.date() if report_as_of is not None else date.today())
+            regen_player_ids = self._load_regen_player_ids(session)
+            regen_pool = self._load_regen_pool(
+                session,
+                as_of=report_as_of.date() if report_as_of is not None else date.today(),
+                regen_player_ids=regen_player_ids,
+            )
             audited_players = self._attach_regen_comparators(audited_players, regen_pool=regen_pool)
             pricing_rows, pricing_failures = self._build_pricing_integrity_rows(audited_players)
             distribution_findings, distribution_failures = self._build_distribution_findings(audited_players)
             market_findings, market_failures, residual_risks = self._build_market_coherence_findings(
                 session,
                 audited_players=audited_players,
+                regen_player_ids=regen_player_ids,
                 regen_pool=regen_pool,
             )
 
@@ -596,12 +627,27 @@ class RealPlayerBatchAuditService:
             return "prospects"
         return "fillers"
 
-    def _load_regen_pool(self, session: Session, *, as_of: date) -> list[_ComparablePlayer]:
+    def _load_regen_player_ids(self, session: Session) -> set[str]:
+        return set(session.scalars(select(RegenProfile.player_id)))
+
+    def _load_regen_pool(
+        self,
+        session: Session,
+        *,
+        as_of: date,
+        regen_player_ids: set[str],
+    ) -> list[_ComparablePlayer]:
+        if not regen_player_ids:
+            return []
         players = list(
             session.scalars(
                 select(Player)
                 .options(selectinload(Player.country))
-                .where(Player.is_real_player.is_(False), Player.is_tradable.is_(True))
+                .where(
+                    Player.id.in_(regen_player_ids),
+                    Player.is_real_player.is_(False),
+                    Player.is_tradable.is_(True),
+                )
                 .order_by(Player.id.asc())
             )
         )
@@ -835,11 +881,27 @@ class RealPlayerBatchAuditService:
                     continue
                 if older.player.normalized_position != younger.player.normalized_position:
                     continue
+                older_primary_position = (older.profile.primary_position or "").strip().casefold()
+                younger_primary_position = (younger.profile.primary_position or "").strip().casefold()
+                if older_primary_position and younger_primary_position and older_primary_position != younger_primary_position:
+                    continue
+                if older.age < AGE_DECLINE_MIN_OLDER_AGE:
+                    continue
                 if older.age < younger.age + 4:
                     continue
                 if older.current_value_credits <= younger.current_value_credits * 1.10:
                     continue
                 if older.global_scouting_index > younger.global_scouting_index + 2.0:
+                    continue
+                if _materially_exceeds(
+                    _audited_metric(older, "football_truth_value_credits"),
+                    _audited_metric(younger, "football_truth_value_credits"),
+                ):
+                    continue
+                if _materially_exceeds(
+                    _audited_metric(older, "market_signal_value_credits"),
+                    _audited_metric(younger, "market_signal_value_credits"),
+                ):
                     continue
                 findings.append(
                     f"[age_decline_anomaly] Older player {older.player.full_name} (age {older.age}, {_format_number(older.current_value_credits)}) "
@@ -875,6 +937,7 @@ class RealPlayerBatchAuditService:
         session: Session,
         *,
         audited_players: Sequence[_AuditedBatchPlayer],
+        regen_player_ids: set[str],
         regen_pool: Sequence[_ComparablePlayer],
     ) -> tuple[list[str], int, tuple[str, ...]]:
         findings: list[str] = []
@@ -887,7 +950,7 @@ class RealPlayerBatchAuditService:
         real_player_ids = {item.profile.gtex_player_id for item in audited_players}
         returned_ids = [item.player_id for item in list_result.items]
         returned_real_ids = [player_id for player_id in returned_ids if player_id in real_player_ids]
-        returned_regen_ids = [player_id for player_id in returned_ids if player_id not in real_player_ids]
+        returned_regen_ids = [player_id for player_id in returned_ids if player_id in regen_player_ids]
         if not returned_real_ids:
             findings.append("[market_query_missing_real_players] Market discovery returned no audited real players.")
             failure_count += 1

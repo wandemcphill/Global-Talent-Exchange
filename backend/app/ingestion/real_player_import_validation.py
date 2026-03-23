@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.ingestion.real_player_canonical_mapping_service import CanonicalReferenceEntityType, CanonicalReferenceInput
 from app.models.real_player_import_batch import RealPlayerImportBatch, RealPlayerImportRow
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_reference_mapping import (
@@ -31,8 +32,60 @@ def _payload_value(payload: dict[str, object], *keys: str) -> object | None:
     return None
 
 
+def _payload_dict(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _reference_lookup_keys(
+    row: RealPlayerImportRow,
+    *,
+    entity_type: str,
+) -> tuple[str, ...]:
+    keys: list[str] = []
+    if entity_type == "club":
+        direct_key = _normalize_text(row.club_reference_key)
+        if direct_key:
+            keys.append(direct_key)
+        raw_payload = _payload_dict(row.raw_payload_json)
+        derived_reference = CanonicalReferenceInput(
+            source_name=row.source_name,
+            entity_type=CanonicalReferenceEntityType.CLUB.value,
+            provider_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_club_key")) or None,
+            display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_club")) or None,
+            competition_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_league_key")) or None,
+            competition_display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_league")) or None,
+        )
+    else:
+        direct_key = _normalize_text(row.league_reference_key)
+        if direct_key:
+            keys.append(direct_key)
+        raw_payload = _payload_dict(row.raw_payload_json)
+        derived_reference = CanonicalReferenceInput(
+            source_name=row.source_name,
+            entity_type=CanonicalReferenceEntityType.COMPETITION.value,
+            provider_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_league_key")) or None,
+            display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_league")) or None,
+        )
+
+    derived_key = _normalize_text(derived_reference.provider_reference_key)
+    if derived_reference.has_reference and derived_key:
+        keys.append(derived_key)
+    return tuple(dict.fromkeys(key for key in keys if key))
+
+
 def _render_list(values: tuple[str, ...]) -> str:
     return ", ".join(values) if values else "(none)"
+
+
+def _render_counts(values: dict[str, int]) -> str:
+    if not values:
+        return "(none)"
+    return ", ".join(
+        f"{key}={count}"
+        for key, count in sorted(values.items())
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +169,48 @@ class UnresolvedReferenceItem:
 
 
 @dataclass(frozen=True, slots=True)
+class CanonicalMappingValidationSummary:
+    referenced_canonical_mapping_count: int
+    resolved_canonical_mapping_count: int
+    unresolved_count: int
+    tracked_count: int
+    missing_mapping_record_count: int
+    resolved_by_entity_type: dict[str, int]
+    unresolved_by_entity_type: dict[str, int]
+    unresolved_reference_categories: dict[str, int]
+
+    def render_lines(self) -> tuple[str, ...]:
+        return (
+            f"referenced_canonical_mapping_count={self.referenced_canonical_mapping_count}",
+            f"resolved_canonical_mapping_count={self.resolved_canonical_mapping_count}",
+            f"unresolved_count={self.unresolved_count}",
+            f"tracked_count={self.tracked_count}",
+            f"missing_mapping_record_count={self.missing_mapping_record_count}",
+            f"resolved_by_entity_type={_render_counts(self.resolved_by_entity_type)}",
+            f"unresolved_by_entity_type={_render_counts(self.unresolved_by_entity_type)}",
+            f"unresolved_reference_categories={_render_counts(self.unresolved_reference_categories)}",
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "referenced_canonical_mapping_count": self.referenced_canonical_mapping_count,
+            "resolved_canonical_mapping_count": self.resolved_canonical_mapping_count,
+            "unresolved_count": self.unresolved_count,
+            "tracked_count": self.tracked_count,
+            "missing_mapping_record_count": self.missing_mapping_record_count,
+            "resolved_by_entity_type": dict(self.resolved_by_entity_type),
+            "unresolved_by_entity_type": dict(self.unresolved_by_entity_type),
+            "unresolved_reference_categories": dict(self.unresolved_reference_categories),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class _CanonicalMappingAnalysis:
+    unresolved_references: tuple[UnresolvedReferenceItem, ...]
+    summary: CanonicalMappingValidationSummary
+
+
+@dataclass(frozen=True, slots=True)
 class ValuationCoverageSummary:
     imported_row_count: int
     unique_player_count: int
@@ -170,15 +265,36 @@ class RealPlayerImportValidationReport:
     unique_player_count: int
     rows_by_status: dict[str, int]
     duplicate_candidates: tuple[DuplicateCandidateGroup, ...]
+    canonical_mapping_summary: CanonicalMappingValidationSummary
     unresolved_references: tuple[UnresolvedReferenceItem, ...]
     missing_required_fields: tuple[MissingRequiredFieldRow, ...]
     valuation_coverage: ValuationCoverageSummary
 
     @property
+    def resolved_canonical_mapping_count(self) -> int:
+        return self.canonical_mapping_summary.resolved_canonical_mapping_count
+
+    @property
+    def unresolved_count(self) -> int:
+        return self.canonical_mapping_summary.unresolved_count
+
+    @property
+    def tracked_count(self) -> int:
+        return self.canonical_mapping_summary.tracked_count
+
+    @property
+    def missing_mapping_record_count(self) -> int:
+        return self.canonical_mapping_summary.missing_mapping_record_count
+
+    @property
+    def unresolved_reference_categories(self) -> dict[str, int]:
+        return self.canonical_mapping_summary.unresolved_reference_categories
+
+    @property
     def verdict(self) -> str:
         if self.duplicate_candidates:
             return "fail"
-        if self.unresolved_references:
+        if self.unresolved_count:
             return "fail"
         if self.missing_required_fields:
             return "fail"
@@ -211,19 +327,23 @@ class RealPlayerImportValidationReport:
                 tuple(item.render() for item in self.duplicate_candidates) or ("none",),
             ),
             (
-                "3. Unresolved mappings",
+                "3. Canonical mapping fence",
+                self.canonical_mapping_summary.render_lines(),
+            ),
+            (
+                "4. Unresolved mappings",
                 tuple(item.render() for item in self.unresolved_references) or ("none",),
             ),
             (
-                "4. Players missing required fields",
+                "5. Players missing required fields",
                 tuple(item.render() for item in self.missing_required_fields) or ("none",),
             ),
             (
-                "5. Valuation coverage",
+                "6. Valuation coverage",
                 self.valuation_coverage.render_lines(),
             ),
             (
-                "6. Verdict",
+                "7. Verdict",
                 (self.verdict,),
             ),
         ]
@@ -246,6 +366,12 @@ class RealPlayerImportValidationReport:
             "unique_player_count": self.unique_player_count,
             "rows_by_status": dict(self.rows_by_status),
             "duplicate_candidates": [item.to_dict() for item in self.duplicate_candidates],
+            "canonical_mapping_summary": self.canonical_mapping_summary.to_dict(),
+            "resolved_canonical_mapping_count": self.resolved_canonical_mapping_count,
+            "unresolved_count": self.unresolved_count,
+            "tracked_count": self.tracked_count,
+            "missing_mapping_record_count": self.missing_mapping_record_count,
+            "unresolved_reference_categories": dict(self.unresolved_reference_categories),
             "unresolved_references": [item.to_dict() for item in self.unresolved_references],
             "missing_required_fields": [item.to_dict() for item in self.missing_required_fields],
             "valuation_coverage": self.valuation_coverage.to_dict(),
@@ -279,6 +405,7 @@ class RealPlayerImportValidationService:
             imported_rows = [row for row in rows if row.status == "imported"]
             rows_by_status = dict(Counter(row.status for row in rows))
             valuation_coverage = self._build_valuation_coverage(session=session, rows=imported_rows)
+            canonical_mapping_analysis = self._analyze_canonical_mappings(session=session, rows=rows)
             return RealPlayerImportValidationReport(
                 batch_key=batch.batch_key,
                 provider_name=batch.provider_name,
@@ -290,7 +417,8 @@ class RealPlayerImportValidationService:
                 unique_player_count=valuation_coverage.unique_player_count,
                 rows_by_status=rows_by_status,
                 duplicate_candidates=self._build_duplicate_candidates(rows),
-                unresolved_references=self._build_unresolved_references(session=session, rows=rows),
+                canonical_mapping_summary=canonical_mapping_analysis.summary,
+                unresolved_references=canonical_mapping_analysis.unresolved_references,
                 missing_required_fields=self._build_missing_required_fields(rows),
                 valuation_coverage=valuation_coverage,
             )
@@ -368,29 +496,60 @@ class RealPlayerImportValidationService:
             )
         )
 
-    def _build_unresolved_references(
+    def _analyze_canonical_mappings(
         self,
         *,
         session: Session,
         rows: list[RealPlayerImportRow],
-    ) -> tuple[UnresolvedReferenceItem, ...]:
-        referenced_keys: dict[str, set[tuple[str, str]]] = {
-            "club": {
-                (row.source_name, row.club_reference_key)
-                for row in rows
-                if _normalize_text(row.club_reference_key)
-            },
-            "competition": {
-                (row.source_name, row.league_reference_key)
-                for row in rows
-                if _normalize_text(row.league_reference_key)
-            },
+    ) -> _CanonicalMappingAnalysis:
+        referenced_keys: dict[str, dict[tuple[str, str], tuple[str, ...]]] = {
+            "club": {},
+            "competition": {},
         }
+        for row in rows:
+            for entity_type, lookup_keys in (
+                ("club", _reference_lookup_keys(row, entity_type="club")),
+                ("competition", _reference_lookup_keys(row, entity_type="competition")),
+            ):
+                if not lookup_keys:
+                    continue
+                direct_key = _normalize_text(row.club_reference_key if entity_type == "club" else row.league_reference_key)
+                reference_key = direct_key or lookup_keys[0]
+                lookup = (row.source_name, reference_key)
+                existing = referenced_keys[entity_type].get(lookup, ())
+                referenced_keys[entity_type][lookup] = tuple(
+                    dict.fromkeys([*existing, *lookup_keys])
+                )
         if not referenced_keys["club"] and not referenced_keys["competition"]:
-            return ()
+            return _CanonicalMappingAnalysis(
+                unresolved_references=(),
+                summary=CanonicalMappingValidationSummary(
+                    referenced_canonical_mapping_count=0,
+                    resolved_canonical_mapping_count=0,
+                    unresolved_count=0,
+                    tracked_count=0,
+                    missing_mapping_record_count=0,
+                    resolved_by_entity_type={},
+                    unresolved_by_entity_type={},
+                    unresolved_reference_categories={},
+                ),
+            )
 
-        source_names = sorted({source_name for values in referenced_keys.values() for source_name, _ in values})
-        provider_reference_keys = sorted({key for values in referenced_keys.values() for _, key in values})
+        source_names = sorted(
+            {
+                source_name
+                for values in referenced_keys.values()
+                for source_name, _ in values
+            }
+        )
+        provider_reference_keys = sorted(
+            {
+                candidate_key
+                for values in referenced_keys.values()
+                for lookup_keys in values.values()
+                for candidate_key in lookup_keys
+            }
+        )
         mapping_rows = list(
             session.scalars(
                 select(RealPlayerReferenceMapping).where(
@@ -403,7 +562,17 @@ class RealPlayerImportValidationService:
         resolved_keys = {
             (mapping.entity_type, mapping.source_name, mapping.provider_reference_key)
             for mapping in mapping_rows
-            if mapping.is_active and mapping.mapping_status == "resolved"
+            if (
+                mapping.is_active
+                and mapping.mapping_status in {"resolved", "auto_created"}
+                and any(
+                    (
+                        mapping.canonical_country_id,
+                        mapping.canonical_competition_id,
+                        mapping.canonical_club_id,
+                    )
+                )
+            )
         }
         unresolved_rows = list(
             session.scalars(
@@ -421,12 +590,21 @@ class RealPlayerImportValidationService:
         }
 
         findings: list[UnresolvedReferenceItem] = []
+        resolved_by_entity_type: Counter[str] = Counter()
         for entity_type in ("club", "competition"):
             for source_name, provider_reference_key in sorted(referenced_keys[entity_type]):
-                lookup_key = (entity_type, source_name, provider_reference_key)
-                if lookup_key in resolved_keys:
+                lookup_keys = referenced_keys[entity_type][(source_name, provider_reference_key)]
+                if any((entity_type, source_name, candidate_key) in resolved_keys for candidate_key in lookup_keys):
+                    resolved_by_entity_type[entity_type] += 1
                     continue
-                unresolved = unresolved_lookup.get(lookup_key)
+                unresolved = next(
+                    (
+                        unresolved_lookup.get((entity_type, source_name, candidate_key))
+                        for candidate_key in lookup_keys
+                        if unresolved_lookup.get((entity_type, source_name, candidate_key)) is not None
+                    ),
+                    None,
+                )
                 findings.append(
                     UnresolvedReferenceItem(
                         entity_type=entity_type,
@@ -437,7 +615,29 @@ class RealPlayerImportValidationService:
                         state="tracked" if unresolved is not None else "missing_mapping_record",
                     )
                 )
-        return tuple(findings)
+        unresolved_by_entity_type = Counter(item.entity_type for item in findings)
+        unresolved_reference_categories = Counter(
+            (
+                f"{item.entity_type}:{item.state}:{item.reason_code or item.state}"
+                if item.state == "tracked"
+                else f"{item.entity_type}:{item.state}"
+            )
+            for item in findings
+        )
+        summary = CanonicalMappingValidationSummary(
+            referenced_canonical_mapping_count=sum(len(values) for values in referenced_keys.values()),
+            resolved_canonical_mapping_count=sum(resolved_by_entity_type.values()),
+            unresolved_count=len(findings),
+            tracked_count=sum(1 for item in findings if item.state == "tracked"),
+            missing_mapping_record_count=sum(1 for item in findings if item.state == "missing_mapping_record"),
+            resolved_by_entity_type=dict(sorted(resolved_by_entity_type.items())),
+            unresolved_by_entity_type=dict(sorted(unresolved_by_entity_type.items())),
+            unresolved_reference_categories=dict(sorted(unresolved_reference_categories.items())),
+        )
+        return _CanonicalMappingAnalysis(
+            unresolved_references=tuple(findings),
+            summary=summary,
+        )
 
     def _build_missing_required_fields(
         self,
@@ -552,4 +752,3 @@ class RealPlayerImportValidationService:
             summaries_with_current_value=summaries_with_current_value,
             rows_missing_valuation=tuple(sorted(missing_rows)),
         )
-
