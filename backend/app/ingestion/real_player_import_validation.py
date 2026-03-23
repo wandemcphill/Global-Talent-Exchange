@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.ingestion.real_player_canonical_mapping_service import CanonicalReferenceEntityType, CanonicalReferenceInput
 from app.models.real_player_import_batch import RealPlayerImportBatch, RealPlayerImportRow
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_reference_mapping import (
@@ -29,6 +30,49 @@ def _payload_value(payload: dict[str, object], *keys: str) -> object | None:
         if value is not None and _normalize_text(value):
             return value
     return None
+
+
+def _payload_dict(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _reference_lookup_keys(
+    row: RealPlayerImportRow,
+    *,
+    entity_type: str,
+) -> tuple[str, ...]:
+    keys: list[str] = []
+    if entity_type == "club":
+        direct_key = _normalize_text(row.club_reference_key)
+        if direct_key:
+            keys.append(direct_key)
+        raw_payload = _payload_dict(row.raw_payload_json)
+        derived_reference = CanonicalReferenceInput(
+            source_name=row.source_name,
+            entity_type=CanonicalReferenceEntityType.CLUB.value,
+            provider_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_club_key")) or None,
+            display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_club")) or None,
+            competition_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_league_key")) or None,
+            competition_display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_league")) or None,
+        )
+    else:
+        direct_key = _normalize_text(row.league_reference_key)
+        if direct_key:
+            keys.append(direct_key)
+        raw_payload = _payload_dict(row.raw_payload_json)
+        derived_reference = CanonicalReferenceInput(
+            source_name=row.source_name,
+            entity_type=CanonicalReferenceEntityType.COMPETITION.value,
+            provider_external_id=_normalize_text(_payload_value(raw_payload, "current_real_world_league_key")) or None,
+            display_name=_normalize_text(_payload_value(raw_payload, "current_real_world_league")) or None,
+        )
+
+    derived_key = _normalize_text(derived_reference.provider_reference_key)
+    if derived_reference.has_reference and derived_key:
+        keys.append(derived_key)
+    return tuple(dict.fromkeys(key for key in keys if key))
 
 
 def _render_list(values: tuple[str, ...]) -> str:
@@ -374,23 +418,42 @@ class RealPlayerImportValidationService:
         session: Session,
         rows: list[RealPlayerImportRow],
     ) -> tuple[UnresolvedReferenceItem, ...]:
-        referenced_keys: dict[str, set[tuple[str, str]]] = {
-            "club": {
-                (row.source_name, row.club_reference_key)
-                for row in rows
-                if _normalize_text(row.club_reference_key)
-            },
-            "competition": {
-                (row.source_name, row.league_reference_key)
-                for row in rows
-                if _normalize_text(row.league_reference_key)
-            },
+        referenced_keys: dict[str, dict[tuple[str, str], tuple[str, ...]]] = {
+            "club": {},
+            "competition": {},
         }
+        for row in rows:
+            for entity_type, lookup_keys in (
+                ("club", _reference_lookup_keys(row, entity_type="club")),
+                ("competition", _reference_lookup_keys(row, entity_type="competition")),
+            ):
+                if not lookup_keys:
+                    continue
+                direct_key = _normalize_text(row.club_reference_key if entity_type == "club" else row.league_reference_key)
+                reference_key = direct_key or lookup_keys[0]
+                lookup = (row.source_name, reference_key)
+                existing = referenced_keys[entity_type].get(lookup, ())
+                referenced_keys[entity_type][lookup] = tuple(
+                    dict.fromkeys([*existing, *lookup_keys])
+                )
         if not referenced_keys["club"] and not referenced_keys["competition"]:
             return ()
 
-        source_names = sorted({source_name for values in referenced_keys.values() for source_name, _ in values})
-        provider_reference_keys = sorted({key for values in referenced_keys.values() for _, key in values})
+        source_names = sorted(
+            {
+                source_name
+                for values in referenced_keys.values()
+                for source_name, _ in values
+            }
+        )
+        provider_reference_keys = sorted(
+            {
+                candidate_key
+                for values in referenced_keys.values()
+                for lookup_keys in values.values()
+                for candidate_key in lookup_keys
+            }
+        )
         mapping_rows = list(
             session.scalars(
                 select(RealPlayerReferenceMapping).where(
@@ -423,10 +486,17 @@ class RealPlayerImportValidationService:
         findings: list[UnresolvedReferenceItem] = []
         for entity_type in ("club", "competition"):
             for source_name, provider_reference_key in sorted(referenced_keys[entity_type]):
-                lookup_key = (entity_type, source_name, provider_reference_key)
-                if lookup_key in resolved_keys:
+                lookup_keys = referenced_keys[entity_type][(source_name, provider_reference_key)]
+                if any((entity_type, source_name, candidate_key) in resolved_keys for candidate_key in lookup_keys):
                     continue
-                unresolved = unresolved_lookup.get(lookup_key)
+                unresolved = next(
+                    (
+                        unresolved_lookup.get((entity_type, source_name, candidate_key))
+                        for candidate_key in lookup_keys
+                        if unresolved_lookup.get((entity_type, source_name, candidate_key)) is not None
+                    ),
+                    None,
+                )
                 findings.append(
                     UnresolvedReferenceItem(
                         entity_type=entity_type,
@@ -552,4 +622,3 @@ class RealPlayerImportValidationService:
             summaries_with_current_value=summaries_with_current_value,
             rows_missing_valuation=tuple(sorted(missing_rows)),
         )
-

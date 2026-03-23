@@ -30,6 +30,8 @@ IDENTICAL_VALUE_CLUSTER_THRESHOLD = 3
 IDENTICAL_VALUE_CLUSTER_RATIO = 0.25
 MAX_FINDINGS_PER_RULE = 5
 NEARBY_COMPARATOR_LIMIT = 3
+AGE_DECLINE_MIN_OLDER_AGE = 27
+AGE_DECLINE_AUTHORITATIVE_SUPPORT_MARGIN = 0.09
 
 
 def _coerce_float(value: object) -> float | None:
@@ -257,6 +259,28 @@ class _AuditedBatchPlayer:
     cohort: str
     comparator_ids: tuple[str, ...] = ()
     comparator_values: tuple[float, ...] = ()
+
+
+def _audited_metric(item: _AuditedBatchPlayer, key: str) -> float | None:
+    snapshot = item.authoritative_snapshot or item.summary_snapshot
+    if snapshot is not None and hasattr(snapshot, key):
+        value = _coerce_float(getattr(snapshot, key))
+        if value is not None:
+            return value
+    for payload in (
+        _breakdown_payload(snapshot),
+        _summary_payload(item.summary),
+    ):
+        value = _coerce_float(payload.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _materially_exceeds(left: float | None, right: float | None, *, margin: float = AGE_DECLINE_AUTHORITATIVE_SUPPORT_MARGIN) -> bool:
+    if left is None or right is None or right <= 0:
+        return False
+    return left > right * (1.0 + margin)
 
 
 @dataclass(slots=True)
@@ -857,11 +881,27 @@ class RealPlayerBatchAuditService:
                     continue
                 if older.player.normalized_position != younger.player.normalized_position:
                     continue
+                older_primary_position = (older.profile.primary_position or "").strip().casefold()
+                younger_primary_position = (younger.profile.primary_position or "").strip().casefold()
+                if older_primary_position and younger_primary_position and older_primary_position != younger_primary_position:
+                    continue
+                if older.age < AGE_DECLINE_MIN_OLDER_AGE:
+                    continue
                 if older.age < younger.age + 4:
                     continue
                 if older.current_value_credits <= younger.current_value_credits * 1.10:
                     continue
                 if older.global_scouting_index > younger.global_scouting_index + 2.0:
+                    continue
+                if _materially_exceeds(
+                    _audited_metric(older, "football_truth_value_credits"),
+                    _audited_metric(younger, "football_truth_value_credits"),
+                ):
+                    continue
+                if _materially_exceeds(
+                    _audited_metric(older, "market_signal_value_credits"),
+                    _audited_metric(younger, "market_signal_value_credits"),
+                ):
                     continue
                 findings.append(
                     f"[age_decline_anomaly] Older player {older.player.full_name} (age {older.age}, {_format_number(older.current_value_credits)}) "

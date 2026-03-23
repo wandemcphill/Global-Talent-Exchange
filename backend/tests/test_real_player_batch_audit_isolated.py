@@ -589,6 +589,273 @@ def test_audit_service_flags_distribution_anomalies() -> None:
         engine.dispose()
 
 
+def test_audit_service_flags_age_decline_when_post_prime_gap_lacks_support() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            batch_id = "batch-age-decline-flag"
+            older = _seed_authoritative_player(
+                session,
+                provider_external_id="older-midfielder",
+                full_name="Older Midfielder",
+                normalized_position="CM",
+                date_of_birth=date(1996, 1, 15),
+                current_value_credits=340.0,
+                global_scouting_index=84.5,
+                market_value_eur=19_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="Belgium",
+            )
+            younger = _seed_authoritative_player(
+                session,
+                provider_external_id="younger-midfielder",
+                full_name="Younger Midfielder",
+                normalized_position="CM",
+                date_of_birth=date(2004, 5, 10),
+                current_value_credits=300.0,
+                global_scouting_index=84.5,
+                market_value_eur=19_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="Belgium",
+            )
+            older_snapshot = older["snapshot"]
+            younger_snapshot = younger["snapshot"]
+            assert older_snapshot is not None
+            assert younger_snapshot is not None
+            older_snapshot.football_truth_value_credits = 308.0
+            older_snapshot.market_signal_value_credits = 306.0
+            older_snapshot.breakdown_json = {
+                **dict(older_snapshot.breakdown_json or {}),
+                "football_truth_value_credits": 308.0,
+                "market_signal_value_credits": 306.0,
+            }
+            younger_snapshot.football_truth_value_credits = 304.0
+            younger_snapshot.market_signal_value_credits = 302.0
+            younger_snapshot.breakdown_json = {
+                **dict(younger_snapshot.breakdown_json or {}),
+                "football_truth_value_credits": 304.0,
+                "market_signal_value_credits": 302.0,
+            }
+            _seed_regens(
+                session,
+                AuditRegenSpec(
+                    key="regen-age-flag-1",
+                    full_name="Regen Age Flag 1",
+                    country_code="BE",
+                    country_name="Belgium",
+                    position="CM",
+                    normalized_position="CM",
+                    date_of_birth=date(1998, 4, 2),
+                    current_value_credits=320.0,
+                    global_scouting_index=80.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-age-flag-2",
+                    full_name="Regen Age Flag 2",
+                    country_code="FR",
+                    country_name="France",
+                    position="CM",
+                    normalized_position="CM",
+                    date_of_birth=date(2003, 7, 12),
+                    current_value_credits=290.0,
+                    global_scouting_index=78.0,
+                ),
+                cohort_key="batch-age-decline-flag-regens",
+            )
+            session.commit()
+
+        report = RealPlayerBatchAuditService(session_factory=session_factory).run(ingestion_batch_id=batch_id)
+
+        assert report.verdict == FAIL_VERDICT
+        assert any("[age_decline_anomaly]" in finding for finding in report.distribution_findings)
+    finally:
+        engine.dispose()
+
+
+def test_audit_service_skips_supported_or_pre_prime_age_decline_pairs() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            batch_id = "batch-age-decline-safe"
+            _seed_authoritative_player(
+                session,
+                provider_external_id="older-rising",
+                full_name="Older Rising",
+                normalized_position="CM",
+                date_of_birth=date(2001, 9, 5),
+                current_value_credits=520.0,
+                global_scouting_index=84.5,
+                market_value_eur=19_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="England",
+            )
+            _seed_authoritative_player(
+                session,
+                provider_external_id="younger-prospect",
+                full_name="Younger Prospect",
+                normalized_position="CM",
+                date_of_birth=date(2007, 3, 21),
+                current_value_credits=240.0,
+                global_scouting_index=84.5,
+                market_value_eur=19_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="England",
+            )
+            _seed_authoritative_player(
+                session,
+                provider_external_id="older-supported",
+                full_name="Older Supported",
+                normalized_position="CM",
+                date_of_birth=date(1997, 4, 1),
+                current_value_credits=350.0,
+                global_scouting_index=84.5,
+                market_value_eur=19_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="Belgium",
+            )
+            _seed_authoritative_player(
+                session,
+                provider_external_id="younger-peer",
+                full_name="Younger Peer",
+                normalized_position="CM",
+                date_of_birth=date(2005, 6, 1),
+                current_value_credits=300.0,
+                global_scouting_index=84.5,
+                market_value_eur=19_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="Belgium",
+            )
+            _seed_regens(
+                session,
+                AuditRegenSpec(
+                    key="regen-age-safe-1",
+                    full_name="Regen Age Safe 1",
+                    country_code="BE",
+                    country_name="Belgium",
+                    position="CM",
+                    normalized_position="CM",
+                    date_of_birth=date(1999, 4, 2),
+                    current_value_credits=330.0,
+                    global_scouting_index=80.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-age-safe-2",
+                    full_name="Regen Age Safe 2",
+                    country_code="GB",
+                    country_name="England",
+                    position="CM",
+                    normalized_position="CM",
+                    date_of_birth=date(2004, 7, 12),
+                    current_value_credits=255.0,
+                    global_scouting_index=78.0,
+                ),
+                cohort_key="batch-age-decline-safe-regens",
+            )
+            session.commit()
+
+        report = RealPlayerBatchAuditService(session_factory=session_factory).run(ingestion_batch_id=batch_id)
+
+        assert report.verdict == PASS_VERDICT
+        assert not any("[age_decline_anomaly]" in finding for finding in report.distribution_findings)
+    finally:
+        engine.dispose()
+
+
+def test_audit_service_skips_cross_subrole_age_decline_pairs() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            batch_id = "batch-age-decline-subrole-safe"
+            older = _seed_authoritative_player(
+                session,
+                provider_external_id="older-defender",
+                full_name="Older Defender",
+                normalized_position="defender",
+                date_of_birth=date(1998, 2, 1),
+                current_value_credits=215.0,
+                global_scouting_index=84.5,
+                market_value_eur=13_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="Argentina",
+            )
+            younger = _seed_authoritative_player(
+                session,
+                provider_external_id="younger-defender",
+                full_name="Younger Defender",
+                normalized_position="defender",
+                date_of_birth=date(2004, 3, 10),
+                current_value_credits=190.0,
+                global_scouting_index=84.5,
+                market_value_eur=13_000_000,
+                is_real_player=True,
+                real_player_tier="watchlist",
+                batch_id=batch_id,
+                nationality="England",
+            )
+            older_profile = older["profile"]
+            younger_profile = younger["profile"]
+            assert older_profile is not None
+            assert younger_profile is not None
+            older_profile.primary_position = "Centre-Back"
+            younger_profile.primary_position = "Full-Back"
+            older_snapshot = older["snapshot"]
+            younger_snapshot = younger["snapshot"]
+            assert older_snapshot is not None
+            assert younger_snapshot is not None
+            older_snapshot.football_truth_value_credits = 205.0
+            older_snapshot.market_signal_value_credits = 205.0
+            younger_snapshot.football_truth_value_credits = 189.0
+            younger_snapshot.market_signal_value_credits = 189.0
+            _seed_regens(
+                session,
+                AuditRegenSpec(
+                    key="regen-age-subrole-1",
+                    full_name="Regen Age Subrole 1",
+                    country_code="AR",
+                    country_name="Argentina",
+                    position="defender",
+                    normalized_position="defender",
+                    date_of_birth=date(1999, 4, 2),
+                    current_value_credits=205.0,
+                    global_scouting_index=80.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-age-subrole-2",
+                    full_name="Regen Age Subrole 2",
+                    country_code="GB",
+                    country_name="England",
+                    position="defender",
+                    normalized_position="defender",
+                    date_of_birth=date(2004, 7, 12),
+                    current_value_credits=180.0,
+                    global_scouting_index=78.0,
+                ),
+                cohort_key="batch-age-decline-subrole-safe-regens",
+            )
+            session.commit()
+
+        report = RealPlayerBatchAuditService(session_factory=session_factory).run(ingestion_batch_id=batch_id)
+
+        assert report.verdict == PASS_VERDICT
+        assert not any("[age_decline_anomaly]" in finding for finding in report.distribution_findings)
+    finally:
+        engine.dispose()
+
+
 def test_runtime_guards_fail_closed_for_real_players_without_authoritative_value() -> None:
     engine, session_factory = _session_factory()
     try:
