@@ -19,7 +19,7 @@ def test_real_player_import_config_inherits_global_provider_defaults() -> None:
     )
 
     assert settings.real_player_import.provider_name == "football-data"
-    assert settings.real_player_import.batch_size == 250
+    assert settings.real_player_import.batch_size == 1000
     assert settings.real_player_import.max_pages_per_run == 40
     assert settings.real_player_import.rate_limit_per_minute == 120
     assert settings.real_player_import.timeout_seconds == 45
@@ -33,7 +33,7 @@ def test_real_player_import_config_honors_overrides_and_clamps_invalid_values() 
             "GTE_INGESTION_PROVIDER": "mock",
             "GTE_PROVIDER_TIMEOUT_SECONDS": "30",
             "GTE_REAL_PLAYER_IMPORT_PROVIDER": "curated-feed",
-            "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE": "0",
+            "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE": "9000",
             "GTE_REAL_PLAYER_IMPORT_MAX_PAGES_PER_RUN": "-3",
             "GTE_REAL_PLAYER_IMPORT_RATE_LIMIT_PER_MINUTE": "-50",
             "GTE_REAL_PLAYER_IMPORT_TIMEOUT_SECONDS": "0",
@@ -43,7 +43,7 @@ def test_real_player_import_config_honors_overrides_and_clamps_invalid_values() 
     )
 
     assert settings.real_player_import.provider_name == "curated-feed"
-    assert settings.real_player_import.batch_size == 1
+    assert settings.real_player_import.batch_size == 5000
     assert settings.real_player_import.max_pages_per_run == 1
     assert settings.real_player_import.rate_limit_per_minute == 1
     assert settings.real_player_import.timeout_seconds == 1

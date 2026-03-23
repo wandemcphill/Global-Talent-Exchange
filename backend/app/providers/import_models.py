@@ -12,15 +12,19 @@ class RealPlayerSourceItem:
     first_name: str | None = None
     last_name: str | None = None
     short_name: str | None = None
+    normalized_name: str | None = None
     display_position: str | None = None
     nationality_name: str | None = None
     nationality_code: str | None = None
     date_of_birth: date | None = None
+    age: int | None = None
     current_club_id: str | None = None
     current_club_name: str | None = None
     current_competition_id: str | None = None
     current_competition_name: str | None = None
     current_season_id: str | None = None
+    rough_market_value: float | None = None
+    rough_market_value_currency: str | None = None
     provider_last_updated_at: datetime | None = None
     metadata_json: dict[str, Any] = field(default_factory=dict)
     raw_payload: dict[str, Any] = field(default_factory=dict)
