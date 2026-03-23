@@ -17,6 +17,7 @@ from app.ingestion.models import Player
 from app.market.repositories import SqlAlchemyMarketPlayerRepository
 from app.market.service import MarketPlayerQueryService
 from app.models.player_cards import PlayerMarketValueSnapshot
+from app.models.regen import RegenProfile
 from app.models.real_player_profile import RealPlayerProfile
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.authority import authoritative_reference_credits
@@ -351,13 +352,19 @@ class RealPlayerBatchAuditService:
                 )
 
             report_as_of = self._resolve_as_of(audited_players)
-            regen_pool = self._load_regen_pool(session, as_of=report_as_of.date() if report_as_of is not None else date.today())
+            regen_player_ids = self._load_regen_player_ids(session)
+            regen_pool = self._load_regen_pool(
+                session,
+                as_of=report_as_of.date() if report_as_of is not None else date.today(),
+                regen_player_ids=regen_player_ids,
+            )
             audited_players = self._attach_regen_comparators(audited_players, regen_pool=regen_pool)
             pricing_rows, pricing_failures = self._build_pricing_integrity_rows(audited_players)
             distribution_findings, distribution_failures = self._build_distribution_findings(audited_players)
             market_findings, market_failures, residual_risks = self._build_market_coherence_findings(
                 session,
                 audited_players=audited_players,
+                regen_player_ids=regen_player_ids,
                 regen_pool=regen_pool,
             )
 
@@ -596,12 +603,27 @@ class RealPlayerBatchAuditService:
             return "prospects"
         return "fillers"
 
-    def _load_regen_pool(self, session: Session, *, as_of: date) -> list[_ComparablePlayer]:
+    def _load_regen_player_ids(self, session: Session) -> set[str]:
+        return set(session.scalars(select(RegenProfile.player_id)))
+
+    def _load_regen_pool(
+        self,
+        session: Session,
+        *,
+        as_of: date,
+        regen_player_ids: set[str],
+    ) -> list[_ComparablePlayer]:
+        if not regen_player_ids:
+            return []
         players = list(
             session.scalars(
                 select(Player)
                 .options(selectinload(Player.country))
-                .where(Player.is_real_player.is_(False), Player.is_tradable.is_(True))
+                .where(
+                    Player.id.in_(regen_player_ids),
+                    Player.is_real_player.is_(False),
+                    Player.is_tradable.is_(True),
+                )
                 .order_by(Player.id.asc())
             )
         )
@@ -875,6 +897,7 @@ class RealPlayerBatchAuditService:
         session: Session,
         *,
         audited_players: Sequence[_AuditedBatchPlayer],
+        regen_player_ids: set[str],
         regen_pool: Sequence[_ComparablePlayer],
     ) -> tuple[list[str], int, tuple[str, ...]]:
         findings: list[str] = []
@@ -887,7 +910,7 @@ class RealPlayerBatchAuditService:
         real_player_ids = {item.profile.gtex_player_id for item in audited_players}
         returned_ids = [item.player_id for item in list_result.items]
         returned_real_ids = [player_id for player_id in returned_ids if player_id in real_player_ids]
-        returned_regen_ids = [player_id for player_id in returned_ids if player_id not in real_player_ids]
+        returned_regen_ids = [player_id for player_id in returned_ids if player_id in regen_player_ids]
         if not returned_real_ids:
             findings.append("[market_query_missing_real_players] Market discovery returned no audited real players.")
             failure_count += 1

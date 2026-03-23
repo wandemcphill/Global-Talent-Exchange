@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.core.database import load_model_modules
 from app.core.config import load_settings
+from app.ingestion.audit_regen_cohort import AuditRegenCohortSeeder, AuditRegenSpec
 from app.ingestion.models import Player
 from app.ingestion.real_player_batch_audit import FAIL_VERDICT, PASS_VERDICT, RealPlayerBatchAuditService
 from app.market.service import MarketPlayerQueryService, MarketValidationError
@@ -261,6 +262,13 @@ def _seed_market_tier(session) -> PlayerCardTier:
     return tier
 
 
+def _seed_regens(session, *specs: AuditRegenSpec, cohort_key: str = "audit-test-regens") -> None:
+    AuditRegenCohortSeeder(
+        session,
+        cohort_key=cohort_key,
+    ).seed(specs or ())
+
+
 def test_audit_service_passes_for_authoritative_first_batch() -> None:
     engine, session_factory = _session_factory()
     try:
@@ -322,45 +330,53 @@ def test_audit_service_passes_for_authoritative_first_batch() -> None:
                 batch_id=batch_id,
                 nationality="Croatia",
             )
-            _seed_authoritative_player(
+            _seed_regens(
                 session,
-                provider_external_id="regen-1",
-                full_name="Regen Striker",
-                normalized_position="ST",
-                date_of_birth=date(1999, 1, 10),
-                current_value_credits=590.0,
-                global_scouting_index=90.0,
-                market_value_eur=0,
-            )
-            _seed_authoritative_player(
-                session,
-                provider_external_id="regen-2",
-                full_name="Regen Midfielder",
-                normalized_position="CM",
-                date_of_birth=date(1996, 5, 11),
-                current_value_credits=330.0,
-                global_scouting_index=72.0,
-                market_value_eur=0,
-            )
-            _seed_authoritative_player(
-                session,
-                provider_external_id="regen-3",
-                full_name="Regen Prospect",
-                normalized_position="ST",
-                date_of_birth=date(2005, 9, 1),
-                current_value_credits=210.0,
-                global_scouting_index=69.0,
-                market_value_eur=0,
-            )
-            _seed_authoritative_player(
-                session,
-                provider_external_id="regen-4",
-                full_name="Regen Defender",
-                normalized_position="CB",
-                date_of_birth=date(1998, 8, 1),
-                current_value_credits=170.0,
-                global_scouting_index=66.0,
-                market_value_eur=0,
+                AuditRegenSpec(
+                    key="regen-1",
+                    full_name="Regen Striker",
+                    country_code="NG",
+                    country_name="Nigeria",
+                    position="ST",
+                    normalized_position="ST",
+                    date_of_birth=date(1999, 1, 10),
+                    current_value_credits=590.0,
+                    global_scouting_index=90.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-2",
+                    full_name="Regen Midfielder",
+                    country_code="GH",
+                    country_name="Ghana",
+                    position="CM",
+                    normalized_position="CM",
+                    date_of_birth=date(1996, 5, 11),
+                    current_value_credits=330.0,
+                    global_scouting_index=72.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-3",
+                    full_name="Regen Prospect",
+                    country_code="GH",
+                    country_name="Ghana",
+                    position="ST",
+                    normalized_position="ST",
+                    date_of_birth=date(2005, 9, 1),
+                    current_value_credits=210.0,
+                    global_scouting_index=69.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-4",
+                    full_name="Regen Defender",
+                    country_code="HR",
+                    country_name="Croatia",
+                    position="CB",
+                    normalized_position="CB",
+                    date_of_birth=date(1998, 8, 1),
+                    current_value_credits=170.0,
+                    global_scouting_index=66.0,
+                ),
+                cohort_key="batch-first-regens",
             )
             session.commit()
 
@@ -395,15 +411,20 @@ def test_audit_service_fails_when_snapshot_or_summary_is_missing() -> None:
                 create_summary=False,
                 profile_pricing_snapshot_id="missing-snapshot-id",
             )
-            _seed_authoritative_player(
+            _seed_regens(
                 session,
-                provider_external_id="regen-safe",
-                full_name="Regen Safe",
-                normalized_position="ST",
-                date_of_birth=date(1999, 5, 1),
-                current_value_credits=350.0,
-                global_scouting_index=75.0,
-                market_value_eur=0,
+                AuditRegenSpec(
+                    key="regen-safe",
+                    full_name="Regen Safe",
+                    country_code="NG",
+                    country_name="Nigeria",
+                    position="ST",
+                    normalized_position="ST",
+                    date_of_birth=date(1999, 5, 1),
+                    current_value_credits=350.0,
+                    global_scouting_index=75.0,
+                ),
+                cohort_key="batch-broken-regens",
             )
             session.commit()
 
@@ -412,6 +433,47 @@ def test_audit_service_fails_when_snapshot_or_summary_is_missing() -> None:
         assert report.verdict == FAIL_VERDICT
         assert any(row.status == FAIL_VERDICT for row in report.pricing_integrity_rows)
         assert any("Pricing integrity failed for Broken Snapshot" in risk for risk in report.residual_risks)
+    finally:
+        engine.dispose()
+
+
+def test_audit_service_does_not_treat_generic_non_real_players_as_regens() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            _seed_authoritative_player(
+                session,
+                provider_external_id="real-only",
+                full_name="Real Only",
+                normalized_position="ST",
+                date_of_birth=date(1999, 1, 1),
+                current_value_credits=420.0,
+                global_scouting_index=82.0,
+                market_value_eur=18_000_000,
+                is_real_player=True,
+                real_player_tier="elite",
+                batch_id="batch-generic-non-real",
+                nationality="Nigeria",
+            )
+            _seed_authoritative_player(
+                session,
+                provider_external_id="generic-non-real",
+                full_name="Generic Non Real",
+                normalized_position="ST",
+                date_of_birth=date(1999, 6, 1),
+                current_value_credits=300.0,
+                global_scouting_index=70.0,
+                market_value_eur=0,
+            )
+            session.commit()
+
+        report = RealPlayerBatchAuditService(session_factory=session_factory).run(
+            ingestion_batch_id="batch-generic-non-real"
+        )
+
+        assert report.verdict == FAIL_VERDICT
+        assert any("[market_query_missing_regens]" in finding for finding in report.market_coherence_findings)
+        assert any("No authoritative regen comparator pool was available" in risk for risk in report.residual_risks)
     finally:
         engine.dispose()
 
@@ -478,35 +540,42 @@ def test_audit_service_flags_distribution_anomalies() -> None:
                     batch_id=batch_id,
                     nationality="Nigeria" if index == 0 else "France",
                 )
-            _seed_authoritative_player(
+            _seed_regens(
                 session,
-                provider_external_id="regen-st-1",
-                full_name="Regen ST 1",
-                normalized_position="ST",
-                date_of_birth=date(1998, 1, 1),
-                current_value_credits=500.0,
-                global_scouting_index=85.0,
-                market_value_eur=0,
-            )
-            _seed_authoritative_player(
-                session,
-                provider_external_id="regen-st-2",
-                full_name="Regen ST 2",
-                normalized_position="ST",
-                date_of_birth=date(2006, 1, 1),
-                current_value_credits=200.0,
-                global_scouting_index=70.0,
-                market_value_eur=0,
-            )
-            _seed_authoritative_player(
-                session,
-                provider_external_id="regen-cm-1",
-                full_name="Regen CM 1",
-                normalized_position="CM",
-                date_of_birth=date(1997, 6, 1),
-                current_value_credits=120.0,
-                global_scouting_index=55.0,
-                market_value_eur=0,
+                AuditRegenSpec(
+                    key="regen-st-1",
+                    full_name="Regen ST 1",
+                    country_code="NG",
+                    country_name="Nigeria",
+                    position="ST",
+                    normalized_position="ST",
+                    date_of_birth=date(1998, 1, 1),
+                    current_value_credits=500.0,
+                    global_scouting_index=85.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-st-2",
+                    full_name="Regen ST 2",
+                    country_code="GH",
+                    country_name="Ghana",
+                    position="ST",
+                    normalized_position="ST",
+                    date_of_birth=date(2006, 1, 1),
+                    current_value_credits=200.0,
+                    global_scouting_index=70.0,
+                ),
+                AuditRegenSpec(
+                    key="regen-cm-1",
+                    full_name="Regen CM 1",
+                    country_code="ES",
+                    country_name="Spain",
+                    position="CM",
+                    normalized_position="CM",
+                    date_of_birth=date(1997, 6, 1),
+                    current_value_credits=120.0,
+                    global_scouting_index=55.0,
+                ),
+                cohort_key="batch-anomaly-regens",
             )
             session.commit()
 
@@ -627,15 +696,20 @@ def test_cli_render_uses_exact_section_order() -> None:
                 batch_id="batch-render",
                 nationality="Nigeria",
             )
-            _seed_authoritative_player(
+            _seed_regens(
                 session,
-                provider_external_id="render-regen",
-                full_name="Render Regen",
-                normalized_position="ST",
-                date_of_birth=date(1998, 1, 1),
-                current_value_credits=390.0,
-                global_scouting_index=78.0,
-                market_value_eur=0,
+                AuditRegenSpec(
+                    key="render-regen",
+                    full_name="Render Regen",
+                    country_code="NG",
+                    country_name="Nigeria",
+                    position="ST",
+                    normalized_position="ST",
+                    date_of_birth=date(1998, 1, 1),
+                    current_value_credits=390.0,
+                    global_scouting_index=78.0,
+                ),
+                cohort_key="batch-render-regens",
             )
             session.commit()
 
