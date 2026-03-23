@@ -30,6 +30,7 @@ PLAYER_MATCH_STATS_ENTITY_TYPE = "player_match_stat"
 PLAYER_SEASON_STATS_ENTITY_TYPE = "player_season_stat"
 REAL_PLAYER_IMPORT_ENTITY_TYPE = "real_player_directory"
 REAL_PLAYER_IMPORT_JOB_NAME = "real_player_directory_import"
+REAL_PLAYER_FILE_IMPORT_JOB_NAME = "real_player_file_import"
 REAL_PLAYER_IMPORT_CURSOR_KEY = "real-player-directory"
 
 SYNC_RUN_STATUS_RUNNING = "running"

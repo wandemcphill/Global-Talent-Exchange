@@ -1468,7 +1468,7 @@ def load_real_player_import_config(
     cursor_key = environ.get("GTE_REAL_PLAYER_IMPORT_CURSOR_KEY", "real-player-directory").strip()
     return RealPlayerImportConfig(
         provider_name=environ.get("GTE_REAL_PLAYER_IMPORT_PROVIDER", default_provider_name).strip() or default_provider_name,
-        batch_size=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE", 250)),
+        batch_size=min(5000, max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE", 1000))),
         max_pages_per_run=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_MAX_PAGES_PER_RUN", 40)),
         rate_limit_per_minute=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_RATE_LIMIT_PER_MINUTE", 120)),
         timeout_seconds=max(

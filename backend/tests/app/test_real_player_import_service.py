@@ -12,7 +12,11 @@ import app.models  # noqa: F401
 import app.players.read_models  # noqa: F401
 import app.value_engine.read_models  # noqa: F401
 from app.core.config import load_settings
-from app.ingestion.real_player_import_models import RealPlayerImportStagingRecord
+from app.ingestion.real_player_import_models import (
+    RealPlayerImportProcessingState,
+    RealPlayerImportRun,
+    RealPlayerImportStagingRecord,
+)
 from app.ingestion.real_player_import_service import RealPlayerImportService
 from app.models.base import Base
 
@@ -50,6 +54,7 @@ def test_real_player_import_is_resumable_and_idempotent() -> None:
             assert first.pages_processed == 1
             assert first.exhausted is False
             assert first.next_cursor == "2"
+            assert first.import_run_id is not None
 
             second = service.import_directory(
                 provider_name="mock",
@@ -66,6 +71,7 @@ def test_real_player_import_is_resumable_and_idempotent() -> None:
             assert second.skipped_count == 0
             assert second.exhausted is True
             assert second.next_cursor is None
+            assert second.import_run_id == first.import_run_id
 
             third = service.import_directory(
                 provider_name="mock",
@@ -81,6 +87,8 @@ def test_real_player_import_is_resumable_and_idempotent() -> None:
             assert third.updated_count == 0
             assert third.skipped_count == 4
             assert third.exhausted is True
+            assert third.import_run_id is not None
+            assert third.import_run_id != first.import_run_id
 
             staged_count = session.scalar(
                 select(func.count()).select_from(RealPlayerImportStagingRecord).where(
@@ -101,6 +109,29 @@ def test_real_player_import_is_resumable_and_idempotent() -> None:
                 "p-saka",
             }
             assert all(record.import_state == "staged" for record in records)
+            assert all(record.processing_state == RealPlayerImportProcessingState.PENDING.value for record in records)
+            assert all(record.normalized_name for record in records)
+
+            import_runs = list(
+                session.scalars(
+                    select(RealPlayerImportRun).order_by(RealPlayerImportRun.started_at.asc())
+                )
+            )
+            assert len(import_runs) == 2
+            assert import_runs[0].id == first.import_run_id
+            assert import_runs[0].status == "completed"
+            assert import_runs[0].configured_batch_size == 2
+            assert import_runs[0].total_rows_discovered == 4
+            assert import_runs[0].processed_rows == 4
+            assert import_runs[0].inserted_rows == 4
+            assert import_runs[0].duplicate_skipped_rows == 0
+            assert import_runs[0].last_successful_batch_marker == "page:2"
+            assert import_runs[0].resume_cursor is None
+            assert import_runs[1].id == third.import_run_id
+            assert import_runs[1].status == "completed"
+            assert import_runs[1].total_rows_discovered == 4
+            assert import_runs[1].inserted_rows == 0
+            assert import_runs[1].duplicate_skipped_rows == 4
 
             status = service.get_status(
                 provider_name="mock",
