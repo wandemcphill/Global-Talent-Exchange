@@ -18,7 +18,9 @@ import app.models.real_player_reference_mapping  # noqa: F401
 import app.models.real_player_source_link  # noqa: F401
 import app.players.read_models  # noqa: F401
 import app.value_engine.read_models  # noqa: F401
+from app.core.config import load_settings
 from app.ingestion.models import Player, ProviderSyncRun
+from app.ingestion.real_player_footballsquads_canonical_backfill import FootballsquadsCanonicalBackfillService
 from app.ingestion.real_player_import_models import RealPlayerImportStagingRecord
 from app.ingestion.real_player_import_repository import RealPlayerImportRepository
 from app.ingestion.real_player_import_validation import RealPlayerImportValidationService
@@ -328,6 +330,112 @@ def _seed_validation_batch(session) -> RealPlayerImportBatch:
     return batch
 
 
+def _seed_footballsquads_validation_batch(
+    session,
+    *,
+    as_of: datetime,
+    club_reason_code: str = "club_not_found",
+    competition_reason_code: str = "competition_not_found",
+) -> RealPlayerImportBatch:
+    batch = RealPlayerImportBatch(
+        batch_key="phase-a-footballsquads-validation",
+        provider_name="footballsquads",
+        provider_job_key="job-footballsquads-001",
+        source_type="provider_feed",
+        mode="batch_import",
+        status="completed_with_errors",
+        submitted_row_count=1,
+        normalized_row_count=1,
+        failed_row_count=1,
+        authoritative_snapshot_count=0,
+    )
+    session.add(batch)
+    session.flush()
+    session.add(
+        RealPlayerImportRow(
+            id="row-footballsquads-1",
+            batch_id=batch.id,
+            row_number=1,
+            source_name="footballsquads",
+            source_player_key="engprem-2023-2024-arsenal-aaron-ramsdale-1998-05-14",
+            canonical_name="Aaron Ramsdale",
+            status="failed",
+            match_action=None,
+            import_action=None,
+            identity_confidence_score=None,
+            gtex_player_id=None,
+            source_link_id=None,
+            real_player_profile_id=None,
+            authoritative_snapshot_id=None,
+            normalized_full_name="aaron ramsdale",
+            normalized_display_name="aaron ramsdale",
+            exact_identity_key=None,
+            name_birthyear_club_key=None,
+            name_birthyear_nationality_key=None,
+            nationality_code="GB",
+            normalized_nationality="england",
+            primary_position_key="goalkeeper",
+            club_reference_key="arsenal",
+            league_reference_key="english-premier-league-2023-2024",
+            raw_payload_json={
+                "canonical_name": "Aaron Ramsdale",
+                "current_real_world_club": "Arsenal",
+                "current_real_world_club_key": "engprem:arsenal",
+                "current_real_world_league": "English Premier League 2023/2024",
+                "current_real_world_league_key": "engprem-2023-2024",
+            },
+            normalized_payload_json={},
+            import_metadata_json={"ingestion_batch_id": batch.batch_key},
+            validation_errors_json=["unresolved canonical references"],
+            audit_findings_json=[],
+        )
+    )
+    session.add_all(
+        [
+            RealPlayerUnresolvedReference(
+                id="unresolved-footballsquads-club",
+                source_name="footballsquads",
+                entity_type="club",
+                provider_reference_key="engprem-arsenal",
+                provider_external_id="engprem:arsenal",
+                raw_label="Arsenal",
+                normalized_label="arsenal",
+                reason_code=club_reason_code,
+                status="open",
+                occurrence_count=1,
+                first_seen_at=as_of,
+                last_seen_at=as_of,
+                sample_payload_json={},
+                metadata_json={},
+            ),
+            RealPlayerUnresolvedReference(
+                id="unresolved-footballsquads-competition",
+                source_name="footballsquads",
+                entity_type="competition",
+                provider_reference_key="engprem-2023-2024",
+                provider_external_id="engprem-2023-2024",
+                raw_label="English Premier League 2023/2024",
+                normalized_label="english premier league 2023/2024",
+                reason_code=competition_reason_code,
+                status="open",
+                occurrence_count=1,
+                first_seen_at=as_of,
+                last_seen_at=as_of,
+                sample_payload_json={},
+                metadata_json={},
+            ),
+        ]
+    )
+    session.commit()
+    return batch
+
+
+def _footballsquads_backfill_service() -> FootballsquadsCanonicalBackfillService:
+    return FootballsquadsCanonicalBackfillService(
+        settings=load_settings(environ={"DATABASE_URL": "sqlite+pysqlite:///:memory:"})
+    )
+
+
 def test_real_player_import_repository_is_idempotent_for_identical_payloads() -> None:
     engine, factory = _session_factory()
     try:
@@ -456,6 +564,14 @@ def test_validation_service_summarizes_duplicate_mapping_and_valuation_gaps() ->
         assert report.unique_player_count == 2
         assert report.rows_by_status == {"failed": 1, "imported": 2}
         assert report.verdict == "fail"
+        assert report.resolved_canonical_mapping_count == 0
+        assert report.unresolved_count == 2
+        assert report.tracked_count == 2
+        assert report.missing_mapping_record_count == 0
+        assert report.unresolved_reference_categories == {
+            "club:tracked:club_not_mapped": 1,
+            "competition:tracked:competition_not_mapped": 1,
+        }
 
         assert len(report.duplicate_candidates) == 2
         assert report.duplicate_candidates[0].identity_key == "victor_osimhen_1998_ng"
@@ -492,96 +608,7 @@ def test_validation_service_matches_provider_keyed_unresolved_references() -> No
     as_of = datetime(2026, 3, 23, 12, 0, tzinfo=UTC)
     try:
         with factory() as session:
-            batch = RealPlayerImportBatch(
-                batch_key="phase-a-footballsquads-validation",
-                provider_name="footballsquads",
-                provider_job_key="job-footballsquads-001",
-                source_type="provider_feed",
-                mode="batch_import",
-                status="completed_with_errors",
-                submitted_row_count=1,
-                normalized_row_count=1,
-                failed_row_count=1,
-                authoritative_snapshot_count=0,
-            )
-            session.add(batch)
-            session.flush()
-            session.add(
-                RealPlayerImportRow(
-                    id="row-footballsquads-1",
-                    batch_id=batch.id,
-                    row_number=1,
-                    source_name="footballsquads",
-                    source_player_key="engprem-2023-2024-arsenal-aaron-ramsdale-1998-05-14",
-                    canonical_name="Aaron Ramsdale",
-                    status="failed",
-                    match_action=None,
-                    import_action=None,
-                    identity_confidence_score=None,
-                    gtex_player_id=None,
-                    source_link_id=None,
-                    real_player_profile_id=None,
-                    authoritative_snapshot_id=None,
-                    normalized_full_name="aaron ramsdale",
-                    normalized_display_name="aaron ramsdale",
-                    exact_identity_key=None,
-                    name_birthyear_club_key=None,
-                    name_birthyear_nationality_key=None,
-                    nationality_code="GB",
-                    normalized_nationality="england",
-                    primary_position_key="goalkeeper",
-                    club_reference_key="arsenal",
-                    league_reference_key="english-premier-league-2023-2024",
-                    raw_payload_json={
-                        "canonical_name": "Aaron Ramsdale",
-                        "current_real_world_club": "Arsenal",
-                        "current_real_world_club_key": "engprem:arsenal",
-                        "current_real_world_league": "English Premier League 2023/2024",
-                        "current_real_world_league_key": "engprem-2023-2024",
-                    },
-                    normalized_payload_json={},
-                    import_metadata_json={"ingestion_batch_id": batch.batch_key},
-                    validation_errors_json=["unresolved canonical references"],
-                    audit_findings_json=[],
-                )
-            )
-            session.add_all(
-                [
-                    RealPlayerUnresolvedReference(
-                        id="unresolved-footballsquads-club",
-                        source_name="footballsquads",
-                        entity_type="club",
-                        provider_reference_key="engprem-arsenal",
-                        provider_external_id="engprem:arsenal",
-                        raw_label="Arsenal",
-                        normalized_label="arsenal",
-                        reason_code="club_not_found",
-                        status="open",
-                        occurrence_count=1,
-                        first_seen_at=as_of,
-                        last_seen_at=as_of,
-                        sample_payload_json={},
-                        metadata_json={},
-                    ),
-                    RealPlayerUnresolvedReference(
-                        id="unresolved-footballsquads-competition",
-                        source_name="footballsquads",
-                        entity_type="competition",
-                        provider_reference_key="engprem-2023-2024",
-                        provider_external_id="engprem-2023-2024",
-                        raw_label="English Premier League 2023/2024",
-                        normalized_label="english premier league 2023/2024",
-                        reason_code="competition_not_found",
-                        status="open",
-                        occurrence_count=1,
-                        first_seen_at=as_of,
-                        last_seen_at=as_of,
-                        sample_payload_json={},
-                        metadata_json={},
-                    ),
-                ]
-            )
-            session.commit()
+            batch = _seed_footballsquads_validation_batch(session, as_of=as_of)
 
         report = RealPlayerImportValidationService(session_factory=factory).run(batch_key=batch.batch_key)
 
@@ -596,7 +623,90 @@ def test_validation_service_matches_provider_keyed_unresolved_references() -> No
                 "english-premier-league-2023-2024",
             ): ("competition_not_found", "tracked", "English Premier League 2023/2024"),
         }
+        assert report.resolved_canonical_mapping_count == 0
+        assert report.unresolved_count == 2
+        assert report.tracked_count == 2
+        assert report.missing_mapping_record_count == 0
+        assert report.unresolved_reference_categories == {
+            "club:tracked:club_not_found": 1,
+            "competition:tracked:competition_not_found": 1,
+        }
         assert all(item.state == "tracked" for item in report.unresolved_references)
+    finally:
+        engine.dispose()
+
+
+def test_validation_service_moves_resolved_references_out_of_unresolved_counts_after_footballsquads_backfill() -> None:
+    engine, factory = _session_factory()
+    as_of = datetime(2026, 3, 23, 12, 0, tzinfo=UTC)
+    try:
+        with factory() as session:
+            batch = _seed_footballsquads_validation_batch(session, as_of=as_of)
+
+        with factory() as session:
+            backfill_report = _footballsquads_backfill_service().run(session, as_of=as_of)
+            session.commit()
+
+        report = RealPlayerImportValidationService(session_factory=factory).run(batch_key=batch.batch_key)
+
+        assert backfill_report.resolved_count == 2
+        assert backfill_report.remaining_unresolved_count == 0
+        assert backfill_report.resolved_counts_by_entity_type == {"club": 1, "competition": 1}
+        assert backfill_report.remaining_unresolved_categories == {}
+        assert report.resolved_canonical_mapping_count == 2
+        assert report.unresolved_count == 0
+        assert report.tracked_count == 0
+        assert report.missing_mapping_record_count == 0
+        assert report.unresolved_reference_categories == {}
+        assert report.unresolved_references == ()
+
+        with factory() as session:
+            unresolved_statuses = {
+                (row.entity_type, row.provider_reference_key): row.status
+                for row in session.scalars(
+                    select(RealPlayerUnresolvedReference).order_by(
+                        RealPlayerUnresolvedReference.entity_type.asc(),
+                        RealPlayerUnresolvedReference.provider_reference_key.asc(),
+                    )
+                )
+            }
+        assert unresolved_statuses == {
+            ("club", "engprem-arsenal"): "resolved",
+            ("competition", "engprem-2023-2024"): "resolved",
+        }
+    finally:
+        engine.dispose()
+
+
+def test_validation_service_keeps_ambiguous_unresolved_references_tracked() -> None:
+    engine, factory = _session_factory()
+    as_of = datetime(2026, 3, 23, 12, 0, tzinfo=UTC)
+    try:
+        with factory() as session:
+            batch = _seed_footballsquads_validation_batch(
+                session,
+                as_of=as_of,
+                club_reason_code="ambiguous_club_match",
+                competition_reason_code="ambiguous_competition_match",
+            )
+
+        report = RealPlayerImportValidationService(session_factory=factory).run(batch_key=batch.batch_key)
+
+        assert report.resolved_canonical_mapping_count == 0
+        assert report.unresolved_count == 2
+        assert report.tracked_count == 2
+        assert report.missing_mapping_record_count == 0
+        assert report.unresolved_reference_categories == {
+            "club:tracked:ambiguous_club_match": 1,
+            "competition:tracked:ambiguous_competition_match": 1,
+        }
+        assert {
+            (item.entity_type, item.reason_code, item.state)
+            for item in report.unresolved_references
+        } == {
+            ("club", "ambiguous_club_match", "tracked"),
+            ("competition", "ambiguous_competition_match", "tracked"),
+        }
     finally:
         engine.dispose()
 
@@ -626,4 +736,6 @@ def test_validation_cli_emits_json_and_nonzero_exit_code_for_gaps(tmp_path: Path
     assert exit_code == 2
     assert '"batch_key": "phase-a-batch-001"' in rendered
     assert '"verdict": "fail"' in rendered
+    assert '"tracked_count": 2' in rendered
+    assert '"missing_mapping_record_count": 0' in rendered
     assert '"rows_with_persisted_snapshot": 1' in rendered
