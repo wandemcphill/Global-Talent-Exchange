@@ -359,7 +359,7 @@ class RealPlayerIdentityAuditService:
                 required_action="Merge or relink duplicate canonical identities sharing the same normalized name and DOB.",
             )
             for (name_key, dob), group_rows in groups.items()
-            if len(group_rows) > 1
+            if _rows_span_multiple_players(group_rows)
         ]
 
     def _duplicate_name_nat_club_findings(self, rows: Sequence[AuditedRealPlayerRow | _PayloadAuditRow]) -> list[RealPlayerAuditFinding]:
@@ -380,7 +380,7 @@ class RealPlayerIdentityAuditService:
                 required_action="Resolve duplicate canonical identities sharing the same normalized fallback identity key.",
             )
             for group_key, group_rows in groups.items()
-            if len(group_rows) > 1
+            if _rows_span_multiple_players(group_rows)
         ]
 
     def _normalization_collision_findings(self, rows: Sequence[AuditedRealPlayerRow | _PayloadAuditRow]) -> list[RealPlayerAuditFinding]:
@@ -392,6 +392,8 @@ class RealPlayerIdentityAuditService:
                 name_groups[normalized_name].append(row)
         for normalized_name, group_rows in name_groups.items():
             if len(group_rows) < 2:
+                continue
+            if not _rows_span_multiple_players(group_rows):
                 continue
             if not _has_related_name_pair(group_rows):
                 continue
@@ -443,15 +445,23 @@ class RealPlayerIdentityAuditService:
         for player_id, source_links in groups.items():
             if len(source_links) <= 1:
                 continue
-            findings.append(
-                RealPlayerAuditFinding(
-                    finding_type="multiple_external_identities_per_gtex_identity",
-                    normalized_key=player_id,
-                    gtex_player_ids=(player_id,),
-                    source_keys=tuple(sorted(f"{source_link.source_name}:{source_link.source_player_key}" for source_link in source_links)),
-                    required_action="Review whether multiple external identities were linked to one GTEX player incorrectly.",
+            source_name_groups: dict[str, list[RealPlayerSourceLink]] = defaultdict(list)
+            for source_link in source_links:
+                source_name_groups[source_link.source_name].append(source_link)
+            for source_name, colliding_links in source_name_groups.items():
+                if len(colliding_links) <= 1:
+                    continue
+                findings.append(
+                    RealPlayerAuditFinding(
+                        finding_type="multiple_external_identities_per_gtex_identity",
+                        normalized_key=f"{player_id}:{source_name}",
+                        gtex_player_ids=(player_id,),
+                        source_keys=tuple(
+                            sorted(f"{source_link.source_name}:{source_link.source_player_key}" for source_link in colliding_links)
+                        ),
+                        required_action="Review whether multiple external identities were linked to one GTEX player incorrectly.",
+                    )
                 )
-            )
         return findings
 
     def _pricing_findings(self, rows: Sequence[AuditedRealPlayerRow]) -> list[RealPlayerAuditFinding]:
@@ -579,6 +589,17 @@ def _summary_pricing_snapshot_id(summary: PlayerSummaryReadModel | None) -> str 
         return None
     value = real_player_profile.get("pricing_snapshot_id")
     return str(value) if value else None
+
+
+def _rows_span_multiple_players(rows: Sequence[AuditedRealPlayerRow | _PayloadAuditRow]) -> bool:
+    player_ids = {
+        row.gtex_player_id
+        for row in rows
+        if isinstance(row, AuditedRealPlayerRow)
+    }
+    if player_ids:
+        return len(player_ids) > 1
+    return len(rows) > 1
 
 
 def _has_related_name_pair(rows: Sequence[AuditedRealPlayerRow | _PayloadAuditRow]) -> bool:
