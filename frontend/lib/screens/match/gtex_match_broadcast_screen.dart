@@ -57,7 +57,7 @@ class GtexMatchBroadcastScreen extends StatefulWidget {
 }
 
 class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late Future<MatchViewState> _viewStateFuture;
   GtexMatchBroadcastController? _controller;
   Ticker? _ticker;
@@ -67,15 +67,39 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
   void initState() {
     super.initState();
     _viewStateFuture = _load();
+    WidgetsBinding.instance.addObserver(this);
     _ticker = createTicker(_onTick);
   }
 
   @override
+  void didUpdateWidget(covariant GtexMatchBroadcastScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_sourceConfigChanged(oldWidget)) {
+      _reloadViewState();
+      return;
+    }
+    if (_controllerConfigChanged(oldWidget)) {
+      _disposeController();
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.dispose();
-    _controller?.removeListener(_handleControllerChanged);
-    _controller?.dispose();
+    _disposeController();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncTicker();
+      return;
+    }
+    _ticker?.stop();
+    _lastTickElapsed = null;
   }
 
   Future<MatchViewState> _load() {
@@ -118,6 +142,8 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
   void _syncTicker() {
     final GtexMatchBroadcastController? controller = _controller;
     if (controller == null) {
+      _ticker?.stop();
+      _lastTickElapsed = null;
       return;
     }
     final bool shouldTick = !controller.isPaused && !controller.isFullTime;
@@ -132,11 +158,11 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
 
   GtexMatchBroadcastController _ensureController(MatchViewState viewState) {
     final GtexMatchBroadcastController? existing = _controller;
-    if (existing != null && existing.viewState.matchId == viewState.matchId) {
+    if (existing != null &&
+        _canReuseController(existing.viewState, viewState)) {
       return existing;
     }
-    existing?.removeListener(_handleControllerChanged);
-    existing?.dispose();
+    _disposeController();
     final GtexMatchBroadcastController created = GtexMatchBroadcastController(
       viewState: viewState,
       initialMode: widget.initialMode,
@@ -151,6 +177,55 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
     _controller = created;
     _syncTicker();
     return created;
+  }
+
+  void _disposeController() {
+    _controller?.removeListener(_handleControllerChanged);
+    _controller?.dispose();
+    _controller = null;
+    _ticker?.stop();
+    _lastTickElapsed = null;
+  }
+
+  void _reloadViewState() {
+    _disposeController();
+    setState(() {
+      _viewStateFuture = _load();
+    });
+  }
+
+  bool _sourceConfigChanged(GtexMatchBroadcastScreen oldWidget) {
+    return oldWidget.matchId != widget.matchId ||
+        oldWidget.competition != widget.competition ||
+        oldWidget.competitionId != widget.competitionId ||
+        oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
+        oldWidget.preferFallback != widget.preferFallback ||
+        oldWidget.viewStateLoader != widget.viewStateLoader;
+  }
+
+  bool _controllerConfigChanged(GtexMatchBroadcastScreen oldWidget) {
+    return oldWidget.initialMode != widget.initialMode ||
+        oldWidget.viewType != widget.viewType ||
+        oldWidget.isPremiumUser != widget.isPremiumUser ||
+        oldWidget.spectatorMode != widget.spectatorMode ||
+        oldWidget.auto3DEnabled != widget.auto3DEnabled ||
+        oldWidget.entitlement != widget.entitlement;
+  }
+
+  bool _canReuseController(MatchViewState current, MatchViewState next) {
+    if (current.matchId != next.matchId ||
+        current.durationSeconds != next.durationSeconds ||
+        current.frames.length != next.frames.length ||
+        current.events.length != next.events.length ||
+        current.segmentEndSeconds != next.segmentEndSeconds ||
+        current.nextSegmentToken != next.nextSegmentToken) {
+      return false;
+    }
+    if (current.frames.isEmpty || next.frames.isEmpty) {
+      return false;
+    }
+    return current.lastFrame.id == next.lastFrame.id &&
+        current.lastFrame.timeSeconds == next.lastFrame.timeSeconds;
   }
 
   void _showGiftSheet() {
@@ -199,44 +274,20 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
           );
         }
         if (snapshot.hasError || !snapshot.hasData) {
-          return Scaffold(
-            backgroundColor: const Color(0xFF08111B),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.white70,
-                      size: 40,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Unable to load the broadcast viewer.',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () {
-                        setState(() {
-                          _viewStateFuture = _load();
-                        });
-                      },
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          return _buildFailureScaffold(
+            context,
+            title: 'Unable to load the broadcast viewer.',
           );
         }
 
         final MatchViewState viewState = snapshot.data!;
+        if (viewState.frames.isEmpty) {
+          return _buildFailureScaffold(
+            context,
+            title: 'Broadcast timeline incomplete.',
+            message: 'The signed spectator feed did not include any frames.',
+          );
+        }
         final GtexMatchBroadcastController controller =
             _ensureController(viewState);
         final String matchTitle = widget.titleOverride ??
@@ -292,6 +343,54 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFailureScaffold(
+    BuildContext context, {
+    required String title,
+    String? message,
+  }) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF08111B),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.white70,
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              if (message != null) ...<Widget>[
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                ),
+              ],
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _reloadViewState,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

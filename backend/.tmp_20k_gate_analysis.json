@@ -1,0 +1,295 @@
+{
+  "source_row_count": 37579,
+  "eligible_row_count": 13694,
+  "selected_player_count": 13694,
+  "resolved_row_count": 10045,
+  "skipped_row_count": 3546,
+  "unresolved_row_count": 103,
+  "unresolved_reason_counts": [
+    [
+      "country_only:country_not_found",
+      103
+    ]
+  ],
+  "top_unresolved_countries": [
+    [
+      "Guinea-Bissau",
+      23
+    ],
+    [
+      "Burkina Faso",
+      20
+    ],
+    [
+      "Equatorial Guinea",
+      8
+    ],
+    [
+      "Togo",
+      8
+    ],
+    [
+      "Gabon",
+      7
+    ],
+    [
+      "Central African Republic",
+      5
+    ],
+    [
+      "Martinique",
+      5
+    ],
+    [
+      "Benin",
+      5
+    ],
+    [
+      "Madagascar",
+      5
+    ],
+    [
+      "Syria",
+      4
+    ],
+    [
+      "Sierra Leone",
+      4
+    ],
+    [
+      "Tanzania",
+      3
+    ],
+    [
+      "French Guiana",
+      2
+    ],
+    [
+      "Mauritius",
+      1
+    ],
+    [
+      "Antigua and Barbuda",
+      1
+    ],
+    [
+      "Sao Tome and Principe",
+      1
+    ],
+    [
+      "Turkmenistan",
+      1
+    ]
+  ],
+  "top_unresolved_clubs": [],
+  "top_unresolved_competitions": [
+    [
+      "ligue-1",
+      24
+    ],
+    [
+      "jupiler-pro-league",
+      15
+    ],
+    [
+      "liga-portugal-bwin",
+      13
+    ],
+    [
+      "super-lig",
+      11
+    ],
+    [
+      "superligaen",
+      7
+    ],
+    [
+      "premier-liga",
+      6
+    ],
+    [
+      "bundesliga",
+      5
+    ],
+    [
+      "serie-a",
+      5
+    ],
+    [
+      "scottish-premiership",
+      5
+    ],
+    [
+      "premier-league",
+      4
+    ],
+    [
+      "laliga",
+      4
+    ],
+    [
+      "super-league-1",
+      2
+    ],
+    [
+      "eredivisie",
+      2
+    ]
+  ],
+  "unresolved_examples": {
+    "country_only:country_not_found": [
+      {
+        "player": "Pierre-Emerick Aubameyang",
+        "club": "Olympique de Marseille",
+        "country": "Gabon",
+        "competition": "ligue-1",
+        "country_reason": "country_not_found",
+        "club_reason": "resolved"
+      },
+      {
+        "player": "Geoffrey Lembet",
+        "club": "Stade Rennais Football Club",
+        "country": "Central African Republic",
+        "competition": "ligue-1",
+        "country_reason": "country_not_found",
+        "club_reason": "resolved"
+      },
+      {
+        "player": "Geoffrey Kondogbia",
+        "club": "Olympique de Marseille",
+        "country": "Central African Republic",
+        "competition": "ligue-1",
+        "country_reason": "country_not_found",
+        "club_reason": "resolved"
+      },
+      {
+        "player": "Bertrand Traor\u00e9",
+        "club": "Sunderland Association Football Club",
+        "country": "Burkina Faso",
+        "competition": "premier-league",
+        "country_reason": "country_not_found",
+        "club_reason": "resolved"
+      },
+      {
+        "player": "Lindsay Rose",
+        "club": "Aris Thessalonikis",
+        "country": "Mauritius",
+        "competition": "super-league-1",
+        "country_reason": "country_not_found",
+        "club_reason": "resolved"
+      }
+    ]
+  },
+  "skipped_reason_counts": [
+    [
+      "club:skipped:club_placeholder",
+      3512
+    ],
+    [
+      "club:skipped:missing_reference",
+      29
+    ]
+  ],
+  "top_skipped_countries": [],
+  "top_skipped_clubs": [
+    [
+      "Unattached",
+      3512
+    ],
+    [
+      "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043a\u043b\u0443\u0431 \"\u041b\u043e\u043a\u043e\u043c\u043e\u0442\u0438\u0432\" \u041c\u043e\u0441\u043a\u0432\u0430",
+      29
+    ]
+  ],
+  "top_skipped_competitions": [
+    [
+      "<missing>",
+      3512
+    ],
+    [
+      "premier-liga",
+      29
+    ]
+  ],
+  "skipped_examples": {
+    "club:skipped:club_placeholder": [
+      {
+        "player": "Lionel Messi",
+        "club": "Unattached",
+        "country": "Argentina",
+        "competition": null
+      },
+      {
+        "player": "Guillermo Ochoa",
+        "club": "Unattached",
+        "country": "Mexico",
+        "competition": null
+      },
+      {
+        "player": "Turki Al-Ammar",
+        "club": "Unattached",
+        "country": "Saudi Arabia",
+        "competition": null
+      },
+      {
+        "player": "Arturo Vidal",
+        "club": "Unattached",
+        "country": "Chile",
+        "competition": null
+      },
+      {
+        "player": "Kamil Grosicki",
+        "club": "Unattached",
+        "country": "Poland",
+        "competition": null
+      }
+    ],
+    "club:skipped:missing_reference": [
+      {
+        "player": "Cristian Ram\u00edrez",
+        "club": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043a\u043b\u0443\u0431 \"\u041b\u043e\u043a\u043e\u043c\u043e\u0442\u0438\u0432\" \u041c\u043e\u0441\u043a\u0432\u0430",
+        "country": "Ecuador",
+        "competition": "premier-liga"
+      },
+      {
+        "player": "Artem Timofeev",
+        "club": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043a\u043b\u0443\u0431 \"\u041b\u043e\u043a\u043e\u043c\u043e\u0442\u0438\u0432\" \u041c\u043e\u0441\u043a\u0432\u0430",
+        "country": "Russia",
+        "competition": "premier-liga"
+      },
+      {
+        "player": "Ilya Lantratov",
+        "club": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043a\u043b\u0443\u0431 \"\u041b\u043e\u043a\u043e\u043c\u043e\u0442\u0438\u0432\" \u041c\u043e\u0441\u043a\u0432\u0430",
+        "country": "Russia",
+        "competition": "premier-liga"
+      },
+      {
+        "player": "Anton Mitryushkin",
+        "club": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043a\u043b\u0443\u0431 \"\u041b\u043e\u043a\u043e\u043c\u043e\u0442\u0438\u0432\" \u041c\u043e\u0441\u043a\u0432\u0430",
+        "country": "Russia",
+        "competition": "premier-liga"
+      },
+      {
+        "player": "Zelimkhan Bakaev",
+        "club": "\u0424\u0443\u0442\u0431\u043e\u043b\u044c\u043d\u044b\u0439 \u043a\u043b\u0443\u0431 \"\u041b\u043e\u043a\u043e\u043c\u043e\u0442\u0438\u0432\" \u041c\u043e\u0441\u043a\u0432\u0430",
+        "country": "Russia",
+        "competition": "premier-liga"
+      }
+    ]
+  },
+  "build_error_counts": [
+    [
+      "build_error:height_cm:greater_than_equal",
+      5
+    ]
+  ],
+  "build_error_examples": {
+    "build_error:height_cm:greater_than_equal": [
+      "Connor Allan",
+      "Joe Westley",
+      "Adi Yona",
+      "Eugene Amankwah",
+      "Waliu Ojetoye"
+    ]
+  }
+}

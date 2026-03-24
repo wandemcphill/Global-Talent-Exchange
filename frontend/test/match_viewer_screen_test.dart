@@ -215,6 +215,7 @@ void main() {
           ),
           matchKey: 'broadcast-match-viewer',
           presentationMode: MatchViewerPresentationMode.broadcast,
+          entitlement: const Match3dUserEntitlement(isPremiumUser: true),
           viewStateLoader: () async => viewState,
         ),
       ),
@@ -226,6 +227,8 @@ void main() {
     expect(find.text('Live broadcast'), findsOneWidget);
     expect(find.text('0:00'), findsOneWidget);
     expect(find.text('--'), findsNWidgets(2));
+    expect(find.textContaining('Gift'), findsNothing);
+    expect(find.text('Pro Manager'), findsNothing);
 
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Match starting...'), findsOneWidget);
@@ -323,6 +326,66 @@ void main() {
     expect(presentation.pitchPresentation.panY.abs(), lessThanOrEqualTo(0.08));
   });
 
+  testWidgets('continuation retries once after a delayed chunk failure', (
+    WidgetTester tester,
+  ) async {
+    int continuationCalls = 0;
+    final MatchViewState initialState = _buildSegmentedReplayState(
+      durationSeconds: 1,
+      source: 'segment-1',
+      hasMoreSegments: true,
+      nextSegmentToken: 'segment-2-token',
+      finalPhase: MatchViewerPhase.openPlay,
+    );
+    final MatchViewState continuedState = _buildSegmentedReplayState(
+      durationSeconds: 2,
+      source: 'segment-2',
+      hasMoreSegments: false,
+      nextSegmentToken: null,
+      finalPhase: MatchViewerPhase.fulltime,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: _buildCompetition(id: 'continued-replay'),
+          matchKey: 'continued-replay',
+          renderMode: RenderMode.twoD,
+          viewStateLoader: () async => initialState,
+          continuationLoader: ({
+            required String matchKey,
+            required String continuationToken,
+          }) async {
+            continuationCalls += 1;
+            if (continuationCalls == 1) {
+              throw StateError('temporary continuation failure');
+            }
+            return continuedState;
+          },
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 64));
+    await _pumpUntilVisible(tester, find.textContaining('Duration: 1s'));
+
+    await tester.pump(const Duration(milliseconds: 1200));
+    expect(continuationCalls, 1);
+    expect(find.text('Segment delayed. Retrying playback...'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump();
+
+    expect(continuationCalls, 2);
+    expect(find.textContaining('Duration: 2s'), findsOneWidget);
+    expect(find.text('Segment delayed. Retrying playback...'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets('viewer remains stable across back-to-back replay loads',
       (WidgetTester tester) async {
     final CompetitionSummary firstCompetition = _buildCompetition(
@@ -331,6 +394,16 @@ void main() {
     final CompetitionSummary secondCompetition = _buildCompetition(
       id: 'match-viewer-second',
     );
+    final LiveMatchSnapshot firstSnapshot = _snapshotWithTeams(
+      competition: firstCompetition,
+      homeTeam: 'Alpha',
+      awayTeam: 'Beta',
+    );
+    final LiveMatchSnapshot secondSnapshot = _snapshotWithTeams(
+      competition: secondCompetition,
+      homeTeam: 'Gamma',
+      awayTeam: 'Delta',
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -338,7 +411,7 @@ void main() {
         home: GtexMatchViewerScreen(
           competition: firstCompetition,
           matchKey: firstCompetition.id,
-          fallbackSnapshot: LiveMatchFixtures.buildSnapshot(firstCompetition),
+          fallbackSnapshot: firstSnapshot,
           preferFallback: true,
           renderMode: RenderMode.twoD,
         ),
@@ -347,6 +420,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 48));
     await _pumpUntilVisible(tester, find.text('Replay lane'));
+    expect(find.text('ALP'), findsOneWidget);
+    expect(find.text('BET'), findsOneWidget);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -354,7 +429,7 @@ void main() {
         home: GtexMatchViewerScreen(
           competition: secondCompetition,
           matchKey: secondCompetition.id,
-          fallbackSnapshot: LiveMatchFixtures.buildSnapshot(secondCompetition),
+          fallbackSnapshot: secondSnapshot,
           preferFallback: true,
           renderMode: RenderMode.twoD,
         ),
@@ -365,6 +440,9 @@ void main() {
 
     expect(find.text('2D Match Viewer'), findsOneWidget);
     await _pumpUntilVisible(tester, find.text('Replay lane'));
+    expect(find.text('GAM'), findsOneWidget);
+    expect(find.text('DEL'), findsOneWidget);
+    expect(find.text('ALP'), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
@@ -414,6 +492,127 @@ CompetitionSummary _buildCompetition({
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 2),
+  );
+}
+
+LiveMatchSnapshot _snapshotWithTeams({
+  required CompetitionSummary competition,
+  required String homeTeam,
+  required String awayTeam,
+}) {
+  final LiveMatchSnapshot base = LiveMatchFixtures.buildSnapshot(competition);
+  return LiveMatchSnapshot(
+    matchId: base.matchId,
+    halftimeAnalyticsAvailable: base.halftimeAnalyticsAvailable,
+    highlightsAvailable: base.highlightsAvailable,
+    keyMomentsAvailable: base.keyMomentsAvailable,
+    homeTeam: homeTeam,
+    awayTeam: awayTeam,
+    homeScore: base.homeScore,
+    awayScore: base.awayScore,
+    minute: base.minute,
+    phase: base.phase,
+    momentum: base.momentum,
+    commentary: base.commentary,
+    homeLineup: base.homeLineup,
+    awayLineup: base.awayLineup,
+    substitutions: base.substitutions,
+    cards: base.cards,
+    tacticalSuggestions: base.tacticalSuggestions,
+    keyMoments: base.keyMoments,
+    highlights: base.highlights,
+    standardHighlightExpiresAt: base.standardHighlightExpiresAt,
+    premiumHighlightExpiresAt: base.premiumHighlightExpiresAt,
+  );
+}
+
+MatchViewState _buildSegmentedReplayState({
+  required int durationSeconds,
+  required String source,
+  required bool hasMoreSegments,
+  required String? nextSegmentToken,
+  required MatchViewerPhase finalPhase,
+}) {
+  return MatchViewState(
+    matchId: 'continued-replay',
+    source: source,
+    supportsOffside: true,
+    durationSeconds: durationSeconds,
+    homeTeam: _buildTeam(
+      teamId: 'home',
+      name: 'Northbridge',
+      shortName: 'NOR',
+      side: MatchViewerSide.home,
+    ),
+    awayTeam: _buildTeam(
+      teamId: 'away',
+      name: 'Southfield',
+      shortName: 'SOU',
+      side: MatchViewerSide.away,
+    ),
+    events: <MatchEvent>[
+      const MatchEvent(
+        id: 'kickoff',
+        sequence: 0,
+        type: MatchViewerEventType.kickoff,
+        minute: 0,
+        addedTime: 0,
+        clockLabel: '0\'',
+        timeSeconds: 0,
+        homeScore: 0,
+        awayScore: 0,
+        bannerText: 'Kickoff',
+        commentary: 'The match is underway.',
+        emphasisLevel: 1,
+        highlightedPlayerIds: <String>[],
+        flags: <String>[],
+      ),
+      MatchEvent(
+        id: 'segment-marker-$source',
+        sequence: 1,
+        type: MatchViewerEventType.attack,
+        minute: durationSeconds * 10,
+        addedTime: 0,
+        clockLabel: "${durationSeconds * 10}'",
+        timeSeconds: math.max(0.55, durationSeconds - 0.15).toDouble(),
+        homeScore: 0,
+        awayScore: 0,
+        bannerText: 'Segment marker',
+        commentary: 'Marker for $source',
+        emphasisLevel: 1,
+        highlightedPlayerIds: const <String>[],
+        flags: const <String>[],
+      ),
+    ],
+    frames: <MatchTimelineFrame>[
+      _buildFrame(
+        id: '$source-frame-0',
+        timeSeconds: 0,
+        clockMinute: 0,
+        phase: MatchViewerPhase.kickoff,
+        homeScore: 0,
+        awayScore: 0,
+        homeShiftX: 0,
+        awayShiftX: 0,
+        ball: const MatchViewerPoint(x: 50, y: 50),
+        activeEventId: 'kickoff',
+      ),
+      _buildFrame(
+        id: '$source-frame-end',
+        timeSeconds: durationSeconds.toDouble(),
+        clockMinute: durationSeconds * 10,
+        phase: finalPhase,
+        homeScore: 0,
+        awayScore: 0,
+        homeShiftX: 3,
+        awayShiftX: -3,
+        ball: const MatchViewerPoint(x: 62, y: 44),
+        activeEventId: 'segment-marker-$source',
+      ),
+    ],
+    hasMoreSegments: hasMoreSegments,
+    nextSegmentToken: nextSegmentToken,
+    segmentEndSeconds: durationSeconds,
   );
 }
 

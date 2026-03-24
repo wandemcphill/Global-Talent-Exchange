@@ -24,6 +24,10 @@ import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prom
 import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
 
 typedef MatchViewStateLoader = Future<MatchViewState> Function();
+typedef MatchViewContinuationLoader = Future<MatchViewState> Function({
+  required String matchKey,
+  required String continuationToken,
+});
 
 class GtexMatchViewerScreen extends StatefulWidget {
   const GtexMatchViewerScreen({
@@ -34,6 +38,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.preferFallback = false,
     this.presentationMode = MatchViewerPresentationMode.replay,
     this.viewStateLoader,
+    this.continuationLoader,
     this.renderMode = RenderMode.twoD,
     this.isSpectator = false,
     this.isMajorMatch = false,
@@ -50,6 +55,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final bool preferFallback;
   final MatchViewerPresentationMode presentationMode;
   final MatchViewStateLoader? viewStateLoader;
+  final MatchViewContinuationLoader? continuationLoader;
   final RenderMode renderMode;
   final bool isSpectator;
   final bool isMajorMatch;
@@ -64,7 +70,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
 }
 
 class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const Duration _overlayBurstWindow = Duration(seconds: 10);
   static const int _maxRenderedOverlayBurstsPerWindow = 3;
 
@@ -81,17 +87,30 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   bool _performanceSafe = true;
   bool _performanceNoticeShown = false;
   bool _loadingContinuation = false;
+  bool _continuationRetryScheduled = false;
+  bool _continuationNeedsUserRetry = false;
   bool _spectatorReactionsMuted = false;
+  bool _resumePlaybackOnAppResume = false;
   int _overlayBurstOverflowCount = 0;
   double? _pendingResumePositionSeconds;
+  Timer? _continuationRetryTimer;
+  String? _pendingContinuationToken;
+  double? _pendingContinuationResumeSeconds;
 
   bool get _broadcastMode =>
       widget.presentationMode == MatchViewerPresentationMode.broadcast;
+
+  bool get _canLoadContinuation =>
+      widget.continuationLoader != null || widget.viewStateLoader == null;
+
+  MatchViewContinuationLoader get _continuationLoader =>
+      widget.continuationLoader ?? MatchViewerMapper.loadContinuation;
 
   @override
   void initState() {
     super.initState();
     _viewStateFuture = _load();
+    WidgetsBinding.instance.addObserver(this);
     _ownsMonetization = widget.monetizationService == null;
     _monetization = widget.monetizationService ??
         Match3dMonetizationService(
@@ -106,6 +125,9 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   @override
   void didUpdateWidget(covariant GtexMatchViewerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_sourceConfigChanged(oldWidget)) {
+      _reload();
+    }
     if (_ownsMonetization) {
       if (oldWidget.entitlement != widget.entitlement) {
         _monetization.updateEntitlement(widget.entitlement);
@@ -118,14 +140,35 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_handleFrameTimings);
     _cancelOverlayTimers();
+    _cancelContinuationRetry();
     _controller?.removeListener(_handleControllerTick);
     _controller?.dispose();
     if (_ownsMonetization) {
       _monetization.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final Match3dTimelineController? controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      if (_resumePlaybackOnAppResume) {
+        _resumePlaybackOnAppResume = false;
+        controller.play();
+      }
+      return;
+    }
+    _resumePlaybackOnAppResume = controller.isPlaying;
+    if (_resumePlaybackOnAppResume) {
+      controller.pause();
+    }
   }
 
   Future<MatchViewState> _load() {
@@ -145,17 +188,30 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     _controller?.dispose();
     _controller = null;
     _cancelOverlayTimers();
+    _cancelContinuationRetry();
     _overlayBursts.clear();
     _overlayBurstTimestamps.clear();
     _recentFrameSpans.clear();
     _performanceSafe = true;
     _performanceNoticeShown = false;
     _loadingContinuation = false;
+    _continuationRetryScheduled = false;
+    _continuationNeedsUserRetry = false;
     _overlayBurstOverflowCount = 0;
     _pendingResumePositionSeconds = null;
     setState(() {
       _viewStateFuture = _load();
     });
+  }
+
+  bool _sourceConfigChanged(GtexMatchViewerScreen oldWidget) {
+    return oldWidget.competition != widget.competition ||
+        oldWidget.matchKey != widget.matchKey ||
+        oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
+        oldWidget.preferFallback != widget.preferFallback ||
+        oldWidget.presentationMode != widget.presentationMode ||
+        oldWidget.viewStateLoader != widget.viewStateLoader ||
+        oldWidget.continuationLoader != widget.continuationLoader;
   }
 
   Match3dTimelineController _ensureController(MatchViewState viewState) {
@@ -329,7 +385,8 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     if (!mounted ||
         controller == null ||
         _loadingContinuation ||
-        widget.viewStateLoader != null) {
+        _continuationRetryScheduled ||
+        !_canLoadContinuation) {
       return;
     }
     final MatchViewState viewState = controller.viewState;
@@ -349,15 +406,22 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   Future<void> _requestContinuation({
     required String continuationToken,
     required double resumeFromSeconds,
+    bool allowAutoRetry = true,
   }) async {
     if (_loadingContinuation) {
       return;
     }
+    _continuationRetryTimer?.cancel();
+    _continuationRetryTimer = null;
     setState(() {
       _loadingContinuation = true;
+      _continuationRetryScheduled = false;
+      _continuationNeedsUserRetry = false;
+      _pendingContinuationToken = continuationToken;
+      _pendingContinuationResumeSeconds = resumeFromSeconds;
     });
     try {
-      final MatchViewState continued = await MatchViewerMapper.loadContinuation(
+      final MatchViewState continued = await _continuationLoader(
         matchKey: widget.matchKey,
         continuationToken: continuationToken,
       );
@@ -370,14 +434,33 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       setState(() {
         _pendingResumePositionSeconds = resumeFromSeconds;
         _loadingContinuation = false;
+        _pendingContinuationToken = null;
+        _pendingContinuationResumeSeconds = null;
         _viewStateFuture = Future<MatchViewState>.value(continued);
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
+      if (allowAutoRetry) {
+        setState(() {
+          _loadingContinuation = false;
+        });
+        _scheduleContinuationRetry(
+          continuationToken: continuationToken,
+          resumeFromSeconds: resumeFromSeconds,
+        );
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Next segment delayed. Retrying playback once.'),
+          ),
+        );
+        return;
+      }
       setState(() {
         _loadingContinuation = false;
+        _continuationRetryScheduled = false;
+        _continuationNeedsUserRetry = true;
       });
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(
@@ -385,6 +468,68 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
         ),
       );
     }
+  }
+
+  void _scheduleContinuationRetry({
+    required String continuationToken,
+    required double resumeFromSeconds,
+  }) {
+    _continuationRetryTimer?.cancel();
+    setState(() {
+      _continuationRetryScheduled = true;
+      _continuationNeedsUserRetry = false;
+      _pendingContinuationToken = continuationToken;
+      _pendingContinuationResumeSeconds = resumeFromSeconds;
+    });
+    _continuationRetryTimer = Timer(const Duration(seconds: 1), () {
+      _continuationRetryTimer = null;
+      if (!mounted) {
+        return;
+      }
+      final String? pendingToken = _pendingContinuationToken;
+      final double? pendingResumeSeconds = _pendingContinuationResumeSeconds;
+      if (pendingToken == null || pendingResumeSeconds == null) {
+        setState(() {
+          _continuationRetryScheduled = false;
+        });
+        return;
+      }
+      unawaited(
+        _requestContinuation(
+          continuationToken: pendingToken,
+          resumeFromSeconds: pendingResumeSeconds,
+          allowAutoRetry: false,
+        ),
+      );
+    });
+  }
+
+  void _cancelContinuationRetry() {
+    _continuationRetryTimer?.cancel();
+    _continuationRetryTimer = null;
+    _continuationRetryScheduled = false;
+    _continuationNeedsUserRetry = false;
+    _pendingContinuationToken = null;
+    _pendingContinuationResumeSeconds = null;
+  }
+
+  void _retryContinuationNow() {
+    final String? continuationToken = _pendingContinuationToken;
+    final double? resumeFromSeconds = _pendingContinuationResumeSeconds;
+    if (continuationToken == null ||
+        resumeFromSeconds == null ||
+        _loadingContinuation) {
+      return;
+    }
+    _continuationRetryTimer?.cancel();
+    _continuationRetryTimer = null;
+    unawaited(
+      _requestContinuation(
+        continuationToken: continuationToken,
+        resumeFromSeconds: resumeFromSeconds,
+        allowAutoRetry: false,
+      ),
+    );
   }
 
   Future<void> _openUpgradePrompt(
@@ -540,6 +685,22 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
             }
 
             final MatchViewState viewState = snapshot.data!;
+            if (viewState.frames.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: GteStatePanel(
+                  title: _broadcastMode
+                      ? 'Broadcast feed incomplete'
+                      : 'Replay data incomplete',
+                  message: _broadcastMode
+                      ? 'The signed spectator timeline did not include any playback frames.'
+                      : 'The replay timeline did not include any playback frames.',
+                  icon: Icons.warning_amber_outlined,
+                  actionLabel: 'Retry',
+                  onAction: _reload,
+                ),
+              );
+            }
             final Match3dTimelineController controller =
                 _ensureController(viewState);
             final Match3dMatchContext matchContext =
@@ -558,7 +719,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                   viewState: viewState,
                   controller: controller,
                 );
-                return _broadcastMode
+                final Widget viewer = _broadcastMode
                     ? _BroadcastViewer(
                         controller: controller,
                         viewState: viewState,
@@ -653,12 +814,55 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                         onSendReaction: (Match3dReaction reaction) =>
                             _handleSendReaction(reaction, matchContext),
                       );
+                final String? continuationStatus = _continuationStatusMessage();
+                if (continuationStatus == null) {
+                  return viewer;
+                }
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    viewer,
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: SafeArea(
+                        top: false,
+                        child: _ContinuationStatusBanner(
+                          message: continuationStatus,
+                          loading: _loadingContinuation ||
+                              _continuationRetryScheduled,
+                          actionLabel:
+                              _continuationNeedsUserRetry ? 'Retry now' : null,
+                          onAction: _continuationNeedsUserRetry
+                              ? _retryContinuationNow
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
               },
             );
           },
         ),
       ),
     );
+  }
+
+  String? _continuationStatusMessage() {
+    if (_loadingContinuation) {
+      return _broadcastMode
+          ? 'Loading the next signed broadcast segment...'
+          : 'Loading the next signed replay segment...';
+    }
+    if (_continuationRetryScheduled) {
+      return 'Segment delayed. Retrying playback...';
+    }
+    if (_continuationNeedsUserRetry) {
+      return 'Unable to load the next signed segment.';
+    }
+    return null;
   }
 }
 
@@ -827,6 +1031,7 @@ class _ReplayViewer extends StatelessWidget {
         final Widget footer = matchContext.isSpectator
             ? _SpectatorStatusBar(
                 reactionsMuted: spectatorReactionsMuted,
+                viewerOnly: false,
                 onToggleMute: onToggleSpectatorMute,
               )
             : _ControlBar(controller: controller);
@@ -987,12 +1192,6 @@ class _BroadcastViewer extends StatelessWidget {
                     cameraPreset: presentation.pitchPresentation.cameraPreset,
                   ),
                 ),
-                if (monetization.effectiveEntitlement.isPremiumUser)
-                  const Positioned(
-                    top: 84,
-                    right: 12,
-                    child: _PremiumStatusBadge(),
-                  ),
                 Positioned(
                   top: compactHeader ? 108 : 92,
                   left: 24,
@@ -1033,17 +1232,6 @@ class _BroadcastViewer extends StatelessWidget {
                     ),
                   ),
                 ),
-                Positioned.fill(
-                  child: GiftingOverlay(
-                    activeBursts:
-                        matchContext.isSpectator && spectatorReactionsMuted
-                            ? const <Match3dOverlayBurst>[]
-                            : overlayBursts,
-                    availableCoins: monetization.availableCoinBalance,
-                    onSendGift: onSendGift,
-                    onSendReaction: onSendReaction,
-                  ),
-                ),
               ],
             ),
           ),
@@ -1056,6 +1244,7 @@ class _BroadcastViewer extends StatelessWidget {
             Expanded(child: surface),
             _SpectatorStatusBar(
               reactionsMuted: spectatorReactionsMuted,
+              viewerOnly: true,
               onToggleMute: onToggleSpectatorMute,
             ),
           ],
@@ -1098,29 +1287,6 @@ class _RenderSurface extends StatelessWidget {
         frame: controller.displayFrame,
         showFormationOverlay: !broadcastMode,
         presentation: presentation,
-      ),
-    );
-  }
-}
-
-class _PremiumStatusBadge extends StatelessWidget {
-  const _PremiumStatusBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: const Color(0x1FFDB022),
-        border: Border.all(color: const Color(0x66FDB022)),
-      ),
-      child: const Text(
-        'Pro Manager',
-        style: TextStyle(
-          color: Color(0xFFFDB022),
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -1346,10 +1512,12 @@ class _ControlBar extends StatelessWidget {
 class _SpectatorStatusBar extends StatelessWidget {
   const _SpectatorStatusBar({
     required this.reactionsMuted,
+    required this.viewerOnly,
     required this.onToggleMute,
   });
 
   final bool reactionsMuted;
+  final bool viewerOnly;
   final VoidCallback onToggleMute;
 
   @override
@@ -1366,9 +1534,11 @@ class _SpectatorStatusBar extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            const Expanded(
+            Expanded(
               child: Text(
-                'Spectator mode keeps playback viewer-only while gifting and camera enhancements remain available.',
+                viewerOnly
+                    ? 'Broadcast mode stays presentation-only while reaction visibility can still be muted.'
+                    : 'Spectator mode keeps playback viewer-only while gifting and camera enhancements remain available.',
               ),
             ),
             const SizedBox(width: 12),
@@ -1378,6 +1548,76 @@ class _SpectatorStatusBar extends StatelessWidget {
               label:
                   Text(reactionsMuted ? 'Reactions muted' : 'Mute reactions'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContinuationStatusBanner extends StatelessWidget {
+  const _ContinuationStatusBanner({
+    required this.message,
+    required this.loading,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+  final bool loading;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: const Color(0xE6111E2B),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.20),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: <Widget>[
+            if (loading) ...<Widget>[
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+            ] else ...<Widget>[
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFFDB022),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...<Widget>[
+              const SizedBox(width: 12),
+              TextButton(
+                onPressed: onAction,
+                child: Text(actionLabel!),
+              ),
+            ],
           ],
         ),
       ),

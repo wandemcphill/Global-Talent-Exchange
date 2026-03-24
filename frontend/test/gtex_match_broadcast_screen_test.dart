@@ -188,6 +188,51 @@ void main() {
 
     expect(find.byType(GtexPseudo3DMatchCanvas), findsOneWidget);
   });
+
+  testWidgets('broadcast playback pauses while the app is backgrounded', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump(const Duration(milliseconds: 2600));
+
+    expect(
+      find.descendant(
+        of: find.byType(GtexEventOverlay),
+        matching: find.text('Chance'),
+      ),
+      findsNothing,
+    );
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 2600));
+
+    expect(
+      find.descendant(
+        of: find.byType(GtexEventOverlay),
+        matching: find.text('Chance'),
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget _host({required Widget child}) {
