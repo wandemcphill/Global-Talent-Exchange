@@ -22,7 +22,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final CompetitionSummary competition = _buildCompetition(
-      id: 'viewer-non-premium',
+      id: 'viewer-monetization-default-off',
     );
     final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
       competition,
@@ -36,7 +36,6 @@ void main() {
           matchKey: competition.id,
           fallbackSnapshot: snapshot,
           preferFallback: true,
-          entitlement: const Match3dUserEntitlement(availableCoins: 1),
         ),
       ),
     );
@@ -243,9 +242,4 @@ CompetitionSummary _buildCompetition({required String id}) {
     createdAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 2),
   );
-}
-
-Future<void> _pumpForOverlayTransition(WidgetTester tester) async {
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 320));
 }

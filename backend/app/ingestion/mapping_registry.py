@@ -8,14 +8,14 @@ import unicodedata
 _WHITESPACE_RE = re.compile(r"\s+")
 _PUNCTUATION_RE = re.compile(r"[^0-9a-z\s]+")
 _NOISY_SUFFIXES = ("fc", "cf", "sc", "afc", "u19", "u21", "b", "ii")
-_MOJIBAKE_MARKERS = ("Ã", "â", "Â")
+_MOJIBAKE_MARKERS = ("\u00c3", "\u00e2", "\u00c2")
 _APOSTROPHE_TRANSLATION = str.maketrans(
     {
-        "’": "'",
-        "‘": "'",
-        "ʼ": "'",
+        "\u2019": "'",
+        "\u2018": "'",
+        "\u02bc": "'",
         "`": "'",
-        "´": "'",
+        "\u00b4": "'",
     }
 )
 
@@ -140,15 +140,16 @@ CLUB_ALIASES = _freeze_aliases(
 
 COUNTRY_ALIASES = _freeze_aliases(
     {
-        "england": ["eng", "uk", "great britain"],
-        "Côte d’Ivoire": ["ivory coast"],
-        "usa": ["united states", "us", "america", "united states of america"],
+        "England": ["eng", "uk", "great britain"],
+        "C\u00f4te d\u2019Ivoire": ["ivory coast"],
+        "USA": ["united states", "us", "america", "united states of america"],
         "Democratic Republic of the Congo": ["dr congo", "congo dr", "congo-kinshasa", "drc"],
         "Republic of the Congo": ["congo", "congo-brazzaville"],
         "Cabo Verde": ["cape verde"],
-        "Curaçao": ["curacao"],
-        "gambia": ["the gambia"],
-        "guinea bissau": ["guinea-bissau"],
+        "Cura\u00e7ao": ["curacao"],
+        "Gambia": ["the gambia"],
+        "Guinea-Bissau": ["guinea bissau"],
+        "Tanzania": ["united republic of tanzania"],
     }
 )
 

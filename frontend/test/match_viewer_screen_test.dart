@@ -8,6 +8,8 @@ import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
 
 void main() {
   test('large frame gaps snap to the nearest authoritative frame', () {

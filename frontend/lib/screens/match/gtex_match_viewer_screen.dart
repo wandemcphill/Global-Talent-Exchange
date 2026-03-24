@@ -62,6 +62,16 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   late Future<MatchViewState> _viewStateFuture;
   MatchPlaybackController? _controller;
 
+  RenderMode get _requestedRenderMode {
+    switch (widget.renderMode) {
+      case RenderMode.threeD:
+        return RenderMode.threeD;
+      case RenderMode.auto:
+      case RenderMode.twoD:
+        return RenderMode.twoD;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
