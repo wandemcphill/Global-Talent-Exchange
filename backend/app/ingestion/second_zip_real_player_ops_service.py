@@ -4,15 +4,18 @@ import csv
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 import hashlib
+from itertools import islice
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.ingestion.models import Club, Competition, Country
+from app.ingestion.normalizers import slugify
 from app.ingestion.real_player_canonical_mapping_service import RealPlayerCanonicalMappingService
 from app.ingestion.real_player_identity_matcher import RealPlayerIdentityMatcher
 from app.ingestion.real_player_ingestion_service import RealPlayerIngestionService
@@ -123,6 +126,40 @@ class SecondZipRunReport:
 
 
 @dataclass(frozen=True, slots=True)
+class SecondZipReferencePreloadCounts:
+    inserted_countries: int = 0
+    updated_countries: int = 0
+    inserted_competitions: int = 0
+    updated_competitions: int = 0
+    inserted_clubs: int = 0
+    updated_clubs: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "inserted_countries": self.inserted_countries,
+            "updated_countries": self.updated_countries,
+            "inserted_competitions": self.inserted_competitions,
+            "updated_competitions": self.updated_competitions,
+            "inserted_clubs": self.inserted_clubs,
+            "updated_clubs": self.updated_clubs,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SecondZipReferencePreloadReport:
+    archive_path: str
+    archive_sha256: str
+    counts: SecondZipReferencePreloadCounts
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "archive_path": self.archive_path,
+            "archive_sha256": self.archive_sha256,
+            "counts": self.counts.to_dict(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SecondZipCandidate:
     source_row_number: int
     source_row: dict[str, Any]
@@ -161,6 +198,23 @@ class SecondZipRealPlayerOpsService:
     identity_matcher: RealPlayerIdentityMatcher = field(default_factory=RealPlayerIdentityMatcher)
     reference_date: date = field(default_factory=lambda: datetime.now(UTC).date())
 
+    def preload_references(
+        self,
+        *,
+        archive_path: str | Path,
+    ) -> SecondZipReferencePreloadReport:
+        resolved_archive = Path(archive_path).expanduser().resolve()
+        self.archive_intake.validate_archive(resolved_archive)
+        archive_sha256 = self._archive_sha256(resolved_archive)
+
+        with self.archive_intake.extract_archive(resolved_archive) as extracted:
+            lookups = self._load_lookups(extracted.workdir)
+            return self._preload_references_from_lookups(
+                archive_path=resolved_archive,
+                archive_sha256=archive_sha256,
+                lookups=lookups,
+            )
+
     def import_archive(
         self,
         *,
@@ -178,6 +232,9 @@ class SecondZipRealPlayerOpsService:
         archive_sha256 = self._archive_sha256(resolved_archive)
         batch_key = self._batch_key(archive_sha256=archive_sha256, limit=limit)
         provider_job_key = self._provider_job_key(archive_sha256=archive_sha256, limit=limit)
+        batch_id: str | None = None
+        start_row_number = 1
+        batch_metadata: dict[str, object] = {}
 
         with self.session_factory() as session:
             batch = session.scalar(
@@ -209,6 +266,9 @@ class SecondZipRealPlayerOpsService:
                     return self._report_from_batch(batch)
                 metadata["batch_size"] = batch_size
                 batch.metadata_json = metadata
+            batch_id = batch.id
+            batch_metadata = self._batch_metadata(batch)
+            start_row_number = self._next_resume_row_number_from_metadata(batch_metadata) or 1
             batch.status = RealPlayerImportBatchStatus.RUNNING.value
             batch.mode = SECOND_ZIP_DRY_RUN_MODE
             batch.error_message = None
@@ -217,37 +277,52 @@ class SecondZipRealPlayerOpsService:
             session.commit()
 
         error_message: str | None = None
+        read_exhausted = False
+        reference_preload_report: SecondZipReferencePreloadReport | None = None
         with self.archive_intake.extract_archive(resolved_archive) as extracted:
-            lookups = self._load_lookups(extracted.workdir)
-            source_rows = self._iter_player_rows(
-                extracted.get_path("players.csv"),
-                start_row_number=self._next_resume_row_number_from_metadata(self._batch_metadata(batch)),
-            )
             try:
+                lookups = self._load_lookups(extracted.workdir)
+                reference_preload_report = self._preload_references_from_lookups(
+                    archive_path=resolved_archive,
+                    archive_sha256=archive_sha256,
+                    lookups=lookups,
+                )
+                source_rows = self._iter_player_rows(
+                    extracted.get_path("players.csv"),
+                    start_row_number=start_row_number,
+                )
                 while True:
-                    remaining = self._remaining_row_budget(self._batch_metadata(batch))
+                    remaining = self._remaining_row_budget(batch_metadata)
                     if remaining is not None and remaining <= 0:
                         break
                     current_batch_size = batch_size if remaining is None else min(batch_size, remaining)
                     current_rows = self._take_source_rows(source_rows, current_batch_size)
                     if not current_rows:
+                        read_exhausted = True
                         break
-                    batch = self._process_source_rows(
-                        batch_id=batch.id,
+                    self._process_source_rows(
+                        batch_id=batch_id,
                         source_rows=current_rows,
                         lookups=lookups,
                     )
+                    batch_metadata["total_rows_read"] = int(batch_metadata.get("total_rows_read") or 0) + len(current_rows)
                     if len(current_rows) < current_batch_size:
+                        read_exhausted = True
                         break
             except Exception as exc:  # pragma: no cover - exercised via monkeypatched resume test
                 error_message = str(exc)
 
         with self.session_factory() as session:
-            batch = self._load_batch(session, batch.id)
+            assert batch_id is not None
+            batch = self._load_batch(session, batch_id)
             metadata = self._batch_metadata(batch)
+            if reference_preload_report is not None:
+                metadata["reference_preload"] = reference_preload_report.counts.to_dict()
+                metadata["reference_preload_archive_sha256"] = reference_preload_report.archive_sha256
+                metadata["reference_preload_at"] = utcnow().isoformat()
             if error_message is None:
                 metadata["scope_complete"] = True
-                metadata["read_exhausted"] = not bool(source_rows)
+                metadata["read_exhausted"] = read_exhausted
                 metadata["next_resume_row_number"] = None
                 batch.error_message = None
             else:
@@ -404,6 +479,205 @@ class SecondZipRealPlayerOpsService:
             self._refresh_batch_summary(batch)
             session.commit()
             return self._report_from_batch(batch, selected_row_count=len(rows))
+
+    def _preload_references_from_lookups(
+        self,
+        *,
+        archive_path: Path,
+        archive_sha256: str,
+        lookups: dict[str, Any],
+    ) -> SecondZipReferencePreloadReport:
+        reference_catalog = lookups.get("reference_catalog")
+        if not isinstance(reference_catalog, TransfermarktSecondZipReferenceCatalog):
+            reference_catalog = TransfermarktSecondZipReferenceCatalog.from_rows(
+                clubs=(lookups.get("clubs", {}) or {}).values(),
+                competitions=(lookups.get("competitions", {}) or {}).values(),
+                countries=(lookups.get("countries", {}) or {}).values(),
+            )
+
+        try:
+            with self.session_factory() as session:
+                countries_by_external_id = {
+                    row.provider_external_id: row
+                    for row in session.scalars(
+                        select(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
+                    )
+                }
+                competitions_by_external_id = {
+                    row.provider_external_id: row
+                    for row in session.scalars(
+                        select(Competition).where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
+                    )
+                }
+                clubs_by_external_id = {
+                    row.provider_external_id: row
+                    for row in session.scalars(
+                        select(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
+                    )
+                }
+
+                inserted_countries = 0
+                updated_countries = 0
+                for row in reference_catalog.countries_by_id.values():
+                    inserted = self._upsert_country_reference(
+                        session=session,
+                        countries_by_external_id=countries_by_external_id,
+                        row=row,
+                    )
+                    if inserted:
+                        inserted_countries += 1
+                    else:
+                        updated_countries += 1
+                session.flush()
+
+                inserted_competitions = 0
+                updated_competitions = 0
+                for row in (lookups.get("competitions", {}) or {}).values():
+                    inserted = self._upsert_competition_reference(
+                        session=session,
+                        countries_by_external_id=countries_by_external_id,
+                        competitions_by_external_id=competitions_by_external_id,
+                        row=row,
+                    )
+                    if inserted:
+                        inserted_competitions += 1
+                    else:
+                        updated_competitions += 1
+                session.flush()
+
+                inserted_clubs = 0
+                updated_clubs = 0
+                for row in (lookups.get("clubs", {}) or {}).values():
+                    inserted = self._upsert_club_reference(
+                        session=session,
+                        competitions_by_external_id=competitions_by_external_id,
+                        clubs_by_external_id=clubs_by_external_id,
+                        row=row,
+                    )
+                    if inserted:
+                        inserted_clubs += 1
+                    else:
+                        updated_clubs += 1
+                session.commit()
+        except Exception as exc:
+            raise SecondZipRealPlayerOpsError(
+                f"Failed to preload 2nd.zip references from '{archive_path}': {exc}",
+            ) from exc
+
+        return SecondZipReferencePreloadReport(
+            archive_path=str(archive_path),
+            archive_sha256=archive_sha256,
+            counts=SecondZipReferencePreloadCounts(
+                inserted_countries=inserted_countries,
+                updated_countries=updated_countries,
+                inserted_competitions=inserted_competitions,
+                updated_competitions=updated_competitions,
+                inserted_clubs=inserted_clubs,
+                updated_clubs=updated_clubs,
+            ),
+        )
+
+    def _upsert_country_reference(
+        self,
+        *,
+        session: Session,
+        countries_by_external_id: dict[str, Country],
+        row: dict[str, Any],
+    ) -> bool:
+        external_id = self._clean_reference_value(row.get("country_id"))
+        if external_id is None:
+            return False
+        country = countries_by_external_id.get(external_id)
+        inserted = country is None
+        if inserted:
+            country = Country(
+                source_provider=SECOND_ZIP_SOURCE_NAME,
+                provider_external_id=external_id,
+                name=self._clean_reference_value(row.get("country_name")) or external_id,
+            )
+            session.add(country)
+            countries_by_external_id[external_id] = country
+
+        country.name = self._clean_reference_value(row.get("country_name")) or country.name
+        country.alpha3_code = self._clean_reference_value(row.get("country_code"), max_length=4)
+        country.confederation_code = self._clean_reference_value(row.get("confederation"), max_length=16)
+        country.last_synced_at = utcnow()
+        return inserted
+
+    def _upsert_competition_reference(
+        self,
+        *,
+        session: Session,
+        countries_by_external_id: dict[str, Country],
+        competitions_by_external_id: dict[str, Competition],
+        row: dict[str, Any],
+    ) -> bool:
+        external_id = self._clean_reference_value(row.get("competition_id"))
+        if external_id is None:
+            return False
+        competition = competitions_by_external_id.get(external_id)
+        inserted = competition is None
+        if inserted:
+            competition = Competition(
+                source_provider=SECOND_ZIP_SOURCE_NAME,
+                provider_external_id=external_id,
+                name=self._clean_reference_value(row.get("name")) or external_id,
+                slug=self._reference_slug(row.get("competition_code"), row.get("name"), fallback=external_id),
+                competition_type=self._clean_reference_value(row.get("type"), max_length=32) or "league",
+                format_type="real_world",
+                is_major=False,
+                is_tradable=True,
+            )
+            session.add(competition)
+            competitions_by_external_id[external_id] = competition
+
+        competition.name = self._clean_reference_value(row.get("name")) or competition.name
+        competition.slug = self._reference_slug(row.get("competition_code"), row.get("name"), fallback=external_id)
+        competition.code = self._clean_reference_value(row.get("competition_code"), max_length=32)
+        competition.competition_type = self._clean_reference_value(row.get("type"), max_length=32) or "league"
+        competition.format_type = "real_world"
+        competition.is_major = self._coerce_true(row.get("is_major_national_league"))
+        competition.is_tradable = True
+        competition.country = countries_by_external_id.get(self._clean_reference_value(row.get("country_id")) or "")
+        competition.last_synced_at = utcnow()
+        return inserted
+
+    def _upsert_club_reference(
+        self,
+        *,
+        session: Session,
+        competitions_by_external_id: dict[str, Competition],
+        clubs_by_external_id: dict[str, Club],
+        row: dict[str, Any],
+    ) -> bool:
+        external_id = self._clean_reference_value(row.get("club_id"))
+        if external_id is None:
+            return False
+        club = clubs_by_external_id.get(external_id)
+        inserted = club is None
+        if inserted:
+            club = Club(
+                source_provider=SECOND_ZIP_SOURCE_NAME,
+                provider_external_id=external_id,
+                name=self._clean_reference_value(row.get("name")) or external_id,
+                slug=self._reference_slug(row.get("club_code"), row.get("name"), fallback=external_id),
+                short_name=self._clean_reference_value(row.get("name"), max_length=80),
+                is_tradable=True,
+            )
+            session.add(club)
+            clubs_by_external_id[external_id] = club
+
+        competition = competitions_by_external_id.get(self._clean_reference_value(row.get("domestic_competition_id")) or "")
+        club.name = self._clean_reference_value(row.get("name")) or club.name
+        club.slug = self._reference_slug(row.get("club_code"), row.get("name"), fallback=external_id)
+        club.short_name = self._clean_reference_value(row.get("name"), max_length=80)
+        club.code = self._clean_reference_value(row.get("club_code"), max_length=16)
+        club.venue = self._clean_reference_value(row.get("stadium_name"), max_length=160)
+        club.current_competition = competition
+        club.country = competition.country if competition is not None else None
+        club.is_tradable = True
+        club.last_synced_at = utcnow()
+        return inserted
 
     def _process_source_rows(
         self,
@@ -842,25 +1116,19 @@ class SecondZipRealPlayerOpsService:
         path: Path,
         *,
         start_row_number: int | None,
-    ) -> list[tuple[int, dict[str, Any]]]:
-        rows: list[tuple[int, dict[str, Any]]] = []
+    ) -> Iterator[tuple[int, dict[str, Any]]]:
         minimum_row_number = max(int(start_row_number or 1), 1)
         for row_number, row in self._iter_csv_rows(path, include_row_numbers=True):
             if row_number < minimum_row_number:
                 continue
-            rows.append((row_number, row))
-        return rows
+            yield row_number, row
 
     def _take_source_rows(
         self,
-        source_rows: list[tuple[int, dict[str, Any]]],
+        source_rows: Iterator[tuple[int, dict[str, Any]]],
         batch_size: int,
     ) -> list[tuple[int, dict[str, Any]]]:
-        if not source_rows:
-            return []
-        batch = source_rows[:batch_size]
-        del source_rows[:batch_size]
-        return batch
+        return list(islice(source_rows, batch_size))
 
     def _iter_csv_rows(
         self,
@@ -1250,10 +1518,37 @@ class SecondZipRealPlayerOpsService:
     def _metadata_archive_sha(self, metadata: dict[str, object]) -> str:
         return str(metadata.get("archive_sha256") or "")
 
+    @staticmethod
+    def _clean_reference_value(value: object, *, max_length: int | None = None) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        if not cleaned:
+            return None
+        if max_length is not None:
+            return cleaned[:max_length]
+        return cleaned
+
+    @staticmethod
+    def _coerce_true(value: object) -> bool:
+        return str(value or "").strip().casefold() in {"1", "true", "yes"}
+
+    def _reference_slug(self, *values: object, fallback: str) -> str:
+        for value in values:
+            cleaned = self._clean_reference_value(value)
+            if cleaned:
+                slug = slugify(cleaned)
+                if slug:
+                    return slug
+        fallback_slug = slugify(fallback)
+        return fallback_slug or fallback.casefold()
+
 
 __all__ = [
     "SECOND_ZIP_BATCH_VERSION",
     "SECOND_ZIP_SOURCE_TYPE",
+    "SecondZipReferencePreloadCounts",
+    "SecondZipReferencePreloadReport",
     "SecondZipRealPlayerOpsError",
     "SecondZipRealPlayerOpsService",
     "SecondZipReportCounts",

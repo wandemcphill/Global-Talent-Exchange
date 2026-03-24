@@ -27,6 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Operate the GTEX 2nd.zip real-player import path.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    preload_parser = subparsers.add_parser("preload", help="Preload 2nd.zip countries, competitions, and clubs.")
+    preload_parser.add_argument("--file", required=True)
+
     import_parser = subparsers.add_parser("import", help="Read 2nd.zip and stage a dry run.")
     import_parser.add_argument("--file", required=True)
     import_parser.add_argument("--batch-size", type=int, default=1000)
@@ -74,6 +77,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     service = build_service(database_url=args.database_url)
     try:
+        if args.command == "preload":
+            result = service.preload_references(archive_path=args.file)
+            _print_json(result.to_dict())
+            return 0
+
         if args.command == "import":
             result = service.import_archive(
                 archive_path=args.file,

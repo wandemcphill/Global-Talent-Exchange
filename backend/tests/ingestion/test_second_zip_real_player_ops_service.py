@@ -367,6 +367,67 @@ def _seed_canonical_entities(engine) -> None:
         session.commit()
 
 
+def test_preload_references_inserts_and_updates_second_zip_entities(tmp_path: Path) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-preload.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1)],
+    )
+
+    first = service.preload_references(archive_path=archive_path)
+    second = service.preload_references(archive_path=archive_path)
+
+    assert first.counts.inserted_countries == 1
+    assert first.counts.inserted_competitions == 1
+    assert first.counts.inserted_clubs == 1
+    assert second.counts.updated_countries == 1
+    assert second.counts.updated_competitions == 1
+    assert second.counts.updated_clubs == 1
+    with _session_factory(engine)() as session:
+        assert session.scalar(
+            select(func.count()).select_from(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
+        ) == 1
+        assert session.scalar(
+            select(func.count()).select_from(Competition).where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
+        ) == 1
+        assert session.scalar(
+            select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
+        ) == 1
+    engine.dispose()
+
+
+def test_import_archive_preloads_references_automatically(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-auto-preload.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_evaluate_candidates",
+        lambda self, candidates: _stub_evaluator({})(candidates),
+    )
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1)],
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=1)
+
+    assert imported.counts.publish_ready == 1
+    with _session_factory(engine)() as session:
+        assert session.scalar(
+            select(func.count()).select_from(Country).where(Country.source_provider == SECOND_ZIP_SOURCE_NAME)
+        ) == 1
+        assert session.scalar(
+            select(func.count()).select_from(Competition).where(Competition.source_provider == SECOND_ZIP_SOURCE_NAME)
+        ) == 1
+        assert session.scalar(
+            select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
+        ) == 1
+    engine.dispose()
+
+
 def test_import_archive_supports_2000_row_dry_run(tmp_path: Path, monkeypatch) -> None:
     database_url = _database_url(tmp_path / "2ndzip-2000.db")
     engine = _initialize_database(database_url)
