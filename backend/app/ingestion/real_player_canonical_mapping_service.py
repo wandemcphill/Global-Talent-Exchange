@@ -28,6 +28,8 @@ from app.models.real_player_reference_mapping import (
     RealPlayerUnresolvedReference,
 )
 
+_CLUB_REFERENCE_PLACEHOLDERS = {"free agent", "unattached"}
+
 
 class CanonicalReferenceEntityType(StrEnum):
     COUNTRY = "country"
@@ -41,6 +43,11 @@ class CanonicalReferenceStatus(StrEnum):
     AUTO_CREATED = "auto_created"
     UNRESOLVED = "unresolved"
     SKIPPED = "skipped"
+
+
+def _is_club_placeholder_label(value: str | None) -> bool:
+    cleaned = clean_name(value)
+    return bool(cleaned and cleaned.casefold() in _CLUB_REFERENCE_PLACEHOLDERS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -550,6 +557,8 @@ class RealPlayerCanonicalMappingService:
     ) -> CanonicalReferenceResolution:
         if not reference.has_reference or not clean_name(reference.display_name):
             return self._skipped_resolution(reference, reason_code="missing_reference")
+        if _is_club_placeholder_label(reference.display_name) and not clean_name(reference.provider_external_id):
+            return self._skipped_resolution(reference, reason_code="club_placeholder")
 
         mapping = self._lookup_mapping(session, reference)
         if mapping is not None:

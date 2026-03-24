@@ -8,3 +8,5 @@ pytest-cache-files*/
 .env
 .env.*
 *.db
+2nd.zip
+fm2023.csv.zip

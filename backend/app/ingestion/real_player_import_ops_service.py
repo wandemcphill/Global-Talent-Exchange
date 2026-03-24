@@ -24,6 +24,11 @@ from app.ingestion.real_player_import_ops_schemas import (
     RealPlayerImportValuationStatusView,
 )
 from app.ingestion.real_player_normalization_service import RealPlayerNormalizationService
+from app.ingestion.second_zip_staged_import import (
+    SECOND_ZIP_SOURCE_TYPE,
+    SecondZipStagedImportBuilder,
+    SecondZipStagedImportError,
+)
 from app.models.base import utcnow
 from app.models.real_player_import_batch import (
     RealPlayerImportBatch,
@@ -40,6 +45,15 @@ class RealPlayerImportOpsError(ValueError):
         super().__init__(message)
 
 
+@dataclass(frozen=True, slots=True)
+class RealPlayerImportSourceLoadResult:
+    source_path: Path
+    request: RealPlayerIngestionRequest
+    manifest_hash: str
+    provider_name: str | None = None
+    source_metadata: dict[str, object] = field(default_factory=dict)
+
+
 @dataclass(slots=True)
 class RealPlayerImportOpsService:
     session_factory: sessionmaker[Session]
@@ -47,6 +61,7 @@ class RealPlayerImportOpsService:
     settings: Settings = field(default_factory=get_settings)
     normalization_service: RealPlayerNormalizationService = field(default_factory=RealPlayerNormalizationService)
     audit_service: RealPlayerIdentityAuditService = field(default_factory=RealPlayerIdentityAuditService)
+    second_zip_builder: SecondZipStagedImportBuilder = field(default_factory=SecondZipStagedImportBuilder)
 
     def list_batches(
         self,
@@ -81,28 +96,95 @@ class RealPlayerImportOpsService:
         actor_user_id: str | None,
         payload: RealPlayerImportBatchRunRequest,
     ) -> RealPlayerImportBatchDetailView:
-        manifest_path, request, manifest_hash = self._load_manifest_request(payload.manifest_path)
-        batch_key = payload.batch_key or request.ingestion_batch_id or self._default_batch_key(manifest_hash)
-        request = request.model_copy(update={"ingestion_batch_id": batch_key})
+        load_result = self._load_source_request(payload.manifest_path, source_type=payload.source_type)
+        manifest_path = load_result.source_path
+        manifest_request = load_result.request
+        manifest_hash = load_result.manifest_hash
+        source_metadata = load_result.source_metadata
+        provider_name = load_result.provider_name or payload.provider_name or self._provider_name_from_request(manifest_request)
+        requested_batch_key = payload.batch_key or manifest_request.ingestion_batch_id or self._default_batch_key(manifest_hash)
+        batch_id: str | None = None
+        request: RealPlayerIngestionRequest | None = None
+        work_request: RealPlayerIngestionRequest | None = None
 
         with self.session_factory() as session:
-            batch = self._prepare_batch(
+            existing = self._find_existing_batch(
                 session,
-                batch_key=batch_key,
-                actor_user_id=actor_user_id,
-                provider_name=payload.provider_name or self._provider_name_from_request(request),
-                provider_job_key=payload.provider_job_key,
+                batch_key=requested_batch_key,
+                provider_name=provider_name,
                 source_type=payload.source_type,
-                runner_mode=payload.mode,
-                manifest_path=manifest_path,
                 manifest_hash=manifest_hash,
-                request=request,
-                restart=payload.restart,
             )
+            if existing is not None and existing.status == RealPlayerImportBatchStatus.RUNNING.value:
+                raise RealPlayerImportOpsError(
+                    f"Real-player import batch '{existing.batch_key}' is already running.",
+                    status_code=409,
+                )
+
+            if existing is not None and not payload.restart:
+                existing_manifest_hash = self._manifest_hash_from_batch(existing)
+                if existing.batch_key == requested_batch_key and existing_manifest_hash not in {"", manifest_hash}:
+                    raise RealPlayerImportOpsError(
+                        (
+                            f"Real-player import batch '{requested_batch_key}' already exists for a different manifest. "
+                            "Use restart explicitly."
+                        ),
+                        status_code=409,
+                    )
+
+            batch_key = existing.batch_key if existing is not None else requested_batch_key
+            request = manifest_request.model_copy(update={"ingestion_batch_id": batch_key})
+
+            if existing is not None and not payload.restart:
+                work_request = self._request_from_batch(existing, pending_only=True)
+                if not work_request.players:
+                    self._record_noop_attempt(
+                        session,
+                        batch=existing,
+                        actor_user_id=actor_user_id,
+                        runner_mode=payload.mode,
+                        request=request,
+                        manifest_path=manifest_path,
+                        manifest_hash=manifest_hash,
+                        source_metadata=source_metadata,
+                        reason="idempotent_rerun",
+                    )
+                    batch_id = existing.id
+                    session.commit()
+                    return self.get_batch(batch_id, include_rows=False)
+
+                batch = self._prepare_existing_batch(
+                    session,
+                    batch=existing,
+                    actor_user_id=actor_user_id,
+                    runner_mode=payload.mode,
+                    request=request,
+                    manifest_path=manifest_path,
+                    manifest_hash=manifest_hash,
+                    source_metadata=source_metadata,
+                )
+            else:
+                work_request = request
+                batch = self._prepare_batch(
+                    session,
+                    batch_key=batch_key,
+                    actor_user_id=actor_user_id,
+                    provider_name=provider_name,
+                    provider_job_key=payload.provider_job_key,
+                    source_type=payload.source_type,
+                    runner_mode=payload.mode,
+                    manifest_path=manifest_path,
+                    manifest_hash=manifest_hash,
+                    source_metadata=source_metadata,
+                    request=request,
+                    restart=payload.restart,
+                )
             batch_id = batch.id
             session.commit()
 
-        report = self._run_report(request=request, runner_mode=payload.mode)
+        assert request is not None
+        assert work_request is not None
+        report = self._run_report(request=work_request, runner_mode=payload.mode)
         with self.session_factory() as session:
             batch = self._load_batch(session, batch_id=batch_id, include_rows=True)
             self._apply_report(session, batch=batch, request=request, report=report)
@@ -125,17 +207,35 @@ class RealPlayerImportOpsService:
                     status_code=409,
                 )
             request = self._request_from_batch(batch)
+            work_request = self._request_from_batch(batch, pending_only=True)
             runner_mode = payload.mode or batch.mode
+            if not work_request.players:
+                self._record_noop_attempt(
+                    session,
+                    batch=batch,
+                    actor_user_id=actor_user_id,
+                    runner_mode=runner_mode,
+                    request=request,
+                    manifest_path=self._manifest_path_from_batch(batch),
+                    manifest_hash=self._manifest_hash_from_batch(batch),
+                    source_metadata=None,
+                    reason="resume_noop",
+                )
+                session.commit()
+                return self.get_batch(batch_id, include_rows=False)
             batch = self._prepare_existing_batch(
                 session,
                 batch=batch,
                 actor_user_id=actor_user_id,
                 runner_mode=runner_mode,
                 request=request,
+                manifest_path=self._manifest_path_from_batch(batch),
+                manifest_hash=self._manifest_hash_from_batch(batch),
+                source_metadata=None,
             )
             session.commit()
 
-        report = self._run_report(request=request, runner_mode=runner_mode)
+        report = self._run_report(request=work_request, runner_mode=runner_mode)
         with self.session_factory() as session:
             batch = self._load_batch(session, batch_id=batch_id, include_rows=True)
             self._apply_report(session, batch=batch, request=request, report=report)
@@ -262,6 +362,7 @@ class RealPlayerImportOpsService:
         runner_mode: str,
         manifest_path: Path,
         manifest_hash: str,
+        source_metadata: dict[str, object] | None,
         request: RealPlayerIngestionRequest,
         restart: bool,
     ) -> RealPlayerImportBatch:
@@ -290,6 +391,7 @@ class RealPlayerImportOpsService:
             source_type=source_type,
             manifest_path=manifest_path,
             manifest_hash=manifest_hash,
+            source_metadata=source_metadata,
             previous_metadata=existing.metadata_json if existing is not None else None,
         )
         batch = existing or RealPlayerImportBatch(batch_key=batch_key)
@@ -328,25 +430,31 @@ class RealPlayerImportOpsService:
         actor_user_id: str | None,
         runner_mode: str,
         request: RealPlayerIngestionRequest,
+        manifest_path: Path | None,
+        manifest_hash: str,
+        source_metadata: dict[str, object] | None,
     ) -> RealPlayerImportBatch:
         now = utcnow()
+        resume_state = self._resume_state(batch.rows)
         metadata = self._metadata_payload(
             request=request,
             runner_mode=runner_mode,
             provider_name=batch.provider_name,
             provider_job_key=batch.provider_job_key,
             source_type=batch.source_type,
-            manifest_path=Path(str((batch.metadata_json or {}).get("manifest_path") or "")) if (batch.metadata_json or {}).get("manifest_path") else None,
-            manifest_hash=str((batch.metadata_json or {}).get("manifest_sha256") or ""),
+            manifest_path=manifest_path,
+            manifest_hash=manifest_hash,
+            source_metadata=source_metadata,
             previous_metadata=batch.metadata_json,
         )
+        metadata.update(resume_state)
         batch.mode = runner_mode
         batch.status = RealPlayerImportBatchStatus.RUNNING.value
         batch.requested_by_user_id = actor_user_id
         batch.requested_at = now
         batch.started_at = now
         batch.completed_at = None
-        batch.submitted_row_count = len(request.players)
+        batch.submitted_row_count = len(batch.rows)
         batch.normalized_row_count = 0
         batch.matched_existing_count = 0
         batch.created_player_count = 0
@@ -357,7 +465,11 @@ class RealPlayerImportOpsService:
         batch.metadata_json = metadata
         batch.summary_json = {}
         batch.error_message = None
-        self._replace_rows(session, batch=batch, request=request, runner_mode=runner_mode)
+        for row in batch.rows:
+            if self._row_is_completed(row):
+                continue
+            self._reset_row_for_retry(row=row, runner_mode=runner_mode)
+        session.flush()
         return batch
 
     def _replace_rows(
@@ -425,6 +537,10 @@ class RealPlayerImportOpsService:
             for row in rows
         }
         batch_findings: list[dict[str, object]] = []
+        executed_source_keys = {
+            f"{execution.source_name}:{execution.source_player_key}"
+            for execution in report.execution_rows
+        }
 
         for preflight in report.preflight_rows:
             source_key = f"{preflight.source_name}:{preflight.source_player_key}"
@@ -494,29 +610,53 @@ class RealPlayerImportOpsService:
                 self._append_finding(row, finding)
 
         for row in rows:
+            source_key = f"{row.source_name}:{row.source_player_key}"
+            if report.error_message and row.status == RealPlayerImportRowStatus.MATCHED.value and source_key not in executed_source_keys:
+                row.status = RealPlayerImportRowStatus.PENDING.value
+                row.review_status = "pending"
+                row.review_reason = "resume_pending"
+                row.import_metadata_json = {
+                    **(row.import_metadata_json or {}),
+                    "resume_required": True,
+                }
             if row.review_status == "pending":
                 row.review_status = "resolved" if row.status != RealPlayerImportRowStatus.FAILED.value else "needs_review"
             if row.review_status == "needs_review" and not row.review_reason:
                 row.review_reason = "manual_review"
 
+        source_duplicate_skipped_count = self._source_duplicate_skipped_count(batch.metadata_json)
+        source_row_count = int((batch.metadata_json or {}).get("source_row_count") or len(rows))
+        source_eligible_row_count = int((batch.metadata_json or {}).get("source_eligible_row_count") or len(rows))
+        source_filtered_row_count = int((batch.metadata_json or {}).get("source_filtered_row_count") or 0)
+        duplicate_skipped_count = (
+            source_duplicate_skipped_count
+            + int((batch.metadata_json or {}).get("preserved_completed_row_count") or 0)
+        )
+        pending_row_count = sum(
+            1
+            for row in rows
+            if row.status == RealPlayerImportRowStatus.PENDING.value
+        )
+        batch_status = self._batch_status_from_rows(report=report, rows=rows, pending_row_count=pending_row_count)
+        resume_state = self._resume_state(rows)
         batch.completed_at = utcnow()
-        batch.normalized_row_count = len(report.preflight_rows)
+        batch.normalized_row_count = len(rows)
         batch.matched_existing_count = sum(
             1
-            for row in report.preflight_rows
-            if row.resolved_action in {"source_link", "matched_existing"}
+            for row in rows
+            if row.match_action in {"source_link", "matched_existing"}
         )
         batch.created_player_count = sum(
             1
-            for row in report.execution_rows
-            if row.resolved_action == "created"
+            for row in rows
+            if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "created"
         )
         batch.updated_player_count = sum(
             1
-            for row in report.execution_rows
-            if row.resolved_action == "updated"
+            for row in rows
+            if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "updated"
         )
-        batch.skipped_row_count = sum(
+        batch.skipped_row_count = duplicate_skipped_count + sum(
             1
             for row in rows
             if row.status == RealPlayerImportRowStatus.SKIPPED.value
@@ -542,16 +682,27 @@ class RealPlayerImportOpsService:
             "ambiguous_finding_count": len(report.ambiguous_findings),
             "pricing_finding_count": len(report.pricing_findings),
             "stability_finding_count": len(report.stability_findings),
+            "source_row_count": source_row_count,
+            "source_eligible_row_count": source_eligible_row_count,
+            "source_filtered_row_count": source_filtered_row_count,
+            "duplicate_skipped_count": duplicate_skipped_count,
+            "source_duplicate_skipped_count": source_duplicate_skipped_count,
+            "pending_row_count": pending_row_count,
+            "resume_from_row_number": resume_state["resume_from_row_number"],
+            "last_successful_row_number": resume_state["last_successful_row_number"],
             "batch_findings": batch_findings,
         }
         batch.metadata_json = self._record_attempt_outcome(
-            batch.metadata_json,
+            {
+                **dict(batch.metadata_json or {}),
+                **resume_state,
+            },
             mode=report.runner_mode,
             verdict=report.verdict,
-            status=self._batch_status_from_report(report),
+            status=batch_status,
             error_message=report.error_message,
         )
-        batch.status = self._batch_status_from_report(report)
+        batch.status = batch_status
         session.flush()
 
     def _run_report(self, *, request: RealPlayerIngestionRequest, runner_mode: str) -> RealPlayerBatchRunReport:
@@ -569,7 +720,17 @@ class RealPlayerImportOpsService:
         finally:
             temp_path.unlink(missing_ok=True)
 
-    def _load_manifest_request(self, manifest_path: str) -> tuple[Path, RealPlayerIngestionRequest, str]:
+    def _load_source_request(
+        self,
+        manifest_path: str,
+        *,
+        source_type: str,
+    ) -> RealPlayerImportSourceLoadResult:
+        if source_type == SECOND_ZIP_SOURCE_TYPE:
+            return self._load_second_zip_request(manifest_path)
+        return self._load_manifest_request(manifest_path)
+
+    def _load_manifest_request(self, manifest_path: str) -> RealPlayerImportSourceLoadResult:
         resolved_path = Path(manifest_path).expanduser().resolve()
         if not resolved_path.exists():
             raise RealPlayerImportOpsError(f"Manifest path '{resolved_path}' does not exist.", status_code=404)
@@ -579,15 +740,40 @@ class RealPlayerImportOpsService:
             raise RealPlayerImportOpsError("Real-player manifest must contain a JSON object.")
         request = RealPlayerIngestionRequest.model_validate(payload)
         manifest_hash = hashlib.sha256(payload_text.encode("utf-8")).hexdigest()
-        return resolved_path, request, manifest_hash
+        return RealPlayerImportSourceLoadResult(
+            source_path=resolved_path,
+            request=request,
+            manifest_hash=manifest_hash,
+        )
 
-    def _request_from_batch(self, batch: RealPlayerImportBatch) -> RealPlayerIngestionRequest:
+    def _load_second_zip_request(self, archive_path: str) -> RealPlayerImportSourceLoadResult:
+        try:
+            build_result = self.second_zip_builder.build_request(archive_path)
+        except SecondZipStagedImportError as exc:
+            raise RealPlayerImportOpsError(str(exc)) from exc
+        return RealPlayerImportSourceLoadResult(
+            source_path=build_result.archive_path,
+            request=build_result.request,
+            manifest_hash=build_result.archive_sha256,
+            provider_name=build_result.provider_name,
+            source_metadata=build_result.metadata_json,
+        )
+
+    def _request_from_batch(
+        self,
+        batch: RealPlayerImportBatch,
+        *,
+        pending_only: bool = False,
+    ) -> RealPlayerIngestionRequest:
         metadata = dict(batch.metadata_json or {})
+        rows = sorted(batch.rows, key=lambda item: item.row_number)
+        if pending_only:
+            rows = [row for row in rows if not self._row_is_completed(row)]
         payload: dict[str, object] = {
             "mode": metadata.get("request_mode") or "curated_seed",
             "players": [
                 dict(row.raw_payload_json or {})
-                for row in sorted(batch.rows, key=lambda item: item.row_number)
+                for row in rows
             ],
             "ingestion_batch_id": batch.batch_key,
             "ingestion_source_version": metadata.get("ingestion_source_version"),
@@ -612,6 +798,38 @@ class RealPlayerImportOpsService:
             return next(iter(providers))
         return "mixed-real-player-manifest"
 
+    def _find_existing_batch(
+        self,
+        session: Session,
+        *,
+        batch_key: str,
+        provider_name: str,
+        source_type: str,
+        manifest_hash: str,
+    ) -> RealPlayerImportBatch | None:
+        statement = (
+            select(RealPlayerImportBatch)
+            .options(selectinload(RealPlayerImportBatch.rows))
+            .where(RealPlayerImportBatch.batch_key == batch_key)
+        )
+        existing = session.scalar(statement)
+        if existing is not None:
+            return existing
+
+        statement = (
+            select(RealPlayerImportBatch)
+            .options(selectinload(RealPlayerImportBatch.rows))
+            .where(
+                RealPlayerImportBatch.provider_name == provider_name,
+                RealPlayerImportBatch.source_type == source_type,
+            )
+            .order_by(RealPlayerImportBatch.requested_at.desc(), RealPlayerImportBatch.created_at.desc())
+        )
+        for candidate in session.scalars(statement):
+            if self._manifest_hash_from_batch(candidate) == manifest_hash:
+                return candidate
+        return None
+
     @staticmethod
     def _default_batch_key(manifest_hash: str) -> str:
         return f"real-player-{manifest_hash[:16]}"
@@ -626,12 +844,13 @@ class RealPlayerImportOpsService:
         source_type: str,
         manifest_path: Path | None,
         manifest_hash: str,
+        source_metadata: dict[str, object] | None,
         previous_metadata: dict[str, object] | None,
     ) -> dict[str, object]:
         previous = dict(previous_metadata or {})
         history = list(previous.get("attempt_history") or [])
         attempt_count = int(previous.get("attempt_count") or 0) + 1
-        return {
+        metadata = {
             "provider_name": provider_name,
             "provider_job_key": provider_job_key,
             "source_type": source_type,
@@ -645,6 +864,159 @@ class RealPlayerImportOpsService:
             "attempt_count": attempt_count,
             "attempt_history": history,
         }
+        for key, value in previous.items():
+            if key.startswith("source_") and key not in metadata:
+                metadata[key] = value
+        if source_metadata:
+            metadata.update(source_metadata)
+        return metadata
+
+    @staticmethod
+    def _manifest_hash_from_batch(batch: RealPlayerImportBatch) -> str:
+        return str((batch.metadata_json or {}).get("manifest_sha256") or "")
+
+    @staticmethod
+    def _manifest_path_from_batch(batch: RealPlayerImportBatch) -> Path | None:
+        manifest_path = str((batch.metadata_json or {}).get("manifest_path") or "").strip()
+        return Path(manifest_path) if manifest_path else None
+
+    @staticmethod
+    def _row_is_completed(row: RealPlayerImportRow) -> bool:
+        return row.status in {
+            RealPlayerImportRowStatus.IMPORTED.value,
+            RealPlayerImportRowStatus.SKIPPED.value,
+        }
+
+    def _resume_state(self, rows: list[RealPlayerImportRow]) -> dict[str, object]:
+        sorted_rows = sorted(rows, key=lambda item: item.row_number)
+        completed_rows = [row for row in sorted_rows if self._row_is_completed(row)]
+        pending_rows = [row for row in sorted_rows if not self._row_is_completed(row)]
+        return {
+            "preserved_completed_row_count": len(completed_rows),
+            "pending_row_count": len(pending_rows),
+            "resume_from_row_number": pending_rows[0].row_number if pending_rows else None,
+            "last_successful_row_number": completed_rows[-1].row_number if completed_rows else None,
+        }
+
+    @staticmethod
+    def _source_duplicate_skipped_count(metadata: dict[str, object] | None) -> int:
+        return int((metadata or {}).get("source_duplicate_skipped_count") or 0)
+
+    @staticmethod
+    def _reset_row_for_retry(*, row: RealPlayerImportRow, runner_mode: str) -> None:
+        row.status = RealPlayerImportRowStatus.PENDING.value
+        row.match_action = None
+        row.import_action = None
+        row.identity_confidence_score = None
+        row.gtex_player_id = None
+        row.source_link_id = None
+        row.real_player_profile_id = None
+        row.authoritative_snapshot_id = None
+        row.player_import_item_id = None
+        row.processed_at = None
+        row.validation_errors_json = []
+        row.candidate_players_json = []
+        row.audit_findings_json = []
+        row.review_status = "pending"
+        row.review_reason = None
+        row.import_metadata_json = {"runner_mode": runner_mode}
+
+    def _record_noop_attempt(
+        self,
+        session: Session,
+        *,
+        batch: RealPlayerImportBatch,
+        actor_user_id: str | None,
+        runner_mode: str,
+        request: RealPlayerIngestionRequest,
+        manifest_path: Path | None,
+        manifest_hash: str,
+        source_metadata: dict[str, object] | None,
+        reason: str,
+    ) -> None:
+        rows = sorted(batch.rows, key=lambda item: item.row_number)
+        resume_state = self._resume_state(rows)
+        now = utcnow()
+        metadata = self._metadata_payload(
+            request=request,
+            runner_mode=runner_mode,
+            provider_name=batch.provider_name,
+            provider_job_key=batch.provider_job_key,
+            source_type=batch.source_type,
+            manifest_path=manifest_path,
+            manifest_hash=manifest_hash,
+            source_metadata=source_metadata,
+            previous_metadata=batch.metadata_json,
+        )
+        metadata.update(resume_state)
+        source_duplicate_skipped_count = self._source_duplicate_skipped_count(metadata)
+        source_row_count = int(metadata.get("source_row_count") or len(rows))
+        source_eligible_row_count = int(metadata.get("source_eligible_row_count") or len(rows))
+        source_filtered_row_count = int(metadata.get("source_filtered_row_count") or 0)
+        batch.mode = runner_mode
+        batch.status = RealPlayerImportBatchStatus.COMPLETED.value
+        batch.requested_by_user_id = actor_user_id
+        batch.requested_at = now
+        batch.started_at = now
+        batch.completed_at = now
+        batch.submitted_row_count = len(rows)
+        batch.normalized_row_count = len(rows)
+        batch.matched_existing_count = sum(
+            1
+            for row in rows
+            if row.match_action in {"source_link", "matched_existing"}
+        )
+        batch.created_player_count = sum(
+            1
+            for row in rows
+            if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "created"
+        )
+        batch.updated_player_count = sum(
+            1
+            for row in rows
+            if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "updated"
+        )
+        batch.skipped_row_count = source_duplicate_skipped_count + int(resume_state["preserved_completed_row_count"])
+        batch.failed_row_count = sum(
+            1
+            for row in rows
+            if row.status == RealPlayerImportRowStatus.FAILED.value
+        )
+        batch.authoritative_snapshot_count = sum(1 for row in rows if row.authoritative_snapshot_id)
+        batch.error_message = None
+        batch.summary_json = {
+            "verdict": "pass",
+            "runner_mode": runner_mode,
+            "request_mode": request.mode,
+            "ingestion_batch_id": batch.batch_key,
+            "ambiguous_matches": 0,
+            "missing_pricing_snapshots": 0,
+            "hard_failures": 0,
+            "preflight_row_count": 0,
+            "execution_row_count": 0,
+            "duplicate_finding_count": 0,
+            "ambiguous_finding_count": 0,
+            "pricing_finding_count": 0,
+            "stability_finding_count": 0,
+            "source_row_count": source_row_count,
+            "source_eligible_row_count": source_eligible_row_count,
+            "source_filtered_row_count": source_filtered_row_count,
+            "duplicate_skipped_count": source_duplicate_skipped_count + int(resume_state["preserved_completed_row_count"]),
+            "source_duplicate_skipped_count": source_duplicate_skipped_count,
+            "pending_row_count": 0,
+            "resume_from_row_number": None,
+            "last_successful_row_number": resume_state["last_successful_row_number"],
+            "batch_findings": [],
+            "noop_reason": reason,
+        }
+        batch.metadata_json = self._record_attempt_outcome(
+            metadata,
+            mode=runner_mode,
+            verdict="pass",
+            status=RealPlayerImportBatchStatus.COMPLETED.value,
+            error_message=None,
+        )
+        session.flush()
 
     @staticmethod
     def _record_attempt_outcome(
@@ -719,6 +1091,29 @@ class RealPlayerImportOpsService:
         ):
             return RealPlayerImportBatchStatus.FAILED.value
         return RealPlayerImportBatchStatus.COMPLETED_WITH_ERRORS.value
+
+    def _batch_status_from_rows(
+        self,
+        *,
+        report: RealPlayerBatchRunReport,
+        rows: list[RealPlayerImportRow],
+        pending_row_count: int,
+    ) -> str:
+        if pending_row_count:
+            imported_row_count = sum(
+                1
+                for row in rows
+                if row.status == RealPlayerImportRowStatus.IMPORTED.value
+            )
+            failed_row_count = sum(
+                1
+                for row in rows
+                if row.status == RealPlayerImportRowStatus.FAILED.value
+            )
+            if imported_row_count or failed_row_count:
+                return RealPlayerImportBatchStatus.COMPLETED_WITH_ERRORS.value
+            return RealPlayerImportBatchStatus.FAILED.value
+        return self._batch_status_from_report(report)
 
     def _batch_summary_view(self, batch: RealPlayerImportBatch) -> RealPlayerImportBatchSummaryView:
         return RealPlayerImportBatchSummaryView(
