@@ -23,10 +23,14 @@ from app.competition_engine.queue_contracts import (
     QueuedJobRecord,
 )
 from app.core.events import DomainEvent, EventPublisher
+from app.fairness.fairness_guard import FairnessGuard
+from app.fairness.match_integrity_service import MatchIntegrityService
+from app.fairness.spend_balance_controller import SpendBalanceController
 from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
 from app.leagues.service import LeagueSeasonLifecycleService
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
 from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
@@ -226,9 +230,33 @@ class LocalMatchExecutionWorker:
         )
         try:
             request = self.team_factory.build_request(job)
-            replay_payload = self.match_service.build_replay_payload(request)
+            competition_metadata = self._competition_metadata(job.competition_id)
+            locked_context = FairnessGuard().lock_official_request(request)
+            balance_session = self._open_session()
+            try:
+                normalized_request, balance_metadata = SpendBalanceController(balance_session).apply_balance_controls(
+                    request=locked_context.request,
+                    job=job,
+                    match_seed=locked_context.match_seed,
+                    competition_metadata_json=competition_metadata,
+                )
+            finally:
+                if balance_session is not None:
+                    balance_session.close()
+            replay_payload = self.match_service.build_replay_payload(normalized_request)
+            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
+            fairness_envelope = MatchIntegrityService().build_fairness_envelope(
+                locked_context=locked_context,
+                view_state=viewer_payload,
+                balance_metadata=balance_metadata,
+                competition_metadata_json=competition_metadata,
+            )
             self._persist_player_lifecycle_incidents(job, replay_payload)
-            self._persist_match_viewer_payload(job, replay_payload)
+            self._persist_match_viewer_payload(
+                job,
+                viewer_payload=viewer_payload,
+                fairness_envelope=fairness_envelope,
+            )
             self._publish_match_lifecycle_event(
                 "competition.match.simulation.completed",
                 job,
@@ -386,7 +414,8 @@ class LocalMatchExecutionWorker:
     def _persist_match_viewer_payload(
         self,
         job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
+        viewer_payload,
+        fairness_envelope: dict[str, Any],
     ) -> None:
         if self.session_factory is None:
             return
@@ -395,16 +424,31 @@ class LocalMatchExecutionWorker:
             match = session.get(CompetitionMatch, job.fixture_id)
             if match is None:
                 return
-            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
             match.metadata_json = {
                 **(match.metadata_json or {}),
                 "match_viewer": viewer_payload.model_dump(mode="json"),
+                "fairness": fairness_envelope,
             }
             session.commit()
         except Exception:
             session.rollback()
         finally:
             session.close()
+
+    def _competition_metadata(self, competition_id: str) -> dict[str, Any]:
+        session = self._open_session()
+        if session is None:
+            return {}
+        try:
+            competition = session.get(Competition, competition_id)
+            return dict(competition.metadata_json or {}) if competition is not None else {}
+        finally:
+            session.close()
+
+    def _open_session(self) -> Session | None:
+        if self.session_factory is None:
+            return None
+        return self.session_factory()
 
     def execute_advancement(self, job: BracketAdvancementJob) -> None:
         claim_key = job.idempotency_key or job.source_fixture_id

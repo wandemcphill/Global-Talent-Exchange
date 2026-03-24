@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.fairness.spend_balance_controller import TournamentFairnessMode
 from app.models.streamer_tournament import (
     StreamerTournamentApprovalStatus,
     StreamerTournamentEntryStatus,
@@ -54,6 +55,7 @@ class StreamerTournamentCreateRequest(BaseModel):
     ends_at: datetime | None = None
     qualification_methods: list[StreamerTournamentQualificationType] = Field(default_factory=list)
     top_gifter_rank_limit: int | None = Field(default=None, ge=1, le=500)
+    fairness_mode: TournamentFairnessMode = TournamentFairnessMode.OPEN
     entry_rules_json: dict[str, object] = Field(default_factory=dict)
     metadata_json: dict[str, object] = Field(default_factory=dict)
     rewards: list[StreamerTournamentRewardInput] = Field(default_factory=list)
@@ -71,6 +73,7 @@ class StreamerTournamentUpdateRequest(BaseModel):
     ends_at: datetime | None = None
     qualification_methods: list[StreamerTournamentQualificationType] | None = None
     top_gifter_rank_limit: int | None = Field(default=None, ge=1, le=500)
+    fairness_mode: TournamentFairnessMode | None = None
     entry_rules_json: dict[str, object] | None = None
     metadata_json: dict[str, object] | None = None
 
@@ -268,6 +271,7 @@ class StreamerTournamentView(BaseModel):
     rejected_by_user_id: str | None
     submission_notes: str | None
     approval_notes: str | None
+    fairness_mode: TournamentFairnessMode
     entry_rules_json: dict[str, object]
     metadata_json: dict[str, object]
     created_at: datetime

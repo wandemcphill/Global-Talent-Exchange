@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/widgets/match/ball_widget.dart';
 import 'package:gte_frontend/widgets/match/formation_overlay_widget.dart';
 import 'package:gte_frontend/widgets/match/player_marker_widget.dart';
@@ -11,11 +12,13 @@ class Pitch2dWidget extends StatelessWidget {
     required this.viewState,
     required this.frame,
     this.showFormationOverlay = true,
+    this.presentation,
   });
 
   final MatchViewState viewState;
   final MatchTimelineFrame frame;
   final bool showFormationOverlay;
+  final MatchPitchPresentation? presentation;
 
   @override
   Widget build(BuildContext context) {
@@ -38,59 +41,92 @@ class Pitch2dWidget extends StatelessWidget {
           ),
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
+              final MatchPitchPresentation activePresentation =
+                  presentation ?? _fallbackPresentation(frame);
               final double shortestSide = constraints.biggest.shortestSide;
               final double markerSize =
                   (shortestSide * 0.06).clamp(18, 28).toDouble();
               final double ballSize =
                   (shortestSide * 0.027).clamp(8, 14).toDouble();
-              return Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  RepaintBoundary(
-                    child: CustomPaint(
-                      painter: _PitchPainter(),
-                    ),
+              return ClipRect(
+                child: Transform(
+                  alignment: Alignment.center,
+                  transform: _perspectiveTransform(
+                    constraints.biggest,
+                    activePresentation,
                   ),
-                  if (showFormationOverlay)
-                    IgnorePointer(
-                      child: RepaintBoundary(
-                        child: FormationOverlayWidget(players: frame.players),
+                  child: DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          Color(0xFF0F5132),
+                          Color(0xFF19683D),
+                          Color(0xFF0D4A2D),
+                        ],
                       ),
                     ),
-                  ...frame.players.map(
-                    (MatchViewerPlayerFrame player) {
-                      final MatchViewerTeam team =
-                          viewState.teamForSide(player.side);
-                      final Offset offset = _offsetForPoint(
-                        player.position,
-                        constraints.biggest,
-                        markerSize,
-                      );
-                      if (!player.active &&
-                          player.state != MatchViewerPlayerState.sentOff) {
-                        return const SizedBox.shrink();
-                      }
-                      return Positioned(
-                        left: offset.dx,
-                        top: offset.dy,
-                        child: PlayerMarkerWidget(
-                          player: player,
-                          team: team,
-                          size: markerSize,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: _PitchPainter(),
+                          ),
                         ),
-                      );
-                    },
+                        if (showFormationOverlay)
+                          IgnorePointer(
+                            child: RepaintBoundary(
+                              child: FormationOverlayWidget(
+                                players: frame.players,
+                              ),
+                            ),
+                          ),
+                        ...frame.players.map(
+                          (MatchViewerPlayerFrame player) {
+                            final MatchViewerTeam team =
+                                viewState.teamForSide(player.side);
+                            final MatchViewerPoint position = activePresentation
+                                .resolvePlayerPosition(player);
+                            final Offset offset = _offsetForPoint(
+                              position,
+                              constraints.biggest,
+                              markerSize,
+                            );
+                            if (!player.active &&
+                                player.state !=
+                                    MatchViewerPlayerState.sentOff) {
+                              return const SizedBox.shrink();
+                            }
+                            return Positioned(
+                              left: offset.dx,
+                              top: offset.dy,
+                              child: PlayerMarkerWidget(
+                                player: player,
+                                team: team,
+                                size: markerSize,
+                              ),
+                            );
+                          },
+                        ),
+                        Positioned(
+                          left: _offsetForPoint(
+                            frame.ball.position,
+                            constraints.biggest,
+                            ballSize,
+                          ).dx,
+                          top: _offsetForPoint(
+                            frame.ball.position,
+                            constraints.biggest,
+                            ballSize,
+                          ).dy,
+                          child: BallWidget(ball: frame.ball, size: ballSize),
+                        ),
+                      ],
+                    ),
                   ),
-                  Positioned(
-                    left: _offsetForPoint(
-                            frame.ball.position, constraints.biggest, ballSize)
-                        .dx,
-                    top: _offsetForPoint(
-                            frame.ball.position, constraints.biggest, ballSize)
-                        .dy,
-                    child: BallWidget(ball: frame.ball, size: ballSize),
-                  ),
-                ],
+                ),
               );
             },
           ),
@@ -98,6 +134,85 @@ class Pitch2dWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+MatchPitchPresentation _fallbackPresentation(MatchTimelineFrame frame) {
+  final double ballPanX =
+      ((frame.ball.position.x - 50) / 100).clamp(-0.18, 0.18).toDouble();
+  final double ballPanY =
+      ((frame.ball.position.y - 50) / 160).clamp(-0.12, 0.12).toDouble();
+  switch (frame.cameraPreset) {
+    case MatchCameraPreset.attackPush:
+      return MatchPitchPresentation(
+        cameraPreset: BroadcastCameraPreset.attackZoom,
+        scale: 1.12,
+        panX: ballPanX,
+        panY: -0.08 + ballPanY,
+        motionSeedKey: frame.id,
+        enableMicroVariation: true,
+      );
+    case MatchCameraPreset.boxZoom:
+      return MatchPitchPresentation(
+        cameraPreset: BroadcastCameraPreset.attackZoom,
+        scale: 1.18,
+        panX: ballPanX * 1.2,
+        panY: -0.1 + ballPanY,
+        motionSeedKey: frame.id,
+        enableMicroVariation: true,
+      );
+    case MatchCameraPreset.goalCelebration:
+      return MatchPitchPresentation(
+        cameraPreset: BroadcastCameraPreset.goalZoom,
+        scale: 1.24,
+        panX: ballPanX * 1.35,
+        panY: -0.12 + ballPanY,
+        motionSeedKey: frame.id,
+        enableMicroVariation: true,
+      );
+    case MatchCameraPreset.assistantFlag:
+      return MatchPitchPresentation(
+        cameraPreset: BroadcastCameraPreset.attackZoom,
+        scale: 1.1,
+        panX: ballPanX.sign * 0.15,
+        panY: -0.06,
+        motionSeedKey: frame.id,
+        enableMicroVariation: false,
+      );
+    case MatchCameraPreset.varReplay:
+      return MatchPitchPresentation(
+        cameraPreset: BroadcastCameraPreset.replayCamera,
+        scale: 1.28,
+        panX: ballPanX * 1.4,
+        panY: -0.12 + ballPanY,
+        motionSeedKey: frame.id,
+        enableMicroVariation: false,
+      );
+    case MatchCameraPreset.broadcast:
+      return const MatchPitchPresentation(
+        cameraPreset: BroadcastCameraPreset.broadcast,
+        scale: 1.02,
+        panX: 0,
+        panY: -0.04,
+        motionSeedKey: 'broadcast',
+        enableMicroVariation: false,
+      );
+  }
+}
+
+Matrix4 _perspectiveTransform(
+  Size size,
+  MatchPitchPresentation presentation,
+) {
+  // ignore: deprecated_member_use
+  return Matrix4.identity()
+    ..translate(
+      presentation.panX * size.width,
+      presentation.panY * size.height,
+    )
+    ..setEntry(3, 2, 0.0012)
+    ..rotateX(0.96)
+    // ignore: deprecated_member_use
+    ..scale(presentation.scale, presentation.scale);
 }
 
 Offset _offsetForPoint(

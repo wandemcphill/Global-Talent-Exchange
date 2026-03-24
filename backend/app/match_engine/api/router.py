@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.common.enums.match_status import MatchStatus
+from app.fairness.fairness_guard import FairnessGuard, FairnessViolation
 from app.match_engine.schemas import (
     MatchEventTimelineView,
     MatchFinalSummaryView,
@@ -24,6 +25,10 @@ api_router = APIRouter(prefix="/api/match-engine")
 
 def get_match_simulation_service() -> MatchSimulationService:
     return MatchSimulationService()
+
+
+def get_fairness_guard() -> FairnessGuard:
+    return FairnessGuard()
 
 
 def _resolve_status_from_record(record) -> MatchStatus:
@@ -154,7 +159,12 @@ def _build_availability(record, timeline_events: list[MatchLiveFeedEventView]) -
 def create_match_replay(
     payload: MatchSimulationRequest,
     service: MatchSimulationService = Depends(get_match_simulation_service),
+    fairness_guard: FairnessGuard = Depends(get_fairness_guard),
 ) -> MatchReplayPayloadView:
+    try:
+        fairness_guard.validate_public_request(payload)
+    except FairnessViolation as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
     return service.build_replay_payload(payload)
 
 
@@ -163,7 +173,12 @@ def create_match_replay(
 def create_match_timeline(
     payload: MatchSimulationRequest,
     service: MatchSimulationService = Depends(get_match_simulation_service),
+    fairness_guard: FairnessGuard = Depends(get_fairness_guard),
 ) -> MatchEventTimelineView:
+    try:
+        fairness_guard.validate_public_request(payload)
+    except FairnessViolation as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
     return service.build_timeline(payload)
 
 
@@ -172,7 +187,12 @@ def create_match_timeline(
 def create_match_summary(
     payload: MatchSimulationRequest,
     service: MatchSimulationService = Depends(get_match_simulation_service),
+    fairness_guard: FairnessGuard = Depends(get_fairness_guard),
 ) -> MatchFinalSummaryView:
+    try:
+        fairness_guard.validate_public_request(payload)
+    except FairnessViolation as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
     return service.build_summary(payload)
 
 

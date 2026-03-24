@@ -12,6 +12,15 @@
 - `DATABASE_URL`
 - `REDIS_URL`
 - `JWT_SECRET_KEY` or equivalent auth secret
+- `EMAIL_ENABLED`
+- `EMAIL_PROVIDER`
+- `EMAIL_FROM_ADDRESS`
+- `EMAIL_FROM_NAME`
+- `EMAIL_REPLY_TO`
+- `BREVO_SMTP_HOST`
+- `BREVO_SMTP_PORT`
+- `BREVO_SMTP_USERNAME`
+- `BREVO_SMTP_PASSWORD` from env only, using a regenerated Brevo SMTP key
 - payment gateway secrets
 - storage / attachment secrets where applicable
 - any moderation, telemetry, or error reporting DSNs
@@ -27,6 +36,7 @@
 ## Backend deploy flow
 1. Create the database.
 2. Set environment variables.
+   For current GTEX transactional email, use Brevo SMTP with the temporary Gmail sender `vidzimedialtd@gmail.com` and `GTEX` as the sender name until the domain sender is ready.
 3. Run Alembic migrations.
 4. Start the FastAPI app with a production ASGI server.
 5. Attach Redis for jobs, cache, and event fan-out.

@@ -6,7 +6,7 @@ from app.match_engine.services.match_simulation_service import MatchSimulationSe
 from app.match_engine.simulation.models import MatchEventType, TacticalStyle
 from app.replay_archive.schemas import ReplayArchiveRecord
 from app.services.match_timeline_service import MatchTimelineService
-from app.schemas.match_viewer import MatchViewerEventType, MatchViewerSide
+from app.schemas.match_viewer import MatchViewerEventType, MatchViewerPlaybackStage, MatchViewerSide
 from backend.tests.match_engine.helpers import build_request, build_team
 
 
@@ -195,6 +195,63 @@ def test_match_timeline_service_builds_long_archive_replay() -> None:
     assert all(frame.possession_side in {MatchViewerSide.HOME, MatchViewerSide.AWAY} for frame in view_state.frames)
 
 
+def test_match_timeline_service_builds_offside_pause_sequence() -> None:
+    view_state = _find_view_state(
+        predicate=lambda candidate: any(event.event_type is MatchViewerEventType.OFFSIDE for event in candidate.events)
+    )
+
+    offside_event = next(event for event in view_state.events if event.event_type is MatchViewerEventType.OFFSIDE)
+    offside_frames = [frame for frame in view_state.frames if frame.active_event_id == offside_event.event_id]
+
+    assert any(frame.stage is MatchViewerPlaybackStage.PRE for frame in offside_frames)
+    assert any(frame.stage is MatchViewerPlaybackStage.EVENT for frame in offside_frames)
+    assert any(frame.overlay_text == "OFFSIDE" for frame in offside_frames)
+    assert any(frame.pause_playback for frame in offside_frames)
+    assert any(frame.flag_animation for frame in offside_frames)
+    assert all(frame.home_score == offside_event.home_score for frame in offside_frames)
+    assert all(frame.away_score == offside_event.away_score for frame in offside_frames)
+
+
+def test_match_timeline_service_builds_var_review_for_goals() -> None:
+    view_state = _find_view_state(
+        predicate=lambda candidate: any(
+            event.event_type is MatchViewerEventType.GOAL and event.reviewable for event in candidate.events
+        )
+    )
+
+    reviewed_goal = next(
+        event for event in view_state.events if event.event_type is MatchViewerEventType.GOAL and event.reviewable
+    )
+    goal_frames = [frame for frame in view_state.frames if frame.active_event_id == reviewed_goal.event_id]
+    confirmed_frame = next(frame for frame in goal_frames if frame.overlay_text == "Confirmed")
+    pre_decision_frames = [frame for frame in goal_frames if frame.time_seconds < confirmed_frame.time_seconds]
+    baseline_score = (pre_decision_frames[0].home_score, pre_decision_frames[0].away_score)
+
+    assert any(frame.overlay_text == "Checking..." for frame in goal_frames)
+    assert any(frame.stage is MatchViewerPlaybackStage.REVIEW and frame.playback_rate == 0.35 for frame in goal_frames)
+    assert all((frame.home_score, frame.away_score) == baseline_score for frame in pre_decision_frames)
+    assert confirmed_frame.home_score == reviewed_goal.home_score
+    assert confirmed_frame.away_score == reviewed_goal.away_score
+
+
+def test_match_timeline_service_builds_var_review_for_fouls() -> None:
+    view_state = _find_view_state(
+        predicate=lambda candidate: any(
+            event.event_type is MatchViewerEventType.FOUL and event.reviewable for event in candidate.events
+        )
+    )
+
+    reviewed_foul = next(
+        event for event in view_state.events if event.event_type is MatchViewerEventType.FOUL and event.reviewable
+    )
+    foul_frames = [frame for frame in view_state.frames if frame.active_event_id == reviewed_foul.event_id]
+
+    assert any(frame.overlay_text == "Checking..." for frame in foul_frames)
+    assert any(frame.pause_playback for frame in foul_frames)
+    assert any(frame.stage is MatchViewerPlaybackStage.REVIEW and frame.playback_rate == 0.35 for frame in foul_frames)
+    assert any(frame.overlay_text in {"Confirmed", "Disallowed"} for frame in foul_frames)
+
+
 def _archive_event_type(event_type: MatchEventType) -> str | None:
     mapping = {
         MatchEventType.GOAL: "goals",
@@ -276,3 +333,40 @@ def _build_archive_record(
             },
         }
     )
+
+
+def _find_view_state(*, predicate):
+    simulation_service = MatchSimulationService()
+    timeline_service = MatchTimelineService()
+
+    for seed in range(1, 180):
+        replay_payload = simulation_service.build_replay_payload(
+            build_request(
+                seed=seed,
+                home_team=build_team(
+                    "home",
+                    "North City",
+                    84,
+                    formation="4-3-3",
+                    style=TacticalStyle.ATTACKING,
+                    pressing=88,
+                    aggression=92,
+                    discipline=18,
+                ),
+                away_team=build_team(
+                    "away",
+                    "South Town",
+                    83,
+                    formation="3-5-2",
+                    style=TacticalStyle.ATTACKING,
+                    pressing=86,
+                    aggression=90,
+                    discipline=20,
+                ),
+            )
+        )
+        candidate = timeline_service.build_from_replay_payload(replay_payload)
+        if predicate(candidate):
+            return candidate
+
+    raise AssertionError("No replay in the deterministic seed range produced the required event")

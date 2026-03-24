@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import os
 from pathlib import Path
@@ -415,6 +415,31 @@ class RealPlayerImportConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class BrevoSmtpConfig:
+    host: str
+    port: int
+    username: str
+    password: str = field(repr=False)
+    use_tls: bool = True
+    use_ssl: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class EmailConfig:
+    enabled: bool
+    provider: str
+    from_address: str
+    from_name: str
+    reply_to: str | None
+    send_timeout_seconds: int
+    signup_confirmation_ttl_minutes: int
+    account_recovery_ttl_minutes: int
+    signup_confirmation_url_base: str | None
+    account_recovery_url_base: str | None
+    brevo_smtp: BrevoSmtpConfig
+
+
+@dataclass(frozen=True, slots=True)
 class Settings:
     app_name: str
     app_version: str
@@ -437,6 +462,7 @@ class Settings:
     football_data_base_url: str
     football_data_api_key: str | None
     value_snapshot_lookback_days: int
+    email: EmailConfig
     real_player_import: RealPlayerImportConfig
     player_universe_weighting: PlayerUniverseWeightingConfig
     supply_tiers: SupplyTiersConfig
@@ -1453,6 +1479,41 @@ def load_real_player_import_config(
     )
 
 
+def _normalized_optional_setting(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = value.strip()
+    return candidate or None
+
+
+def load_email_config(environ: Mapping[str, str]) -> EmailConfig:
+    use_tls = _get_bool(environ, "BREVO_SMTP_USE_TLS", True)
+    use_ssl = _get_bool(environ, "BREVO_SMTP_USE_SSL", False)
+    if use_tls and use_ssl:
+        raise ValueError("BREVO SMTP transport cannot enable both TLS and SSL.")
+
+    return EmailConfig(
+        enabled=_get_bool(environ, "EMAIL_ENABLED", False),
+        provider=environ.get("EMAIL_PROVIDER", "brevo_smtp").strip().lower(),
+        from_address=environ.get("EMAIL_FROM_ADDRESS", "vidzimedialtd@gmail.com").strip(),
+        from_name=environ.get("EMAIL_FROM_NAME", "GTEX").strip(),
+        reply_to=_normalized_optional_setting(environ.get("EMAIL_REPLY_TO", "vidzimedialtd@gmail.com")),
+        send_timeout_seconds=_get_int(environ, "EMAIL_SEND_TIMEOUT_SECONDS", 15),
+        signup_confirmation_ttl_minutes=_get_int(environ, "EMAIL_CONFIRMATION_TTL_MINUTES", 1440),
+        account_recovery_ttl_minutes=_get_int(environ, "ACCOUNT_RECOVERY_TTL_MINUTES", 30),
+        signup_confirmation_url_base=_normalized_optional_setting(environ.get("EMAIL_CONFIRMATION_URL_BASE")),
+        account_recovery_url_base=_normalized_optional_setting(environ.get("ACCOUNT_RECOVERY_URL_BASE")),
+        brevo_smtp=BrevoSmtpConfig(
+            host=environ.get("BREVO_SMTP_HOST", "smtp-relay.brevo.com").strip(),
+            port=_get_int(environ, "BREVO_SMTP_PORT", 587),
+            username=environ.get("BREVO_SMTP_USERNAME", "a21b41001@smtp-brevo.com").strip(),
+            password=environ.get("BREVO_SMTP_PASSWORD", ""),
+            use_tls=use_tls,
+            use_ssl=use_ssl,
+        ),
+    )
+
+
 def load_settings(
     *,
     environ: Mapping[str, str] | None = None,
@@ -1492,6 +1553,7 @@ def load_settings(
         football_data_base_url=resolved_environ.get("FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"),
         football_data_api_key=resolved_environ.get("FOOTBALL_DATA_API_KEY"),
         value_snapshot_lookback_days=_get_int(resolved_environ, "GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS", 7),
+        email=load_email_config(resolved_environ),
         real_player_import=load_real_player_import_config(
             resolved_environ,
             default_provider_name=default_ingestion_provider,

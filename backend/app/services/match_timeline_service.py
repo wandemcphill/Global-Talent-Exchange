@@ -8,11 +8,13 @@ from app.match_engine.schemas import MatchEventView, MatchReplayPayloadView, Mat
 from app.match_engine.simulation.models import MatchEventType, PlayerRole
 from app.replay_archive.schemas import ReplayArchiveRecord, ReplayMomentView
 from app.schemas.match_viewer import (
+    MatchViewerCameraPreset,
     MatchTimelineFrameView,
     MatchViewerBallFrameView,
     MatchViewerEventType,
     MatchViewerEventView,
     MatchViewerPhase,
+    MatchViewerPlaybackStage,
     MatchViewerPlayerFrameView,
     MatchViewerPlayerState,
     MatchViewerSide,
@@ -237,6 +239,12 @@ class MatchTimelineService:
                     if player_id is not None
                 ],
                 flags=[],
+                playback_profile=self._optional_text(metadata.get("build_up_profile")) or "neutral",
+                miss_variant=self._optional_text(metadata.get("miss_variant")),
+                reviewable=bool(metadata.get("reviewable", False)),
+                review_reason=self._optional_text(metadata.get("review_reason")),
+                review_decision=self._optional_text(metadata.get("review_decision")),
+                score_commit=self._optional_text(metadata.get("score_commit")) or "immediate",
             ),
             source_type=event.event_type.value,
             team_side=None,
@@ -280,6 +288,12 @@ class MatchTimelineService:
                     if player_id is not None
                 ],
                 flags=[],
+                playback_profile="neutral",
+                miss_variant=None,
+                reviewable=False,
+                review_reason=None,
+                review_decision=None,
+                score_commit="immediate",
             ),
             source_type=event.event_type,
             team_side=None,
@@ -410,148 +424,476 @@ class MatchTimelineService:
 
         last_possession = MatchViewerSide.HOME
         last_time = 0.0
-        for index, event in enumerate(events):
-            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)
-            if event.team_side is not None:
-                last_possession = event.team_side
-            lead = self._lead_seconds(event.view.event_type)
-            settle = self._settle_seconds(event.view.event_type)
-            pre_time = max(last_time + 0.4, event.view.time_seconds - lead)
 
-            if not frames:
-                frames.append(
-                    self._frame(
-                        match_id=match_id,
-                        home_runtime=home_runtime,
-                        away_runtime=away_runtime,
-                        time_seconds=0.0,
-                        clock_minute=0.0,
-                        home_score=0,
-                        away_score=0,
-                        active_event=None,
-                        phase=MatchViewerPhase.KICKOFF,
-                        stage="reset",
-                        possession_side=MatchViewerSide.HOME,
-                    )
-                )
-                last_time = 0.0
-
-            if pre_time > last_time + 0.1:
-                frames.append(
-                    self._frame(
-                        match_id=match_id,
-                        home_runtime=home_runtime,
-                        away_runtime=away_runtime,
-                        time_seconds=pre_time,
-                        clock_minute=max(0.0, self._pre_clock(frames[-1].clock_minute, event.view.minute)),
-                        home_score=frames[-1].home_score,
-                        away_score=frames[-1].away_score,
-                        active_event=event,
-                        phase=self._phase_for_event(event.view.event_type),
-                        stage="pre",
-                        possession_side=event.team_side or last_possession,
-                    )
-                )
-                last_time = pre_time
-
-            if event.view.event_type is MatchViewerEventType.SUBSTITUTION:
-                self._apply_persistent_event(home_runtime, away_runtime, event)
-
+        def append_frame(
+            *,
+            time_seconds: float,
+            clock_minute: float,
+            home_score: int,
+            away_score: int,
+            active_event: _ViewerEventContext | None,
+            phase: MatchViewerPhase,
+            stage: str,
+            possession_side: MatchViewerSide,
+            camera_preset: MatchViewerCameraPreset,
+            overlay_text: str | None = None,
+            pause_playback: bool = False,
+            playback_rate: float = 1.0,
+            flag_animation: bool = False,
+            celebration_team_id: str | None = None,
+        ) -> None:
+            nonlocal last_time
+            resolved_time = max(
+                0.0,
+                time_seconds if not frames else max(time_seconds, last_time + 0.05),
+            )
             frames.append(
                 self._frame(
                     match_id=match_id,
                     home_runtime=home_runtime,
                     away_runtime=away_runtime,
-                    time_seconds=max(event.view.time_seconds, last_time + 0.1),
-                    clock_minute=self._clock_value(event.view.minute, event.view.added_time),
-                    home_score=event.view.home_score,
-                    away_score=event.view.away_score,
-                    active_event=event,
-                    phase=self._phase_for_event(event.view.event_type),
-                    stage="event",
-                    possession_side=event.team_side or last_possession,
+                    time_seconds=resolved_time,
+                    clock_minute=clock_minute,
+                    home_score=home_score,
+                    away_score=away_score,
+                    active_event=active_event,
+                    phase=phase,
+                    stage=stage,
+                    possession_side=possession_side,
+                    camera_preset=camera_preset,
+                    overlay_text=overlay_text,
+                    pause_playback=pause_playback,
+                    playback_rate=playback_rate,
+                    flag_animation=flag_animation,
+                    celebration_team_id=celebration_team_id,
                 )
             )
             last_time = frames[-1].time_seconds
 
+        for index, event in enumerate(events):
+            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)
+            if event.team_side is not None:
+                last_possession = event.team_side
+            prior_home_score = frames[-1].home_score if frames else 0
+            prior_away_score = frames[-1].away_score if frames else 0
+            phase = self._phase_for_event(event.view.event_type)
+            possession_side = event.team_side or last_possession
+            build_up = self._build_up_seconds(event.view)
+            event_time = max(event.view.time_seconds, last_time + 0.1)
+            pre_time = max(last_time + 0.4, event_time - build_up)
+            goal_confirmed = (
+                event.view.event_type is MatchViewerEventType.GOAL
+                and event.view.review_decision != "disallowed"
+                and (
+                    event.view.home_score != prior_home_score
+                    or event.view.away_score != prior_away_score
+                )
+            )
+
+            def display_score(stage_name: str) -> tuple[int, int]:
+                if event.view.event_type is not MatchViewerEventType.GOAL:
+                    return event.view.home_score, event.view.away_score
+                if goal_confirmed and stage_name in {"decision", "post", "reset"}:
+                    return event.view.home_score, event.view.away_score
+                return prior_home_score, prior_away_score
+
+            pre_camera = (
+                MatchViewerCameraPreset.ATTACK_PUSH
+                if event.view.event_type
+                in {
+                    MatchViewerEventType.GOAL,
+                    MatchViewerEventType.SAVE,
+                    MatchViewerEventType.MISS,
+                    MatchViewerEventType.OFFSIDE,
+                }
+                else MatchViewerCameraPreset.BROADCAST
+            )
+            event_camera = (
+                MatchViewerCameraPreset.BOX_ZOOM
+                if event.view.event_type
+                in {
+                    MatchViewerEventType.GOAL,
+                    MatchViewerEventType.SAVE,
+                    MatchViewerEventType.MISS,
+                    MatchViewerEventType.OFFSIDE,
+                    MatchViewerEventType.FOUL,
+                    MatchViewerEventType.YELLOW_CARD,
+                    MatchViewerEventType.RED_CARD,
+                }
+                else MatchViewerCameraPreset.BROADCAST
+            )
+
+            if not frames:
+                append_frame(
+                    time_seconds=0.0,
+                    clock_minute=0.0,
+                    home_score=0,
+                    away_score=0,
+                    active_event=None,
+                    phase=MatchViewerPhase.KICKOFF,
+                    stage="reset",
+                    possession_side=MatchViewerSide.HOME,
+                    camera_preset=MatchViewerCameraPreset.BROADCAST,
+                )
+
+            if pre_time > last_time + 0.1:
+                append_frame(
+                    time_seconds=pre_time,
+                    clock_minute=max(0.0, self._pre_clock(frames[-1].clock_minute, event.view.minute)),
+                    home_score=prior_home_score,
+                    away_score=prior_away_score,
+                    active_event=event,
+                    phase=phase,
+                    stage="pre",
+                    possession_side=possession_side,
+                    camera_preset=pre_camera,
+                )
+
+            if event.view.event_type is MatchViewerEventType.SUBSTITUTION:
+                self._apply_persistent_event(home_runtime, away_runtime, event)
+
+            append_frame(
+                time_seconds=event_time,
+                clock_minute=self._clock_value(event.view.minute, event.view.added_time),
+                home_score=display_score("event")[0],
+                away_score=display_score("event")[1],
+                active_event=event,
+                phase=phase,
+                stage="event",
+                possession_side=possession_side,
+                camera_preset=event_camera,
+            )
+
             if event.view.event_type is not MatchViewerEventType.SUBSTITUTION:
                 self._apply_persistent_event(home_runtime, away_runtime, event)
 
-            post_time = min(duration_seconds + 4.0, max(last_time + 0.6, event.view.time_seconds + settle))
-            if event.view.event_type is not MatchViewerEventType.FULLTIME:
-                frames.append(
-                    self._frame(
-                        match_id=match_id,
-                        home_runtime=home_runtime,
-                        away_runtime=away_runtime,
-                        time_seconds=post_time,
-                        clock_minute=min(120.0, self._clock_value(event.view.minute, event.view.added_time) + 0.2),
-                        home_score=event.view.home_score,
-                        away_score=event.view.away_score,
-                        active_event=event,
-                        phase=self._phase_for_event(event.view.event_type),
-                        stage="post",
-                        possession_side=event.team_side or last_possession,
-                    )
-                )
-                last_time = post_time
-
             if event.view.event_type is MatchViewerEventType.GOAL:
-                reset_time = min(duration_seconds + 5.0, last_time + 1.8)
-                frames.append(
-                    self._frame(
-                        match_id=match_id,
-                        home_runtime=home_runtime,
-                        away_runtime=away_runtime,
-                        time_seconds=reset_time,
-                        clock_minute=min(120.0, self._clock_value(event.view.minute, event.view.added_time) + 0.35),
-                        home_score=event.view.home_score,
-                        away_score=event.view.away_score,
+                if event.view.reviewable:
+                    append_frame(
+                        time_seconds=last_time + 0.6,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time),
+                        home_score=prior_home_score,
+                        away_score=prior_away_score,
+                        active_event=event,
+                        phase=phase,
+                        stage="hold",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.BOX_ZOOM,
+                        overlay_text="Checking...",
+                        pause_playback=True,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 2.4,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time),
+                        home_score=prior_home_score,
+                        away_score=prior_away_score,
+                        active_event=event,
+                        phase=phase,
+                        stage="review",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.VAR_REPLAY,
+                        overlay_text="Checking...",
+                        playback_rate=0.35,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 1.0,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.05,
+                        home_score=display_score("decision")[0],
+                        away_score=display_score("decision")[1],
+                        active_event=event,
+                        phase=phase,
+                        stage="decision",
+                        possession_side=possession_side,
+                        camera_preset=(
+                            MatchViewerCameraPreset.GOAL_CELEBRATION
+                            if goal_confirmed
+                            else MatchViewerCameraPreset.BROADCAST
+                        ),
+                        overlay_text="Confirmed" if goal_confirmed else "Disallowed",
+                        pause_playback=True,
+                        celebration_team_id=event.view.team_id if goal_confirmed else None,
+                    )
+                    append_frame(
+                        time_seconds=last_time + (1.8 if goal_confirmed else 0.8),
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.12,
+                        home_score=display_score("post")[0],
+                        away_score=display_score("post")[1],
+                        active_event=event,
+                        phase=phase,
+                        stage="post",
+                        possession_side=possession_side,
+                        camera_preset=(
+                            MatchViewerCameraPreset.GOAL_CELEBRATION
+                            if goal_confirmed
+                            else MatchViewerCameraPreset.BROADCAST
+                        ),
+                        celebration_team_id=event.view.team_id if goal_confirmed else None,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 0.8,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.2,
+                        home_score=display_score("reset")[0],
+                        away_score=display_score("reset")[1],
+                        active_event=event,
+                        phase=MatchViewerPhase.KICKOFF if goal_confirmed else MatchViewerPhase.OPEN_PLAY,
+                        stage="reset",
+                        possession_side=(
+                            self._restart_side_after_goal(
+                                event.view.home_score,
+                                event.view.away_score,
+                            )
+                            if goal_confirmed
+                            else self._opposite_side(possession_side)
+                        ),
+                        camera_preset=MatchViewerCameraPreset.BROADCAST,
+                    )
+                else:
+                    append_frame(
+                        time_seconds=last_time + 0.7,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.05,
+                        home_score=display_score("decision")[0],
+                        away_score=display_score("decision")[1],
+                        active_event=event,
+                        phase=phase,
+                        stage="decision",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.GOAL_CELEBRATION,
+                        celebration_team_id=event.view.team_id,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 1.8,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.12,
+                        home_score=display_score("post")[0],
+                        away_score=display_score("post")[1],
+                        active_event=event,
+                        phase=phase,
+                        stage="post",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.GOAL_CELEBRATION,
+                        celebration_team_id=event.view.team_id,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 0.8,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.2,
+                        home_score=display_score("reset")[0],
+                        away_score=display_score("reset")[1],
                         active_event=event,
                         phase=MatchViewerPhase.KICKOFF,
                         stage="reset",
-                        possession_side=self._restart_side_after_goal(event.view.home_score, event.view.away_score),
+                        possession_side=self._restart_side_after_goal(
+                            event.view.home_score,
+                            event.view.away_score,
+                        ),
+                        camera_preset=MatchViewerCameraPreset.BROADCAST,
                     )
+            elif event.view.event_type is MatchViewerEventType.OFFSIDE:
+                append_frame(
+                    time_seconds=last_time + 0.6,
+                    clock_minute=self._clock_value(event.view.minute, event.view.added_time),
+                    home_score=prior_home_score,
+                    away_score=prior_away_score,
+                    active_event=event,
+                    phase=phase,
+                    stage="hold",
+                    possession_side=possession_side,
+                    camera_preset=MatchViewerCameraPreset.ASSISTANT_FLAG,
+                    pause_playback=True,
+                    flag_animation=True,
                 )
-                last_time = reset_time
-
-            if event.view.event_type is MatchViewerEventType.HALFTIME:
-                second_half_time = min(duration_seconds + 6.0, last_time + 1.4)
-                frames.append(
-                    self._frame(
-                        match_id=match_id,
-                        home_runtime=home_runtime,
-                        away_runtime=away_runtime,
-                        time_seconds=second_half_time,
-                        clock_minute=45.1,
+                append_frame(
+                    time_seconds=last_time + 1.4,
+                    clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.05,
+                    home_score=prior_home_score,
+                    away_score=prior_away_score,
+                    active_event=event,
+                    phase=phase,
+                    stage="decision",
+                    possession_side=possession_side,
+                    camera_preset=MatchViewerCameraPreset.ASSISTANT_FLAG,
+                    overlay_text="OFFSIDE",
+                    pause_playback=True,
+                    flag_animation=True,
+                )
+                append_frame(
+                    time_seconds=last_time + 0.8,
+                    clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.12,
+                    home_score=prior_home_score,
+                    away_score=prior_away_score,
+                    active_event=event,
+                    phase=MatchViewerPhase.OPEN_PLAY,
+                    stage="reset",
+                    possession_side=self._opposite_side(possession_side),
+                    camera_preset=MatchViewerCameraPreset.BROADCAST,
+                )
+            elif event.view.event_type is MatchViewerEventType.FOUL:
+                if event.view.reviewable:
+                    append_frame(
+                        time_seconds=last_time + 1.2,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time),
                         home_score=event.view.home_score,
                         away_score=event.view.away_score,
                         active_event=event,
-                        phase=MatchViewerPhase.KICKOFF,
-                        stage="reset",
-                        possession_side=MatchViewerSide.AWAY,
+                        phase=phase,
+                        stage="hold",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.BOX_ZOOM,
+                        overlay_text="Checking...",
+                        pause_playback=True,
                     )
+                    append_frame(
+                        time_seconds=last_time + 2.4,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time),
+                        home_score=event.view.home_score,
+                        away_score=event.view.away_score,
+                        active_event=event,
+                        phase=phase,
+                        stage="review",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.VAR_REPLAY,
+                        overlay_text="Checking...",
+                        playback_rate=0.35,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 1.0,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.04,
+                        home_score=event.view.home_score,
+                        away_score=event.view.away_score,
+                        active_event=event,
+                        phase=MatchViewerPhase.SET_PIECE,
+                        stage="decision",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.BROADCAST,
+                        overlay_text=(
+                            "Confirmed"
+                            if event.view.review_decision == "confirmed"
+                            else "Disallowed"
+                        ),
+                        pause_playback=True,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 0.8,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.1,
+                        home_score=event.view.home_score,
+                        away_score=event.view.away_score,
+                        active_event=event,
+                        phase=MatchViewerPhase.OPEN_PLAY,
+                        stage="reset",
+                        possession_side=self._opposite_side(possession_side),
+                        camera_preset=MatchViewerCameraPreset.BROADCAST,
+                    )
+                else:
+                    append_frame(
+                        time_seconds=last_time + 0.8,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.05,
+                        home_score=event.view.home_score,
+                        away_score=event.view.away_score,
+                        active_event=event,
+                        phase=MatchViewerPhase.SET_PIECE,
+                        stage="post",
+                        possession_side=possession_side,
+                        camera_preset=MatchViewerCameraPreset.BOX_ZOOM,
+                        overlay_text="FOUL",
+                        pause_playback=True,
+                    )
+                    append_frame(
+                        time_seconds=last_time + 0.8,
+                        clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.1,
+                        home_score=event.view.home_score,
+                        away_score=event.view.away_score,
+                        active_event=event,
+                        phase=MatchViewerPhase.OPEN_PLAY,
+                        stage="reset",
+                        possession_side=self._opposite_side(possession_side),
+                        camera_preset=MatchViewerCameraPreset.BROADCAST,
+                    )
+            elif event.view.event_type in {
+                MatchViewerEventType.YELLOW_CARD,
+                MatchViewerEventType.RED_CARD,
+            }:
+                append_frame(
+                    time_seconds=last_time + 0.9,
+                    clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.05,
+                    home_score=event.view.home_score,
+                    away_score=event.view.away_score,
+                    active_event=event,
+                    phase=phase,
+                    stage="post",
+                    possession_side=possession_side,
+                    camera_preset=MatchViewerCameraPreset.BOX_ZOOM,
+                    overlay_text=(
+                        "RED CARD"
+                        if event.view.event_type is MatchViewerEventType.RED_CARD
+                        else "YELLOW CARD"
+                    ),
+                    pause_playback=True,
                 )
-                last_time = second_half_time
+                append_frame(
+                    time_seconds=last_time + 0.8,
+                    clock_minute=self._clock_value(event.view.minute, event.view.added_time) + 0.1,
+                    home_score=event.view.home_score,
+                    away_score=event.view.away_score,
+                    active_event=event,
+                    phase=MatchViewerPhase.OPEN_PLAY,
+                    stage="reset",
+                    possession_side=last_possession,
+                    camera_preset=MatchViewerCameraPreset.BROADCAST,
+                )
+            elif event.view.event_type is MatchViewerEventType.HALFTIME:
+                append_frame(
+                    time_seconds=last_time + 1.0,
+                    clock_minute=45.0,
+                    home_score=event.view.home_score,
+                    away_score=event.view.away_score,
+                    active_event=event,
+                    phase=MatchViewerPhase.HALFTIME,
+                    stage="post",
+                    possession_side=possession_side,
+                    camera_preset=MatchViewerCameraPreset.BROADCAST,
+                    overlay_text="HALFTIME",
+                    pause_playback=True,
+                )
+                append_frame(
+                    time_seconds=last_time + 1.4,
+                    clock_minute=45.1,
+                    home_score=event.view.home_score,
+                    away_score=event.view.away_score,
+                    active_event=event,
+                    phase=MatchViewerPhase.KICKOFF,
+                    stage="reset",
+                    possession_side=MatchViewerSide.AWAY,
+                    camera_preset=MatchViewerCameraPreset.BROADCAST,
+                )
+            elif event.view.event_type is not MatchViewerEventType.FULLTIME:
+                append_frame(
+                    time_seconds=last_time + self._settle_seconds(event.view.event_type),
+                    clock_minute=min(
+                        120.0,
+                        self._clock_value(event.view.minute, event.view.added_time)
+                        + 0.12,
+                    ),
+                    home_score=event.view.home_score,
+                    away_score=event.view.away_score,
+                    active_event=event,
+                    phase=phase,
+                    stage="post",
+                    possession_side=possession_side,
+                    camera_preset=event_camera,
+                )
 
             if event.view.event_type is MatchViewerEventType.FULLTIME:
-                last_time = max(last_time, event.view.time_seconds)
+                last_time = max(last_time, event_time)
 
             if index == len(events) - 1 and frames[-1].time_seconds < duration_seconds:
-                frames.append(
-                    self._frame(
-                        match_id=match_id,
-                        home_runtime=home_runtime,
-                        away_runtime=away_runtime,
-                        time_seconds=duration_seconds,
-                        clock_minute=max(90.0, frames[-1].clock_minute),
-                        home_score=event.view.home_score,
-                        away_score=event.view.away_score,
-                        active_event=event,
-                        phase=MatchViewerPhase.FULLTIME,
-                        stage="post",
-                        possession_side=last_possession,
-                    )
+                append_frame(
+                    time_seconds=duration_seconds,
+                    clock_minute=max(90.0, frames[-1].clock_minute),
+                    home_score=event.view.home_score,
+                    away_score=event.view.away_score,
+                    active_event=event,
+                    phase=MatchViewerPhase.FULLTIME,
+                    stage="post",
+                    possession_side=last_possession,
+                    camera_preset=MatchViewerCameraPreset.BROADCAST,
                 )
 
         deduped: list[MatchTimelineFrameView] = []
@@ -576,6 +918,12 @@ class MatchTimelineService:
         phase: MatchViewerPhase,
         stage: str,
         possession_side: MatchViewerSide,
+        camera_preset: MatchViewerCameraPreset,
+        overlay_text: str | None = None,
+        pause_playback: bool = False,
+        playback_rate: float = 1.0,
+        flag_animation: bool = False,
+        celebration_team_id: str | None = None,
     ) -> MatchTimelineFrameView:
         home_attacks_right = clock_minute < 45.0
         player_payloads = self._player_payloads(
@@ -605,7 +953,14 @@ class MatchTimelineService:
             home_attacks_right=home_attacks_right,
             possession_side=possession_side,
             active_event_id=active_event.view.event_id if active_event is not None else None,
-            event_banner=active_event.view.banner_text if active_event is not None and stage in {"event", "post"} else None,
+            event_banner=active_event.view.banner_text if active_event is not None and stage in {"event", "decision", "post"} else None,
+            stage=self._playback_stage(stage),
+            camera_preset=camera_preset,
+            overlay_text=overlay_text,
+            pause_playback=pause_playback,
+            playback_rate=playback_rate,
+            flag_animation=flag_animation,
+            celebration_team_id=celebration_team_id,
             players=[MatchViewerPlayerFrameView.model_validate(item) for item in player_payloads],
             ball=MatchViewerBallFrameView.model_validate(ball_payload),
         )
@@ -870,7 +1225,16 @@ class MatchTimelineService:
                 position["y"] = self._lerp(position["y"], event_target["y"] + 6.0, 0.52)
                 return position, state
 
-        if viewer_type in {MatchViewerEventType.GOAL, MatchViewerEventType.MISS, MatchViewerEventType.SAVE, MatchViewerEventType.ATTACK, MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE, MatchViewerEventType.OFFSIDE}:
+        if viewer_type in {
+            MatchViewerEventType.GOAL,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.ATTACK,
+            MatchViewerEventType.PENALTY,
+            MatchViewerEventType.SET_PIECE,
+            MatchViewerEventType.OFFSIDE,
+            MatchViewerEventType.FOUL,
+        }:
             if player.role is PlayerRole.GOALKEEPER and player_side is defending_side:
                 state = MatchViewerPlayerState.DEFENDING
                 position["x"] = self._lerp(position["x"], goalkeeper_target["x"], 0.35 if stage == "pre" else 0.68)
@@ -958,6 +1322,12 @@ class MatchTimelineService:
             if stage == "pre":
                 return {"position": self._ball_near_player(primary_pos or event_target), "owner_player_id": primary, "state": "controlled"}
             return {"position": wide_target if stage == "event" else self._ball_near_player(wide_target), "owner_player_id": None, "state": "missed"}
+        if viewer_type is MatchViewerEventType.FOUL:
+            return {
+                "position": self._ball_near_player(primary_pos or event_target),
+                "owner_player_id": primary or default_owner,
+                "state": "stopped",
+            }
         if viewer_type is MatchViewerEventType.OFFSIDE:
             return {"position": event_target if stage != "pre" else self._ball_near_player(primary_pos or event_target), "owner_player_id": primary, "state": "stopped"}
         if viewer_type in {MatchViewerEventType.RED_CARD, MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
@@ -979,6 +1349,9 @@ class MatchTimelineService:
             MatchEventType.KICKOFF: MatchViewerEventType.KICKOFF,
             MatchEventType.GOAL: MatchViewerEventType.GOAL,
             MatchEventType.PENALTY_SCORED: MatchViewerEventType.GOAL,
+            MatchEventType.FOUL: MatchViewerEventType.FOUL,
+            MatchEventType.TACTICAL_FOUL: MatchViewerEventType.FOUL,
+            MatchEventType.OFFSIDE: MatchViewerEventType.OFFSIDE,
             MatchEventType.GOALKEEPER_SAVE: MatchViewerEventType.SAVE,
             MatchEventType.DOUBLE_SAVE: MatchViewerEventType.SAVE,
             MatchEventType.MISSED_CHANCE: MatchViewerEventType.MISS,
@@ -1020,6 +1393,8 @@ class MatchTimelineService:
             return MatchViewerEventType.GOAL
         if "offside" in description:
             return MatchViewerEventType.OFFSIDE
+        if "foul" in description:
+            return MatchViewerEventType.FOUL
         if "save" in description or "denied" in description or "keeps out" in description:
             return MatchViewerEventType.SAVE
         if event.event_type == "missed_chances":
@@ -1037,6 +1412,22 @@ class MatchTimelineService:
             return MatchViewerPhase.FULLTIME
         return MatchViewerPhase.OPEN_PLAY
 
+    def _build_up_seconds(self, event: MatchViewerEventView) -> float:
+        if event.playback_profile == "foul" or event.event_type in {
+            MatchViewerEventType.FOUL,
+            MatchViewerEventType.YELLOW_CARD,
+            MatchViewerEventType.RED_CARD,
+        }:
+            return 1.6
+        if event.playback_profile in {"goal", "offside"} or event.event_type in {
+            MatchViewerEventType.GOAL,
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.OFFSIDE,
+        }:
+            return 2.2
+        return 1.1
+
     def _lead_seconds(self, event_type: MatchViewerEventType) -> float:
         if event_type in {MatchViewerEventType.GOAL, MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.RED_CARD, MatchViewerEventType.OFFSIDE}:
             return 2.2
@@ -1047,7 +1438,7 @@ class MatchTimelineService:
     def _settle_seconds(self, event_type: MatchViewerEventType) -> float:
         if event_type is MatchViewerEventType.GOAL:
             return 2.4
-        if event_type in {MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.RED_CARD}:
+        if event_type in {MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.RED_CARD, MatchViewerEventType.FOUL}:
             return 1.8
         if event_type in {MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
             return 1.2
@@ -1091,6 +1482,8 @@ class MatchTimelineService:
             target_x = 88.0 if attacks_right else 12.0
         if viewer_type is MatchViewerEventType.OFFSIDE:
             target_x = 82.0 if attacks_right else 18.0
+        if viewer_type is MatchViewerEventType.FOUL:
+            target_x = 62.0 if attacks_right else 38.0
         return {"x": target_x, "y": target_y}
 
     def _wide_target_zone(
@@ -1194,6 +1587,18 @@ class MatchTimelineService:
             return previous_clock
         return max(previous_clock, float(next_minute) - 0.35)
 
+    def _playback_stage(self, stage: str) -> MatchViewerPlaybackStage:
+        mapping = {
+            "pre": MatchViewerPlaybackStage.PRE,
+            "event": MatchViewerPlaybackStage.EVENT,
+            "hold": MatchViewerPlaybackStage.HOLD,
+            "review": MatchViewerPlaybackStage.REVIEW,
+            "decision": MatchViewerPlaybackStage.DECISION,
+            "post": MatchViewerPlaybackStage.POST,
+            "reset": MatchViewerPlaybackStage.RESET,
+        }
+        return mapping.get(stage, MatchViewerPlaybackStage.EVENT)
+
     def _score_before_minute(self, events: list[_ViewerEventContext], minute: int) -> tuple[int, int]:
         home_score = 0
         away_score = 0
@@ -1259,7 +1664,7 @@ class MatchTimelineService:
     def _emphasis_level(self, event_type: MatchViewerEventType) -> int:
         if event_type in {MatchViewerEventType.GOAL, MatchViewerEventType.RED_CARD}:
             return 3
-        if event_type in {MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.OFFSIDE, MatchViewerEventType.PENALTY}:
+        if event_type in {MatchViewerEventType.SAVE, MatchViewerEventType.MISS, MatchViewerEventType.FOUL, MatchViewerEventType.OFFSIDE, MatchViewerEventType.PENALTY}:
             return 2
         return 1
 

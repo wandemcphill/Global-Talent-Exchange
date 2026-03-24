@@ -671,12 +671,20 @@ class MatchEventGenerator:
         player = self._choose_card_candidate(state, rng)
         if player is None:
             return None
+        reviewable = minute >= 60 and rng.random() < (
+            0.22
+            + (0.06 if abs(state.stats.goals - opponent.stats.goals) <= 1 else 0.0)
+            + (0.04 if minute >= 75 else 0.0)
+        )
+        review_decision = (
+            self._foul_review_outcome(rng) if reviewable else None
+        )
         state.dynamic_morale = self._clamp(state.dynamic_morale - 0.4, 25.0, 99.0)
         home_state, away_state = self._ordered_states(state, opponent)
         return self._make_event(
             match_id=match_id,
             event_counter=event_counter,
-            event_type=MatchEventType.TACTICAL_FOUL,
+            event_type=MatchEventType.FOUL,
             minute=minute,
             home_state=home_state,
             away_state=away_state,
@@ -684,7 +692,17 @@ class MatchEventGenerator:
             team_name=state.team_name,
             primary_player_id=player.player_id,
             primary_player_name=player.player_name,
-            metadata={"importance": 2, "pressure_level": self._pressure_level(state, opponent, minute)},
+            metadata={
+                "importance": 2,
+                "pressure_level": self._pressure_level(state, opponent, minute),
+                "build_up_profile": "foul",
+                "reviewable": reviewable,
+                "review_reason": (
+                    "possible foul in the build-up" if reviewable else None
+                ),
+                "review_decision": review_decision,
+                "score_commit": "never",
+            },
         )
 
     def _process_fatigue_event(
@@ -729,7 +747,24 @@ class MatchEventGenerator:
         player_stats[player.player_id].yellow_cards += 1
         state.dynamic_morale = self._clamp(state.dynamic_morale - 0.8, 30.0, 99.0)
         home_state, away_state = self._ordered_states(state, opponent)
-        return self._make_event(match_id=match_id, event_counter=event_counter, event_type=MatchEventType.YELLOW_CARD, minute=minute, home_state=home_state, away_state=away_state, team_id=state.team_id, team_name=state.team_name, primary_player_id=player.player_id, primary_player_name=player.player_name, metadata={"importance": 2, "pressure_level": self._pressure_level(state, opponent, minute)})
+        return self._make_event(
+            match_id=match_id,
+            event_counter=event_counter,
+            event_type=MatchEventType.YELLOW_CARD,
+            minute=minute,
+            home_state=home_state,
+            away_state=away_state,
+            team_id=state.team_id,
+            team_name=state.team_name,
+            primary_player_id=player.player_id,
+            primary_player_name=player.player_name,
+            metadata={
+                "importance": 2,
+                "pressure_level": self._pressure_level(state, opponent, minute),
+                "build_up_profile": "foul",
+                "score_commit": "never",
+            },
+        )
 
     def _process_red_card(self, *, match_id: str, event_counter, state: TeamRuntimeState, opponent: TeamRuntimeState, minute: int, player_stats: dict[str, PlayerMatchStats], rng: Random, source: str, forced_player: InternalPlayer | None = None) -> MatchEvent | None:
         player = forced_player or self._choose_red_card_candidate(state, rng)
@@ -750,7 +785,25 @@ class MatchEventGenerator:
         opponent.dynamic_morale = self._clamp(opponent.dynamic_morale + 3.0, 25.0, 99.0)
         opponent.momentum = self._clamp(opponent.momentum + 2.2, -12.0, 14.0)
         home_state, away_state = self._ordered_states(state, opponent)
-        return self._make_event(match_id=match_id, event_counter=event_counter, event_type=MatchEventType.RED_CARD, minute=minute, home_state=home_state, away_state=away_state, team_id=state.team_id, team_name=state.team_name, primary_player_id=player.player_id, primary_player_name=player.player_name, metadata={"source": source, "fallback_formation": state.current_formation, "importance": 5})
+        return self._make_event(
+            match_id=match_id,
+            event_counter=event_counter,
+            event_type=MatchEventType.RED_CARD,
+            minute=minute,
+            home_state=home_state,
+            away_state=away_state,
+            team_id=state.team_id,
+            team_name=state.team_name,
+            primary_player_id=player.player_id,
+            primary_player_name=player.player_name,
+            metadata={
+                "source": source,
+                "fallback_formation": state.current_formation,
+                "importance": 5,
+                "build_up_profile": "foul",
+                "score_commit": "never",
+            },
+        )
 
     def _process_injury(self, *, match_id: str, event_counter, state: TeamRuntimeState, opponent: TeamRuntimeState, minute: int, player_stats: dict[str, PlayerMatchStats], rng: Random) -> list[MatchEvent]:
         player = self._choose_injury_candidate(state, rng)
@@ -913,6 +966,11 @@ class MatchEventGenerator:
             "importance": importance,
             "chance_quality": round(quality, 2),
             "momentum_swing": round((importance * 0.6) + (quality * 1.4), 2),
+            "build_up_profile": "attack",
+            "reviewable": False,
+            "review_reason": None,
+            "review_decision": None,
+            "score_commit": "never",
         }
 
         if metadata["momentum_swing"] >= 2.4 or rng.random() < 0.08:
@@ -993,6 +1051,33 @@ class MatchEventGenerator:
             )
         )
 
+        if rng.random() < self._offside_probability(
+            attacking,
+            defending,
+            minute=minute,
+            chance_family=family,
+        ):
+            events.append(
+                self._make_event(
+                    match_id=match_id,
+                    event_counter=event_counter,
+                    event_type=MatchEventType.OFFSIDE,
+                    minute=minute,
+                    home_state=home_state,
+                    away_state=away_state,
+                    team_id=attacking.team_id,
+                    team_name=attacking.team_name,
+                    primary_player_id=shooter.player_id,
+                    primary_player_name=shooter.player_name,
+                    metadata={
+                        **metadata,
+                        "build_up_profile": "offside",
+                        "score_commit": "never",
+                    },
+                )
+            )
+            return events
+
         penalty_award_chance = 0.06 if family in {"penalty_box_scramble", "defensive_error"} else 0.03
         if rng.random() < penalty_award_chance:
             events.append(
@@ -1034,7 +1119,13 @@ class MatchEventGenerator:
                         team_name=attacking.team_name,
                         primary_player_id=shooter.player_id,
                         primary_player_name=shooter.player_name,
-                        metadata={**metadata, "assisted": False, "penalty": True},
+                        metadata={
+                            **metadata,
+                            "assisted": False,
+                            "penalty": True,
+                            "build_up_profile": "goal",
+                            "score_commit": "immediate",
+                        },
                     )
                 )
             else:
@@ -1058,7 +1149,12 @@ class MatchEventGenerator:
                         primary_player_name=shooter.player_name,
                         secondary_player_id=keeper.player_id if keeper is not None else None,
                         secondary_player_name=keeper.player_name if keeper is not None else None,
-                        metadata={**metadata, "penalty": True},
+                        metadata={
+                            **metadata,
+                            "penalty": True,
+                            "miss_variant": "save",
+                            "score_commit": "never",
+                        },
                     )
                 )
             return events
@@ -1096,9 +1192,67 @@ class MatchEventGenerator:
                 )
             )
             if rng.random() < goal:
+                assister = self._choose_assister(attacking, shooter, rng, chance_family=family)
+                review_decision = self._goal_review_outcome(
+                    rng,
+                    minute=minute,
+                    chance_quality=quality,
+                    importance=importance,
+                    chance_family=family,
+                )
+                reviewable = review_decision is not None
+                goal_metadata = {
+                    **metadata,
+                    "assisted": assister is not None,
+                    "build_up_profile": "goal",
+                    "reviewable": reviewable,
+                    "review_reason": (
+                        "possible offside in the build-up" if reviewable else None
+                    ),
+                    "review_decision": review_decision,
+                    "score_commit": (
+                        "after_review"
+                        if review_decision == "confirmed"
+                        else "never"
+                        if review_decision == "disallowed"
+                        else "immediate"
+                    ),
+                }
+                if review_decision == "disallowed":
+                    attacking.dynamic_morale = self._clamp(
+                        attacking.dynamic_morale - 1.8,
+                        25.0,
+                        99.0,
+                    )
+                    defending.dynamic_morale = self._clamp(
+                        defending.dynamic_morale + 0.9,
+                        25.0,
+                        99.0,
+                    )
+                    events.append(
+                        self._make_event(
+                            match_id=match_id,
+                            event_counter=event_counter,
+                            event_type=MatchEventType.GOAL,
+                            minute=minute,
+                            home_state=home_state,
+                            away_state=away_state,
+                            team_id=attacking.team_id,
+                            team_name=attacking.team_name,
+                            primary_player_id=shooter.player_id,
+                            primary_player_name=shooter.player_name,
+                            secondary_player_id=assister.player_id
+                                if assister is not None
+                                else None,
+                            secondary_player_name=assister.player_name
+                                if assister is not None
+                                else None,
+                            metadata=goal_metadata,
+                        )
+                    )
+                    return events
                 attacking.stats.goals += 1
                 player_stats[shooter.player_id].goals += 1
-                assister = self._choose_assister(attacking, shooter, rng, chance_family=family)
                 if assister is not None:
                     player_stats[assister.player_id].assists += 1
                 self._apply_momentum(attacking, defending, delta=(2.2 + importance * 0.25))
@@ -1116,7 +1270,7 @@ class MatchEventGenerator:
                         primary_player_name=shooter.player_name,
                         secondary_player_id=assister.player_id if assister is not None else None,
                         secondary_player_name=assister.player_name if assister is not None else None,
-                        metadata={**metadata, "assisted": assister is not None},
+                        metadata=goal_metadata,
                     )
                 )
                 return events
@@ -1139,7 +1293,11 @@ class MatchEventGenerator:
                     primary_player_name=keeper.player_name if keeper is not None else None,
                     secondary_player_id=shooter.player_id,
                     secondary_player_name=shooter.player_name,
-                    metadata=metadata,
+                    metadata={
+                        **metadata,
+                        "miss_variant": "save",
+                        "score_commit": "never",
+                    },
                 )
             )
             return events
@@ -1161,7 +1319,11 @@ class MatchEventGenerator:
                     team_name=attacking.team_name,
                     primary_player_id=shooter.player_id,
                     primary_player_name=shooter.player_name,
-                    metadata=metadata,
+                    metadata={
+                        **metadata,
+                        "miss_variant": "post",
+                        "score_commit": "never",
+                    },
                 )
             )
             return events
@@ -1178,7 +1340,11 @@ class MatchEventGenerator:
                 team_name=attacking.team_name,
                 primary_player_id=shooter.player_id,
                 primary_player_name=shooter.player_name,
-                metadata=metadata,
+                metadata={
+                    **metadata,
+                    "miss_variant": "wide",
+                    "score_commit": "never",
+                },
             )
         )
         return events
@@ -1383,6 +1549,50 @@ class MatchEventGenerator:
     def _chance_importance(self, attacking: TeamRuntimeState, defending: TeamRuntimeState, minute: int, *, chance_family: str) -> int:
         importance = 2 + int(chance_family in {"through_ball_one_on_one", "late_siege", "defensive_error"}) + int(minute >= 75) + int(abs(attacking.stats.goals - defending.stats.goals) <= 1)
         return max(1, min(5, importance))
+
+    def _offside_probability(
+        self,
+        attacking: TeamRuntimeState,
+        defending: TeamRuntimeState,
+        *,
+        minute: int,
+        chance_family: str,
+    ) -> float:
+        base = {
+            "through_ball_one_on_one": 0.14,
+            "counterattack": 0.12,
+            "late_siege": 0.10,
+            "cutback": 0.06,
+            "near_post_finish": 0.05,
+        }.get(chance_family, 0.03)
+        base += max(0.0, (attacking.tactics.tempo - 58.0) / 420.0)
+        base += max(0.0, (attacking.strength.attack - defending.strength.defense) / 900.0)
+        base += 0.02 if minute >= 70 and attacking.tactics.mentality.value == "attacking" else 0.0
+        return self._clamp(base, 0.02, 0.24)
+
+    def _goal_review_outcome(
+        self,
+        rng: Random,
+        *,
+        minute: int,
+        chance_quality: float,
+        importance: int,
+        chance_family: str,
+    ) -> str | None:
+        review_chance = 0.0
+        if chance_quality >= 0.54 and importance >= 3:
+            review_chance = 0.14
+        if chance_family in {"through_ball_one_on_one", "counterattack", "late_siege"}:
+            review_chance += 0.10
+        if minute >= 75:
+            review_chance += 0.05
+        if rng.random() >= self._clamp(review_chance, 0.0, 0.36):
+            return None
+        confirm_probability = self._clamp(0.70 + ((chance_quality - 0.5) * 0.35), 0.55, 0.86)
+        return "confirmed" if rng.random() < confirm_probability else "disallowed"
+
+    def _foul_review_outcome(self, rng: Random) -> str:
+        return "confirmed" if rng.random() < 0.68 else "disallowed"
 
     def _select_replacement(self, state: TeamRuntimeState, *, preferred_roles: tuple[PlayerRole, ...]) -> InternalPlayer | None:
         candidates = state.available_bench(preferred_roles) or state.available_bench()

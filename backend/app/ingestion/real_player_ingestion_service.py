@@ -55,11 +55,17 @@ from app.value_engine.models import ValueSnapshot
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 from app.value_engine.service import IngestionValueEngineBridge, IngestionValueSnapshotRepository
 
-from .real_player_canonical_mapping_service import CanonicalReferenceResolution, RealPlayerCanonicalMappingService
+from .mapping_resolver import ClubResolutionContext, MappingResolver, MappingResolution
+from .real_player_canonical_mapping_service import (
+    CanonicalReferenceInput,
+    CanonicalReferenceResolution,
+    RealPlayerCanonicalMappingService,
+)
 from .real_player_identity_matcher import (
     AmbiguousRealPlayerMatchError,
     RealPlayerIdentityMatcher,
 )
+from .unresolved_logger import UnresolvedMappingLogger
 
 
 class RealPlayerIngestionError(ValueError):
@@ -103,6 +109,12 @@ class PreparedRealPlayerBatch:
     import_batch_id: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class StagePlayerOutcome:
+    staged_player: StagedRealPlayer | None
+    mapping_issues: tuple[RealPlayerBatchIssue, ...] = ()
+
+
 @dataclass(slots=True)
 class RealPlayerIngestionService:
     session_factory: sessionmaker[Session]
@@ -112,6 +124,8 @@ class RealPlayerIngestionService:
     normalization_service: RealPlayerNormalizationService = field(default_factory=RealPlayerNormalizationService)
     signal_adapter: RealPlayerSignalAdapter = field(default_factory=RealPlayerSignalAdapter)
     canonical_mapping_service: RealPlayerCanonicalMappingService | None = None
+    strict_canonical_mapping_service: RealPlayerCanonicalMappingService | None = None
+    mapping_resolver: MappingResolver | None = None
     summary_projector: PlayerSummaryProjector = field(default_factory=PlayerSummaryProjector)
     squad_assignment_service: SquadAssignmentService = field(default_factory=SquadAssignmentService)
     avatar_service: AvatarService = field(default_factory=AvatarService)
@@ -126,6 +140,13 @@ class RealPlayerIngestionService:
             )
         if self.canonical_mapping_service is None:
             self.canonical_mapping_service = RealPlayerCanonicalMappingService(settings=self.settings)
+        if self.strict_canonical_mapping_service is None:
+            self.strict_canonical_mapping_service = RealPlayerCanonicalMappingService(
+                settings=self.settings,
+                auto_create_missing_entities=False,
+            )
+        if self.mapping_resolver is None:
+            self.mapping_resolver = MappingResolver()
 
     def ingest(self, request: RealPlayerIngestionRequest) -> RealPlayerIngestionResult:
         write_report: RealPlayerWriteReport
@@ -246,6 +267,7 @@ class RealPlayerIngestionService:
         staged_players: list[StagedRealPlayer] = []
         preview_snapshots: dict[str, ValueSnapshot] = {}
         issues: list[RealPlayerBatchIssue] = []
+        unresolved_logger = UnresolvedMappingLogger()
         row_numbers = {
             (player.source_name, player.source_player_key): index
             for index, player in enumerate(request.players, start=1)
@@ -402,7 +424,7 @@ class RealPlayerIngestionService:
 
             try:
                 with session.begin_nested():
-                    staged = self._stage_player(
+                    outcome = self._stage_player(
                         session=session,
                         import_batch=import_batch,
                         row_number=row_number,
@@ -412,9 +434,11 @@ class RealPlayerIngestionService:
                         request=request,
                         ingestion_batch_id=ingestion_batch_id,
                         as_of=as_of,
+                        unresolved_logger=unresolved_logger,
                     )
-                staged_players.append(staged)
-                issues.extend(staged.mapping_issues)
+                if outcome.staged_player is not None:
+                    staged_players.append(outcome.staged_player)
+                issues.extend(outcome.mapping_issues)
             except Exception as exc:
                 hard_failure_count += 1
                 issues.append(
@@ -498,16 +522,17 @@ class RealPlayerIngestionService:
         request: RealPlayerIngestionRequest,
         ingestion_batch_id: str,
         as_of: datetime,
-    ) -> StagedRealPlayer:
-        if self.canonical_mapping_service is None:
+        unresolved_logger: UnresolvedMappingLogger,
+    ) -> StagePlayerOutcome:
+        if self.canonical_mapping_service is None or self.strict_canonical_mapping_service is None:
             raise RealPlayerIngestionError("Canonical mapping service is not configured.")
+        if self.mapping_resolver is None:
+            raise RealPlayerIngestionError("Mapping resolver is not configured.")
 
         sample_payload = self._canonical_reference_sample_payload(payload)
-        country_resolution = self.canonical_mapping_service.resolve_country(
-            session,
-            source_name=payload.source_name,
-            provider_external_id=payload.nationality_code,
-            name=payload.nationality,
+        country_resolution = self._resolve_country_reference(
+            session=session,
+            payload=payload,
             as_of=as_of,
             sample_payload=sample_payload,
         )
@@ -534,25 +559,12 @@ class RealPlayerIngestionService:
         )
         competition = competition_resolution.entity if isinstance(competition_resolution.entity, Competition) else None
 
-        club_resolution = self.canonical_mapping_service.resolve_club(
-            session,
-            source_name=payload.source_name,
-            provider_external_id=payload.current_real_world_club_key,
-            name=payload.current_real_world_club,
-            country=competition.country if competition is not None else None,
-            country_code=None,
-            country_name=None,
-            competition=competition,
-            competition_external_id=payload.current_real_world_league_key,
-            competition_name=payload.current_real_world_league,
+        club_resolution = self._resolve_club_reference(
+            session=session,
+            payload=payload,
             as_of=as_of,
             sample_payload=sample_payload,
-            auto_create_values={
-                "short_name": (payload.current_real_world_club or "")[:80] or None,
-                "popularity_score": normalized.club_strength_score,
-                "is_tradable": True,
-                "last_synced_at": as_of,
-            },
+            competition=competition,
         )
         club = club_resolution.entity if isinstance(club_resolution.entity, Club) else None
         if competition is None and club is not None and club.current_competition_id:
@@ -572,6 +584,53 @@ class RealPlayerIngestionService:
             "competition": competition_resolution.metadata(),
             "club": club_resolution.metadata(),
         }
+
+        country_blocked = country_resolution.status != "resolved"
+        club_blocked = club_resolution.status != "resolved"
+        if country_resolution.status == "unresolved" or club_resolution.status == "unresolved":
+            unresolved_logger.record(
+                raw_club_name=payload.current_real_world_club,
+                raw_country_name=payload.nationality,
+                competition_name=payload.current_real_world_league,
+                player_name=payload.canonical_name,
+            )
+        if country_blocked or club_blocked:
+            review_reason = (
+                "unresolved_mapping"
+                if country_resolution.status == "unresolved" or club_resolution.status == "unresolved"
+                else "mapped_partial"
+            )
+            validation_errors = [issue.message for issue in mapping_issues]
+            audit_findings = [
+                {
+                    "finding_type": issue.issue_type,
+                    "message": issue.message,
+                    "details": mapping_summary.get(issue.issue_type.removeprefix("unresolved_").removeprefix("skipped_").removesuffix("_mapping"), {}),
+                }
+                for issue in mapping_issues
+            ]
+            self._upsert_import_row(
+                session=session,
+                import_batch=import_batch,
+                row_number=row_number,
+                payload=payload,
+                normalized=normalized,
+                status=RealPlayerImportRowStatus.SKIPPED.value,
+                match_action=match.action,
+                import_action="skipped_mapping",
+                confidence_score=match.confidence_score,
+                review_status="needs_review",
+                review_reason=review_reason,
+                validation_errors=validation_errors,
+                audit_findings=audit_findings,
+                candidate_players=self._candidate_payloads(match.candidates),
+                gtex_player_id=match.player_id,
+                import_metadata={"mapping_summary": mapping_summary},
+            )
+            return StagePlayerOutcome(
+                staged_player=None,
+                mapping_issues=mapping_issues,
+            )
 
         player, action, was_real_player = self._upsert_player(
             session,
@@ -639,17 +698,21 @@ class RealPlayerIngestionService:
             source_link_id=source_link.id,
             real_player_profile_id=profile.id,
             candidate_players=self._candidate_payloads(match.candidates),
+            import_metadata={"mapping_summary": mapping_summary},
         )
-        return StagedRealPlayer(
-            source_name=payload.source_name,
-            source_player_key=payload.source_player_key,
-            canonical_name=normalized.canonical_name,
-            gtex_player_id=player.id,
-            action=action,
-            match_action=match.action,
-            identity_confidence_score=match.confidence_score,
-            profile_id=profile.id,
-            normalized=normalized,
+        return StagePlayerOutcome(
+            staged_player=StagedRealPlayer(
+                source_name=payload.source_name,
+                source_player_key=payload.source_player_key,
+                canonical_name=normalized.canonical_name,
+                gtex_player_id=player.id,
+                action=action,
+                match_action=match.action,
+                identity_confidence_score=match.confidence_score,
+                profile_id=profile.id,
+                normalized=normalized,
+                mapping_issues=mapping_issues,
+            ),
             mapping_issues=mapping_issues,
         )
 
@@ -1005,36 +1068,64 @@ class RealPlayerIngestionService:
         *,
         payload: RealPlayerSeedInput,
         entity_label: str,
-        resolution: CanonicalReferenceResolution,
+        resolution: CanonicalReferenceResolution | MappingResolution,
     ) -> RealPlayerBatchIssue | None:
-        if resolution.status != "unresolved":
+        if resolution.status == "resolved" or (entity_label == "competition" and resolution.status == "skipped"):
             return None
         reference_label = (
-            resolution.provider_label
-            or resolution.provider_external_id
-            or resolution.provider_reference_key
+            getattr(resolution, "provider_label", None)
+            or getattr(resolution, "provider_external_id", None)
+            or getattr(resolution, "provider_reference_key", None)
+            or getattr(resolution, "raw_name", None)
             or entity_label
         )
         reason = f" reason={resolution.reason_code}." if resolution.reason_code else ""
+        issue_prefix = "skipped" if resolution.status == "skipped" else "unresolved"
+        status_verb = "was skipped" if resolution.status == "skipped" else "was not resolved"
         return self._issue(
             payload=payload,
-            issue_type=f"unresolved_{entity_label}_mapping",
+            issue_type=f"{issue_prefix}_{entity_label}_mapping",
             message=(
-                f"Canonical {entity_label} mapping for '{reference_label}' was not resolved. "
-                f"GTEX kept the raw provider reference only.{reason}"
+                f"Canonical {entity_label} mapping for '{reference_label}' {status_verb}. "
+                f"GTEX did not persist canonical {entity_label} data for this row.{reason}"
             ),
         )
 
-    def _resolve_country(self, session: Session, payload: RealPlayerSeedInput) -> Country | None:
-        if self.canonical_mapping_service is None or (not payload.nationality and not payload.nationality_code):
-            return None
-        resolution = self.canonical_mapping_service.resolve_country(
+    def _resolve_country_reference(
+        self,
+        *,
+        session: Session,
+        payload: RealPlayerSeedInput,
+        as_of: datetime,
+        sample_payload: dict[str, object],
+    ) -> CanonicalReferenceResolution:
+        if self.mapping_resolver is None or self.strict_canonical_mapping_service is None:
+            raise RealPlayerIngestionError("Mapping resolver is not configured.")
+        resolver_resolution = self.mapping_resolver.resolve_country(
             session,
-            source_name=payload.source_name,
-            provider_external_id=payload.nationality_code,
-            name=payload.nationality,
+            raw_name=payload.nationality,
+            raw_code=payload.nationality_code,
         )
-        return resolution.entity if isinstance(resolution.entity, Country) else None
+        reference = CanonicalReferenceInput(
+            source_name=payload.source_name,
+            entity_type="country",
+            provider_external_id=payload.nationality_code,
+            display_name=payload.nationality,
+            country_code=payload.nationality_code,
+            country_name=payload.nationality,
+            metadata_json={
+                "resolver_method": resolver_resolution.resolution_method,
+                "resolver_confidence": resolver_resolution.confidence_score,
+            },
+        )
+        return self._persist_mapping_resolution(
+            session=session,
+            reference=reference,
+            sample_payload=sample_payload,
+            resolved_entity=resolver_resolution.entity,
+            resolution=resolver_resolution,
+            as_of=as_of,
+        )
 
     def _resolve_competition(
         self,
@@ -1099,6 +1190,91 @@ class RealPlayerIngestionService:
             },
         )
         return resolution.entity if isinstance(resolution.entity, Club) else None
+
+    def _resolve_club_reference(
+        self,
+        *,
+        session: Session,
+        payload: RealPlayerSeedInput,
+        as_of: datetime,
+        sample_payload: dict[str, object],
+        competition: Competition | None,
+    ) -> CanonicalReferenceResolution:
+        if self.mapping_resolver is None or self.strict_canonical_mapping_service is None:
+            raise RealPlayerIngestionError("Mapping resolver is not configured.")
+        resolver_resolution = self.mapping_resolver.resolve_club(
+            session,
+            raw_name=payload.current_real_world_club,
+            context=ClubResolutionContext(
+                competition_name=payload.current_real_world_league,
+                competition_id=payload.current_real_world_league_key,
+                country_name=payload.nationality,
+                country_id=competition.country_id if competition is not None else None,
+            ),
+        )
+        reference = CanonicalReferenceInput(
+            source_name=payload.source_name,
+            entity_type="club",
+            provider_external_id=payload.current_real_world_club_key,
+            display_name=payload.current_real_world_club,
+            country_code=payload.nationality_code,
+            country_name=payload.nationality,
+            competition_external_id=payload.current_real_world_league_key,
+            competition_display_name=payload.current_real_world_league,
+            metadata_json={
+                "resolver_method": resolver_resolution.resolution_method,
+                "resolver_confidence": resolver_resolution.confidence_score,
+            },
+        )
+        return self._persist_mapping_resolution(
+            session=session,
+            reference=reference,
+            sample_payload=sample_payload,
+            resolved_entity=resolver_resolution.entity,
+            resolution=resolver_resolution,
+            as_of=as_of,
+        )
+
+    def _persist_mapping_resolution(
+        self,
+        *,
+        session: Session,
+        reference: CanonicalReferenceInput,
+        sample_payload: dict[str, object],
+        resolved_entity,
+        resolution: MappingResolution,
+        as_of: datetime,
+    ) -> CanonicalReferenceResolution:
+        if self.strict_canonical_mapping_service is None:
+            raise RealPlayerIngestionError("Strict canonical mapping service is not configured.")
+        if resolution.status == "resolved":
+            return self.strict_canonical_mapping_service._persist_mapping(
+                session,
+                reference,
+                entity=resolved_entity,
+                mapping_status="resolved",
+                resolution_method=f"resolver:{resolution.resolution_method}",
+                confidence_score=resolution.confidence_score,
+                as_of=as_of,
+            )
+        if resolution.status == "unresolved":
+            return self.strict_canonical_mapping_service._record_unresolved(
+                session,
+                reference,
+                reason_code=resolution.reason_code or f"{reference.entity_type}_not_found",
+                as_of=as_of,
+                sample_payload=sample_payload,
+                notes="Deterministic mapping resolver could not bind the reference to an existing canonical entity.",
+                metadata_json={
+                    "resolver_method": resolution.resolution_method,
+                    "resolver_confidence": resolution.confidence_score,
+                    "resolver_status": resolution.status,
+                },
+            )
+        return self.strict_canonical_mapping_service._skipped_resolution(
+            reference,
+            reason_code=resolution.reason_code or "skipped",
+        )
 
     def _upsert_player(
         self,
@@ -1674,6 +1850,7 @@ class RealPlayerIngestionService:
         real_player_profile_id: str | None = None,
         authoritative_snapshot_id: str | None = None,
         processed_at: datetime | None = None,
+        import_metadata: dict[str, object] | None = None,
     ) -> RealPlayerImportRow:
         row = session.scalar(
             select(RealPlayerImportRow).where(
@@ -1717,6 +1894,7 @@ class RealPlayerIngestionService:
             "player_import_item_id": payload.player_import_item_id,
             "review_status": review_status,
             "review_reason": review_reason,
+            **(import_metadata or {}),
         }
         row.validation_errors_json = list(validation_errors or [])
         row.audit_findings_json = list(audit_findings or [])

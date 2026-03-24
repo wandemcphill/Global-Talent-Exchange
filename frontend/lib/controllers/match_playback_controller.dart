@@ -32,7 +32,17 @@ class MatchPlaybackController extends ChangeNotifier {
 
   bool get isPlaying => _isPlaying;
 
+  bool get isAutoPaused => false;
+
   double get speed => _speeds[_speedIndex];
+
+  List<double> get speedOptions => List<double>.unmodifiable(_speeds);
+
+  String get speedLabel {
+    return speed == speed.roundToDouble()
+        ? '${speed.toStringAsFixed(0)}x'
+        : '${speed.toStringAsFixed(1)}x';
+  }
 
   double get positionSeconds => _positionSeconds;
 
@@ -129,6 +139,33 @@ class MatchPlaybackController extends ChangeNotifier {
 
   void cycleSpeed() {
     _speedIndex = (_speedIndex + 1) % _speeds.length;
+    notifyListeners();
+  }
+
+  void updateSpeedOptions(List<double> speedOptions) {
+    final List<double> normalized = speedOptions
+        .where((double value) => value > 0)
+        .map((double value) => value.toDouble())
+        .toSet()
+        .toList()
+      ..sort();
+    if (normalized.isEmpty || listEquals(normalized, _speeds)) {
+      return;
+    }
+    final double currentSpeed = speed;
+    _speeds
+      ..clear()
+      ..addAll(normalized);
+    double nearestDistance = double.infinity;
+    int nearestIndex = 0;
+    for (int index = 0; index < _speeds.length; index += 1) {
+      final double distance = (_speeds[index] - currentSpeed).abs();
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    }
+    _speedIndex = nearestIndex;
     notifyListeners();
   }
 

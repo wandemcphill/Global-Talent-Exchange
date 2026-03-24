@@ -110,6 +110,7 @@ def _bind_application_state(
     app.state.context = context
     app.state.db_engine = engine
     app.state.session_factory = context.database.session_factory
+    app.state.email_service = context.email_service
     app.state.cache_backend = context.cache_backend
     app.state.event_publisher = context.event_publisher
     app.state.job_backend = context.job_backend

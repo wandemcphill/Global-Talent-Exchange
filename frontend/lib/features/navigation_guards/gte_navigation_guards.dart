@@ -17,6 +17,7 @@ import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 
 enum GteNavigationFallbackReason {
   inactiveWorldSuperCup,
@@ -72,6 +73,7 @@ class GteNavigationDependencies {
     this.isCheckingCreatorAccessProvider,
     this.hasApprovedCreatorAccessProvider,
     this.canHostCompetitionsProvider,
+    this.match3dEntitlementProvider,
   })  : _currentUserId = currentUserId,
         _currentUserName = currentUserName,
         _currentUserRole = currentUserRole,
@@ -115,6 +117,7 @@ class GteNavigationDependencies {
   final bool Function()? isCheckingCreatorAccessProvider;
   final bool Function()? hasApprovedCreatorAccessProvider;
   final bool Function()? canHostCompetitionsProvider;
+  final Match3dEntitlementProvider? match3dEntitlementProvider;
 
   String get currentUserId => currentUserIdProvider?.call() ?? _currentUserId;
 
@@ -142,6 +145,9 @@ class GteNavigationDependencies {
 
   bool get canHostCompetitions =>
       canHostCompetitionsProvider?.call() ?? _canHostCompetitions;
+
+  Match3dUserEntitlement? get match3dEntitlement =>
+      match3dEntitlementProvider?.call();
 
   bool get isAdminRole => <String>{'admin', 'super_admin'}
       .contains((currentUserRole ?? '').trim().toLowerCase());

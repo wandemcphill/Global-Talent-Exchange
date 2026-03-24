@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.analytics.service import AnalyticsService
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.schemas import (
+    AccountRecoveryRequest,
+    AccountRecoveryResetRequest,
+    ActionStatusResponse,
     ChangePasswordRequest,
+    ConfirmEmailRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
     LoginRequest,
@@ -13,10 +20,11 @@ from app.auth.schemas import (
     TokenResponse,
 )
 from app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
-from app.analytics.service import AnalyticsService
 from app.models.user import User
 from app.users.schemas import UserPublic
 from app.wallets.service import WalletService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
@@ -24,9 +32,23 @@ api_router = APIRouter(prefix="/api/auth")
 
 
 def _build_auth_service(request: Request | None) -> AuthService:
+    wallet_service = None
+    email_service = None
     if request is not None and hasattr(request.app.state, "event_publisher"):
-        return AuthService(wallet_service=WalletService(event_publisher=request.app.state.event_publisher))
-    return AuthService()
+        wallet_service = WalletService(event_publisher=request.app.state.event_publisher)
+    if request is not None and hasattr(request.app.state, "email_service"):
+        email_service = request.app.state.email_service
+    return AuthService(wallet_service=wallet_service, email_service=email_service)
+
+
+def _log_email_dispatch_exception(*, flow: str, recipient: str | None, exc: Exception) -> None:
+    logger.warning(
+        "auth.email.dispatch_exception flow=%s recipient=%s error_type=%s error=%s",
+        flow,
+        recipient or "unknown",
+        exc.__class__.__name__,
+        str(exc),
+    )
 
 
 @legacy_router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -37,6 +59,7 @@ def register_user(
 ) -> TokenResponse:
     service = _build_auth_service(request)
     analytics = AnalyticsService()
+    confirmation_code: str | None = None
     try:
         analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email})
         if not payload.is_over_18:
@@ -53,6 +76,7 @@ def register_user(
             password=payload.password,
             display_name=payload.full_name,
         )
+        confirmation_code = service.prepare_signup_confirmation(session, user=user)
         analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
         token, expires_in = service.issue_access_token(user)
         session.commit()
@@ -63,6 +87,12 @@ def register_user(
     except AuthError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    else:
+        if confirmation_code is not None:
+            try:
+                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
+            except Exception as exc:
+                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
 
     return TokenResponse(
         access_token=token,
@@ -103,6 +133,63 @@ def login_user(
         permissions=service.resolve_user_permissions(request, user) if request is not None else [],
         landing_route=service.resolve_landing_route(user),
     )
+
+
+@legacy_router.post("/confirm-email", response_model=ActionStatusResponse)
+def confirm_email(
+    payload: ConfirmEmailRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> ActionStatusResponse:
+    service = _build_auth_service(request)
+    try:
+        service.confirm_email_address(session, code=payload.code)
+        session.commit()
+    except AuthError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return ActionStatusResponse(detail="Email address confirmed.")
+
+
+@legacy_router.post("/recovery/request", response_model=ActionStatusResponse)
+def request_account_recovery(
+    payload: AccountRecoveryRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> ActionStatusResponse:
+    service = _build_auth_service(request)
+    user = None
+    recovery_code = None
+    try:
+        user, recovery_code = service.prepare_account_recovery(session, email=payload.email)
+        session.commit()
+    except AuthError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if user is not None and recovery_code is not None:
+        try:
+            service.send_account_recovery_email(user=user, recovery_code=recovery_code)
+        except Exception as exc:
+            _log_email_dispatch_exception(flow="account_recovery", recipient=user.email, exc=exc)
+
+    return ActionStatusResponse(detail="If an account exists for that email, recovery instructions have been sent.")
+
+
+@legacy_router.post("/recovery/reset", response_model=ActionStatusResponse)
+def reset_account_with_recovery(
+    payload: AccountRecoveryResetRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> ActionStatusResponse:
+    service = _build_auth_service(request)
+    try:
+        service.reset_password_with_recovery(session, code=payload.code, new_password=payload.new_password)
+        session.commit()
+    except AuthError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return ActionStatusResponse(detail="Account recovery completed.")
 
 
 @api_router.get("/me", response_model=CurrentUserResponse)

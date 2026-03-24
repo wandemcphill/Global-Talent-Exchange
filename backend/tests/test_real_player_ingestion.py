@@ -12,6 +12,7 @@ from app.ingestion.models import Club, Competition, Country, Player, PlayerImage
 from app.ingestion.real_player_ingestion_service import RealPlayerIngestionService
 from app.models.base import Base
 from app.models.player_cards import PlayerMarketValueSnapshot, PlayerStatsSnapshot
+from app.models.real_player_import_batch import RealPlayerImportRow
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_reference_mapping import RealPlayerReferenceMapping, RealPlayerUnresolvedReference
 from app.models.real_player_source_link import RealPlayerSourceLink
@@ -115,9 +116,90 @@ def _curated_request(*, mode: str, as_of: str, osimhen_club: str = "Launch Club 
     )
 
 
+def _seed_curated_canonical_entities(session) -> None:
+    nigeria = Country(
+        source_provider="football_data",
+        provider_external_id="NG",
+        name="Nigeria",
+        alpha2_code="NG",
+    )
+    league_elite = Competition(
+        source_provider="football_data",
+        provider_external_id="launch-elite",
+        country=nigeria,
+        name="Launch League Elite",
+        slug="launch-league-elite",
+        competition_type="league",
+        format_type="real_world",
+        is_major=True,
+        is_tradable=True,
+    )
+    league_premier = Competition(
+        source_provider="football_data",
+        provider_external_id="launch-premier",
+        country=nigeria,
+        name="Launch League Premier",
+        slug="launch-league-premier",
+        competition_type="league",
+        format_type="real_world",
+        is_major=True,
+        is_tradable=True,
+    )
+    session.add_all(
+        [
+            nigeria,
+            league_elite,
+            league_premier,
+            Club(
+                source_provider="football_data",
+                provider_external_id="launch-club-a",
+                country=nigeria,
+                current_competition=league_elite,
+                name="Launch Club A",
+                slug="launch-club-a",
+                short_name="Launch Club A",
+                is_tradable=True,
+            ),
+            Club(
+                source_provider="football_data",
+                provider_external_id="launch-club-b",
+                country=nigeria,
+                current_competition=league_premier,
+                name="Launch Club B",
+                slug="launch-club-b",
+                short_name="Launch Club B",
+                is_tradable=True,
+            ),
+            Club(
+                source_provider="football_data",
+                provider_external_id="launch-club-c",
+                country=nigeria,
+                current_competition=league_premier,
+                name="Launch Club C",
+                slug="launch-club-c",
+                short_name="Launch Club C",
+                is_tradable=True,
+            ),
+            Club(
+                source_provider="football_data",
+                provider_external_id="launch-club-z",
+                country=nigeria,
+                current_competition=league_elite,
+                name="Launch Club Z",
+                slug="launch-club-z",
+                short_name="Launch Club Z",
+                is_tradable=True,
+            ),
+        ]
+    )
+    session.commit()
+
+
 def test_real_player_ingestion_seeds_curated_batch_without_duplicate_identities() -> None:
     engine, session_factory = _session_factory()
     try:
+        with session_factory() as session:
+            _seed_curated_canonical_entities(session)
         service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
         result = service.ingest(_curated_request(mode="curated_seed", as_of="2026-03-22T12:00:00+00:00"))
 
@@ -157,6 +239,8 @@ def test_real_player_ingestion_seeds_curated_batch_without_duplicate_identities(
 def test_real_player_ingestion_refresh_updates_existing_players_without_creating_duplicates() -> None:
     engine, session_factory = _session_factory()
     try:
+        with session_factory() as session:
+            _seed_curated_canonical_entities(session)
         service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
         first = service.ingest(_curated_request(mode="curated_seed", as_of="2026-03-22T12:00:00+00:00"))
         second = service.ingest(
@@ -330,24 +414,100 @@ def test_real_player_ingestion_surfaces_and_persists_unresolved_mappings_without
         }
 
         report = service.write_batch(request)
-        assert report.players_processed == 1
+        assert report.players_processed == 0
 
         with session_factory() as session:
-            player = session.scalar(select(Player).where(Player.full_name == "Victor Osimhen"))
-            assert player is not None
-            assert player.current_competition_id is None
-            assert player.current_club_id is None
+            assert session.scalar(select(func.count()).select_from(Player)) == 0
+            assert session.scalar(select(func.count()).select_from(RealPlayerProfile)) == 0
+            assert session.scalar(select(func.count()).select_from(RealPlayerSourceLink)) == 0
 
-            profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id))
-            assert profile is not None
-            assert profile.metadata_json["canonical_mapping"]["competition"]["status"] == "unresolved"
-            assert profile.metadata_json["canonical_mapping"]["club"]["status"] == "unresolved"
-            assert profile.metadata_json["canonical_mapping"]["country"]["status"] == "resolved"
+            import_row = session.scalar(select(RealPlayerImportRow))
+            assert import_row is not None
+            assert import_row.status == "skipped"
+            assert import_row.review_reason == "unresolved_mapping"
+            assert import_row.import_metadata_json["mapping_summary"]["country"]["status"] == "resolved"
+            assert import_row.import_metadata_json["mapping_summary"]["competition"]["status"] == "unresolved"
+            assert import_row.import_metadata_json["mapping_summary"]["club"]["status"] == "unresolved"
 
             unresolved_rows = list(session.scalars(select(RealPlayerUnresolvedReference)))
             assert len(unresolved_rows) == 2
             assert {row.entity_type for row in unresolved_rows} == {"competition", "club"}
             assert session.scalar(select(func.count()).select_from(Competition)) == 0
             assert session.scalar(select(func.count()).select_from(Club)) == 0
+    finally:
+        engine.dispose()
+
+
+def test_real_player_ingestion_resolves_aliases_without_breaking_idempotency() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            france = Country(
+                source_provider="football_data",
+                provider_external_id="FR",
+                name="France",
+                alpha2_code="FR",
+            )
+            premier_league = Competition(
+                source_provider="football_data",
+                provider_external_id="eng1",
+                name="Premier League",
+                slug="premier-league",
+                competition_type="league",
+                format_type="real_world",
+                is_major=True,
+                is_tradable=True,
+            )
+            psg = Club(
+                source_provider="football_data",
+                provider_external_id="psg",
+                country=france,
+                name="Paris Saint Germain",
+                slug="paris-saint-germain",
+                short_name="PSG",
+                is_tradable=True,
+            )
+            session.add_all([france, premier_league, psg])
+            session.commit()
+
+        request = RealPlayerIngestionRequest.model_validate(
+            {
+                "mode": "curated_seed",
+                "as_of": "2026-03-22T12:00:00+00:00",
+                "players": [
+                    {
+                        "source_name": "curated-feed",
+                        "source_player_key": "psg-alias-001",
+                        "canonical_name": "Alias Player",
+                        "nationality": "France",
+                        "nationality_code": "FR",
+                        "date_of_birth": "1999-01-01",
+                        "primary_position": "Winger",
+                        "current_real_world_club": "PSG",
+                        "current_real_world_league": "Premier League",
+                        "competition_level": "elite",
+                        "appearances": 20,
+                        "minutes_played": 1800,
+                        "goals": 8,
+                        "assists": 4,
+                        "current_market_reference_value": 20000000,
+                        "market_reference_currency": "EUR",
+                    }
+                ],
+            }
+        )
+
+        service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
+        first = service.ingest(request)
+        second = service.ingest(request)
+
+        assert first.players_processed == 1
+        assert second.players_processed == 1
+
+        with session_factory() as session:
+            player = session.scalar(select(Player).where(Player.full_name == "Alias Player"))
+            assert player is not None
+            assert player.current_club_id == psg.id
+            assert session.scalar(select(func.count()).select_from(RealPlayerSourceLink)) == 1
     finally:
         engine.dispose()

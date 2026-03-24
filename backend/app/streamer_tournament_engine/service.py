@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.fairness.spend_balance_controller import SpendBalanceController, TournamentFairnessMode
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
 from app.models.competition import Competition
@@ -160,12 +161,14 @@ class StreamerTournamentService:
             entry_rules_json=self._build_entry_rules(
                 qualification_methods=payload.qualification_methods,
                 top_gifter_rank_limit=payload.top_gifter_rank_limit,
+                fairness_mode=payload.fairness_mode,
                 entry_rules_json=payload.entry_rules_json,
             ),
             metadata_json=dict(payload.metadata_json),
         )
         self.session.add(tournament)
         self.session.flush()
+        self._sync_linked_competition_fairness(tournament)
         self._replace_rewards(tournament=tournament, rewards=payload.rewards)
         for user_id in payload.invite_user_ids:
             self._create_invite_record(
@@ -186,9 +189,12 @@ class StreamerTournamentService:
         self._assert_mutable(tournament)
         qualification_methods = payload.qualification_methods
         top_gifter_rank_limit = payload.top_gifter_rank_limit
+        fairness_mode = payload.fairness_mode
         if qualification_methods is None:
             qualification_methods = self._qualification_methods_for(tournament)
             top_gifter_rank_limit = self._top_gifter_rank_limit_for(tournament)
+        if fairness_mode is None:
+            fairness_mode = self._fairness_mode_for(tournament)
         self._validate_payload(
             tournament_type=tournament.tournament_type,
             season_id=payload.season_id if payload.season_id is not None else tournament.season_id,
@@ -225,12 +231,19 @@ class StreamerTournamentService:
             tournament.ends_at = payload.ends_at
         if payload.metadata_json is not None:
             tournament.metadata_json = dict(payload.metadata_json)
-        if payload.qualification_methods is not None or payload.top_gifter_rank_limit is not None or payload.entry_rules_json is not None:
+        if (
+            payload.qualification_methods is not None
+            or payload.top_gifter_rank_limit is not None
+            or payload.entry_rules_json is not None
+            or payload.fairness_mode is not None
+        ):
             tournament.entry_rules_json = self._build_entry_rules(
                 qualification_methods=qualification_methods,
                 top_gifter_rank_limit=top_gifter_rank_limit,
+                fairness_mode=fairness_mode,
                 entry_rules_json=payload.entry_rules_json or {},
             )
+        self._sync_linked_competition_fairness(tournament)
         self._refresh_state(tournament=tournament, force_pending=False)
         self.session.flush()
         return self.serialize_tournament(tournament)
@@ -328,6 +341,7 @@ class StreamerTournamentService:
             tournament.status = StreamerTournamentStatus.PUBLISHED
             if tournament.approval_status is StreamerTournamentApprovalStatus.NOT_REQUIRED:
                 tournament.requires_admin_approval = False
+        self._sync_linked_competition_fairness(tournament)
         self.session.flush()
         return self.serialize_tournament(tournament)
 
@@ -453,6 +467,7 @@ class StreamerTournamentService:
             "rejected_by_user_id": tournament.rejected_by_user_id,
             "submission_notes": tournament.submission_notes,
             "approval_notes": tournament.approval_notes,
+            "fairness_mode": self._fairness_mode_for(tournament),
             "entry_rules_json": tournament.entry_rules_json or {},
             "metadata_json": tournament.metadata_json or {},
             "created_at": tournament.created_at,
@@ -651,14 +666,22 @@ class StreamerTournamentService:
         *,
         qualification_methods: list[StreamerTournamentQualificationType],
         top_gifter_rank_limit: int | None,
+        fairness_mode: TournamentFairnessMode,
         entry_rules_json: dict[str, object],
     ) -> dict[str, object]:
         payload = dict(entry_rules_json)
+        fairness_policy = SpendBalanceController.policy_for_mode(fairness_mode)
         payload["qualification_methods"] = [item.value for item in qualification_methods]
         if top_gifter_rank_limit is not None:
             payload["top_gifter_rank_limit"] = top_gifter_rank_limit
         else:
             payload.pop("top_gifter_rank_limit", None)
+        payload["fairness_mode"] = fairness_mode.value
+        payload["fairness"] = {
+            "mode": fairness_mode.value,
+            "max_s_plus_players": fairness_policy.max_s_plus_players,
+            "max_team_rating_spread": fairness_policy.max_team_rating_spread,
+        }
         return payload
 
     def _qualification_methods_for(self, tournament: StreamerTournament) -> list[StreamerTournamentQualificationType]:
@@ -668,6 +691,34 @@ class StreamerTournamentService:
     def _top_gifter_rank_limit_for(self, tournament: StreamerTournament) -> int | None:
         raw_value = (tournament.entry_rules_json or {}).get("top_gifter_rank_limit")
         return int(raw_value) if raw_value is not None else None
+
+    def _fairness_mode_for(self, tournament: StreamerTournament) -> TournamentFairnessMode:
+        raw_value = (tournament.entry_rules_json or {}).get("fairness_mode")
+        if raw_value is None:
+            raw_value = ((tournament.entry_rules_json or {}).get("fairness") or {}).get("mode")
+        try:
+            return TournamentFairnessMode(str(raw_value))
+        except ValueError:
+            return TournamentFairnessMode.OPEN
+
+    def _sync_linked_competition_fairness(self, tournament: StreamerTournament) -> None:
+        if not tournament.linked_competition_id:
+            return
+        competition = self.session.get(Competition, tournament.linked_competition_id)
+        if competition is None:
+            return
+        fairness_mode = self._fairness_mode_for(tournament)
+        fairness_policy = SpendBalanceController.policy_for_mode(fairness_mode)
+        metadata = dict(competition.metadata_json or {})
+        metadata["fairness"] = {
+            **(metadata.get("fairness") if isinstance(metadata.get("fairness"), dict) else {}),
+            "mode": fairness_mode.value,
+            "max_s_plus_players": fairness_policy.max_s_plus_players,
+            "max_team_rating_spread": fairness_policy.max_team_rating_spread,
+            "source": "streamer_tournament",
+            "tournament_id": tournament.id,
+        }
+        competition.metadata_json = metadata
 
     def _replace_rewards(self, *, tournament: StreamerTournament, rewards: list) -> None:
         for item in self._list_rewards(tournament.id):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.models.reward_settlement import RewardSettlement
+from app.models.competition import Competition
 from app.models.creator_share_market import (
     CreatorClubShareHolding,
     CreatorClubShareMarket,
@@ -182,3 +183,36 @@ def test_shareholders_can_join_shareholder_qualified_tournaments(session, seeded
     assert published["status"] == StreamerTournamentStatus.PUBLISHED
     assert joined["entries"][0]["qualification_source"] == "shareholder"
     assert joined["entries"][0]["qualification_snapshot_json"]["share_count"] == 2
+
+
+def test_streamer_tournament_fairness_mode_is_serialized_and_mirrored_to_linked_competition(session, seeded_context) -> None:
+    service = StreamerTournamentService(session)
+    creator = seeded_context["creator"]
+    competition = session.get(Competition, "competition-1")
+
+    tournament = service.create_tournament(
+        actor=creator,
+        payload=StreamerTournamentCreateRequest(
+            title="Balanced Invitational",
+            tournament_type="creator_invitation",
+            linked_competition_id=competition.id,
+            fairness_mode="balanced",
+            rewards=[
+                StreamerTournamentRewardInput(
+                    title="Champion cosmetic",
+                    reward_type="exclusive_cosmetic",
+                    placement_start=1,
+                    placement_end=1,
+                    cosmetic_sku="balanced-skin",
+                )
+            ],
+        ),
+    )
+    session.commit()
+    session.refresh(competition)
+
+    assert tournament["fairness_mode"] == "balanced"
+    assert tournament["entry_rules_json"]["fairness_mode"] == "balanced"
+    assert competition.metadata_json["fairness"]["mode"] == "balanced"
+    assert competition.metadata_json["fairness"]["max_s_plus_players"] == 4
+    assert competition.metadata_json["fairness"]["max_team_rating_spread"] == 6

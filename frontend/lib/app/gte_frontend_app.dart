@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../core/gte_session_identity.dart';
 import '../data/gte_exchange_api_client.dart';
+import '../data/gte_models.dart';
 import '../features/app_routes/gte_app_route_registry.dart';
 import '../features/navigation/presentation/gte_navigation_shell_screen.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../screens/gte_login_screen.dart';
+import '../services/match_3d_monetization_service.dart';
 import '../widgets/gte_shell_theme.dart';
 import 'gte_app_config.dart';
 
@@ -85,6 +87,12 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
           GteSessionIdentity.fromExchangeController(_controller).clubName,
       accessTokenProvider: () => _controller.accessToken,
       isAuthenticatedProvider: () => _controller.isAuthenticated,
+      match3dEntitlementProvider: () => Match3dUserEntitlement(
+        isPremiumUser: _resolvePremiumUser(_controller.session),
+        availableCoins: _controller.walletSummary?.availableBalance ?? 0,
+        premiumCameraAccess: _resolvePremiumUser(_controller.session),
+        fastReplayAccess: _resolvePremiumUser(_controller.session),
+      ),
     );
     final GteAppRouteRegistry registry = GteAppRouteRegistry(
       dependencies: dependencies,
@@ -120,4 +128,32 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       restorationScopeId: 'gtex-app',
     );
   }
+}
+
+bool _resolvePremiumUser(GteAuthSession? session) {
+  if (session == null) {
+    return false;
+  }
+  final Map<String, Object?> userJson = session.user.rawJson;
+  final Map<String, Object?> sessionJson = session.rawJson;
+  return _boolFromJson(
+        userJson['is_premium_user'],
+      ) ||
+      _boolFromJson(
+        userJson['premium_access'],
+      ) ||
+      _boolFromJson(
+        sessionJson['is_premium_user'],
+      ) ||
+      session.permissions
+          .map((String value) => value.trim().toLowerCase())
+          .contains('match_3d_premium');
+}
+
+bool _boolFromJson(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  final String normalized = value?.toString().trim().toLowerCase() ?? '';
+  return normalized == 'true' || normalized == '1' || normalized == 'yes';
 }

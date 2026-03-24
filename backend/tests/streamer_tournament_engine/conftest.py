@@ -35,6 +35,7 @@ from app.models.creator_share_market import (
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.revenue_share_rule import RevenueShareRule
 from app.models.reward_settlement import RewardSettlement
+from app.models.spending_control import SpendingControlAuditEvent
 from app.models.streamer_tournament import (
     StreamerTournament,
     StreamerTournamentEntry,
@@ -87,6 +88,7 @@ def session() -> Iterator[Session]:
             RevenueShareRule.__table__,
             AdminRewardRule.__table__,
             RewardSettlement.__table__,
+            SpendingControlAuditEvent.__table__,
             EconomyBurnEvent.__table__,
             LedgerAccount.__table__,
             LedgerEntry.__table__,

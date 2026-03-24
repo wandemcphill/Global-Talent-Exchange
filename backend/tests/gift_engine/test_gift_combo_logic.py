@@ -221,3 +221,67 @@ def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> No
     assert blocked is not None
     assert blocked.control_scope == "user_hosted_gift"
     assert blocked.primary_reason_code == "daily_sender_limit_exceeded"
+
+
+def test_match_scope_gift_rate_limit_blocks_the_sixth_sender_recipient_pair_gift(session) -> None:
+    sender = _create_user(session, email="stadium-sender@example.com", username="stadium-sender")
+    recipient = _create_user(session, email="stadium-recipient@example.com", username="stadium-recipient")
+
+    session.add(
+        GiftCatalogItem(
+            key="stadium-flare",
+            display_name="Stadium Flare",
+            fancoin_price=Decimal("10.0000"),
+            active=True,
+        )
+    )
+    session.add(
+        RevenueShareRule(
+            rule_key="gift-coin-default",
+            scope="gift",
+            title="Coin gift default",
+            description=None,
+            platform_share_bps=3000,
+            creator_share_bps=0,
+            recipient_share_bps=None,
+            burn_bps=0,
+            priority=10,
+            active=True,
+        )
+    )
+    session.commit()
+
+    wallet_service = WalletService()
+    sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.COIN)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=sender_account, amount=Decimal("200.0000")),
+            LedgerPosting(account=platform_account, amount=Decimal("-200.0000")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-match-gifts",
+        actor=sender,
+    )
+    session.commit()
+
+    service = GiftEngineService(session)
+    for _ in range(5):
+        service.send_gift(
+            sender=sender,
+            recipient_user_id=recipient.id,
+            gift_key="stadium-flare",
+            quantity=Decimal("1.0000"),
+            source_scope="gtex_competition",
+        )
+        session.commit()
+
+    with pytest.raises(GiftEngineError, match="5 gifts per minute"):
+        service.send_gift(
+            sender=sender,
+            recipient_user_id=recipient.id,
+            gift_key="stadium-flare",
+            quantity=Decimal("1.0000"),
+            source_scope="gtex_competition",
+        )

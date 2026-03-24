@@ -95,6 +95,45 @@ class LoginRequest(BaseModel):
 
 
 
+class ActionStatusResponse(BaseModel):
+    detail: str
+
+
+class ConfirmEmailRequest(BaseModel):
+    code: str = Field(min_length=8, max_length=256)
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return value.strip()
+
+
+class AccountRecoveryRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class AccountRecoveryResetRequest(BaseModel):
+    code: str = Field(min_length=8, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_new_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_new_password_match(self) -> "AccountRecoveryResetRequest":
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("New password confirmation does not match.")
+        return self
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)

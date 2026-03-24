@@ -3,6 +3,7 @@ import 'gte_exchange_models.dart';
 import 'gte_http_transport.dart';
 import 'gte_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
+import 'package:gte_frontend/models/match_view_state.dart';
 
 class GteExchangeApiClient {
   GteExchangeApiClient({
@@ -450,10 +451,34 @@ class GteExchangeApiClient {
     );
   }
 
-  Future<Map<String, Object?>> fetchMatchViewer(String matchKey) async {
+  Future<Map<String, Object?>> fetchMatchViewer(
+    String matchKey, {
+    MatchMode mode = MatchMode.standard,
+  }) async {
     return GteJson.map(
-      await _sendPublicGet('/api/match-viewer/$matchKey'),
+      await _sendPublicGet(
+        '/api/match-viewer/$matchKey',
+        query: <String, Object?>{'mode': mode.apiValue},
+      ),
       label: 'match viewer',
+    );
+  }
+
+  Future<Map<String, Object?>> fetchMatchViewerSession(
+    String matchKey, {
+    MatchMode mode = MatchMode.standard,
+    String? continuationToken,
+  }) async {
+    return GteJson.map(
+      await _sendPublicGet(
+        '/api/match-viewer/$matchKey/session',
+        query: <String, Object?>{
+          'mode': mode.apiValue,
+          if (continuationToken != null && continuationToken.isNotEmpty)
+            'token': continuationToken,
+        },
+      ),
+      label: 'match viewer session',
     );
   }
 

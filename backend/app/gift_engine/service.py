@@ -22,6 +22,8 @@ from app.services.spending_control_service import SpendingControlService, Spendi
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal('0.0001')
+MATCH_SCOPE_GIFT_WINDOW_SECONDS = 60
+MATCH_SCOPE_GIFT_MAX_COUNT = 5
 
 
 class GiftEngineError(ValueError):
@@ -93,6 +95,25 @@ class GiftEngineService:
                 return rule, count
         return None, 0
 
+    def _match_scope_gift_count(
+        self,
+        *,
+        sender_id: str,
+        recipient_id: str,
+        source_scope: str,
+        window_seconds: int,
+    ) -> int:
+        window_start = utcnow() - timedelta(seconds=window_seconds)
+        count = self.session.scalar(
+            select(func.count(GiftTransaction.id)).where(
+                GiftTransaction.sender_user_id == sender_id,
+                GiftTransaction.recipient_user_id == recipient_id,
+                GiftTransaction.source_scope == source_scope,
+                GiftTransaction.created_at >= window_start,
+            )
+        )
+        return int(count or 0)
+
     def send_gift(
         self,
         *,
@@ -114,6 +135,18 @@ class GiftEngineService:
             normalized_scope = "gtex_competition"
         if normalized_scope not in {"user_hosted", "gtex_competition"}:
             raise GiftEngineError("Gift source scope must be user_hosted or gtex_competition.")
+        if normalized_scope == "gtex_competition":
+            recent_pair_count = self._match_scope_gift_count(
+                sender_id=sender.id,
+                recipient_id=recipient.id,
+                source_scope=normalized_scope,
+                window_seconds=MATCH_SCOPE_GIFT_WINDOW_SECONDS,
+            )
+            if recent_pair_count >= MATCH_SCOPE_GIFT_MAX_COUNT:
+                raise GiftEngineError(
+                    "Match gifting is rate limited to 5 gifts per minute for each sender-recipient pair.",
+                    reason="match_gift_rate_limited",
+                )
 
         gift = self.session.scalar(select(GiftCatalogItem).where(GiftCatalogItem.key == gift_key, GiftCatalogItem.active.is_(True)))
         if gift is None:

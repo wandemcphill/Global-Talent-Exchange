@@ -22,6 +22,24 @@ class _BackendAppAliasLoader(importlib.abc.Loader):
     def exec_module(self, module) -> None:
         return None
 
+    def get_code(self, fullname: str):
+        target_spec = importlib.util.find_spec(self.target_name)
+        if target_spec is None or target_spec.loader is None:
+            return None
+        get_code = getattr(target_spec.loader, "get_code", None)
+        if get_code is None:
+            return None
+        return get_code(self.target_name)
+
+    def get_source(self, fullname: str):
+        target_spec = importlib.util.find_spec(self.target_name)
+        if target_spec is None or target_spec.loader is None:
+            return None
+        get_source = getattr(target_spec.loader, "get_source", None)
+        if get_source is None:
+            return None
+        return get_source(self.target_name)
+
 
 class _BackendAppAliasFinder(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname: str, path=None, target=None):

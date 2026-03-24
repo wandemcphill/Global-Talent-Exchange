@@ -477,10 +477,34 @@ class ClubSocialService:
                 select(MatchReactionEvent)
                 .where(MatchReactionEvent.match_id == match_id)
                 .order_by(MatchReactionEvent.happened_at.desc(), MatchReactionEvent.created_at.desc())
-                .limit(limit)
+                .limit(limit * 4)
             ).all()
         )
-        return [self._reaction_view(item) for item in reactions]
+        rendered: list[dict[str, object]] = []
+        bucket_counts: dict[int, int] = {}
+        overflow_counts: dict[int, int] = {}
+        bucket_anchor_index: dict[int, int] = {}
+        for reaction in reactions:
+            happened_at = reaction.happened_at or reaction.created_at
+            bucket_key = int(happened_at.timestamp() // 10)
+            current_count = bucket_counts.get(bucket_key, 0)
+            if current_count >= 3:
+                overflow_counts[bucket_key] = overflow_counts.get(bucket_key, 0) + 1
+                continue
+            bucket_counts[bucket_key] = current_count + 1
+            rendered.append(self._reaction_view(reaction))
+            bucket_anchor_index.setdefault(bucket_key, len(rendered) - 1)
+            if len(rendered) >= limit:
+                break
+        for bucket_key, overflow_count in overflow_counts.items():
+            anchor_index = bucket_anchor_index.get(bucket_key)
+            if anchor_index is None or anchor_index >= len(rendered):
+                continue
+            metadata = dict(rendered[anchor_index].get("metadata_json") or {})
+            metadata["overflow_count"] = overflow_count
+            metadata["bucket_window_seconds"] = 10
+            rendered[anchor_index]["metadata_json"] = metadata
+        return rendered
 
     def record_match_outcome(
         self,

@@ -5,7 +5,9 @@ import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/services/avatar_mapper.dart';
+import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
@@ -30,12 +32,15 @@ class GteLiveMatchCenterScreen extends StatefulWidget {
     this.isAuthenticated = false,
     this.onOpenLogin,
     this.navigationDependencies,
+    this.snapshotLoader,
   });
 
   final CompetitionSummary competition;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
   final GteNavigationDependencies? navigationDependencies;
+  final Future<LiveMatchSnapshot> Function(CompetitionSummary competition)?
+      snapshotLoader;
 
   @override
   State<GteLiveMatchCenterScreen> createState() =>
@@ -55,13 +60,19 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   @override
   void initState() {
     super.initState();
-    _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+    _snapshotFuture = _loadSnapshot();
   }
 
   void _reload() {
     setState(() {
-      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+      _snapshotFuture = _loadSnapshot();
     });
+  }
+
+  Future<LiveMatchSnapshot> _loadSnapshot() {
+    final Future<LiveMatchSnapshot> Function(CompetitionSummary competition)
+        loader = widget.snapshotLoader ?? loadLiveMatchSnapshot;
+    return loader(widget.competition);
   }
 
   Future<void> _openFeatureRoute(GteAppRouteData route) {
@@ -98,7 +109,12 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
-  Future<void> _openViewer(LiveMatchSnapshot match) async {
+  Future<void> _openViewer(
+    LiveMatchSnapshot match, {
+    required MatchViewerPresentationMode presentationMode,
+  }) async {
+    final Match3dUserEntitlement? entitlement =
+        widget.navigationDependencies?.match3dEntitlement;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (BuildContext context) => GtexMatchViewerScreen(
@@ -107,6 +123,10 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               ? match.matchId!.trim()
               : widget.competition.id,
           fallbackSnapshot: match,
+          presentationMode: presentationMode,
+          isSpectator: presentationMode == MatchViewerPresentationMode.broadcast,
+          renderMode: RenderMode.auto,
+          entitlement: entitlement,
         ),
       ),
     );
@@ -170,6 +190,43 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               children: <Widget>[
                 _LiveScoreboardCard(match: match),
+                const SizedBox(height: 16),
+                GteSurfacePanel(
+                  accentColor: GteShellTheme.accentArena,
+                  emphasized: true,
+                  child: Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Live broadcast layer',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Open the immersive broadcast presentation with the live clock, masked scoreboard, camera cuts, and commentary overlays.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      FilledButton.icon(
+                        onPressed: () => _openViewer(
+                          match,
+                          presentationMode:
+                              MatchViewerPresentationMode.broadcast,
+                        ),
+                        icon: const Icon(Icons.live_tv_outlined),
+                        label: const Text('Watch broadcast'),
+                      ),
+                    ],
+                  ),
+                ),
                 if (match.isFinal ||
                     match.highlightsAvailable ||
                     match.keyMomentsAvailable) ...<Widget>[
@@ -191,16 +248,20 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                               ),
                               SizedBox(height: 6),
                               Text(
-                                'Open the top-down replay to watch marker movement, event emphasis, and the authoritative scoreboard in one surface.',
+                                'Open the replay-style top-down viewer to inspect marker movement, event emphasis, and the authoritative timeline.',
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
                         FilledButton.icon(
-                          onPressed: () => _openViewer(match),
+                          onPressed: () => _openViewer(
+                            match,
+                            presentationMode:
+                                MatchViewerPresentationMode.replay,
+                          ),
                           icon: const Icon(Icons.sports_soccer),
-                          label: const Text('Open viewer'),
+                          label: const Text('Open replay'),
                         ),
                       ],
                     ),

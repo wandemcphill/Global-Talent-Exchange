@@ -6,6 +6,7 @@ enum MatchViewerEventType {
   goal,
   save,
   miss,
+  foul,
   offside,
   redCard,
   yellowCard,
@@ -29,6 +30,9 @@ MatchViewerEventType matchViewerEventTypeFromString(String value) {
       return MatchViewerEventType.save;
     case 'miss':
       return MatchViewerEventType.miss;
+    case 'foul':
+    case 'tactical_foul':
+      return MatchViewerEventType.foul;
     case 'offside':
       return MatchViewerEventType.offside;
     case 'red_card':
@@ -70,6 +74,12 @@ class MatchEvent {
     required this.emphasisLevel,
     required this.highlightedPlayerIds,
     required this.flags,
+    this.playbackProfile = 'neutral',
+    this.missVariant,
+    this.reviewable = false,
+    this.reviewReason,
+    this.reviewDecision,
+    this.scoreCommit = 'immediate',
     this.teamId,
     this.teamName,
     this.primaryPlayerId,
@@ -98,15 +108,30 @@ class MatchEvent {
   final int emphasisLevel;
   final List<String> highlightedPlayerIds;
   final List<String> flags;
+  final String playbackProfile;
+  final String? missVariant;
+  final bool reviewable;
+  final String? reviewReason;
+  final String? reviewDecision;
+  final String scoreCommit;
 
   bool get isMajor =>
       type == MatchViewerEventType.goal ||
       type == MatchViewerEventType.save ||
       type == MatchViewerEventType.miss ||
+      type == MatchViewerEventType.foul ||
       type == MatchViewerEventType.redCard ||
       type == MatchViewerEventType.offside;
 
   bool get isDataUnavailable => flags.contains('data_unavailable');
+
+  bool get isPresentationOnly => flags.contains('presentation_only');
+
+  bool get isReviewConfirmed => reviewDecision == 'confirmed';
+
+  bool get isReviewDisallowed => reviewDecision == 'disallowed';
+
+  bool get commitsScoreAfterReview => scoreCommit == 'after_review';
 
   IconData get icon {
     switch (type) {
@@ -116,6 +141,8 @@ class MatchEvent {
         return Icons.back_hand_outlined;
       case MatchViewerEventType.miss:
         return Icons.close_rounded;
+      case MatchViewerEventType.foul:
+        return Icons.warning_amber_outlined;
       case MatchViewerEventType.offside:
         return Icons.flag_outlined;
       case MatchViewerEventType.redCard:
@@ -194,6 +221,29 @@ class MatchEvent {
         <String>['emphasis_level', 'emphasisLevel'],
         fallback: 1,
       ),
+      playbackProfile: GteJson.string(
+        json,
+        <String>['playback_profile', 'playbackProfile'],
+        fallback: 'neutral',
+      ),
+      missVariant:
+          GteJson.stringOrNull(json, <String>['miss_variant', 'missVariant']),
+      reviewable: GteJson.boolean(
+        json,
+        <String>['reviewable'],
+        fallback: false,
+      ),
+      reviewReason:
+          GteJson.stringOrNull(json, <String>['review_reason', 'reviewReason']),
+      reviewDecision: GteJson.stringOrNull(
+        json,
+        <String>['review_decision', 'reviewDecision'],
+      ),
+      scoreCommit: GteJson.string(
+        json,
+        <String>['score_commit', 'scoreCommit'],
+        fallback: 'immediate',
+      ),
       highlightedPlayerIds: rawHighlighted
           .map((Object? value) => value.toString())
           .where((String value) => value.trim().isNotEmpty)
@@ -204,4 +254,80 @@ class MatchEvent {
           .toList(growable: false),
     );
   }
+
+  MatchEvent copyWith({
+    int? sequence,
+    MatchViewerEventType? type,
+    int? minute,
+    int? addedTime,
+    String? clockLabel,
+    double? timeSeconds,
+    Object? teamId = _matchEventUnset,
+    Object? teamName = _matchEventUnset,
+    Object? primaryPlayerId = _matchEventUnset,
+    Object? primaryPlayerName = _matchEventUnset,
+    Object? secondaryPlayerId = _matchEventUnset,
+    Object? secondaryPlayerName = _matchEventUnset,
+    int? homeScore,
+    int? awayScore,
+    String? bannerText,
+    String? commentary,
+    int? emphasisLevel,
+    List<String>? highlightedPlayerIds,
+    List<String>? flags,
+    String? playbackProfile,
+    Object? missVariant = _matchEventUnset,
+    bool? reviewable,
+    Object? reviewReason = _matchEventUnset,
+    Object? reviewDecision = _matchEventUnset,
+    String? scoreCommit,
+  }) {
+    return MatchEvent(
+      id: id,
+      sequence: sequence ?? this.sequence,
+      type: type ?? this.type,
+      minute: minute ?? this.minute,
+      addedTime: addedTime ?? this.addedTime,
+      clockLabel: clockLabel ?? this.clockLabel,
+      timeSeconds: timeSeconds ?? this.timeSeconds,
+      teamId:
+          identical(teamId, _matchEventUnset) ? this.teamId : teamId as String?,
+      teamName: identical(teamName, _matchEventUnset)
+          ? this.teamName
+          : teamName as String?,
+      primaryPlayerId: identical(primaryPlayerId, _matchEventUnset)
+          ? this.primaryPlayerId
+          : primaryPlayerId as String?,
+      primaryPlayerName: identical(primaryPlayerName, _matchEventUnset)
+          ? this.primaryPlayerName
+          : primaryPlayerName as String?,
+      secondaryPlayerId: identical(secondaryPlayerId, _matchEventUnset)
+          ? this.secondaryPlayerId
+          : secondaryPlayerId as String?,
+      secondaryPlayerName: identical(secondaryPlayerName, _matchEventUnset)
+          ? this.secondaryPlayerName
+          : secondaryPlayerName as String?,
+      homeScore: homeScore ?? this.homeScore,
+      awayScore: awayScore ?? this.awayScore,
+      bannerText: bannerText ?? this.bannerText,
+      commentary: commentary ?? this.commentary,
+      emphasisLevel: emphasisLevel ?? this.emphasisLevel,
+      highlightedPlayerIds: highlightedPlayerIds ?? this.highlightedPlayerIds,
+      flags: flags ?? this.flags,
+      playbackProfile: playbackProfile ?? this.playbackProfile,
+      missVariant: identical(missVariant, _matchEventUnset)
+          ? this.missVariant
+          : missVariant as String?,
+      reviewable: reviewable ?? this.reviewable,
+      reviewReason: identical(reviewReason, _matchEventUnset)
+          ? this.reviewReason
+          : reviewReason as String?,
+      reviewDecision: identical(reviewDecision, _matchEventUnset)
+          ? this.reviewDecision
+          : reviewDecision as String?,
+      scoreCommit: scoreCommit ?? this.scoreCommit,
+    );
+  }
 }
+
+const Object _matchEventUnset = Object();

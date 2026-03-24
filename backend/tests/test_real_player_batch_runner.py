@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import load_settings
 from app.core.database import load_model_modules
-from app.ingestion.models import Country, Player
+from app.ingestion.models import Club, Competition, Country, Player
 from app.ingestion.real_player_batch_runner import RealPlayerBatchRunner
 from app.ingestion.real_player_ingestion_service import RealPlayerPricingError
 from app.models.base import Base
@@ -102,10 +102,85 @@ def _sample_players() -> list[dict[str, object]]:
     ]
 
 
+def _seed_batch_runner_canonical_entities(engine) -> None:
+    with _session_factory(engine)() as session:
+        nigeria = Country(
+            source_provider="seed",
+            provider_external_id="NG",
+            name="Nigeria",
+            alpha2_code="NG",
+        )
+        turkey = Country(
+            source_provider="seed",
+            provider_external_id="TR",
+            name="Turkey",
+            alpha2_code="TR",
+        )
+        england = Country(
+            source_provider="seed",
+            provider_external_id="ENG",
+            name="England",
+            alpha3_code="ENG",
+        )
+        super_lig = Competition(
+            source_provider="seed",
+            provider_external_id="tr1",
+            country=turkey,
+            name="Super Lig",
+            slug="super-lig",
+            competition_type="league",
+            format_type="real_world",
+            is_major=True,
+            is_tradable=True,
+        )
+        premier_league = Competition(
+            source_provider="seed",
+            provider_external_id="eng1",
+            country=england,
+            name="Premier League",
+            slug="premier-league",
+            competition_type="league",
+            format_type="real_world",
+            is_major=True,
+            is_tradable=True,
+        )
+        session.add_all(
+            [
+                nigeria,
+                turkey,
+                england,
+                super_lig,
+                premier_league,
+                Club(
+                    source_provider="seed",
+                    provider_external_id="galatasaray",
+                    country=turkey,
+                    current_competition=super_lig,
+                    name="Galatasaray",
+                    slug="galatasaray",
+                    short_name="Galatasaray",
+                    is_tradable=True,
+                ),
+                Club(
+                    source_provider="seed",
+                    provider_external_id="fulham",
+                    country=england,
+                    current_competition=premier_league,
+                    name="Fulham",
+                    slug="fulham",
+                    short_name="Fulham",
+                    is_tradable=True,
+                ),
+            ]
+        )
+        session.commit()
+
+
 def test_batch_runner_dry_run_rolls_back_all_real_player_writes(tmp_path: Path) -> None:
     database_url = _database_url(tmp_path / "dry_run.db")
     engine = _initialize_database(database_url)
     try:
+        _seed_batch_runner_canonical_entities(engine)
         batch_path = _write_batch_file(tmp_path, _sample_players())
         report = RealPlayerBatchRunner(
             database_url=database_url,
@@ -127,6 +202,7 @@ def test_batch_runner_write_commits_and_reruns_without_duplicates(tmp_path: Path
     database_url = _database_url(tmp_path / "write_run.db")
     engine = _initialize_database(database_url)
     try:
+        _seed_batch_runner_canonical_entities(engine)
         batch_path = _write_batch_file(tmp_path, _sample_players())
         runner = RealPlayerBatchRunner(
             database_url=database_url,

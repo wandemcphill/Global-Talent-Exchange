@@ -43,6 +43,8 @@ class MatchEventType(StrEnum):
     DANGEROUS_ATTACK = "dangerous_attack"
     SHOT = "shot"
     SHOT_ON_TARGET = "shot_on_target"
+    FOUL = "foul"
+    OFFSIDE = "offside"
     MISSED_CHANCE = "missed_chance"
     MISSED_BIG_CHANCE = "missed_big_chance"
     SAVE = "save"

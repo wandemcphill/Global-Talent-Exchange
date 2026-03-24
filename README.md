@@ -26,6 +26,25 @@ python -m pip install --upgrade pip
 python -m pip install -r backend/requirements.txt
 ```
 
+## Transactional email
+
+The backend now supports env-driven transactional email for:
+
+- new signup email confirmation
+- account recovery / password reset
+
+Current SMTP defaults are Brevo SMTP with a temporary Gmail sender identity:
+
+- `EMAIL_PROVIDER=brevo_smtp`
+- `EMAIL_FROM_ADDRESS=vidzimedialtd@gmail.com`
+- `EMAIL_FROM_NAME=GTEX`
+- `EMAIL_REPLY_TO=vidzimedialtd@gmail.com`
+- `BREVO_SMTP_HOST=smtp-relay.brevo.com`
+- `BREVO_SMTP_PORT=587`
+- `BREVO_SMTP_USERNAME=a21b41001@smtp-brevo.com`
+
+Set `BREVO_SMTP_PASSWORD` from env only. Do not hardcode or reuse an exposed key. Use a regenerated Brevo SMTP key. When the sending domain is ready, you can swap the sender and provider settings without changing auth callers.
+
 ## Frontend quick start
 
 Flutter commands are run from `frontend/`. The app reads `GTE_API_BASE_URL` and `GTE_BACKEND_MODE` from `--dart-define`; `frontend/.env.example` is a reference file and is not auto-loaded by Flutter.

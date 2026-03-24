@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import app.models.real_player_import_batch  # noqa: F401
@@ -19,7 +20,7 @@ from app.ingestion.second_zip_real_player_ops_service import (
 from app.ingestion.transfermarkt_second_zip import SECOND_ZIP_SOURCE_NAME
 from app.models.base import Base
 from app.models.real_player_import_batch import RealPlayerImportRow, RealPlayerImportRowStatus
-from app.schemas.real_player_ingestion import RealPlayerIngestionItemResult
+from app.schemas.real_player_ingestion import RealPlayerIngestionItemResult, RealPlayerSeedInput
 
 
 PLAYER_HEADERS = [
@@ -455,6 +456,62 @@ def test_import_archive_supports_2000_row_dry_run(tmp_path: Path, monkeypatch) -
     with _session_factory(engine)() as session:
         assert session.scalar(select(func.count()).select_from(RealPlayerImportRow)) == 2000
     engine.dispose()
+
+
+def test_evaluation_result_uses_row_mapping_summary_when_profile_was_never_staged(tmp_path: Path) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-row-metadata.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    try:
+        candidate = SimpleNamespace(
+            seed_input=RealPlayerSeedInput.model_validate(
+                {
+                    "source_name": "2nd_zip",
+                    "source_player_key": "player-1",
+                    "canonical_name": "Player One",
+                    "nationality": "Ivory Coast",
+                    "primary_position": "Winger",
+                    "current_real_world_club": "Unattached",
+                }
+            )
+        )
+        row = RealPlayerImportRow(
+            batch_id="batch-1",
+            row_number=1,
+            source_name="2nd_zip",
+            source_player_key="player-1",
+            canonical_name="Player One",
+            status=RealPlayerImportRowStatus.SKIPPED.value,
+            import_metadata_json={
+                "mapping_summary": {
+                    "country": {"status": "unresolved"},
+                    "competition": {"status": "skipped"},
+                    "club": {"status": "skipped"},
+                }
+            },
+            validation_errors_json=["country unresolved"],
+            candidate_players_json=[],
+            audit_findings_json=[],
+            review_status="needs_review",
+            review_reason="unresolved_mapping",
+        )
+
+        with _session_factory(engine)() as session:
+            result = service._evaluation_result_for_candidate(
+                session=session,
+                candidate=candidate,
+                prepared=SimpleNamespace(preview_snapshots={}),
+                row=row,
+                staged=None,
+                issue_list=[],
+            )
+
+        assert result.mapping_status == "unresolved"
+        assert result.state == "unresolved"
+        assert result.publish_ready is False
+        assert result.review_reason == "unresolved_mapping"
+    finally:
+        engine.dispose()
 
 
 def test_import_archive_is_idempotent_for_second_run_same_scope(tmp_path: Path, monkeypatch) -> None:

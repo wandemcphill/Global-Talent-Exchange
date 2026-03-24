@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.ingestion.mapping_resolver import MappingResolver
 from app.ingestion.models import Club, Competition, Country
 from app.ingestion.normalizers import slugify
 from app.ingestion.real_player_canonical_mapping_service import RealPlayerCanonicalMappingService
@@ -196,6 +197,7 @@ class SecondZipRealPlayerOpsService:
     archive_intake: SecondZipArchiveIntakeService = field(default_factory=SecondZipArchiveIntakeService)
     normalization_service: RealPlayerNormalizationService = field(default_factory=RealPlayerNormalizationService)
     identity_matcher: RealPlayerIdentityMatcher = field(default_factory=RealPlayerIdentityMatcher)
+    mapping_resolver: MappingResolver = field(default_factory=MappingResolver)
     reference_date: date = field(default_factory=lambda: datetime.now(UTC).date())
 
     def preload_references(
@@ -989,6 +991,7 @@ class SecondZipRealPlayerOpsService:
             settings=self.settings,
             normalization_service=self.normalization_service,
             identity_matcher=self.identity_matcher,
+            mapping_resolver=self.mapping_resolver,
             canonical_mapping_service=RealPlayerCanonicalMappingService(
                 settings=self.settings,
                 auto_create_missing_entities=False,
@@ -1011,6 +1014,16 @@ class SecondZipRealPlayerOpsService:
             raw_mapping = None
             if profile is not None and isinstance(profile.metadata_json, dict):
                 raw_mapping = profile.metadata_json.get("canonical_mapping")
+            if raw_mapping is None and row is not None and isinstance(row.import_metadata_json, dict):
+                raw_mapping = row.import_metadata_json.get("mapping_summary")
+            if isinstance(raw_mapping, dict):
+                mapping_summary = {
+                    str(entity): dict(values)
+                    for entity, values in raw_mapping.items()
+                    if isinstance(values, dict)
+                }
+        elif row is not None and isinstance(row.import_metadata_json, dict):
+            raw_mapping = row.import_metadata_json.get("mapping_summary")
             if isinstance(raw_mapping, dict):
                 mapping_summary = {
                     str(entity): dict(values)
@@ -1033,6 +1046,8 @@ class SecondZipRealPlayerOpsService:
             )
 
         mapping_status = self._mapping_status(mapping_summary)
+        if mapping_status == "partial" and any(issue_type.startswith("unresolved_") for issue_type in issue_types):
+            mapping_status = "unresolved"
         pricing_preview_ready = staged is not None and staged.gtex_player_id in prepared.preview_snapshots
         stable_gtex_player_id = None
         if row is not None and row.match_action in {"matched_existing", "source_link"}:

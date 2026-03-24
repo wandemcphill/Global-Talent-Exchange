@@ -4,6 +4,7 @@ from app.models.academy_player_progress import AcademyPlayerProgress
 from app.models.academy_program import AcademyProgram
 from app.models.academy_training_cycle import AcademyTrainingCycle
 from app.models.analytics_event import AnalyticsEvent
+from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
 from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
 from app.models.attachment import Attachment
 from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
@@ -149,6 +150,7 @@ from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrde
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
 from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
+from app.ingestion.models import Player
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_agency_state import PlayerAgencyState
@@ -331,6 +333,8 @@ __all__ = [
     "AcademyProgram",
     "AcademyTrainingCycle",
     "AnalyticsEvent",
+    "AuthEmailToken",
+    "AuthEmailTokenPurpose",
     "AdminCalendarRule",
     "AdminFeatureFlag",
     "AdminRewardRule",

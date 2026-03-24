@@ -18,6 +18,7 @@ from app.market.service import MarketEngine
 from app.notifications.service import NotificationCenter
 from app.players.service import PlayerSummaryProjector
 from app.realtime.service import RealtimeHub
+from app.services.email import EmailService
 from app.value_engine.service import IngestionValueEngineBridge
 
 
@@ -25,6 +26,7 @@ from app.value_engine.service import IngestionValueEngineBridge
 class ApplicationContext:
     settings: Settings
     database: DatabaseRuntime
+    email_service: EmailService
     cache_backend: CacheBackend
     event_publisher: InMemoryEventPublisher
     job_backend: InlineJobBackend
@@ -48,6 +50,7 @@ def build_application_context(
         engine=engine,
         session_factory=session_factory,
     )
+    email_service = EmailService.build(resolved_settings)
     cache_backend = build_cache_backend(settings=resolved_settings)
     event_publisher = InMemoryEventPublisher()
     job_backend = InlineJobBackend(event_publisher=event_publisher)
@@ -81,6 +84,7 @@ def build_application_context(
     return ApplicationContext(
         settings=resolved_settings,
         database=database,
+        email_service=email_service,
         cache_backend=cache_backend,
         event_publisher=event_publisher,
         job_backend=job_backend,

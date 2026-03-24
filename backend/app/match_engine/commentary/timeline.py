@@ -65,6 +65,7 @@ class MatchCommentaryTimelineGenerator:
                 MatchEventType.DOUBLE_SAVE,
                 MatchEventType.GOALKEEPER_SAVE,
                 MatchEventType.WOODWORK,
+                MatchEventType.OFFSIDE,
                 MatchEventType.TACTICAL_SWING,
                 MatchEventType.TACTICAL_CHANGE,
                 MatchEventType.SUBSTITUTION_IMPACT,
@@ -157,6 +158,22 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.SHOT_ON_TARGET:
             detail = f" {family_phrase}" if family_phrase else ""
             return f"{event.primary_player_name} tests the keeper for {event.team_name}{detail}."
+        if event.event_type is MatchEventType.FOUL:
+            if event.metadata.get("reviewable") and event.metadata.get(
+                "review_decision"
+            ) == "disallowed":
+                return (
+                    f"VAR overturns the foul call against {event.team_name}; "
+                    f"{event.primary_player_name} gets away with it."
+                )
+            if event.metadata.get("reviewable"):
+                return (
+                    f"{event.primary_player_name} brings the move down for {event.team_name}, "
+                    "and VAR confirms the foul."
+                )
+            return f"{event.primary_player_name} halts the move with a foul for {event.team_name}."
+        if event.event_type is MatchEventType.OFFSIDE:
+            return f"The flag goes up against {event.team_name} as the move is caught offside."
         if event.event_type is MatchEventType.MISSED_CHANCE:
             detail = f" {family_phrase}" if family_phrase else ""
             return f"{event.primary_player_name} wastes a big opening{detail} for {event.team_name}."
@@ -176,6 +193,20 @@ class MatchCommentaryTimelineGenerator:
             detail = f" {family_phrase}" if family_phrase else ""
             return f"{event.primary_player_name} rattles the woodwork{detail} for {event.team_name}."
         if event.event_type is MatchEventType.GOAL:
+            if event.metadata.get("reviewable") and event.metadata.get(
+                "review_decision"
+            ) == "disallowed":
+                return (
+                    f"Goal initially given for {event.team_name}, but VAR rules it out "
+                    f"after reviewing {event.metadata.get('review_reason', 'the phase')}."
+                )
+            if event.metadata.get("reviewable") and event.metadata.get(
+                "review_decision"
+            ) == "confirmed":
+                return (
+                    f"Goal for {event.team_name}. VAR checks the phase and confirms "
+                    f"{event.primary_player_name}'s finish."
+                )
             if event.metadata.get("assisted") and event.secondary_player_name is not None:
                 detail = f" {family_phrase}" if family_phrase else ""
                 return f"Goal for {event.team_name}. {event.primary_player_name} finishes{detail} after a setup from {event.secondary_player_name}."
