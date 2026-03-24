@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import load_model_modules
+from app.ingestion.canonical_countries import seed_canonical_countries
 from app.ingestion.mapping_resolver import ClubResolutionContext, MappingResolver, normalize_string
 from app.ingestion.models import Club, Competition, Country
 from app.models.base import Base
@@ -103,25 +105,76 @@ def test_resolve_club_uses_alias_registry_for_psg_and_man_utd() -> None:
         engine.dispose()
 
 
-def test_resolve_country_uses_alias_registry_for_ivory_coast() -> None:
+@pytest.mark.parametrize(
+    ("raw_name", "expected_canonical_name"),
+    [
+        ("Ivory Coast", "Côte d’Ivoire"),
+        ("Cote d'Ivoire", "Côte d’Ivoire"),
+        ("Cote dIvoire", "Côte d’Ivoire"),
+        ("CÃ´te dâ€™Ivoire", "Côte d’Ivoire"),
+        ("Curacao", "Curaçao"),
+        ("Cape Verde", "Cabo Verde"),
+        ("DR Congo", "Democratic Republic of the Congo"),
+        ("Congo DR", "Democratic Republic of the Congo"),
+        ("Congo-Kinshasa", "Democratic Republic of the Congo"),
+        ("The Gambia", "Gambia"),
+    ],
+)
+def test_resolve_country_prefers_canonical_rows_for_aliases_and_variants(
+    raw_name: str,
+    expected_canonical_name: str,
+) -> None:
     engine, session_factory = _session_factory()
     try:
         resolver = MappingResolver()
         with session_factory() as session:
-            session.add(
-                Country(
-                    source_provider="seed",
-                    provider_external_id="CIV",
-                    name="Cote dIvoire",
-                    alpha3_code="CIV",
-                )
+            session.add_all(
+                [
+                    Country(
+                        source_provider="transfermarkt_2nd_zip",
+                        provider_external_id="civ-raw",
+                        name="Cote d'Ivoire",
+                    ),
+                    Country(
+                        source_provider="transfermarkt_2nd_zip",
+                        provider_external_id="cod-raw",
+                        name="DR Congo",
+                    ),
+                    Country(
+                        source_provider="transfermarkt_2nd_zip",
+                        provider_external_id="cv-raw",
+                        name="Cape Verde",
+                    ),
+                    Country(
+                        source_provider="transfermarkt_2nd_zip",
+                        provider_external_id="gm-raw",
+                        name="The Gambia",
+                    ),
+                ]
             )
+            seed_canonical_countries(session)
             session.commit()
 
         with session_factory() as session:
-            resolution = resolver.resolve_country(session, raw_name="Ivory Coast")
+            resolution = resolver.resolve_country(session, raw_name=raw_name)
             assert resolution.status == "resolved"
-            assert resolution.canonical_name == "Cote dIvoire"
+            assert resolution.canonical_name == expected_canonical_name
+    finally:
+        engine.dispose()
+
+
+def test_resolve_country_remains_unresolved_for_unknown_country() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        resolver = MappingResolver()
+        with session_factory() as session:
+            seed_canonical_countries(session)
+            session.commit()
+
+        with session_factory() as session:
+            resolution = resolver.resolve_country(session, raw_name="Atlantis Republic")
+            assert resolution.status == "unresolved"
+            assert resolution.reason_code == "country_not_found"
     finally:
         engine.dispose()
 

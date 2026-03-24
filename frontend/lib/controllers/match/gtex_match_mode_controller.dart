@@ -52,7 +52,8 @@ class GtexMatchModeController extends ChangeNotifier {
     if (_targetDurationSeconds <= 0) {
       return 0;
     }
-    final double progress = (viewerSeconds / _targetDurationSeconds).clamp(0, 1);
+    final double progress =
+        (viewerSeconds / _targetDurationSeconds).clamp(0, 1);
     return progress * _baseViewState.durationSeconds;
   }
 

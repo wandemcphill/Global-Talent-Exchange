@@ -5,6 +5,8 @@ import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match/gtex_match_render_mode.dart';
+import 'package:gte_frontend/models/match/gtex_match_view_type.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/services/avatar_mapper.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
@@ -18,6 +20,7 @@ import 'package:gte_frontend/widgets/gtex_branding.dart';
 
 import 'gte_halftime_analytics_screen.dart';
 import 'gte_match_highlights_screen.dart';
+import '../match/gtex_match_broadcast_screen.dart';
 import '../match/gtex_match_viewer_screen.dart';
 
 enum _LiveViewMode {
@@ -109,22 +112,60 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
-  Future<void> _openViewer(
+  Future<void> _openBroadcast(
+    LiveMatchSnapshot match,
+  ) async {
+    final Match3dUserEntitlement? entitlement =
+        widget.navigationDependencies?.match3dEntitlement;
+    final String matchKey = match.matchId?.trim().isNotEmpty == true
+        ? match.matchId!.trim()
+        : widget.competition.id;
+    final bool competitionUpgrade =
+        entitlement?.hasTournamentBoost(widget.competition.id) ?? false;
+    final bool unlockedMatch = entitlement?.hasUnlockedMatch(matchKey) ?? false;
+    final GtexMatchViewType initialViewType = competitionUpgrade ||
+            unlockedMatch ||
+            (entitlement?.isPremiumUser ?? false)
+        ? GtexMatchViewType.pseudo3D
+        : GtexMatchViewType.twoD;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GtexMatchBroadcastScreen(
+          competition: widget.competition,
+          competitionId: widget.competition.id,
+          matchId: matchKey,
+          fallbackSnapshot: match,
+          initialMode: GtexMatchRenderMode.standard,
+          viewType: initialViewType,
+          isPremiumUser: entitlement?.isPremiumUser ?? false,
+          spectatorMode: true,
+          auto3DEnabled: competitionUpgrade,
+          entitlement: entitlement,
+          competitionLabel: widget.competition.name,
+          onOpenHighlights: match.highlightsAvailable ? _openHighlights : null,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openReplayViewer(
     LiveMatchSnapshot match, {
     required MatchViewerPresentationMode presentationMode,
   }) async {
     final Match3dUserEntitlement? entitlement =
         widget.navigationDependencies?.match3dEntitlement;
+    final String matchKey = match.matchId?.trim().isNotEmpty == true
+        ? match.matchId!.trim()
+        : widget.competition.id;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (BuildContext context) => GtexMatchViewerScreen(
           competition: widget.competition,
-          matchKey: match.matchId?.trim().isNotEmpty == true
-              ? match.matchId!.trim()
-              : widget.competition.id,
+          matchKey: matchKey,
           fallbackSnapshot: match,
           presentationMode: presentationMode,
-          isSpectator: presentationMode == MatchViewerPresentationMode.broadcast,
+          isSpectator:
+              presentationMode == MatchViewerPresentationMode.broadcast,
           renderMode: RenderMode.auto,
           entitlement: entitlement,
         ),
@@ -216,11 +257,7 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                       ),
                       const SizedBox(width: 16),
                       FilledButton.icon(
-                        onPressed: () => _openViewer(
-                          match,
-                          presentationMode:
-                              MatchViewerPresentationMode.broadcast,
-                        ),
+                        onPressed: () => _openBroadcast(match),
                         icon: const Icon(Icons.live_tv_outlined),
                         label: const Text('Watch broadcast'),
                       ),
@@ -255,7 +292,7 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                         ),
                         const SizedBox(width: 16),
                         FilledButton.icon(
-                          onPressed: () => _openViewer(
+                          onPressed: () => _openReplayViewer(
                             match,
                             presentationMode:
                                 MatchViewerPresentationMode.replay,

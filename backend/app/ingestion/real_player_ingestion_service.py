@@ -55,6 +55,7 @@ from app.value_engine.models import ValueSnapshot
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 from app.value_engine.service import IngestionValueEngineBridge, IngestionValueSnapshotRepository
 
+from .canonical_countries import seed_canonical_countries
 from .mapping_resolver import ClubResolutionContext, MappingResolver, MappingResolution
 from .real_player_canonical_mapping_service import (
     CanonicalReferenceInput,
@@ -278,6 +279,9 @@ class RealPlayerIngestionService:
             ingestion_batch_id=ingestion_batch_id,
             as_of=as_of,
         )
+        seed_result = seed_canonical_countries(session)
+        if seed_result.changed and self.mapping_resolver is not None:
+            self.mapping_resolver.invalidate_country_index()
         normalized_row_count = 0
         matched_existing_count = 0
         new_identity_count = 0

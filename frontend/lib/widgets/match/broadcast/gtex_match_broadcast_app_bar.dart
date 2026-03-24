@@ -56,7 +56,9 @@ class GtexMatchBroadcastAppBar extends StatelessWidget
         IconButton(
           tooltip: viewType == GtexMatchViewType.pseudo3D
               ? 'Switch to 2D'
-              : (canToggleViewType ? 'Switch to Broadcast+' : 'Broadcast+ locked'),
+              : (canToggleViewType
+                  ? 'Switch to Broadcast+'
+                  : 'Broadcast+ locked'),
           onPressed: canToggleViewType ? onToggleViewType : null,
           icon: Icon(
             viewType == GtexMatchViewType.pseudo3D

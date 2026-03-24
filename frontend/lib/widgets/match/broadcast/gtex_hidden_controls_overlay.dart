@@ -43,7 +43,9 @@ class GtexHiddenControlsOverlay extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   _ControlChip(
-                    icon: isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                    icon: isPaused
+                        ? Icons.play_arrow_rounded
+                        : Icons.pause_rounded,
                     label: isPaused ? 'Play' : 'Pause',
                     onTap: onTogglePause,
                   ),

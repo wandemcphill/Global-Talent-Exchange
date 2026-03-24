@@ -46,11 +46,13 @@ class GtexEventOverlay extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             event!.title,
-                            style:
-                                Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
                           if (event!.subtitle?.trim().isNotEmpty == true)
                             Text(

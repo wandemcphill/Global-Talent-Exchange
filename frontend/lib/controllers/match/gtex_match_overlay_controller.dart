@@ -17,7 +17,7 @@ class GtexMatchOverlayController {
 
   final double controlsAutoHideSeconds;
 
-  double _controlsVisibleUntilSeconds = 0;
+  double _controlsVisibleUntilSeconds = -1;
 
   void showControls(double viewerSeconds) {
     _controlsVisibleUntilSeconds = viewerSeconds + controlsAutoHideSeconds;
@@ -109,7 +109,7 @@ class GtexMatchOverlayController {
     if (isPaused || isFullTime || frame.phase == MatchViewerPhase.halftime) {
       return true;
     }
-    return viewerSeconds <= _controlsVisibleUntilSeconds;
+    return viewerSeconds < _controlsVisibleUntilSeconds;
   }
 
   GtexBroadcastEvent? _activeVarOverlay({
@@ -209,7 +209,8 @@ class GtexMatchOverlayController {
       id: 'event-${event.id}',
       type: type,
       title: title,
-      subtitle: event.bannerText.trim().isEmpty ? event.commentary : event.bannerText,
+      subtitle:
+          event.bannerText.trim().isEmpty ? event.commentary : event.bannerText,
       teamId: event.teamId,
       startViewerSeconds: math.max(0, startViewerSeconds),
       endViewerSeconds: math.max(

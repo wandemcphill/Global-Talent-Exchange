@@ -293,18 +293,11 @@ def test_repair_mappings_scans_without_importing_and_writes_csv(tmp_path: Path, 
         payload = json.loads(capsys.readouterr().out)
         assert payload["selected_player_count"] == 2
         assert payload["resolved_row_count"] == 1
-        assert payload["skipped_row_count"] == 0
-        assert payload["unresolved_row_count"] == 1
-        assert payload["unresolved_group_count"] == 1
+        assert payload["skipped_row_count"] == 1
+        assert payload["unresolved_row_count"] == 0
+        assert payload["unresolved_group_count"] == 0
 
         rows = list(csv.DictReader(csv_path.open("r", encoding="utf-8", newline="")))
-        assert rows == [
-            {
-                "club_name": "Unattached",
-                "country_name": "Ivory Coast",
-                "count": "1",
-                "examples": "Ivory NeedsMap",
-            }
-        ]
+        assert rows == []
     finally:
         engine.dispose()

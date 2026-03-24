@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import load_settings
 from app.core.database import load_model_modules
+from app.ingestion.canonical_countries import CANONICAL_COUNTRY_SEEDS
 from app.ingestion.models import Club, Competition, Country
 from app.ingestion.second_zip_real_player_ops_service import (
     SecondZipEvaluationResult,
@@ -396,6 +397,45 @@ def test_preload_references_inserts_and_updates_second_zip_entities(tmp_path: Pa
         assert session.scalar(
             select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
         ) == 1
+    engine.dispose()
+
+
+def test_preload_references_seeds_missing_canonical_countries_idempotently(tmp_path: Path) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-canonical-countries.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1)],
+    )
+
+    with _session_factory(engine)() as session:
+        session.add(
+            Country(
+                source_provider="existing_provider",
+                provider_external_id="AGO-existing",
+                name="Angola",
+                alpha3_code="AGO",
+            )
+        )
+        session.commit()
+
+    service.preload_references(archive_path=archive_path)
+    service.preload_references(archive_path=archive_path)
+
+    canonical_names = [seed.name for seed in CANONICAL_COUNTRY_SEEDS]
+    with _session_factory(engine)() as session:
+        rows = list(
+            session.scalars(
+                select(Country).where(Country.name.in_(canonical_names))
+            )
+        )
+        counts_by_name = {
+            name: sum(1 for row in rows if row.name == name)
+            for name in canonical_names
+        }
+
+    assert counts_by_name == {name: 1 for name in canonical_names}
     engine.dispose()
 
 

@@ -8,6 +8,7 @@ from typing import Sequence
 
 from app.core.config import load_settings
 from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
+from app.ingestion.canonical_countries import seed_canonical_countries
 from app.ingestion.mapping_resolver import ClubResolutionContext, MappingResolver
 from app.ingestion.second_zip_real_player_ops_service import SecondZipRealPlayerOpsService
 from app.ingestion.second_zip_base_eligibility import SecondZipBaseEligibilityPolicy, evaluate_second_zip_players_csv_row
@@ -66,6 +67,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             lookups = service._load_lookups(extracted.workdir)
             policy = SecondZipBaseEligibilityPolicy(reference_date=service.reference_date)
             with session_factory() as session:
+                seed_result = seed_canonical_countries(session)
+                if seed_result.changed:
+                    session.commit()
                 for _, source_row in service._iter_player_rows(extracted.get_path("players.csv"), start_row_number=1):
                     total_rows_read += 1
                     eligibility = evaluate_second_zip_players_csv_row(source_row, policy=policy)

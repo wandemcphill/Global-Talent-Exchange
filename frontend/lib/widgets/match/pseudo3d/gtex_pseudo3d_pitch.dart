@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
@@ -180,9 +181,8 @@ class _GtexPseudo3DPitchPainter extends CustomPainter {
     for (int stripe = 0; stripe < 10; stripe += 1) {
       final double top = stripe * 10;
       final double bottom = top + 10;
-      stripePaint.color = stripe.isEven
-          ? const Color(0x12000000)
-          : const Color(0x0DFFFFFF);
+      stripePaint.color =
+          stripe.isEven ? const Color(0x12000000) : const Color(0x0DFFFFFF);
       canvas.drawPath(
         projection.rectPath(
           left: 0,
@@ -233,9 +233,18 @@ class _GtexPseudo3DPitchPainter extends CustomPainter {
     );
 
     final Paint dotPaint = Paint()..color = Colors.white.withValues(alpha: 0.9);
-    canvas.drawCircle(projection.project(const MatchViewerPoint(x: 50, y: 50)).offset, 3, dotPaint);
-    canvas.drawCircle(projection.project(const MatchViewerPoint(x: 11, y: 50)).offset, 2.6, dotPaint);
-    canvas.drawCircle(projection.project(const MatchViewerPoint(x: 89, y: 50)).offset, 2.6, dotPaint);
+    canvas.drawCircle(
+        projection.project(const MatchViewerPoint(x: 50, y: 50)).offset,
+        3,
+        dotPaint);
+    canvas.drawCircle(
+        projection.project(const MatchViewerPoint(x: 11, y: 50)).offset,
+        2.6,
+        dotPaint);
+    canvas.drawCircle(
+        projection.project(const MatchViewerPoint(x: 89, y: 50)).offset,
+        2.6,
+        dotPaint);
   }
 
   @override

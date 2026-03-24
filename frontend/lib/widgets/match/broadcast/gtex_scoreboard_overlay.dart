@@ -9,6 +9,9 @@ class GtexScoreboardOverlay extends StatelessWidget {
     required this.hudState,
   });
 
+  final MatchViewState viewState;
+  final GtexBroadcastHudState hudState;
+
   @override
   Widget build(BuildContext context) {
     return Align(
@@ -35,9 +38,8 @@ class GtexScoreboardOverlay extends StatelessWidget {
               _TeamCell(
                 shortName: viewState.homeTeam.shortName,
                 color: _parseColor(viewState.homeTeam.primaryColorHex),
-                scoreLabel: hudState.scoreMasked
-                    ? '--'
-                    : '${hudState.homeScore ?? 0}',
+                scoreLabel:
+                    hudState.scoreMasked ? '--' : '${hudState.homeScore ?? 0}',
                 alignEnd: false,
               ),
               Padding(
@@ -53,9 +55,8 @@ class GtexScoreboardOverlay extends StatelessWidget {
               _TeamCell(
                 shortName: viewState.awayTeam.shortName,
                 color: _parseColor(viewState.awayTeam.primaryColorHex),
-                scoreLabel: hudState.scoreMasked
-                    ? '--'
-                    : '${hudState.awayScore ?? 0}',
+                scoreLabel:
+                    hudState.scoreMasked ? '--' : '${hudState.awayScore ?? 0}',
                 alignEnd: true,
               ),
               const SizedBox(width: 12),

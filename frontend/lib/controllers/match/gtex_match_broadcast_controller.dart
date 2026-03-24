@@ -19,6 +19,7 @@ class GtexMatchBroadcastController extends ChangeNotifier {
     required bool isPremiumUser,
     required bool spectatorMode,
     required bool auto3DEnabled,
+    this.competitionId,
     Match3dUserEntitlement? entitlement,
     GtexMatchOverlayController? overlayController,
   })  : _viewState = viewState,
@@ -32,13 +33,13 @@ class GtexMatchBroadcastController extends ChangeNotifier {
         _overlayController = overlayController ?? GtexMatchOverlayController(),
         _isPremiumUser = isPremiumUser {
     _viewType = _resolveInitialViewType(initialViewType);
-    _overlayController.showControls(0);
     _rebuildHudState();
   }
 
   final MatchViewState _viewState;
   final bool _spectatorMode;
   final bool _auto3DEnabled;
+  final String? competitionId;
   final Match3dUserEntitlement? _entitlement;
   final GtexMatchModeController _modeController;
   final GtexMatchOverlayController _overlayController;
@@ -71,14 +72,14 @@ class GtexMatchBroadcastController extends ChangeNotifier {
   bool get isPaused => _isPaused;
 
   bool get canUsePseudo3D {
-    final Match3dUserEntitlement entitlement =
-        _entitlement ??
-            Match3dUserEntitlement(
-              isPremiumUser: _isPremiumUser,
-            );
+    final Match3dUserEntitlement entitlement = _entitlement ??
+        Match3dUserEntitlement(
+          isPremiumUser: _isPremiumUser,
+        );
     return entitlement.isPremiumUser ||
         entitlement.hasUnlockedMatch(_viewState.matchId) ||
-        entitlement.hasTournamentBoost(_viewState.matchId);
+        (competitionId != null &&
+            entitlement.hasTournamentBoost(competitionId!));
   }
 
   bool get isFullTime {
@@ -205,8 +206,7 @@ class GtexMatchBroadcastController extends ChangeNotifier {
   }
 
   void _rebuildHudState() {
-    final ({int? home, int? away, bool masked}) scoreState =
-        _scoreboardState();
+    final ({int? home, int? away, bool masked}) scoreState = _scoreboardState();
     _hudState = _overlayController.buildHudState(
       viewState: _viewState,
       modeController: _modeController,

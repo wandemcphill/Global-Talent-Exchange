@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.ingestion.canonical_countries import seed_canonical_countries
 from app.ingestion.mapping_resolver import MappingResolver
 from app.ingestion.models import Club, Competition, Country
 from app.ingestion.normalizers import slugify
@@ -499,6 +500,7 @@ class SecondZipRealPlayerOpsService:
 
         try:
             with self.session_factory() as session:
+                seed_canonical_countries(session)
                 countries_by_external_id = {
                     row.provider_external_id: row
                     for row in session.scalars(
@@ -565,6 +567,8 @@ class SecondZipRealPlayerOpsService:
             raise SecondZipRealPlayerOpsError(
                 f"Failed to preload 2nd.zip references from '{archive_path}': {exc}",
             ) from exc
+        self.mapping_resolver.invalidate_country_index()
+        self.mapping_resolver.invalidate_club_index()
 
         return SecondZipReferencePreloadReport(
             archive_path=str(archive_path),

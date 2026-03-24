@@ -6,12 +6,19 @@ from difflib import SequenceMatcher
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.ingestion.canonical_countries import (
+    CANONICAL_COUNTRY_DISPLAY_KEYS,
+    CANONICAL_COUNTRY_SOURCE_PROVIDER,
+    canonical_country_display_key,
+)
 from app.ingestion.models import Club, Country
 
 from .mapping_registry import (
     CLUB_ALIAS_LOOKUP,
     CLUB_PLACEHOLDER_LABELS,
     COUNTRY_ALIAS_LOOKUP,
+    COUNTRY_COMPACT_ALIAS_LOOKUP,
+    normalize_compact_registry_key,
     normalize_registry_key,
 )
 
@@ -22,6 +29,20 @@ FUZZY_MATCH_MARGIN = 0.03
 
 def normalize_string(value: str | None) -> str | None:
     return normalize_registry_key(value)
+
+
+def _country_lookup_key(value: str | None) -> str | None:
+    normalized = normalize_registry_key(value, strip_suffixes=False)
+    if normalized is None:
+        return None
+    return COUNTRY_ALIAS_LOOKUP.get(normalized, normalized)
+
+
+def _country_compact_lookup_key(value: str | None) -> str | None:
+    compact = normalize_compact_registry_key(value, strip_suffixes=False)
+    if compact is None:
+        return None
+    return COUNTRY_COMPACT_ALIAS_LOOKUP.get(compact, compact)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +94,11 @@ class _CountryEntry:
     entity_id: str
     canonical_name: str
     normalized_name: str
+    lookup_name: str
+    compact_lookup_name: str | None
     codes: tuple[str, ...]
+    source_provider: str
+    country_priority: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +118,7 @@ class MappingResolver:
     fuzzy_margin: float = FUZZY_MATCH_MARGIN
     _country_entries: tuple[_CountryEntry, ...] = field(default_factory=tuple, init=False)
     _country_by_name: dict[str, tuple[_CountryEntry, ...]] = field(default_factory=dict, init=False)
+    _country_by_compact_name: dict[str, tuple[_CountryEntry, ...]] = field(default_factory=dict, init=False)
     _country_by_code: dict[str, tuple[_CountryEntry, ...]] = field(default_factory=dict, init=False)
     _club_entries: tuple[_ClubEntry, ...] = field(default_factory=tuple, init=False)
     _club_by_name: dict[str, tuple[_ClubEntry, ...]] = field(default_factory=dict, init=False)
@@ -106,62 +132,48 @@ class MappingResolver:
     ) -> ResolvedCountryMapping:
         self._ensure_country_index(session)
         normalized_input = normalize_registry_key(raw_name, strip_suffixes=False)
+        country_lookup_key = _country_lookup_key(raw_name)
+        country_compact_lookup_key = _country_compact_lookup_key(raw_name)
+        alias_applied = country_lookup_key is not None and country_lookup_key != normalized_input
         normalized_code = (raw_code or "").strip().upper() or None
         if normalized_code:
-            code_matches = self._country_by_code.get(normalized_code, ())
-            if len(code_matches) == 1:
-                return self._resolved_country(
-                    session,
-                    code_matches[0],
-                    raw_name=raw_name,
-                    normalized_input=normalized_input,
-                    method="code_exact",
-                    confidence=1.0,
-                )
-            if len(code_matches) > 1:
-                return self._unresolved_country(
-                    raw_name=raw_name,
-                    normalized_input=normalized_input,
-                    reason_code="ambiguous_country_code_match",
-                )
+            code_resolution = self._select_country_from_candidates(
+                session,
+                candidates=self._country_by_code.get(normalized_code, ()),
+                raw_name=raw_name,
+                normalized_input=normalized_input,
+                method="code_exact",
+                ambiguous_reason="ambiguous_country_code_match",
+            )
+            if code_resolution is not None:
+                return code_resolution
         if not normalized_input:
             return self._skipped_country(raw_name=raw_name, reason_code="missing_reference")
 
-        exact_matches = self._country_by_name.get(normalized_input, ())
-        if len(exact_matches) == 1:
-            return self._resolved_country(
-                session,
-                exact_matches[0],
-                raw_name=raw_name,
-                normalized_input=normalized_input,
-                method="exact",
-                confidence=1.0,
-            )
-        if len(exact_matches) > 1:
-            return self._unresolved_country(
-                raw_name=raw_name,
-                normalized_input=normalized_input,
-                reason_code="ambiguous_country_match",
-            )
+        exact_resolution = self._select_country_from_candidates(
+            session,
+            candidates=self._country_by_name.get(country_lookup_key or normalized_input, ()),
+            raw_name=raw_name,
+            normalized_input=normalized_input,
+            method="alias" if alias_applied else "exact",
+            ambiguous_reason="ambiguous_country_alias_match" if alias_applied else "ambiguous_country_match",
+            confidence=0.99 if alias_applied else 1.0,
+        )
+        if exact_resolution is not None:
+            return exact_resolution
 
-        alias_target = COUNTRY_ALIAS_LOOKUP.get(normalized_input)
-        if alias_target:
-            alias_matches = self._country_by_name.get(alias_target, ())
-            if len(alias_matches) == 1:
-                return self._resolved_country(
-                    session,
-                    alias_matches[0],
-                    raw_name=raw_name,
-                    normalized_input=normalized_input,
-                    method="alias",
-                    confidence=0.99,
-                )
-            if len(alias_matches) > 1:
-                return self._unresolved_country(
-                    raw_name=raw_name,
-                    normalized_input=normalized_input,
-                    reason_code="ambiguous_country_alias_match",
-                )
+        if country_compact_lookup_key:
+            compact_resolution = self._select_country_from_candidates(
+                session,
+                candidates=self._country_by_compact_name.get(country_compact_lookup_key, ()),
+                raw_name=raw_name,
+                normalized_input=normalized_input,
+                method="alias_compact" if alias_applied else "compact",
+                ambiguous_reason="ambiguous_country_alias_match" if alias_applied else "ambiguous_country_compact_match",
+                confidence=0.99 if alias_applied else 0.98,
+            )
+            if compact_resolution is not None:
+                return compact_resolution
 
         fuzzy_match = self._best_fuzzy_country_match(normalized_input)
         if fuzzy_match is not None:
@@ -275,11 +287,20 @@ class MappingResolver:
             return
         entries: list[_CountryEntry] = []
         by_name: dict[str, list[_CountryEntry]] = {}
+        by_compact_name: dict[str, list[_CountryEntry]] = {}
         by_code: dict[str, list[_CountryEntry]] = {}
         for country in session.scalars(select(Country)):
             normalized_name = normalize_registry_key(country.name, strip_suffixes=False)
             if normalized_name is None:
                 continue
+            lookup_name = COUNTRY_ALIAS_LOOKUP.get(normalized_name, normalized_name)
+            compact_lookup_name = _country_compact_lookup_key(country.name)
+            display_key = canonical_country_display_key(country.name)
+            country_priority = 2
+            if display_key in CANONICAL_COUNTRY_DISPLAY_KEYS:
+                country_priority = 1
+            if country.source_provider == CANONICAL_COUNTRY_SOURCE_PROVIDER:
+                country_priority = 0
             codes = tuple(
                 sorted(
                     {
@@ -298,14 +319,21 @@ class MappingResolver:
                 entity_id=country.id,
                 canonical_name=country.name,
                 normalized_name=normalized_name,
+                lookup_name=lookup_name,
+                compact_lookup_name=compact_lookup_name,
                 codes=codes,
+                source_provider=country.source_provider,
+                country_priority=country_priority,
             )
             entries.append(entry)
-            by_name.setdefault(normalized_name, []).append(entry)
+            by_name.setdefault(lookup_name, []).append(entry)
+            if compact_lookup_name:
+                by_compact_name.setdefault(compact_lookup_name, []).append(entry)
             for code in codes:
                 by_code.setdefault(code, []).append(entry)
         self._country_entries = tuple(entries)
         self._country_by_name = {key: tuple(value) for key, value in by_name.items()}
+        self._country_by_compact_name = {key: tuple(value) for key, value in by_compact_name.items()}
         self._country_by_code = {key: tuple(value) for key, value in by_code.items()}
 
     def _ensure_club_index(self, session: Session) -> None:
@@ -344,7 +372,7 @@ class MappingResolver:
                 else None
             )
             country_name = (
-                normalize_registry_key(club.country.name, strip_suffixes=False)
+                _country_lookup_key(club.country.name)
                 if club.country is not None
                 else None
             )
@@ -411,15 +439,30 @@ class MappingResolver:
             filtered,
             key=lambda item: (
                 -item[0],
+                getattr(item[1], "country_priority", 0),
                 item[1].canonical_name.casefold(),
                 item[1].entity_id,
             ),
         )
         best_score, best_entry = ordered[0]
-        second_score = ordered[1][0] if len(ordered) > 1 else None
-        if second_score is not None and (best_score - second_score) < self.fuzzy_margin:
-            return None
+        second_item = ordered[1] if len(ordered) > 1 else None
+        if second_item is not None:
+            second_score, second_entry = second_item
+            if (best_score - second_score) < self.fuzzy_margin and (
+                getattr(best_entry, "country_priority", 0) == getattr(second_entry, "country_priority", 0)
+            ):
+                return None
         return best_entry, best_score
+
+    def invalidate_country_index(self) -> None:
+        self._country_entries = ()
+        self._country_by_name = {}
+        self._country_by_compact_name = {}
+        self._country_by_code = {}
+
+    def invalidate_club_index(self) -> None:
+        self._club_entries = ()
+        self._club_by_name = {}
 
     def _filter_clubs_by_context(
         self,
@@ -428,7 +471,7 @@ class MappingResolver:
         context: ClubResolutionContext,
     ) -> tuple[_ClubEntry, ...]:
         competition_name = normalize_registry_key(context.competition_name, strip_suffixes=False)
-        country_name = normalize_registry_key(context.country_name, strip_suffixes=False)
+        country_name = _country_lookup_key(context.country_name)
         competition_id = (context.competition_id or "").strip() or None
         country_id = (context.country_id or "").strip() or None
         return tuple(
@@ -469,6 +512,39 @@ class MappingResolver:
                 reason_code=ambiguous_reason,
             )
         return None
+
+    def _select_country_from_candidates(
+        self,
+        session: Session,
+        *,
+        candidates: tuple[_CountryEntry, ...],
+        raw_name: str | None,
+        normalized_input: str | None,
+        method: str,
+        ambiguous_reason: str,
+        confidence: float = 1.0,
+    ) -> ResolvedCountryMapping | None:
+        if not candidates:
+            return None
+        preferred = self._prefer_country_candidates(candidates)
+        if len(preferred) == 1:
+            return self._resolved_country(
+                session,
+                preferred[0],
+                raw_name=raw_name,
+                normalized_input=normalized_input,
+                method=method,
+                confidence=confidence,
+            )
+        return self._unresolved_country(
+            raw_name=raw_name,
+            normalized_input=normalized_input,
+            reason_code=ambiguous_reason,
+        )
+
+    def _prefer_country_candidates(self, candidates: tuple[_CountryEntry, ...]) -> tuple[_CountryEntry, ...]:
+        best_priority = min(candidate.country_priority for candidate in candidates)
+        return tuple(candidate for candidate in candidates if candidate.country_priority == best_priority)
 
     def _resolved_country(
         self,

@@ -365,6 +365,88 @@ def test_real_player_ingestion_attaches_to_existing_canonical_entities() -> None
         engine.dispose()
 
 
+def test_real_player_ingestion_resolves_seeded_country_alias_when_club_exists() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            england = Country(
+                source_provider="football_data",
+                provider_external_id="ENG",
+                name="England",
+                alpha3_code="ENG",
+                fifa_code="ENG",
+            )
+            premier_league = Competition(
+                source_provider="football_data",
+                provider_external_id="pl",
+                country=england,
+                name="Premier League",
+                slug="premier-league",
+                competition_type="league",
+                format_type="real_world",
+                is_major=True,
+                is_tradable=True,
+            )
+            fulham = Club(
+                source_provider="football_data",
+                provider_external_id="fulham",
+                country=england,
+                current_competition=premier_league,
+                name="Fulham",
+                slug="fulham",
+                short_name="Fulham",
+                is_tradable=True,
+            )
+            session.add_all([england, premier_league, fulham])
+            session.commit()
+
+        request = RealPlayerIngestionRequest.model_validate(
+            {
+                "mode": "curated_seed",
+                "as_of": "2026-03-22T12:00:00+00:00",
+                "players": [
+                    {
+                        "source_name": "curated-feed",
+                        "source_player_key": "gambia-001",
+                        "canonical_name": "Gambia Example",
+                        "nationality": "The Gambia",
+                        "date_of_birth": "1999-01-01",
+                        "primary_position": "Winger",
+                        "current_real_world_club": "Fulham",
+                        "current_real_world_league": "Premier League",
+                        "competition_level": "elite",
+                        "appearances": 20,
+                        "minutes_played": 1800,
+                        "goals": 8,
+                        "assists": 4,
+                        "current_market_reference_value": 20000000,
+                        "market_reference_currency": "EUR",
+                    }
+                ],
+            }
+        )
+
+        service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
+        report = service.write_batch(request)
+        assert report.players_processed == 1
+
+        with session_factory() as session:
+            player = session.scalar(select(Player).where(Player.full_name == "Gambia Example"))
+            assert player is not None
+            assert player.country is not None
+            assert player.country.name == "Gambia"
+            assert player.current_club_id == fulham.id
+
+            profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id))
+            assert profile is not None
+            assert profile.metadata_json["canonical_mapping"]["country"]["status"] == "resolved"
+            assert profile.metadata_json["canonical_mapping"]["country"]["canonical_name"] == "Gambia"
+
+            assert session.scalar(select(func.count()).select_from(RealPlayerUnresolvedReference)) == 0
+    finally:
+        engine.dispose()
+
+
 def test_real_player_ingestion_surfaces_and_persists_unresolved_mappings_without_auto_create() -> None:
     engine, session_factory = _session_factory()
     try:

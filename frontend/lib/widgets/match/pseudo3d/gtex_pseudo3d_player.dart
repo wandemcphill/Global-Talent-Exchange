@@ -20,9 +20,8 @@ class GtexPseudo3DPlayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final double width = 18 * scale;
     final double height = 40 * scale;
-    final Color glowColor = highlighted
-        ? trimColor.withValues(alpha: 0.35)
-        : Colors.transparent;
+    final Color glowColor =
+        highlighted ? trimColor.withValues(alpha: 0.35) : Colors.transparent;
     return SizedBox(
       width: width,
       height: height,
@@ -67,7 +66,8 @@ class GtexPseudo3DPlayer extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: primaryColor.withValues(alpha: 0.96),
-                border: Border.all(color: trimColor, width: mathMax(1, scale * 0.7)),
+                border: Border.all(
+                    color: trimColor, width: mathMax(1, scale * 0.7)),
               ),
             ),
           ),
@@ -77,4 +77,5 @@ class GtexPseudo3DPlayer extends StatelessWidget {
   }
 }
 
-double mathMax(num left, num right) => left > right ? left.toDouble() : right.toDouble();
+double mathMax(num left, num right) =>
+    left > right ? left.toDouble() : right.toDouble();

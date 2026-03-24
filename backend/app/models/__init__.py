@@ -150,7 +150,6 @@ from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrde
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
 from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
-from app.ingestion.models import Player
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_agency_state import PlayerAgencyState
@@ -676,3 +675,11 @@ __all__ = [
     "YouthProspect",
     "YouthProspectReport",
 ]
+
+
+def __getattr__(name: str):
+    if name == "Player":
+        from app.ingestion.models import Player
+
+        return Player
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
