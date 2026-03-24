@@ -163,6 +163,44 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('replay viewer stays usable in a narrow layout', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final CompetitionSummary competition = _buildCompetition(
+      id: 'match-viewer-narrow-test',
+    );
+    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
+      competition,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: competition,
+          matchKey: competition.id,
+          fallbackSnapshot: snapshot,
+          preferFallback: true,
+          renderMode: RenderMode.twoD,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 64));
+
+    expect(find.text('Restart'), findsOneWidget);
+    expect(find.text('Next event'), findsOneWidget);
+    await _pumpUntilVisible(tester, find.text('Replay lane'));
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets(
       'broadcast viewer shows intro, live clock, masked score, and commentary',
       (WidgetTester tester) async {

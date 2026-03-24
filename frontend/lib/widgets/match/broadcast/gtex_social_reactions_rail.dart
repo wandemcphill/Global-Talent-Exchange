@@ -5,11 +5,13 @@ class GtexSocialReactionsRail extends StatelessWidget {
     super.key,
     required this.visible,
     required this.reactions,
+    required this.showGiftAction,
     required this.onGiftTap,
   });
 
   final bool visible;
   final List<String> reactions;
+  final bool showGiftAction;
   final VoidCallback onGiftTap;
 
   @override
@@ -28,38 +30,40 @@ class GtexSocialReactionsRail extends StatelessWidget {
               _RailChip(label: reaction),
               const SizedBox(height: 10),
             ],
-            InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: onGiftTap,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xE6101E2D),
-                  borderRadius: BorderRadius.circular(999),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.14)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Icon(
-                      Icons.card_giftcard_rounded,
-                      color: Colors.white,
-                      size: 18,
+            if (showGiftAction)
+              InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: onGiftTap,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xE6101E2D),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.14),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Gift',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      const Icon(
+                        Icons.card_giftcard_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Gift',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

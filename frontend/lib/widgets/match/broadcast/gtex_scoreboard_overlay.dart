@@ -14,13 +14,16 @@ class GtexScoreboardOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 380;
+    final double edgePadding = compact ? 10 : 14;
+    final double sectionGap = compact ? 8 : 12;
     return Align(
       alignment: Alignment.topCenter,
       child: Padding(
         padding: const EdgeInsets.only(top: 18),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: edgePadding, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xE6111E2B),
             borderRadius: BorderRadius.circular(18),
@@ -41,9 +44,10 @@ class GtexScoreboardOverlay extends StatelessWidget {
                 scoreLabel:
                     hudState.scoreMasked ? '--' : '${hudState.homeScore ?? 0}',
                 alignEnd: false,
+                compact: compact,
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.symmetric(horizontal: sectionGap),
                 child: Text(
                   ':',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -58,31 +62,38 @@ class GtexScoreboardOverlay extends StatelessWidget {
                 scoreLabel:
                     hudState.scoreMasked ? '--' : '${hudState.awayScore ?? 0}',
                 alignEnd: true,
+                compact: compact,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: sectionGap),
               Container(
                 width: 1,
-                height: 24,
+                height: compact ? 20 : 24,
                 color: Colors.white.withValues(alpha: 0.12),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: sectionGap),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Text(
                     hudState.statusLabel,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white70,
-                          letterSpacing: 1.1,
-                        ),
+                    style: (compact
+                            ? Theme.of(context).textTheme.labelSmall
+                            : Theme.of(context).textTheme.labelSmall)
+                        ?.copyWith(
+                      color: Colors.white70,
+                      letterSpacing: compact ? 0.8 : 1.1,
+                    ),
                   ),
                   Text(
                     hudState.clockLabel,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    style: (compact
+                            ? Theme.of(context).textTheme.titleSmall
+                            : Theme.of(context).textTheme.titleMedium)
+                        ?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -100,42 +111,55 @@ class _TeamCell extends StatelessWidget {
     required this.color,
     required this.scoreLabel,
     required this.alignEnd,
+    required this.compact,
   });
 
   final String shortName;
   final Color color;
   final String scoreLabel;
   final bool alignEnd;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final double gap = compact ? 6 : 8;
     return Expanded(
       child: Row(
         mainAxisAlignment:
             alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: <Widget>[
           if (!alignEnd) ...<Widget>[
-            _Badge(color: color),
-            const SizedBox(width: 8),
+            _Badge(color: color, compact: compact),
+            SizedBox(width: gap),
           ],
-          Text(
-            shortName,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
+          Flexible(
+            child: Text(
+              shortName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: (compact
+                      ? Theme.of(context).textTheme.labelMedium
+                      : Theme.of(context).textTheme.labelLarge)
+                  ?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: gap),
           Text(
             scoreLabel,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+            style: (compact
+                    ? Theme.of(context).textTheme.titleMedium
+                    : Theme.of(context).textTheme.titleLarge)
+                ?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           if (alignEnd) ...<Widget>[
-            const SizedBox(width: 8),
-            _Badge(color: color),
+            SizedBox(width: gap),
+            _Badge(color: color, compact: compact),
           ],
         ],
       ),
@@ -144,15 +168,16 @@ class _TeamCell extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.color});
+  const _Badge({required this.color, required this.compact});
 
   final Color color;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 22,
-      height: 22,
+      width: compact ? 18 : 22,
+      height: compact ? 18 : 22,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,

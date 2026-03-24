@@ -109,6 +109,62 @@ void main() {
     );
   });
 
+  testWidgets('broadcast screen does not expose gifting controls', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.text('Gift'), findsNothing);
+    expect(find.byIcon(Icons.card_giftcard_rounded), findsNothing);
+  });
+
+  testWidgets('broadcast HUD remains usable in a narrow layout', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+    await tester.tap(find.byType(Scaffold));
+    await tester.pump(const Duration(milliseconds: 220));
+
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byKey(GtexHiddenControlsOverlay.overlayKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('pseudo-3D broadcast screen loads without crashing', (
     WidgetTester tester,
   ) async {

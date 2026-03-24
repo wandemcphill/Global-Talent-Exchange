@@ -1250,63 +1250,94 @@ class _ControlBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      child: Row(
+    Widget buildProgressPanel() {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          FilledButton.icon(
-            onPressed: controller.togglePlayPause,
-            icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
-            label: Text(controller.isPlaying ? 'Pause' : 'Play'),
+          LinearProgressIndicator(
+            value: controller.progress.clamp(0, 1),
+            minHeight: 7,
+            borderRadius: BorderRadius.circular(999),
+            backgroundColor: Colors.white.withValues(alpha: 0.08),
+            valueColor: const AlwaysStoppedAnimation<Color>(
+              GteShellTheme.accentArena,
+            ),
           ),
-          const SizedBox(width: 10),
-          FilledButton.tonalIcon(
-            onPressed: controller.restart,
-            icon: const Icon(Icons.replay),
-            label: const Text('Restart'),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.tonalIcon(
-            onPressed: controller.cycleSpeed,
-            icon: const Icon(Icons.speed),
-            label: Text(controller.speedLabel),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.tonalIcon(
-            onPressed: controller.jumpToNextEvent,
-            icon: const Icon(Icons.skip_next),
-            label: const Text('Next event'),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                LinearProgressIndicator(
-                  value: controller.progress.clamp(0, 1),
-                  minHeight: 7,
-                  borderRadius: BorderRadius.circular(999),
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    GteShellTheme.accentArena,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    controller.isAutoPaused
-                        ? 'Playback paused for event cue'
-                        : 'Replay mode',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white70,
-                        ),
-                  ),
-                ),
-              ],
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              controller.isAutoPaused
+                  ? 'Playback paused for event cue'
+                  : 'Replay mode',
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: Colors.white70),
             ),
           ),
         ],
+      );
+    }
+
+    List<Widget> buildButtons() {
+      return <Widget>[
+        FilledButton.icon(
+          onPressed: controller.togglePlayPause,
+          icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
+          label: Text(controller.isPlaying ? 'Pause' : 'Play'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: controller.restart,
+          icon: const Icon(Icons.replay),
+          label: const Text('Restart'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: controller.cycleSpeed,
+          icon: const Icon(Icons.speed),
+          label: Text(controller.speedLabel),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: controller.jumpToNextEvent,
+          icon: const Icon(Icons.skip_next),
+          label: const Text('Next event'),
+        ),
+      ];
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool compact = constraints.maxWidth < 760;
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: buildButtons(),
+                ),
+                const SizedBox(height: 12),
+                buildProgressPanel(),
+              ],
+            );
+          }
+          final List<Widget> buttons = buildButtons();
+          return Row(
+            children: <Widget>[
+              buttons[0],
+              const SizedBox(width: 10),
+              buttons[1],
+              const SizedBox(width: 10),
+              buttons[2],
+              const SizedBox(width: 10),
+              buttons[3],
+              const SizedBox(width: 14),
+              Expanded(child: buildProgressPanel()),
+            ],
+          );
+        },
       ),
     );
   }

@@ -114,6 +114,7 @@ def test_resolve_club_uses_alias_registry_for_psg_and_man_utd() -> None:
         ("CÃ´te dâ€™Ivoire", "Côte d’Ivoire"),
         ("Curacao", "Curaçao"),
         ("Cape Verde", "Cabo Verde"),
+        ("Congo", "Republic of the Congo"),
         ("DR Congo", "Democratic Republic of the Congo"),
         ("Congo DR", "Democratic Republic of the Congo"),
         ("Congo-Kinshasa", "Democratic Republic of the Congo"),
@@ -152,6 +153,35 @@ def test_resolve_country_prefers_canonical_rows_for_aliases_and_variants(
                     ),
                 ]
             )
+            seed_canonical_countries(session)
+            session.commit()
+
+        with session_factory() as session:
+            resolution = resolver.resolve_country(session, raw_name=raw_name)
+            assert resolution.status == "resolved"
+            assert resolution.canonical_name == expected_canonical_name
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("raw_name", "expected_canonical_name"),
+    [
+        ("Haiti", "Haiti"),
+        ("Bonaire", "Bonaire"),
+        ("Saint-Martin", "Saint-Martin"),
+        ("Palestine", "Palestine"),
+        ("Zimbabwe", "Zimbabwe"),
+    ],
+)
+def test_resolve_country_covers_additive_long_tail_seed_names(
+    raw_name: str,
+    expected_canonical_name: str,
+) -> None:
+    engine, session_factory = _session_factory()
+    try:
+        resolver = MappingResolver()
+        with session_factory() as session:
             seed_canonical_countries(session)
             session.commit()
 

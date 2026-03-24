@@ -96,7 +96,7 @@ class GtexMatchOverlayController {
       showIntroOverlay: viewerSeconds <= 2.4 && !isFullTime,
       showFullTimeOverlay: isFullTime,
       showSocialRail: spectatorMode,
-      canGift: spectatorMode,
+      canGift: false,
     );
   }
 
@@ -261,12 +261,12 @@ class GtexMatchOverlayController {
     final GtexBroadcastEvent? active = varOverlay ?? eventOverlay;
     if (active == null) {
       return pseudo3dEnabled
-          ? const <String>['LIVE', 'CAM+', 'GIFT']
-          : const <String>['LIVE', 'CHAT', 'GIFT'];
+          ? const <String>['LIVE', 'CAM+']
+          : const <String>['LIVE', 'CHAT'];
     }
     switch (active.type) {
       case GtexBroadcastEventType.goal:
-        return const <String>['HYPE', 'GOAL', 'GIFT'];
+        return const <String>['HYPE', 'GOAL'];
       case GtexBroadcastEventType.offside:
         return const <String>['OOH', 'FLAG', 'CHAT'];
       case GtexBroadcastEventType.varChecking:
@@ -278,7 +278,7 @@ class GtexMatchOverlayController {
       case GtexBroadcastEventType.missedChance:
         return const <String>['CLOSE', 'OOH', 'CHAT'];
       default:
-        return const <String>['LIVE', 'CHAT', 'GIFT'];
+        return const <String>['LIVE', 'CHAT'];
     }
   }
 

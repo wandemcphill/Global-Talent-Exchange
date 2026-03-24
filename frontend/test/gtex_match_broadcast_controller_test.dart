@@ -106,6 +106,21 @@ void main() {
     );
   });
 
+  test('broadcast spectator HUD suppresses gifting affordances', () {
+    final GtexMatchBroadcastController controller =
+        GtexMatchBroadcastController(
+      viewState: buildBroadcastTestViewState(),
+      initialMode: GtexMatchRenderMode.quick,
+      initialViewType: GtexMatchViewType.twoD,
+      isPremiumUser: false,
+      spectatorMode: true,
+      auto3DEnabled: false,
+    );
+
+    expect(controller.hudState.canGift, isFalse);
+    expect(controller.hudState.socialReactions, isNot(contains('GIFT')));
+  });
+
   test('cinematic viewer-only beats do not change the authoritative outcome',
       () {
     final viewState = buildBroadcastTestViewState();

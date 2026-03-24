@@ -144,6 +144,7 @@ COUNTRY_ALIASES = _freeze_aliases(
         "Côte d’Ivoire": ["ivory coast"],
         "usa": ["united states", "us", "america", "united states of america"],
         "Democratic Republic of the Congo": ["dr congo", "congo dr", "congo-kinshasa", "drc"],
+        "Republic of the Congo": ["congo", "congo-brazzaville"],
         "Cabo Verde": ["cape verde"],
         "Curaçao": ["curacao"],
         "gambia": ["the gambia"],

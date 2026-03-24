@@ -51,6 +51,7 @@ class GtexBroadcastHudLayer extends StatelessWidget {
         GtexSocialReactionsRail(
           visible: hudState.showSocialRail,
           reactions: hudState.socialReactions,
+          showGiftAction: hudState.canGift,
           onGiftTap: onGiftTap,
         ),
         GtexHiddenControlsOverlay(
