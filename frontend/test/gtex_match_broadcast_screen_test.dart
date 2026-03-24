@@ -7,6 +7,7 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_event_overlay.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_hidden_controls_overlay.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_mode_selector_button.dart';
+import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_match_canvas.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
@@ -189,6 +190,76 @@ void main() {
     expect(find.byType(GtexPseudo3DMatchCanvas), findsOneWidget);
   });
 
+  testWidgets('broadcast falls back to 2D when pseudo-3D is unavailable', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.pseudo3D,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byType(Pitch2dWidget), findsOneWidget);
+    expect(find.byType(GtexPseudo3DMatchCanvas), findsNothing);
+    expect(find.byTooltip('Broadcast+ locked'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('broadcast switches cleanly between 2D and pseudo-3D views', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: true,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byType(Pitch2dWidget), findsOneWidget);
+    expect(find.byType(GtexPseudo3DMatchCanvas), findsNothing);
+
+    await tester.tap(find.byTooltip('Switch to Broadcast+'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+
+    expect(find.byType(GtexPseudo3DMatchCanvas), findsOneWidget);
+    expect(find.byType(Pitch2dWidget), findsNothing);
+
+    await tester.tap(find.byTooltip('Switch to 2D'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+
+    expect(find.byType(Pitch2dWidget), findsOneWidget);
+    expect(find.byType(GtexPseudo3DMatchCanvas), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('broadcast playback pauses while the app is backgrounded', (
     WidgetTester tester,
   ) async {
@@ -233,6 +304,86 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('broadcast route can be popped and reopened cleanly', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: Builder(
+          builder: (BuildContext context) {
+            return Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () {
+                    Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (BuildContext context) =>
+                            GtexMatchBroadcastScreen(
+                          matchId: 'broadcast-screen',
+                          initialMode: GtexMatchRenderMode.quick,
+                          viewType: GtexMatchViewType.twoD,
+                          isPremiumUser: false,
+                          spectatorMode: true,
+                          auto3DEnabled: false,
+                          competitionLabel: 'GTEX Cup',
+                          viewStateLoader: () async =>
+                              buildBroadcastTestViewState(),
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Open broadcast'),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open broadcast'));
+    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpUntilVisible(
+      tester,
+      find.descendant(
+        of: find.byType(GtexEventOverlay),
+        matching: find.text('Chance'),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byType(GtexEventOverlay),
+        matching: find.text('Chance'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Open broadcast'), findsOneWidget);
+
+    await tester.tap(find.text('Open broadcast'));
+    await tester.pump(const Duration(milliseconds: 350));
+    await _pumpUntilVisible(
+      tester,
+      find.descendant(
+        of: find.byType(GtexEventOverlay),
+        matching: find.text('Chance'),
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byType(GtexEventOverlay),
+        matching: find.text('Chance'),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _host({required Widget child}) {
@@ -240,4 +391,20 @@ Widget _host({required Widget child}) {
     theme: GteShellTheme.build(),
     home: child,
   );
+}
+
+Future<void> _pumpUntilVisible(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 100),
+  Duration timeout = const Duration(seconds: 4),
+}) async {
+  final int attempts = timeout.inMilliseconds ~/ step.inMilliseconds;
+  for (int index = 0; index < attempts; index += 1) {
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.pump(step);
+  }
+  expect(finder, findsOneWidget);
 }

@@ -201,6 +201,50 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('replay viewer pauses and resumes safely across app lifecycle',
+      (WidgetTester tester) async {
+    final CompetitionSummary competition = _buildCompetition(
+      id: 'match-viewer-lifecycle-test',
+    );
+    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
+      competition,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: competition,
+          matchKey: competition.id,
+          fallbackSnapshot: snapshot,
+          preferFallback: true,
+          renderMode: RenderMode.twoD,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 64));
+    await _pumpUntilVisible(tester, find.text('Pause'));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+
+    expect(find.text('Play'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(find.text('Play'), findsOneWidget);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(find.text('Pause'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
+
   testWidgets(
       'broadcast viewer shows intro, live clock, masked score, and commentary',
       (WidgetTester tester) async {
