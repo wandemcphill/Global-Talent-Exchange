@@ -7,18 +7,19 @@ class GiftingOverlay extends StatelessWidget {
     required this.activeBursts,
     this.overflowCount = 0,
     required this.availableCoins,
-    required this.onSendGift,
-    required this.onSendReaction,
+    this.onSendGift,
+    this.onSendReaction,
   });
 
   final List<Match3dOverlayBurst> activeBursts;
   final int overflowCount;
   final double availableCoins;
-  final Future<void> Function(double amount) onSendGift;
-  final Future<void> Function(Match3dReaction reaction) onSendReaction;
+  final Future<void> Function(double amount)? onSendGift;
+  final Future<void> Function(Match3dReaction reaction)? onSendReaction;
 
   @override
   Widget build(BuildContext context) {
+    final bool hasActions = onSendGift != null || onSendReaction != null;
     return Stack(
       children: <Widget>[
         Positioned(
@@ -47,15 +48,24 @@ class GiftingOverlay extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          right: 18,
-          bottom: 18,
-          child: FilledButton.tonalIcon(
-            onPressed: () => _openGiftSheet(context),
-            icon: const Icon(Icons.card_giftcard_outlined),
-            label: Text('Gift ${availableCoins.toStringAsFixed(2)}'),
+        if (hasActions)
+          Positioned(
+            right: 18,
+            bottom: 18,
+            child: FilledButton.tonalIcon(
+              onPressed: () => _openGiftSheet(context),
+              icon: Icon(
+                onSendGift != null
+                    ? Icons.card_giftcard_outlined
+                    : Icons.emoji_emotions_outlined,
+              ),
+              label: Text(
+                onSendGift != null
+                    ? 'Gift ${availableCoins.toStringAsFixed(2)}'
+                    : 'React',
+              ),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -83,12 +93,23 @@ class _GiftSheet extends StatelessWidget {
   });
 
   final double availableCoins;
-  final Future<void> Function(double amount) onSendGift;
-  final Future<void> Function(Match3dReaction reaction) onSendReaction;
+  final Future<void> Function(double amount)? onSendGift;
+  final Future<void> Function(Match3dReaction reaction)? onSendReaction;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool showGiftOptions = onSendGift != null;
+    final bool showReactions = onSendReaction != null;
+    final String intro = switch ((showGiftOptions, showReactions)) {
+      (true, true) =>
+        'Send lightweight gifts and reactions without interrupting the match. Balance ${availableCoins.toStringAsFixed(2)} coin.',
+      (true, false) =>
+        'Send lightweight gifts without interrupting the match. Balance ${availableCoins.toStringAsFixed(2)} coin.',
+      (false, true) =>
+        'Send lightweight reactions without interrupting the match.',
+      (false, false) => 'Viewer support is unavailable right now.',
+    };
     return SafeArea(
       top: false,
       child: Padding(
@@ -113,63 +134,67 @@ class _GiftSheet extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Send lightweight gifts and reactions without interrupting the match. Balance ${availableCoins.toStringAsFixed(2)} coin.',
+                intro,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white70,
                 ),
               ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: Match3dMonetizationService.giftAmounts
-                    .map(
-                      (double amount) => FilledButton.tonal(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          await onSendGift(amount);
-                        },
-                        child: Text('${amount.toStringAsFixed(1)} coin'),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Reactions',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+              if (showGiftOptions) ...<Widget>[
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: Match3dMonetizationService.giftAmounts
+                      .map(
+                        (double amount) => FilledButton.tonal(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await onSendGift!(amount);
+                          },
+                          child: Text('${amount.toStringAsFixed(1)} coin'),
+                        ),
+                      )
+                      .toList(growable: false),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: <Widget>[
-                  _ReactionButton(
-                    label: '\u{1F525} Fire',
-                    onPressed: () async {
-                      Navigator.of(context).pop();
-                      await onSendReaction(Match3dReaction.fire);
-                    },
+              ],
+              if (showReactions) ...<Widget>[
+                const SizedBox(height: 18),
+                Text(
+                  'Reactions',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
                   ),
-                  _ReactionButton(
-                    label: '\u{1F44F} Applause',
-                    onPressed: () async {
-                      Navigator.of(context).pop();
-                      await onSendReaction(Match3dReaction.applause);
-                    },
-                  ),
-                  _ReactionButton(
-                    label: '\u{26A1} Hype',
-                    onPressed: () async {
-                      Navigator.of(context).pop();
-                      await onSendReaction(Match3dReaction.hype);
-                    },
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: <Widget>[
+                    _ReactionButton(
+                      label: '\u{1F525} Fire',
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await onSendReaction!(Match3dReaction.fire);
+                      },
+                    ),
+                    _ReactionButton(
+                      label: '\u{1F44F} Applause',
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await onSendReaction!(Match3dReaction.applause);
+                      },
+                    ),
+                    _ReactionButton(
+                      label: '\u{26A1} Hype',
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        await onSendReaction!(Match3dReaction.hype);
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

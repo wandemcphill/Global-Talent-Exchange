@@ -51,6 +51,25 @@ enum Match3dFailureReason {
   unavailable,
 }
 
+class MatchViewerMonetizationFlags {
+  const MatchViewerMonetizationFlags({
+    this.enableUpgradePrompt = false,
+    this.enableTournamentUpgrade = false,
+    this.enablePremiumControls = false,
+    this.enableGifting = false,
+    this.enableReactions = false,
+  });
+
+  static const MatchViewerMonetizationFlags softDisabled =
+      MatchViewerMonetizationFlags();
+
+  final bool enableUpgradePrompt;
+  final bool enableTournamentUpgrade;
+  final bool enablePremiumControls;
+  final bool enableGifting;
+  final bool enableReactions;
+}
+
 class Match3dMatchContext {
   const Match3dMatchContext({
     required this.matchId,
@@ -251,11 +270,11 @@ class Match3dMonetizationService extends ChangeNotifier {
         _onPurchaseIntent = onPurchaseIntent;
 
   static const double threeDUnlockPrice = 0.2;
+  static const List<double> standardSpeedOptions = <double>[1, 2, 4];
   static const double slowMotionReplayPrice = 0.05;
   static const double alternateCameraAnglePrice = 0.02;
   static const double highlightNextAttackPrice = 0.05;
   static const List<double> giftAmounts = <double>[0.1, 0.2, 0.5];
-  static const List<double> _standardSpeedOptions = <double>[1, 2, 4];
   static const List<double> _premiumSpeedOptions = <double>[1, 2, 4, 6];
 
   Match3dUserEntitlement _baseEntitlement;
@@ -419,9 +438,8 @@ class Match3dMonetizationService extends ChangeNotifier {
   }
 
   List<double> speedOptionsFor(Match3dMatchContext context) {
-    final List<double> options = canUseFastReplay(context)
-        ? _premiumSpeedOptions
-        : _standardSpeedOptions;
+    final List<double> options =
+        canUseFastReplay(context) ? _premiumSpeedOptions : standardSpeedOptions;
     if (hasInteraction(
       context.matchId,
       Match3dPaidInteraction.slowMotionReplay,

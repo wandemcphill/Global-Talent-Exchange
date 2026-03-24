@@ -10,15 +10,11 @@ import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
 void main() {
-  testWidgets('non-premium users are prompted before switching into 3D',
-      (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
+  testWidgets('viewer monetization stays soft-disabled by default', (
+    WidgetTester tester,
+  ) async {
     final CompetitionSummary competition = _buildCompetition(
-      id: 'viewer-non-premium',
+      id: 'viewer-monetization-default-off',
     );
     final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
       competition,
@@ -32,7 +28,6 @@ void main() {
           matchKey: competition.id,
           fallbackSnapshot: snapshot,
           preferFallback: true,
-          entitlement: const Match3dUserEntitlement(availableCoins: 1),
         ),
       ),
     );
@@ -41,35 +36,60 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(Pitch2dWidget), findsOneWidget);
-
-    await tester.tap(find.text('3D').last);
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.text('Watch in Cinematic Mode 🎬'), findsOneWidget);
-
-    await tester.tap(find.text('Continue in 2D'));
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.byType(Pitch2dWidget), findsOneWidget);
     expect(find.byType(Gtex3dScene), findsNothing);
-
-    await tester.tap(find.text('3D').last);
-    await _pumpForOverlayTransition(tester);
-    await tester.tap(find.text('Unlock & Watch'));
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.byType(Gtex3dScene), findsOneWidget);
+    expect(find.text('Match controls'), findsNothing);
+    expect(find.textContaining('Gift'), findsNothing);
+    expect(find.textContaining('Cinematic Mode'), findsNothing);
   });
 
-  testWidgets('premium users bypass the paywall and spectator mode hides replay controls',
-      (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('explicit 3D render mode stays additive and replay-safe', (
+    WidgetTester tester,
+  ) async {
+    final CompetitionSummary competition = _buildCompetition(
+      id: 'viewer-explicit-3d',
+    );
+    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
+      competition,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: competition,
+          matchKey: competition.id,
+          fallbackSnapshot: snapshot,
+          preferFallback: true,
+          renderMode: RenderMode.threeD,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.byType(Gtex3dScene), findsOneWidget);
+    expect(find.byType(Pitch2dWidget), findsNothing);
+    expect(find.text('Restart'), findsOneWidget);
+    expect(find.text('Next event'), findsOneWidget);
+    expect(find.text('Match controls'), findsNothing);
+    expect(find.textContaining('Gift'), findsNothing);
+  });
+
+  testWidgets('broadcast mode stays presentation-only even when hooks exist', (
+    WidgetTester tester,
+  ) async {
+    const MatchViewerMonetizationFlags enabledViewerMonetization =
+        MatchViewerMonetizationFlags(
+      enableUpgradePrompt: true,
+      enableTournamentUpgrade: true,
+      enablePremiumControls: true,
+      enableGifting: true,
+      enableReactions: true,
+    );
 
     final CompetitionSummary competition = _buildCompetition(
-      id: 'viewer-premium-spectator',
+      id: 'viewer-broadcast-presentation-only',
     );
     final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
       competition,
@@ -87,6 +107,7 @@ void main() {
           renderMode: RenderMode.threeD,
           isSpectator: true,
           entitlement: const Match3dUserEntitlement.proManager(),
+          viewerMonetizationFlags: enabledViewerMonetization,
         ),
       ),
     );
@@ -95,66 +116,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(find.byType(Gtex3dScene), findsOneWidget);
-    expect(find.text('Pro Manager'), findsWidgets);
-    expect(find.text('Watch in Cinematic Mode 🎬'), findsNothing);
+    expect(find.text('Live broadcast'), findsOneWidget);
     expect(find.text('Restart'), findsNothing);
-    expect(find.textContaining('Gift'), findsOneWidget);
-  });
-
-  testWidgets('gifting and fallback to 2D stay non-disruptive',
-      (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final CompetitionSummary competition = _buildCompetition(
-      id: 'viewer-gifting',
-    );
-    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-      competition,
-    );
-    final Match3dMonetizationService monetization = Match3dMonetizationService(
-      entitlement: const Match3dUserEntitlement.proManager(availableCoins: 1),
-      initialRenderMode: RenderMode.threeD,
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexMatchViewerScreen(
-          competition: competition,
-          matchKey: competition.id,
-          fallbackSnapshot: snapshot,
-          preferFallback: true,
-          renderMode: RenderMode.threeD,
-          entitlement: monetization.effectiveEntitlement,
-          monetizationService: monetization,
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(find.byType(Gtex3dScene), findsOneWidget);
-
-    await tester.tap(find.textContaining('Gift'));
-    await _pumpForOverlayTransition(tester);
-    await tester.tap(find.text('0.1 coin'));
-    await tester.pump();
-
-    expect(find.text('0.1 coin gift'), findsOneWidget);
-    expect(find.text('Pause'), findsOneWidget);
-
-    monetization.fallbackToTwoD(
-      reason: Match3dFailureReason.performanceDrop,
-    );
-    await _pumpForOverlayTransition(tester);
-
-    expect(find.byType(Pitch2dWidget), findsOneWidget);
-    expect(find.byType(Gtex3dScene), findsNothing);
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.text('Match controls'), findsNothing);
+    expect(find.textContaining('Gift'), findsNothing);
+    expect(find.textContaining('Official broadcast playback'), findsOneWidget);
   });
 }
 
@@ -183,9 +149,4 @@ CompetitionSummary _buildCompetition({required String id}) {
     createdAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 2),
   );
-}
-
-Future<void> _pumpForOverlayTransition(WidgetTester tester) async {
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 320));
 }

@@ -41,6 +41,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.monetizationService,
     this.onPurchaseIntent,
     this.tournamentBoostPrice,
+    this.viewerMonetizationFlags = MatchViewerMonetizationFlags.softDisabled,
     this.titleOverride,
   });
 
@@ -57,6 +58,7 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final Match3dMonetizationService? monetizationService;
   final Match3dPurchaseIntentHandler? onPurchaseIntent;
   final double? tournamentBoostPrice;
+  final MatchViewerMonetizationFlags viewerMonetizationFlags;
   final String? titleOverride;
 
   @override
@@ -88,6 +90,16 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   bool get _broadcastMode =>
       widget.presentationMode == MatchViewerPresentationMode.broadcast;
 
+  RenderMode get _requestedRenderMode {
+    switch (widget.renderMode) {
+      case RenderMode.threeD:
+        return RenderMode.threeD;
+      case RenderMode.auto:
+      case RenderMode.twoD:
+        return RenderMode.twoD;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +118,11 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   @override
   void didUpdateWidget(covariant GtexMatchViewerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.renderMode != widget.renderMode) {
+      _performanceSafe = true;
+      _performanceNoticeShown = false;
+      _recentFrameSpans.clear();
+    }
     if (_ownsMonetization) {
       if (oldWidget.entitlement != widget.entitlement) {
         _monetization.updateEntitlement(widget.entitlement);
@@ -191,7 +208,9 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   }
 
   void _handleFrameTimings(List<FrameTiming> timings) {
-    if (!mounted || _monetization.selectedRenderMode != RenderMode.threeD) {
+    if (!mounted ||
+        _requestedRenderMode != RenderMode.threeD ||
+        !_performanceSafe) {
       _recentFrameSpans.clear();
       return;
     }
@@ -242,6 +261,36 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       presentationMode: widget.presentationMode,
       performanceSafe: _performanceSafe,
     );
+  }
+
+  bool _premiumControlsEnabled(Match3dMatchContext matchContext) {
+    return !_isOfficialBroadcast(matchContext) &&
+        widget.viewerMonetizationFlags.enablePremiumControls;
+  }
+
+  bool _viewerUpgradePromptEnabled(Match3dMatchContext matchContext) {
+    return !_isOfficialBroadcast(matchContext) &&
+        widget.viewerMonetizationFlags.enableUpgradePrompt;
+  }
+
+  bool _viewerTournamentUpgradeEnabled(Match3dMatchContext matchContext) {
+    return !_isOfficialBroadcast(matchContext) &&
+        widget.viewerMonetizationFlags.enableTournamentUpgrade;
+  }
+
+  bool _giftingEnabled(Match3dMatchContext matchContext) {
+    return !_isOfficialBroadcast(matchContext) &&
+        widget.viewerMonetizationFlags.enableGifting;
+  }
+
+  bool _reactionsEnabled(Match3dMatchContext matchContext) {
+    return !_isOfficialBroadcast(matchContext) &&
+        widget.viewerMonetizationFlags.enableReactions;
+  }
+
+  bool _isOfficialBroadcast(Match3dMatchContext matchContext) {
+    return matchContext.presentationMode ==
+        MatchViewerPresentationMode.broadcast;
   }
 
   void _scheduleBurst(Match3dOverlayBurst burst) {
@@ -391,10 +440,21 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     Match3dMatchContext matchContext, {
     required RenderMode targetMode,
   }) async {
+    if (!_viewerUpgradePromptEnabled(matchContext)) {
+      _monetization.selectRenderMode(RenderMode.twoD);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Viewer upgrade prompts are disabled in this build.'),
+        ),
+      );
+      return;
+    }
     final Match3dUpgradeAction? action = await Match3dUpgradePrompt.show(
       context,
       matchUnlockPrice: Match3dMonetizationService.threeDUnlockPrice,
-      tournamentBoostPrice: _monetization.tournamentBoostPrice,
+      tournamentBoostPrice: _viewerTournamentUpgradeEnabled(matchContext)
+          ? _monetization.tournamentBoostPrice
+          : null,
     );
     if (!mounted) {
       return;
@@ -407,6 +467,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
         if (result.success) {
           _monetization.selectRenderMode(targetMode);
         }
+        return;
       case Match3dUpgradeAction.upgradeTournament:
         final Match3dActionResult result =
             await _monetization.upgradeTournamentExperience(matchContext);
@@ -414,9 +475,11 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
         if (result.success) {
           _monetization.selectRenderMode(RenderMode.auto);
         }
+        return;
       case Match3dUpgradeAction.continueIn2d:
       case null:
         _monetization.selectRenderMode(RenderMode.twoD);
+        return;
     }
   }
 
@@ -438,6 +501,14 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     Match3dPaidInteraction interaction,
     Match3dMatchContext matchContext,
   ) async {
+    if (!_premiumControlsEnabled(matchContext)) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Playback upgrades are disabled in this build.'),
+        ),
+      );
+      return;
+    }
     final Match3dActionResult result =
         await _monetization.unlockInteraction(interaction, matchContext);
     _showActionResult(result);
@@ -451,6 +522,14 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     double amount,
     Match3dMatchContext matchContext,
   ) async {
+    if (!_giftingEnabled(matchContext)) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Viewer gifting is disabled in this build.'),
+        ),
+      );
+      return;
+    }
     final Match3dActionResult result =
         await _monetization.sendCoinGift(amount, matchContext);
     _showActionResult(result);
@@ -460,6 +539,14 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     Match3dReaction reaction,
     Match3dMatchContext matchContext,
   ) async {
+    if (!_reactionsEnabled(matchContext)) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Viewer reactions are disabled in this build.'),
+        ),
+      );
+      return;
+    }
     final Match3dActionResult result =
         _monetization.sendReaction(reaction, matchContext);
     _showActionResult(result);
@@ -469,7 +556,9 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     Match3dTimelineController controller,
     Match3dMatchContext matchContext,
   ) {
-    final List<double> desired = _monetization.speedOptionsFor(matchContext);
+    final List<double> desired = _premiumControlsEnabled(matchContext)
+        ? _monetization.speedOptionsFor(matchContext)
+        : Match3dMonetizationService.standardSpeedOptions;
     if (_listEquals(desired, controller.speedOptions)) {
       return;
     }
@@ -484,7 +573,11 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   @override
   Widget build(BuildContext context) {
     final String title = widget.titleOverride ??
-        (_broadcastMode ? 'Live broadcast' : '2D Match Viewer');
+        (_broadcastMode
+            ? 'Live broadcast'
+            : _requestedRenderMode == RenderMode.threeD
+                ? '3D Match Viewer'
+                : '2D Match Viewer');
     return Container(
       decoration: gteBackdropDecoration(),
       child: Scaffold(
@@ -544,14 +637,16 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                 _ensureController(viewState);
             final Match3dMatchContext matchContext =
                 _buildMatchContext(viewState);
-
             return AnimatedBuilder(
               animation:
                   Listenable.merge(<Listenable>[controller, _monetization]),
               builder: (BuildContext context, Widget? child) {
                 _syncControllerSpeeds(controller, matchContext);
                 final RenderMode activeRenderMode =
-                    _monetization.effectiveRenderModeFor(matchContext);
+                    _requestedRenderMode == RenderMode.threeD &&
+                            _performanceSafe
+                        ? RenderMode.threeD
+                        : RenderMode.twoD;
                 final MatchEvent? activeEvent = controller.activeEvent;
                 final MatchBroadcastPresentationState presentation =
                     MatchBroadcastPresentationBuilder.build(
@@ -562,48 +657,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                     ? _BroadcastViewer(
                         controller: controller,
                         viewState: viewState,
-                        matchContext: matchContext,
-                        monetization: _monetization,
                         activeRenderMode: activeRenderMode,
-                        activeEvent: activeEvent,
-                        overlayBursts: _overlayBursts,
-                        spectatorReactionsMuted: _spectatorReactionsMuted,
-                        onToggleSpectatorMute: () {
-                          setState(() {
-                            _spectatorReactionsMuted =
-                                !_spectatorReactionsMuted;
-                          });
-                        },
-                        onRenderModeSelected: (RenderMode mode) =>
-                            _handleRenderModeSelected(mode, matchContext),
-                        onCameraPresetSelected: (Match3dCameraPreset preset) =>
-                            _monetization.setCameraPreset(
-                          preset,
-                          matchContext,
-                        ),
-                        onUnlockSlowMotion: () => _handleUnlockInteraction(
-                          Match3dPaidInteraction.slowMotionReplay,
-                          matchContext,
-                        ),
-                        onUnlockAlternateCamera: () => _handleUnlockInteraction(
-                          Match3dPaidInteraction.alternateCameraAngle,
-                          matchContext,
-                        ),
-                        onUnlockHighlightAttack: () => _handleUnlockInteraction(
-                          Match3dPaidInteraction.highlightNextAttack,
-                          matchContext,
-                        ),
-                        onUpgradeTournament:
-                            _monetization.tournamentBoostPrice == null
-                                ? null
-                                : () => _openUpgradePrompt(
-                                      matchContext,
-                                      targetMode: RenderMode.auto,
-                                    ),
-                        onSendGift: (double amount) =>
-                            _handleSendGift(amount, matchContext),
-                        onSendReaction: (Match3dReaction reaction) =>
-                            _handleSendReaction(reaction, matchContext),
                         presentation: presentation,
                       )
                     : _ReplayViewer(
@@ -616,6 +670,10 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                         overlayBursts: _overlayBursts,
                         overlayOverflowCount: _overlayBurstOverflowCount,
                         spectatorReactionsMuted: _spectatorReactionsMuted,
+                        showPremiumControls:
+                            _premiumControlsEnabled(matchContext),
+                        showGiftingOverlay: _giftingEnabled(matchContext) ||
+                            _reactionsEnabled(matchContext),
                         onToggleSpectatorMute: () {
                           setState(() {
                             _spectatorReactionsMuted =
@@ -642,16 +700,23 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           matchContext,
                         ),
                         onUpgradeTournament:
-                            _monetization.tournamentBoostPrice == null
+                            _monetization.tournamentBoostPrice == null ||
+                                    !_viewerTournamentUpgradeEnabled(
+                                      matchContext,
+                                    )
                                 ? null
                                 : () => _openUpgradePrompt(
                                       matchContext,
                                       targetMode: RenderMode.auto,
                                     ),
-                        onSendGift: (double amount) =>
-                            _handleSendGift(amount, matchContext),
-                        onSendReaction: (Match3dReaction reaction) =>
-                            _handleSendReaction(reaction, matchContext),
+                        onSendGift: _giftingEnabled(matchContext)
+                            ? (double amount) =>
+                                _handleSendGift(amount, matchContext)
+                            : null,
+                        onSendReaction: _reactionsEnabled(matchContext)
+                            ? (Match3dReaction reaction) =>
+                                _handleSendReaction(reaction, matchContext)
+                            : null,
                       );
               },
             );
@@ -673,6 +738,8 @@ class _ReplayViewer extends StatelessWidget {
     required this.overlayBursts,
     required this.overlayOverflowCount,
     required this.spectatorReactionsMuted,
+    required this.showPremiumControls,
+    required this.showGiftingOverlay,
     required this.onToggleSpectatorMute,
     required this.onRenderModeSelected,
     required this.onCameraPresetSelected,
@@ -693,6 +760,8 @@ class _ReplayViewer extends StatelessWidget {
   final List<Match3dOverlayBurst> overlayBursts;
   final int overlayOverflowCount;
   final bool spectatorReactionsMuted;
+  final bool showPremiumControls;
+  final bool showGiftingOverlay;
   final VoidCallback onToggleSpectatorMute;
   final ValueChanged<RenderMode> onRenderModeSelected;
   final ValueChanged<Match3dCameraPreset> onCameraPresetSelected;
@@ -700,8 +769,8 @@ class _ReplayViewer extends StatelessWidget {
   final VoidCallback onUnlockAlternateCamera;
   final VoidCallback onUnlockHighlightAttack;
   final VoidCallback? onUpgradeTournament;
-  final Future<void> Function(double amount) onSendGift;
-  final Future<void> Function(Match3dReaction reaction) onSendReaction;
+  final Future<void> Function(double amount)? onSendGift;
+  final Future<void> Function(Match3dReaction reaction)? onSendReaction;
 
   @override
   Widget build(BuildContext context) {
@@ -709,7 +778,10 @@ class _ReplayViewer extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool wide = constraints.maxWidth >= 1040;
         final bool compactHeader = constraints.maxWidth < 860;
-        final bool showPremiumControls = wide;
+        final bool showWidePremiumControls = wide && showPremiumControls;
+        final bool showSpectatorMute = matchContext.isSpectator &&
+            showGiftingOverlay &&
+            onSendReaction != null;
         final Widget field = Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
           child: Stack(
@@ -787,19 +859,20 @@ class _ReplayViewer extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: GiftingOverlay(
-                  activeBursts:
-                      matchContext.isSpectator && spectatorReactionsMuted
-                          ? const <Match3dOverlayBurst>[]
-                          : overlayBursts,
-                  overflowCount:
-                      spectatorReactionsMuted ? 0 : overlayOverflowCount,
-                  availableCoins: monetization.availableCoinBalance,
-                  onSendGift: onSendGift,
-                  onSendReaction: onSendReaction,
+              if (showGiftingOverlay)
+                Positioned.fill(
+                  child: GiftingOverlay(
+                    activeBursts:
+                        matchContext.isSpectator && spectatorReactionsMuted
+                            ? const <Match3dOverlayBurst>[]
+                            : overlayBursts,
+                    overflowCount:
+                        spectatorReactionsMuted ? 0 : overlayOverflowCount,
+                    availableCoins: monetization.availableCoinBalance,
+                    onSendGift: onSendGift,
+                    onSendReaction: onSendReaction,
+                  ),
                 ),
-              ),
             ],
           ),
         );
@@ -826,8 +899,11 @@ class _ReplayViewer extends StatelessWidget {
             : const SizedBox.shrink();
         final Widget footer = matchContext.isSpectator
             ? _SpectatorStatusBar(
+                message: showSpectatorMute
+                    ? 'Spectator mode keeps playback viewer-only. Overlay reactions can be muted locally.'
+                    : 'Spectator mode keeps playback viewer-only.',
                 reactionsMuted: spectatorReactionsMuted,
-                onToggleMute: onToggleSpectatorMute,
+                onToggleMute: showSpectatorMute ? onToggleSpectatorMute : null,
               )
             : _ControlBar(controller: controller);
         final Widget viewerPanel = Column(
@@ -837,7 +913,6 @@ class _ReplayViewer extends StatelessWidget {
             footer,
           ],
         );
-
         final Widget rail = Padding(
           padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
           child: _EventRail(
@@ -866,7 +941,7 @@ class _ReplayViewer extends StatelessWidget {
                 child: Column(
                   children: <Widget>[
                     footer,
-                    if (showPremiumControls) controls,
+                    if (showWidePremiumControls) controls,
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
                       child: _EventRail(
@@ -890,41 +965,13 @@ class _BroadcastViewer extends StatelessWidget {
   const _BroadcastViewer({
     required this.controller,
     required this.viewState,
-    required this.matchContext,
-    required this.monetization,
     required this.activeRenderMode,
-    required this.activeEvent,
-    required this.overlayBursts,
-    required this.spectatorReactionsMuted,
-    required this.onToggleSpectatorMute,
-    required this.onRenderModeSelected,
-    required this.onCameraPresetSelected,
-    required this.onUnlockSlowMotion,
-    required this.onUnlockAlternateCamera,
-    required this.onUnlockHighlightAttack,
-    required this.onUpgradeTournament,
-    required this.onSendGift,
-    required this.onSendReaction,
     required this.presentation,
   });
 
   final Match3dTimelineController controller;
   final MatchViewState viewState;
-  final Match3dMatchContext matchContext;
-  final Match3dMonetizationService monetization;
   final RenderMode activeRenderMode;
-  final MatchEvent? activeEvent;
-  final List<Match3dOverlayBurst> overlayBursts;
-  final bool spectatorReactionsMuted;
-  final VoidCallback onToggleSpectatorMute;
-  final ValueChanged<RenderMode> onRenderModeSelected;
-  final ValueChanged<Match3dCameraPreset> onCameraPresetSelected;
-  final VoidCallback onUnlockSlowMotion;
-  final VoidCallback onUnlockAlternateCamera;
-  final VoidCallback onUnlockHighlightAttack;
-  final VoidCallback? onUpgradeTournament;
-  final Future<void> Function(double amount) onSendGift;
-  final Future<void> Function(Match3dReaction reaction) onSendReaction;
   final MatchBroadcastPresentationState presentation;
 
   @override
@@ -943,9 +990,9 @@ class _BroadcastViewer extends StatelessWidget {
                     controller: controller,
                     viewState: viewState,
                     renderMode: activeRenderMode,
-                    cameraPreset: activeRenderMode == RenderMode.threeD
-                        ? monetization.cameraPreset
-                        : Match3dCameraPreset.broadcast,
+                    cameraPreset: _broadcastRenderCameraPreset(
+                      presentation.pitchPresentation.cameraPreset,
+                    ),
                     broadcastMode: true,
                     presentation: presentation.pitchPresentation,
                   ),
@@ -987,12 +1034,6 @@ class _BroadcastViewer extends StatelessWidget {
                     cameraPreset: presentation.pitchPresentation.cameraPreset,
                   ),
                 ),
-                if (monetization.effectiveEntitlement.isPremiumUser)
-                  const Positioned(
-                    top: 84,
-                    right: 12,
-                    child: _PremiumStatusBadge(),
-                  ),
                 Positioned(
                   top: compactHeader ? 108 : 92,
                   left: 24,
@@ -1033,31 +1074,14 @@ class _BroadcastViewer extends StatelessWidget {
                     ),
                   ),
                 ),
-                Positioned.fill(
-                  child: GiftingOverlay(
-                    activeBursts:
-                        matchContext.isSpectator && spectatorReactionsMuted
-                            ? const <Match3dOverlayBurst>[]
-                            : overlayBursts,
-                    availableCoins: monetization.availableCoinBalance,
-                    onSendGift: onSendGift,
-                    onSendReaction: onSendReaction,
-                  ),
-                ),
               ],
             ),
           ),
         );
-        if (!matchContext.isSpectator) {
-          return surface;
-        }
         return Column(
           children: <Widget>[
             Expanded(child: surface),
-            _SpectatorStatusBar(
-              reactionsMuted: spectatorReactionsMuted,
-              onToggleMute: onToggleSpectatorMute,
-            ),
+            const _OfficialBroadcastNoticeBar(),
           ],
         );
       },
@@ -1098,29 +1122,6 @@ class _RenderSurface extends StatelessWidget {
         frame: controller.displayFrame,
         showFormationOverlay: !broadcastMode,
         presentation: presentation,
-      ),
-    );
-  }
-}
-
-class _PremiumStatusBadge extends StatelessWidget {
-  const _PremiumStatusBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: const Color(0x1FFDB022),
-        border: Border.all(color: const Color(0x66FDB022)),
-      ),
-      child: const Text(
-        'Pro Manager',
-        style: TextStyle(
-          color: Color(0xFFFDB022),
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -1250,63 +1251,87 @@ class _ControlBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget playbackStatus = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        LinearProgressIndicator(
+          value: controller.progress.clamp(0, 1),
+          minHeight: 7,
+          borderRadius: BorderRadius.circular(999),
+          backgroundColor: Colors.white.withValues(alpha: 0.08),
+          valueColor: const AlwaysStoppedAnimation<Color>(
+            GteShellTheme.accentArena,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            controller.isAutoPaused
+                ? 'Playback paused for event cue'
+                : 'Replay mode',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Colors.white70,
+                ),
+          ),
+        ),
+      ],
+    );
+    final List<Widget> playbackActions = <Widget>[
+      FilledButton.icon(
+        onPressed: controller.togglePlayPause,
+        icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
+        label: Text(controller.isPlaying ? 'Pause' : 'Play'),
+      ),
+      FilledButton.tonalIcon(
+        onPressed: controller.restart,
+        icon: const Icon(Icons.replay),
+        label: const Text('Restart'),
+      ),
+      FilledButton.tonalIcon(
+        onPressed: controller.cycleSpeed,
+        icon: const Icon(Icons.speed),
+        label: Text(controller.speedLabel),
+      ),
+      FilledButton.tonalIcon(
+        onPressed: controller.jumpToNextEvent,
+        icon: const Icon(Icons.skip_next),
+        label: const Text('Next event'),
+      ),
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-      child: Row(
-        children: <Widget>[
-          FilledButton.icon(
-            onPressed: controller.togglePlayPause,
-            icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
-            label: Text(controller.isPlaying ? 'Pause' : 'Play'),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.tonalIcon(
-            onPressed: controller.restart,
-            icon: const Icon(Icons.replay),
-            label: const Text('Restart'),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.tonalIcon(
-            onPressed: controller.cycleSpeed,
-            icon: const Icon(Icons.speed),
-            label: Text(controller.speedLabel),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.tonalIcon(
-            onPressed: controller.jumpToNextEvent,
-            icon: const Icon(Icons.skip_next),
-            label: const Text('Next event'),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          if (constraints.maxWidth < 720) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                LinearProgressIndicator(
-                  value: controller.progress.clamp(0, 1),
-                  minHeight: 7,
-                  borderRadius: BorderRadius.circular(999),
-                  backgroundColor: Colors.white.withValues(alpha: 0.08),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    GteShellTheme.accentArena,
-                  ),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: playbackActions,
                 ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    controller.isAutoPaused
-                        ? 'Playback paused for event cue'
-                        : 'Replay mode',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white70,
-                        ),
-                  ),
-                ),
+                const SizedBox(height: 12),
+                playbackStatus,
               ],
-            ),
-          ),
-        ],
+            );
+          }
+          return Row(
+            children: <Widget>[
+              for (int index = 0;
+                  index < playbackActions.length;
+                  index += 1) ...<Widget>[
+                playbackActions[index],
+                if (index < playbackActions.length - 1)
+                  const SizedBox(width: 10),
+              ],
+              const SizedBox(width: 14),
+              Expanded(child: playbackStatus),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1314,12 +1339,14 @@ class _ControlBar extends StatelessWidget {
 
 class _SpectatorStatusBar extends StatelessWidget {
   const _SpectatorStatusBar({
+    required this.message,
     required this.reactionsMuted,
-    required this.onToggleMute,
+    this.onToggleMute,
   });
 
+  final String message;
   final bool reactionsMuted;
-  final VoidCallback onToggleMute;
+  final VoidCallback? onToggleMute;
 
   @override
   Widget build(BuildContext context) {
@@ -1335,19 +1362,37 @@ class _SpectatorStatusBar extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            const Expanded(
-              child: Text(
-                'Spectator mode keeps playback viewer-only while gifting and camera enhancements remain available.',
+            Expanded(
+              child: Text(message),
+            ),
+            if (onToggleMute != null) ...<Widget>[
+              const SizedBox(width: 12),
+              FilterChip(
+                selected: reactionsMuted,
+                onSelected: (_) => onToggleMute!(),
+                label:
+                    Text(reactionsMuted ? 'Reactions muted' : 'Mute reactions'),
               ),
-            ),
-            const SizedBox(width: 12),
-            FilterChip(
-              selected: reactionsMuted,
-              onSelected: (_) => onToggleMute(),
-              label:
-                  Text(reactionsMuted ? 'Reactions muted' : 'Mute reactions'),
-            ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OfficialBroadcastNoticeBar extends StatelessWidget {
+  const _OfficialBroadcastNoticeBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(18, 0, 18, 18),
+      child: SizedBox(
+        width: double.infinity,
+        child: Text(
+          'Official broadcast playback stays viewer-only. Premium, gifting, and reaction controls are disabled in this mode.',
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -1519,6 +1564,18 @@ Color _overlayAccent(MatchTimelineFrame frame, MatchEvent? event) {
     return const Color(0xFFEF4444);
   }
   return _tileAccent(event?.type ?? MatchViewerEventType.neutral);
+}
+
+Match3dCameraPreset _broadcastRenderCameraPreset(
+  BroadcastCameraPreset preset,
+) {
+  switch (preset) {
+    case BroadcastCameraPreset.broadcast:
+    case BroadcastCameraPreset.attackZoom:
+    case BroadcastCameraPreset.goalZoom:
+    case BroadcastCameraPreset.replayCamera:
+      return Match3dCameraPreset.broadcast;
+  }
 }
 
 bool _listEquals(List<double> left, List<double> right) {

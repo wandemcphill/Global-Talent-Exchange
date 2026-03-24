@@ -13,6 +13,8 @@ import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_broadcast_presentation.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
 
 void main() {
   test('large frame gaps snap to the nearest authoritative frame', () {
@@ -163,6 +165,46 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('compact replay layout stays scroll-safe without overflow',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final CompetitionSummary competition = _buildCompetition(
+      id: 'match-viewer-compact',
+    );
+    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
+      competition,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: competition,
+          matchKey: competition.id,
+          fallbackSnapshot: snapshot,
+          preferFallback: true,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.text('2D Match Viewer'), findsOneWidget);
+    expect(find.text('Restart'), findsOneWidget);
+    expect(find.text('Next event'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Replay lane'));
+    await tester.pump();
+
+    expect(find.text('Replay lane'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'broadcast viewer shows intro, live clock, masked score, and commentary',
       (WidgetTester tester) async {
@@ -217,6 +259,47 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+  });
+
+  testWidgets(
+      'broadcast viewer stays presentation-only while preserving 3D playback',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1440, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final MatchViewState viewState = _buildBroadcastViewState();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GtexMatchViewerScreen(
+          competition: _buildCompetition(
+            id: 'broadcast-viewer-presentation-only',
+            status: CompetitionStatus.inProgress,
+          ),
+          matchKey: 'broadcast-viewer-presentation-only',
+          presentationMode: MatchViewerPresentationMode.broadcast,
+          renderMode: RenderMode.threeD,
+          isSpectator: true,
+          entitlement: const Match3dUserEntitlement.proManager(
+            availableCoins: 12,
+          ),
+          viewerMonetizationFlags: _enabledViewerMonetizationFlags,
+          viewStateLoader: () async => viewState,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.byType(Gtex3dScene), findsOneWidget);
+    expect(find.text('Live broadcast'), findsOneWidget);
+    expect(find.byType(GiftingOverlay), findsNothing);
+    expect(find.text('Pro Manager'), findsNothing);
+    expect(find.byType(FilterChip), findsNothing);
+    expect(find.text('Restart'), findsNothing);
   });
 
   test('scoreless broadcast state stays masked until full time', () {
@@ -332,6 +415,15 @@ void main() {
     await tester.pump();
   });
 }
+
+const MatchViewerMonetizationFlags _enabledViewerMonetizationFlags =
+    MatchViewerMonetizationFlags(
+  enableUpgradePrompt: true,
+  enableTournamentUpgrade: true,
+  enablePremiumControls: true,
+  enableGifting: true,
+  enableReactions: true,
+);
 
 Future<void> _pumpUntilVisible(
   WidgetTester tester,

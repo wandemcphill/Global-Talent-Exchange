@@ -108,15 +108,20 @@ def test_resolve_club_uses_alias_registry_for_psg_and_man_utd() -> None:
 @pytest.mark.parametrize(
     ("raw_name", "expected_canonical_name"),
     [
-        ("Ivory Coast", "Côte d’Ivoire"),
-        ("Cote d'Ivoire", "Côte d’Ivoire"),
-        ("Cote dIvoire", "Côte d’Ivoire"),
-        ("CÃ´te dâ€™Ivoire", "Côte d’Ivoire"),
-        ("Curacao", "Curaçao"),
+        ("Ivory Coast", "C\u00f4te d\u2019Ivoire"),
+        ("Cote d'Ivoire", "C\u00f4te d\u2019Ivoire"),
+        ("Cote dIvoire", "C\u00f4te d\u2019Ivoire"),
+        ("C\u00c3\u00b4te d\u00e2\u20ac\u2122Ivoire", "C\u00f4te d\u2019Ivoire"),
+        ("Curacao", "Cura\u00e7ao"),
         ("Cape Verde", "Cabo Verde"),
         ("DR Congo", "Democratic Republic of the Congo"),
         ("Congo DR", "Democratic Republic of the Congo"),
         ("Congo-Kinshasa", "Democratic Republic of the Congo"),
+        ("Congo", "Republic of the Congo"),
+        ("Congo-Brazzaville", "Republic of the Congo"),
+        ("CAR", "Central African Republic"),
+        ("Guinea Bissau", "Guinea-Bissau"),
+        ("United Republic of Tanzania", "Tanzania"),
         ("The Gambia", "Gambia"),
     ],
 )
@@ -149,6 +154,11 @@ def test_resolve_country_prefers_canonical_rows_for_aliases_and_variants(
                         source_provider="transfermarkt_2nd_zip",
                         provider_external_id="gm-raw",
                         name="The Gambia",
+                    ),
+                    Country(
+                        source_provider="transfermarkt_2nd_zip",
+                        provider_external_id="cog-raw",
+                        name="Congo",
                     ),
                 ]
             )
