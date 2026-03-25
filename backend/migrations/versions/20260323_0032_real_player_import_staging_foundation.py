@@ -85,7 +85,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("rejection_reason", sa.Text(), nullable=True))
         batch_op.add_column(sa.Column("last_processed_at", sa.DateTime(timezone=True), nullable=True))
         batch_op.create_foreign_key(
-            "fk_real_player_import_staging_import_run_id_real_player_import_runs",
+            "fk_real_player_import_staging_import_run",
             "real_player_import_runs",
             ["import_run_id"],
             ["id"],
@@ -120,7 +120,7 @@ def downgrade() -> None:
         batch_op.drop_index("ix_real_player_import_staging_import_batch_key")
         batch_op.drop_index("ix_real_player_import_staging_import_run_id")
         batch_op.drop_constraint(
-            "fk_real_player_import_staging_import_run_id_real_player_import_runs",
+            "fk_real_player_import_staging_import_run",
             type_="foreignkey",
         )
         batch_op.drop_column("last_processed_at")

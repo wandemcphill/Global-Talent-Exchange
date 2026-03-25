@@ -9,6 +9,8 @@ from typing import Any
 
 from fastapi import FastAPI
 from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.models.base import generate_uuid, utcnow
@@ -46,9 +48,10 @@ from .schemas import (
     ManagerTradeResultView,
     TeamManagersView,
 )
-from .seed_catalog import build_seed_catalog
+from .seed_catalog import build_seed_catalog_entries
 
 LEGACY_STATE_FILE = "manager_market_state.json"
+SEED_INSERT_BATCH_SIZE = 40
 
 
 class ManagerMarketError(ValueError):
@@ -59,9 +62,42 @@ class CapacityError(ManagerMarketError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class ManagerCatalogCounts:
+    total_count: int
+    legendary_count: int
+    non_legendary_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ManagerCatalogSeedResult:
+    attempted_count: int
+    inserted_count: int
+    total_count: int
+    legendary_count: int
+    non_legendary_count: int
+
+
 @dataclass(slots=True)
 class ManagerMarketService:
     wallet_service: WalletService
+
+    def catalog_counts(self, session: Session) -> ManagerCatalogCounts:
+        return self._catalog_counts(session)
+
+    def seed_catalog_entries(self, session: Session) -> ManagerCatalogSeedResult:
+        rows = build_seed_catalog_entries()
+        before = self._catalog_counts(session)
+        self._insert_catalog_entries(session, rows)
+        session.flush()
+        after = self._catalog_counts(session)
+        return ManagerCatalogSeedResult(
+            attempted_count=len(rows),
+            inserted_count=max(0, after.total_count - before.total_count),
+            total_count=after.total_count,
+            legendary_count=after.legendary_count,
+            non_legendary_count=after.non_legendary_count,
+        )
 
     def list_catalog(self, app: FastAPI, session: Session, *, search: str | None = None, tactic: str | None = None, trait: str | None = None, mentality: str | None = None, rarity: str | None = None, limit: int = 250) -> ManagerCatalogPage:
         self._bootstrap_db(app, session)
@@ -788,63 +824,18 @@ class ManagerMarketService:
             raise ManagerMarketError("This manager trade has already been settled and cannot be processed again.")
 
     def _bootstrap_db(self, app: FastAPI, session: Session) -> None:
-        existing = session.scalar(select(func.count()).select_from(ManagerCatalogEntry)) or 0
-        if int(existing) > 0:
-            return
-
         legacy_path = self._legacy_state_path(app)
-        if legacy_path.exists():
-            legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
-            for row in legacy.get("catalog", []):
-                session.add(ManagerCatalogEntry(
-                    manager_id=row["manager_id"],
-                    display_name=row["display_name"],
-                    rarity=row["rarity"],
-                    mentality=row["mentality"],
-                    tactics=row.get("tactics", []),
-                    traits=row.get("traits", []),
-                    substitution_tendency=row.get("substitution_tendency", "balanced_substitution"),
-                    philosophy_summary=row.get("philosophy_summary", ""),
-                    club_associations=row.get("club_associations", []),
-                    supply_total=int(row.get("supply_total", 0)),
-                    supply_available=int(row.get("supply_available", 0)),
-                ))
-            for row in legacy.get("holdings", []):
-                session.add(ManagerHolding(asset_id=row["asset_id"], manager_id=row["manager_id"], owner_user_id=row["owner_user_id"], acquired_at=row["acquired_at"], status=row["status"]))
-            for row in legacy.get("listings", []):
-                session.add(ManagerTradeListing(listing_id=row["listing_id"], asset_id=row["asset_id"], seller_user_id=row["seller_user_id"], seller_name=row.get("seller_name") or row["seller_user_id"], asking_price_credits=row["asking_price_credits"], status=row["status"]))
-            for user_id, assignment in (legacy.get("team_assignments") or {}).items():
-                session.add(ManagerTeamAssignment(user_id=user_id, main_manager_asset_id=assignment.get("main_manager_asset_id"), academy_manager_asset_id=assignment.get("academy_manager_asset_id")))
-            for row in legacy.get("trade_history", []):
-                session.add(ManagerTradeRecord(trade_id=row["trade_id"], mode=row["mode"], listing_id=row.get("listing_id"), proposer_asset_id=row.get("proposer_asset_id"), requested_asset_id=row.get("requested_asset_id"), gross_credits=row.get("gross_credits", "0"), fee_credits=row.get("fee_credits", "0"), seller_net_credits=row.get("seller_net_credits", "0"), settlement_reference=row.get("settlement_reference") or f"legacy:{row['trade_id']}", settlement_status=row.get("settlement_status", "settled"), immediate_withdrawal_eligible=bool(row.get("immediate_withdrawal_eligible", True)), created_at=datetime.fromisoformat(row["created_at"])))
-            for row in legacy.get("settlement_records", []):
-                session.add(ManagerSettlementRecord(reference=row["reference"], trade_id=row["trade_id"], listing_id=row.get("listing_id"), mode=row.get("mode", "cash"), status=row.get("status", "settled"), gross_credits=row.get("gross_credits", "0"), fee_credits=row.get("fee_credits", "0"), seller_net_credits=row.get("seller_net_credits", "0"), eligible_immediately=bool(row.get("eligible_immediately", True)), settled_by_user_id=row.get("settled_by_user_id"), created_at=datetime.fromisoformat(row["created_at"])))
-            for row in legacy.get("competition_settings", []):
-                session.add(ManagerCompetitionSetting(code=row["code"], label=row["label"], enabled=bool(row.get("enabled", True)), minimum_viable_participants=int(row.get("minimum_viable_participants", 2)), geo_locked_regions=row.get("geo_locked_regions", []), allow_fallback_fill=bool(row.get("allow_fallback_fill", False)), fallback_source_regions=row.get("fallback_source_regions", [])))
-            for row in legacy.get("audit_log", []):
-                session.add(ManagerAuditLog(event_id=row["event_id"], event_type=row["event_type"], actor_user_id=row["actor_user_id"], actor_email=row["actor_email"], payload=row.get("payload", {}), created_at=datetime.fromisoformat(row["created_at"])))
-            session.flush()
-            return
-
-        for raw in build_seed_catalog():
-            manager_id = raw["name"].lower().replace("'", "").replace(" ", "-")
-            substitution = next((trait for trait in raw["traits"] if "substitution" in trait), "balanced_substitution")
-            session.add(ManagerCatalogEntry(
-                manager_id=manager_id,
-                display_name=raw["name"],
-                rarity=raw["rarity"],
-                mentality=raw["mentality"],
-                tactics=raw["tactics"][:4],
-                traits=raw["traits"][:4],
-                substitution_tendency=substitution,
-                philosophy_summary=raw["philosophy"],
-                club_associations=raw.get("club_associations", []),
-                supply_total=raw["supply_total"],
-                supply_available=raw["supply_total"],
-            ))
-        for row in self._default_competitions():
-            session.add(ManagerCompetitionSetting(**row))
+        counts = self._catalog_counts(session)
+        changed = False
+        if counts.total_count == 0 and legacy_path.exists():
+            self._import_legacy_state(session, legacy_path)
+            changed = True
+        else:
+            changed = self.seed_catalog_entries(session).inserted_count > 0
+        changed = self._seed_default_competitions(session) > 0 or changed
         session.flush()
+        if changed:
+            session.commit()
 
     def _default_competitions(self) -> list[dict[str, Any]]:
         return [
@@ -855,6 +846,106 @@ class ManagerMarketService:
             {"code": "north_america_cup", "label": "North America Cup", "enabled": False, "minimum_viable_participants": 4, "geo_locked_regions": ["north_america"], "allow_fallback_fill": False, "fallback_source_regions": []},
             {"code": "fast_league", "label": "Fast League", "enabled": True, "minimum_viable_participants": 2, "geo_locked_regions": ["africa"], "allow_fallback_fill": True, "fallback_source_regions": ["africa"]},
         ]
+
+    def _catalog_counts(self, session: Session) -> ManagerCatalogCounts:
+        total = session.scalar(select(func.count()).select_from(ManagerCatalogEntry)) or 0
+        legendary = session.scalar(
+            select(func.count())
+            .select_from(ManagerCatalogEntry)
+            .where(ManagerCatalogEntry.rarity == "legendary")
+        ) or 0
+        total_count = int(total)
+        legendary_count = int(legendary)
+        return ManagerCatalogCounts(
+            total_count=total_count,
+            legendary_count=legendary_count,
+            non_legendary_count=max(0, total_count - legendary_count),
+        )
+
+    def _import_legacy_state(self, session: Session, legacy_path: Path) -> None:
+        legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
+        for row in legacy.get("catalog", []):
+            session.add(ManagerCatalogEntry(
+                manager_id=row["manager_id"],
+                display_name=row["display_name"],
+                rarity=row["rarity"],
+                mentality=row["mentality"],
+                tactics=row.get("tactics", []),
+                traits=row.get("traits", []),
+                substitution_tendency=row.get("substitution_tendency", "balanced_substitution"),
+                philosophy_summary=row.get("philosophy_summary", ""),
+                club_associations=row.get("club_associations", []),
+                supply_total=int(row.get("supply_total", 0)),
+                supply_available=int(row.get("supply_available", 0)),
+            ))
+        for row in legacy.get("holdings", []):
+            session.add(ManagerHolding(asset_id=row["asset_id"], manager_id=row["manager_id"], owner_user_id=row["owner_user_id"], acquired_at=row["acquired_at"], status=row["status"]))
+        for row in legacy.get("listings", []):
+            session.add(ManagerTradeListing(listing_id=row["listing_id"], asset_id=row["asset_id"], seller_user_id=row["seller_user_id"], seller_name=row.get("seller_name") or row["seller_user_id"], asking_price_credits=row["asking_price_credits"], status=row["status"]))
+        for user_id, assignment in (legacy.get("team_assignments") or {}).items():
+            session.add(ManagerTeamAssignment(user_id=user_id, main_manager_asset_id=assignment.get("main_manager_asset_id"), academy_manager_asset_id=assignment.get("academy_manager_asset_id")))
+        for row in legacy.get("trade_history", []):
+            session.add(ManagerTradeRecord(trade_id=row["trade_id"], mode=row["mode"], listing_id=row.get("listing_id"), proposer_asset_id=row.get("proposer_asset_id"), requested_asset_id=row.get("requested_asset_id"), gross_credits=row.get("gross_credits", "0"), fee_credits=row.get("fee_credits", "0"), seller_net_credits=row.get("seller_net_credits", "0"), settlement_reference=row.get("settlement_reference") or f"legacy:{row['trade_id']}", settlement_status=row.get("settlement_status", "settled"), immediate_withdrawal_eligible=bool(row.get("immediate_withdrawal_eligible", True)), created_at=datetime.fromisoformat(row["created_at"])))
+        for row in legacy.get("settlement_records", []):
+            session.add(ManagerSettlementRecord(reference=row["reference"], trade_id=row["trade_id"], listing_id=row.get("listing_id"), mode=row.get("mode", "cash"), status=row.get("status", "settled"), gross_credits=row.get("gross_credits", "0"), fee_credits=row.get("fee_credits", "0"), seller_net_credits=row.get("seller_net_credits", "0"), eligible_immediately=bool(row.get("eligible_immediately", True)), settled_by_user_id=row.get("settled_by_user_id"), created_at=datetime.fromisoformat(row["created_at"])))
+        for row in legacy.get("competition_settings", []):
+            session.add(ManagerCompetitionSetting(code=row["code"], label=row["label"], enabled=bool(row.get("enabled", True)), minimum_viable_participants=int(row.get("minimum_viable_participants", 2)), geo_locked_regions=row.get("geo_locked_regions", []), allow_fallback_fill=bool(row.get("allow_fallback_fill", False)), fallback_source_regions=row.get("fallback_source_regions", [])))
+        for row in legacy.get("audit_log", []):
+            session.add(ManagerAuditLog(event_id=row["event_id"], event_type=row["event_type"], actor_user_id=row["actor_user_id"], actor_email=row["actor_email"], payload=row.get("payload", {}), created_at=datetime.fromisoformat(row["created_at"])))
+        session.flush()
+
+    def _insert_catalog_entries(self, session: Session, rows: list[dict[str, Any]]) -> None:
+        self._insert_do_nothing(
+            session,
+            model=ManagerCatalogEntry,
+            rows=rows,
+            conflict_column="manager_id",
+        )
+
+    def _seed_default_competitions(self, session: Session) -> int:
+        before = session.scalar(select(func.count()).select_from(ManagerCompetitionSetting)) or 0
+        self._insert_do_nothing(
+            session,
+            model=ManagerCompetitionSetting,
+            rows=self._default_competitions(),
+            conflict_column="code",
+        )
+        session.flush()
+        after = session.scalar(select(func.count()).select_from(ManagerCompetitionSetting)) or 0
+        return max(0, int(after) - int(before))
+
+    def _insert_do_nothing(
+        self,
+        session: Session,
+        *,
+        model: type[ManagerCatalogEntry] | type[ManagerCompetitionSetting],
+        rows: list[dict[str, Any]],
+        conflict_column: str,
+    ) -> None:
+        if not rows:
+            return
+        dialect_name = session.get_bind().dialect.name
+        if dialect_name == "sqlite":
+            for start in range(0, len(rows), SEED_INSERT_BATCH_SIZE):
+                chunk = rows[start:start + SEED_INSERT_BATCH_SIZE]
+                statement = sqlite_insert(model).values(chunk).on_conflict_do_nothing(index_elements=[conflict_column])
+                session.execute(statement)
+            return
+        if dialect_name == "postgresql":
+            for start in range(0, len(rows), SEED_INSERT_BATCH_SIZE):
+                chunk = rows[start:start + SEED_INSERT_BATCH_SIZE]
+                statement = postgresql_insert(model).values(chunk).on_conflict_do_nothing(index_elements=[conflict_column])
+                session.execute(statement)
+            return
+
+        existing_values = set(
+            session.scalars(select(getattr(model, conflict_column)))
+            .all()
+        )
+        for row in rows:
+            if row[conflict_column] in existing_values:
+                continue
+            session.add(model(**row))
 
     def _legacy_state_path(self, app: FastAPI) -> Path:
         return app.state.settings.config_root / LEGACY_STATE_FILE

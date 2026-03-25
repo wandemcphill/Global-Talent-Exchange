@@ -225,7 +225,7 @@ class MatchIntegrityService:
             exclude={"deterministic_seed", "match_mode"},
         )
         canonical = json.dumps(payload, separators=(",", ":"), sort_keys=True)
-        return f"{self._fnv1a_64(canonical.encode('utf-8')):016x}"
+        return f"{self._fnv1a_32(canonical.encode('utf-8')):08x}"
 
     @staticmethod
     def _sha_hash(payload: Any) -> str:
@@ -233,11 +233,11 @@ class MatchIntegrityService:
         return sha256(encoded).hexdigest()
 
     @staticmethod
-    def _fnv1a_64(payload: bytes) -> int:
-        value = 0xCBF29CE484222325
+    def _fnv1a_32(payload: bytes) -> int:
+        value = 0x811C9DC5
         for item in payload:
             value ^= item
-            value = (value * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+            value = (value * 0x01000193) & 0xFFFFFFFF
         return value
 
     @staticmethod

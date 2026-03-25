@@ -91,7 +91,7 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
     try {
       final List<Future<Object>> requests = <Future<Object>>[
         _competitionRepository.fetchAdminCompetitions(),
-        _repository.fetchCatalog(limit: 500),
+        _repository.fetchCatalog(limit: 1000),
         _repository.fetchAuditLog(),
       ];
       if (widget.role == 'super_admin') {
@@ -103,28 +103,39 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
         return;
       }
       setState(() {
-        _competitions = (responses[0] as List<dynamic>).cast<Map<String, dynamic>>();
-        _catalog = (((responses[1] as Map<String, dynamic>)['items'] as List<dynamic>? ?? <dynamic>[]))
+        _competitions =
+            (responses[0] as List<dynamic>).cast<Map<String, dynamic>>();
+        _catalog = (((responses[1] as Map<String, dynamic>)['items']
+                    as List<dynamic>? ??
+                <dynamic>[]))
             .whereType<Map>()
             .map((dynamic item) => Map<String, dynamic>.from(item as Map))
             .toList();
-        _auditLog = (responses[2] as List<dynamic>).cast<Map<String, dynamic>>();
+        _auditLog =
+            (responses[2] as List<dynamic>).cast<Map<String, dynamic>>();
         _admins = widget.role == 'super_admin'
             ? (responses[3] as List<dynamic>).cast<Map<String, dynamic>>()
             : <Map<String, dynamic>>[];
         _permissionCatalog = widget.role == 'super_admin'
-            ? ((((responses[4] as Map<String, dynamic>)['permissions'] as List<dynamic>? ?? <dynamic>[]).map((dynamic item) => item.toString())).toList())
+            ? ((((responses[4] as Map<String, dynamic>)['permissions']
+                        as List<dynamic>? ??
+                    <dynamic>[])
+                .map((dynamic item) => item.toString())).toList())
             : <String>[];
         _editedPermissions.clear();
         _editedEnabled.clear();
         for (final Map<String, dynamic> admin in _admins) {
           _editedPermissions[admin['id'].toString()] =
-              ((admin['permissions'] as List<dynamic>? ?? <dynamic>[]).cast<String>()).toSet();
-          _editedEnabled[admin['id'].toString()] = (admin['is_active'] ?? true) as bool;
+              ((admin['permissions'] as List<dynamic>? ?? <dynamic>[])
+                      .cast<String>())
+                  .toSet();
+          _editedEnabled[admin['id'].toString()] =
+              (admin['is_active'] ?? true) as bool;
         }
       });
       if (_competitions.isNotEmpty) {
-        await _loadOrchestrationPreview((_competitions.first['code'] ?? '').toString());
+        await _loadOrchestrationPreview(
+            (_competitions.first['code'] ?? '').toString());
       }
     } catch (error) {
       if (!mounted) {
@@ -147,7 +158,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
       return;
     }
     try {
-      final Map<String, dynamic> response = await _competitionRepository.fetchOrchestrationPreview(code);
+      final Map<String, dynamic> response =
+          await _competitionRepository.fetchOrchestrationPreview(code);
       if (!mounted) {
         return;
       }
@@ -214,7 +226,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
     if (_email.text.trim().isEmpty ||
         _username.text.trim().isEmpty ||
         _password.text.isEmpty) {
-      AppFeedback.showError(context, 'Email, username, and password are required.');
+      AppFeedback.showError(
+          context, 'Email, username, and password are required.');
       return;
     }
     await _runAdminAction(() async {
@@ -236,7 +249,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
     await _runAdminAction(() async {
       await _repository.updateAdminPermissions(
         userId: userId,
-        permissions: (_editedPermissions[userId] ?? <String>{}).toList()..sort(),
+        permissions: (_editedPermissions[userId] ?? <String>{}).toList()
+          ..sort(),
         isEnabled: _editedEnabled[userId] ?? true,
       );
       await _load();
@@ -312,8 +326,7 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> visibleCatalog =
-        _filteredCatalog.take(120).toList();
+    final List<Map<String, dynamic>> visibleCatalog = _filteredCatalog;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Manager operations desk')),
@@ -323,7 +336,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
               child: GteStatePanel(
                 eyebrow: 'MANAGER OPERATIONS',
                 title: 'Loading manager operations desk',
-                message: 'Preparing coach scarcity, competition orchestration, and admin control signals.',
+                message:
+                    'Preparing coach scarcity, competition orchestration, and admin control signals.',
                 icon: Icons.sports_outlined,
                 accentColor: Colors.orangeAccent,
               ),
@@ -348,13 +362,17 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                     children: <Widget>[
                       GtexHeroBanner(
                         eyebrow: 'MANAGER OPERATIONS',
-                        title: 'Run the scarce coach ecosystem with premium controls and clean market integrity.',
-                        description: 'Supply, metadata, traits, tactics, competition orchestration, and audit review all live here. This surface should read like a premium control tower for coach scarcity, not an admin spreadsheet dump.',
+                        title:
+                            'Run the scarce coach ecosystem with premium controls and clean market integrity.',
+                        description:
+                            'Supply, metadata, traits, tactics, competition orchestration, and audit review all live here. This surface should read like a premium control tower for coach scarcity, not an admin spreadsheet dump.',
                         accent: Colors.orangeAccent,
                         chips: <Widget>[
                           Chip(label: Text('Catalog ${_catalog.length}')),
                           Chip(label: Text('Admins ${_admins.length}')),
-                          Chip(label: Text('Competitions ${_competitions.length}')),
+                          Chip(
+                              label:
+                                  Text('Competitions ${_competitions.length}')),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -365,7 +383,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                       const _SectionHeading(
                         eyebrow: 'MATCH GOVERNANCE',
                         title: 'Competition controls',
-                        detail: 'Keep creator and manager competitions live, stable, and orchestrated without breaking integrity.',
+                        detail:
+                            'Keep creator and manager competitions live, stable, and orchestrated without breaking integrity.',
                       ),
                       const SizedBox(height: 8),
                       if (_competitions.isEmpty)
@@ -381,10 +400,14 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                             value: (item['enabled'] ?? false) as bool,
                             onChanged: _saving
                                 ? null
-                                : (bool value) => _toggleCompetition(item, value),
+                                : (bool value) =>
+                                    _toggleCompetition(item, value),
                             secondary: IconButton(
                               tooltip: 'Preview orchestration',
-                              onPressed: _saving ? null : () => _loadOrchestrationPreview((item['code'] ?? '').toString()),
+                              onPressed: _saving
+                                  ? null
+                                  : () => _loadOrchestrationPreview(
+                                      (item['code'] ?? '').toString()),
                               icon: const Icon(Icons.visibility_outlined),
                             ),
                             title: Text((item['label'] ?? '').toString()),
@@ -402,11 +425,19 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                const Text('Competition orchestration preview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                const Text('Competition orchestration preview',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 8),
-                                Text('Code: ${(_orchestrationPreview!['code'] ?? '').toString()} • Entrants: ${(_orchestrationPreview!['entrants'] ?? '').toString()} • Fallback: ${((_orchestrationPreview!['fallback_used'] ?? false) as bool) ? 'on' : 'off'}'),
+                                Text(
+                                    'Code: ${(_orchestrationPreview!['code'] ?? '').toString()} • Entrants: ${(_orchestrationPreview!['entrants'] ?? '').toString()} • Fallback: ${((_orchestrationPreview!['fallback_used'] ?? false) as bool) ? 'on' : 'off'}'),
                                 const SizedBox(height: 8),
-                                Text(((_orchestrationPreview!['notes'] as List<dynamic>? ?? <dynamic>[]).join(' • ')).toString()),
+                                Text(((_orchestrationPreview!['notes']
+                                                as List<dynamic>? ??
+                                            <dynamic>[])
+                                        .join(' • '))
+                                    .toString()),
                               ],
                             ),
                           ),
@@ -416,7 +447,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                       const _SectionHeading(
                         eyebrow: 'SCARCITY CONTROL',
                         title: 'Manager supply desk',
-                        detail: 'Search the coach catalog, tune supply, and preserve rarity without muddying the market story.',
+                        detail:
+                            'Search the coach catalog, tune supply, and preserve rarity without muddying the market story.',
                       ),
                       const SizedBox(height: 8),
                       TextField(
@@ -447,7 +479,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                       else
                         ...visibleCatalog.map(
                           (Map<String, dynamic> item) => ListTile(
-                            title: Text((item['display_name'] ?? '').toString()),
+                            title:
+                                Text((item['display_name'] ?? '').toString()),
                             subtitle: Text(
                               '${(item['rarity'] ?? '').toString()} • total: ${(item['supply_total'] ?? '').toString()}'
                               ' • available: ${(item['supply_available'] ?? '').toString()}',
@@ -483,8 +516,7 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                         const SizedBox(height: 8),
                         TextField(
                           controller: _email,
-                          decoration:
-                              const InputDecoration(labelText: 'Email'),
+                          decoration: const InputDecoration(labelText: 'Email'),
                         ),
                         const SizedBox(height: 8),
                         TextField(
@@ -499,7 +531,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                               const InputDecoration(labelText: 'Password'),
                         ),
                         const SizedBox(height: 12),
-                        _permissionWrap(_newAdminPermissions, (String permission) {
+                        _permissionWrap(_newAdminPermissions,
+                            (String permission) {
                           setState(() {
                             if (_newAdminPermissions.contains(permission)) {
                               _newAdminPermissions.remove(permission);
@@ -548,11 +581,16 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                                           ),
                                         ),
                                         Switch(
-                                          value: _editedEnabled[item['id'].toString()] ?? true,
+                                          value: _editedEnabled[
+                                                  item['id'].toString()] ??
+                                              true,
                                           onChanged: _saving
                                               ? null
                                               : (bool value) => setState(
-                                                    () => _editedEnabled[item['id'].toString()] = value,
+                                                    () => _editedEnabled[
+                                                            item['id']
+                                                                .toString()] =
+                                                        value,
                                                   ),
                                         ),
                                       ],
@@ -562,10 +600,13 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     _permissionWrap(
-                                      _editedPermissions[item['id'].toString()] ?? <String>{},
+                                      _editedPermissions[
+                                              item['id'].toString()] ??
+                                          <String>{},
                                       (String permission) {
                                         final Set<String> selected =
-                                            _editedPermissions[item['id'].toString()] ??
+                                            _editedPermissions[
+                                                    item['id'].toString()] ??
                                                 <String>{};
                                         setState(() {
                                           if (selected.contains(permission)) {
@@ -573,8 +614,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                                           } else {
                                             selected.add(permission);
                                           }
-                                          _editedPermissions[item['id'].toString()] =
-                                              selected;
+                                          _editedPermissions[
+                                              item['id'].toString()] = selected;
                                         });
                                       },
                                     ),
@@ -612,15 +653,16 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
                         )
                       else
                         ..._auditLog.take(30).map(
-                          (Map<String, dynamic> event) => ListTile(
-                            dense: true,
-                            title: Text((event['event_type'] ?? '').toString()),
-                            subtitle: Text(
-                              '${(event['actor_email'] ?? '').toString()} • ${(event['created_at'] ?? '').toString()}\n'
-                              '${(event['payload'] ?? const <String, dynamic>{}).toString()}',
+                              (Map<String, dynamic> event) => ListTile(
+                                dense: true,
+                                title: Text(
+                                    (event['event_type'] ?? '').toString()),
+                                subtitle: Text(
+                                  '${(event['actor_email'] ?? '').toString()} • ${(event['created_at'] ?? '').toString()}\n'
+                                  '${(event['payload'] ?? const <String, dynamic>{}).toString()}',
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -628,17 +670,23 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
   }
 }
 
-
 class ManagerAdminRepository {
-  ManagerAdminRepository({required this.config, required this.transport, required this.accessToken})
-      : _managerRepository = ManagerMarketRepository(config: config, transport: transport, accessToken: accessToken);
+  ManagerAdminRepository(
+      {required this.config,
+      required this.transport,
+      required this.accessToken})
+      : _managerRepository = ManagerMarketRepository(
+            config: config, transport: transport, accessToken: accessToken);
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final String accessToken;
   final ManagerMarketRepository _managerRepository;
 
-  factory ManagerAdminRepository.standard({required String baseUrl, required String accessToken, GteBackendMode mode = GteBackendMode.liveThenFixture}) {
+  factory ManagerAdminRepository.standard(
+      {required String baseUrl,
+      required String accessToken,
+      GteBackendMode mode = GteBackendMode.liveThenFixture}) {
     return ManagerAdminRepository(
       config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
       transport: GteHttpTransport(),
@@ -646,24 +694,61 @@ class ManagerAdminRepository {
     );
   }
 
-  Future<Map<String, dynamic>> fetchCatalog({int limit = 500}) => _managerRepository.fetchCatalog(limit: limit);
-  Future<List<Map<String, dynamic>>> fetchAuditLog() => _getList('/api/admin/managers/audit-log');
-  Future<List<Map<String, dynamic>>> fetchAdmins() => _getList('/api/admin/access');
-  Future<Map<String, dynamic>> fetchPermissionCatalog() => _getMap('/api/admin/access/permissions');
-  Future<void> updateManagerSupply(String managerId, int supplyTotal, String reason) => _request('PUT', '/api/admin/managers/catalog/$managerId/supply', body: <String, Object?>{'supply_total': supplyTotal, 'reason': reason});
-  Future<void> createAdmin({required String email, required String username, required String password, required List<String> permissions}) => _request('POST', '/api/admin/access', body: <String, Object?>{'email': email, 'username': username, 'password': password, 'permissions': permissions});
-  Future<void> updateAdminPermissions({required String userId, required List<String> permissions, required bool isEnabled}) => _request('PUT', '/api/admin/access/$userId/permissions', body: <String, Object?>{'permissions': permissions, 'is_enabled': isEnabled});
+  Future<Map<String, dynamic>> fetchCatalog({int limit = 500}) =>
+      _managerRepository.fetchCatalog(limit: limit);
+  Future<List<Map<String, dynamic>>> fetchAuditLog() =>
+      _getList('/api/admin/managers/audit-log');
+  Future<List<Map<String, dynamic>>> fetchAdmins() =>
+      _getList('/api/admin/access');
+  Future<Map<String, dynamic>> fetchPermissionCatalog() =>
+      _getMap('/api/admin/access/permissions');
+  Future<void> updateManagerSupply(
+          String managerId, int supplyTotal, String reason) =>
+      _request('PUT', '/api/admin/managers/catalog/$managerId/supply',
+          body: <String, Object?>{
+            'supply_total': supplyTotal,
+            'reason': reason
+          });
+  Future<void> createAdmin(
+          {required String email,
+          required String username,
+          required String password,
+          required List<String> permissions}) =>
+      _request('POST', '/api/admin/access', body: <String, Object?>{
+        'email': email,
+        'username': username,
+        'password': password,
+        'permissions': permissions
+      });
+  Future<void> updateAdminPermissions(
+          {required String userId,
+          required List<String> permissions,
+          required bool isEnabled}) =>
+      _request('PUT', '/api/admin/access/$userId/permissions',
+          body: <String, Object?>{
+            'permissions': permissions,
+            'is_enabled': isEnabled
+          });
 
   Future<Map<String, dynamic>> _getMap(String path) async {
     final Object? body = await _request('GET', path);
     if (body is Map<String, dynamic>) return body;
-    throw const GteApiException(type: GteApiErrorType.parsing, message: 'Unexpected admin response shape.');
+    throw const GteApiException(
+        type: GteApiErrorType.parsing,
+        message: 'Unexpected admin response shape.');
   }
 
   Future<List<Map<String, dynamic>>> _getList(String path) async {
     final Object? body = await _request('GET', path);
-    if (body is List) return body.whereType<Map>().map((dynamic item) => Map<String, dynamic>.from(item as Map)).toList(growable: false);
-    throw const GteApiException(type: GteApiErrorType.parsing, message: 'Unexpected admin list response shape.');
+    if (body is List) {
+      return body
+          .whereType<Map>()
+          .map((dynamic item) => Map<String, dynamic>.from(item as Map))
+          .toList(growable: false);
+    }
+    throw const GteApiException(
+        type: GteApiErrorType.parsing,
+        message: 'Unexpected admin list response shape.');
   }
 
   Future<Object?> _request(String method, String path, {Object? body}) async {
@@ -692,7 +777,10 @@ class ManagerAdminRepository {
     } else if (body is String && body.trim().isNotEmpty) {
       message = body;
     }
-    return GteApiException(type: GteApiErrorType.unknown, message: message, statusCode: response.statusCode);
+    return GteApiException(
+        type: GteApiErrorType.unknown,
+        message: message,
+        statusCode: response.statusCode);
   }
 }
 
@@ -716,9 +804,9 @@ class _SectionHeading extends StatelessWidget {
           Text(
             eyebrow,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.orangeAccent,
-              letterSpacing: 1.0,
-            ),
+                  color: Colors.orangeAccent,
+                  letterSpacing: 1.0,
+                ),
           ),
           const SizedBox(height: 8),
           Text(title, style: Theme.of(context).textTheme.titleLarge),

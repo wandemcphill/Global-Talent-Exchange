@@ -19,6 +19,12 @@ class FairnessBadgeState {
 class FairnessIndicatorService {
   const FairnessIndicatorService._();
 
+  static const int _fnvOffsetBasis32 = 0x811c9dc5;
+  static const int _fnvPrime32 = 0x01000193;
+  static const int _uint8Mod = 0x100;
+  static const int _uint16Mod = 0x10000;
+  static const int _uint32Mod = 0x100000000;
+
   static FairnessBadgeState build(MatchViewState viewState) {
     final MatchVerificationStatus status = verify(viewState);
     final MatchFairnessIndicator indicator = viewState.fairnessIndicator;
@@ -108,7 +114,7 @@ class FairnessIndicatorService {
       'supports_offside': viewState.supportsOffside,
     };
     final String canonicalJson = jsonEncode(_sortedJson(payload));
-    return _fnv1a64(canonicalJson);
+    return _fnv1a32(canonicalJson);
   }
 
   static Map<String, Object?> _eventPayload(MatchEvent event) {
@@ -211,15 +217,26 @@ class FairnessIndicatorService {
     return value;
   }
 
-  static String _fnv1a64(String value) {
-    const int offsetBasis = 0xcbf29ce484222325;
-    const int prime = 0x100000001b3;
-    int hash = offsetBasis;
+  static String _fnv1a32(String value) {
+    int hash = _fnvOffsetBasis32;
     for (final int codeUnit in utf8.encode(value)) {
-      hash ^= codeUnit;
-      hash = (hash * prime) & 0xffffffffffffffff;
+      final int lowByte = hash % _uint8Mod;
+      hash = hash - lowByte + (lowByte ^ codeUnit);
+      hash = _multiplyUint32(hash, _fnvPrime32);
     }
-    return hash.toRadixString(16).padLeft(16, '0');
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
+  // Split the multiply into 16-bit chunks so dart2js never needs an imprecise
+  // 64-bit intermediate while still producing the same uint32 result.
+  static int _multiplyUint32(int left, int right) {
+    final int leftLow = left % _uint16Mod;
+    final int leftHigh = left ~/ _uint16Mod;
+    final int rightLow = right % _uint16Mod;
+    final int rightHigh = right ~/ _uint16Mod;
+    final int low = leftLow * rightLow;
+    final int cross = (leftHigh * rightLow) + (leftLow * rightHigh);
+    return (low + ((cross % _uint16Mod) * _uint16Mod)) % _uint32Mod;
   }
 
   static String _eventTypeValue(MatchViewerEventType value) {

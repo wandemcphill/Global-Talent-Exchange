@@ -152,6 +152,98 @@ def test_identity_matcher_is_deterministic_for_high_confidence_existing_match(se
         assert first.confidence_score == second.confidence_score
 
 
+def test_identity_matcher_resolves_unique_exact_name_real_player_without_dob_or_club_anchor(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="BE",
+            name="Belgium",
+            alpha2_code="BE",
+        )
+        player = Player(
+            source_provider="legacy-source",
+            provider_external_id="de-bruyne-main",
+            full_name="Kevin De Bruyne",
+            canonical_display_name="Kevin De Bruyne",
+            country=country,
+            position="Attacking Midfielder",
+            normalized_position="midfielder",
+            is_real_player=True,
+        )
+        session.add_all([country, player])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "de-bruyne-001",
+                "canonical_name": "Kevin De Bruyne",
+                "nationality": "Belgium",
+                "date_of_birth": "1991-06-28",
+                "primary_position": "Central Midfielder",
+                "current_real_world_club": "Napoli",
+                "current_real_world_league": "Serie A",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == player.id
+        assert result.confidence_score == pytest.approx(0.71)
+
+
+def test_identity_matcher_uses_position_tiebreak_for_same_exact_name_candidates(session_factory) -> None:
+    matcher = RealPlayerIdentityMatcher()
+    with session_factory() as session:
+        country = Country(
+            source_provider="test-source",
+            provider_external_id="NG",
+            name="Nigeria",
+            alpha2_code="NG",
+        )
+        centre_back = Player(
+            source_provider="legacy-a",
+            provider_external_id="torunarigha-centre-back",
+            full_name="Jordan Torunarigha",
+            canonical_display_name="Jordan Torunarigha",
+            country=country,
+            position="Centre-Back",
+            normalized_position="defender",
+            is_real_player=True,
+        )
+        full_back = Player(
+            source_provider="legacy-b",
+            provider_external_id="torunarigha-full-back",
+            full_name="Jordan Torunarigha",
+            canonical_display_name="Jordan Torunarigha",
+            country=country,
+            position="Full-Back",
+            normalized_position="defender",
+            is_real_player=True,
+        )
+        session.add_all([country, centre_back, full_back])
+        session.commit()
+
+        payload = RealPlayerSeedInput.model_validate(
+            {
+                "source_name": "curated-feed",
+                "source_player_key": "torunarigha-001",
+                "canonical_name": "Jordan Torunarigha",
+                "nationality": "Nigeria",
+                "date_of_birth": "1997-08-07",
+                "primary_position": "Centre-Back",
+            }
+        )
+
+        result = matcher.match(session, payload)
+
+        assert result.action == "matched_existing"
+        assert result.player_id == centre_back.id
+        assert result.confidence_score == pytest.approx(0.74)
+
+
 def test_identity_matcher_raises_for_ambiguous_candidates(session_factory) -> None:
     matcher = RealPlayerIdentityMatcher()
     with session_factory() as session:

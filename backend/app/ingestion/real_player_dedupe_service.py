@@ -92,6 +92,7 @@ class RealPlayerDedupeService:
             return strong_result
 
         candidates = self._load_candidates(session, identity)
+        players_by_id = {player.id: player for player in candidates}
         ranked = tuple(
             sorted(
                 (
@@ -120,6 +121,13 @@ class RealPlayerDedupeService:
                 confidence_score=top_candidate.score,
                 candidates=ranked,
             )
+        exact_name_resolution = self._resolve_exact_name_ambiguity(
+            ranked=ranked,
+            players_by_id=players_by_id,
+            identity=identity,
+        )
+        if exact_name_resolution is not None:
+            return exact_name_resolution
         if top_candidate.score >= self.ambiguous_match_threshold:
             raise AmbiguousRealPlayerMatchError(identity.canonical_name, ranked)
         return RealPlayerMatchResult(
@@ -315,6 +323,134 @@ class RealPlayerDedupeService:
             and (self._club_matches(player, identity) or self._country_matches(player, identity))
         ]
 
+    def _resolve_exact_name_ambiguity(
+        self,
+        *,
+        ranked: tuple[RealPlayerMatchCandidate, ...],
+        players_by_id: dict[str, Player],
+        identity: NormalizedRealPlayerIdentity,
+    ) -> RealPlayerMatchResult | None:
+        exact_name_candidates = [
+            candidate
+            for candidate in ranked
+            if "exact_normalized_name" in candidate.reasons
+        ]
+        if not exact_name_candidates:
+            return None
+
+        candidate_vectors: list[tuple[tuple[int, int, int, int, int, int], RealPlayerMatchCandidate]] = []
+        for candidate in exact_name_candidates:
+            player = players_by_id.get(candidate.player_id)
+            if player is None or not bool(player.is_real_player):
+                continue
+            vector = self._exact_name_tiebreak_vector(player, identity)
+            if not self._supports_exact_name_resolution(vector):
+                continue
+            candidate_vectors.append((vector, candidate))
+        if not candidate_vectors:
+            return None
+
+        best_vector = max(vector for vector, _candidate in candidate_vectors)
+        best_candidates = [
+            candidate
+            for vector, candidate in candidate_vectors
+            if vector == best_vector
+        ]
+        if len(best_candidates) != 1:
+            return None
+
+        winner = best_candidates[0]
+        return RealPlayerMatchResult(
+            action="matched_existing",
+            player_id=winner.player_id,
+            confidence_score=winner.score,
+            candidates=ranked,
+        )
+
+    def _exact_name_tiebreak_vector(
+        self,
+        player: Player,
+        identity: NormalizedRealPlayerIdentity,
+    ) -> tuple[int, int, int, int, int, int]:
+        return (
+            1,
+            self._birth_match_rank(player, identity),
+            self._country_match_rank(player, identity),
+            self._club_match_rank(player, identity),
+            self._league_match_rank(player, identity),
+            self._position_match_rank(player, identity),
+        )
+
+    def _supports_exact_name_resolution(self, vector: tuple[int, int, int, int, int, int]) -> bool:
+        _, birth_rank, country_rank, club_rank, league_rank, position_rank = vector
+        return (
+            birth_rank >= 0
+            and country_rank > 0
+            and club_rank >= 0
+            and league_rank >= 0
+            and position_rank > 0
+        )
+
+    def _birth_match_rank(self, player: Player, identity: NormalizedRealPlayerIdentity) -> int:
+        if player.date_of_birth is None:
+            return 0
+        if identity.date_of_birth is not None:
+            return 3 if player.date_of_birth == identity.date_of_birth else -1
+        if identity.birth_year is not None:
+            return 2 if player.date_of_birth.year == identity.birth_year else -1
+        return 0
+
+    def _country_match_rank(self, player: Player, identity: NormalizedRealPlayerIdentity) -> int:
+        return self._value_overlap_rank(
+            candidate_values=self._country_values(player),
+            reference_values=self._identity_country_values(identity),
+        )
+
+    def _club_match_rank(self, player: Player, identity: NormalizedRealPlayerIdentity) -> int:
+        return self._reference_match_rank(
+            candidate_values=self._club_values(player),
+            reference_value=identity.club_reference_key,
+        )
+
+    def _league_match_rank(self, player: Player, identity: NormalizedRealPlayerIdentity) -> int:
+        return self._reference_match_rank(
+            candidate_values=self._league_values(player),
+            reference_value=identity.league_reference_key,
+        )
+
+    def _position_match_rank(self, player: Player, identity: NormalizedRealPlayerIdentity) -> int:
+        if not (player.position or player.normalized_position):
+            return 0
+        if self._position_matches(player, identity):
+            return 2
+        if position_family(player.normalized_position or player.position) == identity.position_family:
+            return 1
+        return -1
+
+    def _value_overlap_rank(
+        self,
+        *,
+        candidate_values: set[str],
+        reference_values: set[str],
+    ) -> int:
+        if not reference_values:
+            return 0
+        if not candidate_values:
+            return 0
+        return 1 if candidate_values.intersection(reference_values) else -1
+
+    def _reference_match_rank(
+        self,
+        *,
+        candidate_values: set[str],
+        reference_value: str | None,
+    ) -> int:
+        if not reference_value:
+            return 0
+        if not candidate_values:
+            return 0
+        return 1 if reference_value in candidate_values else -1
+
     def _score_candidate(
         self,
         player: Player,
@@ -440,6 +576,7 @@ class RealPlayerDedupeService:
         return select(Player).options(
             selectinload(Player.country),
             selectinload(Player.current_club),
+            selectinload(Player.current_competition),
         )
 
     def _candidate_matches_name(self, player: Player, identity: NormalizedRealPlayerIdentity) -> bool:
@@ -464,29 +601,49 @@ class RealPlayerDedupeService:
         )
 
     def _country_matches(self, player: Player, identity: NormalizedRealPlayerIdentity) -> bool:
-        candidate_values = {
+        candidate_values = self._country_values(player)
+        payload_values = self._identity_country_values(identity)
+        return bool(candidate_values and payload_values and candidate_values.intersection(payload_values))
+
+    def _club_matches(self, player: Player, identity: NormalizedRealPlayerIdentity) -> bool:
+        return bool(identity.club_reference_key and identity.club_reference_key in self._club_values(player))
+
+    def _league_matches(self, player: Player, identity: NormalizedRealPlayerIdentity) -> bool:
+        return bool(identity.league_reference_key and identity.league_reference_key in self._league_values(player))
+
+    def _country_values(self, player: Player) -> set[str]:
+        values = {
             normalize_identity_name(getattr(player.country, "name", None)).normalized,
             str(getattr(player.country, "alpha2_code", "") or "").strip().lower(),
             str(getattr(player.country, "alpha3_code", "") or "").strip().lower(),
             str(getattr(player.country, "fifa_code", "") or "").strip().lower(),
         }
-        payload_values = {
-            (identity.normalized_nationality or ""),
+        values.discard("")
+        return values
+
+    def _identity_country_values(self, identity: NormalizedRealPlayerIdentity) -> set[str]:
+        values = {
+            identity.normalized_nationality or "",
             str(identity.nationality_code or "").strip().lower(),
         }
-        candidate_values.discard("")
-        payload_values.discard("")
-        return bool(candidate_values and payload_values and candidate_values.intersection(payload_values))
+        values.discard("")
+        return values
 
-    def _club_matches(self, player: Player, identity: NormalizedRealPlayerIdentity) -> bool:
-        if not identity.club_reference_key:
-            return False
-        candidate_values = {
+    def _club_values(self, player: Player) -> set[str]:
+        values = {
             self._reference_key(player.real_world_club_name),
             self._reference_key(getattr(player.current_club, "name", None)),
         }
-        candidate_values.discard("")
-        return identity.club_reference_key in candidate_values
+        values.discard("")
+        return values
+
+    def _league_values(self, player: Player) -> set[str]:
+        values = {
+            self._reference_key(player.real_world_league_name),
+            self._reference_key(getattr(player.current_competition, "name", None)),
+        }
+        values.discard("")
+        return values
 
     def _position_matches(self, player: Player, identity: NormalizedRealPlayerIdentity) -> bool:
         return canonical_position_key(player.position) == identity.primary_position_key

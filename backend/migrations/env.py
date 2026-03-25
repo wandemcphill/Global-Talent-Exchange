@@ -12,6 +12,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.append(str(BACKEND_DIR))
 
 from app.db import get_database_url, get_target_metadata, load_model_modules  # noqa: E402
+from migrations.version_table import ensure_postgresql_version_table_capacity, version_table_options  # noqa: E402
 
 config = context.config
 
@@ -25,14 +26,21 @@ if config.config_file_name is not None:
 target_metadata = get_target_metadata()
 
 
+def _context_configure_kwargs() -> dict[str, object]:
+    return {
+        "target_metadata": target_metadata,
+        "compare_type": True,
+        **version_table_options(),
+    }
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
-        target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,
+        **_context_configure_kwargs(),
     )
 
     with context.begin_transaction():
@@ -47,7 +55,10 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
+        with connection.begin():
+            ensure_postgresql_version_table_capacity(connection)
+
+        context.configure(connection=connection, **_context_configure_kwargs())
 
         with context.begin_transaction():
             context.run_migrations()

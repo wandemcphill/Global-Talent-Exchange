@@ -100,3 +100,23 @@ def test_match_integrity_service_rejects_tampered_timeline_payloads() -> None:
 
     with pytest.raises(MatchIntegrityViolation, match="timeline proof"):
         integrity.validate_view_state(view_state=tampered_view, fairness_metadata=fairness)
+
+
+def test_match_integrity_service_builds_32_bit_visible_hashes() -> None:
+    request = build_request(seed=15)
+    locked = FairnessGuard().lock_official_request(request)
+    replay_payload = MatchSimulationService().build_replay_payload(locked.request)
+    view_state = MatchTimelineService().build_from_replay_payload(replay_payload)
+    integrity = MatchIntegrityService()
+
+    fairness = integrity.build_fairness_envelope(
+        locked_context=locked,
+        view_state=view_state,
+        balance_metadata={},
+        competition_metadata_json={},
+    )
+
+    visible_hash = fairness["visible_timeline_hash"]
+    assert visible_hash == integrity._visible_hash_view_state(view_state)
+    assert len(visible_hash) == 8
+    assert all(char in "0123456789abcdef" for char in visible_hash)

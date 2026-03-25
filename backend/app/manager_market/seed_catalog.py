@@ -238,3 +238,29 @@ def build_seed_catalog() -> list[dict[str, Any]]:
         )
 
     return catalog
+
+
+def build_seed_catalog_entries() -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for raw in build_seed_catalog():
+        traits = list(raw["traits"][:4])
+        supply_total = int(raw["supply_total"])
+        entries.append(
+            {
+                "manager_id": _slug(raw["name"]),
+                "display_name": raw["name"],
+                "rarity": raw["rarity"],
+                "mentality": raw["mentality"],
+                "tactics": list(raw["tactics"][:4]),
+                "traits": traits,
+                "substitution_tendency": next(
+                    (trait for trait in traits if "substitution" in trait),
+                    "balanced_substitution",
+                ),
+                "philosophy_summary": raw["philosophy"],
+                "club_associations": list(raw.get("club_associations", [])),
+                "supply_total": supply_total,
+                "supply_available": supply_total,
+            }
+        )
+    return entries

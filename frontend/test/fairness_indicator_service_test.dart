@@ -7,6 +7,23 @@ import 'package:gte_frontend/services/fairness_indicator_service.dart';
 import 'package:gte_frontend/widgets/match/fairness_badge.dart';
 
 void main() {
+  test('visible timeline hash is deterministic 32-bit hex', () {
+    final MatchViewState baseState = _buildViewState();
+
+    final String firstHash =
+        FairnessIndicatorService.computeVisibleTimelineHash(baseState);
+    final String secondHash =
+        FairnessIndicatorService.computeVisibleTimelineHash(baseState);
+    final String changedHash =
+        FairnessIndicatorService.computeVisibleTimelineHash(
+      baseState.copyWith(durationSeconds: baseState.durationSeconds + 1),
+    );
+
+    expect(firstHash, secondHash);
+    expect(firstHash, matches(RegExp(r'^[0-9a-f]{8}$')));
+    expect(changedHash, isNot(firstHash));
+  });
+
   test('fairness indicator verifies a matching visible timeline proof', () {
     final MatchViewState baseState = _buildViewState();
     final MatchViewState verifiedState = baseState.copyWith(
@@ -35,7 +52,7 @@ void main() {
       ),
       timelineProof: const MatchTimelineProof(
         status: MatchVerificationStatus.verified,
-        visibleTimelineHash: 'deadbeefdeadbeef',
+        visibleTimelineHash: 'deadbeef',
       ),
     );
 
