@@ -25,15 +25,19 @@ MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "app.models",
+    "app.club_finance.models",
     "app.club_identity.models.reputation",
     "app.fast_cups.repositories.database",
     "app.ingestion.models",
     "app.ingestion.real_player_import_models",
     "app.leagues.repository",
+    "app.live_ops.models",
     "app.market.read_models",
     "app.players.read_models",
+    "app.predictions.models",
     "app.regen_universe.models",
     "app.replay_archive.persistence",
+    "app.team_dynamics.models",
     "app.value_engine.read_models",
 )
 DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10

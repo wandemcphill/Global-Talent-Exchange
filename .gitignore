@@ -4,6 +4,16 @@ __pycache__/
 .tmp_pytest/
 .tmp_pytest_run/
 pytest-cache-files*/
+*.db-journal
+backend/.pytest-tmp/
+backend/.pytest_tmp*/
+backend/.tmp_pytest*/
+backend/.tmp_testdirs/
+backend/.tmp_testdbs/
+backend/.tmp_*.err
+backend/.tmp_*.out
+backend/.tmp_*.db
+backend/.tmp_*.db-*
 .vscode/
 .env
 .env.*

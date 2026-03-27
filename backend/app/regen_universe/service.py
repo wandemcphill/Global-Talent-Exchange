@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Competition, InternalLeague, Match, Player, PlayerMatchStat, PlayerSeasonStat, Season as IngestionSeason
-from app.models.regen import RegenProfile
+from app.models.regen import RegenDiscoveryBadge, RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
 from app.regen_universe.awards_engine import AwardDefinition, AwardsEngine, DEFAULT_AWARD_DEFINITIONS
 from app.regen_universe.models import (
     RegenAward,
@@ -19,6 +19,7 @@ from app.regen_universe.models import (
     RegenSeason,
 )
 from app.regen_universe.ranking_engine import PerformanceInput, RankingEngine
+from app.services.regen_market_service import RegenMarketService
 
 
 class RegenUniverseError(ValueError):
@@ -260,8 +261,11 @@ class RegenUniverseService:
             performances=computed_performances,
             rankings=rankings,
         )
+        story_candidate_ids: set[str] = set()
         for selection in award_selections:
             award = award_lookup[selection.award_code]
+            if selection.rank is None or selection.rank <= 1:
+                story_candidate_ids.add(selection.player_id)
             self.session.add(
                 RegenAwardWinner(
                     award_id=award.id,
@@ -280,6 +284,17 @@ class RegenUniverseService:
         if close_date is not None:
             season.end_date = close_date
         self.session.flush()
+        if story_candidate_ids:
+            from app.regen_universe.expansion_service import RegenUniverseExpansionService
+
+            story_service = RegenUniverseExpansionService(self.session)
+            for player_id in story_candidate_ids:
+                story_service.refresh_story(
+                    player_id,
+                    trigger="major_trophy_win",
+                    notify=False,
+                    publish=True,
+                )
 
         next_season_id: str | None = None
         if start_next_season:
@@ -428,6 +443,242 @@ class RegenUniverseService:
             "latest_overall_ranking": latest_ranking_payload,
             "recent_awards": awards_payload,
         }
+
+    def get_player_showcase(self, player_id: str) -> dict[str, object] | None:
+        regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player_id))
+        if regen is None:
+            return None
+
+        market_service = RegenMarketService(self.session)
+        profile = market_service.get_profile_view(regen.id)
+        latest_value = market_service.get_latest_value_view(regen.id)
+        prestige = self.get_player_prestige_summary(player_id)
+        legacy = self.session.scalar(select(RegenLegacyRecord).where(RegenLegacyRecord.regen_id == regen.id))
+        discovery_badges = [
+            badge.badge_name
+            for badge in market_service.list_discovery_badges(regen.id)
+        ]
+        legacy_score = (
+            legacy.legacy_score
+            if legacy is not None
+            else float(prestige["legacy_score"]) if prestige is not None else 0.0
+        )
+        return {
+            "player_id": player_id,
+            "profile": profile,
+            "card": self._card_payload(
+                profile,
+                legacy_score=legacy_score,
+                discovery_badges=discovery_badges,
+            ),
+            "prestige": prestige,
+            "legacy": self._legacy_payload(legacy, profile),
+            "latest_value": latest_value,
+            "discovery_badges": discovery_badges,
+        }
+
+    def list_rising_stars(self, *, limit: int = 20, age_max: int = 21) -> dict[str, object]:
+        candidates: list[tuple[float, dict[str, object]]] = []
+        market_service = RegenMarketService(self.session)
+        for regen in self.session.scalars(select(RegenProfile).order_by(RegenProfile.generated_at.desc())):
+            profile = market_service.get_profile_view(regen.id)
+            if profile.age > age_max or profile.status == "retired":
+                continue
+            latest_value = market_service.get_latest_value_view(regen.id)
+            prestige = self.get_player_prestige_summary(profile.player_id) if profile.player_id is not None else None
+            legacy_score = float(prestige["legacy_score"]) if prestige is not None else 0.0
+            entry = {
+                "player_id": profile.player_id,
+                "profile": profile,
+                "card": self._card_payload(
+                    profile,
+                    legacy_score=legacy_score,
+                    discovery_badges=[badge.badge_name for badge in market_service.list_discovery_badges(regen.id)],
+                ),
+                "legacy_score": legacy_score,
+                "market_value_coin": latest_value.current_value_coin,
+                "momentum_label": self._rising_star_momentum_label(profile),
+            }
+            score = (
+                (profile.potential or profile.current_rating or 0) * 1.6
+                + (profile.uniqueness_score * 100.0)
+                + (legacy_score * 0.25)
+                + ((profile.current_rating or 0) * 0.5)
+            )
+            candidates.append((score, entry))
+
+        candidates.sort(
+            key=lambda item: (
+                item[0],
+                item[1]["profile"].potential or 0,
+                item[1]["profile"].uniqueness_score,
+                item[1]["profile"].generated_at,
+            ),
+            reverse=True,
+        )
+        return {"entries": [entry for _, entry in candidates[:limit]]}
+
+    def list_bloodlines(self, *, limit: int = 20) -> dict[str, object]:
+        market_service = RegenMarketService(self.session)
+        lineage_rows = list(
+            self.session.scalars(
+                select(RegenLineageProfile).order_by(RegenLineageProfile.created_at.asc(), RegenLineageProfile.id.asc())
+            )
+        )
+        grouped: dict[str, list[RegenLineageProfile]] = defaultdict(list)
+        for lineage in lineage_rows:
+            grouped[f"{lineage.related_legend_type}:{lineage.related_legend_ref_id}"].append(lineage)
+
+        chains: list[dict[str, object]] = []
+        for key, rows in grouped.items():
+            entries: list[dict[str, object]] = []
+            for index, lineage in enumerate(
+                sorted(
+                    rows,
+                    key=lambda item: (
+                        (self.session.get(RegenProfile, item.regen_id).generated_at if self.session.get(RegenProfile, item.regen_id) is not None else _utcnow()),
+                        item.created_at,
+                    ),
+                ),
+                start=1,
+            ):
+                regen = self.session.get(RegenProfile, lineage.regen_id)
+                if regen is None:
+                    continue
+                profile = market_service.get_profile_view(regen.id)
+                prestige = self.get_player_prestige_summary(profile.player_id) if profile.player_id is not None else None
+                entries.append(
+                    {
+                        "player_id": profile.player_id,
+                        "regen_id": profile.regen_id,
+                        "display_name": profile.display_name,
+                        "regen_type": profile.regen_type,
+                        "generation_index": index,
+                        "primary_position": profile.primary_position,
+                        "current_rating": profile.current_rating or profile.current_gsi,
+                        "potential": profile.potential or profile.current_gsi,
+                        "uniqueness_score": profile.uniqueness_score,
+                        "legacy_score": float(prestige["legacy_score"]) if prestige is not None else 0.0,
+                        "story_snippet": profile.story_seed.snippet if profile.story_seed is not None else None,
+                    }
+                )
+            if not entries:
+                continue
+            baseline = entries[0]["uniqueness_score"]
+            drift_score = round(
+                0.0
+                if len(entries) == 1
+                else sum(abs(entry["uniqueness_score"] - baseline) for entry in entries[1:]) / (len(entries) - 1),
+                4,
+            )
+            first = rows[0]
+            chains.append(
+                {
+                    "bloodline_key": key,
+                    "origin_label": first.narrative_text or first.related_legend_ref_id,
+                    "origin_ref_id": first.related_legend_ref_id,
+                    "origin_type": first.related_legend_type,
+                    "drift_score": drift_score,
+                    "entries": entries,
+                }
+            )
+
+        chains.sort(
+            key=lambda item: (
+                len(item["entries"]),
+                max((entry["uniqueness_score"] for entry in item["entries"]), default=0.0),
+                item["drift_score"],
+            ),
+            reverse=True,
+        )
+        return {"entries": chains[:limit]}
+
+    def list_scouting_feed(self, *, limit: int = 20) -> dict[str, object]:
+        market_service = RegenMarketService(self.session)
+        items: list[dict[str, object]] = []
+        regens = list(
+            self.session.scalars(
+                select(RegenProfile).order_by(RegenProfile.generated_at.desc())
+            )
+        )
+        for regen in regens[: max(limit, 10)]:
+            profile = market_service.get_profile_view(regen.id)
+            items.append(
+                {
+                    "feed_id": f"new:{regen.id}",
+                    "feed_type": "new_regen_discovered",
+                    "player_id": profile.player_id,
+                    "regen_id": profile.regen_id,
+                    "title": f"{profile.display_name} enters the universe",
+                    "summary": profile.story_seed.snippet if profile.story_seed is not None else "Freshly generated prospect added to the pool.",
+                    "occurred_at": profile.generated_at,
+                    "importance": round(0.45 + (profile.uniqueness_score * 0.55), 4),
+                    "badges": [profile.regen_type],
+                }
+            )
+            if profile.age <= 21 and (profile.potential or 0) >= 86 and (profile.current_rating or 0) >= 68:
+                items.append(
+                    {
+                        "feed_id": f"breakout:{regen.id}",
+                        "feed_type": "breakout_player",
+                        "player_id": profile.player_id,
+                        "regen_id": profile.regen_id,
+                        "title": f"{profile.display_name} is trending as a breakout",
+                        "summary": "High current level and elite ceiling are converging into a fast-rising profile.",
+                        "occurred_at": profile.generated_at,
+                        "importance": round(0.55 + (((profile.current_rating or 0) + (profile.potential or 0)) / 400.0), 4),
+                        "badges": ["breakout", "rising_star"],
+                    }
+                )
+            if profile.uniqueness_score >= 0.75:
+                items.append(
+                    {
+                        "feed_id": f"hidden:{regen.id}",
+                        "feed_type": "hidden_gem",
+                        "player_id": profile.player_id,
+                        "regen_id": profile.regen_id,
+                        "title": f"{profile.display_name} grades as a hidden gem",
+                        "summary": "Rare trait mix, high narrative value, and unusual upside create a premium scouting signal.",
+                        "occurred_at": profile.generated_at,
+                        "importance": round(0.5 + (profile.uniqueness_score * 0.5), 4),
+                        "badges": ["hidden_gem"],
+                    }
+                )
+
+        recent_reports = list(
+            self.session.scalars(
+                select(RegenScoutReport).order_by(RegenScoutReport.created_at.desc(), RegenScoutReport.id.asc())
+            )
+        )
+        for report in recent_reports[: max(limit, 10)]:
+            if not report.wonderkid_signal and report.hidden_gem_score < 70:
+                continue
+            regen = self.session.get(RegenProfile, report.regen_id)
+            if regen is None:
+                continue
+            profile = market_service.get_profile_view(regen.id)
+            items.append(
+                {
+                    "feed_id": f"scout:{report.id}",
+                    "feed_type": "hidden_gem",
+                    "player_id": profile.player_id,
+                    "regen_id": profile.regen_id,
+                    "title": f"Scouting alert on {profile.display_name}",
+                    "summary": report.summary_text,
+                    "occurred_at": report.created_at,
+                    "importance": round(max(report.hidden_gem_score / 100.0, 0.6), 4),
+                    "badges": list(report.tags_json),
+                }
+            )
+
+        items.sort(
+            key=lambda item: (
+                item["occurred_at"],
+                item["importance"],
+            ),
+            reverse=True,
+        )
+        return {"items": items[:limit]}
 
     def _build_performance_inputs(self, season: RegenSeason) -> list[PerformanceInput]:
         players = list(
@@ -771,6 +1022,89 @@ class RegenUniverseService:
             "legacy_score": entry.legacy_score,
             "metadata_json": dict(entry.metadata_json),
         }
+
+    def _legacy_payload(self, legacy: RegenLegacyRecord | None, profile) -> dict[str, object] | None:
+        if legacy is None:
+            return None
+        metadata = dict(legacy.metadata_json or {})
+        return {
+            "regen_id": legacy.regen_id,
+            "player_id": legacy.player_id,
+            "total_matches": legacy.appearances_total,
+            "goals": legacy.goals_total,
+            "assists": legacy.assists_total,
+            "trophies": int(metadata.get("trophies", 0)),
+            "peak_rating": profile.current_rating or profile.current_gsi,
+            "seasons_total": legacy.seasons_total,
+            "awards_total": legacy.awards_total,
+            "legacy_score": legacy.legacy_score,
+            "legacy_tier": legacy.legacy_tier,
+            "is_legend": legacy.is_legend,
+            "narrative_summary": legacy.narrative_summary,
+            "career_path": list(metadata.get("career_path", [])),
+        }
+
+    def _card_payload(
+        self,
+        profile,
+        *,
+        legacy_score: float,
+        discovery_badges: list[str],
+    ) -> dict[str, object]:
+        metadata = dict(profile.metadata or {})
+        visual_profile = metadata.get("visual_profile") if isinstance(metadata.get("visual_profile"), dict) else {}
+        badges: list[dict[str, object]] = []
+        if profile.regen_type == "legend_regen":
+            badges.append({"code": "bloodline", "label": "Bloodline", "emphasis": "premium"})
+        if profile.age <= 21 and (profile.current_rating or 0) >= 70:
+            badges.append({"code": "breakout", "label": "Breakout", "emphasis": "hot"})
+        if (profile.potential or 0) >= 90:
+            badges.append({"code": "elite_potential", "label": "Elite Potential", "emphasis": "premium"})
+        if profile.personality.professionalism >= 75 and profile.personality.adaptability >= 70:
+            badges.append({"code": "tactical_genius", "label": "Tactical Genius", "emphasis": "sharp"})
+        for badge_name in discovery_badges[:2]:
+            badges.append({"code": badge_name.lower().replace(" ", "_"), "label": badge_name, "emphasis": "earned"})
+
+        uniqueness_badge = "standard"
+        if profile.uniqueness_score >= 0.85:
+            uniqueness_badge = "mythic"
+        elif profile.uniqueness_score >= 0.72:
+            uniqueness_badge = "rare"
+        elif profile.uniqueness_score >= 0.58:
+            uniqueness_badge = "distinct"
+
+        personality_tags = tuple(profile.personality.personality_tags)
+        trait_source = personality_tags[:3]
+        if not trait_source and profile.story_seed is not None:
+            trait_source = (profile.story_seed.temperament,)
+        traits_icons = tuple(
+            tag.lower().replace(" ", "_")
+            for tag in trait_source
+            if tag
+        )
+        return {
+            "name": profile.display_name,
+            "face_seed": visual_profile.get("portrait_seed"),
+            "position": profile.primary_position,
+            "rating": profile.current_rating or profile.current_gsi,
+            "potential": profile.potential or profile.current_gsi,
+            "regen_type_badge": "Legend Echo" if profile.regen_type == "legend_regen" else "Organic NewGen",
+            "uniqueness_badge": uniqueness_badge,
+            "legacy_score": legacy_score,
+            "traits_icons": traits_icons,
+            "personality_tag": personality_tags[0] if personality_tags else (profile.story_seed.temperament if profile.story_seed is not None else None),
+            "story_snippet": profile.story_seed.snippet if profile.story_seed is not None else None,
+            "badges": badges,
+        }
+
+    def _rising_star_momentum_label(self, profile) -> str:
+        if (profile.potential or 0) >= 92 and profile.uniqueness_score >= 0.75:
+            return "Wonderkid surge"
+        if (profile.current_rating or 0) >= 72:
+            return "Breakout form"
+        if profile.regen_type == "legend_regen":
+            return "Legacy spotlight"
+        return "High-upside prospect"
 
 
 __all__ = ["RegenUniverseError", "RegenUniverseService"]

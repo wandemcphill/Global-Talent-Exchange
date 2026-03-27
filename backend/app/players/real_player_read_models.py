@@ -42,6 +42,16 @@ class RealPlayerUniverseListResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RealPlayerUniversePageResult:
+    items: tuple[RealPlayerUniverseListItem, ...]
+    limit: int
+    offset: int
+    total: int
+    next_cursor: str | None
+    has_more: bool
+
+
+@dataclass(frozen=True, slots=True)
 class RealPlayerUniverseDetail:
     player_id: str
     player_name: str
@@ -93,3 +103,42 @@ class RealPlayerUniverseDetail:
     metadata_json: dict[str, Any]
     summary_json: dict[str, Any]
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RealPlayerMatchPlayer:
+    player_id: str
+    player_name: str
+    identity_rail: str
+    canonical_display_name: str | None
+    real_player_tier: str | None
+    nationality: str | None
+    nationality_code: str | None
+    position: str | None
+    secondary_positions: tuple[str, ...]
+    age: int | None
+    height_cm: int | None
+    dominant_foot: str | None
+    current_club_name: str | None
+    current_league_name: str | None
+    competition_level: str | None
+    current_value_credits: float | None
+    current_market_reference_value: float | None
+    market_reference_currency: str | None
+    source_name: str
+    source_last_refreshed_at: datetime | None
+    is_verified_real_player: bool
+    is_free_agent: bool
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RealPlayerMatchResult:
+    player: RealPlayerMatchPlayer
+    score: float
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RealPlayerMatchResultSet:
+    matches: tuple[RealPlayerMatchResult, ...]

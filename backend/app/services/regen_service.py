@@ -19,6 +19,7 @@ from app.schemas.regen_core import (
     RegenProfileView,
     StarterRegenBundleView,
 )
+from app.regen_universe.dna import generate_dna_profile
 from app.services.club_finance_service import ClubOpsStore, get_club_ops_store
 
 _PRIMARY_POSITIONS = ("GK", "CB", "RB", "LB", "DM", "CM", "AM", "RW", "LW", "ST")
@@ -503,6 +504,33 @@ class RegenGenerationEngine:
             "temperament": personality.temperament,
             "adaptability": personality.adaptability,
         }
+        regen_type = self._regen_type(lineage_selection)
+        parent_legacy_id = (
+            lineage_selection.related_legend_ref_id
+            if regen_type == "legend_regen" and lineage_selection is not None
+            else None
+        )
+        growth_curve = self._growth_curve(
+            current_rating=current_gsi,
+            potential=potential.maximum,
+            quality_score=quality_score,
+            decision_traits=decision_traits,
+            personality=personality,
+        )
+        morale = self._starting_morale(decision_traits=decision_traits, personality=personality)
+        chemistry_affinity = self._chemistry_affinity(
+            decision_traits=decision_traits,
+            personality=personality,
+            origin=origin,
+            regen_type=regen_type,
+        )
+        story_seed = self._story_seed(
+            decision_traits=decision_traits,
+            personality=personality,
+            origin=origin,
+            regen_type=regen_type,
+            lineage_selection=lineage_selection,
+        )
         lineage_metadata: dict[str, object] = {}
         relationship_tags: list[str] = []
         is_special_lineage = False
@@ -543,6 +571,12 @@ class RegenGenerationEngine:
                 "hair_profile": _HAIR_PROFILES[int(visual_seed[1], 16) % len(_HAIR_PROFILES)],
                 "kit_style": _KIT_STYLES[int(visual_seed[2], 16) % len(_KIT_STYLES)],
             },
+            "dna_profile": generate_dna_profile(
+                position=primary_position,
+                country_code=origin.country_code,
+                lineage_metadata=lineage_metadata or None,
+                rng=rng,
+            ),
         }
         if customization.get("hairstyle"):
             metadata["visual_profile"]["hair_profile"] = str(customization["hairstyle"])
@@ -559,6 +593,27 @@ class RegenGenerationEngine:
                 metadata["son_of_retired_regen"] = True
             if lineage_selection.relationship_type == "hometown_legacy":
                 metadata["hometown_legacy"] = True
+        uniqueness_score = self._uniqueness_score(
+            regen_type=regen_type,
+            current_rating=current_gsi,
+            potential=potential.maximum,
+            secondary_positions=secondary_positions,
+            decision_traits=decision_traits,
+            personality=personality,
+            story_seed=story_seed,
+            is_special_lineage=is_special_lineage,
+        )
+        metadata.update(
+            {
+                "regen_type": regen_type,
+                "parent_legacy_id": parent_legacy_id,
+                "growth_curve": growth_curve,
+                "morale": morale,
+                "chemistry_affinity": chemistry_affinity,
+                "story_seed": story_seed,
+                "uniqueness_score": uniqueness_score,
+            }
+        )
         return RegenProfileView(
             id=regen_identifier,
             regen_id=regen_identifier,
@@ -575,10 +630,19 @@ class RegenGenerationEngine:
             current_gsi=current_gsi,
             current_ability_range=current_ability,
             potential_range=potential,
+            current_rating=current_gsi,
+            potential=potential.maximum,
             scout_confidence=scout_confidence,
             generation_source=generation_source,
+            regen_type=regen_type,
+            parent_legacy_id=parent_legacy_id,
             status="academy_candidate" if generation_source == "academy" else "active",
             is_special_lineage=is_special_lineage,
+            uniqueness_score=uniqueness_score,
+            growth_curve=growth_curve,
+            morale=morale,
+            chemistry_affinity=chemistry_affinity,
+            story_seed=story_seed,
             generated_at=_utcnow(),
             club_quality_score=quality_score,
             personality=personality,
@@ -649,6 +713,162 @@ class RegenGenerationEngine:
         tuning = self._country_tuning(country_code)
         probability = config.base_elite_probability + (quality_score / 100.0) * 0.05 + tuning.elite_probability_boost
         return min(config.max_elite_probability, max(config.base_elite_probability, probability))
+
+    def _regen_type(self, lineage_selection: LineageSelection | None) -> str:
+        if lineage_selection is None:
+            return "organic_newgen"
+        if (
+            lineage_selection.is_real_legend_lineage
+            or lineage_selection.is_retired_regen_lineage
+            or lineage_selection.relationship_type in {"son_of_legend", "hometown_legacy"}
+        ):
+            return "legend_regen"
+        return "organic_newgen"
+
+    def _starting_morale(
+        self,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityView,
+    ) -> float:
+        morale = (
+            (decision_traits["loyalty"] * 0.24)
+            + (decision_traits["professionalism"] * 0.24)
+            + (decision_traits["patience"] * 0.18)
+            + (decision_traits["adaptability"] * 0.14)
+            + (personality.resilience * 0.20)
+        ) / 100.0
+        return round(max(0.3, min(0.95, morale)), 4)
+
+    def _growth_curve(
+        self,
+        *,
+        current_rating: int,
+        potential: int,
+        quality_score: float,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityView,
+    ) -> float:
+        upside = max(potential - current_rating, 0) / 35.0
+        growth = (
+            (upside * 0.42)
+            + ((decision_traits["professionalism"] / 100.0) * 0.20)
+            + ((personality.resilience / 100.0) * 0.12)
+            + ((decision_traits["adaptability"] / 100.0) * 0.10)
+            + ((quality_score / 100.0) * 0.16)
+        )
+        return round(max(0.2, min(1.0, growth)), 4)
+
+    def _chemistry_affinity(
+        self,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityView,
+        origin: RegenOriginView,
+        regen_type: str,
+    ) -> dict[str, float]:
+        hometown_weight = decision_traits["hometown_affinity"] / 100.0
+        return {
+            "academy_discipline": round(decision_traits["professionalism"] / 100.0, 4),
+            "street_flair": round(personality.flair / 100.0, 4),
+            "elite_ambition": round(max(decision_traits["ambition"], decision_traits["trophy_hunger"]) / 100.0, 4),
+            "local_loyalty": round(hometown_weight if origin.city_name else hometown_weight * 0.65, 4),
+            "legacy_aura": round(0.9 if regen_type == "legend_regen" else 0.35, 4),
+        }
+
+    def _story_seed(
+        self,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityView,
+        origin: RegenOriginView,
+        regen_type: str,
+        lineage_selection: LineageSelection | None,
+    ) -> dict[str, str]:
+        if regen_type == "legend_regen":
+            background = "legacy academy heir"
+        elif personality.flair >= 72 and origin.urbanicity == "urban":
+            background = "street footballer"
+        elif decision_traits["professionalism"] >= 72:
+            background = "academy standout"
+        else:
+            background = "regional prospect"
+
+        if decision_traits["temperament"] >= 72:
+            temperament = "aggressive"
+        elif decision_traits["temperament"] <= 38:
+            temperament = "calm"
+        else:
+            temperament = "balanced"
+
+        if decision_traits["ambition"] >= 85:
+            ambition = "world_class"
+        elif decision_traits["ambition"] >= 70:
+            ambition = "elite"
+        elif decision_traits["ambition"] >= 55:
+            ambition = "top_flight"
+        else:
+            ambition = "steady"
+
+        pressure_total = decision_traits["professionalism"] + decision_traits["patience"] + personality.resilience
+        if pressure_total >= 220:
+            pressure_response = "clutch"
+        elif decision_traits["temperament"] >= 75 and decision_traits["patience"] <= 42:
+            pressure_response = "volatile"
+        else:
+            pressure_response = "steady"
+
+        lineage_note = (
+            f" carrying a {lineage_selection.relationship_type.replace('_', ' ')} thread"
+            if lineage_selection is not None
+            else ""
+        )
+        snippet = (
+            f"{background.title()}{lineage_note}, built for {ambition.replace('_', ' ')} ceilings "
+            f"with a {pressure_response.replace('_', ' ')} edge."
+        )
+        return {
+            "background": background,
+            "temperament": temperament,
+            "ambition": ambition,
+            "pressure_response": pressure_response,
+            "snippet": snippet,
+        }
+
+    def _uniqueness_score(
+        self,
+        *,
+        regen_type: str,
+        current_rating: int,
+        potential: int,
+        secondary_positions: tuple[str, ...],
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityView,
+        story_seed: dict[str, str],
+        is_special_lineage: bool,
+    ) -> float:
+        rarity_weight = 0.32 if regen_type == "legend_regen" else 0.12
+        if is_special_lineage:
+            rarity_weight += 0.08
+        trait_combo_uniqueness = (
+            (sum(1 for value in decision_traits.values() if value >= 75) * 0.035)
+            + (0.05 if personality.flair >= 75 and decision_traits["professionalism"] >= 70 else 0.0)
+            + (min(len(personality.personality_tags), 3) * 0.025)
+        )
+        stat_distribution_entropy = min(
+            0.24,
+            ((max(potential - current_rating, 0) / 100.0) * 0.18)
+            + (len(secondary_positions) * 0.03),
+        )
+        narrative_seed_complexity = min(
+            0.22,
+            0.08
+            + (0.05 if story_seed["background"] == "street footballer" else 0.0)
+            + (0.05 if story_seed["pressure_response"] == "clutch" else 0.0)
+            + (0.04 if story_seed["ambition"] == "world_class" else 0.0),
+        )
+        score = rarity_weight + trait_combo_uniqueness + stat_distribution_entropy + narrative_seed_complexity
+        return round(max(0.0, min(1.0, score)), 4)
 
     def _scout_confidence(self, *, quality_score: float, generation_source: str, rng: random.Random) -> str:
         if generation_source == "new_club":

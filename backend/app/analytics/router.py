@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.models.user import User
+from app.players.match_learning_service import PlayerMatchLearningService
 
-from .schemas import AnalyticsEventCreate, AnalyticsEventView, AnalyticsFunnelView, AnalyticsSummaryView
+from .schemas import (
+    AnalyticsEventCreate,
+    AnalyticsEventView,
+    AnalyticsFunnelView,
+    AnalyticsSummaryView,
+    PlayerMatchAnalyticsView,
+    PlayerMatchWeightRefreshView,
+)
 from .service import AnalyticsService
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -44,3 +52,23 @@ def read_funnel(
     service = AnalyticsService()
     since, steps = service.funnel(session)
     return AnalyticsFunnelView(since=since, steps=steps)
+
+
+@admin_router.get("/player-matching", response_model=PlayerMatchAnalyticsView)
+def read_player_matching_summary(
+    since_days: int = Query(default=30, ge=1, le=365),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> PlayerMatchAnalyticsView:
+    payload = PlayerMatchLearningService(session=session).build_admin_summary(since_days=since_days)
+    return PlayerMatchAnalyticsView.model_validate(payload)
+
+
+@admin_router.post("/player-matching/recompute-weights", response_model=PlayerMatchWeightRefreshView)
+def recompute_player_matching_weights(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> PlayerMatchWeightRefreshView:
+    payload = PlayerMatchLearningService(session=session).refresh_weights()
+    session.commit()
+    return PlayerMatchWeightRefreshView.model_validate(payload)

@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/domain/match/match_weight_presets.dart';
+import 'package:gte_frontend/domain/match/match_weights.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
@@ -85,5 +87,49 @@ void main() {
         closeTo(startingAvailable, 0.001));
     expect(controller.walletSummary!.reservedBalance,
         closeTo(startingReserved, 0.001));
+  });
+
+  test('controller loads player profile and keeps shortlist state in sync',
+      () async {
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    await controller.openPlayer('lamine-yamal');
+
+    expect(controller.selectedPlayer?.detail.playerId, 'lamine-yamal');
+    expect(controller.selectedProfile?.snapshot.id, 'lamine-yamal');
+    expect(controller.isPlayerScouted('lamine-yamal'), isTrue);
+    expect(controller.isPlayerShortlisted('lamine-yamal'), isFalse);
+
+    controller.toggleShortlist('lamine-yamal');
+
+    expect(controller.isPlayerShortlisted('lamine-yamal'), isTrue);
+    expect(controller.selectedProfile?.snapshot.isShortlisted, isTrue);
+  });
+
+  test('controller stores normalized match weights and applies presets', () {
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    controller.updateWeights(
+      const MatchWeights(
+        position: 2,
+        age: 1,
+        country: 1,
+        height: 0,
+        foot: 0,
+        availability: 0,
+      ),
+    );
+
+    expect(controller.weights.position, closeTo(0.5, 0.0001));
+    expect(controller.weights.age, closeTo(0.25, 0.0001));
+    expect(controller.weights.country, closeTo(0.25, 0.0001));
+
+    controller.applyPreset(MatchWeightPresets.readyNow());
+
+    expect(controller.weights.cacheKey, MatchWeightPresets.readyNow().cacheKey);
   });
 }

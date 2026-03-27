@@ -26,6 +26,10 @@ class PlayerEntity {
     required this.currentPosition,
     required this.hasPossession,
     required this.highlighted,
+    required this.animationState,
+    required this.speedRatio,
+    required this.blendFactor,
+    required this.staminaPct,
   });
 
   final String playerId;
@@ -44,6 +48,10 @@ class PlayerEntity {
   final MatchViewerPoint currentPosition;
   final bool hasPossession;
   final bool highlighted;
+  final MatchPlayerAnimationState animationState;
+  final double speedRatio;
+  final double blendFactor;
+  final int staminaPct;
 
   factory PlayerEntity.fromFrames({
     required MatchViewerPlayerFrame startFrame,
@@ -81,6 +89,14 @@ class PlayerEntity {
       ),
       hasPossession: hasPossession,
       highlighted: highlighted,
+      animationState: targetFrame.animationState,
+      speedRatio: startFrame.speedRatio +
+          ((targetFrame.speedRatio - startFrame.speedRatio) * progress),
+      blendFactor: startFrame.blendFactor +
+          ((targetFrame.blendFactor - startFrame.blendFactor) * progress),
+      staminaPct: (startFrame.staminaPct +
+              ((targetFrame.staminaPct - startFrame.staminaPct) * progress))
+          .round(),
     );
   }
 
@@ -157,6 +173,10 @@ class PlayerEntity {
       highlighted: highlighted,
       position: currentPosition,
       anchorPosition: anchor,
+      animationState: animationState,
+      speedRatio: speedRatio,
+      blendFactor: blendFactor,
+      staminaPct: staminaPct,
     );
   }
 

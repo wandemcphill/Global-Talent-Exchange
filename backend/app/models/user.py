@@ -17,6 +17,9 @@ class UserRole(StrEnum):
     USER = "user"
     ADMIN = "admin"
     SUPER_ADMIN = "super_admin"
+    SCOUT = "scout"
+    AGENT = "agent"
+    CLUB = "club"
 
 
 class KycStatus(StrEnum):

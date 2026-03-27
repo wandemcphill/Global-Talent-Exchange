@@ -115,7 +115,8 @@ def get_market_summary(
 @router.get("/players", response_model=MarketPlayerListView)
 def list_market_players(
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    cursor: str | None = Query(default=None),
+    offset: int | None = Query(default=None, ge=0, deprecated=True),
     position: str | None = Query(default=None),
     nationality: str | None = Query(default=None),
     club: str | None = Query(default=None),
@@ -130,6 +131,7 @@ def list_market_players(
     try:
         result = service.list_players(
             limit=limit,
+            cursor=cursor,
             offset=offset,
             position=position,
             nationality=nationality,

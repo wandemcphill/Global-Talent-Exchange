@@ -3,14 +3,27 @@ from __future__ import annotations
 from datetime import date
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, configure_mappers, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.ingestion.models import Competition, Club, InternalLeague, Match, Player, PlayerMatchStat, PlayerSeasonStat, Season as IngestionSeason
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
-from app.models.player_cards import PlayerCard, PlayerCardTier
-from app.models.regen import RegenProfile
+from app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardSale, PlayerCardTier
+from app.models.regen import (
+    RegenDemandSignal,
+    RegenDiscoveryBadge,
+    RegenLegacyRecord,
+    RegenLineageProfile,
+    RegenMarketActivity,
+    RegenOriginMetadata,
+    RegenPersonalityProfile,
+    RegenProfile,
+    RegenRelationshipTag,
+    RegenScoutReport,
+    RegenTransferFeeRule,
+    RegenValueSnapshot,
+)
 from app.models.user import User
 from app.players.read_models import PlayerSummaryReadModel
 from app.regen_universe.models import RegenAward, RegenAwardWinner, RegenHallOfFame, RegenPerformanceRecord, RegenRankingSnapshot, RegenSeason
@@ -18,6 +31,7 @@ from app.regen_universe.service import RegenUniverseService
 
 
 def build_regen_universe_session() -> Session:
+    configure_mappers()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -36,7 +50,20 @@ def build_regen_universe_session() -> Session:
             Player.__table__,
             PlayerCardTier.__table__,
             PlayerCard.__table__,
+            PlayerCardListing.__table__,
+            PlayerCardSale.__table__,
             RegenProfile.__table__,
+            RegenPersonalityProfile.__table__,
+            RegenOriginMetadata.__table__,
+            RegenLineageProfile.__table__,
+            RegenRelationshipTag.__table__,
+            RegenDiscoveryBadge.__table__,
+            RegenLegacyRecord.__table__,
+            RegenTransferFeeRule.__table__,
+            RegenValueSnapshot.__table__,
+            RegenMarketActivity.__table__,
+            RegenDemandSignal.__table__,
+            RegenScoutReport.__table__,
             PlayerSummaryReadModel.__table__,
             PlayerSeasonStat.__table__,
             PlayerMatchStat.__table__,
@@ -354,6 +381,32 @@ def _create_regen_player(
             potential_range_json={"minimum": 76, "maximum": 90},
             scout_confidence="high",
             generation_source="academy",
+            metadata_json={},
+        )
+    )
+    session.add(
+        RegenPersonalityProfile(
+            regen_profile_id=f"profile-{player_id}",
+            temperament=56,
+            leadership=61,
+            ambition=74,
+            loyalty=49,
+            work_rate=68,
+            flair=72 if normalized_position in {"forward", "midfielder"} else 48,
+            resilience=66,
+            personality_tags_json=["composed", "upside"],
+        )
+    )
+    session.add(
+        RegenOriginMetadata(
+            regen_profile_id=f"profile-{player_id}",
+            country_code="NG",
+            region_name="Lagos",
+            city_name="Lagos",
+            hometown_club_affinity="Prestige FC",
+            ethnolinguistic_profile="yoruba",
+            religion_naming_pattern="mixed",
+            urbanicity="urban",
             metadata_json={},
         )
     )

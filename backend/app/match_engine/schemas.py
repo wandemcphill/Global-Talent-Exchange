@@ -86,6 +86,8 @@ class TeamTacticalPlanInput(CommonSchema):
         min_length=1,
     )
     max_substitutions: int = Field(default=5, ge=1, le=5)
+    allow_substitutions: bool = True
+    allow_tactical_changes: bool = True
     tactical_quality: int = Field(default=60, ge=1, le=100)
     adaptability: int = Field(default=60, ge=1, le=100)
     game_management: int = Field(default=60, ge=1, le=100)
@@ -212,6 +214,7 @@ class MatchTacticalChangeInput(CommonSchema):
     requested_minute: int = Field(ge=0, le=120)
     requested_second: int = Field(default=0, ge=0, le=59)
     urgency: str = Field(default="normal", min_length=3, max_length=16)
+    condition: str | None = Field(default=None, min_length=2, max_length=64)
     adjustment: MatchTacticalAdjustmentInput | None = None
     substitution: MatchSubstitutionRequestInput | None = None
     notes: str | None = Field(default=None, max_length=140)
@@ -406,12 +409,21 @@ class MatchPlayerStatsView(CommonSchema):
     goals: int = Field(ge=0)
     assists: int = Field(ge=0)
     saves: int = Field(ge=0)
+    shots_on_target: int = Field(default=0, ge=0)
     missed_chances: int = Field(ge=0)
+    big_chances_missed: int = Field(default=0, ge=0)
     yellow_cards: int = Field(ge=0)
     red_card: bool
     injured: bool
     substituted_in_minute: int | None = Field(default=None, ge=0, le=90)
     substituted_out_minute: int | None = Field(default=None, ge=0, le=90)
+    key_passes: int = Field(default=0, ge=0)
+    tackles_won: int = Field(default=0, ge=0)
+    interceptions: int = Field(default=0, ge=0)
+    xg: float = Field(default=0.0, ge=0.0)
+    xg_faced: float = Field(default=0.0, ge=0.0)
+    rating: float | None = Field(default=None, ge=0.0, le=10.0)
+    rating_summary: str | None = None
 
 
 
@@ -493,11 +505,16 @@ class MatchSpectatorPackageView(CommonSchema):
 
 
 class MatchSceneAssemblyContractView(CommonSchema):
-    scene_version: str = "v1"
+    scene_version: str = "v2"
     enabled_scenes: list[str] = Field(default_factory=list)
     replay_angle_set: str = "standard"
     crowd_profile: str = "regular"
     branded_backdrop: bool = False
+    event_render_mode: str = "event_driven"
+    transition_style: str = "blended_interpolation"
+    camera_modes: list[str] = Field(default_factory=list)
+    replay_buffer_events: int = Field(default=12, ge=4, le=64)
+    special_moment_effects: bool = True
 
 
 class MatchBroadcastPresentationView(CommonSchema):
@@ -506,6 +523,8 @@ class MatchBroadcastPresentationView(CommonSchema):
     commentary_style: str = "tactical"
     finals_package: bool = False
     atmosphere_profile: str = "standard"
+    live_stream_transport: str = "websocket"
+    async_match_mode: str = "summary_only"
 
 
 class MatchReplayDownloadContractView(CommonSchema):

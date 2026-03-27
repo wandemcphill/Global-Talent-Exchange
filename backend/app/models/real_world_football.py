@@ -15,6 +15,12 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+def _player_model() -> type["Player"]:
+    from app.ingestion.models import Player
+
+    return Player
+
+
 class EventIngestionJobStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
@@ -141,7 +147,7 @@ class RealWorldFootballEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     normalized_payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     ingestion_job: Mapped[EventIngestionJob | None] = relationship(back_populates="events")
-    player: Mapped["Player"] = relationship()
+    player: Mapped["Player"] = relationship(_player_model)
     approved_by_user: Mapped["User | None"] = relationship(foreign_keys=[approved_by_user_id])
     rejected_by_user: Mapped["User | None"] = relationship(foreign_keys=[rejected_by_user_id])
     form_modifiers: Mapped[list["PlayerFormModifier"]] = relationship(back_populates="event")
@@ -209,7 +215,7 @@ class PlayerFormModifier(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     event: Mapped[RealWorldFootballEvent] = relationship(back_populates="form_modifiers")
-    player: Mapped["Player"] = relationship()
+    player: Mapped["Player"] = relationship(_player_model)
 
 
 class TrendingPlayerFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -247,7 +253,7 @@ class TrendingPlayerFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     event: Mapped[RealWorldFootballEvent] = relationship(back_populates="trending_flags")
-    player: Mapped["Player"] = relationship()
+    player: Mapped["Player"] = relationship(_player_model)
 
 
 class PlayerDemandSignal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -287,4 +293,4 @@ class PlayerDemandSignal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     event: Mapped[RealWorldFootballEvent] = relationship(back_populates="demand_signals")
-    player: Mapped["Player"] = relationship()
+    player: Mapped["Player"] = relationship(_player_model)

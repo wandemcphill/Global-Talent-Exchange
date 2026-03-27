@@ -39,8 +39,9 @@ class BallEntity {
       targetPlayerId: frame.ownerPlayerId,
       trajectoryType: switch (frame.state) {
         'placed' => BallTrajectoryType.reset,
-        'shot' || 'saved' || 'missed' => BallTrajectoryType.shot,
-        'stopped' => BallTrajectoryType.loose,
+        'shot' || 'saved' || 'missed' || 'in_goal' => BallTrajectoryType.shot,
+        'pass' || 'cross' || 'lob' || 'traveling' => BallTrajectoryType.pass,
+        'stopped' || 'held' => BallTrajectoryType.loose,
         _ => BallTrajectoryType.carry,
       },
       state: frame.state,

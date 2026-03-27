@@ -9,7 +9,6 @@ from sqlalchemy import create_engine
 
 from app.core.config import load_settings
 from app.ingestion.demo_bootstrap import DemoBootstrapService
-from app.main import create_app
 from app.players.read_models import PlayerSummaryReadModel
 from app.simulation.runtime import replace_market_engine
 from app.simulation.service import DemoMarketSimulationService
@@ -36,6 +35,8 @@ def integration_engine(integration_app_settings):
 
 @pytest.fixture(scope="module")
 def integration_app(integration_app_settings, integration_engine):
+    from app.main import create_app
+
     app = create_app(settings=integration_app_settings, engine=integration_engine, run_migration_check=True)
     yield app
 

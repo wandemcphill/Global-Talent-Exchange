@@ -5,6 +5,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.common.schemas.base import CommonSchema
+from app.schemas.regen_core import RegenCardView, RegenProfileView, RegenValueSnapshotView
 
 
 class RegenSeasonCreateRequest(CommonSchema):
@@ -124,3 +125,86 @@ class RegenPlayerPrestigeSummaryView(CommonSchema):
     current_overall_ranking: RegenSeasonRankingReferenceView | None = None
     latest_overall_ranking: RegenSeasonRankingReferenceView | None = None
     recent_awards: list[RegenRecentAwardView] = Field(default_factory=list)
+
+
+class RegenLegacySnapshotView(CommonSchema):
+    regen_id: str
+    player_id: str
+    total_matches: int = 0
+    goals: int = 0
+    assists: int = 0
+    trophies: int = 0
+    peak_rating: int = 0
+    seasons_total: int = 0
+    awards_total: int = 0
+    legacy_score: float = 0.0
+    legacy_tier: str = "standard"
+    is_legend: bool = False
+    narrative_summary: str | None = None
+    career_path: list[dict[str, object]] = Field(default_factory=list)
+
+
+class RegenUniversePlayerShowcaseView(CommonSchema):
+    player_id: str
+    profile: RegenProfileView
+    card: RegenCardView
+    prestige: RegenPlayerPrestigeSummaryView | None = None
+    legacy: RegenLegacySnapshotView | None = None
+    latest_value: RegenValueSnapshotView | None = None
+    discovery_badges: list[str] = Field(default_factory=list)
+
+
+class RegenRisingStarEntryView(CommonSchema):
+    player_id: str
+    profile: RegenProfileView
+    card: RegenCardView
+    legacy_score: float = 0.0
+    market_value_coin: int | None = None
+    momentum_label: str
+
+
+class RegenRisingStarsView(CommonSchema):
+    entries: list[RegenRisingStarEntryView] = Field(default_factory=list)
+
+
+class RegenBloodlinePlayerView(CommonSchema):
+    player_id: str
+    regen_id: str
+    display_name: str
+    regen_type: str
+    generation_index: int = 1
+    primary_position: str
+    current_rating: int
+    potential: int
+    uniqueness_score: float
+    legacy_score: float = 0.0
+    story_snippet: str | None = None
+
+
+class RegenBloodlineChainView(CommonSchema):
+    bloodline_key: str
+    origin_label: str
+    origin_ref_id: str
+    origin_type: str
+    drift_score: float = 0.0
+    entries: list[RegenBloodlinePlayerView] = Field(default_factory=list)
+
+
+class RegenBloodlinesView(CommonSchema):
+    entries: list[RegenBloodlineChainView] = Field(default_factory=list)
+
+
+class RegenScoutingFeedItemView(CommonSchema):
+    feed_id: str
+    feed_type: str
+    player_id: str
+    regen_id: str
+    title: str
+    summary: str
+    occurred_at: datetime
+    importance: float = 0.0
+    badges: list[str] = Field(default_factory=list)
+
+
+class RegenScoutingFeedView(CommonSchema):
+    items: list[RegenScoutingFeedItemView] = Field(default_factory=list)

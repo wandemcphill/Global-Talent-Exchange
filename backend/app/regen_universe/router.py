@@ -1,24 +1,60 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_session
 from app.models.user import User
+from app.regen_universe.expansion_service import (
+    RegenUniverseExpansionError,
+    RegenUniverseExpansionNotFoundError,
+    RegenUniverseExpansionService,
+    RegenUniverseExpansionValidationError,
+)
 from app.regen_universe.service import RegenUniverseError, RegenUniverseService
 from app.schemas.regen_universe import (
     RegenAwardResultView,
+    RegenBloodlinesView,
     RegenHallOfFameView,
+    RegenRisingStarsView,
     RegenRankingLeaderboardView,
     RegenSeasonCloseRequest,
     RegenSeasonCreateRequest,
     RegenSeasonView,
+    RegenScoutingFeedView,
     RegenUniverseCloseResultView,
+    RegenUniversePlayerShowcaseView,
+)
+from app.schemas.regen_universe_expansion import (
+    RegenUniverseJobRunView,
+    YouthTournamentCreateRequest,
+    YouthTournamentView,
 )
 
 
 router = APIRouter(prefix="/regen-universe", tags=["regen-universe"])
 admin_router = APIRouter(prefix="/admin/regen-universe", tags=["regen-universe-admin"])
+
+
+def raise_regen_universe_expansion_http_exception(exc: RegenUniverseExpansionError) -> None:
+    if isinstance(exc, RegenUniverseExpansionNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, RegenUniverseExpansionValidationError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+def _job_payload(job) -> dict[str, object]:
+    return {
+        "job_id": job.job_id,
+        "name": job.name,
+        "status": job.status,
+        "queued_at": job.queued_at,
+        "started_at": job.started_at,
+        "finished_at": job.finished_at,
+        "error": job.error,
+        "result": job.result,
+    }
 
 
 @router.get("/seasons", response_model=list[RegenSeasonView])
@@ -65,6 +101,68 @@ def list_regen_hall_of_fame(
     return RegenHallOfFameView.model_validate(RegenUniverseService(session).list_hall_of_fame(limit=limit))
 
 
+@router.get("/players/{player_id}", response_model=RegenUniversePlayerShowcaseView)
+def get_regen_player_showcase(
+    player_id: str,
+    session: Session = Depends(get_session),
+) -> RegenUniversePlayerShowcaseView:
+    payload = RegenUniverseService(session).get_player_showcase(player_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="regen_universe_player_not_found")
+    return RegenUniversePlayerShowcaseView.model_validate(payload)
+
+
+@router.get("/rising-stars", response_model=RegenRisingStarsView)
+def list_regen_rising_stars(
+    limit: int = Query(default=20, ge=1, le=100),
+    age_max: int = Query(default=21, ge=16, le=30),
+    session: Session = Depends(get_session),
+) -> RegenRisingStarsView:
+    return RegenRisingStarsView.model_validate(
+        RegenUniverseService(session).list_rising_stars(limit=limit, age_max=age_max)
+    )
+
+
+@router.get("/bloodlines", response_model=RegenBloodlinesView)
+def list_regen_bloodlines(
+    limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> RegenBloodlinesView:
+    return RegenBloodlinesView.model_validate(RegenUniverseService(session).list_bloodlines(limit=limit))
+
+
+@router.get("/scouting-feed", response_model=RegenScoutingFeedView)
+def list_regen_scouting_feed(
+    limit: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> RegenScoutingFeedView:
+    return RegenScoutingFeedView.model_validate(RegenUniverseService(session).list_scouting_feed(limit=limit))
+
+
+@router.get("/youth-tournaments", response_model=list[YouthTournamentView])
+def list_youth_tournaments(
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=20, ge=1, le=50),
+    session: Session = Depends(get_session),
+) -> list[YouthTournamentView]:
+    return [
+        YouthTournamentView.model_validate(item)
+        for item in RegenUniverseExpansionService(session).list_youth_tournaments(status=status_filter, limit=limit)
+    ]
+
+
+@router.get("/youth-tournaments/{tournament_id}", response_model=YouthTournamentView)
+def get_youth_tournament(
+    tournament_id: str,
+    session: Session = Depends(get_session),
+) -> YouthTournamentView:
+    try:
+        payload = RegenUniverseExpansionService(session).get_youth_tournament(tournament_id)
+    except RegenUniverseExpansionError as exc:
+        raise_regen_universe_expansion_http_exception(exc)
+    return YouthTournamentView.model_validate(payload)
+
+
 @admin_router.post("/seasons", response_model=RegenSeasonView)
 def create_regen_season(
     payload: RegenSeasonCreateRequest,
@@ -104,3 +202,91 @@ def close_regen_season(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     session.commit()
     return RegenUniverseCloseResultView.model_validate(result)
+
+
+@admin_router.post("/youth-tournaments", response_model=YouthTournamentView, status_code=status.HTTP_201_CREATED)
+def create_youth_tournament(
+    payload: YouthTournamentCreateRequest,
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> YouthTournamentView:
+    service = RegenUniverseExpansionService(session)
+    try:
+        tournament = service.create_youth_tournament(
+            name=payload.name,
+            age_limit=payload.age_limit,
+            rewards=payload.rewards,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            participant_club_ids=payload.participant_club_ids,
+            participant_limit=payload.participant_limit,
+            simulate_immediately=payload.simulate_immediately,
+        )
+    except RegenUniverseExpansionError as exc:
+        raise_regen_universe_expansion_http_exception(exc)
+    session.commit()
+    return YouthTournamentView.model_validate(service.get_youth_tournament(tournament.id))
+
+
+@admin_router.post("/jobs/story-regeneration", response_model=RegenUniverseJobRunView)
+def run_story_regeneration_job(
+    request: Request,
+    player_id: str | None = Query(default=None),
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> RegenUniverseJobRunView:
+    service = RegenUniverseExpansionService(session)
+    job = request.app.state.job_backend.run(
+        "regen_universe.story_regeneration",
+        lambda: service.regenerate_stories(player_id=player_id),
+    )
+    session.commit()
+    return RegenUniverseJobRunView.model_validate(_job_payload(job))
+
+
+@admin_router.post("/jobs/rivalry-detection", response_model=RegenUniverseJobRunView)
+def run_rivalry_detection_job(
+    request: Request,
+    player_id: str | None = Query(default=None),
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> RegenUniverseJobRunView:
+    service = RegenUniverseExpansionService(session)
+    job = request.app.state.job_backend.run(
+        "regen_universe.rivalry_detection",
+        lambda: service.detect_rivalries(player_id=player_id),
+    )
+    session.commit()
+    return RegenUniverseJobRunView.model_validate(_job_payload(job))
+
+
+@admin_router.post("/jobs/dna-evolution", response_model=RegenUniverseJobRunView)
+def run_dna_evolution_job(
+    request: Request,
+    player_id: str | None = Query(default=None),
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> RegenUniverseJobRunView:
+    service = RegenUniverseExpansionService(session)
+    job = request.app.state.job_backend.run(
+        "regen_universe.dna_evolution",
+        lambda: service.evolve_dna_profiles(player_id=player_id),
+    )
+    session.commit()
+    return RegenUniverseJobRunView.model_validate(_job_payload(job))
+
+
+@admin_router.post("/jobs/tournament-scheduling", response_model=RegenUniverseJobRunView)
+def run_tournament_scheduling_job(
+    request: Request,
+    days_ahead: int = Query(default=21, ge=1, le=90),
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> RegenUniverseJobRunView:
+    service = RegenUniverseExpansionService(session)
+    job = request.app.state.job_backend.run(
+        "regen_universe.tournament_scheduling",
+        lambda: service.schedule_youth_tournaments(days_ahead=days_ahead),
+    )
+    session.commit()
+    return RegenUniverseJobRunView.model_validate(_job_payload(job))

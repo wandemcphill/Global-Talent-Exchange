@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -56,6 +57,35 @@ class RegenLineageView(CommonSchema):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class RegenStorySeedView(CommonSchema):
+    background: str
+    temperament: str
+    ambition: str
+    pressure_response: str
+    snippet: str | None = None
+
+
+class RegenCardBadgeView(CommonSchema):
+    code: str
+    label: str
+    emphasis: str = "standard"
+
+
+class RegenCardView(CommonSchema):
+    name: str
+    face_seed: str | None = None
+    position: str
+    rating: int
+    potential: int
+    regen_type_badge: str
+    uniqueness_badge: str
+    legacy_score: float = 0.0
+    traits_icons: tuple[str, ...] = Field(default_factory=tuple)
+    personality_tag: str | None = None
+    story_snippet: str | None = None
+    badges: tuple[RegenCardBadgeView, ...] = Field(default_factory=tuple)
+
+
 class RegenProfileView(CommonSchema):
     id: str
     regen_id: str
@@ -72,10 +102,19 @@ class RegenProfileView(CommonSchema):
     current_gsi: int
     current_ability_range: AbilityRangeView
     potential_range: AbilityRangeView
+    current_rating: int | None = None
+    potential: int | None = None
     scout_confidence: str
     generation_source: str
+    regen_type: Literal["legend_regen", "organic_newgen"] = "organic_newgen"
+    parent_legacy_id: str | None = None
     status: str
     is_special_lineage: bool = False
+    uniqueness_score: float = 0.0
+    growth_curve: float = 0.5
+    morale: float = 0.5
+    chemistry_affinity: dict[str, float] = Field(default_factory=dict)
+    story_seed: RegenStorySeedView | None = None
     generated_at: datetime
     club_quality_score: float
     personality: RegenPersonalityView
@@ -199,11 +238,14 @@ __all__ = [
     "AbilityRangeView",
     "AcademyCandidateView",
     "AcademyIntakeBatchView",
+    "RegenCardBadgeView",
+    "RegenCardView",
     "RegenLineageView",
     "RegenOriginView",
     "RegenPersonalityView",
     "RegenProfileView",
     "RegenRecommendationItemView",
+    "RegenStorySeedView",
     "RegenScoutReportView",
     "RegenSearchResultView",
     "RegenTransferSettlementView",

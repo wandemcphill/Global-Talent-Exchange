@@ -687,3 +687,32 @@ def test_real_player_ingestion_resolves_cyrillic_club_names_via_provider_id_fall
             assert unresolved_clubs == []
     finally:
         engine.dispose()
+
+
+def test_real_player_ingestion_re_raises_fatal_match_database_errors_without_reusing_session(monkeypatch) -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            _seed_curated_canonical_entities(session)
+        service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
+        upsert_calls: list[str] = []
+        original_upsert_import_row = RealPlayerIngestionService._upsert_import_row
+
+        def tracked_upsert_import_row(self, *args, **kwargs):
+            payload = kwargs["payload"]
+            upsert_calls.append(payload.source_player_key)
+            return original_upsert_import_row(self, *args, **kwargs)
+
+        def fatal_match_error(session, payload, normalized_identity=None):
+            session.connection().invalidate()
+            raise SQLAlchemyError("simulated primary db failure")
+
+        monkeypatch.setattr(RealPlayerIngestionService, "_upsert_import_row", tracked_upsert_import_row)
+        monkeypatch.setattr(service.identity_matcher, "match", fatal_match_error)
+
+        with pytest.raises(SQLAlchemyError, match="simulated primary db failure"):
+            service.validate(_curated_request(mode="curated_seed", as_of="2026-03-22T12:00:00+00:00"))
+
+        assert upsert_calls == []
+    finally:
+        engine.dispose()

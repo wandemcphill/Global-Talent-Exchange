@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import csv
 from datetime import UTC, datetime
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import app.models.real_player_import_batch  # noqa: F401
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import load_settings
@@ -20,7 +22,13 @@ from app.ingestion.second_zip_real_player_ops_service import (
 )
 from app.ingestion.transfermarkt_second_zip import SECOND_ZIP_SOURCE_NAME
 from app.models.base import Base
-from app.models.real_player_import_batch import RealPlayerImportRow, RealPlayerImportRowStatus
+from app.models.player_import import PlayerImportItem
+from app.models.real_player_import_batch import (
+    RealPlayerImportBatch,
+    RealPlayerImportBatchStatus,
+    RealPlayerImportRow,
+    RealPlayerImportRowStatus,
+)
 from app.schemas.real_player_ingestion import RealPlayerIngestionItemResult, RealPlayerSeedInput
 
 
@@ -64,9 +72,15 @@ def _database_url(database_path: Path) -> str:
     return f"sqlite+pysqlite:///{database_path.as_posix()}"
 
 
-def _initialize_database(database_url: str):
+def _initialize_database(database_url: str, *, enforce_foreign_keys: bool = False):
     load_model_modules()
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    if enforce_foreign_keys and database_url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
     Base.metadata.create_all(engine)
     return engine
 
@@ -319,19 +333,27 @@ def _stub_evaluator(states_by_key: dict[str, str]):
     return _evaluate
 
 
-def _stub_publisher(calls: list[str]):
-    def _publish(*, batch_key: str, row: RealPlayerImportRow) -> RealPlayerIngestionItemResult:
-        calls.append(row.source_player_key)
-        sequence = len(calls)
-        return RealPlayerIngestionItemResult(
-            source_name=row.source_name,
-            source_player_key=row.source_player_key,
-            gtex_player_id=f"player-{sequence}",
-            action="created",
-            pricing_snapshot_id=f"snapshot-{sequence}",
-            authoritative_price_credits=120.0,
-            identity_confidence_score=0.94,
-        )
+def _stub_batch_publisher(chunk_calls: list[list[str]], result_calls: list[str] | None = None):
+    def _publish(self, *, batch_key: str, rows: list[RealPlayerImportRow]):
+        chunk_calls.append([row.source_player_key for row in rows])
+        results_by_source_key = {}
+        for row in rows:
+            if result_calls is not None:
+                result_calls.append(row.source_player_key)
+                sequence = len(result_calls)
+            else:
+                sequence = sum(len(chunk) for chunk in chunk_calls[: len(chunk_calls) - 1]) + len(results_by_source_key) + 1
+            result = RealPlayerIngestionItemResult(
+                source_name=row.source_name,
+                source_player_key=row.source_player_key,
+                gtex_player_id=f"player-{sequence}",
+                action="created",
+                pricing_snapshot_id=f"snapshot-{sequence}",
+                authoritative_price_credits=120.0,
+                identity_confidence_score=0.94,
+            )
+            results_by_source_key[(row.source_name, row.source_player_key)] = result
+        return results_by_source_key, {}
 
     return _publish
 
@@ -466,6 +488,75 @@ def test_import_archive_preloads_references_automatically(tmp_path: Path, monkey
         assert session.scalar(
             select(func.count()).select_from(Club).where(Club.source_provider == SECOND_ZIP_SOURCE_NAME)
         ) == 1
+    engine.dispose()
+
+
+def test_import_archive_commits_player_import_items_before_evaluation(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-fk-order.db")
+    engine = _initialize_database(database_url, enforce_foreign_keys=True)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1)],
+    )
+
+    def assert_items_exist_before_evaluation(self, candidates):
+        item_ids = [candidate.seed_input.player_import_item_id for candidate in candidates]
+        assert item_ids == [item_id for item_id in item_ids if item_id]
+        with _session_factory(engine)() as session:
+            for item_id in item_ids:
+                assert session.get(PlayerImportItem, item_id) is not None
+        return _stub_evaluator({})(candidates)
+
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_evaluate_candidates",
+        assert_items_exist_before_evaluation,
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=1)
+
+    assert imported.status == "completed"
+    with _session_factory(engine)() as session:
+        row = session.scalar(
+            select(RealPlayerImportRow).where(
+                RealPlayerImportRow.batch_id == imported.run_id,
+                RealPlayerImportRow.source_player_key == "1",
+            )
+        )
+        assert row is not None
+        assert row.player_import_item_id is not None
+    engine.dispose()
+
+
+def test_import_archive_persists_valid_player_import_item_reference_when_foreign_keys_are_enforced(tmp_path: Path) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-fk-reference.db")
+    engine = _initialize_database(database_url, enforce_foreign_keys=True)
+    _seed_canonical_entities(engine)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1, name="Ready Player")],
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=1)
+
+    assert imported.status == "completed"
+    assert imported.counts.publish_ready == 1
+    with _session_factory(engine)() as session:
+        row = session.scalar(
+            select(RealPlayerImportRow).where(
+                RealPlayerImportRow.batch_id == imported.run_id,
+                RealPlayerImportRow.source_player_key == "1",
+            )
+        )
+        assert row is not None
+        assert row.player_import_item_id is not None
+        item = session.get(PlayerImportItem, row.player_import_item_id)
+        assert item is not None
+        assert item.external_source_id == "1"
+        assert item.player_name == "Ready Player"
+        assert item.payload_json["player_import_item_id"] == item.id
     engine.dispose()
 
 
@@ -620,6 +711,48 @@ def test_resume_run_continues_after_interruption(tmp_path: Path, monkeypatch) ->
     engine.dispose()
 
 
+def test_resume_run_recovers_after_fatal_match_database_error(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-session-recovery.db")
+    engine = _initialize_database(database_url)
+    _seed_canonical_entities(engine)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1, name="Ready Player 1"), _player_row(2, name="Ready Player 2")],
+    )
+    ingestion_service = service._strict_ingestion_service()
+    original_match = ingestion_service.identity_matcher.match
+
+    def fatal_second_match(session, payload, normalized_identity=None):
+        if payload.source_player_key == "2":
+            session.connection().invalidate()
+            raise SQLAlchemyError("simulated primary db failure")
+        return original_match(session, payload, normalized_identity=normalized_identity)
+
+    monkeypatch.setattr(ingestion_service.identity_matcher, "match", fatal_second_match)
+
+    interrupted = service.import_archive(archive_path=archive_path, batch_size=1, limit=2)
+
+    assert interrupted.status == "failed"
+    assert interrupted.counts.total_rows_read == 1
+    assert interrupted.next_resume_row_number == 2
+    assert interrupted.error_message == "simulated primary db failure"
+
+    monkeypatch.setattr(ingestion_service.identity_matcher, "match", original_match)
+    resumed = service.resume_run(run_id=interrupted.run_id)
+
+    assert resumed.status == "completed"
+    assert resumed.counts.total_rows_read == 2
+    assert resumed.counts.publish_ready == 2
+    assert resumed.error_message is None
+    with _session_factory(engine)() as session:
+        batch = session.get(RealPlayerImportBatch, interrupted.run_id)
+        assert batch is not None
+        assert batch.error_message is None
+        assert session.scalar(select(func.count()).select_from(RealPlayerImportRow)) == 2
+    engine.dispose()
+
+
 def test_publish_excludes_invalid_and_partial_rows(tmp_path: Path) -> None:
     database_url = _database_url(tmp_path / "2ndzip-publish.db")
     engine = _initialize_database(database_url)
@@ -634,11 +767,13 @@ def test_publish_excludes_invalid_and_partial_rows(tmp_path: Path) -> None:
     )
 
     imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=2)
+    assert imported.status == "completed"
     assert imported.counts.publish_ready == 1
     assert imported.counts.mapped_partial == 1
 
     published = service.publish_run(run_id=imported.run_id, limit=10)
 
+    assert published.status == "completed"
     assert published.selected_row_count == 1
     assert published.counts.published == 1
     assert published.counts.publish_ready == 0
@@ -665,11 +800,11 @@ def test_publish_tier_filter_uses_second_zip_publish_tiers(tmp_path: Path, monke
         "_evaluate_candidates",
         lambda self, candidates: _stub_evaluator({})(candidates),
     )
-    publish_calls: list[str] = []
+    publish_calls: list[list[str]] = []
     monkeypatch.setattr(
         SecondZipRealPlayerOpsService,
-        "_publish_candidate",
-        lambda self, *, batch_key, row: _stub_publisher(publish_calls)(batch_key=batch_key, row=row),
+        "_publish_candidates",
+        _stub_batch_publisher(publish_calls),
     )
     archive_path = _write_second_zip(
         tmp_path / "2nd.zip",
@@ -699,9 +834,154 @@ def test_publish_tier_filter_uses_second_zip_publish_tiers(tmp_path: Path, monke
     published = service.publish_run(run_id=imported.run_id, limit=10, tier="tier_1")
 
     assert published.selected_row_count == 1
-    assert publish_calls == ["1"]
+    assert publish_calls == [["1"]]
     assert published.counts.published == 1
     assert published.counts.publish_ready == 1
+    engine.dispose()
+
+
+def test_strict_ingestion_service_is_reused_within_ops_service(tmp_path: Path) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-publish-service-cache.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+
+    first = service._strict_ingestion_service()
+    second = service._strict_ingestion_service()
+
+    assert first is second
+    engine.dispose()
+
+
+def test_publish_processes_ready_rows_in_batches(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-publish-batched.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_evaluate_candidates",
+        lambda self, candidates: _stub_evaluator({})(candidates),
+    )
+    publish_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_publish_candidates",
+        _stub_batch_publisher(publish_calls),
+    )
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(index) for index in range(1, 6)],
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=5)
+    published = service.publish_run(run_id=imported.run_id, limit=5, batch_size=2)
+
+    assert publish_calls == [["1", "2"], ["3", "4"], ["5"]]
+    assert published.selected_row_count == 5
+    assert published.counts.published == 5
+    assert published.counts.publish_ready == 0
+    engine.dispose()
+
+
+def test_publish_checkpoints_summary_less_often_than_publish_chunks(tmp_path: Path, monkeypatch, caplog) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-publish-checkpoint.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_evaluate_candidates",
+        lambda self, candidates: _stub_evaluator({})(candidates),
+    )
+    publish_calls: list[list[str]] = []
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_publish_candidates",
+        _stub_batch_publisher(publish_calls),
+    )
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(index) for index in range(1, 6)],
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=5)
+    refresh_states: list[bool] = []
+    original_refresh = SecondZipRealPlayerOpsService._refresh_batch_summary
+
+    def tracked_refresh(self, batch):
+        if batch.id == imported.run_id:
+            refresh_states.append(bool(dict(batch.metadata_json or {}).get("publish_in_progress")))
+        return original_refresh(self, batch)
+
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_refresh_batch_summary",
+        tracked_refresh,
+    )
+    monkeypatch.setenv("GTE_SECOND_ZIP_PUBLISH_CHECKPOINT_INTERVAL", "4")
+    caplog.set_level(logging.INFO, logger="app.ingestion.second_zip_real_player_ops_service")
+
+    published = service.publish_run(run_id=imported.run_id, limit=5, batch_size=2)
+
+    assert publish_calls == [["1", "2"], ["3", "4"], ["5"]]
+    assert refresh_states == [True, False]
+    assert published.counts.published == 5
+    messages = [
+        record.message
+        for record in caplog.records
+        if "2nd.zip publish checkpoint" in record.message
+    ]
+    assert len(messages) == 2
+    assert "processed_in_batch=4" in messages[0]
+    assert "total_published=4" in messages[0]
+    assert "inserted=4" in messages[0]
+    assert "updated=0" in messages[0]
+    assert "rows_per_second=" in messages[0]
+    assert "processed_in_batch=1" in messages[1]
+    assert "total_published=5" in messages[1]
+    with _session_factory(engine)() as session:
+        batch = session.get(RealPlayerImportBatch, imported.run_id)
+        assert batch is not None
+        metadata = dict(batch.metadata_json or {})
+        assert metadata["publish_checkpoint_interval"] == 4
+        assert metadata["last_publish_checkpoint_processed"] == 1
+        assert metadata["last_publish_processed_total"] == 5
+        assert metadata["last_publish_checkpoint_counts"] == {
+            "published": 5,
+            "inserted": 5,
+            "updated": 0,
+        }
+    engine.dispose()
+
+
+def test_publish_reports_running_while_publish_invocation_is_active(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-publish-running.db")
+    engine = _initialize_database(database_url)
+    _seed_canonical_entities(engine)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1, name="Ready Player 1"), _player_row(2, name="Ready Player 2")],
+    )
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=2)
+    observed_statuses: list[str] = []
+    publish_calls: list[list[str]] = []
+
+    def stub_publish_candidates(self, *, batch_key, rows):
+        observed_statuses.append(service.report_run(run_id=imported.run_id).status)
+        return _stub_batch_publisher(publish_calls)(self, batch_key=batch_key, rows=rows)
+
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_publish_candidates",
+        stub_publish_candidates,
+    )
+
+    published = service.publish_run(run_id=imported.run_id, limit=2, batch_size=1)
+
+    assert observed_statuses == ["running", "running"]
+    assert publish_calls == [["1"], ["2"]]
+    assert published.status == "completed"
+    assert published.counts.published == 2
+    assert published.counts.publish_ready == 0
     engine.dispose()
 
 
@@ -720,11 +1000,11 @@ def test_reporting_counts_remain_coherent(tmp_path: Path, monkeypatch) -> None:
             }
         )(candidates),
     )
-    publish_calls: list[str] = []
+    publish_calls: list[list[str]] = []
     monkeypatch.setattr(
         SecondZipRealPlayerOpsService,
-        "_publish_candidate",
-        lambda self, *, batch_key, row: _stub_publisher(publish_calls)(batch_key=batch_key, row=row),
+        "_publish_candidates",
+        _stub_batch_publisher(publish_calls),
     )
     archive_path = _write_second_zip(
         tmp_path / "2nd.zip",
@@ -748,7 +1028,8 @@ def test_reporting_counts_remain_coherent(tmp_path: Path, monkeypatch) -> None:
     service.publish_run(run_id=imported.run_id, limit=5)
     reported = service.report_run(run_id=imported.run_id)
 
-    assert publish_calls == ["1"]
+    assert publish_calls == [["1"]]
+    assert reported.status == "completed_with_errors"
     assert reported.counts.total_rows_read == 5
     assert reported.counts.eligible_rows == 4
     assert reported.counts.mapped_ready == 2
@@ -757,4 +1038,39 @@ def test_reporting_counts_remain_coherent(tmp_path: Path, monkeypatch) -> None:
     assert reported.counts.failed == 1
     assert reported.counts.publish_ready == 0
     assert reported.counts.published == 1
+    engine.dispose()
+
+
+def test_read_only_report_derives_running_status_without_refresh(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-report-read-only.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1)],
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=1)
+    with _session_factory(engine)() as session:
+        batch = session.get(RealPlayerImportBatch, imported.run_id)
+        assert batch is not None
+        metadata = dict(batch.metadata_json or {})
+        metadata["publish_in_progress"] = True
+        batch.metadata_json = metadata
+        batch.status = RealPlayerImportBatchStatus.COMPLETED.value
+        session.commit()
+
+    def fail_refresh(self, batch):
+        raise AssertionError("read-only report should not refresh the batch summary")
+
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_refresh_batch_summary",
+        fail_refresh,
+    )
+
+    reported = service.report_run(run_id=imported.run_id, refresh_summary=False)
+
+    assert reported.status == "running"
+    assert reported.counts.publish_ready == 1
     engine.dispose()

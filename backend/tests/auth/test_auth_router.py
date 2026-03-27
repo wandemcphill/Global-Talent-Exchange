@@ -48,7 +48,7 @@ def _create_authenticated_user(app):
             password="SuperSecret1",
             display_name="Fan User",
         )
-        token, _ = service.issue_access_token(user)
+        token, _ = service.issue_access_token(user, session=session)
         session.commit()
         session.refresh(user)
         return user.id, token
@@ -60,7 +60,8 @@ def test_register_login_and_me_flow(session) -> None:
             email="fan@example.com",
             username="fanuser",
             password="SuperSecret1",
-            display_name="Fan User",
+            full_name="Fan User",
+            region_code="NG",
         ),
         session,
     )
@@ -75,12 +76,12 @@ def test_register_login_and_me_flow(session) -> None:
 
 
 def test_duplicate_registration_returns_conflict(session) -> None:
-    payload = RegisterRequest(email="fan@example.com", username="fanuser", password="SuperSecret1")
+    payload = RegisterRequest(email="fan@example.com", username="fanuser", password="SuperSecret1", region_code="NG")
     register_user(payload, session)
 
     with pytest.raises(HTTPException) as exc_info:
         register_user(
-            RegisterRequest(email="fan@example.com", username="fanuser2", password="SuperSecret1"),
+            RegisterRequest(email="fan@example.com", username="fanuser2", password="SuperSecret1", region_code="NG"),
             session,
         )
 
@@ -109,11 +110,17 @@ def test_api_auth_me_returns_authenticated_user(app_client) -> None:
         "favourite_club": None,
         "nationality": None,
         "preferred_position": None,
+        "region_code": "GLOBAL",
         "role": "user",
         "kyc_status": "unverified",
         "is_active": True,
         "created_at": response.json()["created_at"],
         "last_login_at": None,
+        "active_organization_id": None,
+        "active_organization_name": None,
+        "active_organization_type": None,
+        "memberships": [],
+        "permissions": [],
     }
 
 
@@ -146,11 +153,17 @@ def test_api_auth_me_patch_updates_allowed_profile_fields(app_client) -> None:
         "favourite_club": "Arsenal",
         "nationality": "Nigeria",
         "preferred_position": "Forward",
+        "region_code": "GLOBAL",
         "role": "user",
         "kyc_status": "unverified",
         "is_active": True,
         "created_at": response.json()["created_at"],
         "last_login_at": None,
+        "active_organization_id": None,
+        "active_organization_name": None,
+        "active_organization_type": None,
+        "memberships": [],
+        "permissions": [],
     }
 
 

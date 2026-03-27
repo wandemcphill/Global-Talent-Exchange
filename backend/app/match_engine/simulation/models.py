@@ -10,6 +10,7 @@ from app.common.enums.match_status import MatchStatus
 class MatchCompetitionType(StrEnum):
     LEAGUE = "league"
     CUP = "cup"
+    MANAGER_DUEL = "manager_duel"
 
 
 class PlayerRole(StrEnum):
@@ -112,6 +113,9 @@ class InternalPlayer:
         chunks = [chunk for chunk in self.player_name.split(" ") if chunk]
         return chunks[-1] if chunks else self.player_name
 
+    def performance_modifier(self) -> float:
+        return max(0.5, 1 + ((self.morale - 50) / 100))
+
     def attacking_value(self) -> float:
         role_adjustment = {
             PlayerRole.GOALKEEPER: -20.0,
@@ -121,10 +125,13 @@ class InternalPlayer:
         }[self.role]
         return max(
             5.0,
-            (self.overall * 0.18)
-            + (self.finishing * 0.24)
-            + (self.composure * 0.14)
-            + (self.off_ball_movement * 0.14)
+            (
+                (self.overall * 0.18)
+                + (self.finishing * 0.24)
+                + (self.composure * 0.14)
+                + (self.off_ball_movement * 0.14)
+            )
+            * self.performance_modifier()
             + (self.technique * 0.10)
             + (self.pace * 0.08)
             + (self.creativity * 0.07)
@@ -141,9 +148,12 @@ class InternalPlayer:
         }[self.role]
         return max(
             5.0,
-            (self.overall * 0.17)
-            + (self.creativity * 0.24)
-            + (self.decision_making * 0.17)
+            (
+                (self.overall * 0.17)
+                + (self.creativity * 0.24)
+                + (self.decision_making * 0.17)
+            )
+            * self.performance_modifier()
             + (self.technique * 0.11)
             + (self.positioning * 0.09)
             + (self.consistency * 0.08)
@@ -161,9 +171,12 @@ class InternalPlayer:
         }[self.role]
         return max(
             5.0,
-            (self.overall * 0.14)
-            + (self.defending * 0.26)
-            + (self.positioning * 0.17)
+            (
+                (self.overall * 0.14)
+                + (self.defending * 0.26)
+                + (self.positioning * 0.17)
+            )
+            * self.performance_modifier()
             + (self.decision_making * 0.12)
             + (self.aerial_ability * 0.11)
             + (self.pace * 0.06)
@@ -243,6 +256,8 @@ class TacticalPlan:
     yellow_card_substitution_minute: int
     yellow_card_replacement_roles: tuple[PlayerRole, ...]
     max_substitutions: int
+    allow_substitutions: bool = True
+    allow_tactical_changes: bool = True
     defensive_line: int = 50
     width: int = 50
     mentality: TacticalStyle = TacticalStyle.BALANCED
@@ -357,12 +372,19 @@ class PlayerMatchStats:
     goals: int = 0
     assists: int = 0
     saves: int = 0
+    shots_on_target: int = 0
     missed_chances: int = 0
+    big_chances_missed: int = 0
     yellow_cards: int = 0
     red_card: bool = False
     injured: bool = False
     substituted_in_minute: int | None = None
     substituted_out_minute: int | None = None
+    key_passes: int = 0
+    tackles_won: int = 0
+    interceptions: int = 0
+    xg: float = 0.0
+    xg_faced: float = 0.0
 
     def is_notable(self) -> bool:
         return any(
@@ -370,10 +392,17 @@ class PlayerMatchStats:
                 self.goals,
                 self.assists,
                 self.saves,
+                self.shots_on_target,
                 self.missed_chances,
+                self.big_chances_missed,
                 self.yellow_cards,
                 self.red_card,
                 self.injured,
+                self.key_passes,
+                self.tackles_won,
+                self.interceptions,
+                self.xg > 0,
+                self.xg_faced > 0,
                 self.substituted_in_minute is not None,
                 self.substituted_out_minute is not None,
             )

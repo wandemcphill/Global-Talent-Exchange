@@ -24,6 +24,19 @@ enum MatchViewerPlayerState {
   sentOff,
 }
 
+enum MatchPlayerAnimationState {
+  idle,
+  jog,
+  run,
+  sprint,
+  control,
+  pass,
+  shoot,
+  tackle,
+  intercept,
+  recover,
+}
+
 enum MatchPlayerLine {
   goalkeeper,
   defense,
@@ -115,6 +128,46 @@ MatchViewerPlayerState matchViewerPlayerStateFromString(String value) {
     default:
       return MatchViewerPlayerState.idle;
   }
+}
+
+MatchPlayerAnimationState matchPlayerAnimationStateFromString(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'jog':
+      return MatchPlayerAnimationState.jog;
+    case 'run':
+      return MatchPlayerAnimationState.run;
+    case 'sprint':
+      return MatchPlayerAnimationState.sprint;
+    case 'control':
+      return MatchPlayerAnimationState.control;
+    case 'pass':
+      return MatchPlayerAnimationState.pass;
+    case 'shoot':
+      return MatchPlayerAnimationState.shoot;
+    case 'tackle':
+      return MatchPlayerAnimationState.tackle;
+    case 'intercept':
+      return MatchPlayerAnimationState.intercept;
+    case 'recover':
+      return MatchPlayerAnimationState.recover;
+    default:
+      return MatchPlayerAnimationState.idle;
+  }
+}
+
+extension MatchPlayerAnimationStateX on MatchPlayerAnimationState {
+  String get label => switch (this) {
+        MatchPlayerAnimationState.idle => 'Idle',
+        MatchPlayerAnimationState.jog => 'Jog',
+        MatchPlayerAnimationState.run => 'Run',
+        MatchPlayerAnimationState.sprint => 'Sprint',
+        MatchPlayerAnimationState.control => 'Control',
+        MatchPlayerAnimationState.pass => 'Pass',
+        MatchPlayerAnimationState.shoot => 'Shoot',
+        MatchPlayerAnimationState.tackle => 'Tackle',
+        MatchPlayerAnimationState.intercept => 'Intercept',
+        MatchPlayerAnimationState.recover => 'Recover',
+      };
 }
 
 MatchPlayerLine matchPlayerLineFromString(String value) {
@@ -285,6 +338,10 @@ class MatchViewerPlayerFrame {
     required this.highlighted,
     required this.position,
     required this.anchorPosition,
+    this.animationState = MatchPlayerAnimationState.idle,
+    this.speedRatio = 0,
+    this.blendFactor = 0.2,
+    this.staminaPct = 100,
     this.shirtNumber,
   });
 
@@ -300,6 +357,10 @@ class MatchViewerPlayerFrame {
   final bool highlighted;
   final MatchViewerPoint position;
   final MatchViewerPoint anchorPosition;
+  final MatchPlayerAnimationState animationState;
+  final double speedRatio;
+  final double blendFactor;
+  final int staminaPct;
 
   bool get isGoalkeeper => role == MatchViewerRole.goalkeeper;
 
@@ -338,6 +399,28 @@ class MatchViewerPlayerFrame {
       anchorPosition: MatchViewerPoint.fromJson(
         GteJson.value(json, <String>['anchor_position', 'anchorPosition']),
       ),
+      animationState: matchPlayerAnimationStateFromString(
+        GteJson.string(
+          json,
+          <String>['animation_state', 'animationState'],
+          fallback: 'idle',
+        ),
+      ),
+      speedRatio: GteJson.number(
+        json,
+        <String>['speed_ratio', 'speedRatio'],
+        fallback: 0,
+      ).toDouble(),
+      blendFactor: GteJson.number(
+        json,
+        <String>['blend_factor', 'blendFactor'],
+        fallback: 0.2,
+      ).toDouble(),
+      staminaPct: GteJson.integer(
+        json,
+        <String>['stamina_pct', 'staminaPct'],
+        fallback: 100,
+      ),
     );
   }
 
@@ -352,6 +435,10 @@ class MatchViewerPlayerFrame {
     bool? highlighted,
     MatchViewerPoint? position,
     MatchViewerPoint? anchorPosition,
+    MatchPlayerAnimationState? animationState,
+    double? speedRatio,
+    double? blendFactor,
+    int? staminaPct,
   }) {
     return MatchViewerPlayerFrame(
       playerId: playerId,
@@ -366,6 +453,10 @@ class MatchViewerPlayerFrame {
       highlighted: highlighted ?? this.highlighted,
       position: position ?? this.position,
       anchorPosition: anchorPosition ?? this.anchorPosition,
+      animationState: animationState ?? this.animationState,
+      speedRatio: speedRatio ?? this.speedRatio,
+      blendFactor: blendFactor ?? this.blendFactor,
+      staminaPct: staminaPct ?? this.staminaPct,
     );
   }
 }
@@ -833,6 +924,15 @@ class MatchTimelineFrame {
             right.anchorPosition,
             t,
           ),
+          animationState:
+              t < changeoverT ? left.animationState : right.animationState,
+          speedRatio:
+              left.speedRatio + ((right.speedRatio - left.speedRatio) * t),
+          blendFactor:
+              left.blendFactor + ((right.blendFactor - left.blendFactor) * t),
+          staminaPct:
+              (left.staminaPct + ((right.staminaPct - left.staminaPct) * t))
+                  .round(),
         );
       }
       if (left != null) {

@@ -5,13 +5,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.ingestion.models import (
+from app.ingestion.models import (
     CompetitionContext,
     NormalizedAwardEvent,
     NormalizedMatchEvent,
     NormalizedTransferEvent,
 )
-from backend.app.value_engine.models import (
+from app.value_engine.models import (
     DemandSignal,
     EGameSignal,
     HistoricalValuePoint,

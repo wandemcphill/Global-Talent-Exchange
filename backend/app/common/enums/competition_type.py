@@ -9,6 +9,7 @@ class CompetitionType(StrEnum):
     WORLD_SUPER_CUP = "world_super_cup"
     ACADEMY = "academy"
     FAST_CUP = "fast_cup"
+    MANAGER_DUEL = "manager_duel"
 
     @property
     def uses_senior_windows(self) -> bool:

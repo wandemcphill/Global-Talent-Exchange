@@ -68,15 +68,17 @@ class NotificationCenter:
 
     @staticmethod
     def _build_notification(user_id: str | None, topic: str, message: str, payload: dict[str, Any], created_at: datetime) -> Notification:
+        template_key = payload.get("template_key")
+        resolved_message = payload.get("message")
         return Notification(
             notification_id=f"ntf_{uuid4().hex[:12]}",
             user_id=user_id,
             topic=topic,
-            template_key=None,
+            template_key=str(template_key) if template_key is not None else None,
             resource_id=str(payload.get("resource_id")) if payload.get("resource_id") is not None else None,
             fixture_id=str(payload.get("fixture_id")) if payload.get("fixture_id") is not None else None,
             competition_id=str(payload.get("competition_id")) if payload.get("competition_id") is not None else None,
-            message=message,
+            message=str(resolved_message) if isinstance(resolved_message, str) and resolved_message.strip() else message,
             metadata={k: v for k, v in payload.items() if isinstance(k, str)},
             created_at=created_at,
         )

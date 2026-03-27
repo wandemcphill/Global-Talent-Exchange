@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from app.access_control.schemas import OrganizationMembershipView
+from app.models.access_control import OrganizationType
 from app.models.user import KycStatus, UserRole
 
 
@@ -21,3 +23,7 @@ class UserPublic(BaseModel):
     is_active: bool
     created_at: datetime
     last_login_at: datetime | None
+    active_organization_id: str | None = None
+    active_organization_name: str | None = None
+    active_organization_type: OrganizationType | None = None
+    memberships: tuple[OrganizationMembershipView, ...] = ()

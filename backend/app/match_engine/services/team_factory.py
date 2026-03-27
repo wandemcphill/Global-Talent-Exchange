@@ -26,6 +26,8 @@ from app.match_engine.schemas import (
 )
 from app.match_engine.simulation.models import MatchCompetitionType, PlayerRole, TacticalStyle
 from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
+from app.manager_marketplace.service import ManagerMarketplaceService
+from app.services.team_dynamics_service import TeamDynamicsService, TeamDynamicsSnapshot
 from app.services.player_lifecycle_service import (
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
@@ -60,6 +62,9 @@ class SyntheticSquadFactory:
                     match_date=job.match_date,
                     lifecycle_service=lifecycle_service,
                 )
+                from app.regen_universe.expansion_service import RegenUniverseExpansionService
+
+                home_team, away_team = RegenUniverseExpansionService(session).apply_match_context(home_team, away_team)
             finally:
                 session.close()
         else:
@@ -95,9 +100,12 @@ class SyntheticSquadFactory:
         base_overall: int,
         match_date: date | None = None,
         lifecycle_service: PlayerLifecycleService | None = None,
+        manager_profile_override: dict[str, object] | None = None,
     ) -> MatchTeamInput:
         session = lifecycle_service.session if lifecycle_service is not None else None
-        manager_profile = self._manager_profile_for_team(session, team_id) if lifecycle_service is not None else None
+        manager_profile = manager_profile_override
+        if manager_profile is None and lifecycle_service is not None:
+            manager_profile = self._manager_profile_for_team(session, team_id)
         if lifecycle_service is not None and match_date is not None:
             managed_team = self._build_managed_team(
                 lifecycle_service=lifecycle_service,
@@ -105,6 +113,7 @@ class SyntheticSquadFactory:
                 team_name=team_name,
                 base_overall=base_overall,
                 match_date=match_date,
+                manager_profile_override=manager_profile,
             )
             if managed_team is not None:
                 return managed_team
@@ -163,6 +172,7 @@ class SyntheticSquadFactory:
         team_name: str,
         base_overall: int,
         match_date: date,
+        manager_profile_override: dict[str, object] | None = None,
     ) -> MatchTeamInput | None:
         squad_status = lifecycle_service.list_club_squad_status(team_id, on_date=match_date)
         if not squad_status:
@@ -183,21 +193,45 @@ class SyntheticSquadFactory:
 
         starters, bench = self._select_managed_squad(eligible)
         resolved_overall = max(50, min(96, base_overall))
-        manager_profile = self._manager_profile_for_team(lifecycle_service.session if lifecycle_service is not None else None, team_id)
+        manager_profile = manager_profile_override
+        if manager_profile is None:
+            manager_profile = self._manager_profile_for_team(
+                lifecycle_service.session if lifecycle_service is not None else None,
+                team_id,
+            )
+        dynamics_snapshot = TeamDynamicsService(lifecycle_service.session).build_snapshot(
+            club_id=team_id,
+            squad=starters + bench,
+        )
         return MatchTeamInput(
             team_id=team_id,
             team_name=team_name,
             formation="4-3-3",
             tactics=self._build_tactics(resolved_overall, manager_profile=manager_profile),
             manager_profile=manager_profile,
-            club_context=self._build_managed_club_context(starters + bench, resolved_overall, manager_profile=manager_profile),
+            club_context=self._build_managed_club_context(
+                starters + bench,
+                resolved_overall,
+                manager_profile=manager_profile,
+                dynamics_snapshot=dynamics_snapshot,
+            ),
             identity=self._resolve_team_identity(lifecycle_service.session, team_id=team_id, team_name=team_name),
             starters=[
-                self._build_managed_player(player, assigned_role=role, base_overall=resolved_overall)
+                self._build_managed_player(
+                    player,
+                    assigned_role=role,
+                    base_overall=resolved_overall,
+                    dynamics_snapshot=dynamics_snapshot,
+                )
                 for player, role in starters
             ],
             bench=[
-                self._build_managed_player(player, assigned_role=role, base_overall=max(45, resolved_overall - 3))
+                self._build_managed_player(
+                    player,
+                    assigned_role=role,
+                    base_overall=max(45, resolved_overall - 3),
+                    dynamics_snapshot=dynamics_snapshot,
+                )
                 for player, role in bench
             ],
         )
@@ -296,7 +330,13 @@ class SyntheticSquadFactory:
     def _manager_profile_for_team(self, session: Session | None, team_id: str) -> dict[str, object] | None:
         if session is None:
             return None
-        assignment = session.scalar(select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == team_id))
+        marketplace_profile = ManagerMarketplaceService(session).build_match_manager_profile(club_id=team_id)
+        if marketplace_profile is not None:
+            return marketplace_profile
+
+        club_profile = session.get(ClubProfile, team_id)
+        assignment_user_id = club_profile.owner_user_id if club_profile is not None else team_id
+        assignment = session.scalar(select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == assignment_user_id))
         if assignment is None or not assignment.main_manager_asset_id:
             return None
         holding = session.scalar(select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id))
@@ -480,12 +520,16 @@ class SyntheticSquadFactory:
         *,
         assigned_role: PlayerRole,
         base_overall: int,
+        dynamics_snapshot: TeamDynamicsSnapshot | None = None,
     ) -> MatchPlayerInput:
         overall = self._estimate_player_overall(player, base_overall=base_overall)
         discipline = self._clamp(70)
         fitness = self._clamp(78)
+        recent_form = self._managed_recent_form(player)
+        morale_value = int(round((dynamics_snapshot.morale_by_player.get(player.id, player.morale) if dynamics_snapshot is not None else player.morale) or player.morale))
+        morale = self._clamp(morale_value)
+        motivation = self._clamp(int(round(58 + ((morale - 50) * 0.45) + ((recent_form - 55) * 0.25))))
         if assigned_role is PlayerRole.GOALKEEPER:
-            recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
                 player_id=player.id,
                 player_name=player.full_name,
@@ -512,14 +556,13 @@ class SyntheticSquadFactory:
                 clutch_factor=self._clamp(overall + 2),
                 big_match_temperament=self._clamp(overall + 1),
                 recent_form=recent_form,
-                morale=self._clamp(58 + ((recent_form - 55) // 2)),
-                motivation=self._clamp(60 + ((recent_form - 55) // 3)),
+                morale=morale,
+                motivation=motivation,
                 fatigue_load=26,
                 injury_risk=18,
                 leadership=self._clamp(overall + 4),
             )
         if assigned_role is PlayerRole.DEFENDER:
-            recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
                 player_id=player.id,
                 player_name=player.full_name,
@@ -546,14 +589,13 @@ class SyntheticSquadFactory:
                 clutch_factor=self._clamp(overall - 2),
                 big_match_temperament=self._clamp(overall + 1),
                 recent_form=recent_form,
-                morale=self._clamp(58 + ((recent_form - 55) // 2)),
-                motivation=self._clamp(60 + ((recent_form - 55) // 3)),
+                morale=morale,
+                motivation=motivation,
                 fatigue_load=30,
                 injury_risk=24,
                 leadership=self._clamp(overall + 3),
             )
         if assigned_role is PlayerRole.MIDFIELDER:
-            recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
                 player_id=player.id,
                 player_name=player.full_name,
@@ -580,13 +622,12 @@ class SyntheticSquadFactory:
                 clutch_factor=self._clamp(overall + 1),
                 big_match_temperament=self._clamp(overall + 2),
                 recent_form=recent_form,
-                morale=self._clamp(59 + ((recent_form - 55) // 2)),
-                motivation=self._clamp(61 + ((recent_form - 55) // 3)),
+                morale=morale,
+                motivation=motivation,
                 fatigue_load=32,
                 injury_risk=22,
                 leadership=self._clamp(overall + 4),
             )
-        recent_form = self._managed_recent_form(player)
         return MatchPlayerInput(
             player_id=player.id,
             player_name=player.full_name,
@@ -613,8 +654,8 @@ class SyntheticSquadFactory:
             clutch_factor=self._clamp(overall + 7),
             big_match_temperament=self._clamp(overall + 5),
             recent_form=recent_form,
-            morale=self._clamp(61 + ((recent_form - 55) // 2)),
-            motivation=self._clamp(63 + ((recent_form - 55) // 3)),
+            morale=morale,
+            motivation=motivation,
             fatigue_load=34,
             injury_risk=20,
             leadership=self._clamp(overall + 2),
@@ -709,15 +750,27 @@ class SyntheticSquadFactory:
         resolved_overall: int,
         *,
         manager_profile: dict[str, object] | None = None,
+        dynamics_snapshot: TeamDynamicsSnapshot | None = None,
     ) -> MatchClubContextInput:
         form_values = [self._managed_recent_form(player) for player, _ in squad]
         base = self._build_club_context(resolved_overall, manager_profile=manager_profile)
         average_form = int(round(sum(form_values) / max(1, len(form_values))))
+        average_morale = (
+            self._clamp(int(round(dynamics_snapshot.average_morale)))
+            if dynamics_snapshot is not None
+            else self._clamp(base.morale + ((average_form - 58) // 3))
+        )
+        chemistry_score = (
+            self._clamp(int(round(dynamics_snapshot.chemistry_score)))
+            if dynamics_snapshot is not None
+            else base.team_chemistry
+        )
         return base.model_copy(
             update={
+                "team_chemistry": chemistry_score,
                 "recent_form": self._clamp(average_form),
-                "morale": self._clamp(base.morale + ((average_form - 58) // 3)),
-                "motivation": self._clamp(base.motivation + ((average_form - 58) // 4)),
+                "morale": average_morale,
+                "motivation": self._clamp(int(round(base.motivation + ((average_morale - 50) * 0.4)))),
             }
         )
 

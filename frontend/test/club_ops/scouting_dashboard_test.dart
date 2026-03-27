@@ -5,7 +5,7 @@ import 'package:gte_frontend/screens/clubs/scouting_dashboard_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('scouting dashboard shows pipeline and opens prospect detail',
+  testWidgets('recruiter dashboard exposes tabs and opens prospect detail',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -15,13 +15,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Scouting pipeline'), findsOneWidget);
-    expect(find.text('Scout: Nadia Mensah'), findsOneWidget);
+    expect(find.text('Recruiter dashboard'), findsOneWidget);
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Shortlist'), findsOneWidget);
+    expect(find.text('Pipeline'), findsOneWidget);
+    expect(find.text('Insights'), findsOneWidget);
+    expect(find.text('Players viewed'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Prospects'));
-    await tester.tap(find.text('Prospects'));
+    await tester.tap(find.text('Shortlist'));
     await tester.pumpAndSettle();
-    expect(find.text('Youth prospects'), findsOneWidget);
     expect(find.text('Lamine Diallo'), findsOneWidget);
 
     await tester.tap(find.text('Lamine Diallo').first);

@@ -5,8 +5,11 @@ import logging
 from fastapi import APIRouter
 
 from app.academy.api.router import router as academy_router
+from app.ai_manager.router import router as ai_manager_router
 from app.analytics.router import admin_router as analytics_admin_router, router as analytics_router
+from app.access_control.router import router as organizations_router
 from app.attachments.router import router as attachments_router
+from app.marketplace.router import router as marketplace_router
 from app.calendar_engine.router import admin_router as calendar_engine_admin_router, router as calendar_engine_router
 from app.admin.router import router as admin_router
 from app.admin_access.router import router as admin_access_router
@@ -16,6 +19,7 @@ from app.economy.router import admin_router as admin_economy_router, router as e
 from app.gift_engine.router import router as gift_engine_router
 from app.auth.router import router as auth_router
 from app.champions_league.api.router import router as champions_league_router
+from app.club_finance.router import router as club_finance_router
 from app.clubs.router import router as clubs_router
 from app.club_identity.jerseys.router import router as club_identity_router
 from app.routes.competitions import router as competitions_router
@@ -37,12 +41,24 @@ from app.football_events_engine.router import admin_router as football_events_ad
 from app.ingestion.router import router as ingestion_router
 from app.leagues.router import router as leagues_router
 from app.market.router import router as market_router
+from app.manager_duels.router import router as manager_duels_router
 from app.manager_market.router import router as manager_market_router
+from app.manager_marketplace.router import router as manager_marketplace_router
+from app.live_matches.router import router as live_matches_router
 from app.match_engine.api.router import router as match_engine_router
+from app.matches.router import router as matches_router
+from app.simulation_matchmaking.router import router as simulation_matchmaking_router
 from app.notifications.router import notifications_router
+from app.competitive_integrity.router import router as competitive_integrity_router
+from app.competitive_integrity.worker import (
+    bind_competitive_integrity_scheduler,
+    shutdown_competitive_integrity_scheduler,
+)
 from app.player_cards.router import router as player_cards_router
 from app.players.router import router as players_router
+from app.predictions.router import router as predictions_router
 from app.policies.router import admin_router as admin_policies_router, router as policies_router
+from app.regen_ecosystem.router import router as regen_ecosystem_router
 from app.regen_universe.router import admin_router as regen_universe_admin_router, router as regen_universe_router
 from app.routes.player_lifecycle import router as player_lifecycle_router
 from app.routes.player_agency import router as player_agency_router
@@ -77,6 +93,7 @@ from app.world_simulation.router import admin_router as world_simulation_admin_r
 from app.world_super_cup.api.router import router as world_super_cup_router
 from app.treasury.router import router as treasury_router
 from app.integrations.payments.router import router as payments_router
+from app.live_ops.router import router as live_ops_router
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +213,19 @@ def _seed_sponsorship_defaults(app, context) -> None:
 
     _run_startup_seed(context, seed_name="sponsorship_defaults", seed_action=_seed)
 
+
+def _seed_engagement_defaults(app, context) -> None:
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.club_finance.service import ClubFinanceService
+            from app.live_ops.service import LiveOpsService
+
+            ClubFinanceService(session).seed_defaults()
+            LiveOpsService(session).seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="engagement_defaults", seed_action=_seed)
+
 def _seed_admin_engine_defaults(app, context) -> None:
     def _seed() -> None:
         with context.database.session_factory() as session:
@@ -253,6 +283,7 @@ DOMAIN_MODULES = (
     DomainModule(name="admin_godmode", router=admin_godmode_router),
     DomainModule(name="admin_engine", router=admin_engine_router, on_startup=(_seed_admin_engine_defaults,)),
     DomainModule(name="admin_engine_admin", router=admin_engine_admin_router),
+    DomainModule(name="ai_manager", router=ai_manager_router),
     DomainModule(name="economy", router=economy_router, on_startup=(_seed_economy_defaults,)),
     DomainModule(name="economy_admin", router=admin_economy_router),
     DomainModule(name="gift_engine", router=gift_engine_router),
@@ -260,6 +291,7 @@ DOMAIN_MODULES = (
     DomainModule(name="reward_engine_admin", router=reward_engine_admin_router),
     DomainModule(name="fan_predictions", router=fan_predictions_router),
     DomainModule(name="fan_predictions_admin", router=fan_predictions_admin_router),
+    DomainModule(name="predictions", router=_with_api_alias(predictions_router)),
     DomainModule(name="fan_wars", router=fan_wars_router),
     DomainModule(name="fan_wars_admin", router=fan_wars_admin_router),
     DomainModule(name="daily_challenge_engine", router=daily_challenge_router, on_startup=(_seed_daily_challenges,)),
@@ -274,6 +306,7 @@ DOMAIN_MODULES = (
     DomainModule(name="integrity_engine", router=integrity_router),
     DomainModule(name="integrity_engine_admin", router=integrity_admin_router),
     DomainModule(name="auth", router=auth_router),
+    DomainModule(name="organizations", router=organizations_router),
     DomainModule(name="wallets", router=wallets_router),
     DomainModule(name="payments", router=payments_router),
     DomainModule(name="media_engine", router=media_engine_router),
@@ -292,6 +325,8 @@ DOMAIN_MODULES = (
     DomainModule(name="risk_ops_engine_admin", router=risk_ops_admin_router),
     DomainModule(name="sponsorship_engine", router=sponsorship_router, on_startup=(_seed_sponsorship_defaults,)),
     DomainModule(name="sponsorship_engine_admin", router=sponsorship_admin_router),
+    DomainModule(name="club_finance", router=_with_api_alias(club_finance_router), on_startup=(_seed_engagement_defaults,)),
+    DomainModule(name="live_ops", router=_with_api_alias(live_ops_router)),
     DomainModule(name="creator_campaign_engine", router=creator_campaign_router),
     DomainModule(name="creator_campaign_engine_admin", router=creator_campaign_admin_router),
     DomainModule(name="governance_engine", router=governance_router),
@@ -309,6 +344,7 @@ DOMAIN_MODULES = (
     DomainModule(name="analytics", router=analytics_router),
     DomainModule(name="admin_analytics", router=analytics_admin_router),
     DomainModule(name="players", router=players_router),
+    DomainModule(name="regen_ecosystem", router=_with_api_alias(regen_ecosystem_router)),
     DomainModule(name="regen_universe", router=_with_api_alias(regen_universe_router), on_startup=(_seed_regen_universe_defaults,)),
     DomainModule(name="regen_universe_admin", router=regen_universe_admin_router),
     DomainModule(name="player_lifecycle", router=player_lifecycle_router),
@@ -324,7 +360,10 @@ DOMAIN_MODULES = (
     DomainModule(name="referrals", router=referrals_router),
     DomainModule(name="admin_referrals", router=admin_referrals_router),
     DomainModule(name="market", router=market_router),
+    DomainModule(name="marketplace", router=marketplace_router),
+    DomainModule(name="manager_duels", router=manager_duels_router),
     DomainModule(name="manager_market", router=manager_market_router),
+    DomainModule(name="manager_marketplace", router=manager_marketplace_router),
     DomainModule(name="player_cards", router=player_cards_router),
     DomainModule(name="ingestion", router=ingestion_router),
     DomainModule(name="value_engine", router=value_engine_router),
@@ -335,7 +374,16 @@ DOMAIN_MODULES = (
     DomainModule(name="academy", router=_with_api_alias(academy_router)),
     DomainModule(name="world_super_cup", router=_with_api_alias(world_super_cup_router)),
     DomainModule(name="fast_cups", router=_with_api_alias(fast_cups_router)),
+    DomainModule(name="live_matches", router=live_matches_router),
     DomainModule(name="match_engine", router=match_engine_router),
+    DomainModule(name="matches", router=_with_api_alias(matches_router)),
+    DomainModule(name="simulation_matchmaking", router=simulation_matchmaking_router),
+    DomainModule(
+        name="competitive_integrity",
+        router=competitive_integrity_router,
+        on_startup=(bind_competitive_integrity_scheduler,),
+        on_shutdown=(shutdown_competitive_integrity_scheduler,),
+    ),
     DomainModule(name="match_viewer", router=_with_api_alias(match_viewer_router)),
     # legacy club_identity routers provide compatibility endpoints while /api/clubs/... remains canonical
     DomainModule(name="club_identity", router=club_identity_router),

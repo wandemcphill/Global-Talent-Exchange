@@ -220,6 +220,24 @@ class RegenMarketService:
         self.session = session
         self.settings = settings or get_settings()
 
+    def get_profile_view(self, regen_id: str) -> RegenProfileView:
+        profile = self._get_profile(regen_id)
+        return self._to_profile_view(profile)
+
+    def get_latest_value_view(self, regen_id: str) -> RegenValueSnapshotView:
+        profile = self._get_profile(regen_id)
+        snapshot = self._latest_snapshot_or_refresh(profile)
+        return self._to_value_snapshot_view(snapshot, profile)
+
+    def list_discovery_badges(self, regen_id: str) -> tuple[RegenDiscoveryBadge, ...]:
+        return tuple(
+            self.session.scalars(
+                select(RegenDiscoveryBadge)
+                .where(RegenDiscoveryBadge.regen_id == regen_id)
+                .order_by(RegenDiscoveryBadge.awarded_at.desc(), RegenDiscoveryBadge.badge_name.asc())
+            ).all()
+        )
+
     def refresh_value(self, regen_id: str, *, as_of: datetime | None = None) -> RegenValueSnapshotView:
         profile = self._get_profile(regen_id)
         player = self._get_player(profile.player_id)
@@ -695,6 +713,9 @@ class RegenMarketService:
                 continue
             personality = self._get_personality(candidate.profile.id)
             priority_score = self._recommendation_priority(style, candidate, personality, request)
+            visibility_multiplier = float(candidate.profile.metadata.get("visibility_multiplier", 1.0) or 1.0)
+            if visibility_multiplier > 1.0:
+                priority_score *= min(2.0, visibility_multiplier)
             ranked.append((priority_score, candidate))
         top_results = sorted(ranked, key=lambda item: item[0], reverse=True)[: max(request.limit, 1)]
         premium_tier = "premium" if request.premium_service else "standard"
@@ -850,6 +871,236 @@ class RegenMarketService:
 
     def _get_origin(self, profile_id: str) -> RegenOriginMetadata | None:
         return self.session.scalar(select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == profile_id))
+
+    def _decision_traits(
+        self,
+        profile: RegenProfile,
+        personality: RegenPersonalityProfile | None,
+    ) -> dict[str, int]:
+        metadata = dict(profile.metadata_json or {})
+        raw_traits = metadata.get("decision_traits") if isinstance(metadata.get("decision_traits"), dict) else {}
+        return {
+            "ambition": int(raw_traits.get("ambition", getattr(personality, "ambition", 50) if personality is not None else 50)),
+            "loyalty": int(raw_traits.get("loyalty", getattr(personality, "loyalty", 50) if personality is not None else 50)),
+            "professionalism": int(raw_traits.get("professionalism", getattr(personality, "work_rate", 50) if personality is not None else 50)),
+            "greed": int(raw_traits.get("greed", 50)),
+            "patience": int(raw_traits.get("patience", getattr(personality, "resilience", 50) if personality is not None else 50)),
+            "hometown_affinity": int(raw_traits.get("hometown_affinity", 50)),
+            "trophy_hunger": int(raw_traits.get("trophy_hunger", 50)),
+            "media_appetite": int(raw_traits.get("media_appetite", 50)),
+            "temperament": int(raw_traits.get("temperament", getattr(personality, "temperament", 50) if personality is not None else 50)),
+            "adaptability": int(raw_traits.get("adaptability", 50)),
+        }
+
+    def _regen_type(self, profile: RegenProfile, lineage_profile: RegenLineageProfile | None) -> str:
+        metadata = dict(profile.metadata_json or {})
+        raw_type = metadata.get("regen_type")
+        if raw_type in {"legend_regen", "organic_newgen"}:
+            return str(raw_type)
+        if lineage_profile is None:
+            return "organic_newgen"
+        if (
+            lineage_profile.is_real_legend_lineage
+            or lineage_profile.is_retired_regen_lineage
+            or lineage_profile.relationship_type in {"son_of_legend", "hometown_legacy"}
+        ):
+            return "legend_regen"
+        return "organic_newgen"
+
+    def _parent_legacy_id(self, profile: RegenProfile, *, regen_type: str, lineage_profile: RegenLineageProfile | None) -> str | None:
+        metadata = dict(profile.metadata_json or {})
+        parent_legacy_id = metadata.get("parent_legacy_id")
+        if isinstance(parent_legacy_id, str) and parent_legacy_id.strip():
+            return parent_legacy_id
+        if regen_type == "legend_regen" and lineage_profile is not None:
+            return lineage_profile.related_legend_ref_id
+        return None
+
+    def _story_seed(
+        self,
+        profile: RegenProfile,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityProfile | None,
+        origin: RegenOriginMetadata | None,
+        regen_type: str,
+        lineage_profile: RegenLineageProfile | None,
+    ) -> dict[str, str]:
+        metadata = dict(profile.metadata_json or {})
+        raw_story_seed = metadata.get("story_seed")
+        if isinstance(raw_story_seed, dict):
+            return {
+                "background": str(raw_story_seed.get("background", "regional prospect")),
+                "temperament": str(raw_story_seed.get("temperament", "balanced")),
+                "ambition": str(raw_story_seed.get("ambition", "elite")),
+                "pressure_response": str(raw_story_seed.get("pressure_response", "steady")),
+                "snippet": str(raw_story_seed.get("snippet", "")),
+            }
+
+        flair = getattr(personality, "flair", 50) if personality is not None else 50
+        resilience = getattr(personality, "resilience", 50) if personality is not None else 50
+        if regen_type == "legend_regen":
+            background = "legacy academy heir"
+        elif flair >= 72 and getattr(origin, "urbanicity", None) == "urban":
+            background = "street footballer"
+        elif decision_traits["professionalism"] >= 72:
+            background = "academy standout"
+        else:
+            background = "regional prospect"
+
+        if decision_traits["temperament"] >= 72:
+            temperament = "aggressive"
+        elif decision_traits["temperament"] <= 38:
+            temperament = "calm"
+        else:
+            temperament = "balanced"
+
+        if decision_traits["ambition"] >= 85:
+            ambition = "world_class"
+        elif decision_traits["ambition"] >= 70:
+            ambition = "elite"
+        elif decision_traits["ambition"] >= 55:
+            ambition = "top_flight"
+        else:
+            ambition = "steady"
+
+        pressure_total = decision_traits["professionalism"] + decision_traits["patience"] + resilience
+        if pressure_total >= 220:
+            pressure_response = "clutch"
+        elif decision_traits["temperament"] >= 75 and decision_traits["patience"] <= 42:
+            pressure_response = "volatile"
+        else:
+            pressure_response = "steady"
+
+        lineage_note = ""
+        if lineage_profile is not None:
+            lineage_note = f" carrying a {lineage_profile.relationship_type.replace('_', ' ')} thread"
+        snippet = (
+            f"{background.title()}{lineage_note}, shaped for {ambition.replace('_', ' ')} ceilings "
+            f"with a {pressure_response.replace('_', ' ')} response under pressure."
+        )
+        return {
+            "background": background,
+            "temperament": temperament,
+            "ambition": ambition,
+            "pressure_response": pressure_response,
+            "snippet": snippet,
+        }
+
+    def _growth_curve(
+        self,
+        profile: RegenProfile,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityProfile | None,
+    ) -> float:
+        metadata = dict(profile.metadata_json or {})
+        raw_growth_curve = metadata.get("growth_curve")
+        if isinstance(raw_growth_curve, (float, int)):
+            return round(_clamp_float(float(raw_growth_curve), 0.2, 1.0), 4)
+
+        current_rating = profile.current_gsi
+        potential = int((profile.potential_range_json or {}).get("maximum", current_rating))
+        upside = max(potential - current_rating, 0) / 35.0
+        resilience = getattr(personality, "resilience", 50) if personality is not None else 50
+        growth = (
+            (upside * 0.42)
+            + ((decision_traits["professionalism"] / 100.0) * 0.20)
+            + ((resilience / 100.0) * 0.12)
+            + ((decision_traits["adaptability"] / 100.0) * 0.10)
+            + ((profile.club_quality_score / 100.0) * 0.16)
+        )
+        return round(_clamp_float(growth, 0.2, 1.0), 4)
+
+    def _morale(
+        self,
+        profile: RegenProfile,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityProfile | None,
+    ) -> float:
+        metadata = dict(profile.metadata_json or {})
+        raw_morale = metadata.get("morale")
+        if isinstance(raw_morale, (float, int)):
+            return round(_clamp_float(float(raw_morale), 0.3, 0.95), 4)
+
+        resilience = getattr(personality, "resilience", 50) if personality is not None else 50
+        morale = (
+            (decision_traits["loyalty"] * 0.24)
+            + (decision_traits["professionalism"] * 0.24)
+            + (decision_traits["patience"] * 0.18)
+            + (decision_traits["adaptability"] * 0.14)
+            + (resilience * 0.20)
+        ) / 100.0
+        return round(_clamp_float(morale, 0.3, 0.95), 4)
+
+    def _chemistry_affinity(
+        self,
+        profile: RegenProfile,
+        *,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityProfile | None,
+        origin: RegenOriginMetadata | None,
+        regen_type: str,
+    ) -> dict[str, float]:
+        metadata = dict(profile.metadata_json or {})
+        raw_affinity = metadata.get("chemistry_affinity")
+        if isinstance(raw_affinity, dict):
+            return {
+                str(key): round(_clamp_float(float(value), 0.0, 1.0), 4)
+                for key, value in raw_affinity.items()
+                if isinstance(value, (float, int))
+            }
+
+        flair = getattr(personality, "flair", 50) if personality is not None else 50
+        hometown_weight = decision_traits["hometown_affinity"] / 100.0
+        return {
+            "academy_discipline": round(decision_traits["professionalism"] / 100.0, 4),
+            "street_flair": round(flair / 100.0, 4),
+            "elite_ambition": round(max(decision_traits["ambition"], decision_traits["trophy_hunger"]) / 100.0, 4),
+            "local_loyalty": round(hometown_weight if getattr(origin, "city_name", None) else hometown_weight * 0.65, 4),
+            "legacy_aura": round(0.9 if regen_type == "legend_regen" else 0.35, 4),
+        }
+
+    def _uniqueness_score(
+        self,
+        profile: RegenProfile,
+        *,
+        regen_type: str,
+        decision_traits: dict[str, int],
+        personality: RegenPersonalityProfile | None,
+        story_seed: dict[str, str],
+    ) -> float:
+        metadata = dict(profile.metadata_json or {})
+        raw_uniqueness_score = metadata.get("uniqueness_score")
+        if isinstance(raw_uniqueness_score, (float, int)):
+            return round(_clamp_float(float(raw_uniqueness_score), 0.0, 1.0), 4)
+
+        personality_tags = tuple(getattr(personality, "personality_tags_json", ()) if personality is not None else ())
+        flair = getattr(personality, "flair", 50) if personality is not None else 50
+        rarity_weight = 0.32 if regen_type == "legend_regen" else 0.12
+        if profile.is_special_lineage:
+            rarity_weight += 0.08
+        trait_combo_uniqueness = (
+            (sum(1 for value in decision_traits.values() if value >= 75) * 0.035)
+            + (0.05 if flair >= 75 and decision_traits["professionalism"] >= 70 else 0.0)
+            + (min(len(personality_tags), 3) * 0.025)
+        )
+        potential = int((profile.potential_range_json or {}).get("maximum", profile.current_gsi))
+        stat_distribution_entropy = min(
+            0.24,
+            ((max(potential - profile.current_gsi, 0) / 100.0) * 0.18)
+            + (len(profile.secondary_positions_json or []) * 0.03),
+        )
+        narrative_seed_complexity = min(
+            0.22,
+            0.08
+            + (0.05 if story_seed["background"] == "street footballer" else 0.0)
+            + (0.05 if story_seed["pressure_response"] == "clutch" else 0.0)
+            + (0.04 if story_seed["ambition"] == "world_class" else 0.0),
+        )
+        score = rarity_weight + trait_combo_uniqueness + stat_distribution_entropy + narrative_seed_complexity
+        return round(_clamp_float(score, 0.0, 1.0), 4)
 
     def _active_contract(self, player_id: str | None) -> PlayerContract | None:
         if player_id is None:
@@ -1200,6 +1451,33 @@ class RegenMarketService:
         age = _compute_age(resolved_player.date_of_birth if resolved_player is not None else None)
         lineage_profile = self._get_lineage(profile.id)
         lineage_tags = self._get_relationship_tags(profile.id)
+        decision_traits = self._decision_traits(profile, personality)
+        regen_type = self._regen_type(profile, lineage_profile)
+        parent_legacy_id = self._parent_legacy_id(profile, regen_type=regen_type, lineage_profile=lineage_profile)
+        story_seed = self._story_seed(
+            profile,
+            decision_traits=decision_traits,
+            personality=personality,
+            origin=resolved_origin,
+            regen_type=regen_type,
+            lineage_profile=lineage_profile,
+        )
+        growth_curve = self._growth_curve(profile, decision_traits=decision_traits, personality=personality)
+        morale = self._morale(profile, decision_traits=decision_traits, personality=personality)
+        chemistry_affinity = self._chemistry_affinity(
+            profile,
+            decision_traits=decision_traits,
+            personality=personality,
+            origin=resolved_origin,
+            regen_type=regen_type,
+        )
+        uniqueness_score = self._uniqueness_score(
+            profile,
+            regen_type=regen_type,
+            decision_traits=decision_traits,
+            personality=personality,
+            story_seed=story_seed,
+        )
         lineage_view = None
         if lineage_profile is not None:
             lineage_view = RegenLineageView(
@@ -1234,10 +1512,19 @@ class RegenMarketService:
             current_gsi=profile.current_gsi,
             current_ability_range=AbilityRangeView(**profile.current_ability_range_json),
             potential_range=AbilityRangeView(**profile.potential_range_json),
+            current_rating=profile.current_gsi,
+            potential=int((profile.potential_range_json or {}).get("maximum", profile.current_gsi)),
             scout_confidence=profile.scout_confidence,
             generation_source=profile.generation_source,
+            regen_type=regen_type,
+            parent_legacy_id=parent_legacy_id,
             status=profile.status,
             is_special_lineage=profile.is_special_lineage,
+            uniqueness_score=uniqueness_score,
+            growth_curve=growth_curve,
+            morale=morale,
+            chemistry_affinity=chemistry_affinity,
+            story_seed=story_seed,
             generated_at=profile.generated_at,
             club_quality_score=profile.club_quality_score,
             personality=RegenPersonalityView(
@@ -1245,6 +1532,13 @@ class RegenMarketService:
                 leadership=personality.leadership if personality is not None else 50,
                 ambition=personality.ambition if personality is not None else 50,
                 loyalty=personality.loyalty if personality is not None else 50,
+                professionalism=decision_traits["professionalism"],
+                greed=decision_traits["greed"],
+                patience=decision_traits["patience"],
+                hometown_affinity=decision_traits["hometown_affinity"],
+                trophy_hunger=decision_traits["trophy_hunger"],
+                media_appetite=decision_traits["media_appetite"],
+                adaptability=decision_traits["adaptability"],
                 work_rate=personality.work_rate if personality is not None else 50,
                 flair=personality.flair if personality is not None else 50,
                 resilience=personality.resilience if personality is not None else 50,

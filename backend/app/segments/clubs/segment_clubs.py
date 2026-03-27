@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access_control.service import AccessControlService
 from app.auth.dependencies import get_current_user
 from app.db import get_session
+from app.models.access_control import OrganizationRole
 from app.models.club_profile import ClubProfile
 from app.models.scouting_intelligence import (
     AcademySupplySignal,
@@ -95,12 +97,31 @@ def _to_http_error(error: Exception) -> HTTPException:
 
 
 def _require_owned_club(session: Session, club_id: str, current_user) -> ClubProfile:
-    club = session.get(ClubProfile, club_id)
-    if club is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="club_not_found")
-    if club.owner_user_id != _user_id(current_user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="club_owner_required")
-    return club
+    try:
+        return AccessControlService(session).require_club_access(
+            user=current_user,
+            club_id=club_id,
+            allowed_roles={OrganizationRole.CLUB},
+            forbidden_detail="club_owner_required",
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+def _require_scouting_club_access(session: Session, club_id: str, current_user) -> ClubProfile:
+    try:
+        return AccessControlService(session).require_club_access(
+            user=current_user,
+            club_id=club_id,
+            allowed_roles={OrganizationRole.CLUB, OrganizationRole.SCOUT},
+            forbidden_detail="club_owner_required",
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 def _get_scouting_service(session: Session) -> ScoutingIntelligenceService:
@@ -332,7 +353,7 @@ def list_scouting_intelligence_networks(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[ScoutingNetworkView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     networks = session.scalars(
         select(ScoutingNetwork)
         .where(ScoutingNetwork.club_id == club_id)
@@ -347,7 +368,7 @@ def list_scouting_intelligence_manager_profiles(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[ManagerScoutingProfileView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     return _get_scouting_service(session).list_manager_profiles(club_id)
 
 
@@ -362,7 +383,7 @@ def upsert_scouting_intelligence_manager_profile(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> ManagerScoutingProfileView:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         profile = _get_scouting_service(session).upsert_manager_profile(
             ManagerProfileUpsert(
@@ -392,7 +413,7 @@ def create_scouting_intelligence_network(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> ScoutingNetworkView:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         network = _get_scouting_service(session).create_network(
             ScoutingNetworkCreate(
@@ -423,7 +444,7 @@ def list_scouting_intelligence_assignments(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[ScoutingNetworkAssignmentView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     statement = (
         select(ScoutingNetworkAssignment)
         .where(ScoutingNetworkAssignment.club_id == club_id)
@@ -446,7 +467,7 @@ def create_scouting_intelligence_assignment(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> ScoutingNetworkAssignmentView:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         assignment = _get_scouting_service(session).assign_network(
             ScoutingNetworkAssignmentCreate(
@@ -478,7 +499,7 @@ def list_scouting_intelligence_missions(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[ScoutMissionView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     statement = (
         select(ScoutMission)
         .where(ScoutMission.club_id == club_id)
@@ -501,7 +522,7 @@ def create_scouting_intelligence_mission(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> ScoutMissionView:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         mission = _get_scouting_service(session).create_mission(
             ScoutMissionCreate(
@@ -538,7 +559,7 @@ def complete_scouting_intelligence_mission(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> CompletedScoutMissionView:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         completed = _get_scouting_service(session).complete_mission(mission_id, limit=limit)
         session.commit()
@@ -555,7 +576,7 @@ def list_scouting_intelligence_academy_supply_signals(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[AcademySupplySignalView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         signals = _get_scouting_service(session).list_academy_supply_signals(club_id, refresh=refresh)
         session.commit()
@@ -573,7 +594,7 @@ def list_scouting_intelligence_badges(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[TalentDiscoveryBadgeView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     return _get_scouting_service(session).list_talent_discovery_badges(club_id, mission_id=mission_id, limit=limit)
 
 
@@ -586,7 +607,7 @@ def list_scouting_intelligence_lifecycle_profiles(
     session: Session = Depends(get_session),
     current_user=Depends(get_current_user),
 ) -> tuple[PlayerLifecycleProfileView, ...]:
-    _require_owned_club(session, club_id, current_user)
+    _require_scouting_club_access(session, club_id, current_user)
     try:
         profiles = _get_scouting_service(session).list_player_lifecycle_profiles(
             club_id,

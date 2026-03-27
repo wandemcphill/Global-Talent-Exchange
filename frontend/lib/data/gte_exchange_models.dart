@@ -1,24 +1,134 @@
 import 'gte_models.dart';
 import '../models/player_avatar.dart';
 
+const Object _playerFilterUnset = Object();
+
+class PlayerFilter {
+  const PlayerFilter({
+    this.search,
+    this.position,
+    this.country,
+    this.minAge,
+    this.maxAge,
+    this.availability,
+  });
+
+  final String? search;
+  final String? position;
+  final String? country;
+  final int? minAge;
+  final int? maxAge;
+  final String? availability;
+
+  PlayerFilter copyWith({
+    Object? search = _playerFilterUnset,
+    Object? position = _playerFilterUnset,
+    Object? country = _playerFilterUnset,
+    Object? minAge = _playerFilterUnset,
+    Object? maxAge = _playerFilterUnset,
+    Object? availability = _playerFilterUnset,
+  }) {
+    return PlayerFilter(
+      search: search == _playerFilterUnset ? this.search : search as String?,
+      position:
+          position == _playerFilterUnset ? this.position : position as String?,
+      country:
+          country == _playerFilterUnset ? this.country : country as String?,
+      minAge: minAge == _playerFilterUnset ? this.minAge : minAge as int?,
+      maxAge: maxAge == _playerFilterUnset ? this.maxAge : maxAge as int?,
+      availability: availability == _playerFilterUnset
+          ? this.availability
+          : availability as String?,
+    );
+  }
+
+  PlayerFilter reset() => const PlayerFilter();
+
+  PlayerFilter normalized() {
+    return PlayerFilter(
+      search: _trimOrNull(search),
+      position: _trimOrNull(position),
+      country: _trimOrNull(country),
+      minAge: minAge,
+      maxAge: maxAge,
+      availability: _trimOrNull(availability),
+    );
+  }
+
+  bool get hasActiveFilters {
+    final PlayerFilter value = normalized();
+    return value.search != null ||
+        value.position != null ||
+        value.country != null ||
+        value.minAge != null ||
+        value.maxAge != null ||
+        value.availability != null;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is PlayerFilter &&
+        other.search == search &&
+        other.position == position &&
+        other.country == country &&
+        other.minAge == minAge &&
+        other.maxAge == maxAge &&
+        other.availability == availability;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        search,
+        position,
+        country,
+        minAge,
+        maxAge,
+        availability,
+      );
+}
+
 class GteMarketPlayersQuery {
   const GteMarketPlayersQuery({
     this.limit = 20,
+    this.cursor,
     this.offset = 0,
     this.search,
+    this.position,
+    this.country,
+    this.minAge,
+    this.maxAge,
+    this.availability,
   });
 
   final int limit;
+  final String? cursor;
   final int offset;
   final String? search;
+  final String? position;
+  final String? country;
+  final int? minAge;
+  final int? maxAge;
+  final String? availability;
 
   Map<String, Object?> toQueryParameters() {
     final String? trimmedSearch = search?.trim();
+    final String? trimmedCursor = cursor?.trim();
+    final String? trimmedPosition = _trimOrNull(position);
+    final String? trimmedCountry = _trimOrNull(country);
+    final String? trimmedAvailability = _trimOrNull(availability);
     return <String, Object?>{
       'limit': limit,
-      'offset': offset,
+      if (trimmedCursor != null && trimmedCursor.isNotEmpty)
+        'cursor': trimmedCursor
+      else if (offset > 0)
+        'offset': offset,
       if (trimmedSearch != null && trimmedSearch.isNotEmpty)
         'search': trimmedSearch,
+      if (trimmedPosition != null) 'position': trimmedPosition,
+      if (trimmedCountry != null) 'country': trimmedCountry,
+      if (minAge != null) 'min_age': minAge,
+      if (maxAge != null) 'max_age': maxAge,
+      if (trimmedAvailability != null) 'availability': trimmedAvailability,
     };
   }
 }
@@ -36,6 +146,12 @@ class GteMarketPlayerListItem {
     required this.trendScore,
     required this.marketInterestScore,
     required this.averageRating,
+    this.isAvailable = true,
+    this.availabilityLabel = 'Available now',
+    this.askingType = 'transfer',
+    this.agentUserId = '',
+    this.agentName = 'Listed agent',
+    this.marketplaceNote,
     this.avatar,
   });
 
@@ -50,6 +166,12 @@ class GteMarketPlayerListItem {
   final double? trendScore;
   final int? marketInterestScore;
   final double? averageRating;
+  final bool isAvailable;
+  final String availabilityLabel;
+  final String askingType;
+  final String agentUserId;
+  final String agentName;
+  final String? marketplaceNote;
   final PlayerAvatar? avatar;
 
   bool get isRising => (movementPct ?? 0) > 0;
@@ -76,6 +198,35 @@ class GteMarketPlayerListItem {
       ),
       averageRating:
           _nullableNumber(json, <String>['average_rating', 'averageRating']),
+      isAvailable: GteJson.boolean(
+        json,
+        <String>['is_available', 'isAvailable'],
+        fallback: true,
+      ),
+      availabilityLabel: GteJson.string(
+        json,
+        <String>['availability_label', 'availabilityLabel'],
+        fallback: 'Available now',
+      ),
+      askingType: GteJson.string(
+        json,
+        <String>['asking_type', 'askingType'],
+        fallback: 'transfer',
+      ),
+      agentUserId: GteJson.string(
+        json,
+        <String>['agent_user_id', 'agentUserId'],
+        fallback: '',
+      ),
+      agentName: GteJson.string(
+        json,
+        <String>['agent_name', 'agentName'],
+        fallback: 'Listed agent',
+      ),
+      marketplaceNote: GteJson.stringOrNull(
+        json,
+        <String>['marketplace_note', 'marketplaceNote'],
+      ),
       avatar:
           PlayerAvatar.fromJsonOrNull(GteJson.value(json, <String>['avatar'])),
     );
@@ -86,24 +237,51 @@ class GteMarketPlayerListView {
   const GteMarketPlayerListView({
     required this.items,
     required this.limit,
+    required this.hasMore,
+    this.nextCursor,
     required this.offset,
     required this.total,
   });
 
   final List<GteMarketPlayerListItem> items;
   final int limit;
+  final bool hasMore;
+  final String? nextCursor;
   final int offset;
   final int total;
 
   factory GteMarketPlayerListView.fromJson(Object? value) {
     final Map<String, Object?> json =
         GteJson.map(value, label: 'market players');
+    final List<GteMarketPlayerListItem> items = GteJson.typedList(
+      json,
+      <String>['players', 'items'],
+      GteMarketPlayerListItem.fromJson,
+    );
+    final int limit = GteJson.integer(
+      json,
+      <String>['limit'],
+      fallback: items.isEmpty ? 20 : items.length,
+    );
+    final int offset = GteJson.integer(json, <String>['offset'], fallback: 0);
+    final int total = GteJson.integer(
+      json,
+      <String>['total'],
+      fallback: offset + items.length,
+    );
+    final bool hasMore = GteJson.boolean(
+      json,
+      <String>['has_more', 'hasMore'],
+      fallback: offset + items.length < total,
+    );
     return GteMarketPlayerListView(
-      items: GteJson.typedList(
-          json, <String>['items'], GteMarketPlayerListItem.fromJson),
-      limit: GteJson.integer(json, <String>['limit'], fallback: 20),
-      offset: GteJson.integer(json, <String>['offset']),
-      total: GteJson.integer(json, <String>['total']),
+      items: items,
+      limit: limit,
+      hasMore: hasMore,
+      nextCursor:
+          GteJson.stringOrNull(json, <String>['next_cursor', 'nextCursor']),
+      offset: offset,
+      total: total,
     );
   }
 }
@@ -846,6 +1024,290 @@ class GtePlayerLifecycleSnapshot {
       ),
     );
   }
+
+  factory GtePlayerLifecycleSnapshot.fromOverview(GtePlayerOverview overview) {
+    return GtePlayerLifecycleSnapshot(
+      playerId: overview.playerId,
+      playerName: overview.playerName,
+      availabilityBadge: overview.availabilityBadge,
+      transferStatus: overview.transferStatus,
+      recentEvents: overview.recentEvents,
+      contractBadge: overview.contractBadge,
+      agencySummary: overview.agencySummary,
+    );
+  }
+}
+
+class GteCareerTotals {
+  const GteCareerTotals({
+    required this.appearances,
+    required this.starts,
+    required this.goals,
+    required this.assists,
+    required this.cleanSheets,
+    required this.saves,
+    required this.minutes,
+  });
+
+  final int appearances;
+  final int starts;
+  final int goals;
+  final int assists;
+  final int cleanSheets;
+  final int saves;
+  final int minutes;
+
+  factory GteCareerTotals.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'career totals');
+    return GteCareerTotals(
+      appearances: GteJson.integer(json, <String>['appearances']),
+      starts: GteJson.integer(json, <String>['starts']),
+      goals: GteJson.integer(json, <String>['goals']),
+      assists: GteJson.integer(json, <String>['assists']),
+      cleanSheets:
+          GteJson.integer(json, <String>['clean_sheets', 'cleanSheets']),
+      saves: GteJson.integer(json, <String>['saves']),
+      minutes: GteJson.integer(json, <String>['minutes']),
+    );
+  }
+}
+
+class GteSeasonProgression {
+  const GteSeasonProgression({
+    required this.seasonLabel,
+    required this.competitionId,
+    required this.competitionName,
+    required this.clubId,
+    required this.clubName,
+    required this.appearances,
+    required this.starts,
+    required this.goals,
+    required this.assists,
+    required this.cleanSheets,
+    required this.saves,
+    required this.minutes,
+    required this.averageRating,
+  });
+
+  final String seasonLabel;
+  final String? competitionId;
+  final String? competitionName;
+  final String? clubId;
+  final String? clubName;
+  final int appearances;
+  final int starts;
+  final int goals;
+  final int assists;
+  final int cleanSheets;
+  final int saves;
+  final int minutes;
+  final double? averageRating;
+
+  factory GteSeasonProgression.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'season progression');
+    return GteSeasonProgression(
+      seasonLabel:
+          GteJson.string(json, <String>['season_label', 'seasonLabel']),
+      competitionId: GteJson.stringOrNull(
+          json, <String>['competition_id', 'competitionId']),
+      competitionName: GteJson.stringOrNull(
+          json, <String>['competition_name', 'competitionName']),
+      clubId: GteJson.stringOrNull(json, <String>['club_id', 'clubId']),
+      clubName: GteJson.stringOrNull(json, <String>['club_name', 'clubName']),
+      appearances: GteJson.integer(json, <String>['appearances']),
+      starts: GteJson.integer(json, <String>['starts']),
+      goals: GteJson.integer(json, <String>['goals']),
+      assists: GteJson.integer(json, <String>['assists']),
+      cleanSheets:
+          GteJson.integer(json, <String>['clean_sheets', 'cleanSheets']),
+      saves: GteJson.integer(json, <String>['saves']),
+      minutes: GteJson.integer(json, <String>['minutes']),
+      averageRating:
+          _nullableNumber(json, <String>['average_rating', 'averageRating']),
+    );
+  }
+}
+
+class GtePlayerCareerSummary {
+  const GtePlayerCareerSummary({
+    required this.playerId,
+    required this.playerName,
+    required this.currentClubId,
+    required this.currentClubName,
+    required this.currentCompetitionId,
+    required this.currentCompetitionName,
+    required this.totals,
+    required this.seasonalProgression,
+  });
+
+  final String playerId;
+  final String playerName;
+  final String? currentClubId;
+  final String? currentClubName;
+  final String? currentCompetitionId;
+  final String? currentCompetitionName;
+  final GteCareerTotals totals;
+  final List<GteSeasonProgression> seasonalProgression;
+
+  factory GtePlayerCareerSummary.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'player career summary');
+    return GtePlayerCareerSummary(
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      playerName: GteJson.string(json, <String>['player_name', 'playerName']),
+      currentClubId: GteJson.stringOrNull(
+          json, <String>['current_club_id', 'currentClubId']),
+      currentClubName: GteJson.stringOrNull(
+          json, <String>['current_club_name', 'currentClubName']),
+      currentCompetitionId: GteJson.stringOrNull(
+          json, <String>['current_competition_id', 'currentCompetitionId']),
+      currentCompetitionName: GteJson.stringOrNull(
+          json, <String>['current_competition_name', 'currentCompetitionName']),
+      totals: GteCareerTotals.fromJson(
+        GteJson.value(json, <String>['totals']) ?? const <String, Object?>{},
+      ),
+      seasonalProgression: GteJson.typedList(
+        json,
+        <String>['seasonal_progression', 'seasonalProgression'],
+        GteSeasonProgression.fromJson,
+      ),
+    );
+  }
+}
+
+class GteCareerEntry {
+  const GteCareerEntry({
+    required this.id,
+    required this.playerId,
+    required this.clubId,
+    required this.clubName,
+    required this.seasonLabel,
+    required this.squadRole,
+    required this.appearances,
+    required this.goals,
+    required this.assists,
+    required this.averageRating,
+    required this.notes,
+    required this.startOn,
+    required this.endOn,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String playerId;
+  final String? clubId;
+  final String clubName;
+  final String seasonLabel;
+  final String? squadRole;
+  final int appearances;
+  final int goals;
+  final int assists;
+  final int? averageRating;
+  final String? notes;
+  final DateTime? startOn;
+  final DateTime? endOn;
+  final DateTime updatedAt;
+
+  DateTime get timelineAnchor => endOn ?? startOn ?? updatedAt;
+
+  factory GteCareerEntry.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'career entry');
+    return GteCareerEntry(
+      id: GteJson.string(json, <String>['id']),
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      clubId: GteJson.stringOrNull(json, <String>['club_id', 'clubId']),
+      clubName: GteJson.string(json, <String>['club_name', 'clubName']),
+      seasonLabel:
+          GteJson.string(json, <String>['season_label', 'seasonLabel']),
+      squadRole:
+          GteJson.stringOrNull(json, <String>['squad_role', 'squadRole']),
+      appearances: GteJson.integer(json, <String>['appearances']),
+      goals: GteJson.integer(json, <String>['goals']),
+      assists: GteJson.integer(json, <String>['assists']),
+      averageRating:
+          _nullableInteger(json, <String>['average_rating', 'averageRating']),
+      notes: GteJson.stringOrNull(json, <String>['notes']),
+      startOn: GteJson.dateTimeOrNull(json, <String>['start_on', 'startOn']),
+      endOn: GteJson.dateTimeOrNull(json, <String>['end_on', 'endOn']),
+      updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
+    );
+  }
+}
+
+class GtePlayerOverview {
+  const GtePlayerOverview({
+    required this.playerId,
+    required this.playerName,
+    required this.position,
+    required this.marketValueEur,
+    required this.overviewGeneratedOn,
+    required this.careerSummary,
+    required this.availabilityBadge,
+    required this.contractBadge,
+    required this.transferStatus,
+    required this.agencySummary,
+    required this.recentEvents,
+  });
+
+  final String playerId;
+  final String playerName;
+  final String? position;
+  final double? marketValueEur;
+  final DateTime overviewGeneratedOn;
+  final GtePlayerCareerSummary careerSummary;
+  final GteLifecycleBadgeView availabilityBadge;
+  final GteContractBadgeView? contractBadge;
+  final GteTransferStatusView transferStatus;
+  final GtePlayerAgencySummary? agencySummary;
+  final List<GteLifecycleEventItem> recentEvents;
+
+  factory GtePlayerOverview.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'player overview');
+    return GtePlayerOverview(
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      playerName: GteJson.string(json, <String>['player_name', 'playerName']),
+      position: GteJson.stringOrNull(json, <String>['position']),
+      marketValueEur:
+          _nullableNumber(json, <String>['market_value_eur', 'marketValueEur']),
+      overviewGeneratedOn: GteJson.dateTime(
+          json, <String>['overview_generated_on', 'overviewGeneratedOn']),
+      careerSummary: GtePlayerCareerSummary.fromJson(
+        GteJson.value(json, <String>['career_summary', 'careerSummary']) ??
+            const <String, Object?>{},
+      ),
+      availabilityBadge: GteLifecycleBadgeView.fromJson(
+        GteJson.value(
+                json, <String>['availability_badge', 'availabilityBadge']) ??
+            const <String, Object?>{},
+      ),
+      contractBadge: GteJson.value(
+                  json, <String>['contract_badge', 'contractBadge']) ==
+              null
+          ? null
+          : GteContractBadgeView.fromJson(
+              GteJson.value(json, <String>['contract_badge', 'contractBadge']),
+            ),
+      transferStatus: GteTransferStatusView.fromJson(
+        GteJson.value(json, <String>['transfer_status', 'transferStatus']) ??
+            const <String, Object?>{},
+      ),
+      agencySummary:
+          GteJson.value(json, <String>['regen_summary', 'regenSummary']) == null
+              ? null
+              : GtePlayerAgencySummary.fromJson(
+                  GteJson.value(
+                      json, <String>['regen_summary', 'regenSummary']),
+                ),
+      recentEvents: GteJson.typedList(
+        json,
+        <String>['recent_events', 'recentEvents'],
+        GteLifecycleEventItem.fromJson,
+      ),
+    );
+  }
 }
 
 class GtePlayerMarketSnapshot {
@@ -854,6 +1316,8 @@ class GtePlayerMarketSnapshot {
     required this.ticker,
     required this.candles,
     required this.orderBook,
+    required this.careerEntries,
+    this.overview,
     this.lifecycle,
   });
 
@@ -861,6 +1325,8 @@ class GtePlayerMarketSnapshot {
   final GteMarketTicker ticker;
   final GteMarketCandles candles;
   final GteOrderBook orderBook;
+  final GtePlayerOverview? overview;
+  final List<GteCareerEntry> careerEntries;
   final GtePlayerLifecycleSnapshot? lifecycle;
 
   GtePlayerMarketSnapshot copyWith({
@@ -868,6 +1334,8 @@ class GtePlayerMarketSnapshot {
     GteMarketTicker? ticker,
     GteMarketCandles? candles,
     GteOrderBook? orderBook,
+    GtePlayerOverview? overview,
+    List<GteCareerEntry>? careerEntries,
     GtePlayerLifecycleSnapshot? lifecycle,
   }) {
     return GtePlayerMarketSnapshot(
@@ -875,6 +1343,8 @@ class GtePlayerMarketSnapshot {
       ticker: ticker ?? this.ticker,
       candles: candles ?? this.candles,
       orderBook: orderBook ?? this.orderBook,
+      overview: overview ?? this.overview,
+      careerEntries: careerEntries ?? this.careerEntries,
       lifecycle: lifecycle ?? this.lifecycle,
     );
   }
@@ -892,4 +1362,12 @@ int? _nullableInteger(Map<String, Object?> json, List<String> keys) {
     return null;
   }
   return GteJson.integer(json, keys);
+}
+
+String? _trimOrNull(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final String trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
 }

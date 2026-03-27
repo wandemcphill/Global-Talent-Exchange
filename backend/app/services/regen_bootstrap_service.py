@@ -102,6 +102,7 @@ class RegenBootstrapService:
                 market_value_eur=float(generated.current_gsi) * 12_500.0,
                 profile_completeness_score=0.98,
                 is_tradable=True,
+                dna_profile=dict(generated.metadata.get("dna_profile") or {}),
             )
             self.session.add(player)
             self.session.flush()

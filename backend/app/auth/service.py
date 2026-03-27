@@ -9,6 +9,7 @@ import secrets
 from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
 
+from app.access_control.service import AccessControlService, MembershipAccessContext
 from app.admin_godmode.service import AdminGodModeService
 from app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
 from app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
@@ -17,6 +18,7 @@ from app.models.base import generate_uuid, utcnow
 from app.models.user import User, UserRole
 from app.policies.service import PolicyService
 from app.services.email import EmailSendResult, EmailService
+from app.users.schemas import UserPublic
 from app.wallets.service import WalletService
 
 logger = logging.getLogger(__name__)
@@ -125,50 +127,91 @@ class AuthService:
         session.flush()
         return user
 
-    def issue_access_token(self, user: User) -> tuple[str, int]:
+    def issue_access_token(self, user: User, *, session: Session | None = None) -> tuple[str, int]:
+        effective_role = user.role
+        active_org_id: str | None = None
+        if session is not None:
+            access_context = AccessControlService(session).bind_user_access_context(user)
+            effective_role = access_context.effective_role
+            active_org_id = access_context.active_organization_id
         token = create_access_token(
             user.id,
             claims={
                 "email": user.email,
-                "role": user.role.value,
+                "role": effective_role.value,
+                "org_id": active_org_id,
             },
         )
         return token, ACCESS_TOKEN_TTL_SECONDS
 
-    def resolve_user_permissions(self, app, user: User) -> list[str]:
-        if user.role == UserRole.USER:
+    def resolve_user_permissions(self, app, user: User, *, session: Session | None = None) -> list[str]:
+        if session is not None:
+            access_context = AccessControlService(session).bind_user_access_context(user)
+            membership_permissions = list(access_context.permissions)
+        else:
+            membership_permissions = []
+        if user.role == UserRole.USER and not membership_permissions:
             return []
         try:
             state = AdminGodModeService(wallet_service=self.wallet_service)._load_state(app)
             profile = AdminGodModeService(wallet_service=self.wallet_service).resolve_profile(user, state)
-            return profile.permissions
+            return list(self._dedupe_permissions(membership_permissions, profile.permissions))
         except Exception:
             if user.role == UserRole.SUPER_ADMIN:
-                return [
-                    "manage_admin_roles",
-                    "manage_commissions",
-                    "manage_payment_rails",
-                    "manage_withdrawals",
-                    "manage_treasury_withdrawals",
-                    "manage_liquidity_desk",
-                    "view_audit_log",
-                    "pause_payments",
-                    "view_integrity_controls",
-                    "manage_manager_catalog",
-                    "manage_competitions",
-                    "manage_manager_supply",
-                ]
-            return []
+                return list(
+                    self._dedupe_permissions(
+                        membership_permissions,
+                        [
+                            "manage_admin_roles",
+                            "manage_commissions",
+                            "manage_payment_rails",
+                            "manage_withdrawals",
+                            "manage_treasury_withdrawals",
+                            "manage_liquidity_desk",
+                            "view_audit_log",
+                            "pause_payments",
+                            "view_integrity_controls",
+                            "manage_manager_catalog",
+                            "manage_competitions",
+                            "manage_manager_supply",
+                        ],
+                    )
+                )
+            return membership_permissions
 
     @staticmethod
-    def resolve_landing_route(user: User) -> str:
-        if user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+    def resolve_landing_route(user: User, *, session: Session | None = None) -> str:
+        effective_role = user.role
+        if session is not None:
+            effective_role = AccessControlService(session).bind_user_access_context(user).effective_role
+        if effective_role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             return "/admin/god-mode"
         return "/"
 
-    def get_current_user_profile(self, session: Session, user: User) -> CurrentUserResponse:
+    def build_user_public(self, session: Session, user: User) -> UserPublic:
+        access_context = AccessControlService(session).bind_user_access_context(user)
+        return UserPublic(
+            id=user.id,
+            email=user.email,
+            username=user.username,
+            full_name=user.full_name,
+            phone_number=user.phone_number,
+            display_name=user.display_name,
+            role=access_context.effective_role,
+            kyc_status=user.kyc_status,
+            is_active=user.is_active,
+            created_at=user.created_at,
+            last_login_at=user.last_login_at,
+            active_organization_id=access_context.active_organization_id,
+            active_organization_name=access_context.active_organization_name,
+            active_organization_type=access_context.active_organization_type,
+            memberships=tuple(self._membership_views(access_context.memberships)),
+        )
+
+    def get_current_user_profile(self, session: Session, user: User, *, app=None) -> CurrentUserResponse:
         profile_fields = self._get_profile_fields(session, user.id)
         region_code = PolicyService(session).resolve_country_code_for_user(user=user)
+        access_context = AccessControlService(session).bind_user_access_context(user)
         return CurrentUserResponse(
             id=user.id,
             email=user.email,
@@ -182,12 +225,41 @@ class AuthService:
             nationality=profile_fields["nationality"],
             region_code=region_code,
             preferred_position=profile_fields["preferred_position"],
-            role=user.role,
+            role=access_context.effective_role,
             kyc_status=user.kyc_status,
             is_active=user.is_active,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
+            active_organization_id=access_context.active_organization_id,
+            active_organization_name=access_context.active_organization_name,
+            active_organization_type=access_context.active_organization_type,
+            memberships=tuple(self._membership_views(access_context.memberships)),
+            permissions=self.resolve_user_permissions(app, user, session=session),
         )
+
+    @staticmethod
+    def _dedupe_permissions(*permission_sets: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+        seen: list[str] = []
+        for permission_set in permission_sets:
+            for permission in permission_set:
+                if permission not in seen:
+                    seen.append(permission)
+        return tuple(seen)
+
+    @staticmethod
+    def _membership_views(memberships: tuple[MembershipAccessContext, ...]):
+        from app.access_control.schemas import OrganizationMembershipView
+
+        for membership in memberships:
+            yield OrganizationMembershipView(
+                id=membership.membership_id,
+                organization_id=membership.organization_id,
+                organization_name=membership.organization_name,
+                organization_type=membership.organization_type,
+                role=membership.role,
+                is_primary=membership.is_primary,
+                permissions=list(membership.permissions),
+            )
 
     def update_current_user_profile(
         self,

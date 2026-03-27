@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/data/match/match_simulation_engine.dart';
+import 'package:gte_frontend/data/match/match_simulation_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -21,6 +23,7 @@ import 'package:gte_frontend/widgets/gtex_branding.dart';
 import 'gte_halftime_analytics_screen.dart';
 import 'gte_match_highlights_screen.dart';
 import '../match/gtex_match_broadcast_screen.dart';
+import '../match/gtex_match_simulation_screen.dart';
 import '../match/gtex_match_viewer_screen.dart';
 
 enum _LiveViewMode {
@@ -173,6 +176,34 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
+  Future<void> _openSimulation(
+    LiveMatchSnapshot match,
+  ) async {
+    final MatchSimulationImportance importance =
+        widget.competition.capacity <= 2
+            ? MatchSimulationImportance.finalMatch
+            : MatchSimulationImportance.tournament;
+    final MatchSimulationRequest request =
+        MatchSimulationRequestFactory.fromLiveSnapshot(
+      match,
+      matchId: match.matchId?.trim().isNotEmpty == true
+          ? match.matchId!.trim()
+          : widget.competition.id,
+      importance: importance,
+    );
+    final MatchSimulationResult result =
+        const MatchSimulationEngine().simulate(request);
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => GtexMatchSimulationScreen(
+          result: result,
+          title: '${match.homeTeam} vs ${match.awayTeam}',
+          competitionLabel: widget.competition.name,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -304,6 +335,38 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 16),
+                GteSurfacePanel(
+                  accentColor: GteShellTheme.accentArena,
+                  child: Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Tactical match simulation',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Run the controlled realism engine with tactical causality, live 2D movement, commentary, and post-match value impact.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      FilledButton.icon(
+                        onPressed: () => _openSimulation(match),
+                        icon: const Icon(Icons.bolt_outlined),
+                        label: const Text('Run simulation'),
+                      ),
+                    ],
+                  ),
+                ),
                 if (widget.navigationDependencies != null) ...<Widget>[
                   const SizedBox(height: 16),
                   GteSurfacePanel(

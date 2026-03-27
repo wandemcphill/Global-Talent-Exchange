@@ -26,12 +26,16 @@ from app.core.events import DomainEvent, EventPublisher
 from app.fairness.fairness_guard import FairnessGuard
 from app.fairness.match_integrity_service import MatchIntegrityService
 from app.fairness.spend_balance_controller import SpendBalanceController
+from app.live_matches.highlights import SmartHighlightService
 from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
 from app.leagues.service import LeagueSeasonLifecycleService
+from app.manager_marketplace.service import ManagerMarketplaceService
+from app.matches.service import MatchEventLoggerService
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
+from app.models.notification_record import NotificationRecord
 from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.match_engine.simulation.models import MatchEventType
@@ -257,6 +261,7 @@ class LocalMatchExecutionWorker:
                 viewer_payload=viewer_payload,
                 fairness_envelope=fairness_envelope,
             )
+            self._persist_smart_highlights(job.fixture_id, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.simulation.completed",
                 job,
@@ -272,6 +277,18 @@ class LocalMatchExecutionWorker:
                     "key_moments": self._build_key_moment_breakdown(replay_payload),
                 },
             )
+            live_update_templates = self._queue_live_update_notifications(job, replay_payload)
+            if live_update_templates:
+                self._publish_match_lifecycle_event(
+                    "competition.match.notifications.dispatched",
+                    job,
+                    replay_payload=replay_payload,
+                    extra={
+                        "notification_phase": "live_update",
+                        "notification_count": len(live_update_templates),
+                        "notification_templates": live_update_templates,
+                    },
+                )
             live_templates = self._queue_live_notifications(job)
             if live_templates:
                 self._publish_match_lifecycle_event(
@@ -293,6 +310,7 @@ class LocalMatchExecutionWorker:
                 )
             )
             state = self._apply_competition_result(job, replay_payload)
+            self._persist_match_extensions(job, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.result.generated",
                 job,
@@ -332,6 +350,18 @@ class LocalMatchExecutionWorker:
                     payload=self._build_replay_archive_payload(job, replay_payload),
                 )
             )
+            highlight_templates = self._queue_highlight_notifications(job, replay_payload)
+            if highlight_templates:
+                self._publish_match_lifecycle_event(
+                    "competition.match.notifications.dispatched",
+                    job,
+                    replay_payload=replay_payload,
+                    extra={
+                        "notification_phase": "highlights",
+                        "notification_count": len(highlight_templates),
+                        "notification_templates": highlight_templates,
+                    },
+                )
             result_templates = self._queue_result_notifications(job, replay_payload)
             if result_templates:
                 self._publish_match_lifecycle_event(
@@ -434,6 +464,132 @@ class LocalMatchExecutionWorker:
             session.rollback()
         finally:
             session.close()
+
+    def _persist_smart_highlights(
+        self,
+        match_id: str,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        if self.session_factory is None:
+            return
+        SmartHighlightService(self.session_factory).persist_from_replay_payload(match_id, replay_payload)
+
+    def _persist_match_extensions(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        if self.session_factory is None:
+            return
+        session = self.session_factory()
+        try:
+            insights = MatchEventLoggerService(session).persist_official_match(
+                match_id=job.fixture_id,
+                replay_payload=replay_payload,
+            )
+            ManagerMarketplaceService(session).record_match_outcome(
+                home_club_id=job.home_club_id,
+                away_club_id=job.away_club_id,
+                winner_club_id=replay_payload.summary.winner_team_id,
+            )
+            from app.services.match_engagement_service import MatchEngagementService
+
+            MatchEngagementService(session).apply_match_result(
+                match_id=job.fixture_id,
+                home_club_id=job.home_club_id,
+                away_club_id=job.away_club_id,
+                home_score=replay_payload.summary.home_score,
+                away_score=replay_payload.summary.away_score,
+                home_user_id=job.home_user_id,
+                away_user_id=job.away_user_id,
+            )
+            self._store_offline_match_notifications(
+                session,
+                job=job,
+                replay_payload=replay_payload,
+                home_analysis=insights.home_analysis,
+                away_analysis=insights.away_analysis,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+        finally:
+            session.close()
+
+    def _store_offline_match_notifications(
+        self,
+        session: Session,
+        *,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+        home_analysis,
+        away_analysis,
+    ) -> None:
+        participants = (
+            (job.home_user_id, "home", home_analysis),
+            (job.away_user_id, "away", away_analysis),
+        )
+        replay_link = f"/matches/{job.fixture_id}/replay"
+        for user_id, team_side, analysis in participants:
+            if user_id is None:
+                continue
+            analysis_link = f"/matches/{job.fixture_id}/analysis?team={team_side}"
+            summary_text = "; ".join(analysis.problems[:2]) if analysis.problems else "No major issues detected."
+            session.add(
+                NotificationRecord(
+                    user_id=user_id,
+                    topic="match_result",
+                    template_key="MATCH_RESULT",
+                    resource_type="competition_match",
+                    resource_id=job.fixture_id,
+                    fixture_id=job.fixture_id,
+                    competition_id=job.competition_id,
+                    message=(
+                        f"{job.home_club_name or 'Home'} {replay_payload.summary.home_score}"
+                        f" - {replay_payload.summary.away_score} {job.away_club_name or 'Away'}"
+                    )[:255],
+                    metadata_json={
+                        "replay_link": replay_link,
+                        "analysis_link": analysis_link,
+                        "analysis_summary": summary_text,
+                        "team": team_side,
+                    },
+                )
+            )
+            session.add(
+                NotificationRecord(
+                    user_id=user_id,
+                    topic="match_analysis",
+                    template_key="MATCH_ANALYSIS_READY",
+                    resource_type="competition_match",
+                    resource_id=job.fixture_id,
+                    fixture_id=job.fixture_id,
+                    competition_id=job.competition_id,
+                    message="Match analysis ready"[:255],
+                    metadata_json={
+                        "analysis_link": analysis_link,
+                        "problems": list(analysis.problems),
+                        "suggestions": list(analysis.suggestions),
+                        "team": team_side,
+                    },
+                )
+            )
+            session.add(
+                NotificationRecord(
+                    user_id=user_id,
+                    topic="match_replay",
+                    template_key="REPLAY_AVAILABLE",
+                    resource_type="competition_match",
+                    resource_id=job.fixture_id,
+                    fixture_id=job.fixture_id,
+                    competition_id=job.competition_id,
+                    message="Replay available"[:255],
+                    metadata_json={
+                        "replay_link": replay_link,
+                        "team": team_side,
+                    },
+                )
+            )
 
     def _competition_metadata(self, competition_id: str) -> dict[str, Any]:
         session = self._open_session()
@@ -569,6 +725,45 @@ class LocalMatchExecutionWorker:
                 },
             )
             templates.append("match_live_now")
+            self.dispatcher.dispatch_notification(
+                competition_id=job.competition_id,
+                competition_type=job.competition_type,
+                template_key="LIVE_MATCH_STARTED",
+                audience_key=user_id,
+                resource_id=f"{job.fixture_id}:live_started",
+                payload={
+                    **self._countdown_payload(job),
+                    "message": f"{job.home_club_name or job.home_club_id or 'Home Club'} vs {job.away_club_name or job.away_club_id or 'Away Club'} is live.",
+                },
+            )
+            templates.append("LIVE_MATCH_STARTED")
+        return tuple(templates)
+
+    def _queue_live_update_notifications(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> tuple[str, ...]:
+        preview = self._highlight_preview(replay_payload)
+        if not preview:
+            return ()
+        templates: list[str] = []
+        for user_id in (job.home_user_id, job.away_user_id):
+            if user_id is None:
+                continue
+            self.dispatcher.dispatch_notification(
+                competition_id=job.competition_id,
+                competition_type=job.competition_type,
+                template_key="LIVE_MATCH_UPDATE",
+                audience_key=user_id,
+                resource_id=f"{job.fixture_id}:live_update",
+                payload={
+                    **self._base_payload(job),
+                    "message": preview[0]["description"],
+                    "highlights_preview": preview,
+                },
+            )
+            templates.append("LIVE_MATCH_UPDATE")
         return tuple(templates)
 
     def _queue_result_notifications(
@@ -583,6 +778,7 @@ class LocalMatchExecutionWorker:
             **self._base_payload(job),
             "home_goals": replay_payload.summary.home_score,
             "away_goals": replay_payload.summary.away_score,
+            "highlights_preview": self._highlight_preview(replay_payload),
         }
         templates: list[str] = []
         if job.home_user_id is not None:
@@ -607,6 +803,33 @@ class LocalMatchExecutionWorker:
                 payload=base_payload,
             )
             templates.append(template_key)
+        return tuple(templates)
+
+    def _queue_highlight_notifications(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> tuple[str, ...]:
+        preview = self._highlight_preview(replay_payload)
+        if not preview:
+            return ()
+        templates: list[str] = []
+        for user_id in (job.home_user_id, job.away_user_id):
+            if user_id is None:
+                continue
+            self.dispatcher.dispatch_notification(
+                competition_id=job.competition_id,
+                competition_type=job.competition_type,
+                template_key="HIGHLIGHTS_READY",
+                audience_key=user_id,
+                resource_id=f"{job.fixture_id}:highlights",
+                payload={
+                    **self._base_payload(job),
+                    "message": f"Highlights are ready for {job.home_club_name or job.home_club_id or 'Home Club'} vs {job.away_club_name or job.away_club_id or 'Away Club'}.",
+                    "highlights_preview": preview,
+                },
+            )
+            templates.append("HIGHLIGHTS_READY")
         return tuple(templates)
 
     def _queue_league_transition_notifications(
@@ -909,6 +1132,23 @@ class LocalMatchExecutionWorker:
                 continue
             breakdown[replay_event_type] = breakdown.get(replay_event_type, 0) + 1
         return breakdown
+
+    def _highlight_preview(self, replay_payload: MatchReplayPayloadView) -> list[dict[str, Any]]:
+        preview: list[dict[str, Any]] = []
+        for event in replay_payload.timeline.events:
+            replay_event_type = self._map_replay_event_type(event.event_type)
+            if replay_event_type is None:
+                continue
+            preview.append(
+                {
+                    "minute": event.minute,
+                    "type": replay_event_type,
+                    "description": event.commentary,
+                }
+            )
+            if len(preview) >= 3:
+                break
+        return preview
 
     def _claim_once(self, bucket: set[str], key: str) -> bool:
         with self._lock:

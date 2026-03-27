@@ -374,7 +374,7 @@ def map_player_row_to_contract(row: Mapping[str, Any]) -> TransfermarktSecondZip
         country_of_birth=raw_payload.get("country_of_birth"),
         city_of_birth=raw_payload.get("city_of_birth"),
         preferred_foot=normalize_preferred_foot(raw_payload.get("foot")),
-        height_cm=parse_optional_int(raw_payload.get("height_in_cm")),
+        height_cm=parse_optional_height_cm(raw_payload.get("height_in_cm")),
         primary_position_group=primary_position_group,
         primary_position=primary_position,
         current_club_id=raw_payload.get("current_club_id"),
@@ -487,6 +487,15 @@ def parse_optional_int(value: Any) -> int | None:
             return int(float(cleaned))
         except ValueError:
             return None
+
+
+def parse_optional_height_cm(value: Any) -> int | None:
+    parsed = parse_optional_int(value)
+    if parsed is None:
+        return None
+    if parsed < 100 or parsed > 250:
+        return None
+    return parsed
 
 
 def _normalized_key(value: str) -> str:
@@ -712,6 +721,7 @@ __all__ = [
     "normalize_position_group",
     "normalize_preferred_foot",
     "normalize_primary_position",
+    "parse_optional_height_cm",
     "parse_optional_int",
     "parse_source_date",
     "UNATTACHED_PLACEHOLDER",

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'gte_api_repository.dart';
 import 'gte_exchange_models.dart';
 import 'gte_http_transport.dart';
@@ -369,7 +371,7 @@ class GteExchangeApiClient {
     try {
       return GteMarketPlayerListView.fromJson(
         await _sendPublicGet(
-          '/api/market/players',
+          '/marketplace/players',
           query: query.toQueryParameters(),
         ),
       );
@@ -398,6 +400,45 @@ class GteExchangeApiClient {
     }
   }
 
+  Future<GtePlayerOverview> fetchPlayerOverview(String playerId) async {
+    if (config.mode == GteBackendMode.fixture) {
+      return _fallbackPlayerOverview(playerId);
+    }
+
+    try {
+      return GtePlayerOverview.fromJson(
+        await _sendPublicGet('/api/players/$playerId/overview'),
+      );
+    } catch (error) {
+      if (_shouldFallback(error)) {
+        return _fallbackPlayerOverview(playerId);
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<GteCareerEntry>> fetchPlayerCareer(String playerId) async {
+    if (config.mode == GteBackendMode.fixture) {
+      return _fallbackPlayerCareer(playerId);
+    }
+
+    try {
+      final Object? raw = await _sendPublicGet('/api/players/$playerId/career');
+      return GteJson.list(raw, label: 'player career')
+          .map(GteCareerEntry.fromJson)
+          .toList(growable: false);
+    } catch (error) {
+      if (_shouldFallback(error)) {
+        return _fallbackPlayerCareer(playerId);
+      }
+      rethrow;
+    }
+  }
+
+  Future<PlayerProfile> fetchPlayerProfile(String playerId) {
+    return repository.fetchPlayerProfile(playerId);
+  }
+
   Future<GtePlayerMarketSnapshot> fetchPlayerMarket(
     String playerId, {
     String interval = '1h',
@@ -408,21 +449,27 @@ class GteExchangeApiClient {
       repository.fetchTicker(playerId),
       repository.fetchCandles(playerId, interval: interval, limit: limit),
       repository.fetchOrderBook(playerId),
-      fetchPlayerLifecycleSnapshot(playerId),
+      fetchPlayerOverview(playerId),
+      fetchPlayerCareer(playerId),
     ]);
+    final GtePlayerOverview overview = payload[4] as GtePlayerOverview;
     return GtePlayerMarketSnapshot(
       detail: payload[0] as GteMarketPlayerDetailView,
       ticker: payload[1] as GteMarketTicker,
       candles: payload[2] as GteMarketCandles,
       orderBook: payload[3] as GteOrderBook,
-      lifecycle: payload[4] as GtePlayerLifecycleSnapshot?,
+      overview: overview,
+      careerEntries: payload[5] as List<GteCareerEntry>,
+      lifecycle: GtePlayerLifecycleSnapshot.fromOverview(overview),
     );
   }
 
   Future<GtePlayerLifecycleSnapshot?> fetchPlayerLifecycleSnapshot(
       String playerId) async {
     if (config.mode == GteBackendMode.fixture) {
-      return null;
+      final GtePlayerOverview overview =
+          await _fallbackPlayerOverview(playerId);
+      return GtePlayerLifecycleSnapshot.fromOverview(overview);
     }
 
     try {
@@ -431,7 +478,9 @@ class GteExchangeApiClient {
       );
     } catch (error) {
       if (_shouldFallback(error)) {
-        return null;
+        final GtePlayerOverview overview =
+            await _fallbackPlayerOverview(playerId);
+        return GtePlayerLifecycleSnapshot.fromOverview(overview);
       }
       rethrow;
     }
@@ -581,37 +630,65 @@ class GteExchangeApiClient {
 
   Future<GteMarketPlayerListView> _fallbackPlayers(
       GteMarketPlayersQuery query) async {
-    final int minimumWindow = query.offset + query.limit;
+    final int startOffset = _fallbackCursorOffset(query);
+    final int minimumWindow = startOffset + query.limit;
     final List<PlayerSnapshot> base = await repository.fetchPlayers(
       limit: minimumWindow > 20 ? minimumWindow : 20,
     );
     final String searchTerm = query.search?.trim().toLowerCase() ?? '';
-    final List<PlayerSnapshot> filtered = searchTerm.isEmpty
-        ? base
-        : base.where((PlayerSnapshot player) {
-            final String haystack = <String>[
-              player.name,
-              player.club,
-              player.nation,
-              player.position,
-            ].join(' ').toLowerCase();
-            return haystack.contains(searchTerm);
-          }).toList(growable: false);
+    final String? position = query.position?.trim().toLowerCase();
+    final String? country = query.country?.trim().toLowerCase();
+    final String? availability = query.availability?.trim().toLowerCase();
+    final List<PlayerSnapshot> filtered = base.where((PlayerSnapshot player) {
+      if (searchTerm.isNotEmpty) {
+        final String haystack = <String>[
+          player.name,
+          player.club,
+          player.nation,
+          player.position,
+        ].join(' ').toLowerCase();
+        if (!haystack.contains(searchTerm)) {
+          return false;
+        }
+      }
+      if (position != null &&
+          !player.position.toLowerCase().contains(position)) {
+        return false;
+      }
+      if (country != null && !player.nation.toLowerCase().contains(country)) {
+        return false;
+      }
+      if (query.minAge != null && player.age < query.minAge!) {
+        return false;
+      }
+      if (query.maxAge != null && player.age > query.maxAge!) {
+        return false;
+      }
+      if (availability == 'free_agent' &&
+          player.club.trim().toLowerCase() != 'free agent') {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
     final List<PlayerSnapshot> page =
-        filtered.skip(query.offset).take(query.limit).toList(
+        filtered.skip(startOffset).take(query.limit).toList(
               growable: false,
             );
+    final bool hasMore = startOffset + page.length < filtered.length;
     return GteMarketPlayerListView(
       items: page.map(_mapSnapshotToListItem).toList(growable: false),
       limit: query.limit,
-      offset: query.offset,
+      hasMore: hasMore,
+      nextCursor:
+          hasMore ? _encodeFallbackCursor(startOffset + page.length) : null,
+      offset: startOffset,
       total: filtered.length,
     );
   }
 
   Future<GteMarketPlayerDetailView> _fallbackPlayerDetail(
       String playerId) async {
-    final PlayerProfile profile = await repository.fetchPlayerProfile(playerId);
+    final PlayerProfile profile = await _fallbackProfile(playerId);
     final double normalizedMovement =
         _normalizeMovement(profile.snapshot.valueDeltaPct);
     final double previousValue = normalizedMovement.abs() < 0.0001
@@ -698,6 +775,120 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<GtePlayerOverview> _fallbackPlayerOverview(String playerId) async {
+    final PlayerProfile profile = await _fallbackProfile(playerId);
+    final PlayerSnapshot snapshot = profile.snapshot;
+    final DateTime now = DateTime.now().toUtc();
+    final DateTime generatedOn = DateTime.utc(now.year, now.month, now.day);
+    final GteCareerTotals totals = _fallbackCareerTotals(snapshot);
+    final List<GteSeasonProgression> seasonalProgression =
+        _fallbackSeasonalProgression(snapshot, totals);
+    final bool freeAgent = snapshot.club.trim().toLowerCase() == 'free agent';
+    final String transferSignal = profile.transferSignal.trim();
+    final List<GteLifecycleEventItem> events = profile.awards.isNotEmpty
+        ? profile.awards
+            .take(3)
+            .toList(growable: false)
+            .asMap()
+            .entries
+            .map((MapEntry<int, String> entry) {
+            return GteLifecycleEventItem(
+              eventType: 'career_highlight',
+              summary: entry.value,
+              occurredOn: DateTime.utc(now.year - entry.key, 6, 1),
+            );
+          }).toList(growable: false)
+        : snapshot.recentHighlights
+            .take(3)
+            .toList(growable: false)
+            .asMap()
+            .entries
+            .map((MapEntry<int, String> entry) {
+            return GteLifecycleEventItem(
+              eventType: 'market_signal',
+              summary: entry.value,
+              occurredOn: generatedOn.subtract(Duration(days: entry.key)),
+            );
+          }).toList(growable: false);
+
+    return GtePlayerOverview(
+      playerId: snapshot.id,
+      playerName: snapshot.name,
+      position: snapshot.position,
+      marketValueEur: null,
+      overviewGeneratedOn: generatedOn,
+      careerSummary: GtePlayerCareerSummary(
+        playerId: snapshot.id,
+        playerName: snapshot.name,
+        currentClubId: null,
+        currentClubName: freeAgent ? null : snapshot.club,
+        currentCompetitionId: null,
+        currentCompetitionName: null,
+        totals: totals,
+        seasonalProgression: seasonalProgression,
+      ),
+      availabilityBadge: const GteLifecycleBadgeView(
+        status: 'available',
+        label: 'Available',
+        available: true,
+      ),
+      contractBadge: GteContractBadgeView(
+        status: freeAgent ? 'free_agent' : 'active',
+        label: freeAgent ? 'Free agent' : 'Under contract',
+        clubName: freeAgent ? null : snapshot.club,
+        endsOn: freeAgent ? null : DateTime.utc(now.year + 1, 6, 30),
+      ),
+      transferStatus: GteTransferStatusView(
+        windowOpen: true,
+        eligible: true,
+        reason: transferSignal.isEmpty ? null : transferSignal,
+        windowLabel: 'Open market',
+        lastBidStatus: snapshot.inTransferRoom ? 'active' : null,
+      ),
+      agencySummary: null,
+      recentEvents: events,
+    );
+  }
+
+  Future<List<GteCareerEntry>> _fallbackPlayerCareer(String playerId) async {
+    final PlayerProfile profile = await _fallbackProfile(playerId);
+    final PlayerSnapshot snapshot = profile.snapshot;
+    final GteCareerTotals totals = _fallbackCareerTotals(snapshot);
+    final List<GteSeasonProgression> progression =
+        _fallbackSeasonalProgression(snapshot, totals);
+    final DateTime now = DateTime.now().toUtc();
+    final List<GteCareerEntry> entries = progression.reversed
+        .toList(growable: false)
+        .asMap()
+        .entries
+        .map((MapEntry<int, GteSeasonProgression> entry) {
+      final GteSeasonProgression season = entry.value;
+      final String clubName = season.clubName ??
+          (snapshot.club.trim().isEmpty ? 'Independent' : snapshot.club);
+      return GteCareerEntry(
+        id: '${snapshot.id}-${season.seasonLabel}',
+        playerId: snapshot.id,
+        clubId: season.clubId,
+        clubName: clubName,
+        seasonLabel: season.seasonLabel,
+        squadRole: entry.key == 0 ? 'Breakthrough' : 'First team',
+        appearances: season.appearances,
+        goals: season.goals,
+        assists: season.assists,
+        averageRating: season.averageRating?.round(),
+        notes: profile.awards.isEmpty
+            ? null
+            : profile.awards[entry.key % profile.awards.length],
+        startOn: DateTime.utc(now.year - (2 - entry.key), 7, 1),
+        endOn: DateTime.utc(now.year - (1 - entry.key), 6, 30),
+        updatedAt: now,
+      );
+    }).toList(growable: false);
+    entries.sort((GteCareerEntry left, GteCareerEntry right) =>
+        right.timelineAnchor.compareTo(left.timelineAnchor));
+    return entries;
+  }
+
   GteMarketPlayerListItem _mapSnapshotToListItem(PlayerSnapshot player) {
     return GteMarketPlayerListItem(
       playerId: player.id,
@@ -711,7 +902,174 @@ class GteExchangeApiClient {
       trendScore: player.gsi.toDouble(),
       marketInterestScore: player.recentHighlights.length * 10,
       averageRating: player.formRating,
+      isAvailable: true,
+      availabilityLabel: 'Available now',
+      askingType: player.inTransferRoom ? 'transfer' : 'trial',
+      agentUserId: 'fixture-agent-${player.id}',
+      agentName: '${player.club} representation',
+      marketplaceNote: player.recentHighlights.isEmpty
+          ? null
+          : player.recentHighlights.first,
     );
+  }
+
+  Future<PlayerProfile> _fallbackProfile(String playerId) {
+    return repository.fetchPlayerProfile(playerId);
+  }
+
+  GteCareerTotals _fallbackCareerTotals(PlayerSnapshot snapshot) {
+    final String position = snapshot.position.trim().toUpperCase();
+    final int appearances =
+        (24 + (snapshot.gsi / 5).round() + (snapshot.age % 6))
+            .clamp(18, 48)
+            .toInt();
+    final int starts = (appearances * (0.72 + (snapshot.formRating / 25)))
+        .round()
+        .clamp(12, appearances)
+        .toInt();
+    final int minutes =
+        (starts * (position == 'GK' ? 90 : 79)).clamp(1200, 4320).toInt();
+    if (_isGoalkeeper(position)) {
+      return GteCareerTotals(
+        appearances: appearances,
+        starts: starts,
+        goals: 0,
+        assists: 0,
+        cleanSheets: (starts * 0.38).round(),
+        saves: starts * 3,
+        minutes: minutes,
+      );
+    }
+    if (_isDefender(position)) {
+      return GteCareerTotals(
+        appearances: appearances,
+        starts: starts,
+        goals: (snapshot.formRating / 2.2).round().clamp(1, 7).toInt(),
+        assists: (snapshot.formRating / 1.8).round().clamp(2, 9).toInt(),
+        cleanSheets: (starts * 0.34).round(),
+        saves: 0,
+        minutes: minutes,
+      );
+    }
+    if (_isMidfielder(position)) {
+      return GteCareerTotals(
+        appearances: appearances,
+        starts: starts,
+        goals: (snapshot.formRating * 1.6).round().clamp(4, 18).toInt(),
+        assists: (snapshot.formRating * 1.4).round().clamp(4, 16).toInt(),
+        cleanSheets: 0,
+        saves: 0,
+        minutes: minutes,
+      );
+    }
+    return GteCareerTotals(
+      appearances: appearances,
+      starts: starts,
+      goals: (snapshot.formRating * 2.2).round().clamp(8, 28).toInt(),
+      assists: (snapshot.formRating * 1.1).round().clamp(3, 14).toInt(),
+      cleanSheets: 0,
+      saves: 0,
+      minutes: minutes,
+    );
+  }
+
+  List<GteSeasonProgression> _fallbackSeasonalProgression(
+    PlayerSnapshot snapshot,
+    GteCareerTotals totals,
+  ) {
+    final DateTime now = DateTime.now().toUtc();
+    const List<double> weights = <double>[0.24, 0.33, 0.43];
+    final List<int> appearances = _distributeTotal(totals.appearances, weights);
+    final List<int> starts = _distributeTotal(totals.starts, weights);
+    final List<int> goals = _distributeTotal(totals.goals, weights);
+    final List<int> assists = _distributeTotal(totals.assists, weights);
+    final List<int> cleanSheets = _distributeTotal(totals.cleanSheets, weights);
+    final List<int> saves = _distributeTotal(totals.saves, weights);
+    final List<int> minutes = _distributeTotal(totals.minutes, weights);
+    return List<GteSeasonProgression>.generate(3, (int index) {
+      final int startYear = now.year - (2 - index);
+      return GteSeasonProgression(
+        seasonLabel: '$startYear/${(startYear + 1).toString().substring(2)}',
+        competitionId: null,
+        competitionName: null,
+        clubId: null,
+        clubName: snapshot.club.trim().isEmpty ? 'Independent' : snapshot.club,
+        appearances: appearances[index],
+        starts: starts[index],
+        goals: goals[index],
+        assists: assists[index],
+        cleanSheets: cleanSheets[index],
+        saves: saves[index],
+        minutes: minutes[index],
+        averageRating: (snapshot.formRating - (0.4 - (index * 0.2)))
+            .clamp(6.4, 9.2)
+            .toDouble(),
+      );
+    }).reversed.toList(growable: false);
+  }
+
+  List<int> _distributeTotal(int total, List<double> weights) {
+    if (total <= 0) {
+      return List<int>.filled(weights.length, 0, growable: false);
+    }
+    final List<int> values =
+        weights.map((double weight) => (total * weight).floor()).toList();
+    int assigned = values.fold<int>(0, (int sum, int value) => sum + value);
+    int cursor = values.length - 1;
+    while (assigned < total) {
+      values[cursor] += 1;
+      assigned += 1;
+      cursor = cursor == 0 ? values.length - 1 : cursor - 1;
+    }
+    return values;
+  }
+
+  int _fallbackCursorOffset(GteMarketPlayersQuery query) {
+    final String? rawCursor = query.cursor?.trim();
+    if (rawCursor == null || rawCursor.isEmpty) {
+      return query.offset < 0 ? 0 : query.offset;
+    }
+    try {
+      final Map<String, dynamic> payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(rawCursor))),
+      ) as Map<String, dynamic>;
+      final Object? offset = payload['offset'];
+      if (offset is int && offset >= 0) {
+        return offset;
+      }
+      if (offset is num && offset >= 0) {
+        return offset.toInt();
+      }
+    } catch (_) {
+      return query.offset < 0 ? 0 : query.offset;
+    }
+    return query.offset < 0 ? 0 : query.offset;
+  }
+
+  String _encodeFallbackCursor(int offset) {
+    return base64Url.encode(
+      utf8.encode(
+        jsonEncode(<String, int>{'offset': offset}),
+      ),
+    );
+  }
+
+  bool _isGoalkeeper(String position) => position == 'GK';
+
+  bool _isDefender(String position) {
+    return position == 'CB' ||
+        position == 'LB' ||
+        position == 'RB' ||
+        position == 'LWB' ||
+        position == 'RWB';
+  }
+
+  bool _isMidfielder(String position) {
+    return position == 'DM' ||
+        position == 'CM' ||
+        position == 'AM' ||
+        position == 'LM' ||
+        position == 'RM';
   }
 }
 

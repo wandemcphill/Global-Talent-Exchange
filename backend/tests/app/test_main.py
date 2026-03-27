@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from contextlib import suppress
 from datetime import datetime, timezone
+from pathlib import Path
 import logging
 import os
+from uuid import uuid4
 
 from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
@@ -26,10 +28,18 @@ from app.wallets.router import list_wallet_accounts
 
 
 @pytest.fixture()
-def app_and_engine(tmp_path):
-    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_app_test.db').as_posix()}"
+def app_and_engine():
+    temp_root = Path(__file__).resolve().parents[2] / ".tmp_testdbs"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    database_path = temp_root / f"gte_app_test_{uuid4().hex}.db"
+    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    return create_app(engine=engine, run_migration_check=True), engine
+    try:
+        yield create_app(engine=engine, run_migration_check=True), engine
+    finally:
+        engine.dispose()
+        with suppress(FileNotFoundError, PermissionError):
+            database_path.unlink()
 
 
 def _resolve_session(app):
@@ -42,6 +52,26 @@ def _resolve_session(app):
 def _close_session(generator) -> None:
     with suppress(StopIteration):
         next(generator)
+
+
+def _install_logger_info_spy(monkeypatch) -> list[str]:
+    messages: list[str] = []
+
+    def _record(message: object, *args: object, **_kwargs: object) -> None:
+        template = str(message)
+        if args:
+            try:
+                messages.append(template % args)
+                return
+            except (TypeError, ValueError):
+                pass
+        messages.append(template)
+
+    import app.modules as modules_module
+
+    monkeypatch.setattr(main_module.logger, "info", _record)
+    monkeypatch.setattr(modules_module.logger, "info", _record)
+    return messages
 
 
 def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -> None:
@@ -65,6 +95,12 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "world_super_cup" in app.state.domain_modules
         assert "fast_cups" in app.state.domain_modules
         assert "match_engine" in app.state.domain_modules
+        assert "matches" in app.state.domain_modules
+        assert "live_matches" in app.state.domain_modules
+        assert "manager_duels" in app.state.domain_modules
+        assert "manager_marketplace" in app.state.domain_modules
+        assert "simulation_matchmaking" in app.state.domain_modules
+        assert "competitive_integrity" in app.state.domain_modules
         assert "canonical_clubs" in app.state.domain_modules
         assert "player_lifecycle" in app.state.domain_modules
         assert "player_agency" in app.state.domain_modules
@@ -118,6 +154,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/wallets/summary" in paths
     assert "/api/wallets/ledger" in paths
     assert "/api/wallets/payment-events" in paths
+    assert "/players" in paths
     assert "/players/summaries/recent" in paths
     assert "/regen-universe/awards" in paths
     assert "/api/regen-universe/awards" in paths
@@ -162,6 +199,33 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/fast-cups/upcoming" in paths
     assert "/match-engine/replay" in paths
     assert "/api/match-engine/replay" in paths
+    assert "/matches/{match_id}/replay" in paths
+    assert "/api/matches/{match_id}/replay" in paths
+    assert "/matches/{match_id}/analysis" in paths
+    assert "/api/matches/{match_id}/analysis" in paths
+    assert "/matches/{match_id}/spectate" in paths
+    assert "/api/matches/{match_id}/highlights" in paths
+    assert "/manager-duels" in paths
+    assert "/manager-duels/leaderboard" in paths
+    assert "/api/manager-duels/{duel_id}" in paths
+    assert "/managers" in paths
+    assert "/managers/leaderboard" in paths
+    assert "/simulation-matchmaking/profiles/{user_id}" in paths
+    assert "/api/simulation-matchmaking/profiles/{user_id}" in paths
+    assert "/simulation-matchmaking/quick-game" in paths
+    assert "/api/simulation-matchmaking/quick-game" in paths
+    assert "/simulation-matchmaking/quick-tournament" in paths
+    assert "/api/simulation-matchmaking/quick-tournament" in paths
+    assert "/simulation-matchmaking/hosted-competitions/preview" in paths
+    assert "/api/simulation-matchmaking/hosted-competitions/preview" in paths
+    assert "/competitive-integrity/managers" in paths
+    assert "/api/competitive-integrity/managers" in paths
+    assert "/competitive-integrity/matches" in paths
+    assert "/api/competitive-integrity/matches" in paths
+    assert "/competitive-integrity/fast-game/runs" in paths
+    assert "/api/competitive-integrity/fast-game/runs" in paths
+    assert "/competitive-integrity/notifications/events" in paths
+    assert "/api/competitive-integrity/notifications/events" in paths
     assert "/api/clubs/{club_id}/reputation" in paths
     assert "/api/clubs/{club_id}/reputation/history" in paths
     assert "/api/clubs/{club_id}/prestige" in paths
@@ -189,7 +253,10 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/admin/referrals/dashboard" in paths
     assert "/api/admin/referrals/analytics/summary" in paths
     assert "/notifications/me" in paths
+    assert "/notifications" in paths
     assert "/api/notifications/me" in paths
+    assert "/api/notifications" in paths
+    assert "/api/admin/competitive-integrity/workers/run-once" in paths
     assert "/replays/public/featured" in paths
     assert "/api/replays/public/featured" in paths
     assert "/api/players/{player_id}/career" in paths
@@ -231,7 +298,7 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
     }
 
 
-def test_startup_logs_completion_and_skips_non_local_seeding(tmp_path, caplog, monkeypatch) -> None:
+def test_startup_logs_completion_and_skips_non_local_seeding(tmp_path, monkeypatch) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-log-test.db').as_posix()}"
     media_root = tmp_path / "media"
     monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda session_factory: None)
@@ -246,17 +313,15 @@ def test_startup_logs_completion_and_skips_non_local_seeding(tmp_path, caplog, m
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     app = create_app(settings=settings, engine=engine, run_migration_check=False)
 
-    with caplog.at_level(logging.INFO):
-        with TestClient(app):
-            app.state.deferred_startup_thread.join(timeout=5)
-
-    messages = [record.getMessage() for record in caplog.records]
+    messages = _install_logger_info_spy(monkeypatch)
+    with TestClient(app):
+        app.state.deferred_startup_thread.join(timeout=5)
 
     assert "app.startup.complete" in messages
     assert any(message.startswith("app.startup.seed.skipped") for message in messages)
 
 
-def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, caplog, monkeypatch) -> None:
+def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, monkeypatch) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-seeding-disabled.db').as_posix()}"
     media_root = tmp_path / "media"
     monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda session_factory: None)
@@ -272,11 +337,9 @@ def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, caplo
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     app = create_app(settings=settings, engine=engine, run_migration_check=False)
 
-    with caplog.at_level(logging.INFO):
-        with TestClient(app):
-            app.state.deferred_startup_thread.join(timeout=5)
-
-    messages = [record.getMessage() for record in caplog.records]
+    messages = _install_logger_info_spy(monkeypatch)
+    with TestClient(app):
+        app.state.deferred_startup_thread.join(timeout=5)
 
     assert "app.startup.complete" in messages
     assert any(message == "app.startup.seed.skipped seed=policy_documents reason=disabled" for message in messages)

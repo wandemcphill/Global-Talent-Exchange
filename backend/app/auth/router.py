@@ -21,7 +21,6 @@ from app.auth.schemas import (
 )
 from app.auth.service import AuthError, AuthService, DuplicateUserError, InvalidCredentialsError
 from app.models.user import User
-from app.users.schemas import UserPublic
 from app.wallets.service import WalletService
 
 logger = logging.getLogger(__name__)
@@ -78,7 +77,7 @@ def register_user(
         )
         confirmation_code = service.prepare_signup_confirmation(session, user=user)
         analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
-        token, expires_in = service.issue_access_token(user)
+        token, expires_in = service.issue_access_token(user, session=session)
         session.commit()
         session.refresh(user)
     except DuplicateUserError as exc:
@@ -97,9 +96,9 @@ def register_user(
     return TokenResponse(
         access_token=token,
         expires_in=expires_in,
-        user=UserPublic.model_validate(user),
-        permissions=service.resolve_user_permissions(request, user) if request is not None else [],
-        landing_route=service.resolve_landing_route(user),
+        user=service.build_user_public(session, user),
+        permissions=service.resolve_user_permissions(request, user, session=session) if request is not None else [],
+        landing_route=service.resolve_landing_route(user, session=session),
     )
 
 
@@ -114,7 +113,7 @@ def login_user(
     try:
         user = service.authenticate_user(session, email=payload.email, password=payload.password)
         analytics.track_event(session, name="login_success", user_id=user.id, metadata={})
-        token, expires_in = service.issue_access_token(user)
+        token, expires_in = service.issue_access_token(user, session=session)
         session.commit()
         session.refresh(user)
     except InvalidCredentialsError as exc:
@@ -129,9 +128,9 @@ def login_user(
     return TokenResponse(
         access_token=token,
         expires_in=expires_in,
-        user=UserPublic.model_validate(user),
-        permissions=service.resolve_user_permissions(request, user) if request is not None else [],
-        landing_route=service.resolve_landing_route(user),
+        user=service.build_user_public(session, user),
+        permissions=service.resolve_user_permissions(request, user, session=session) if request is not None else [],
+        landing_route=service.resolve_landing_route(user, session=session),
     )
 
 
@@ -194,21 +193,23 @@ def reset_account_with_recovery(
 
 @api_router.get("/me", response_model=CurrentUserResponse)
 def read_current_user_profile(
+    request: Request,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> CurrentUserResponse:
-    return AuthService().get_current_user_profile(session, current_user)
+    return AuthService().get_current_user_profile(session, current_user, app=request.app)
 
 
 @api_router.patch("/me", response_model=CurrentUserResponse)
 def update_current_user_profile(
     payload: CurrentUserUpdateRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> CurrentUserResponse:
     service = AuthService()
     try:
-        profile = service.update_current_user_profile(
+        service.update_current_user_profile(
             session,
             user=current_user,
             payload=payload,
@@ -218,12 +219,13 @@ def update_current_user_profile(
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return profile
+    return service.get_current_user_profile(session, current_user, app=request.app)
 
 
 @api_router.post("/change-password", response_model=CurrentUserResponse)
 def change_current_user_password(
     payload: ChangePasswordRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> CurrentUserResponse:
@@ -232,7 +234,7 @@ def change_current_user_password(
         service.change_password(session, user=current_user, payload=payload)
         session.commit()
         session.refresh(current_user)
-        return service.get_current_user_profile(session, current_user)
+        return service.get_current_user_profile(session, current_user, app=request.app)
     except InvalidCredentialsError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc

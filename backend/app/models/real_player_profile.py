@@ -8,6 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
+def _player_model():
+    from app.ingestion.models import Player
+
+    return Player
+
+
 class RealPlayerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "real_player_profiles"
     __table_args__ = (
@@ -61,7 +67,7 @@ class RealPlayerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    player = relationship("Player")
+    player = relationship(_player_model)
     source_link: Mapped["RealPlayerSourceLink"] = relationship("RealPlayerSourceLink", back_populates="profile")
 
 

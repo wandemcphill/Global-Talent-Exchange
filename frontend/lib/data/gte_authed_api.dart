@@ -65,13 +65,27 @@ class GteAuthedApi {
     return response.body;
   }
 
+  Future<Object?> post(
+    String path, {
+    Map<String, Object?> query = const <String, Object?>{},
+    Object? body,
+    bool auth = true,
+  }) {
+    return request(
+      'POST',
+      path,
+      query: query,
+      body: body,
+      auth: auth,
+    );
+  }
+
   Future<Map<String, dynamic>> getMap(
     String path, {
     Map<String, Object?> query = const <String, Object?>{},
     bool auth = true,
   }) async {
-    final Object? body =
-        await request('GET', path, query: query, auth: auth);
+    final Object? body = await request('GET', path, query: query, auth: auth);
     if (body is Map) {
       return Map<String, dynamic>.from(body);
     }
@@ -86,8 +100,7 @@ class GteAuthedApi {
     Map<String, Object?> query = const <String, Object?>{},
     bool auth = true,
   }) async {
-    final Object? body =
-        await request('GET', path, query: query, auth: auth);
+    final Object? body = await request('GET', path, query: query, auth: auth);
     if (body is List) {
       return body;
     }

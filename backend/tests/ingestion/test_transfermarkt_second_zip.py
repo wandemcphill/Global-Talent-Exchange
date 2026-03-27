@@ -9,6 +9,7 @@ from app.ingestion.transfermarkt_second_zip import (
     SECOND_ZIP_REQUIRED_FILES,
     TransfermarktSecondZipReader,
     map_player_row_to_contract,
+    parse_optional_height_cm,
     normalize_optional_text,
     normalize_position_fields,
     normalize_preferred_foot,
@@ -117,6 +118,35 @@ def test_normalization_helpers_cover_nulls_dates_feet_and_positions() -> None:
     assert parse_optional_int("184") == 184
     assert parse_optional_int("184.0") == 184
     assert parse_optional_int("") is None
+
+
+def test_parse_optional_height_cm_nulls_impossible_values() -> None:
+    assert parse_optional_height_cm("184") == 184
+    assert parse_optional_height_cm("18") is None
+    assert parse_optional_height_cm("251") is None
+    assert parse_optional_height_cm("") is None
+    assert parse_optional_height_cm(None) is None
+
+
+def test_player_contract_uses_height_hygiene_for_bad_source_values() -> None:
+    base_row = {
+        "player_id": "10",
+        "name": "Test Player",
+        "date_of_birth": "2004-01-10 00:00:00",
+        "country_of_citizenship": "Scotland",
+        "position": "Defender",
+        "sub_position": "Centre-Back",
+    }
+
+    too_small = map_player_row_to_contract({**base_row, "height_in_cm": "19"})
+    too_large = map_player_row_to_contract({**base_row, "height_in_cm": "300"})
+    blank = map_player_row_to_contract({**base_row, "height_in_cm": ""})
+    missing = map_player_row_to_contract(base_row)
+
+    assert too_small.height_cm is None
+    assert too_large.height_cm is None
+    assert blank.height_cm is None
+    assert missing.height_cm is None
 
 
 def test_reader_supports_required_second_zip_members(tmp_path: Path) -> None:

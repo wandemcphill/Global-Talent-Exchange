@@ -83,6 +83,7 @@ class GteSessionIdentity {
 
   static _ResolvedClub? _currentClubCandidate(Map<String, Object?> source) {
     return _mergeClubCandidates(
+      _activeOrganizationCandidate(source),
       _candidateFromDirectFields(
         source,
         idKeys: const <String>['current_club_id', 'currentClubId'],
@@ -92,6 +93,40 @@ class GteSessionIdentity {
       _candidateFromClubObject(
         _mapValue(source, const <String>['current_club', 'currentClub']),
       ),
+    );
+  }
+
+  static _ResolvedClub? _activeOrganizationCandidate(
+    Map<String, Object?> source,
+  ) {
+    final String? organizationType = _firstString(
+      source,
+      const <String>[
+        'active_organization_type',
+        'activeOrganizationType',
+        'organization_type',
+        'organizationType',
+      ],
+    );
+    if (organizationType != null &&
+        organizationType.trim().toLowerCase() != 'club') {
+      return null;
+    }
+    return _candidateFromDirectFields(
+      source,
+      idKeys: const <String>[
+        'active_organization_id',
+        'activeOrganizationId',
+        'organization_id',
+        'organizationId',
+      ],
+      nameKeys: const <String>[
+        'active_organization_name',
+        'activeOrganizationName',
+        'organization_name',
+        'organizationName',
+      ],
+      slugKeys: const <String>[],
     );
   }
 
@@ -197,11 +232,29 @@ class GteSessionIdentity {
     if (entry == null) {
       return null;
     }
+    final String? organizationType = _firstString(
+      entry,
+      const <String>['organization_type', 'organizationType', 'type'],
+    );
+    if (organizationType != null &&
+        organizationType.trim().toLowerCase() != 'club') {
+      return null;
+    }
     return _mergeClubCandidates(
       _candidateFromDirectFields(
         entry,
-        idKeys: const <String>['club_id', 'clubId'],
-        nameKeys: const <String>['club_name', 'clubName'],
+        idKeys: const <String>[
+          'club_id',
+          'clubId',
+          'organization_id',
+          'organizationId',
+        ],
+        nameKeys: const <String>[
+          'club_name',
+          'clubName',
+          'organization_name',
+          'organizationName',
+        ],
         slugKeys: const <String>['club_slug', 'clubSlug', 'slug'],
       ),
       _candidateFromClubObject(_mapValue(entry, const <String>['club'])),

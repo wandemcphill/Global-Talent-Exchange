@@ -35,6 +35,7 @@ This document covers the canonical path from fixture scheduling to final replay 
 
 - Replace the in-memory publisher with Kafka, Redpanda, or RabbitMQ for durable queueing.
 - Use separate topics or queues for `match_simulation`, `notification`, `bracket_advancement`, and `payout_settlement`.
+- Split match workloads into explicit lanes such as `match_queue_live`, `match_queue_async`, and `tournament_queue` so live viewer workloads do not queue behind cheap async resolutions.
 - Partition `match_simulation` by `fixture_id` and transition jobs by `competition_id` to keep ordering deterministic where it matters.
 - Persist the dispatcher outbox in the primary database so fixture commits and job publication are atomic.
 
@@ -68,12 +69,19 @@ This document covers the canonical path from fixture scheduling to final replay 
 - Publish live state changes into Redis Streams or Kafka, then fan out through dedicated websocket gateway nodes.
 - Keep websocket nodes stateless and shard subscriptions by fixture or competition.
 - Push only compact state deltas over sockets; replay payload retrieval stays on HTTP.
+- Treat live event streaming and async summary delivery as different products: live matches publish minute-by-minute deltas over sockets, while async matches skip fanout entirely and return the final summary plus replay package.
 
 ### Object Storage
 
 - Store replay payload JSON, commentary streams, and future rich media in object storage such as S3 or GCS.
 - Keep only replay metadata, object keys, versions, and visibility flags in PostgreSQL.
 - Use immutable object keys per replay version to preserve append-only auditability.
+
+### Result Storage Split
+
+- Keep match summary rows, queue state, fixture execution ledgers, and replay metadata in PostgreSQL.
+- Store hot live event buffers, websocket fanout metadata, and idempotency claims in Redis.
+- Store full event logs and replay bodies in object storage when they outgrow the primary database write path.
 
 ### Rate Limiting
 
@@ -114,6 +122,7 @@ This document covers the canonical path from fixture scheduling to final replay 
 - Simulation is CPU-heavy and can spike unpredictably during tournament bursts.
 - Inline execution would couple user latency to simulation time and reduce API capacity under load.
 - Queue-backed workers give retry control, backpressure, deterministic recovery, and better autoscaling signals.
+- Async matches are the pressure valve: they resolve immediately on worker completion, persist the result, and avoid the live streaming path unless the fixture is explicitly scheduled for spectators.
 
 ## Capacity Model For 100k Simultaneous Users
 

@@ -1,0 +1,172 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import time
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+
+from app.auth.service import AuthService
+from app.live_matches.service import ensure_live_match_hub
+from app.main import create_app
+from app.models.base import generate_uuid
+from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
+from app.models.user import User
+
+
+def _create_authenticated_user(app, *, email: str, username: str, display_name: str) -> tuple[User, dict[str, str]]:
+    with app.state.session_factory() as session:
+        service = AuthService()
+        user = service.register_user(
+            session,
+            email=email,
+            username=username,
+            password="SuperSecret1",
+            display_name=display_name,
+        )
+        token, _ = service.issue_access_token(user)
+        session.commit()
+        session.refresh(user)
+        return user, {"Authorization": f"Bearer {token}"}
+
+
+def _seed_manager(app, *, owner_user_id: str, manager_id: str, display_name: str) -> None:
+    with app.state.session_factory() as session:
+        session.add(
+            ManagerCatalogEntry(
+                manager_id=manager_id,
+                display_name=display_name,
+                rarity="elite",
+                mentality="attacking",
+                tactics=["high_press_attack", "counter_attack"],
+                traits=["tactical_flexibility", "great_motivator"],
+                substitution_tendency="balanced_substitution",
+                philosophy_summary=f"{display_name} drives human-led tactical execution.",
+                club_associations=[],
+                supply_total=1,
+                supply_available=0,
+            )
+        )
+        asset_id = generate_uuid()
+        session.add(
+            ManagerHolding(
+                asset_id=asset_id,
+                manager_id=manager_id,
+                owner_user_id=owner_user_id,
+                status="owned",
+                acquired_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+        session.add(
+            ManagerTeamAssignment(
+                user_id=owner_user_id,
+                main_manager_asset_id=asset_id,
+                academy_manager_asset_id=None,
+            )
+        )
+        session.commit()
+
+
+def _wait_for_completion(client: TestClient, duel_id: str, *, timeout_seconds: float = 5.0) -> dict[str, object]:
+    deadline = time.time() + timeout_seconds
+    payload: dict[str, object] = {}
+    while time.time() < deadline:
+        response = client.get(f"/api/manager-duels/{duel_id}")
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        if payload["status"] == "completed":
+            return payload
+        time.sleep(0.1)
+    return payload
+
+
+def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'manager_duels.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(engine=engine, run_migration_check=True)
+    with TestClient(app) as client:
+        ensure_live_match_hub(app, step_interval_seconds=0.1)
+        home_user, home_headers = _create_authenticated_user(
+            app,
+            email="home-duel@example.com",
+            username="home_duel",
+            display_name="Home Duelist",
+        )
+        away_user, _away_headers = _create_authenticated_user(
+            app,
+            email="away-duel@example.com",
+            username="away_duel",
+            display_name="Away Duelist",
+        )
+        spectator_user, spectator_headers = _create_authenticated_user(
+            app,
+            email="spectator-duel@example.com",
+            username="spectator_duel",
+            display_name="Spectator Duelist",
+        )
+        _seed_manager(app, owner_user_id=home_user.id, manager_id="home-manager", display_name="Home Manager")
+        _seed_manager(app, owner_user_id=away_user.id, manager_id="away-manager", display_name="Away Manager")
+
+        duel_response = client.post(
+            "/api/manager-duels",
+            headers=home_headers,
+            json={
+                "home_user_id": home_user.id,
+                "away_user_id": away_user.id,
+                "simulation_seed": 4,
+            },
+        )
+        assert duel_response.status_code == 201, duel_response.text
+        duel_payload = duel_response.json()
+        duel_id = duel_payload["id"]
+        assert duel_payload["competition_type"] == "manager_duel"
+        assert duel_payload["controller_home"] == "manager"
+        assert duel_payload["controller_away"] == "manager"
+        assert duel_payload["user_control_enabled"] is False
+
+        spectate_response = client.post(
+            f"/api/matches/{duel_id}/spectate",
+            headers=spectator_headers,
+        )
+        assert spectate_response.status_code == 200, spectate_response.text
+        spectate_payload = spectate_response.json()
+        assert spectate_payload["user_id"] == spectator_user.id
+        assert spectate_payload["read_only"] is True
+        assert spectate_payload["channel"] == f"match:{duel_id}"
+
+        websocket_path = spectate_payload["websocket_path"]
+        with client.websocket_connect(websocket_path) as websocket:
+            first_message = websocket.receive_json()
+            assert first_message["channel"] == f"match:{duel_id}"
+            assert first_message["kind"] == "snapshot"
+            saw_event_batch = False
+            for _ in range(20):
+                message = websocket.receive_json()
+                if message["kind"] == "events":
+                    assert isinstance(message["payload"], list)
+                    saw_event_batch = True
+                    break
+            assert saw_event_batch is True
+
+        completed_payload = _wait_for_completion(client, duel_id)
+        assert completed_payload["status"] == "completed"
+        assert completed_payload["live_state"]["is_live"] is False
+
+        highlights_response = client.get(f"/api/matches/{duel_id}/highlights")
+        assert highlights_response.status_code == 200, highlights_response.text
+        highlights_payload = highlights_response.json()
+        assert highlights_payload["highlights"]
+        assert {"minute", "type", "description"} <= set(highlights_payload["highlights"][0].keys())
+
+        leaderboard_response = client.get("/api/manager-duels/leaderboard")
+        assert leaderboard_response.status_code == 200, leaderboard_response.text
+        leaderboard_payload = leaderboard_response.json()
+        assert {item["manager_id"] for item in leaderboard_payload} & {"home-manager", "away-manager"}
+        assert all(item["matches_played"] >= 0 for item in leaderboard_payload)
+
+        notifications_response = client.get("/api/notifications/me", headers=home_headers)
+        assert notifications_response.status_code == 200, notifications_response.text
+        template_keys = {item["template_key"] for item in notifications_response.json()}
+        assert "LIVE_MATCH_STARTED" in template_keys
+        assert "HIGHLIGHTS_READY" in template_keys
+    engine.dispose()

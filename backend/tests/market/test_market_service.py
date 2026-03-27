@@ -565,6 +565,21 @@ def test_market_player_list_pagination_returns_total_and_window(session) -> None
     assert [item.player_id for item in payload.items] == ["player-2", "player-3"]
 
 
+def test_market_player_list_supports_cursor_pagination(session) -> None:
+    _seed_market_player_catalog(session)
+    service = _build_market_query_service(session)
+
+    first_page = service.list_players(limit=2)
+    second_page = service.list_players(limit=2, cursor=first_page.next_cursor)
+
+    assert [item.player_id for item in first_page.items] == ["player-1", "player-2"]
+    assert first_page.has_more is True
+    assert first_page.next_cursor is not None
+    assert [item.player_id for item in second_page.items] == ["player-3", "player-4"]
+    assert second_page.has_more is False
+    assert second_page.next_cursor is None
+
+
 def test_market_player_list_filters_by_position(session) -> None:
     _seed_market_player_catalog(session)
 

@@ -166,10 +166,10 @@ class GteClubIdentityHubScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _IdentitySection(
-                title: 'Scouting pipeline',
+                title: 'Recruiter dashboard',
                 subtitle:
-                    'Monitor assignments, youth prospects, reports, and pipeline summary.',
-                buttonLabel: 'Open scouting',
+                    'Track who you are watching, who looks strongest, who is already in motion, and what should happen next.',
+                buttonLabel: 'Open recruiter',
                 icon: Icons.travel_explore_outlined,
                 onPressed: () => _openScouting(context, target),
               ),

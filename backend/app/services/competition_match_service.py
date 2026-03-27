@@ -97,6 +97,9 @@ class CompetitionMatchService:
             FanPredictionService(self.session).attempt_match_settlement(match_id=match.id)
         except ValueError:
             pass
+        from app.services.match_engagement_service import MatchEngagementService
+
+        MatchEngagementService(self.session).apply_match_result_from_competition_match(match=match)
         self.event_publisher.publish(
             DomainEvent(
                 name="match_completed",

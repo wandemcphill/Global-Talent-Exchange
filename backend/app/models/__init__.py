@@ -4,7 +4,25 @@ from app.models.academy_player_progress import AcademyPlayerProgress
 from app.models.academy_program import AcademyProgram
 from app.models.academy_training_cycle import AcademyTrainingCycle
 from app.models.analytics_event import AnalyticsEvent
+from app.models.access_control import (
+    AccessAuditLog,
+    Organization,
+    OrganizationInvite,
+    OrganizationMembership,
+    OrganizationRole,
+    OrganizationType,
+    PlayerOwnership,
+)
 from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
+from app.models.agent_marketplace import (
+    AgentAskingType,
+    AgentMarketplaceListing,
+    ConversationParticipantRole,
+    PlayerConversation,
+    PlayerConversationMessage,
+    PlayerConversationParticipant,
+    PlayerConversationStatus,
+)
 from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
 from app.models.attachment import Attachment
 from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
@@ -67,6 +85,9 @@ from app.models.competition_entry import CompetitionEntry
 from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.highlight_event import HighlightEvent
+from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerControlMode, ManagerProfile
+from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
 from app.models.competition_participant import CompetitionParticipant
 from app.models.competition_playoff import CompetitionPlayoff
 from app.models.competition_prize_rule import CompetitionPrizeRule
@@ -151,6 +172,8 @@ from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
 from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
+from app.models.player_rivalry import PlayerRivalry
+from app.models.player_story import PlayerStory
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
@@ -185,6 +208,7 @@ from app.models.player_cards import (
     PlayerStatsSnapshot,
     PlayerMarketValueSnapshot,
 )
+from app.models.player_match_learning import MatchWeight, PlayerFeatureSnapshot, PlayerMatchEventType, UserPlayerEvent
 from app.models.real_world_football import (
     EventEffectRule,
     EventIngestionJob,
@@ -210,6 +234,7 @@ from app.models.manager_market import (
     ManagerTradeListing,
     ManagerTradeRecord,
 )
+from app.models.manager_duel import ManagerDuel, ManagerDuelProfile
 from app.models.transfer_bid import TransferBid
 from app.models.transfer_window import TransferWindow
 from app.models.treasury import (
@@ -229,6 +254,21 @@ from app.models.user import KycStatus, User, UserRole
 from app.models.user_region import UserRegionProfile
 from app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
 from app.models.notification_record import NotificationRecord
+from app.models.competitive_integrity import (
+    CompetitiveMatchCompetitionType,
+    CompetitiveMatchStatus,
+    CompetitiveNotificationChannel,
+    CompetitiveNotificationStatus,
+    FastGameRun,
+    Manager,
+    ManagerType,
+    Match,
+    MatchControlLog,
+    MatchControllerType,
+    MatchControlSide,
+    Notification,
+)
+from app.models.spectator_session import SpectatorSession
 from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
 from app.models.fan_prediction import (
     FanPredictionFixture,
@@ -283,6 +323,15 @@ from app.models.regen import (
     RegenVisualProfile,
     TransferHeadlineMediaRecord,
 )
+from app.models.regen_ecosystem import (
+    Agent,
+    CareerEvent,
+    RegenAttributeProfile,
+    RegenAwardVote,
+    RegenBloodlineLink,
+    Scout,
+    YouthAcademy,
+)
 from app.models.scouting_intelligence import (
     AcademySupplySignal,
     HiddenPotentialEstimate,
@@ -304,6 +353,7 @@ from app.models.moderation_report import ModerationPriority, ModerationReport, M
 from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
 from app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
 from app.models.story_feed import StoryFeedItem
+from app.models.youth_tournament import YouthTournament
 from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
 from app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, HostedCompetitionSettlementStatus, HostedCompetitionStanding, HostedCompetitionStatus, UserHostedCompetition, UserHostedCompetitionParticipant
 from app.models.integrity import IntegrityIncident, IntegrityScore
@@ -332,6 +382,7 @@ __all__ = [
     "AcademyProgram",
     "AcademyTrainingCycle",
     "AnalyticsEvent",
+    "AccessAuditLog",
     "AuthEmailToken",
     "AuthEmailTokenPurpose",
     "AdminCalendarRule",
@@ -395,6 +446,14 @@ __all__ = [
     "CompetitionInvite",
     "CompetitionMatch",
     "CompetitionMatchEvent",
+    "HighlightEvent",
+    "ManagerContract",
+    "ManagerContractStatus",
+    "ManagerControlMode",
+    "ManagerProfile",
+    "MatchEvent",
+    "MatchEventTeam",
+    "MatchEventType",
     "CompetitionParticipant",
     "CompetitionPlayoff",
     "CompetitionPrizeRule",
@@ -504,6 +563,8 @@ __all__ = [
     "MarketTopup",
     "MarketTopupStatus",
     "WithdrawalReview",
+    "PlayerRivalry",
+    "PlayerStory",
     "PlayerCareerEntry",
     "PlayerAgencyState",
     "PlayerContract",
@@ -558,6 +619,8 @@ __all__ = [
     "ManagerTeamAssignment",
     "ManagerTradeListing",
     "ManagerTradeRecord",
+    "ManagerDuel",
+    "ManagerDuelProfile",
     "TransferBid",
     "TransferWindow",
     "DepositRequest",
@@ -575,6 +638,7 @@ __all__ = [
     "User",
     "UserRole",
     "NotificationRecord",
+    "SpectatorSession",
     "CountryFeaturePolicy",
     "PolicyAcceptanceRecord",
     "PolicyDocument",
@@ -622,6 +686,13 @@ __all__ = [
     "RegenValueSnapshot",
     "RegenVisualProfile",
     "TransferHeadlineMediaRecord",
+    "Agent",
+    "CareerEvent",
+    "RegenAttributeProfile",
+    "RegenAwardVote",
+    "RegenBloodlineLink",
+    "Scout",
+    "YouthAcademy",
     "AcademySupplySignal",
     "HiddenPotentialEstimate",
     "ManagerScoutingProfile",
@@ -651,6 +722,11 @@ __all__ = [
     "ModerationReport",
     "ModerationReportStatus",
     "ModerationResolutionAction",
+    "Organization",
+    "OrganizationInvite",
+    "OrganizationMembership",
+    "OrganizationRole",
+    "OrganizationType",
     "MatchRevenueSnapshot",
     "MatchView",
     "PremiumVideoPurchase",
@@ -659,6 +735,7 @@ __all__ = [
     "NationalTeamManagerHistory",
     "NationalTeamSquadMember",
     "StoryFeedItem",
+    "YouthTournament",
     "DailyChallenge",
     "DailyChallengeClaim",
     "DailyChallengeStatus",
@@ -669,11 +746,24 @@ __all__ = [
     "HostedCompetitionStatus",
     "UserHostedCompetition",
     "UserHostedCompetitionParticipant",
+    "PlayerOwnership",
     "IntegrityIncident",
     "IntegrityScore",
     "YouthPipelineSnapshot",
     "YouthProspect",
     "YouthProspectReport",
+    "CompetitiveMatchCompetitionType",
+    "CompetitiveMatchStatus",
+    "CompetitiveNotificationChannel",
+    "CompetitiveNotificationStatus",
+    "FastGameRun",
+    "Manager",
+    "ManagerType",
+    "Match",
+    "MatchControlLog",
+    "MatchControllerType",
+    "MatchControlSide",
+    "Notification",
 ]
 
 

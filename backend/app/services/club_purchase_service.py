@@ -92,9 +92,16 @@ class ClubPurchaseService:
         return [ClubCosmeticPurchaseCore.model_validate(item) for item in purchases]
 
     def _require_owned_club(self, club_id: str, owner_user_id: str) -> ClubProfile:
-        club = self.session.get(ClubProfile, club_id)
-        if club is None:
-            raise LookupError(f"club {club_id} was not found")
-        if club.owner_user_id != owner_user_id:
+        from app.access_control.service import AccessControlService
+        from app.models.access_control import OrganizationRole
+        from app.models.user import User
+
+        actor = self.session.get(User, owner_user_id)
+        if actor is None:
             raise PermissionError("club_owner_required")
-        return club
+        return AccessControlService(self.session).require_club_access(
+            user=actor,
+            club_id=club_id,
+            allowed_roles={OrganizationRole.CLUB},
+            forbidden_detail="club_owner_required",
+        )

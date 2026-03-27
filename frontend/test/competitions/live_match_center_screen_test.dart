@@ -51,6 +51,12 @@ void main() {
     expect(find.text('Watch broadcast'), findsOneWidget);
     expect(find.text('2D replay viewer'), findsOneWidget);
     expect(find.text('Open replay'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Tactical match simulation'),
+      250,
+    );
+    expect(find.text('Tactical match simulation'), findsOneWidget);
+    expect(find.text('Run simulation'), findsOneWidget);
   });
 }
 

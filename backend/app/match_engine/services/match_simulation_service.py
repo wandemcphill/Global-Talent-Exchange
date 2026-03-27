@@ -28,6 +28,7 @@ from app.match_engine.services.experience_layers import (
     MatchReplayContractBuilder,
     HighlightBundle,
 )
+from app.match_engine.services.player_rating_engine import PositionAwarePlayerRatingEngine
 from app.match_engine.simulation.event_generator import MatchEventGenerator
 from app.match_engine.simulation.models import MatchEventType, SimulationResult
 
@@ -44,12 +45,14 @@ class MatchSimulationService:
         presentation_builder: MatchPresentationBuilder | None = None,
         replay_contract_builder: MatchReplayContractBuilder | None = None,
         control_log_builder: MatchControlLogBuilder | None = None,
+        rating_engine: PositionAwarePlayerRatingEngine | None = None,
     ) -> None:
         self.event_generator = event_generator or MatchEventGenerator()
         self.commentary_generator = commentary_generator or MatchCommentaryTimelineGenerator()
         self.replay_builder = replay_builder or ReplayEventLogBuilder()
         self.highlight_builder = highlight_builder or MatchHighlightBuilder()
-        self.halftime_builder = halftime_builder or MatchHalftimeAnalyticsBuilder()
+        self.rating_engine = rating_engine or PositionAwarePlayerRatingEngine()
+        self.halftime_builder = halftime_builder or MatchHalftimeAnalyticsBuilder(rating_engine=self.rating_engine)
         self.presentation_builder = presentation_builder or MatchPresentationBuilder()
         self.replay_contract_builder = replay_contract_builder or MatchReplayContractBuilder()
         self.control_log_builder = control_log_builder or MatchControlLogBuilder()
@@ -132,6 +135,8 @@ class MatchSimulationService:
         home_prob, draw_prob, away_prob = self._probability_triplet(result)
         home_xg, away_xg = self._expected_goals(result)
         bundle = highlight_bundle or self.highlight_builder.build(result)
+        rating_views = self.rating_engine.rate(result)
+        rating_lookup = {item.player_id: item for item in rating_views}
         return MatchFinalSummaryView(
             match_id=result.match_id,
             seed=result.seed,
@@ -187,12 +192,21 @@ class MatchSimulationService:
                     goals=player.goals,
                     assists=player.assists,
                     saves=player.saves,
+                    shots_on_target=player.shots_on_target,
                     missed_chances=player.missed_chances,
+                    big_chances_missed=player.big_chances_missed,
                     yellow_cards=player.yellow_cards,
                     red_card=player.red_card,
                     injured=player.injured,
                     substituted_in_minute=player.substituted_in_minute,
                     substituted_out_minute=player.substituted_out_minute,
+                    key_passes=player.key_passes,
+                    tackles_won=player.tackles_won,
+                    interceptions=player.interceptions,
+                    xg=round(player.xg, 2),
+                    xg_faced=round(player.xg_faced, 2),
+                    rating=rating_lookup[player.player_id].rating if player.player_id in rating_lookup else None,
+                    rating_summary=rating_lookup[player.player_id].summary if player.player_id in rating_lookup else None,
                 )
                 for player in result.player_stats
                 if player.started or player.is_notable()

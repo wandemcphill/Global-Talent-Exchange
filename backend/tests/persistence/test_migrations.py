@@ -53,6 +53,9 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("league_event_records")
     assert inspector.has_table("replay_archive_records")
     assert inspector.has_table("replay_archive_countdowns")
+    assert inspector.has_table("match_events")
+    assert inspector.has_table("manager_profiles")
+    assert inspector.has_table("manager_contracts")
     assert inspector.has_table("fast_cup_records")
     assert inspector.has_table("card_loan_listings")
     assert inspector.has_table("card_loan_contracts")
@@ -129,6 +132,19 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("real_player_value_lineages")
     assert inspector.has_table("real_player_source_links")
     assert inspector.has_table("real_player_profiles")
+    assert inspector.has_table("spectator_sessions")
+    assert inspector.has_table("highlight_events")
+    assert inspector.has_table("manager_duels")
+    assert inspector.has_table("manager_duel_profiles")
+    assert inspector.has_table("predictions")
+    assert inspector.has_table("club_finance_profiles")
+    assert inspector.has_table("club_finance_sponsors")
+    assert inspector.has_table("club_finance_transactions")
+    assert inspector.has_table("player_relationships")
+    assert inspector.has_table("season_passes")
+    assert inspector.has_table("season_pass_claims")
+    assert inspector.has_table("season_pass_xp_grants")
+    assert inspector.has_table("live_events")
 
     creator_league_config_columns = {column["name"] for column in inspector.get_columns("creator_league_configs")}
     assert {
@@ -412,6 +428,44 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
         "ix_real_player_value_lineages_snapshot_id",
         "ix_real_player_value_lineages_snapshot_type",
     } <= real_player_value_lineage_indexes
+
+    player_columns = {column["name"] for column in inspector.get_columns("ingestion_players")}
+    assert "morale" in player_columns
+
+    prediction_columns = {column["name"] for column in inspector.get_columns("predictions")}
+    assert {
+        "user_id",
+        "match_id",
+        "predicted_outcome",
+        "confidence_level",
+        "reward_earned",
+        "difficulty_multiplier",
+        "actual_outcome",
+        "resolved_at",
+    } <= prediction_columns
+
+    finance_profile_columns = {column["name"] for column in inspector.get_columns("club_finance_profiles")}
+    assert {
+        "user_id",
+        "balance",
+        "weekly_wages",
+        "sponsorship_income",
+        "match_income",
+        "transfer_profit",
+        "expenses",
+        "transfers_blocked",
+        "forced_sale_required",
+        "forced_sale_player_id",
+    } <= finance_profile_columns
+
+    sponsor_columns = {column["name"] for column in inspector.get_columns("club_finance_sponsors")}
+    assert {"name", "tier", "payout", "requirements_json", "active"} <= sponsor_columns
+
+    season_pass_columns = {column["name"] for column in inspector.get_columns("season_passes")}
+    assert {"user_id", "season_id", "tier", "xp", "level", "rewards_json"} <= season_pass_columns
+
+    live_event_columns = {column["name"] for column in inspector.get_columns("live_events")}
+    assert {"name", "start_date", "end_date", "rules_json", "rewards_json", "started_notification_sent_at"} <= live_event_columns
 
     with engine.connect() as connection:
         versions = connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()

@@ -50,6 +50,7 @@ from app.models.transfer_window import TransferWindow
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.club_identity.models.reputation import ClubReputationProfile
+from app.club_finance.service import ClubFinanceService
 from app.schemas.player_lifecycle import (
     AvailabilityBadgeView,
     BigClubApproachRequest,
@@ -96,6 +97,7 @@ from app.schemas.player_lifecycle import (
 )
 from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
 from app.services.player_agency_context_service import clamp
+from app.services.team_dynamics_service import TeamDynamicsService
 from app.services.regen_transfer_addon import (
     AUTO_CONVERSION_PREMIUM_BPS,
     BigClubApproachInputs,
@@ -1479,6 +1481,7 @@ class PlayerLifecycleService:
         if payload.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bids require a buying club")
         self._require_club_profile(payload.buying_club_id)
+        ClubFinanceService(self.session).assert_transfer_allowed_for_club(club_id=payload.buying_club_id)
         if payload.selling_club_id is not None:
             self._require_club_profile(payload.selling_club_id)
 
@@ -1875,6 +1878,17 @@ class PlayerLifecycleService:
                 offer=offer,
                 contract=new_contract,
             )
+        ClubFinanceService(self.session).record_transfer_movement(
+            buying_club_id=bid.buying_club_id,
+            selling_club_id=bid.selling_club_id,
+            amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
+            reference_key=f"transfer:{bid.id}",
+            metadata={
+                "bid_id": bid.id,
+                "player_id": player.id,
+                "contract_id": new_contract.id,
+            },
+        )
         self.session.commit()
         self.session.refresh(bid)
         self.session.expunge(bid)
@@ -1940,6 +1954,11 @@ class PlayerLifecycleService:
         match_date: date,
         replay_payload: MatchReplayPayloadView,
     ) -> None:
+        TeamDynamicsService(self.session).apply_match_outcome(
+            fixture_id=fixture_id,
+            match_date=match_date,
+            replay_payload=replay_payload,
+        )
         player_ids = [item.player_id for item in replay_payload.summary.player_stats]
         players = self._load_players(player_ids)
         injury_commentary = self._injury_commentary_by_player(replay_payload)
@@ -3158,6 +3177,14 @@ class PlayerLifecycleService:
                     regen.id,
                     club_id=state.get("previous_club_id"),
                     retired_on=reference_on,
+                )
+                from app.regen_universe.expansion_service import RegenUniverseExpansionService
+
+                RegenUniverseExpansionService(self.session).refresh_story(
+                    player.id,
+                    trigger="retirement",
+                    notify=False,
+                    publish=True,
                 )
             active_contract = self._select_current_contract(self.get_contracts(player.id), reference_on=reference_on)
             if active_contract is not None and active_contract.status != ContractStatus.TERMINATED.value:

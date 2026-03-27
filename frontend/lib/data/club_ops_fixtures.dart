@@ -157,7 +157,8 @@ ClubFinanceSnapshot fixtureClubFinance(String clubId, String? clubName) {
         amount: 185000,
         runningBalance: 3425000,
         occurredAt: DateTime.utc(2026, 3, 8),
-        note: 'Quarterly contract milestone cleared after content delivery review.',
+        note:
+            'Quarterly contract milestone cleared after content delivery review.',
       ),
       LedgerEntry(
         id: 'ledger-2',
@@ -179,7 +180,8 @@ ClubFinanceSnapshot fixtureClubFinance(String clubId, String? clubName) {
         amount: 38000,
         runningBalance: 3336000,
         occurredAt: DateTime.utc(2026, 3, 5),
-        note: 'West Africa and Iberia tournament coverage for March scouting window.',
+        note:
+            'West Africa and Iberia tournament coverage for March scouting window.',
       ),
       LedgerEntry(
         id: 'ledger-4',
@@ -190,7 +192,8 @@ ClubFinanceSnapshot fixtureClubFinance(String clubId, String? clubName) {
         amount: 120000,
         runningBalance: 3374000,
         occurredAt: DateTime.utc(2026, 3, 2),
-        note: 'Facility improvement tranche linked to academy classroom upgrade.',
+        note:
+            'Facility improvement tranche linked to academy classroom upgrade.',
       ),
       LedgerEntry(
         id: 'ledger-5',
@@ -201,7 +204,8 @@ ClubFinanceSnapshot fixtureClubFinance(String clubId, String? clubName) {
         amount: 52000,
         runningBalance: 3254000,
         occurredAt: DateTime.utc(2026, 3, 1),
-        note: 'Security, stewarding, and broadcast compound access for home fixture.',
+        note:
+            'Security, stewarding, and broadcast compound access for home fixture.',
       ),
     ],
     financeNotes: const <String>[
@@ -229,7 +233,8 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
         value: 2100000,
         durationMonths: 24,
         assetCount: 6,
-        inventorySummary: 'Shirt front, backdrop, content series, and academy clinic rights.',
+        inventorySummary:
+            'Shirt front, backdrop, content series, and academy clinic rights.',
         deliverables: <String>[
           'Men’s first-team shirt front',
           'Academy pathway documentary series',
@@ -246,7 +251,8 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
         value: 720000,
         durationMonths: 18,
         assetCount: 4,
-        inventorySummary: 'Sleeve logo, hospitality allocation, and social recap support.',
+        inventorySummary:
+            'Sleeve logo, hospitality allocation, and social recap support.',
         deliverables: <String>[
           'First-team sleeve',
           'Hospitality package',
@@ -262,7 +268,8 @@ SponsorshipDashboard fixtureSponsorships(String clubId, String? clubName) {
         value: 560000,
         durationMonths: 12,
         assetCount: 5,
-        inventorySummary: 'Training centre signage, scholarship stories, and grassroots clinics.',
+        inventorySummary:
+            'Training centre signage, scholarship stories, and grassroots clinics.',
         deliverables: <String>[
           'Academy training centre branding',
           'Scholarship content support',
@@ -390,7 +397,8 @@ AcademyDashboard fixtureAcademy(String clubId, String? clubName) {
       squadSize: 32,
       promotionsThisSeason: 4,
       graduationRatePercent: 12.5,
-      staffCoverageLabel: 'Nine full-time staff across coaching, analysis, and welfare',
+      staffCoverageLabel:
+          'Nine full-time staff across coaching, analysis, and welfare',
       facilityLabel: 'Category A regional performance centre',
     ),
     programs: const <AcademyProgram>[
@@ -612,7 +620,8 @@ ScoutingDashboard fixtureScouting(String clubId, String? clubName) {
         currentClub: 'Dakar Horizon Academy',
         stage: ProspectStage.shortlisted,
         readinessScore: 73,
-        developmentProjection: 'High-volume midfield connector with senior upside',
+        developmentProjection:
+            'High-volume midfield connector with senior upside',
         pathwayFitLabel: 'Strong fit for U17 transition',
         nextAction: 'Schedule live follow-up in April',
         availabilityLabel: 'Scholarship route open',
@@ -663,13 +672,51 @@ ScoutingDashboard fixtureScouting(String clubId, String? clubName) {
         currentClub: 'Lagos Promise Project',
         stage: ProspectStage.scholarship,
         readinessScore: 77,
-        developmentProjection: 'Direct winger with clear academy progression runway',
+        developmentProjection:
+            'Direct winger with clear academy progression runway',
         pathwayFitLabel: 'Scholarship offer prepared',
         nextAction: 'Guardian meeting and welfare review',
         availabilityLabel: 'Offer pack pending',
         lastUpdated: DateTime.utc(2026, 3, 8),
         strengths: <String>['Explosive take-ons', 'End-product variety'],
         focusAreas: <String>['Pressing shape', 'Decision speed'],
+      ),
+      Prospect(
+        id: 'prospect-adaora-eze',
+        name: 'Adaora Eze',
+        position: 'LW',
+        age: 15,
+        region: 'Nigeria',
+        currentClub: 'Enugu Rising Stars',
+        stage: ProspectStage.monitored,
+        readinessScore: 71,
+        developmentProjection:
+            'High-tempo wide threat with clean acceleration upside',
+        pathwayFitLabel: 'Early winger track worth a second watch',
+        nextAction: 'Review match video and request a second live report',
+        availabilityLabel: 'Open to first contact',
+        lastUpdated: DateTime.utc(2026, 3, 6),
+        strengths: <String>['Acceleration', '1v1 separation'],
+        focusAreas: <String>['Final pass weight', 'Defensive recovery'],
+      ),
+      Prospect(
+        id: 'prospect-tunde-afolabi',
+        name: 'Tunde Afolabi',
+        position: 'CF',
+        age: 17,
+        region: 'Nigeria',
+        currentClub: 'Ibadan Future XI',
+        stage: ProspectStage.promoted,
+        readinessScore: 82,
+        developmentProjection:
+            'Penalty-box forward already translating output into senior actions',
+        pathwayFitLabel:
+            'Closed as the highest-conviction attacker on the board',
+        nextAction: 'Prepare onboarding plan and first integration block',
+        availabilityLabel: 'Terms completed',
+        lastUpdated: DateTime.utc(2026, 3, 10),
+        strengths: <String>['Box movement', 'First-time finishing'],
+        focusAreas: <String>['Link play', 'Press triggers'],
       ),
     ],
     reports: <ProspectReport>[
@@ -705,10 +752,27 @@ ScoutingDashboard fixtureScouting(String clubId, String? clubName) {
         recommendation:
             'Proceed with trial and benchmark defensive adaptation against transition group.',
       ),
+      ProspectReport(
+        id: 'report-chioma',
+        prospectId: 'prospect-chioma-adebayo',
+        scoutName: 'Bisi Adeyemi',
+        headline:
+            'Wide attacker keeps forcing the exact advantage profile we lack',
+        createdAt: DateTime.utc(2026, 3, 8),
+        overallFit: 'Negotiation-ready profile',
+        technicalNote:
+            'Wins the first defender early and already varies cutback, shot, and slip-pass choices.',
+        physicalNote:
+            'Acceleration is already carrying into repeat actions late in matches.',
+        characterNote:
+            'Family feedback and school reports suggest a strong support environment.',
+        recommendation:
+            'Move from scholarship preparation into final guardian and welfare sign-off.',
+      ),
     ],
     notes: const <String>[
       'Assignments are planned around role needs, regional coverage, and pathway timing rather than speculative volume scouting.',
-      'Shortlist progression is transparent from monitored to trial to scholarship review.',
+      'The recruiter board is strongest when wide attackers and midfield connectors are reviewed inside the same weekly cycle.',
       'The next trial block is being aligned with academy staffing capacity and welfare support.',
     ],
   );
@@ -726,27 +790,32 @@ YouthPipelineSnapshot fixtureYouthPipeline(String clubId, String? clubName) {
       YouthPipelineStage(
         label: 'Tracked',
         count: 48,
-        description: 'Live reports and monitoring clips active in the scouting board.',
+        description:
+            'Live reports and monitoring clips active in the scouting board.',
       ),
       YouthPipelineStage(
         label: 'Shortlisted',
         count: 18,
-        description: 'Prospects with repeat viewings and pathway fit confirmed.',
+        description:
+            'Prospects with repeat viewings and pathway fit confirmed.',
       ),
       YouthPipelineStage(
         label: 'Trial',
         count: 7,
-        description: 'Players invited into supervised training or match observation.',
+        description:
+            'Players invited into supervised training or match observation.',
       ),
       YouthPipelineStage(
         label: 'Scholarship',
         count: 4,
-        description: 'Offer packs prepared with guardian, welfare, and schooling review.',
+        description:
+            'Offer packs prepared with guardian, welfare, and schooling review.',
       ),
       YouthPipelineStage(
         label: 'Promoted',
         count: 2,
-        description: 'Prospects converted into active academy or senior pathway steps.',
+        description:
+            'Prospects converted into active academy or senior pathway steps.',
       ),
     ],
     notes: <String>[
@@ -783,17 +852,38 @@ ClubFinanceAnalyticsSnapshot fixtureFinanceAnalytics() {
     revenueReliabilityLabel: 'Renewals are steady and matchday variance is low',
     topExpenseLabel: 'Payroll remains the largest cost centre',
     categoryMix: <FinanceCategoryBreakdown>[
-      FinanceCategoryBreakdown(label: 'Payroll', amount: 82200000, sharePercent: 49.2),
-      FinanceCategoryBreakdown(label: 'Academy pathway', amount: 36000000, sharePercent: 21.6),
-      FinanceCategoryBreakdown(label: 'Facilities', amount: 24400000, sharePercent: 14.6),
-      FinanceCategoryBreakdown(label: 'Scouting pipeline', amount: 15700000, sharePercent: 9.4),
-      FinanceCategoryBreakdown(label: 'Commercial delivery', amount: 8900000, sharePercent: 5.2),
+      FinanceCategoryBreakdown(
+          label: 'Payroll', amount: 82200000, sharePercent: 49.2),
+      FinanceCategoryBreakdown(
+          label: 'Academy pathway', amount: 36000000, sharePercent: 21.6),
+      FinanceCategoryBreakdown(
+          label: 'Facilities', amount: 24400000, sharePercent: 14.6),
+      FinanceCategoryBreakdown(
+          label: 'Scouting pipeline', amount: 15700000, sharePercent: 9.4),
+      FinanceCategoryBreakdown(
+          label: 'Commercial delivery', amount: 8900000, sharePercent: 5.2),
     ],
     quarterlyCashflow: <CashflowPoint>[
-      CashflowPoint(label: 'Q1', inflow: 41800000, outflow: 37400000, closingBalance: 65800000),
-      CashflowPoint(label: 'Q2', inflow: 43600000, outflow: 38400000, closingBalance: 71000000),
-      CashflowPoint(label: 'Q3', inflow: 40100000, outflow: 37200000, closingBalance: 73900000),
-      CashflowPoint(label: 'Q4', inflow: 44800000, outflow: 39400000, closingBalance: 79300000),
+      CashflowPoint(
+          label: 'Q1',
+          inflow: 41800000,
+          outflow: 37400000,
+          closingBalance: 65800000),
+      CashflowPoint(
+          label: 'Q2',
+          inflow: 43600000,
+          outflow: 38400000,
+          closingBalance: 71000000),
+      CashflowPoint(
+          label: 'Q3',
+          inflow: 40100000,
+          outflow: 37200000,
+          closingBalance: 73900000),
+      CashflowPoint(
+          label: 'Q4',
+          inflow: 44800000,
+          outflow: 39400000,
+          closingBalance: 79300000),
     ],
   );
 }
@@ -824,7 +914,8 @@ AcademyAnalyticsSnapshot fixtureAcademyAnalytics() {
     retentionRatePercent: 86.0,
     averageReadinessScore: 71,
     promotionsThisSeason: dashboard.pathwaySummary.promotionsThisSeason,
-    pathwayHealthLabel: 'Healthy balance between intake, minutes, and promotion readiness',
+    pathwayHealthLabel:
+        'Healthy balance between intake, minutes, and promotion readiness',
     programMix: dashboard.programs,
   );
 }

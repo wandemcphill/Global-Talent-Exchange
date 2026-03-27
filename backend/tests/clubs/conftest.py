@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_admin, get_current_user
+from app.models.access_control import AccessAuditLog, Organization, OrganizationInvite, OrganizationMembership, PlayerOwnership
 from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
 from app.db import get_session
 from app.ingestion.models import Country, Player, PlayerVerification
@@ -87,6 +88,11 @@ def session() -> Iterator[Session]:
         engine,
         tables=[
             User.__table__,
+            Organization.__table__,
+            OrganizationMembership.__table__,
+            OrganizationInvite.__table__,
+            PlayerOwnership.__table__,
+            AccessAuditLog.__table__,
             ClubProfile.__table__,
             ClubFacility.__table__,
             ClubReputationProfile.__table__,

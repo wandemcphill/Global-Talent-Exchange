@@ -9,6 +9,7 @@ from app.config.competition_constants import (
     HALFTIME_ANALYSIS_MIN_SECONDS,
     HIGHLIGHT_DEFAULT_EXPIRY_SECONDS,
 )
+from app.match_engine.services.player_rating_engine import PositionAwarePlayerRatingEngine
 from app.match_engine.schemas import (
     MatchBroadcastPresentationView,
     MatchCriticalSnapshotView,
@@ -165,6 +166,9 @@ class MatchHighlightBuilder:
 
 
 class MatchHalftimeAnalyticsBuilder:
+    def __init__(self, *, rating_engine: PositionAwarePlayerRatingEngine | None = None) -> None:
+        self.rating_engine = rating_engine or PositionAwarePlayerRatingEngine()
+
     def build(self, result: SimulationResult, *, requested_duration_seconds: int | None = None) -> MatchHalftimeAnalyticsView:
         duration = self._resolve_duration(result, requested_duration_seconds)
         first_half_events = [event for event in result.events if event.minute <= 45]
@@ -204,7 +208,7 @@ class MatchHalftimeAnalyticsBuilder:
         away_possession = 100 - home_possession
         home_heatmap, away_heatmap = _heatmaps(result)
         home_pass_map, away_pass_map = _pass_maps(result)
-        ratings = _player_ratings(first_half_events, result)
+        ratings = self.rating_engine.rate(result, events=first_half_events, limit=6)
         momentum_graph = _momentum_graph(first_half_events)
         cards_incidents = _cards_incidents(first_half_events)
         tactical_suggestions = _tactical_suggestions(result, home_possession, away_possession, home_shots, away_shots)
@@ -248,11 +252,16 @@ class MatchPresentationBuilder:
         if elite:
             scenes.extend(["trophy_presentation", "medal_presentation", "branded_backdrop"])
         return MatchSceneAssemblyContractView(
-            scene_version="v1",
+            scene_version="v2",
             enabled_scenes=scenes,
             replay_angle_set="elite" if elite else "standard",
             crowd_profile="finals" if elite else "regular",
             branded_backdrop=elite,
+            event_render_mode="event_driven",
+            transition_style="blended_interpolation",
+            camera_modes=["broadcast", "attack_zoom", "goal_camera"],
+            replay_buffer_events=12,
+            special_moment_effects=True,
         )
 
     def build_broadcast_presentation(self, result: SimulationResult) -> MatchBroadcastPresentationView:
@@ -263,6 +272,8 @@ class MatchPresentationBuilder:
             commentary_style="tactical",
             finals_package=elite,
             atmosphere_profile="elite" if elite else "standard",
+            live_stream_transport="websocket",
+            async_match_mode="summary_only",
         )
 
     def build_spectator_package(self, result: SimulationResult) -> MatchSpectatorPackageView:
@@ -497,38 +508,7 @@ def _pass_maps(result: SimulationResult) -> tuple[list[MatchPassMapEdgeView], li
 
 
 def _player_ratings(events: Iterable, result: SimulationResult) -> list[MatchPlayerRatingView]:
-    ratings: dict[str, float] = {}
-    roster = {player.player_id: player for player in result.player_stats}
-    for event in events:
-        player_id = event.primary_player_id
-        if not player_id or player_id not in roster:
-            continue
-        ratings.setdefault(player_id, 6.0)
-        if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_SCORED}:
-            ratings[player_id] += 0.8
-        if event.event_type in {MatchEventType.MISSED_BIG_CHANCE, MatchEventType.PENALTY_MISSED}:
-            ratings[player_id] -= 0.4
-        if event.event_type in {MatchEventType.GOALKEEPER_SAVE, MatchEventType.DOUBLE_SAVE}:
-            ratings[player_id] += 0.4
-        if event.event_type is MatchEventType.YELLOW_CARD:
-            ratings[player_id] -= 0.2
-        if event.event_type is MatchEventType.RED_CARD:
-            ratings[player_id] -= 1.0
-    rated = sorted(ratings.items(), key=lambda item: item[1], reverse=True)[:6]
-    views: list[MatchPlayerRatingView] = []
-    for player_id, score in rated:
-        player = roster[player_id]
-        views.append(
-            MatchPlayerRatingView(
-                player_id=player.player_id,
-                player_name=player.player_name,
-                team_id=player.team_id,
-                team_name=player.team_name,
-                rating=round(max(4.0, min(9.8, score)), 2),
-                summary=None,
-            )
-        )
-    return views
+    return PositionAwarePlayerRatingEngine().rate(result, events=list(events), limit=6)
 
 
 def _momentum_graph(events: Iterable) -> list[MatchMomentumPointView]:

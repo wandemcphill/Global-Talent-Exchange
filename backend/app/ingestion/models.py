@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from typing import Sequence
 
 
+def _match_model() -> type["Match"]:
+    return Match
+
+
 MAJOR_COMPETITIONS = {
     "world cup",
     "uefa champions league",
@@ -270,7 +274,7 @@ class Competition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     internal_league: Mapped[InternalLeague | None] = relationship(back_populates="competitions")
     seasons: Mapped[list["Season"]] = relationship(back_populates="competition")
     clubs: Mapped[list["Club"]] = relationship(back_populates="current_competition")
-    matches: Mapped[list["Match"]] = relationship(back_populates="competition")
+    matches: Mapped[list["Match"]] = relationship(_match_model, back_populates="competition")
     standings: Mapped[list["TeamStanding"]] = relationship(back_populates="competition")
     current_players: Mapped[list["Player"]] = relationship(back_populates="current_competition")
 
@@ -304,7 +308,7 @@ class Season(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     competition: Mapped[Competition] = relationship(back_populates="seasons")
-    matches: Mapped[list["Match"]] = relationship(back_populates="season")
+    matches: Mapped[list["Match"]] = relationship(_match_model, back_populates="season")
     standings: Mapped[list["TeamStanding"]] = relationship(back_populates="season")
     player_tenures: Mapped[list["PlayerClubTenure"]] = relationship(back_populates="season")
 
@@ -354,12 +358,14 @@ class Club(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     internal_league: Mapped[InternalLeague | None] = relationship(back_populates="clubs")
     players: Mapped[list["Player"]] = relationship(back_populates="current_club")
     home_matches: Mapped[list["Match"]] = relationship(
+        _match_model,
         back_populates="home_club",
-        foreign_keys="Match.home_club_id",
+        foreign_keys=lambda: [Match.home_club_id],
     )
     away_matches: Mapped[list["Match"]] = relationship(
+        _match_model,
         back_populates="away_club",
-        foreign_keys="Match.away_club_id",
+        foreign_keys=lambda: [Match.away_club_id],
     )
     player_tenures: Mapped[list["PlayerClubTenure"]] = relationship(back_populates="club")
 
@@ -428,6 +434,7 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     preferred_foot: Mapped[str | None] = mapped_column(String(16), nullable=True)
     shirt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     market_value_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    morale: Mapped[float] = mapped_column(Float, nullable=False, default=50.0, server_default="50.0")
     profile_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_tradable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     is_real_player: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
@@ -440,6 +447,7 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_market_reference_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     market_reference_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     normalization_profile_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    dna_profile: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     country: Mapped[Country | None] = relationship(back_populates="players")
@@ -709,7 +717,7 @@ class PlayerMatchStat(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     raw_position: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     player: Mapped[Player] = relationship(back_populates="match_stats")
-    match: Mapped[Match] = relationship(back_populates="match_stats")
+    match: Mapped[Match] = relationship(_match_model, back_populates="match_stats")
 
 
 class PlayerSeasonStat(UUIDPrimaryKeyMixin, TimestampMixin, Base):

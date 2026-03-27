@@ -17,11 +17,15 @@ def get_session() -> Iterator[Session]:
     yield from get_database_session()
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    session: Session = Depends(get_session),
-) -> User:
+def _resolve_authenticated_user(
+    *,
+    credentials: HTTPAuthorizationCredentials | None,
+    session: Session,
+    allow_missing_credentials: bool,
+) -> User | None:
     if credentials is None:
+        if allow_missing_credentials:
+            return None
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials were not provided.",
@@ -53,7 +57,34 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    from app.access_control.service import AccessControlService
+
+    AccessControlService(session).bind_user_access_context(user)
     return user
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    session: Session = Depends(get_session),
+) -> User:
+    resolved_user = _resolve_authenticated_user(
+        credentials=credentials,
+        session=session,
+        allow_missing_credentials=False,
+    )
+    assert resolved_user is not None
+    return resolved_user
+
+
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    session: Session = Depends(get_session),
+) -> User | None:
+    return _resolve_authenticated_user(
+        credentials=credentials,
+        session=session,
+        allow_missing_credentials=True,
+    )
 
 
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.app.core.config import Settings, ValueEngineWeightingConfig, get_settings
+from app.core.config import Settings, ValueEngineWeightingConfig, get_settings
 
 ValueEngineConfig = ValueEngineWeightingConfig
 

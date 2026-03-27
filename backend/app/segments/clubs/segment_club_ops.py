@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.access_control.dependencies import require_bound_organization_access
+from app.models.access_control import OrganizationRole
 from app.schemas.academy_core import AcademyPlayerView, AcademyProgramView
 from app.schemas.club_finance_core import ClubBudgetSnapshotView, ClubCashflowSummaryView
 from app.schemas.club_ops_requests import (
@@ -37,7 +39,11 @@ from app.services.scouting_service import ScoutingService, get_scouting_service
 router = APIRouter(prefix="/api/clubs/{club_id}", tags=["club-ops"])
 
 
-@router.get("/finances", response_model=ClubFinanceOverviewResponse)
+@router.get(
+    "/finances",
+    response_model=ClubFinanceOverviewResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_club_finances(
     club_id: str,
     finance_service: ClubFinanceService = Depends(get_club_finance_service),
@@ -45,7 +51,11 @@ def get_club_finances(
     return finance_service.get_finance_overview(club_id)
 
 
-@router.get("/finances/ledger", response_model=ClubFinanceLedgerResponse)
+@router.get(
+    "/finances/ledger",
+    response_model=ClubFinanceLedgerResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_club_finance_ledger(
     club_id: str,
     finance_service: ClubFinanceService = Depends(get_club_finance_service),
@@ -53,7 +63,11 @@ def get_club_finance_ledger(
     return finance_service.get_ledger(club_id)
 
 
-@router.get("/finances/budget", response_model=ClubBudgetSnapshotView)
+@router.get(
+    "/finances/budget",
+    response_model=ClubBudgetSnapshotView,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_club_budget(
     club_id: str,
     budget_service: ClubBudgetService = Depends(get_club_budget_service),
@@ -61,7 +75,11 @@ def get_club_budget(
     return budget_service.get_budget(club_id)
 
 
-@router.get("/finances/cashflow", response_model=ClubCashflowSummaryView)
+@router.get(
+    "/finances/cashflow",
+    response_model=ClubCashflowSummaryView,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_club_cashflow(
     club_id: str,
     cashflow_service: ClubCashflowService = Depends(get_club_cashflow_service),
@@ -69,7 +87,11 @@ def get_club_cashflow(
     return cashflow_service.get_cashflow(club_id)
 
 
-@router.get("/sponsorships", response_model=ClubSponsorshipOverviewResponse)
+@router.get(
+    "/sponsorships",
+    response_model=ClubSponsorshipOverviewResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_club_sponsorships(
     club_id: str,
     sponsorship_service: ClubSponsorshipService = Depends(get_club_sponsorship_service),
@@ -77,7 +99,11 @@ def get_club_sponsorships(
     return sponsorship_service.get_overview(club_id)
 
 
-@router.get("/sponsorships/catalog", response_model=ClubSponsorshipCatalogResponse)
+@router.get(
+    "/sponsorships/catalog",
+    response_model=ClubSponsorshipCatalogResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_sponsorship_catalog(
     club_id: str,
     sponsorship_service: ClubSponsorshipService = Depends(get_club_sponsorship_service),
@@ -86,7 +112,12 @@ def get_sponsorship_catalog(
     return sponsorship_service.list_catalog()
 
 
-@router.post("/sponsorships/contracts", response_model=ClubSponsorshipContractView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sponsorships/contracts",
+    response_model=ClubSponsorshipContractView,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def create_sponsorship_contract(
     club_id: str,
     payload: CreateSponsorshipContractRequest,
@@ -95,7 +126,11 @@ def create_sponsorship_contract(
     return _handle_domain_errors(lambda: sponsorship_service.create_contract(club_id, payload))
 
 
-@router.patch("/sponsorships/contracts/{contract_id}", response_model=ClubSponsorshipContractView)
+@router.patch(
+    "/sponsorships/contracts/{contract_id}",
+    response_model=ClubSponsorshipContractView,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def update_sponsorship_contract(
     club_id: str,
     contract_id: str,
@@ -105,7 +140,11 @@ def update_sponsorship_contract(
     return _handle_domain_errors(lambda: sponsorship_service.update_contract(club_id, contract_id, payload))
 
 
-@router.get("/sponsorships/assets", response_model=tuple[ClubSponsorshipAssetView, ...])
+@router.get(
+    "/sponsorships/assets",
+    response_model=tuple[ClubSponsorshipAssetView, ...],
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def list_sponsorship_assets(
     club_id: str,
     sponsorship_service: ClubSponsorshipService = Depends(get_club_sponsorship_service),
@@ -113,7 +152,11 @@ def list_sponsorship_assets(
     return sponsorship_service.list_assets(club_id)
 
 
-@router.get("/academy", response_model=AcademyOverviewResponse)
+@router.get(
+    "/academy",
+    response_model=AcademyOverviewResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def get_academy_overview(
     club_id: str,
     academy_service: AcademyService = Depends(get_academy_service),
@@ -121,7 +164,12 @@ def get_academy_overview(
     return academy_service.get_overview(club_id)
 
 
-@router.post("/academy/programs", response_model=AcademyProgramView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/academy/programs",
+    response_model=AcademyProgramView,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def create_academy_program(
     club_id: str,
     payload: CreateAcademyProgramRequest,
@@ -130,7 +178,11 @@ def create_academy_program(
     return _handle_domain_errors(lambda: academy_service.create_program(club_id, payload))
 
 
-@router.get("/academy/players", response_model=AcademyPlayersResponse)
+@router.get(
+    "/academy/players",
+    response_model=AcademyPlayersResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def list_academy_players(
     club_id: str,
     academy_service: AcademyService = Depends(get_academy_service),
@@ -138,7 +190,12 @@ def list_academy_players(
     return academy_service.list_players(club_id)
 
 
-@router.post("/academy/players", response_model=AcademyPlayerView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/academy/players",
+    response_model=AcademyPlayerView,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def create_academy_player(
     club_id: str,
     payload: CreateAcademyPlayerRequest,
@@ -147,7 +204,11 @@ def create_academy_player(
     return _handle_domain_errors(lambda: academy_service.create_player(club_id, payload))
 
 
-@router.patch("/academy/players/{player_id}", response_model=AcademyPlayerView)
+@router.patch(
+    "/academy/players/{player_id}",
+    response_model=AcademyPlayerView,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def update_academy_player(
     club_id: str,
     player_id: str,
@@ -157,7 +218,11 @@ def update_academy_player(
     return _handle_domain_errors(lambda: academy_service.update_player(club_id, player_id, payload))
 
 
-@router.get("/academy/training-cycles", response_model=AcademyTrainingCyclesResponse)
+@router.get(
+    "/academy/training-cycles",
+    response_model=AcademyTrainingCyclesResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))],
+)
 def list_academy_training_cycles(
     club_id: str,
     academy_service: AcademyService = Depends(get_academy_service),
@@ -165,7 +230,11 @@ def list_academy_training_cycles(
     return academy_service.list_training_cycles(club_id)
 
 
-@router.get("/scouting", response_model=ScoutingOverviewResponse)
+@router.get(
+    "/scouting",
+    response_model=ScoutingOverviewResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, OrganizationRole.SCOUT, forbidden_detail="club_access_required"))],
+)
 def get_scouting_overview(
     club_id: str,
     scouting_service: ScoutingService = Depends(get_scouting_service),
@@ -173,7 +242,12 @@ def get_scouting_overview(
     return scouting_service.get_overview(club_id)
 
 
-@router.post("/scouting/assignments", response_model=ScoutAssignmentView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/scouting/assignments",
+    response_model=ScoutAssignmentView,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, OrganizationRole.SCOUT, forbidden_detail="club_access_required"))],
+)
 def create_scout_assignment(
     club_id: str,
     payload: CreateScoutAssignmentRequest,
@@ -182,7 +256,11 @@ def create_scout_assignment(
     return _handle_domain_errors(lambda: scouting_service.create_assignment(club_id, payload))
 
 
-@router.get("/scouting/prospects", response_model=ScoutingProspectsResponse)
+@router.get(
+    "/scouting/prospects",
+    response_model=ScoutingProspectsResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, OrganizationRole.SCOUT, forbidden_detail="club_access_required"))],
+)
 def list_scouting_prospects(
     club_id: str,
     scouting_service: ScoutingService = Depends(get_scouting_service),
@@ -190,7 +268,11 @@ def list_scouting_prospects(
     return scouting_service.list_prospects(club_id)
 
 
-@router.get("/scouting/prospects/{prospect_id}", response_model=ScoutingProspectDetailResponse)
+@router.get(
+    "/scouting/prospects/{prospect_id}",
+    response_model=ScoutingProspectDetailResponse,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, OrganizationRole.SCOUT, forbidden_detail="club_access_required"))],
+)
 def get_scouting_prospect(
     club_id: str,
     prospect_id: str,
@@ -199,7 +281,11 @@ def get_scouting_prospect(
     return _handle_domain_errors(lambda: scouting_service.get_prospect(club_id, prospect_id))
 
 
-@router.patch("/scouting/prospects/{prospect_id}", response_model=YouthProspectView)
+@router.patch(
+    "/scouting/prospects/{prospect_id}",
+    response_model=YouthProspectView,
+    dependencies=[Depends(require_bound_organization_access(OrganizationRole.CLUB, OrganizationRole.SCOUT, forbidden_detail="club_access_required"))],
+)
 def update_scouting_prospect(
     club_id: str,
     prospect_id: str,

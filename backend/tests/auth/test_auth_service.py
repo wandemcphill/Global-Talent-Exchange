@@ -9,6 +9,8 @@ from app.auth.schemas import CurrentUserUpdateRequest
 from app.auth.security import decode_access_token, verify_password
 from app.auth.service import AuthService, DuplicateUserError, InvalidCredentialsError
 from app.models import Base, LedgerAccount, LedgerUnit
+from app.schemas.club_requests import ClubCreateRequest
+from app.services.club_branding_service import ClubBrandingService
 
 
 @pytest.fixture()
@@ -74,14 +76,47 @@ def test_authenticate_user_issues_token_and_updates_last_login(session) -> None:
     session.commit()
 
     authenticated_user = service.authenticate_user(session, email="owner@example.com", password="SuperSecret1")
-    token, expires_in = service.issue_access_token(authenticated_user)
+    token, expires_in = service.issue_access_token(authenticated_user, session=session)
     session.commit()
 
     claims = decode_access_token(token)
     assert claims["sub"] == user.id
     assert claims["email"] == user.email
+    assert claims["org_id"] is None
     assert expires_in == 3600
     assert authenticated_user.last_login_at is not None
+
+
+def test_issue_access_token_uses_primary_organization_role_for_club_owner(session) -> None:
+    service = AuthService()
+    user = service.register_user(
+        session,
+        email="club@example.com",
+        username="clubowner",
+        password="SuperSecret1",
+        display_name="Club Owner",
+    )
+    session.commit()
+
+    club = ClubBrandingService(session).create_club_profile(
+        owner_user_id=user.id,
+        payload=ClubCreateRequest(
+            club_name="Access FC",
+            short_name="AFC",
+            slug="access-fc",
+            primary_color="#123456",
+            secondary_color="#654321",
+            accent_color="#abcdef",
+            visibility="public",
+        ),
+    )
+    session.refresh(user)
+
+    token, _ = service.issue_access_token(user, session=session)
+    claims = decode_access_token(token)
+
+    assert claims["role"] == "club"
+    assert claims["org_id"] == club.id
 
 
 def test_authenticate_user_rejects_invalid_password(session) -> None:

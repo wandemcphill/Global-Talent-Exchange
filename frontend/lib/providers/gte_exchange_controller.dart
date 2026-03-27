@@ -1,5 +1,8 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 import '../core/app_feedback.dart';
+import '../domain/match/match_weights.dart';
 
 import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
@@ -42,11 +45,13 @@ class GteExchangeController extends ChangeNotifier {
   bool isCancellingOrder = false;
   bool isLoadingCompliance = false;
 
-  String marketSearch = '';
+  PlayerFilter marketFilter = const PlayerFilter();
+  MatchWeights _weights = MatchWeights.defaultWeights();
   String selectedCandleInterval = '1h';
 
   String? marketError;
   String? playerError;
+  String? playerProfileError;
   String? authError;
   String? portfolioError;
   String? ordersError;
@@ -56,21 +61,31 @@ class GteExchangeController extends ChangeNotifier {
   GteAuthSession? session;
   GteMarketPlayerListView? marketPage;
   GtePlayerMarketSnapshot? selectedPlayer;
+  PlayerProfile? selectedProfile;
   GteWalletSummary? walletSummary;
   GtePortfolioView? portfolio;
   GtePortfolioSummary? portfolioSummary;
   GteComplianceStatus? complianceStatus;
-  List<GtePolicyRequirementSummary> policyRequirements = const <GtePolicyRequirementSummary>[];
+  List<GtePolicyRequirementSummary> policyRequirements =
+      const <GtePolicyRequirementSummary>[];
   int recentOrderTotal = 0;
   int openOrderTotal = 0;
 
   final Map<String, GteOrderRecord> _ordersById = <String, GteOrderRecord>{};
   final List<String> _recentOrderIds = <String>[];
   final List<String> _openOrderIds = <String>[];
+  final Map<String, _PlayerEngagementState> _playerEngagement =
+      <String, _PlayerEngagementState>{};
   bool _hasLoadedOrdersOnce = false;
 
   List<GteMarketPlayerListItem> get players =>
       marketPage?.items ?? const <GteMarketPlayerListItem>[];
+
+  String get marketSearch => marketFilter.search ?? '';
+
+  MatchWeights get weights => _weights;
+
+  bool get hasActiveMarketFilters => marketFilter.hasActiveFilters;
 
   bool get isAuthenticated => session != null;
 
@@ -82,7 +97,7 @@ class GteExchangeController extends ChangeNotifier {
     if (marketPage == null) {
       return false;
     }
-    return marketPage!.items.length + marketPage!.offset < marketPage!.total;
+    return marketPage!.hasMore;
   }
 
   List<GteOrderRecord> get recentOrders => _ordersForIds(_recentOrderIds);
@@ -143,46 +158,55 @@ class GteExchangeController extends ChangeNotifier {
 
   Future<void> loadMarket({
     String? search,
+    PlayerFilter? filter,
     bool reset = false,
   }) async {
+    final PlayerFilter nextFilter = ((filter ?? marketFilter).copyWith(
+      search: search ?? (filter == null ? marketFilter.search : filter.search),
+    )).normalized();
+    final bool shouldReset =
+        reset || marketPage == null || nextFilter != marketFilter;
+    if ((isLoadingMarket || isLoadingMoreMarket) && !shouldReset) {
+      return;
+    }
+    if (!shouldReset && !hasMorePlayers) {
+      return;
+    }
     final int requestId = _marketGate.begin();
-    final String nextSearch = (search ?? marketSearch).trim();
     marketError = null;
-    if (reset || marketPage == null) {
+    marketFilter = nextFilter;
+    if (shouldReset) {
       isLoadingMarket = true;
+      marketPage = null;
     } else {
       isLoadingMoreMarket = true;
     }
     notifyListeners();
 
     try {
-      final int offset = reset || marketPage == null
-          ? 0
-          : marketPage!.offset + marketPage!.items.length;
+      final String? cursor = shouldReset ? null : _nextMarketCursor();
+      final int offset = shouldReset ? 0 : _nextMarketOffset();
       final GteMarketPlayerListView response = await _api.fetchPlayers(
         query: GteMarketPlayersQuery(
           limit: 20,
+          cursor: cursor,
           offset: offset,
-          search: nextSearch.isEmpty ? null : nextSearch,
+          search: nextFilter.search,
+          position: nextFilter.position,
+          country: nextFilter.country,
+          minAge: nextFilter.minAge,
+          maxAge: nextFilter.maxAge,
+          availability: nextFilter.availability,
         ),
       );
       if (!_marketGate.isActive(requestId)) {
         return;
       }
-      marketSearch = nextSearch;
       marketSyncedAt = DateTime.now().toUtc();
-      if (reset || marketPage == null) {
+      if (shouldReset || marketPage == null) {
         marketPage = response;
       } else {
-        marketPage = GteMarketPlayerListView(
-          items: <GteMarketPlayerListItem>[
-            ...marketPage!.items,
-            ...response.items,
-          ],
-          limit: response.limit,
-          offset: 0,
-          total: response.total,
-        );
+        marketPage = _mergeMarketPage(marketPage!, response);
       }
     } catch (error) {
       if (_marketGate.isActive(requestId)) {
@@ -197,6 +221,41 @@ class GteExchangeController extends ChangeNotifier {
     }
   }
 
+  String? _nextMarketCursor() {
+    final String? cursor = marketPage?.nextCursor?.trim();
+    if (cursor == null || cursor.isEmpty) {
+      return null;
+    }
+    return cursor;
+  }
+
+  int _nextMarketOffset() {
+    return marketPage?.items.length ?? 0;
+  }
+
+  GteMarketPlayerListView _mergeMarketPage(
+    GteMarketPlayerListView current,
+    GteMarketPlayerListView next,
+  ) {
+    final LinkedHashMap<String, GteMarketPlayerListItem> uniquePlayers =
+        LinkedHashMap<String, GteMarketPlayerListItem>();
+    for (final GteMarketPlayerListItem player in current.items) {
+      uniquePlayers[player.playerId] = player;
+    }
+    for (final GteMarketPlayerListItem player in next.items) {
+      uniquePlayers[player.playerId] = player;
+    }
+    return GteMarketPlayerListView(
+      items: uniquePlayers.values.toList(growable: false),
+      limit: next.limit,
+      hasMore: next.hasMore,
+      nextCursor: next.nextCursor,
+      offset: 0,
+      total:
+          next.total > uniquePlayers.length ? next.total : uniquePlayers.length,
+    );
+  }
+
   Future<void> openPlayer(
     String playerId, {
     String interval = '1h',
@@ -204,10 +263,22 @@ class GteExchangeController extends ChangeNotifier {
     final int requestId = _playerGate.begin();
     selectedCandleInterval = interval;
     playerError = null;
+    playerProfileError = null;
     isLoadingPlayer = true;
     notifyListeners();
 
     try {
+      final Future<_PlayerProfileLoadResult> profileFuture = _api
+          .fetchPlayerProfile(playerId)
+          .then<_PlayerProfileLoadResult>(
+            (PlayerProfile profile) =>
+                _PlayerProfileLoadResult(profile: profile),
+          )
+          .catchError((Object error) {
+        return _PlayerProfileLoadResult(
+          errorMessage: AppFeedback.messageFor(error),
+        );
+      });
       final GtePlayerMarketSnapshot snapshot = await _api.fetchPlayerMarket(
         playerId,
         interval: interval,
@@ -217,6 +288,15 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       selectedPlayer = snapshot;
+      final _PlayerProfileLoadResult profileResult = await profileFuture;
+      if (!_playerGate.isActive(requestId)) {
+        return;
+      }
+      if (profileResult.profile != null) {
+        selectedProfile = _applyEngagementToProfile(profileResult.profile!);
+      } else {
+        playerProfileError = profileResult.errorMessage;
+      }
       playerSyncedAt = DateTime.now().toUtc();
     } catch (error) {
       if (_playerGate.isActive(requestId)) {
@@ -352,6 +432,7 @@ class GteExchangeController extends ChangeNotifier {
     ordersError = null;
     orderError = null;
     complianceError = null;
+    playerProfileError = null;
     recentOrderTotal = 0;
     openOrderTotal = 0;
     _recentOrderIds.clear();
@@ -362,11 +443,22 @@ class GteExchangeController extends ChangeNotifier {
     _portfolioFuture = null;
     _ordersFuture = null;
     marketSyncedAt = null;
+    marketFilter = const PlayerFilter();
+    _weights = MatchWeights.defaultWeights();
     playerSyncedAt = null;
     portfolioSyncedAt = null;
     ordersSyncedAt = null;
     complianceSyncedAt = null;
     notifyListeners();
+  }
+
+  void updateWeights(MatchWeights newWeights) {
+    _weights = newWeights.normalize();
+    notifyListeners();
+  }
+
+  void applyPreset(MatchWeights preset) {
+    updateWeights(preset);
   }
 
   Future<void> refreshAccount() async {
@@ -402,8 +494,7 @@ class GteExchangeController extends ChangeNotifier {
           return;
         }
         complianceStatus = payload[0] as GteComplianceStatus;
-        policyRequirements =
-            payload[1] as List<GtePolicyRequirementSummary>;
+        policyRequirements = payload[1] as List<GtePolicyRequirementSummary>;
         complianceSyncedAt = DateTime.now().toUtc();
       } catch (error) {
         if (_complianceGate.isActive(requestId)) {
@@ -436,7 +527,8 @@ class GteExchangeController extends ChangeNotifier {
 
     final Future<void> task = () async {
       try {
-        final List<dynamic> payload = await Future.wait<dynamic>(<Future<dynamic>>[
+        final List<dynamic> payload =
+            await Future.wait<dynamic>(<Future<dynamic>>[
           _api.fetchWalletSummary(),
           _api.fetchPortfolio(),
           _api.fetchPortfolioSummary(),
@@ -481,7 +573,8 @@ class GteExchangeController extends ChangeNotifier {
 
     final Future<void> task = () async {
       try {
-        final List<dynamic> payload = await Future.wait<dynamic>(<Future<dynamic>>[
+        final List<dynamic> payload =
+            await Future.wait<dynamic>(<Future<dynamic>>[
           _api.listOrders(limit: limit),
           _api.listOrders(
             limit: limit,
@@ -618,6 +711,32 @@ class GteExchangeController extends ChangeNotifier {
     return playerId;
   }
 
+  bool isPlayerScouted(String playerId) {
+    return _engagementStateFor(playerId).isScouted;
+  }
+
+  bool isPlayerShortlisted(String playerId) {
+    return _engagementStateFor(playerId).isShortlisted;
+  }
+
+  void toggleScouted(String playerId) {
+    final _PlayerEngagementState current = _engagementStateFor(playerId);
+    _playerEngagement[playerId] = current.copyWith(
+      isScouted: !current.isScouted,
+    );
+    _syncSelectedProfileEngagement(playerId);
+    notifyListeners();
+  }
+
+  void toggleShortlist(String playerId) {
+    final _PlayerEngagementState current = _engagementStateFor(playerId);
+    _playerEngagement[playerId] = current.copyWith(
+      isShortlisted: !current.isShortlisted,
+    );
+    _syncSelectedProfileEngagement(playerId);
+    notifyListeners();
+  }
+
   Future<void> _refreshTradingState({
     String? playerId,
     bool refreshPlayer = false,
@@ -675,5 +794,72 @@ class GteExchangeController extends ChangeNotifier {
     if (openOrderTotal < _openOrderIds.length) {
       openOrderTotal = _openOrderIds.length;
     }
+  }
+
+  _PlayerEngagementState _engagementStateFor(String playerId,
+      {PlayerProfile? profile}) {
+    final _PlayerEngagementState? existing = _playerEngagement[playerId];
+    if (existing != null) {
+      return existing;
+    }
+    final PlayerSnapshot? snapshot = profile?.snapshot ??
+        (selectedProfile?.snapshot.id == playerId
+            ? selectedProfile?.snapshot
+            : null);
+    return _PlayerEngagementState(
+      isScouted: snapshot?.isFollowed ?? false,
+      isShortlisted: snapshot?.isShortlisted ?? false,
+    );
+  }
+
+  PlayerProfile _applyEngagementToProfile(PlayerProfile profile) {
+    final _PlayerEngagementState engagement = _engagementStateFor(
+      profile.snapshot.id,
+      profile: profile,
+    );
+    return profile.copyWith(
+      snapshot: profile.snapshot.copyWith(
+        isFollowed: engagement.isScouted,
+        isShortlisted: engagement.isShortlisted,
+      ),
+    );
+  }
+
+  void _syncSelectedProfileEngagement(String playerId) {
+    final PlayerProfile? profile = selectedProfile;
+    if (profile == null || profile.snapshot.id != playerId) {
+      return;
+    }
+    selectedProfile = _applyEngagementToProfile(profile);
+  }
+}
+
+class _PlayerProfileLoadResult {
+  const _PlayerProfileLoadResult({
+    this.profile,
+    this.errorMessage,
+  });
+
+  final PlayerProfile? profile;
+  final String? errorMessage;
+}
+
+class _PlayerEngagementState {
+  const _PlayerEngagementState({
+    required this.isScouted,
+    required this.isShortlisted,
+  });
+
+  final bool isScouted;
+  final bool isShortlisted;
+
+  _PlayerEngagementState copyWith({
+    bool? isScouted,
+    bool? isShortlisted,
+  }) {
+    return _PlayerEngagementState(
+      isScouted: isScouted ?? this.isScouted,
+      isShortlisted: isShortlisted ?? this.isShortlisted,
+    );
   }
 }

@@ -39,3 +39,37 @@ class AnalyticsFunnelStep(BaseModel):
 class AnalyticsFunnelView(BaseModel):
     since: datetime
     steps: list[AnalyticsFunnelStep]
+
+
+class PlayerMatchAnalyticsFunnelStep(BaseModel):
+    event: str
+    count: int
+
+
+class PlayerMatchScoreMetricView(BaseModel):
+    event: str
+    average_score: float | None = None
+
+
+class PlayerMatchDistributionItemView(BaseModel):
+    label: str
+    count: int
+
+
+class PlayerMatchWeightItemView(BaseModel):
+    factor: str
+    weight: float
+
+
+class PlayerMatchAnalyticsView(BaseModel):
+    since: datetime
+    funnel: list[PlayerMatchAnalyticsFunnelStep]
+    score_effectiveness: list[PlayerMatchScoreMetricView]
+    top_positions: list[PlayerMatchDistributionItemView]
+    top_countries: list[PlayerMatchDistributionItemView]
+    age_buckets: list[PlayerMatchDistributionItemView]
+    weights: list[PlayerMatchWeightItemView]
+
+
+class PlayerMatchWeightRefreshView(BaseModel):
+    weights: list[PlayerMatchWeightItemView]

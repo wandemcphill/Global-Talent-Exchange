@@ -10,13 +10,30 @@ void main() {
   test('fixture client paginates and filters the market directory', () async {
     final GteExchangeApiClient client = GteExchangeApiClient.fixture();
 
-    final firstPage = await client.fetchPlayers();
+    final firstPage = await client.fetchPlayers(
+      query: const GteMarketPlayersQuery(limit: 2),
+    );
+    final secondPage = await client.fetchPlayers(
+      query: GteMarketPlayersQuery(limit: 2, cursor: firstPage.nextCursor),
+    );
     final filtered = await client.fetchPlayers(
       query: const GteMarketPlayersQuery(search: 'Yamal'),
     );
 
     expect(firstPage.items, isNotEmpty);
+    expect(firstPage.hasMore, isTrue);
+    expect(firstPage.nextCursor, isNotNull);
     expect(firstPage.total, greaterThan(0));
+    expect(secondPage.items, isNotEmpty);
+    expect(
+      secondPage.items.any(
+        (GteMarketPlayerListItem player) => firstPage.items.any(
+          (GteMarketPlayerListItem firstPagePlayer) =>
+              firstPagePlayer.playerId == player.playerId,
+        ),
+      ),
+      isFalse,
+    );
     expect(filtered.items, hasLength(1));
     expect(filtered.items.single.playerName, 'Lamine Yamal');
   });
@@ -65,6 +82,43 @@ void main() {
     expect(transport.lastRequest!.uri.path, '/api/match-viewer/match-001');
     expect(transport.lastRequest!.uri.queryParameters['mode'], 'cinematic');
   });
+
+  test('live client routes market discovery through the unified players query',
+      () async {
+    final _RecordingTransport transport = _RecordingTransport();
+    final GteExchangeApiClient client = GteExchangeApiClient(
+      config: const GteRepositoryConfig(
+        baseUrl: 'https://example.test',
+        mode: GteBackendMode.live,
+      ),
+      transport: transport,
+      repository: GteMockApi(),
+    );
+
+    await client.fetchPlayers(
+      query: const GteMarketPlayersQuery(
+        limit: 20,
+        search: 'ronaldo',
+        position: 'ST',
+        country: 'Nigeria',
+        minAge: 18,
+        maxAge: 28,
+        availability: 'free_agent',
+      ),
+    );
+
+    expect(transport.lastRequest, isNotNull);
+    expect(transport.lastRequest!.uri.path, '/players');
+    expect(transport.lastRequest!.uri.queryParameters['search'], 'ronaldo');
+    expect(transport.lastRequest!.uri.queryParameters['position'], 'ST');
+    expect(transport.lastRequest!.uri.queryParameters['country'], 'Nigeria');
+    expect(transport.lastRequest!.uri.queryParameters['min_age'], '18');
+    expect(transport.lastRequest!.uri.queryParameters['max_age'], '28');
+    expect(
+      transport.lastRequest!.uri.queryParameters['availability'],
+      'free_agent',
+    );
+  });
 }
 
 class _RecordingTransport implements GteTransport {
@@ -73,6 +127,17 @@ class _RecordingTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) async {
     lastRequest = request;
+    if (request.uri.path == '/players') {
+      return const GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'players': <Object?>[],
+          'limit': 20,
+          'has_more': false,
+          'total': 0,
+        },
+      );
+    }
     return const GteTransportResponse(
       statusCode: 200,
       body: <String, Object?>{

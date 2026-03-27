@@ -63,6 +63,11 @@ class FairnessIndicatorService {
         proof.status == MatchVerificationStatus.tampered) {
       return MatchVerificationStatus.tampered;
     }
+    final bool localPreview = viewState.source == 'local_simulation' &&
+        !indicator.serverAuthoritative;
+    if (localPreview) {
+      return MatchVerificationStatus.unverified;
+    }
     if (!indicator.noPayToWin ||
         !indicator.visualOnlyMonetization ||
         !indicator.serverAuthoritative) {

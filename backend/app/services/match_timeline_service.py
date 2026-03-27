@@ -60,6 +60,7 @@ class _ViewerEventContext:
     home_formation: str | None = None
     away_formation: str | None = None
     fallback_formation: str | None = None
+    render_contract: dict[str, Any] | None = None
 
 
 class MatchTimelineService:
@@ -251,6 +252,7 @@ class MatchTimelineService:
             home_formation=self._optional_text(metadata.get("home_formation")),
             away_formation=self._optional_text(metadata.get("away_formation")),
             fallback_formation=self._optional_text(metadata.get("fallback_formation")),
+            render_contract=self._render_contract(metadata.get("render")),
         )
 
     def _context_from_archive_event(
@@ -297,6 +299,7 @@ class MatchTimelineService:
             ),
             source_type=event.event_type,
             team_side=None,
+            render_contract=None,
         )
 
     def _ensure_control_events(
@@ -508,6 +511,7 @@ class MatchTimelineService:
                 }
                 else MatchViewerCameraPreset.BROADCAST
             )
+            pre_camera = self._camera_preset_from_render(event, stage="pre", fallback=pre_camera)
             event_camera = (
                 MatchViewerCameraPreset.BOX_ZOOM
                 if event.view.event_type
@@ -522,6 +526,7 @@ class MatchTimelineService:
                 }
                 else MatchViewerCameraPreset.BROADCAST
             )
+            event_camera = self._camera_preset_from_render(event, stage="event", fallback=event_camera)
 
             if not frames:
                 append_frame(
@@ -562,6 +567,7 @@ class MatchTimelineService:
                 stage="event",
                 possession_side=possession_side,
                 camera_preset=event_camera,
+                playback_rate=self._playback_rate_from_render(event, stage="event"),
             )
 
             if event.view.event_type is not MatchViewerEventType.SUBSTITUTION:
@@ -877,7 +883,8 @@ class MatchTimelineService:
                     phase=phase,
                     stage="post",
                     possession_side=possession_side,
-                    camera_preset=event_camera,
+                    camera_preset=self._camera_preset_from_render(event, stage="post", fallback=event_camera),
+                    playback_rate=self._playback_rate_from_render(event, stage="post"),
                 )
 
             if event.view.event_type is MatchViewerEventType.FULLTIME:
@@ -1181,12 +1188,14 @@ class MatchTimelineService:
         attacking_side = active_event.team_side or secondary_side or primary_side
         defending_side = None if attacking_side is None else self._opposite_side(attacking_side)
         player_side = runtime.view.side
-        event_target = self._target_zone(
+        fallback_target = self._target_zone(
             side=attacking_side or MatchViewerSide.HOME,
             home_attacks_right=home_attacks_right,
             event_id=active_event.view.event_id,
             viewer_type=viewer_type,
         )
+        event_target = self._render_point(active_event, "target") or fallback_target
+        event_origin = self._render_point(active_event, "origin") or dict(anchor)
         goalkeeper_target = self._goalkeeper_zone(
             side=defending_side or self._opposite_side(player_side),
             home_attacks_right=home_attacks_right,
@@ -1202,8 +1211,8 @@ class MatchTimelineService:
             if player_side is attacking_side:
                 state = MatchViewerPlayerState.ATTACKING
                 if stage == "pre":
-                    position["x"] = self._lerp(position["x"], event_target["x"], 0.42)
-                    position["y"] = self._lerp(position["y"], event_target["y"], 0.42)
+                    position["x"] = self._lerp(position["x"], event_origin["x"], 0.42)
+                    position["y"] = self._lerp(position["y"], event_origin["y"], 0.42)
                 else:
                     position["x"] = self._lerp(position["x"], event_target["x"], 0.82 if stage == "event" else 0.58)
                     position["y"] = self._lerp(position["y"], event_target["y"], 0.82 if stage == "event" else 0.58)
@@ -1216,8 +1225,8 @@ class MatchTimelineService:
         if player.player_id == active_event.view.secondary_player_id:
             if viewer_type is MatchViewerEventType.SAVE and secondary_side is attacking_side:
                 state = MatchViewerPlayerState.ATTACKING
-                position["x"] = self._lerp(position["x"], event_target["x"], 0.66 if stage != "pre" else 0.38)
-                position["y"] = self._lerp(position["y"], event_target["y"], 0.66 if stage != "pre" else 0.38)
+                position["x"] = self._lerp(position["x"], event_origin["x"] if stage == "pre" else event_target["x"], 0.66 if stage != "pre" else 0.38)
+                position["y"] = self._lerp(position["y"], event_origin["y"] if stage == "pre" else event_target["y"], 0.66 if stage != "pre" else 0.38)
                 return position, state
             if viewer_type is MatchViewerEventType.GOAL and secondary_side is attacking_side:
                 state = MatchViewerPlayerState.ATTACKING
@@ -1287,7 +1296,7 @@ class MatchTimelineService:
         secondary_side = self._player_side_lookup(home_runtime, away_runtime, secondary)
         attacking_side = active_event.team_side or secondary_side or primary_side or possession_side
         defending_side = self._opposite_side(attacking_side)
-        event_target = self._target_zone(
+        fallback_target = self._target_zone(
             side=attacking_side,
             home_attacks_right=home_attacks_right,
             event_id=active_event.view.event_id,
@@ -1305,43 +1314,82 @@ class MatchTimelineService:
         )
         primary_pos = positions.get(primary) if primary is not None else None
         secondary_pos = positions.get(secondary) if secondary is not None else None
+        event_target = self._render_point(active_event, "target") or fallback_target
+        event_origin = self._render_point(active_event, "origin") or primary_pos or event_target
 
         if viewer_type is MatchViewerEventType.GOAL:
             if stage == "pre":
-                return {"position": self._ball_near_player(primary_pos or event_target), "owner_player_id": primary, "state": "controlled"}
+                return {
+                    "position": self._ball_near_player(primary_pos or event_origin),
+                    "owner_player_id": primary,
+                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
+                }
             if stage == "event":
-                return {"position": event_target, "owner_player_id": None, "state": "shot"}
+                return {
+                    "position": event_target,
+                    "owner_player_id": None,
+                    "state": self._ball_state_from_render(active_event, fallback="shot"),
+                }
             return {"position": {"x": event_target["x"], "y": event_target["y"]}, "owner_player_id": None, "state": "in_goal"}
         if viewer_type is MatchViewerEventType.SAVE:
             if stage == "pre":
-                return {"position": self._ball_near_player(secondary_pos or primary_pos or event_target), "owner_player_id": secondary or primary, "state": "controlled"}
+                return {
+                    "position": self._ball_near_player(secondary_pos or primary_pos or event_origin),
+                    "owner_player_id": secondary or primary,
+                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
+                }
             if stage == "event":
-                return {"position": goalkeeper_target, "owner_player_id": None, "state": "saved"}
+                return {
+                    "position": event_target,
+                    "owner_player_id": None,
+                    "state": self._ball_state_from_render(active_event, fallback="saved"),
+                }
             return {"position": self._ball_near_player(goalkeeper_target), "owner_player_id": primary if primary_side is defending_side else secondary, "state": "held"}
         if viewer_type is MatchViewerEventType.MISS:
             if stage == "pre":
-                return {"position": self._ball_near_player(primary_pos or event_target), "owner_player_id": primary, "state": "controlled"}
-            return {"position": wide_target if stage == "event" else self._ball_near_player(wide_target), "owner_player_id": None, "state": "missed"}
+                return {
+                    "position": self._ball_near_player(primary_pos or event_origin),
+                    "owner_player_id": primary,
+                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
+                }
+            resolved_miss_target = event_target if stage == "event" else wide_target
+            return {
+                "position": resolved_miss_target if stage == "event" else self._ball_near_player(resolved_miss_target),
+                "owner_player_id": None,
+                "state": self._ball_state_from_render(active_event, fallback="missed"),
+            }
         if viewer_type is MatchViewerEventType.FOUL:
             return {
-                "position": self._ball_near_player(primary_pos or event_target),
+                "position": self._ball_near_player(primary_pos or event_origin),
                 "owner_player_id": primary or default_owner,
                 "state": "stopped",
             }
         if viewer_type is MatchViewerEventType.OFFSIDE:
-            return {"position": event_target if stage != "pre" else self._ball_near_player(primary_pos or event_target), "owner_player_id": primary, "state": "stopped"}
+            return {
+                "position": event_target if stage != "pre" else self._ball_near_player(primary_pos or event_origin),
+                "owner_player_id": primary,
+                "state": "stopped",
+            }
         if viewer_type in {MatchViewerEventType.RED_CARD, MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
             return {"position": self._ball_near_player(primary_pos or positions.get(default_owner) or {"x": 50.0, "y": 50.0}), "owner_player_id": primary or default_owner, "state": "stopped"}
         if viewer_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE, MatchViewerEventType.ATTACK}:
             if stage == "pre":
-                return {"position": self._ball_near_player(primary_pos or event_target), "owner_player_id": primary or default_owner, "state": "controlled"}
+                return {
+                    "position": self._ball_near_player(primary_pos or event_origin),
+                    "owner_player_id": primary or default_owner,
+                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
+                }
             if stage == "event":
-                return {"position": event_target, "owner_player_id": None, "state": "traveling"}
+                return {
+                    "position": event_target,
+                    "owner_player_id": None,
+                    "state": self._ball_state_from_render(active_event, fallback="traveling"),
+                }
         owner = primary or default_owner
         return {
             "position": self._ball_near_player(positions.get(owner) or event_target),
             "owner_player_id": owner,
-            "state": "rolling",
+            "state": self._ball_state_from_render(active_event, fallback="rolling"),
         }
 
     def _viewer_event_type_from_match_event(self, event: MatchEventView) -> MatchViewerEventType:
@@ -1673,6 +1721,79 @@ class MatchTimelineService:
             return None
         text = str(value).strip()
         return text or None
+
+    def _render_contract(self, value: object | None) -> dict[str, Any] | None:
+        return value if isinstance(value, dict) else None
+
+    def _render_point(self, event: _ViewerEventContext | None, key: str) -> dict[str, float] | None:
+        if event is None or not event.render_contract:
+            return None
+        raw = event.render_contract.get(key)
+        if not isinstance(raw, dict):
+            return None
+        x = raw.get("x")
+        y = raw.get("y")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            return None
+        return {"x": self._clamp(float(x)), "y": self._clamp(float(y))}
+
+    def _render_camera_mode(self, event: _ViewerEventContext | None) -> str | None:
+        if event is None or not event.render_contract:
+            return None
+        camera = event.render_contract.get("camera")
+        if not isinstance(camera, dict):
+            return None
+        return self._optional_text(camera.get("mode"))
+
+    def _render_slow_motion(self, event: _ViewerEventContext | None) -> bool:
+        if event is None or not event.render_contract:
+            return False
+        camera = event.render_contract.get("camera")
+        return isinstance(camera, dict) and bool(camera.get("slow_motion", False))
+
+    def _camera_preset_from_render(
+        self,
+        event: _ViewerEventContext | None,
+        *,
+        stage: str,
+        fallback: MatchViewerCameraPreset,
+    ) -> MatchViewerCameraPreset:
+        mode = self._render_camera_mode(event)
+        if mode == "assistant_flag":
+            return MatchViewerCameraPreset.ASSISTANT_FLAG
+        if mode == "goal_camera":
+            return (
+                MatchViewerCameraPreset.GOAL_CELEBRATION
+                if stage in {"decision", "post"}
+                else MatchViewerCameraPreset.BOX_ZOOM
+            )
+        if mode == "attack_zoom":
+            return MatchViewerCameraPreset.ATTACK_PUSH if stage == "pre" else MatchViewerCameraPreset.BOX_ZOOM
+        if mode == "var_replay":
+            return MatchViewerCameraPreset.VAR_REPLAY
+        if mode == "broadcast":
+            return MatchViewerCameraPreset.BROADCAST
+        return fallback
+
+    def _playback_rate_from_render(
+        self,
+        event: _ViewerEventContext | None,
+        *,
+        stage: str,
+        fallback: float = 1.0,
+    ) -> float:
+        if stage in {"event", "post"} and self._render_slow_motion(event):
+            return 0.5
+        return fallback
+
+    def _ball_state_from_render(self, event: _ViewerEventContext | None, *, fallback: str) -> str:
+        if event is None or not event.render_contract:
+            return fallback
+        ball = event.render_contract.get("ball")
+        if not isinstance(ball, dict):
+            return fallback
+        motion = self._optional_text(ball.get("motion"))
+        return motion or fallback
 
     def _fraction(self, seed: str) -> float:
         digest = md5(seed.encode("utf-8")).hexdigest()[:8]

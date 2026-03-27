@@ -6,10 +6,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from app.auth.dependencies import get_current_admin
+from app.access_control.service import ACCESS_ROLE_MAP_ATTR
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.common.enums.academy_player_status import AcademyPlayerStatus
 from app.common.enums.player_pathway_stage import PlayerPathwayStage
 from app.common.enums.sponsorship_status import SponsorshipStatus
+from app.models.user import UserRole
 from app.schemas.club_ops_requests import (
     CreateAcademyPlayerRequest,
     CreateAcademyProgramRequest,
@@ -97,6 +99,7 @@ def build_club_ops_services() -> dict[str, object]:
         "analytics": analytics,
         "admin": admin,
         "admin_user": SimpleNamespace(id="admin-1", role="admin", is_admin=True),
+        "club_user": SimpleNamespace(id="club-user-1", role=UserRole.CLUB, **{ACCESS_ROLE_MAP_ATTR: {"club-api": "club"}}),
     }
 
 
@@ -127,6 +130,7 @@ def club_ops_app(club_ops_services):
     app.dependency_overrides[get_club_ops_analytics_service] = lambda: club_ops_services["analytics"]
     app.dependency_overrides[get_club_ops_admin_service] = lambda: club_ops_services["admin"]
     app.dependency_overrides[get_current_admin] = lambda: club_ops_services["admin_user"]
+    app.dependency_overrides[get_current_user] = lambda: club_ops_services["club_user"]
     return app
 
 

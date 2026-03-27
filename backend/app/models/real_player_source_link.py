@@ -8,6 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
+def _player_model():
+    from app.ingestion.models import Player
+
+    return Player
+
+
 class RealPlayerSourceLink(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "real_player_source_links"
     __table_args__ = (
@@ -36,7 +42,7 @@ class RealPlayerSourceLink(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_verified_real_player: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     verification_state: Mapped[str] = mapped_column(String(32), nullable=False, default="verified", server_default="verified")
 
-    player = relationship("Player")
+    player = relationship(_player_model)
     profile: Mapped["RealPlayerProfile | None"] = relationship(
         "RealPlayerProfile",
         back_populates="source_link",

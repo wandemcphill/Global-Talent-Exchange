@@ -16,8 +16,14 @@ for candidate in (REPO_ROOT, BACKEND_ROOT):
         sys.path.insert(0, candidate_str)
 
 from app.core.config import Settings, load_settings
-from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
+from app.core.database import (
+    create_database_engine,
+    create_session_factory,
+    ensure_database_schema_current,
+    initialize_database_connection,
+)
 from app.ingestion.second_zip_real_player_ops_service import (
+    DEFAULT_SECOND_ZIP_PUBLISH_BATCH_SIZE,
     SecondZipRealPlayerOpsError,
     SecondZipRealPlayerOpsService,
 )
@@ -26,6 +32,8 @@ from app.ingestion.second_zip_real_player_ops_service import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Operate the GTEX 2nd.zip real-player import path.")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    subparsers.add_parser("check-db", help="Verify database connectivity and schema readiness.")
 
     preload_parser = subparsers.add_parser("preload", help="Preload 2nd.zip countries, competitions, and clubs.")
     preload_parser.add_argument("--file", required=True)
@@ -47,9 +55,15 @@ def build_parser() -> argparse.ArgumentParser:
     publish_parser.add_argument("--run-id", required=True)
     publish_parser.add_argument("--limit", type=int, default=None)
     publish_parser.add_argument("--tier", default=None)
+    publish_parser.add_argument("--batch-size", type=int, default=DEFAULT_SECOND_ZIP_PUBLISH_BATCH_SIZE)
 
     report_parser = subparsers.add_parser("report", help="Report current 2nd.zip run counts.")
     report_parser.add_argument("--run-id", required=True)
+    report_parser.add_argument(
+        "--refresh-summary",
+        action="store_true",
+        help="Persist refreshed summary/status fields before returning the report.",
+    )
 
     parser.add_argument(
         "--database-url",
@@ -62,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
 def build_service(*, database_url: str) -> SecondZipRealPlayerOpsService:
     settings = _settings_with_database_url(database_url=database_url)
     engine = create_database_engine(database_url)
-    ensure_database_schema_current(engine)
+    initialize_database_connection(engine, run_migration_check=settings.run_migration_check)
     session_factory = create_session_factory(engine)
     return SecondZipRealPlayerOpsService(
         session_factory=session_factory,
@@ -70,10 +84,32 @@ def build_service(*, database_url: str) -> SecondZipRealPlayerOpsService:
     )
 
 
+def check_database(*, database_url: str) -> dict[str, object]:
+    settings = _settings_with_database_url(database_url=database_url)
+    engine = create_database_engine(database_url)
+    try:
+        initialize_database_connection(engine, run_migration_check=False)
+        schema_heads = ensure_database_schema_current(engine)
+        return {
+            "status": "ready",
+            "database_backend": engine.dialect.name,
+            "database_driver": engine.dialect.driver,
+            "schema_heads": list(schema_heads),
+            "authoritative_large_publish_supported": engine.dialect.name == "postgresql",
+            "migration_check": settings.run_migration_check,
+        }
+    finally:
+        engine.dispose()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(_normalize_global_args(argv))
     if not args.database_url:
         raise SystemExit("--database-url or GTE_DATABASE_URL is required.")
+
+    if args.command == "check-db":
+        _print_json(check_database(database_url=args.database_url))
+        return 0
 
     service = build_service(database_url=args.database_url)
     try:
@@ -107,11 +143,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 run_id=args.run_id,
                 limit=args.limit,
                 tier=args.tier,
+                batch_size=args.batch_size,
             )
             _print_json(result.to_dict())
             return 0
 
-        result = service.report_run(run_id=args.run_id)
+        result = service.report_run(run_id=args.run_id, refresh_summary=args.refresh_summary)
         _print_json(result.to_dict())
         return 0
     except SecondZipRealPlayerOpsError as exc:

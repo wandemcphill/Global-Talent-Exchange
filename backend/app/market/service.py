@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any
@@ -751,8 +754,10 @@ class MarketPlayerListItem:
 class MarketPlayerListResult:
     items: tuple[MarketPlayerListItem, ...]
     limit: int
-    offset: int
+    next_cursor: str | None
+    has_more: bool
     total: int
+    offset: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -876,7 +881,8 @@ class MarketPlayerQueryService:
         self,
         *,
         limit: int = 20,
-        offset: int = 0,
+        cursor: str | None = None,
+        offset: int | None = 0,
         position: str | None = None,
         nationality: str | None = None,
         club: str | None = None,
@@ -891,9 +897,10 @@ class MarketPlayerQueryService:
         normalized_nationality = self._normalize_optional_text(nationality)
         normalized_club = self._normalize_optional_text(club)
         normalized_search = self._normalize_optional_text(search)
+        normalized_offset = 0 if offset is None else offset
         self._validate_player_query(
             limit=limit,
-            offset=offset,
+            offset=normalized_offset,
             min_age=min_age,
             max_age=max_age,
             min_value=min_value,
@@ -913,12 +920,46 @@ class MarketPlayerQueryService:
         ]
         sorted_records = self._sort_player_records(filtered_records, sort=sort)
         total = len(sorted_records)
-        paginated_records = sorted_records[offset:offset + limit]
+        query_signature = self._player_query_signature(
+            sort=sort,
+            position=normalized_position,
+            nationality=normalized_nationality,
+            club=normalized_club,
+            min_age=min_age,
+            max_age=max_age,
+            min_value=min_value,
+            max_value=max_value,
+            search=normalized_search,
+        )
+        start_index = (
+            self._cursor_start_index(
+                sorted_records,
+                cursor=cursor,
+                sort=sort,
+                query_signature=query_signature,
+            )
+            if cursor
+            else normalized_offset
+        )
+        paginated_records = sorted_records[start_index:start_index + limit + 1]
+        page_records = paginated_records[:limit]
+        has_more = len(paginated_records) > limit
+        next_cursor = (
+            self._encode_player_cursor(
+                page_records[-1],
+                sort=sort,
+                query_signature=query_signature,
+            )
+            if has_more and page_records
+            else None
+        )
         return MarketPlayerListResult(
-            items=tuple(self._build_list_item(record) for record in paginated_records),
+            items=tuple(self._build_list_item(record) for record in page_records),
             limit=limit,
-            offset=offset,
+            next_cursor=next_cursor,
+            has_more=has_more,
             total=total,
+            offset=start_index,
         )
 
     def get_player_detail(self, player_id: str) -> MarketPlayerDetail:
@@ -1273,44 +1314,129 @@ class MarketPlayerQueryService:
         *,
         sort: str,
     ) -> list[MarketPlayerRecord]:
+        return sorted(records, key=lambda record: self._player_sort_key(record, sort=sort))
+
+    def _player_query_signature(
+        self,
+        *,
+        sort: str,
+        position: str | None,
+        nationality: str | None,
+        club: str | None,
+        min_age: int | None,
+        max_age: int | None,
+        min_value: float | None,
+        max_value: float | None,
+        search: str | None,
+    ) -> dict[str, Any]:
+        return {
+            "sort": sort,
+            "position": position,
+            "nationality": nationality,
+            "club": club,
+            "min_age": min_age,
+            "max_age": max_age,
+            "min_value": min_value,
+            "max_value": max_value,
+            "search": search,
+        }
+
+    def _player_sort_key(
+        self,
+        record: MarketPlayerRecord,
+        *,
+        sort: str,
+    ) -> tuple[Any, ...]:
+        normalized_name = self._normalize_text(record.player.full_name)
         if sort == "current_value":
-            return sorted(
-                records,
-                key=lambda record: (
-                    self._current_value_credits(record) is None,
-                    -(self._current_value_credits(record) or 0.0),
-                    self._normalize_text(record.player.full_name),
-                    record.player.id,
-                ),
+            current_value = self._current_value_credits(record)
+            return (
+                current_value is None,
+                -(current_value or 0.0),
+                normalized_name,
+                record.player.id,
             )
         if sort == "trend_score":
-            return sorted(
-                records,
-                key=lambda record: (
-                    self._trend_score(record) is None,
-                    -(self._trend_score(record) or 0.0),
-                    -(self._current_value_credits(record) or 0.0),
-                    self._normalize_text(record.player.full_name),
-                    record.player.id,
-                ),
+            trend_score = self._trend_score(record)
+            current_value = self._current_value_credits(record)
+            return (
+                trend_score is None,
+                -(trend_score or 0.0),
+                -(current_value or 0.0),
+                normalized_name,
+                record.player.id,
             )
         if sort == "age":
-            return sorted(
-                records,
-                key=lambda record: (
-                    self._player_age(record.player.date_of_birth) is None,
-                    self._player_age(record.player.date_of_birth) or 10_000,
-                    self._normalize_text(record.player.full_name),
-                    record.player.id,
-                ),
-            )
-        return sorted(
-            records,
-            key=lambda record: (
-                self._normalize_text(record.player.full_name),
+            player_age = self._player_age(record.player.date_of_birth)
+            return (
+                player_age is None,
+                player_age or 10_000,
+                normalized_name,
                 record.player.id,
-            ),
+            )
+        return (
+            normalized_name,
+            record.player.id,
         )
+
+    def _encode_player_cursor(
+        self,
+        record: MarketPlayerRecord,
+        *,
+        sort: str,
+        query_signature: dict[str, Any],
+    ) -> str:
+        payload = {
+            "v": 1,
+            "query": query_signature,
+            "key": list(self._player_sort_key(record, sort=sort)),
+        }
+        raw_payload = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        return base64.urlsafe_b64encode(raw_payload).decode("ascii").rstrip("=")
+
+    def _decode_player_cursor(
+        self,
+        cursor: str,
+        *,
+        query_signature: dict[str, Any],
+    ) -> tuple[Any, ...]:
+        try:
+            raw_cursor = cursor.strip()
+            if not raw_cursor:
+                raise ValueError("empty cursor")
+            padding = "=" * (-len(raw_cursor) % 4)
+            payload = json.loads(
+                base64.urlsafe_b64decode(f"{raw_cursor}{padding}".encode("ascii")).decode("utf-8")
+            )
+        except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as exc:
+            raise MarketValidationError("cursor is invalid") from exc
+
+        if not isinstance(payload, dict) or payload.get("v") != 1:
+            raise MarketValidationError("cursor is invalid")
+        if payload.get("query") != query_signature:
+            raise MarketValidationError("cursor does not match the current player query")
+
+        cursor_key = payload.get("key")
+        if not isinstance(cursor_key, list) or not cursor_key:
+            raise MarketValidationError("cursor is invalid")
+        return tuple(cursor_key)
+
+    def _cursor_start_index(
+        self,
+        sorted_records: list[MarketPlayerRecord],
+        *,
+        cursor: str,
+        sort: str,
+        query_signature: dict[str, Any],
+    ) -> int:
+        cursor_key = self._decode_player_cursor(cursor, query_signature=query_signature)
+        start_index = 0
+        for record in sorted_records:
+            if self._player_sort_key(record, sort=sort) <= cursor_key:
+                start_index += 1
+                continue
+            break
+        return start_index
 
     def _summary_payload(self, record: MarketPlayerRecord) -> dict[str, Any]:
         if record.summary is None or not isinstance(record.summary.summary_json, dict):

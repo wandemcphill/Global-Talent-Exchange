@@ -440,6 +440,10 @@ class Match3dTimelineController extends ChangeNotifier {
         hasPossession: frame.ball.ownerPlayerId == player.playerId,
         highlighted: player.highlighted ||
             segment.highlightedIds.contains(player.playerId),
+        animationState: player.animationState,
+        speedRatio: player.speedRatio,
+        blendFactor: player.blendFactor,
+        staminaPct: player.staminaPct,
       );
     }).toList(growable: false);
     return _RuntimeSnapshot(

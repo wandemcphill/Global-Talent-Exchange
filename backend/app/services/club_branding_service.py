@@ -22,6 +22,8 @@ class ClubBrandingService:
     session: Session
 
     def create_club_profile(self, *, owner_user_id: str, payload: ClubCreateRequest) -> ClubProfile:
+        from app.access_control.service import AccessControlService
+
         existing = self.session.scalar(select(ClubProfile).where(ClubProfile.slug == payload.slug))
         if existing is not None:
             raise ValueError("club_slug_taken")
@@ -49,6 +51,7 @@ class ClubBrandingService:
         ClubTrophyService(self.session).ensure_cabinet(club.id)
         self.session.flush()
         RegenBootstrapService(self.session).bootstrap_for_new_club(club)
+        AccessControlService(self.session).ensure_club_organization(club, owner_user_id=owner_user_id)
         self.session.commit()
         self.session.refresh(club)
         return club
@@ -149,7 +152,16 @@ class ClubBrandingService:
         return club
 
     def _require_owned_club(self, club_id: str, owner_user_id: str) -> ClubProfile:
-        club = self._require_club(club_id)
-        if club.owner_user_id != owner_user_id:
+        from app.access_control.service import AccessControlService
+        from app.models.access_control import OrganizationRole
+        from app.models.user import User
+
+        actor = self.session.get(User, owner_user_id)
+        if actor is None:
             raise PermissionError("club_owner_required")
-        return club
+        return AccessControlService(self.session).require_club_access(
+            user=actor,
+            club_id=club_id,
+            allowed_roles={OrganizationRole.CLUB},
+            forbidden_detail="club_owner_required",
+        )

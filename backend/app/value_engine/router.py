@@ -6,8 +6,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend.app.auth.dependencies import get_session
-from backend.app.value_engine.schemas import (
+from app.auth.dependencies import get_session
+from app.value_engine.schemas import (
     ValueDailyCloseResponse,
     ValueDailyCloseView,
     ValueHistoryResponse,
@@ -16,7 +16,7 @@ from backend.app.value_engine.schemas import (
     ValueSnapshotView,
     ValueTrendSummaryView,
 )
-from backend.app.value_engine.service import ValueSnapshotQueryService
+from app.value_engine.service import ValueSnapshotQueryService
 
 router = APIRouter(prefix="/value-engine", tags=["value-engine"])
 

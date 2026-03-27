@@ -7,6 +7,7 @@ import json
 from uuid import uuid4
 
 from sqlalchemy import delete, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
@@ -94,6 +95,7 @@ class StagedRealPlayer:
     source_player_key: str
     canonical_name: str
     gtex_player_id: str
+    import_row_id: str
     action: str
     match_action: str
     identity_confidence_score: float
@@ -366,6 +368,8 @@ class RealPlayerIngestionService:
                     ],
                 )
                 continue
+            except SQLAlchemyError:
+                raise
             except Exception as exc:
                 hard_failure_count += 1
                 issues.append(
@@ -443,6 +447,8 @@ class RealPlayerIngestionService:
                 if outcome.staged_player is not None:
                     staged_players.append(outcome.staged_player)
                 issues.extend(outcome.mapping_issues)
+            except SQLAlchemyError:
+                raise
             except Exception as exc:
                 hard_failure_count += 1
                 issues.append(
@@ -479,6 +485,8 @@ class RealPlayerIngestionService:
                     lookback_days=request.lookback_days,
                 )
                 preview_snapshots[staged.gtex_player_id] = snapshot
+            except SQLAlchemyError:
+                raise
             except Exception as exc:
                 missing_pricing_snapshot_count += 1
                 issues.append(
@@ -686,7 +694,7 @@ class RealPlayerIngestionService:
         )
         self._upsert_injury_status(session, player=player, payload=payload)
         self._upsert_market_signals(session, player=player, normalized=normalized, as_of=as_of)
-        self._upsert_import_row(
+        import_row = self._upsert_import_row(
             session=session,
             import_batch=import_batch,
             row_number=row_number,
@@ -710,6 +718,7 @@ class RealPlayerIngestionService:
                 source_player_key=payload.source_player_key,
                 canonical_name=normalized.canonical_name,
                 gtex_player_id=player.id,
+                import_row_id=import_row.id,
                 action=action,
                 match_action=match.action,
                 identity_confidence_score=match.confidence_score,
@@ -1958,15 +1967,7 @@ class RealPlayerIngestionService:
         confidence_score: float,
         as_of: datetime,
     ) -> None:
-        row = session.scalar(
-            select(RealPlayerImportRow)
-            .join(RealPlayerImportBatch, RealPlayerImportBatch.id == RealPlayerImportRow.batch_id)
-            .where(
-                RealPlayerImportBatch.batch_key == ingestion_batch_id,
-                RealPlayerImportRow.source_name == staged.source_name,
-                RealPlayerImportRow.source_player_key == staged.source_player_key,
-            )
-        )
+        row = session.get(RealPlayerImportRow, staged.import_row_id)
         if row is None:
             return
         row.status = RealPlayerImportRowStatus.IMPORTED.value
