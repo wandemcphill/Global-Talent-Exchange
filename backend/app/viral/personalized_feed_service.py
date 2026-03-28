@@ -21,6 +21,7 @@ from app.feedback_engine.service import FeedbackEngine
 from app.models.analytics_event import AnalyticsEvent
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
+from app.orchestrator.orchestrator_service import build_attention_orchestrator_service
 from app.runtime_config.service import ensure_runtime_config_loader
 from app.users.follow_service import (
     FOLLOWING_FEED_KEY_TEMPLATE,
@@ -31,12 +32,15 @@ from app.users.follow_service import (
 from app.viral.cold_start import ColdStartManager
 from app.viral.social_boost import SocialBoostService
 from app.viral.ingestion_schemas import ClipEventType
+from app.viral.ranking_service import build_viral_ranking_service
 from app.viral.schemas import (
     PersonalizedFeedAffinityView,
     PersonalizedFeedClipView,
+    PersonalizedFeedRefreshResponse,
     PersonalizedFeedResponse,
     PersonalizedFeedScoreBreakdownView,
 )
+from app.viral.session_tracker import ensure_viral_session_tracker
 from app.viral.service import ViralFeedService
 
 logger = logging.getLogger(__name__)
@@ -44,6 +48,7 @@ logger = logging.getLogger(__name__)
 FOR_YOU_FEED_KEY_TEMPLATE = "user:{user_id}:feed"
 FOR_YOU_FEED_PAYLOAD_KEY_TEMPLATE = "user:{user_id}:feed:payloads"
 FOR_YOU_FEED_HISTORY_KEY_TEMPLATE = "user:{user_id}:feed:history"
+FOR_YOU_SEEN_CLIPS_KEY_TEMPLATE = "user:{user_id}:seen_clips"
 DEFAULT_FEED_CACHE_TTL_SECONDS = 900
 DEFAULT_HISTORY_TTL_SECONDS = 259_200
 DEFAULT_HISTORY_LIMIT = 120
@@ -121,6 +126,12 @@ class PersonalizedFeedStore(Protocol):
     def recent_history(self, user_id: str, limit: int) -> list[SeenClipHistory]:
         ...
 
+    def mark_seen(self, user_id: str, clip_ids: list[str]) -> None:
+        ...
+
+    def seen_clip_ids(self, user_id: str) -> set[str]:
+        ...
+
 
 @dataclass(slots=True)
 class InMemoryPersonalizedFeedStore:
@@ -129,6 +140,7 @@ class InMemoryPersonalizedFeedStore:
     max_history: int = DEFAULT_HISTORY_LIMIT
     _feeds: dict[str, dict[str, tuple[float, str]]] = field(default_factory=dict, init=False, repr=False)
     _history: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
+    _seen: dict[str, set[str]] = field(default_factory=dict, init=False, repr=False)
     _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def replace(self, user_id: str, entries: list[PersonalizedFeedEnvelope]) -> None:
@@ -181,12 +193,25 @@ class InMemoryPersonalizedFeedStore:
                 history.append(entry)
         return history
 
+    def mark_seen(self, user_id: str, clip_ids: list[str]) -> None:
+        normalized = {clip_id.strip() for clip_id in clip_ids if clip_id.strip()}
+        if not normalized:
+            return
+        with self._lock:
+            seen = self._seen.setdefault(user_id, set())
+            seen.update(normalized)
+
+    def seen_clip_ids(self, user_id: str) -> set[str]:
+        with self._lock:
+            return set(self._seen.get(user_id, set()))
+
 
 @dataclass(slots=True)
 class RedisPersonalizedFeedStore:
     redis_url: str
     feed_ttl_seconds: int = DEFAULT_FEED_CACHE_TTL_SECONDS
     history_ttl_seconds: int = DEFAULT_HISTORY_TTL_SECONDS
+    seen_ttl_seconds: int = DEFAULT_HISTORY_TTL_SECONDS
     max_history: int = DEFAULT_HISTORY_LIMIT
     _client: Redis = field(init=False, repr=False)
 
@@ -282,6 +307,25 @@ class RedisPersonalizedFeedStore:
                 history.append(entry)
         return history
 
+    def mark_seen(self, user_id: str, clip_ids: list[str]) -> None:
+        normalized = [clip_id.strip() for clip_id in clip_ids if clip_id.strip()]
+        if not normalized:
+            return
+        try:
+            pipeline = self._client.pipeline()
+            pipeline.sadd(self.seen_key(user_id), *normalized)
+            pipeline.expire(self.seen_key(user_id), self.seen_ttl_seconds)
+            pipeline.execute()
+        except RedisError:
+            logger.warning("viral.personalized_feed.redis.seen_write_failed user_id=%s", user_id)
+
+    def seen_clip_ids(self, user_id: str) -> set[str]:
+        try:
+            return {str(item) for item in self._client.smembers(self.seen_key(user_id))}
+        except RedisError:
+            logger.warning("viral.personalized_feed.redis.seen_read_failed user_id=%s", user_id)
+            return set()
+
     @staticmethod
     def feed_key(user_id: str) -> str:
         return FOR_YOU_FEED_KEY_TEMPLATE.format(user_id=user_id)
@@ -293,6 +337,10 @@ class RedisPersonalizedFeedStore:
     @staticmethod
     def history_key(user_id: str) -> str:
         return FOR_YOU_FEED_HISTORY_KEY_TEMPLATE.format(user_id=user_id)
+
+    @staticmethod
+    def seen_key(user_id: str) -> str:
+        return FOR_YOU_SEEN_CLIPS_KEY_TEMPLATE.format(user_id=user_id)
 
 
 @dataclass(slots=True)
@@ -466,6 +514,8 @@ class _PersonalizedCandidate:
     social_boost: float
     following_boost: float
     creator_boost: float = 0.0
+    orchestrator_weight: float = 1.0
+    session_boost: float = 1.0
     cold_start_exploration: bool = False
 
 
@@ -486,6 +536,9 @@ class PersonalizedFeedRankingService:
     feedback_engine: FeedbackEngine | None = None
     cold_start_manager: ColdStartManager | None = None
     runtime_config_loader: Any | None = None
+    ranking_service: Any | None = None
+    attention_orchestrator: Any | None = None
+    session_tracker: Any | None = None
     hybrid_for_you_share: float = DEFAULT_HYBRID_FOR_YOU_SHARE
     hybrid_following_share: float = DEFAULT_HYBRID_FOLLOWING_SHARE
 
@@ -522,6 +575,7 @@ class PersonalizedFeedRankingService:
         user_id: str,
         limit: int = 20,
         refresh: bool = False,
+        session_id: str | None = None,
     ) -> PersonalizedFeedResponse:
         self._apply_dynamic_config()
         resolved_limit = max(1, min(int(limit), self.cache_size))
@@ -536,9 +590,24 @@ class PersonalizedFeedRankingService:
                 "for_you": round(self.hybrid_for_you_share, 2),
                 "following": round(self.hybrid_following_share, 2),
             },
-            ranker=lambda: self._blend_entries(
-                algorithmic=self._rank_mode_candidates(user_id=user_id, limit=resolved_limit, mode="for_you"),
-                following=self._rank_mode_candidates(user_id=user_id, limit=resolved_limit, mode="following"),
+            ranker=lambda: self._allocate_ranked_entries(
+                self._blend_entries(
+                    algorithmic=self._rank_mode_candidates(
+                        user_id=user_id,
+                        limit=resolved_limit,
+                        mode="for_you",
+                        allocate=False,
+                        session_id=session_id,
+                    ),
+                    following=self._rank_mode_candidates(
+                        user_id=user_id,
+                        limit=resolved_limit,
+                        mode="following",
+                        allocate=False,
+                        session_id=session_id,
+                    ),
+                    limit=resolved_limit,
+                ),
                 limit=resolved_limit,
             ),
         )
@@ -549,6 +618,7 @@ class PersonalizedFeedRankingService:
         user_id: str,
         limit: int = 20,
         refresh: bool = False,
+        session_id: str | None = None,
     ) -> PersonalizedFeedResponse:
         self._apply_dynamic_config()
         resolved_limit = max(1, min(int(limit), self.cache_size))
@@ -560,7 +630,48 @@ class PersonalizedFeedRankingService:
             feed_key=FOLLOWING_FEED_KEY_TEMPLATE.format(user_id=user_id),
             feed_type="following",
             mix={"for_you": 0.0, "following": 1.0},
-            ranker=lambda: self._rank_mode_candidates(user_id=user_id, limit=resolved_limit, mode="following"),
+            ranker=lambda: self._rank_mode_candidates(
+                user_id=user_id,
+                limit=resolved_limit,
+                mode="following",
+                session_id=session_id,
+            ),
+        )
+
+    def refresh_for_you(
+        self,
+        *,
+        user_id: str,
+        cursor: int,
+        limit: int = 20,
+        session_id: str | None = None,
+    ) -> PersonalizedFeedRefreshResponse:
+        resolved_limit = max(1, min(int(limit), self.cache_size))
+        current_entries = self.feed_store.top(user_id, resolved_limit)
+        current_clip_ids = [
+            PersonalizedFeedClipView.model_validate(entry.payload).clip_id
+            for entry in current_entries
+        ]
+        refreshed = self.get_for_you(
+            user_id=user_id,
+            limit=resolved_limit,
+            refresh=True,
+            session_id=session_id,
+        )
+        resolved_cursor = max(int(cursor), -1)
+        replace_indices: list[int] = []
+        new_items: list[PersonalizedFeedClipView] = []
+        for index, clip in enumerate(refreshed.clips):
+            if index <= resolved_cursor:
+                continue
+            current_clip_id = current_clip_ids[index] if index < len(current_clip_ids) else None
+            if current_clip_id == clip.clip_id:
+                continue
+            replace_indices.append(index)
+            new_items.append(clip)
+        return PersonalizedFeedRefreshResponse(
+            new_items=new_items,
+            replace_indices=replace_indices,
         )
 
     def record_delivery(self, response: PersonalizedFeedResponse) -> None:
@@ -569,7 +680,20 @@ class PersonalizedFeedRankingService:
         cache_subject = response.user_id
         if response.feed_type == "following":
             cache_subject = following_feed_cache_subject(response.user_id)
-        self.feed_store.mark_served(cache_subject, self._history_entries(response.clips))
+        self._record_clip_delivery(
+            cache_subject=cache_subject,
+            user_id=response.user_id,
+            clips=response.clips,
+        )
+
+    def record_refresh_delivery(self, *, user_id: str, clips: list[PersonalizedFeedClipView]) -> None:
+        if not clips:
+            return
+        self._record_clip_delivery(
+            cache_subject=user_id,
+            user_id=user_id,
+            clips=clips,
+        )
 
     def _build_response(
         self,
@@ -610,7 +734,15 @@ class PersonalizedFeedRankingService:
             cache_hit=False,
         )
 
-    def _rank_mode_candidates(self, *, user_id: str, limit: int, mode: str) -> list[PersonalizedFeedEnvelope]:
+    def _rank_mode_candidates(
+        self,
+        *,
+        user_id: str,
+        limit: int,
+        mode: str,
+        allocate: bool = True,
+        session_id: str | None = None,
+    ) -> list[PersonalizedFeedEnvelope]:
         snapshot = None
         if self.runtime_config_loader is not None:
             try:
@@ -619,14 +751,20 @@ class PersonalizedFeedRankingService:
                 snapshot = None
         feed_weights = snapshot.feed_weights if snapshot is not None else None
         candidate_limit = min(self.max_candidates, max(limit * self.candidate_multiplier, limit))
-        feed = self.feed_service.build_feed(limit=max(candidate_limit, 1), allocate_impressions=False)
-        if not feed.clips:
+        seen_clip_ids = self.feed_store.seen_clip_ids(user_id)
+        candidate_clips = self._resolve_candidate_clips(
+            limit=max(candidate_limit, 1),
+            excluded_clip_ids=seen_clip_ids,
+        )
+        if self.attention_orchestrator is not None:
+            candidate_clips = self.attention_orchestrator.filter_available(candidate_clips)
+        if not candidate_clips:
             return []
         if self.notification_service is not None:
-            self.notification_service.process_new_clips(feed.clips)
+            self.notification_service.process_new_clips(candidate_clips)
 
-        match_updates = self._match_updated_at_map({clip.match_id for clip in feed.clips})
-        max_viral_score = max(float(getattr(clip, "viral_score", 0.0) or 0.0) for clip in feed.clips) or 1.0
+        match_updates = self._match_updated_at_map({clip.match_id for clip in candidate_clips})
+        max_viral_score = max(float(getattr(clip, "viral_score", 0.0) or 0.0) for clip in candidate_clips) or 1.0
         snapshot = self.affinity_calculator.build_snapshot(user_id)
         new_user = bool(mode == "for_you" and self.cold_start_manager.is_new_user(user_id))
         history_subject = user_id if mode == "for_you" else following_feed_cache_subject(user_id)
@@ -638,7 +776,7 @@ class PersonalizedFeedRankingService:
                 if self.follow_graph_service is not None
                 else None
             )
-            for clip in feed.clips
+            for clip in candidate_clips
         }
         creator_user_ids = {creator_user_id for creator_user_id in creator_user_by_clip.values() if creator_user_id}
         social_context = (
@@ -651,7 +789,7 @@ class PersonalizedFeedRankingService:
         )
 
         candidates: list[_PersonalizedCandidate] = []
-        for clip in feed.clips:
+        for clip in candidate_clips:
             clip_id = str(getattr(clip, "clip_id", "") or "")
             creator_user_id = creator_user_by_clip.get(clip_id)
             social_breakdown = (
@@ -672,6 +810,7 @@ class PersonalizedFeedRankingService:
                     creator_user_id=creator_user_id,
                     social_boost=(social_breakdown.rank_score_boost if social_breakdown is not None else 0.0),
                     following_boost=(social_breakdown.followed_boost if social_breakdown is not None else 0.0),
+                    session_id=session_id,
                 )
             )
 
@@ -684,9 +823,10 @@ class PersonalizedFeedRankingService:
                     if feed_weights is not None
                     else self.cold_start_manager.exploration_rate(is_new_user=True)
                 ),
+                allocate=allocate,
             )
 
-        selected_candidates: list[tuple[_PersonalizedCandidate, float, float, float, float]] = []
+        selected_candidates: list[tuple[_PersonalizedCandidate, float, float, float, float, float, float]] = []
         selected_creator_counts: Counter[str] = Counter()
         selected_format_counts: Counter[str] = Counter()
         selected_similarity_counts: Counter[str] = Counter()
@@ -694,11 +834,13 @@ class PersonalizedFeedRankingService:
 
         while remaining and len(selected_candidates) < min(self.cache_size, len(candidates)):
             best_index = 0
-            best_sort_key: tuple[float, float, float, float, float, str] | None = None
+            best_sort_key: tuple[object, ...] | None = None
             best_score = 0.0
             best_repetition = 0.0
             best_diversity = 0.0
             best_following_boost = 0.0
+            best_base_score = 0.0
+            best_session_boost = 1.0
 
             for index, candidate in enumerate(remaining):
                 diversity_penalty = self._diversity_penalty(
@@ -727,18 +869,28 @@ class PersonalizedFeedRankingService:
                     ),
                     0.0,
                 )
+                session_boost = candidate.session_boost
+                session_multiplier = self._session_multiplier(session_boost)
+                score = round(max(base_score, 0.0) * session_multiplier, 6)
+                if self.attention_orchestrator is not None:
+                    score = round(
+                        score * max(candidate.orchestrator_weight, 0.0001),
+                        6,
+                    )
                 score = round(
                     max(
-                        base_score
-                        + candidate.social_boost
-                        + candidate.following_boost,
+                        score
+                        + max(candidate.social_boost, 0.0)
+                        + max(candidate.following_boost, 0.0)
+                        + max(candidate.creator_boost, 0.0),
                         0.0,
-                    )
-                    + max(candidate.creator_boost, 0.0),
+                    ),
                     6,
                 )
                 sort_key = (
                     score,
+                    round(candidate.orchestrator_weight, 6),
+                    round(session_boost, 6),
                     round(candidate.creator_boost, 6),
                     round(candidate.following_boost, 6),
                     round(candidate.social_boost, 6),
@@ -754,9 +906,21 @@ class PersonalizedFeedRankingService:
                     best_repetition = round(repetition_penalty, 6)
                     best_diversity = round(diversity_penalty, 6)
                     best_following_boost = round(candidate.following_boost, 6)
+                    best_base_score = round(base_score, 6)
+                    best_session_boost = round(session_boost, 6)
 
             chosen = remaining.pop(best_index)
-            selected_candidates.append((chosen, best_score, best_repetition, best_diversity, best_following_boost))
+            selected_candidates.append(
+                (
+                    chosen,
+                    best_score,
+                    best_repetition,
+                    best_diversity,
+                    best_following_boost,
+                    best_base_score,
+                    best_session_boost,
+                )
+            )
             if chosen.creator_key:
                 selected_creator_counts[chosen.creator_key] += 1
             if chosen.format_key:
@@ -765,9 +929,9 @@ class PersonalizedFeedRankingService:
 
         envelopes: list[PersonalizedFeedEnvelope] = []
         feed_source = "following" if mode == "following" else "for_you"
-        for rank, (candidate, score, repetition_penalty, diversity_penalty, following_boost) in enumerate(selected_candidates, start=1):
+        for rank, (candidate, score, repetition_penalty, diversity_penalty, following_boost, base_score, session_boost) in enumerate(selected_candidates, start=1):
             clip_view = PersonalizedFeedClipView(
-                **candidate.clip.model_dump(),
+                **self._base_clip_payload(candidate.clip),
                 rank=rank,
                 score=score,
                 feed_source=feed_source,
@@ -777,6 +941,10 @@ class PersonalizedFeedRankingService:
                     recency_score=round(candidate.recency_score, 6),
                     repetition_penalty=repetition_penalty,
                     diversity_penalty=diversity_penalty,
+                    base_score=round(base_score, 6),
+                    orchestrator_weight=round(candidate.orchestrator_weight, 6),
+                    session_boost=round(session_boost, 6),
+                    final_score=round(score, 6),
                     social_boost=round(candidate.social_boost, 6),
                     creator_boost=round(candidate.creator_boost, 6),
                     following_boost=round(following_boost, 6),
@@ -797,7 +965,9 @@ class PersonalizedFeedRankingService:
                     payload=clip_view.model_dump(mode="json"),
                 )
             )
-        return envelopes
+        if not allocate:
+            return envelopes
+        return self._allocate_ranked_entries(envelopes, limit=limit)
 
     def _blend_entries(
         self,
@@ -846,6 +1016,7 @@ class PersonalizedFeedRankingService:
         candidates: list[_PersonalizedCandidate],
         limit: int,
         exploration_rate: float,
+        allocate: bool = True,
     ) -> list[PersonalizedFeedEnvelope]:
         ordered = sorted(
             candidates,
@@ -884,12 +1055,28 @@ class PersonalizedFeedRankingService:
 
         envelopes: list[PersonalizedFeedEnvelope] = []
         for rank, candidate in enumerate(selected[:limit], start=1):
+            base_score = round(max(candidate.viral_input + candidate.recency_score, 0.0), 6)
             score = round(
-                max(candidate.viral_input + candidate.recency_score + candidate.creator_boost + candidate.social_boost, 0.0),
+                max(base_score, 0.0) * self._session_multiplier(candidate.session_boost),
+                6,
+            )
+            if self.attention_orchestrator is not None:
+                score = round(
+                    score * max(candidate.orchestrator_weight, 0.0001),
+                    6,
+                )
+            score = round(
+                max(
+                    score
+                    + max(candidate.creator_boost, 0.0)
+                    + max(candidate.social_boost, 0.0)
+                    + max(candidate.following_boost, 0.0),
+                    0.0,
+                ),
                 6,
             )
             clip_view = PersonalizedFeedClipView(
-                **candidate.clip.model_dump(),
+                **self._base_clip_payload(candidate.clip),
                 rank=rank,
                 score=score,
                 feed_source="for_you",
@@ -899,6 +1086,10 @@ class PersonalizedFeedRankingService:
                     recency_score=round(candidate.recency_score, 6),
                     repetition_penalty=0.0,
                     diversity_penalty=0.0,
+                    base_score=round(base_score, 6),
+                    orchestrator_weight=round(candidate.orchestrator_weight, 6),
+                    session_boost=round(candidate.session_boost, 6),
+                    final_score=round(score, 6),
                     social_boost=round(candidate.social_boost, 6),
                     creator_boost=round(candidate.creator_boost, 6),
                     following_boost=round(candidate.following_boost, 6),
@@ -913,7 +1104,9 @@ class PersonalizedFeedRankingService:
                     payload=clip_view.model_dump(mode="json"),
                 )
             )
-        return envelopes
+        if not allocate:
+            return envelopes
+        return self._allocate_ranked_entries(envelopes, limit=limit)
 
     def _candidate_from_clip(
         self,
@@ -926,6 +1119,7 @@ class PersonalizedFeedRankingService:
         creator_user_id: str | None,
         social_boost: float,
         following_boost: float,
+        session_id: str | None,
     ) -> _PersonalizedCandidate:
         creator_key = _creator_key_from_clip(clip)
         creator_id = _creator_id_from_clip(clip)
@@ -959,6 +1153,13 @@ class PersonalizedFeedRankingService:
         if creator_id is not None:
             creator_boost += self.feedback_engine.creator_recommendation_boost(creator_id)
             creator_boost += self.cold_start_manager.creator_boost(creator_id)
+        orchestrator_weight = 1.0
+        if self.attention_orchestrator is not None:
+            orchestrator = getattr(clip, "orchestrator", None)
+            orchestrator_weight = float(getattr(orchestrator, "orchestrator_weight", 0.0) or 0.0)
+            if orchestrator_weight <= 0.0:
+                orchestrator_weight = self.attention_orchestrator.weight_for_clip(clip)
+        session_boost = self._session_affinity(session_id=session_id, clip=clip)
 
         return _PersonalizedCandidate(
             clip=clip,
@@ -973,6 +1174,101 @@ class PersonalizedFeedRankingService:
             social_boost=round(social_boost, 6),
             following_boost=round(following_boost, 6),
             creator_boost=round(creator_boost, 6),
+            orchestrator_weight=round(max(orchestrator_weight, 0.0001), 6),
+            session_boost=session_boost,
+        )
+
+    def _resolve_candidate_clips(self, *, limit: int, excluded_clip_ids: set[str] | None = None) -> list[Any]:
+        candidates: list[Any] = []
+        seen_clip_ids: set[str] = set()
+        blocked_clip_ids = excluded_clip_ids or set()
+        if self.ranking_service is not None:
+            try:
+                ranked_candidates = self.ranking_service.get_candidates(limit=max(limit, 1), refresh=False)
+            except Exception:
+                ranked_candidates = []
+            for clip in ranked_candidates:
+                clip_id = str(getattr(clip, "clip_id", "") or "")
+                if not clip_id or clip_id in seen_clip_ids or clip_id in blocked_clip_ids:
+                    continue
+                candidates.append(clip)
+                seen_clip_ids.add(clip_id)
+        feed = self.feed_service.build_feed(limit=max(limit, 1), allocate_impressions=False)
+        for clip in feed.clips:
+            clip_id = str(getattr(clip, "clip_id", "") or "")
+            if not clip_id or clip_id in seen_clip_ids or clip_id in blocked_clip_ids:
+                continue
+            candidates.append(clip)
+            seen_clip_ids.add(clip_id)
+        return candidates
+
+    def _record_clip_delivery(
+        self,
+        *,
+        cache_subject: str,
+        user_id: str,
+        clips: list[PersonalizedFeedClipView],
+    ) -> None:
+        if not clips:
+            return
+        self.feed_store.mark_served(cache_subject, self._history_entries(clips))
+        self.feed_store.mark_seen(user_id, [clip.clip_id for clip in clips])
+
+    @staticmethod
+    def _session_multiplier(session_boost: float) -> float:
+        return round(0.7 + (0.3 * max(0.0, min(float(session_boost), 1.0))), 6)
+
+    def _session_affinity(self, *, session_id: str | None, clip) -> float:
+        if self.session_tracker is None:
+            return 1.0
+        normalized_session_id = (session_id or "").strip()
+        if not normalized_session_id:
+            return 1.0
+        try:
+            return round(
+                max(
+                    0.0,
+                    min(
+                        float(self.session_tracker.get_affinity(session_id=normalized_session_id, clip=clip)),
+                        1.0,
+                    ),
+                ),
+                6,
+            )
+        except Exception:
+            return 1.0
+
+    def _allocate_ranked_entries(self, entries: list[PersonalizedFeedEnvelope], *, limit: int) -> list[PersonalizedFeedEnvelope]:
+        if self.attention_orchestrator is None:
+            return entries
+        clip_views = [PersonalizedFeedClipView.model_validate(entry.payload) for entry in entries]
+        allocated_clips = self.attention_orchestrator.allocate_impressions(clip_views, limit=max(limit, 1))
+        reranked: list[PersonalizedFeedEnvelope] = []
+        for rank, clip_view in enumerate(allocated_clips, start=1):
+            clip_view.rank = rank
+            clip_view.score_breakdown.final_score = round(float(clip_view.score), 6)
+            reranked.append(
+                PersonalizedFeedEnvelope(
+                    clip_id=clip_view.clip_id,
+                    score=float(clip_view.score),
+                    payload=clip_view.model_dump(mode="json"),
+                )
+            )
+        return reranked
+
+    def _base_clip_payload(self, clip) -> dict[str, Any]:
+        return clip.model_dump(
+            exclude={
+                "rank",
+                "score",
+                "feed_source",
+                "score_breakdown",
+                "trending_score",
+                "age_hours",
+                "recompute_bucket",
+                "last_ranked_at",
+                "trending_metrics",
+            }
         )
 
     def _rerank_entries(self, entries: list[PersonalizedFeedEnvelope]) -> list[PersonalizedFeedEnvelope]:
@@ -1098,6 +1394,9 @@ def build_personalized_feed_service(*, app: FastAPI, session: Session) -> Person
         feedback_engine=feedback_engine,
         cold_start_manager=ColdStartManager(session=session, feedback_engine=feedback_engine),
         runtime_config_loader=ensure_runtime_config_loader(app),
+        ranking_service=build_viral_ranking_service(app=app, session=session),
+        attention_orchestrator=build_attention_orchestrator_service(app=app, session=session),
+        session_tracker=ensure_viral_session_tracker(app),
     )
 
 

@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import Field
 
 from app.common.schemas.base import CommonSchema
+from app.orchestrator.schemas import ClipAttentionStateView
 
 
 class ViralScoreBreakdownView(CommonSchema):
@@ -163,6 +164,7 @@ class ViralClipView(CommonSchema):
     analytics: ViralClipAnalyticsView
     feedback: ViralFeedbackLoopView
     distribution: ViralClipDistributionView | None = None
+    orchestrator: ClipAttentionStateView | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -255,6 +257,10 @@ class PersonalizedFeedScoreBreakdownView(CommonSchema):
     recency_score: float = Field(default=0.0, ge=0.0, le=1.0)
     repetition_penalty: float = Field(default=0.0, ge=0.0, le=1.0)
     diversity_penalty: float = Field(default=0.0, ge=0.0, le=1.0)
+    base_score: float = Field(default=0.0, ge=0.0)
+    orchestrator_weight: float = Field(default=1.0, ge=0.0)
+    session_boost: float = Field(default=1.0, ge=0.0)
+    final_score: float = Field(default=0.0, ge=0.0)
     social_boost: float = Field(default=0.0, ge=0.0)
     creator_boost: float = Field(default=0.0, ge=0.0)
     following_boost: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -277,6 +283,11 @@ class PersonalizedFeedResponse(CommonSchema):
     feed_type: str = "for_you"
     mix: dict[str, float] = Field(default_factory=dict)
     cache_hit: bool = False
+
+
+class PersonalizedFeedRefreshResponse(CommonSchema):
+    new_items: list[PersonalizedFeedClipView] = Field(default_factory=list)
+    replace_indices: list[int] = Field(default_factory=list)
 
 
 class ViralTrendingMetricsView(CommonSchema):

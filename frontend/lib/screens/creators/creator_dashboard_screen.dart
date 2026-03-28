@@ -4,17 +4,16 @@ import '../../controllers/creator_controller.dart';
 import '../../models/creator_models.dart';
 import '../../widgets/creators/creator_finance_summary_card.dart';
 import '../../widgets/creators/creator_header_card.dart';
+import '../../widgets/creators/creator_copilot_panel.dart';
 import '../../widgets/creators/creator_stats_card.dart';
 import '../../widgets/gte_state_panel.dart';
+import '../../widgets/gte_sync_status_card.dart';
 import '../../widgets/gte_surface_panel.dart';
 import '../competitions/creator_competition_share_screen.dart';
 import 'creator_profile_screen.dart';
 
 class CreatorDashboardScreen extends StatefulWidget {
-  const CreatorDashboardScreen({
-    super.key,
-    required this.controller,
-  });
+  const CreatorDashboardScreen({super.key, required this.controller});
 
   final CreatorController controller;
 
@@ -27,6 +26,13 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
   void initState() {
     super.initState();
     widget.controller.load();
+    widget.controller.attachStateSync();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.detachStateSync();
+    super.dispose();
   }
 
   @override
@@ -72,6 +78,8 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
           }
 
           final CreatorProfile profile = widget.controller.profile!;
+          final CreatorFinanceSummary financeSummary =
+              widget.controller.financeSummary ?? profile.financeSummary;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             child: Column(
@@ -79,8 +87,10 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
               children: <Widget>[
                 const GteStatePanel(
                   eyebrow: 'CREATOR MATCHDAY DESK',
-                  title: 'Run community growth, invite momentum, and reward energy from one polished lane.',
-                  message: 'This deck is tuned for hosts and promoters. Use it to track active competitions, share codes, and keep your creator economy moving without losing the premium GTEX rhythm.',
+                  title:
+                      'Run community growth, invite momentum, and reward energy from one polished lane.',
+                  message:
+                      'This deck is tuned for hosts and promoters. Use it to track active competitions, share codes, and keep your creator economy moving without losing the premium GTEX rhythm.',
                   icon: Icons.campaign_outlined,
                   accentColor: Color(0xFF9C6BFF),
                 ),
@@ -90,13 +100,29 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
                   onShareCodeTap: () => _openCompetitionShare(context, null),
                 ),
                 const SizedBox(height: 16),
+                CreatorCopilotPanel(controller: widget.controller),
+                const SizedBox(height: 16),
                 CreatorStatsCard(
                   stats: profile.stats,
                   growthSummary: profile.growthSummary,
                   rewardSummary: profile.rewardSummary,
                 ),
                 const SizedBox(height: 16),
-                CreatorFinanceSummaryCard(summary: profile.financeSummary),
+                GteSyncStatusCard(
+                  title: 'CREATOR STATE SYNC',
+                  status:
+                      widget.controller.isSyncing
+                          ? 'Refreshing creator profile and finance.'
+                          : 'Profile and finance stay aligned with live creator APIs.',
+                  detail:
+                      'Critical actions trigger an immediate sync and background refresh.',
+                  syncedAt: widget.controller.syncedAt,
+                  accent: const Color(0xFF9C6BFF),
+                  onRefresh: widget.controller.syncNow,
+                  isRefreshing: widget.controller.isSyncing,
+                ),
+                const SizedBox(height: 16),
+                CreatorFinanceSummaryCard(summary: financeSummary),
                 const SizedBox(height: 16),
                 GteSurfacePanel(
                   child: Column(
@@ -122,23 +148,25 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
                         const GteStatePanel(
                           eyebrow: 'COMMUNITY READY',
                           title: 'No creator competitions are live yet.',
-                          message: 'Your creator profile is polished and ready. The next published competition will appear here with sharing tools and invite momentum intact.',
+                          message:
+                              'Your creator profile is polished and ready. The next published competition will appear here with sharing tools and invite momentum intact.',
                           icon: Icons.celebration_outlined,
                           accentColor: Color(0xFF9C6BFF),
                         )
                       else
                         for (final CreatorCompetition competition
                             in profile.competitions) ...<Widget>[
-                        _DashboardCompetitionTile(
-                          competition: competition,
-                          onOpenShare: () => _openCompetitionShare(
-                            context,
-                            competition.competitionId,
+                          _DashboardCompetitionTile(
+                            competition: competition,
+                            onOpenShare:
+                                () => _openCompetitionShare(
+                                  context,
+                                  competition.competitionId,
+                                ),
                           ),
-                        ),
-                        if (competition != profile.competitions.last)
-                          const Divider(height: 28),
-                      ],
+                          if (competition != profile.competitions.last)
+                            const Divider(height: 28),
+                        ],
                     ],
                   ),
                 ),
@@ -156,10 +184,11 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
   ) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CreatorCompetitionShareScreen(
-          creatorController: widget.controller,
-          competitionId: competitionId,
-        ),
+        builder:
+            (BuildContext context) => CreatorCompetitionShareScreen(
+              creatorController: widget.controller,
+              competitionId: competitionId,
+            ),
       ),
     );
   }
@@ -167,9 +196,9 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
   Future<void> _openProfile(BuildContext context) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CreatorProfileScreen(
-          controller: widget.controller,
-        ),
+        builder:
+            (BuildContext context) =>
+                CreatorProfileScreen(controller: widget.controller),
       ),
     );
   }

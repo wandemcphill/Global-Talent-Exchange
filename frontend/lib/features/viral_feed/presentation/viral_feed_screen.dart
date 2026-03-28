@@ -1,16 +1,31 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/actions/action_pipeline.dart' as feed_actions;
+import '../../../core/app_feedback.dart';
+import '../../../core/optimistic_ui_handler.dart';
+import '../../../core/state_sync_system.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../services/frontend_audit_hooks.dart';
+import '../../../services/reliability/reliable_event_queue.dart';
 import '../data/viral_feed_models.dart';
 import '../data/viral_feed_repository.dart';
 
 class ViralFeedScreen extends StatefulWidget {
-  const ViralFeedScreen({super.key, ViralFeedRepository? repository})
-    : _repository = repository;
+  const ViralFeedScreen({
+    super.key,
+    ViralFeedRepository? repository,
+    feed_actions.ClipActionDispatcher? actionDispatcher,
+    ReliableEventQueue? eventQueue,
+  }) : _repository = repository,
+       _actionDispatcher = actionDispatcher,
+       _eventQueue = eventQueue;
 
   final ViralFeedRepository? _repository;
+  final feed_actions.ClipActionDispatcher? _actionDispatcher;
+  final ReliableEventQueue? _eventQueue;
 
   @override
   State<ViralFeedScreen> createState() => _ViralFeedScreenState();
@@ -18,84 +33,524 @@ class ViralFeedScreen extends StatefulWidget {
 
 class _ViralFeedScreenState extends State<ViralFeedScreen> {
   late final ViralFeedRepository _repository;
-  late Future<ViralFeedDeck> _deckFuture;
+  late final feed_actions.ClipActionDispatcher _actionDispatcher;
+  late final FrontendAuditHooks _auditHooks;
+  late final ReliableEventQueue _eventQueue;
+  late final StateSyncSystem _syncSystem;
+  late final OptimisticUiHandler<String, Set<String>> _optimisticUi;
+  late final bool _ownsActionDispatcher;
+
+  final PageController _pageController = PageController();
+  final Set<String> _likedClipIds = <String>{};
+  final Set<String> _sharedClipIds = <String>{};
+  final Set<String> _completedClipIds = <String>{};
+
+  StreamSubscription<FeedRefreshTrigger>? _feedRefreshSubscription;
+  ViralFeedDeck? _deck;
+  Object? _loadError;
+  ViralFeedSource _source = ViralFeedSource.forYou;
   int _pageIndex = 0;
+  bool _isBootstrapping = true;
+  Timer? _completionTimer;
+  Timer? _feedRefreshDebounce;
+  String? _activeClipId;
+  String? _pendingClipActivationId;
 
   @override
   void initState() {
     super.initState();
     _repository = widget._repository ?? ViralFeedApiRepository.standard();
-    _deckFuture = _repository.fetchDeck();
+    _ownsActionDispatcher = widget._actionDispatcher == null;
+    _actionDispatcher =
+        widget._actionDispatcher ?? feed_actions.ActionPipeline();
+    _auditHooks = FrontendAuditHooks(baseUrl: _frontendAuditBaseUrl);
+    _eventQueue = widget._eventQueue ?? gteReliableEventQueue;
+    _syncSystem = StateSyncSystem(
+      interval: const Duration(seconds: 45),
+      onSync: _syncDeck,
+      onStateChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+    _optimisticUi = OptimisticUiHandler<String, Set<String>>(
+      onStateChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+    _feedRefreshSubscription = _eventQueue.feedRefreshTriggers.listen((_) {
+      _scheduleFeedRefresh();
+    });
+    _syncSystem.attach();
+    unawaited(_loadDeck(refresh: true));
   }
 
-  void _reload() {
-    setState(() {
-      _deckFuture = _repository.fetchDeck();
-    });
+  @override
+  void dispose() {
+    _completionTimer?.cancel();
+    _feedRefreshDebounce?.cancel();
+    _feedRefreshSubscription?.cancel();
+    _syncSystem.detach();
+    _pageController.dispose();
+    if (_ownsActionDispatcher) {
+      _actionDispatcher.dispose();
+    }
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ViralFeedDeck? deck = _deck;
+    if (_isBootstrapping) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: _LoadingState(),
+      );
+    }
+    if (_loadError != null && deck == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _ErrorState(
+          message: AppFeedback.messageFor(_loadError!),
+          onRetry: _handleRetry,
+        ),
+      );
+    }
+    if (deck == null || deck.clips.isEmpty) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _EmptyState(onRetry: _handleRetry),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: FutureBuilder<ViralFeedDeck>(
-        future: _deckFuture,
-        builder: (BuildContext context, AsyncSnapshot<ViralFeedDeck> snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const _LoadingState();
-          }
-          if (!snapshot.hasData || snapshot.data!.clips.isEmpty) {
-            return _EmptyState(onRetry: _reload);
-          }
-          final ViralFeedDeck deck = snapshot.data!;
-          return PageView.builder(
-            key: const Key('viral-feed-page-view'),
-            scrollDirection: Axis.vertical,
-            itemCount: deck.clips.length,
-            onPageChanged: (int index) {
-              setState(() {
-                _pageIndex = index;
-              });
-            },
-            itemBuilder: (BuildContext context, int index) {
-              final ViralClip clip = deck.clips[index];
-              return _ViralClipPage(
-                clip: clip,
-                debate: deck.debatesByMatch[clip.matchId],
-                index: index,
-                total: deck.clips.length,
-                isActive: index == _pageIndex,
-              );
-            },
+      body: PageView.builder(
+        key: const Key('viral-feed-page-view'),
+        controller: _pageController,
+        scrollDirection: Axis.vertical,
+        itemCount: deck.clips.length,
+        onPageChanged: (int index) => _handlePageChanged(deck, index),
+        itemBuilder: (BuildContext context, int index) {
+          final ViralClip clip = deck.clips[index];
+          return _ViralClipPage(
+            clip: clip,
+            deck: deck,
+            index: index,
+            total: deck.clips.length,
+            source: _source,
+            isSyncing: _syncSystem.isSyncing,
+            isLiked: _likedClipIds.contains(clip.clipId),
+            isShared: _sharedClipIds.contains(clip.clipId),
+            likePending: _optimisticUi.isPending('like:${clip.clipId}'),
+            sharePending: _optimisticUi.isPending('share:${clip.clipId}'),
+            onBack: () => _handleBack(clip),
+            onRefresh: _handleManualRefresh,
+            onSelectSource: _changeSource,
+            onLike: () => _handleLike(clip),
+            onShare: () => _handleShare(clip),
           );
         },
       ),
     );
+  }
+
+  Future<void> _loadDeck({
+    required bool refresh,
+    bool resetPosition = false,
+    bool showErrorFeedback = false,
+  }) async {
+    final bool clearExistingDeck = resetPosition || _deck == null;
+    if (mounted) {
+      setState(() {
+        _isBootstrapping = clearExistingDeck;
+        if (clearExistingDeck) {
+          _deck = null;
+          _loadError = null;
+          _pageIndex = 0;
+        }
+      });
+    }
+
+    try {
+      final ViralFeedDeck nextDeck = await _repository.fetchDeck(
+        source: _source,
+        refresh: refresh,
+      );
+      if (!mounted) {
+        return;
+      }
+      final int nextIndex =
+          nextDeck.clips.isEmpty
+              ? 0
+              : (resetPosition
+                  ? 0
+                  : _pageIndex.clamp(0, nextDeck.clips.length - 1));
+      setState(() {
+        _deck = nextDeck;
+        _loadError = null;
+        _isBootstrapping = false;
+        _pageIndex = nextIndex;
+      });
+      if (nextDeck.clips.isNotEmpty) {
+        _jumpToPage(nextIndex);
+        _scheduleActiveClip(nextDeck.clips[nextIndex]);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isBootstrapping = false;
+        if (clearExistingDeck) {
+          _loadError = error;
+        }
+      });
+      if (showErrorFeedback && !clearExistingDeck) {
+        AppFeedback.showError(context, error);
+      }
+    }
+  }
+
+  Future<void> _syncDeck() {
+    return _loadDeck(refresh: true, showErrorFeedback: _deck != null);
+  }
+
+  void _handleRetry() {
+    unawaited(
+      _auditHooks.trackButtonClick(
+        screen: 'viral_feed',
+        flow: 'feed_load',
+        target: 'retry_button',
+      ),
+    );
+    unawaited(_loadDeck(refresh: true, resetPosition: true));
+  }
+
+  void _handleManualRefresh() {
+    unawaited(
+      _auditHooks.trackButtonClick(
+        screen: 'viral_feed',
+        flow: 'feed_load',
+        target: 'refresh_button',
+        metadata: <String, Object?>{'feed_type': _source.feedType},
+      ),
+    );
+    unawaited(_syncSystem.sync());
+  }
+
+  void _changeSource(ViralFeedSource source) {
+    if (_source == source) {
+      return;
+    }
+    _completionTimer?.cancel();
+    _activeClipId = null;
+    _pendingClipActivationId = null;
+    setState(() {
+      _source = source;
+      _pageIndex = 0;
+      _deck = null;
+      _loadError = null;
+      _isBootstrapping = true;
+    });
+    unawaited(
+      _auditHooks.trackButtonClick(
+        screen: 'viral_feed',
+        flow: 'feed_source',
+        target: source.feedType,
+      ),
+    );
+    unawaited(_loadDeck(refresh: true, resetPosition: true));
+  }
+
+  void _handleBack(ViralClip clip) {
+    unawaited(
+      _auditHooks.trackButtonClick(
+        screen: 'viral_feed',
+        flow: 'feed_navigation',
+        target: 'back_button',
+        metadata: <String, Object?>{
+          'clip_id': clip.clipId,
+          'page_index': _pageIndex,
+        },
+      ),
+    );
+    unawaited(
+      _auditHooks.trackDropOff(
+        screen: 'viral_feed',
+        flow: 'feed_navigation',
+        stage: 'back_navigation',
+        target: 'back_button',
+        metadata: <String, Object?>{
+          'clip_id': clip.clipId,
+          'page_index': _pageIndex,
+        },
+      ),
+    );
+    Navigator.of(context).maybePop();
+  }
+
+  void _scheduleFeedRefresh() {
+    _feedRefreshDebounce?.cancel();
+    _feedRefreshDebounce = Timer(const Duration(milliseconds: 300), () {
+      unawaited(_syncSystem.syncAfterCriticalAction());
+    });
+  }
+
+  void _handlePageChanged(ViralFeedDeck deck, int index) {
+    if (_pageIndex >= 0 && _pageIndex < deck.clips.length) {
+      final ViralClip previousClip = deck.clips[_pageIndex];
+      if (!_completedClipIds.contains(previousClip.clipId)) {
+        unawaited(_dispatchAction('scroll', previousClip));
+      }
+    }
+    setState(() {
+      _pageIndex = index;
+    });
+    _scheduleActiveClip(deck.clips[index]);
+  }
+
+  void _scheduleActiveClip(ViralClip clip) {
+    if (_activeClipId == clip.clipId ||
+        _pendingClipActivationId == clip.clipId) {
+      return;
+    }
+    _pendingClipActivationId = clip.clipId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _pendingClipActivationId = null;
+      _activateClip(clip);
+    });
+  }
+
+  void _activateClip(ViralClip clip) {
+    if (_activeClipId == clip.clipId) {
+      return;
+    }
+    _completionTimer?.cancel();
+    _activeClipId = clip.clipId;
+    if (_completedClipIds.contains(clip.clipId)) {
+      return;
+    }
+    _completionTimer = Timer(_completionDelay(clip), () {
+      if (!mounted || _activeClipId != clip.clipId) {
+        return;
+      }
+      _completedClipIds.add(clip.clipId);
+      unawaited(_dispatchAction('complete', clip));
+    });
+  }
+
+  Duration _completionDelay(ViralClip clip) {
+    final int durationMs = clip.videoLengthMs ?? 12000;
+    return Duration(milliseconds: math.max(durationMs, 1));
+  }
+
+  Future<void> _handleLike(ViralClip clip) async {
+    if (_likedClipIds.contains(clip.clipId) ||
+        _optimisticUi.isPending('like:${clip.clipId}')) {
+      return;
+    }
+    unawaited(
+      _auditHooks.trackButtonClick(
+        screen: 'viral_feed',
+        flow: 'feed_engagement',
+        target: 'like_button',
+        metadata: <String, Object?>{
+          'clip_id': clip.clipId,
+          'highlight_id': clip.highlightId,
+          'match_id': clip.matchId,
+        },
+      ),
+    );
+    await _runOptimisticSetMutation(
+      key: 'like:${clip.clipId}',
+      currentState: _likedClipIds,
+      apply: (Set<String> nextState) {
+        _likedClipIds
+          ..clear()
+          ..addAll(nextState);
+      },
+      clipId: clip.clipId,
+      commit: () async {
+        await _eventQueue.enqueue(
+          topic: 'viral_feed',
+          name: 'major_interaction',
+          payload: <String, Object?>{
+            'action': 'like_clip',
+            'clip_id': clip.clipId,
+            'match_id': clip.matchId,
+            'highlight_id': clip.highlightId,
+          },
+          dedupeKey: 'viral-like:${clip.clipId}',
+          feedRefreshTrigger: FeedRefreshTrigger.majorInteraction,
+        );
+        await _dispatchAction('like', clip, commitImmediately: true);
+        unawaited(_syncSystem.syncAfterCriticalAction());
+      },
+    );
+  }
+
+  Future<void> _handleShare(ViralClip clip) async {
+    if (_sharedClipIds.contains(clip.clipId) ||
+        _optimisticUi.isPending('share:${clip.clipId}')) {
+      return;
+    }
+    unawaited(
+      _auditHooks.trackButtonClick(
+        screen: 'viral_feed',
+        flow: 'feed_engagement',
+        target: 'share_button',
+        metadata: <String, Object?>{
+          'clip_id': clip.clipId,
+          'highlight_id': clip.highlightId,
+          'match_id': clip.matchId,
+          'channel': clip.shareChannel,
+        },
+      ),
+    );
+    await _runOptimisticSetMutation(
+      key: 'share:${clip.clipId}',
+      currentState: _sharedClipIds,
+      apply: (Set<String> nextState) {
+        _sharedClipIds
+          ..clear()
+          ..addAll(nextState);
+      },
+      clipId: clip.clipId,
+      commit: () async {
+        await _eventQueue.enqueue(
+          topic: 'viral_feed',
+          name: 'major_interaction',
+          payload: <String, Object?>{
+            'action': 'share_clip',
+            'clip_id': clip.clipId,
+            'match_id': clip.matchId,
+            'highlight_id': clip.highlightId,
+            'channel': clip.shareChannel,
+          },
+          dedupeKey: 'viral-share:${clip.clipId}',
+          feedRefreshTrigger: FeedRefreshTrigger.majorInteraction,
+        );
+        await _dispatchAction('share', clip, commitImmediately: true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Share handoff queued for ${clip.shareChannel.toUpperCase()}.',
+              ),
+            ),
+          );
+        }
+        unawaited(_syncSystem.syncAfterCriticalAction());
+      },
+    );
+  }
+
+  Future<void> _runOptimisticSetMutation({
+    required String key,
+    required Set<String> currentState,
+    required void Function(Set<String> nextState) apply,
+    required String clipId,
+    required Future<void> Function() commit,
+  }) async {
+    try {
+      await _optimisticUi.run(
+        key: key,
+        currentState: Set<String>.from(currentState),
+        optimisticState:
+            (Set<String> existing) => <String>{...existing, clipId},
+        apply: (Set<String> nextState) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            apply(nextState);
+          });
+        },
+        commit: commit,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppFeedback.showError(context, error);
+    }
+  }
+
+  Future<void> _dispatchAction(
+    String action,
+    ViralClip clip, {
+    bool commitImmediately = false,
+  }) {
+    return _actionDispatcher.dispatch(
+      feed_actions.ActionInvocation(
+        action: action,
+        clipId: clip.clipId,
+        videoLengthMs: clip.videoLengthMs,
+        referrer: 'viral_feed',
+        clipEventType: clip.eventType,
+        teamName: clip.teamName,
+        tags: clip.tags,
+        commitImmediately: commitImmediately,
+      ),
+    );
+  }
+
+  void _jumpToPage(int pageIndex) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pageController.hasClients) {
+        return;
+      }
+      _pageController.jumpToPage(pageIndex);
+    });
   }
 }
 
 class _ViralClipPage extends StatelessWidget {
   const _ViralClipPage({
     required this.clip,
+    required this.deck,
     required this.index,
     required this.total,
-    required this.isActive,
-    this.debate,
+    required this.source,
+    required this.isSyncing,
+    required this.isLiked,
+    required this.isShared,
+    required this.likePending,
+    required this.sharePending,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onSelectSource,
+    required this.onLike,
+    required this.onShare,
   });
 
   final ViralClip clip;
-  final PunditDebate? debate;
+  final ViralFeedDeck deck;
   final int index;
   final int total;
-  final bool isActive;
+  final ViralFeedSource source;
+  final bool isSyncing;
+  final bool isLiked;
+  final bool isShared;
+  final bool likePending;
+  final bool sharePending;
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+  final ValueChanged<ViralFeedSource> onSelectSource;
+  final VoidCallback onLike;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
     final List<Color> palette = _paletteFor(clip.eventType);
     final ThemeData theme = Theme.of(context);
-    final List<PunditDebateLine> visibleLines =
-        debate?.lines.take(2).toList(growable: false) ??
-        const <PunditDebateLine>[];
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -123,41 +578,44 @@ class _ViralClipPage extends StatelessWidget {
                         Row(
                           children: <Widget>[
                             IconButton(
-                              onPressed: () => Navigator.of(context).maybePop(),
+                              onPressed: onBack,
                               icon: const Icon(
                                 Icons.arrow_back_ios_new_rounded,
                               ),
                               color: AppColors.textPrimary,
                             ),
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.28),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                ),
-                              ),
-                              child: Text(
-                                'FOR YOU',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.4,
-                                ),
+                            Expanded(
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: ViralFeedSource.values
+                                    .map<Widget>(
+                                      (ViralFeedSource value) =>
+                                          _FeedSourceChip(
+                                            label: value.label,
+                                            isSelected: value == source,
+                                            onTap: () => onSelectSource(value),
+                                          ),
+                                    )
+                                    .toList(growable: false),
                               ),
                             ),
-                            const Spacer(),
-                            Text(
-                              '${index + 1}/$total',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: onRefresh,
+                              icon:
+                                  isSyncing
+                                      ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.primary,
+                                        ),
+                                      )
+                                      : const Icon(Icons.refresh_rounded),
+                              color: AppColors.textPrimary,
                             ),
                           ],
                         ),
@@ -166,11 +624,17 @@ class _ViralClipPage extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 8,
                           children: <Widget>[
+                            _MetaChip(
+                              label: isSyncing ? 'SYNCING LIVE' : 'LIVE LOCKED',
+                            ),
+                            _MetaChip(label: 'RANK #${clip.rank}'),
+                            _MetaChip(label: 'ENGINE'),
                             _MetaChip(label: "${clip.minute}'"),
                             if (clip.teamName != null)
                               _MetaChip(label: clip.teamName!.toUpperCase()),
                             if (clip.scorelineLabel != null)
                               _MetaChip(label: clip.scorelineLabel!),
+                            _MetaChip(label: '${index + 1}/$total'),
                           ],
                         ),
                         const SizedBox(height: 24),
@@ -198,11 +662,7 @@ class _ViralClipPage extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  _StageCard(
-                                    clip: clip,
-                                    debate: debate,
-                                    visibleLines: visibleLines,
-                                  ),
+                                  _StageCard(clip: clip, deck: deck),
                                   const SizedBox(height: 18),
                                   Text(
                                     clip.caption.caption,
@@ -229,7 +689,15 @@ class _ViralClipPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 18),
-                            _ActionRail(clip: clip, isActive: isActive),
+                            _ActionRail(
+                              clip: clip,
+                              isLiked: isLiked,
+                              isShared: isShared,
+                              likePending: likePending,
+                              sharePending: sharePending,
+                              onLike: onLike,
+                              onShare: onShare,
+                            ),
                           ],
                         ),
                       ],
@@ -246,15 +714,10 @@ class _ViralClipPage extends StatelessWidget {
 }
 
 class _StageCard extends StatelessWidget {
-  const _StageCard({
-    required this.clip,
-    required this.visibleLines,
-    this.debate,
-  });
+  const _StageCard({required this.clip, required this.deck});
 
   final ViralClip clip;
-  final PunditDebate? debate;
-  final List<PunditDebateLine> visibleLines;
+  final ViralFeedDeck deck;
 
   @override
   Widget build(BuildContext context) {
@@ -304,10 +767,29 @@ class _StageCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
+            _SignalLine(label: 'Feed source', value: clip.feedSource),
+            _SignalLine(label: 'Deck', value: deck.source.label),
+            _SignalLine(label: 'Score', value: clip.score.toStringAsFixed(1)),
+            if (clip.creatorId != null)
+              _SignalLine(label: 'Creator', value: clip.creatorId!),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                clip.summaryLine ??
+                    'Ranking engine supplied this highlight with no local reordering, cache replay, or mock fallback.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
+                color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
@@ -317,46 +799,14 @@ class _StageCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       clip.videoUrl == null
-                          ? 'Vertical render ready. Playback source attaches when the clip CDN is available.'
-                          : 'Playback source connected. This card can hand off to the actual video player next.',
+                          ? 'Playback source attaches when the ranked clip asset is available.'
+                          : 'Playback source connected for this ranked clip.',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
                 ],
               ),
             ),
-            if (debate != null) ...<Widget>[
-              const SizedBox(height: 18),
-              Text(
-                debate!.headline,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-            if (visibleLines.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 12),
-              ...visibleLines.map(
-                (PunditDebateLine line) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: RichText(
-                    text: TextSpan(
-                      style: theme.textTheme.bodyMedium,
-                      children: <InlineSpan>[
-                        TextSpan(
-                          text: '${line.speaker}: ',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.gold,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        TextSpan(text: line.line),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -364,11 +814,57 @@ class _StageCard extends StatelessWidget {
   }
 }
 
+class _SignalLine extends StatelessWidget {
+  const _SignalLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 92,
+            child: Text(
+              label.toUpperCase(),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.gold,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ActionRail extends StatelessWidget {
-  const _ActionRail({required this.clip, required this.isActive});
+  const _ActionRail({
+    required this.clip,
+    required this.isLiked,
+    required this.isShared,
+    required this.likePending,
+    required this.sharePending,
+    required this.onLike,
+    required this.onShare,
+  });
 
   final ViralClip clip;
-  final bool isActive;
+  final bool isLiked;
+  final bool isShared;
+  final bool likePending;
+  final bool sharePending;
+  final VoidCallback onLike;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -378,21 +874,38 @@ class _ActionRail extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: <Widget>[
-          _ActionBubble(
+          const _ActionBubble(
             icon: Icons.local_fire_department_rounded,
-            label: '${clip.viralScore}',
-            active: isActive,
-          ),
-          const SizedBox(height: 16),
-          _ActionBubble(
-            icon: Icons.share_rounded,
-            label: clip.caption.cta,
+            label: 'Hot',
             active: true,
           ),
           const SizedBox(height: 16),
-          const _ActionBubble(
-            icon: Icons.stadium_rounded,
-            label: 'Debate',
+          _ActionBubble(
+            key: Key('viral-like-${clip.highlightId}'),
+            icon:
+                isLiked
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+            label: likePending ? 'Saving' : (isLiked ? 'Liked' : 'Like'),
+            active: isLiked || likePending,
+            busy: likePending,
+            onTap: likePending ? null : onLike,
+          ),
+          const SizedBox(height: 16),
+          _ActionBubble(
+            icon: isShared ? Icons.check_circle_rounded : Icons.share_rounded,
+            label:
+                sharePending
+                    ? 'Sending'
+                    : (isShared ? 'Shared' : clip.caption.cta),
+            active: isShared || sharePending,
+            busy: sharePending,
+            onTap: sharePending ? null : onShare,
+          ),
+          const SizedBox(height: 16),
+          _ActionBubble(
+            icon: Icons.leaderboard_rounded,
+            label: 'Rank ${clip.rank}',
             active: false,
           ),
           const SizedBox(height: 20),
@@ -413,19 +926,24 @@ class _ActionRail extends StatelessWidget {
 
 class _ActionBubble extends StatelessWidget {
   const _ActionBubble({
+    super.key,
     required this.icon,
     required this.label,
     required this.active,
+    this.busy = false,
+    this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool active;
+  final bool busy;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return Column(
+    final Widget bubble = Column(
       children: <Widget>[
         Container(
           width: 60,
@@ -443,9 +961,21 @@ class _ActionBubble extends StatelessWidget {
                       : Colors.white.withValues(alpha: 0.12),
             ),
           ),
-          child: Icon(
-            icon,
-            color: active ? AppColors.primary : AppColors.textPrimary,
+          child: Center(
+            child:
+                busy
+                    ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    )
+                    : Icon(
+                      icon,
+                      color: active ? AppColors.primary : AppColors.textPrimary,
+                    ),
           ),
         ),
         const SizedBox(height: 8),
@@ -458,6 +988,58 @@ class _ActionBubble extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ],
+    );
+    if (onTap == null) {
+      return bubble;
+    }
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: bubble,
+    );
+  }
+}
+
+class _FeedSourceChip extends StatelessWidget {
+  const _FeedSourceChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color:
+              isSelected
+                  ? Colors.black.withValues(alpha: 0.28)
+                  : Colors.black.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color:
+                isSelected
+                    ? AppColors.primary.withValues(alpha: 0.36)
+                    : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: isSelected ? AppColors.primary : AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -537,6 +1119,11 @@ class _BackdropPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+const String _frontendAuditBaseUrl = String.fromEnvironment(
+  'GTE_API_BASE_URL',
+  defaultValue: 'http://127.0.0.1:8000',
+);
+
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
 
@@ -573,7 +1160,46 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'The viral engine will surface ranked highlights here as soon as the backend has replay payloads to work with.',
+              'The ranking engine will surface clips here as soon as the live feed endpoints return ranked payloads.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              Icons.error_outline_rounded,
+              color: AppColors.danger,
+              size: 48,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Feed validation failed',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
               style: Theme.of(context).textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),

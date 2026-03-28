@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import hashlib
 import json
 import logging
+from math import exp
 from threading import Lock
 
 from fastapi import FastAPI
@@ -30,9 +31,10 @@ _TEAM_WEIGHT = 6.0
 _EVENT_WEIGHT = 8.0
 _TAG_WEIGHT = 2.0
 _SCORE_CLAMP = 4.0
-_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
-_SESSION_STATE_KEY_PATTERN = "session:{session_id}:state"
-_SESSION_AFFINITY_VECTOR_KEY_PATTERN = "session:{session_id}:affinity_vector"
+_SESSION_TTL_SECONDS = 60 * 60
+_SESSION_KEY_PATTERN = "session:{session_id}"
+_LEGACY_SESSION_STATE_KEY_PATTERN = "session:{session_id}:state"
+_LEGACY_SESSION_AFFINITY_VECTOR_KEY_PATTERN = "session:{session_id}:affinity_vector"
 _INTERACTION_EVENTS = {
     ClipEventType.COMPLETE,
     ClipEventType.LOOP,
@@ -118,6 +120,18 @@ class ViralSessionTracker:
         with self._lock:
             state = self._state_for(normalized_session_id)
             return self._state_view(state)
+
+    def get_affinity(self, *, session_id: str, clip: ViralClipView | object | None = None) -> float:
+        normalized_session_id = session_id.strip()
+        if not normalized_session_id:
+            return 1.0
+        with self._lock:
+            state = self._state_for(normalized_session_id)
+            snapshot = self._snapshot(state)
+        if clip is None:
+            return 1.0 if not _has_affinity_signal(snapshot) else 0.5
+        raw_boost = self._session_boost(_profile_from_clip(clip), snapshot)
+        return _normalized_affinity_score(raw_boost, snapshot=snapshot)
 
     def observe_many(self, events: list[ClipEvent]) -> None:
         if not events:
@@ -350,7 +364,7 @@ class ViralSessionTracker:
     def _persist_state(self, state: SessionState) -> None:
         if self._redis_client is None:
             return
-        state_payload = {
+        session_payload = {
             "session_id": state.session_id,
             "clips_seen": state.clips_seen,
             "watch_time_ms": state.watch_time_ms,
@@ -373,30 +387,22 @@ class ViralSessionTracker:
             },
             "seen_clip_ids": sorted(state.seen_clip_ids),
             "last_updated_at": state.last_updated_at.astimezone(UTC).isoformat(),
-        }
-        affinity_payload = {
-            "session_id": state.session_id,
-            "content_types": _sorted_scores(state.content_affinity),
-            "formats": _sorted_scores(state.format_affinity),
-            "teams": _sorted_scores(state.team_affinity),
-            "clip_event_types": _sorted_scores(state.clip_event_affinity),
-            "tags": _sorted_scores(state.tag_affinity),
-            "override_dimensions": _override_dimensions(state),
-            "updated_at": state.last_updated_at.astimezone(UTC).isoformat(),
+            "affinity": {
+                "content_types": _sorted_scores(state.content_affinity),
+                "formats": _sorted_scores(state.format_affinity),
+                "teams": _sorted_scores(state.team_affinity),
+                "clip_event_types": _sorted_scores(state.clip_event_affinity),
+                "tags": _sorted_scores(state.tag_affinity),
+                "override_dimensions": _override_dimensions(state),
+                "updated_at": state.last_updated_at.astimezone(UTC).isoformat(),
+            },
         }
         try:
-            pipeline = self._redis_client.pipeline()
-            pipeline.set(
-                _SESSION_STATE_KEY_PATTERN.format(session_id=state.session_id),
-                json.dumps(state_payload, ensure_ascii=True, default=str),
-                ex=_SESSION_TTL_SECONDS,
+            self._redis_client.setex(
+                _SESSION_KEY_PATTERN.format(session_id=state.session_id),
+                _SESSION_TTL_SECONDS,
+                json.dumps(session_payload, ensure_ascii=True, default=str),
             )
-            pipeline.set(
-                _SESSION_AFFINITY_VECTOR_KEY_PATTERN.format(session_id=state.session_id),
-                json.dumps(affinity_payload, ensure_ascii=True, default=str),
-                ex=_SESSION_TTL_SECONDS,
-            )
-            pipeline.execute()
         except RedisError:
             logger.warning("viral.session_tracker.persist_failed session_id=%s", state.session_id)
 
@@ -404,20 +410,39 @@ class ViralSessionTracker:
         if self._redis_client is None:
             return None
         try:
-            state_payload = self._redis_client.get(_SESSION_STATE_KEY_PATTERN.format(session_id=session_id))
-            affinity_payload = self._redis_client.get(
-                _SESSION_AFFINITY_VECTOR_KEY_PATTERN.format(session_id=session_id)
-            )
+            session_payload = self._redis_client.get(_SESSION_KEY_PATTERN.format(session_id=session_id))
         except RedisError:
             logger.warning("viral.session_tracker.load_failed session_id=%s", session_id)
             return None
-        if not state_payload:
-            return None
-        try:
-            parsed_state = json.loads(state_payload)
-            parsed_affinity = json.loads(affinity_payload) if affinity_payload else {}
-        except json.JSONDecodeError:
-            return None
+        parsed_state: dict[str, object]
+        parsed_affinity: dict[str, object]
+        if session_payload:
+            try:
+                parsed_payload = json.loads(session_payload)
+            except json.JSONDecodeError:
+                return None
+            if not isinstance(parsed_payload, dict):
+                return None
+            parsed_state = parsed_payload
+            parsed_affinity = parsed_payload.get("affinity") if isinstance(parsed_payload.get("affinity"), dict) else {}
+        else:
+            try:
+                legacy_state_payload = self._redis_client.get(
+                    _LEGACY_SESSION_STATE_KEY_PATTERN.format(session_id=session_id)
+                )
+                legacy_affinity_payload = self._redis_client.get(
+                    _LEGACY_SESSION_AFFINITY_VECTOR_KEY_PATTERN.format(session_id=session_id)
+                )
+            except RedisError:
+                logger.warning("viral.session_tracker.load_failed session_id=%s", session_id)
+                return None
+            if not legacy_state_payload:
+                return None
+            try:
+                parsed_state = json.loads(legacy_state_payload)
+                parsed_affinity = json.loads(legacy_affinity_payload) if legacy_affinity_payload else {}
+            except json.JSONDecodeError:
+                return None
         last_updated_raw = parsed_state.get("last_updated_at")
         last_updated_at = datetime.now(UTC)
         if isinstance(last_updated_raw, str):
@@ -535,6 +560,24 @@ def _sorted_scores(values: dict[str, float]) -> dict[str, float]:
         key: round(score, 4)
         for key, score in sorted(values.items(), key=lambda item: (-abs(item[1]), item[0]))
     }
+
+
+def _has_affinity_signal(snapshot: SessionSnapshot) -> bool:
+    return any(
+        (
+            snapshot.content_affinity,
+            snapshot.format_affinity,
+            snapshot.team_affinity,
+            snapshot.clip_event_affinity,
+            snapshot.tag_affinity,
+        )
+    )
+
+
+def _normalized_affinity_score(raw_boost: float, *, snapshot: SessionSnapshot) -> float:
+    if not _has_affinity_signal(snapshot):
+        return 1.0
+    return round(max(0.0, min(1.0, 1.0 / (1.0 + exp(-raw_boost / 12.0)))), 6)
 
 
 def _coerce_score_map(value: object) -> dict[str, float]:

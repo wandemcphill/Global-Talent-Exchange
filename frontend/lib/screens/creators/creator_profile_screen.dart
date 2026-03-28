@@ -6,13 +6,11 @@ import '../../widgets/creators/creator_finance_summary_card.dart';
 import '../../widgets/creators/creator_header_card.dart';
 import '../../widgets/creators/creator_stats_card.dart';
 import '../../widgets/gte_state_panel.dart';
+import '../../widgets/gte_sync_status_card.dart';
 import '../../widgets/gte_surface_panel.dart';
 
 class CreatorProfileScreen extends StatefulWidget {
-  const CreatorProfileScreen({
-    super.key,
-    required this.controller,
-  });
+  const CreatorProfileScreen({super.key, required this.controller});
 
   final CreatorController controller;
 
@@ -25,6 +23,13 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
   void initState() {
     super.initState();
     widget.controller.load();
+    widget.controller.attachStateSync();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.detachStateSync();
+    super.dispose();
   }
 
   @override
@@ -62,6 +67,8 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
           }
 
           final CreatorProfile profile = widget.controller.profile!;
+          final CreatorFinanceSummary financeSummary =
+              widget.controller.financeSummary ?? profile.financeSummary;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             child: Column(
@@ -69,8 +76,10 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
               children: <Widget>[
                 const GteStatePanel(
                   eyebrow: 'PROFILE SIGNAL',
-                  title: 'Shape a creator identity that feels trusted, promotable, and ready for matchday traffic.',
-                  message: 'This profile deck keeps public links, creator momentum, and competition summaries in one presentation layer so the creator lane feels as premium as market and wallet.',
+                  title:
+                      'Shape a creator identity that feels trusted, promotable, and ready for matchday traffic.',
+                  message:
+                      'This profile deck keeps public links, creator momentum, and competition summaries in one presentation layer so the creator lane feels as premium as market and wallet.',
                   icon: Icons.person_pin_circle_outlined,
                   accentColor: Color(0xFF9C6BFF),
                 ),
@@ -83,7 +92,21 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                   rewardSummary: profile.rewardSummary,
                 ),
                 const SizedBox(height: 16),
-                CreatorFinanceSummaryCard(summary: profile.financeSummary),
+                GteSyncStatusCard(
+                  title: 'CREATOR STATE SYNC',
+                  status:
+                      widget.controller.isSyncing
+                          ? 'Refreshing creator profile and finance.'
+                          : 'Profile and finance stay aligned with live creator APIs.',
+                  detail:
+                      'Critical actions trigger an immediate sync and background refresh.',
+                  syncedAt: widget.controller.syncedAt,
+                  accent: const Color(0xFF9C6BFF),
+                  onRefresh: widget.controller.syncNow,
+                  isRefreshing: widget.controller.isSyncing,
+                ),
+                const SizedBox(height: 16),
+                CreatorFinanceSummaryCard(summary: financeSummary),
                 const SizedBox(height: 16),
                 GteSurfacePanel(
                   child: Column(
@@ -115,17 +138,18 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                         const GteStatePanel(
                           eyebrow: 'MATCHDAY RECORD',
                           title: 'No published creator competitions yet.',
-                          message: 'Once this creator starts hosting competitions, the archive will appear here with season labels, participation cues, and live-state context.',
+                          message:
+                              'Once this creator starts hosting competitions, the archive will appear here with season labels, participation cues, and live-state context.',
                           icon: Icons.history_toggle_off_outlined,
                           accentColor: Color(0xFF9C6BFF),
                         )
                       else
                         for (final CreatorCompetition competition
                             in profile.competitions) ...<Widget>[
-                        _CompetitionSummaryTile(competition: competition),
-                        if (competition != profile.competitions.last)
-                          const Divider(height: 28),
-                      ],
+                          _CompetitionSummaryTile(competition: competition),
+                          if (competition != profile.competitions.last)
+                            const Divider(height: 28),
+                        ],
                     ],
                   ),
                 ),
@@ -139,9 +163,7 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
 }
 
 class _CompetitionSummaryTile extends StatelessWidget {
-  const _CompetitionSummaryTile({
-    required this.competition,
-  });
+  const _CompetitionSummaryTile({required this.competition});
 
   final CreatorCompetition competition;
 
@@ -158,9 +180,7 @@ class _CompetitionSummaryTile extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            Chip(
-              label: Text(competition.isLive ? 'Live now' : 'Upcoming'),
-            ),
+            Chip(label: Text(competition.isLive ? 'Live now' : 'Upcoming')),
           ],
         ),
         const SizedBox(height: 6),

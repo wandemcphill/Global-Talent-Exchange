@@ -27,6 +27,7 @@ from app.viral.ingestion_schemas import CLIP_EVENT_TOPICS, ClipEventIngestionAcc
 from app.viral.personalized_feed_service import build_personalized_feed_service
 from app.viral.ranking_service import build_viral_ranking_service
 from app.viral.schemas import (
+    PersonalizedFeedRefreshResponse,
     PersonalizedFeedResponse,
     ViralAccountCatalogItemView,
     ViralAccountCatalogResponse,
@@ -270,6 +271,7 @@ def read_personalized_feed(
     request: Request,
     limit: int = 20,
     refresh: bool = False,
+    session_id: str | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> PersonalizedFeedResponse:
@@ -278,6 +280,7 @@ def read_personalized_feed(
         user_id=current_user.id,
         limit=max(limit, 1),
         refresh=refresh,
+        session_id=session_id,
     )
     response = ensure_distribution_filter_middleware(request.app).deliver_personalized_feed_response(response)
     service.record_delivery(response)
@@ -290,6 +293,7 @@ def read_following_feed(
     request: Request,
     limit: int = 20,
     refresh: bool = False,
+    session_id: str | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> PersonalizedFeedResponse:
@@ -298,9 +302,31 @@ def read_following_feed(
         user_id=current_user.id,
         limit=max(limit, 1),
         refresh=refresh,
+        session_id=session_id,
     )
     response = ensure_distribution_filter_middleware(request.app).deliver_personalized_feed_response(response)
     service.record_delivery(response)
+    session.commit()
+    return response
+
+
+@feed_router.get("/for-you/refresh", response_model=PersonalizedFeedRefreshResponse)
+def refresh_personalized_feed(
+    request: Request,
+    cursor: int = 0,
+    limit: int = 20,
+    session_id: str | None = None,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> PersonalizedFeedRefreshResponse:
+    service = build_personalized_feed_service(app=request.app, session=session)
+    response = service.refresh_for_you(
+        user_id=current_user.id,
+        cursor=cursor,
+        limit=max(limit, 1),
+        session_id=session_id,
+    )
+    service.record_refresh_delivery(user_id=current_user.id, clips=response.new_items)
     session.commit()
     return response
 

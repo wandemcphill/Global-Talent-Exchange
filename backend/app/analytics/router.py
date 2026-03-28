@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
 from app.models.user import User
 from app.players.match_learning_service import PlayerMatchLearningService
 from app.schemas.referral_analytics import CreatorLeaderboardResponse
@@ -20,6 +20,7 @@ from .schemas import (
     AnalyticsEventCreate,
     AnalyticsEventView,
     AnalyticsFunnelView,
+    FrontendAnalyticsEventCreate,
     ClipAnalyticsDetailView,
     ClipDashboardItemView,
     ClipDashboardResponse,
@@ -56,6 +57,40 @@ def create_event(
         "device_signal_sources": list(fingerprint.source_signals),
     }
     event = service.track_event(session, name=payload.name, user_id=current_user.id, metadata=metadata)
+    session.commit()
+    session.refresh(event)
+    return AnalyticsEventView.model_validate(event)
+
+
+@public_router.post("/frontend", response_model=AnalyticsEventView, status_code=status.HTTP_201_CREATED)
+def create_frontend_event(
+    payload: FrontendAnalyticsEventCreate,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User | None = Depends(get_optional_current_user),
+) -> AnalyticsEventView:
+    service = AnalyticsService()
+    fingerprint = DeviceFingerprintService().build(headers=request.headers)
+    event_name = f"frontend.{payload.category.strip().lower()}.{payload.name.strip().lower()}".replace(" ", "_")[:64]
+    metadata = {
+        **dict(payload.metadata),
+        "category": payload.category,
+        "screen": payload.screen,
+        "flow": payload.flow,
+        "target": payload.target,
+        "stage": payload.stage,
+        "success": payload.success,
+        "status_code": payload.status_code,
+        "latency_ms": payload.latency_ms,
+        "device_fingerprint": fingerprint.fingerprint,
+        "device_signal_sources": list(fingerprint.source_signals),
+    }
+    event = service.track_event(
+        session,
+        name=event_name,
+        user_id=current_user.id if current_user is not None else None,
+        metadata=metadata,
+    )
     session.commit()
     session.refresh(event)
     return AnalyticsEventView.model_validate(event)

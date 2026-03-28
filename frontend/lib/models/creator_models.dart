@@ -217,3 +217,204 @@ class CreatorLeaderboardEntry {
   final String highlightLabel;
   final bool flaggedForReview;
 }
+
+class CreatorCopilotDraft {
+  const CreatorCopilotDraft({
+    required this.title,
+    required this.durationSeconds,
+    required this.eventType,
+    required this.tags,
+    required this.preferredFormat,
+    required this.introSeconds,
+    required this.visualIntensity,
+    required this.eventDensity,
+    required this.audienceCluster,
+    required this.hasReactionOverlay,
+  });
+
+  final String title;
+  final double durationSeconds;
+  final String eventType;
+  final List<String> tags;
+  final String preferredFormat;
+  final double introSeconds;
+  final double visualIntensity;
+  final double eventDensity;
+  final String audienceCluster;
+  final bool hasReactionOverlay;
+
+  CreatorCopilotDraft copyWith({
+    String? title,
+    double? durationSeconds,
+    String? eventType,
+    List<String>? tags,
+    String? preferredFormat,
+    double? introSeconds,
+    double? visualIntensity,
+    double? eventDensity,
+    String? audienceCluster,
+    bool? hasReactionOverlay,
+  }) {
+    return CreatorCopilotDraft(
+      title: title ?? this.title,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      eventType: eventType ?? this.eventType,
+      tags: tags ?? this.tags,
+      preferredFormat: preferredFormat ?? this.preferredFormat,
+      introSeconds: introSeconds ?? this.introSeconds,
+      visualIntensity: visualIntensity ?? this.visualIntensity,
+      eventDensity: eventDensity ?? this.eventDensity,
+      audienceCluster: audienceCluster ?? this.audienceCluster,
+      hasReactionOverlay: hasReactionOverlay ?? this.hasReactionOverlay,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'title': title,
+      'duration_seconds': durationSeconds,
+      'event_type': eventType,
+      'tags': tags,
+      'preferred_format': preferredFormat,
+      'intro_seconds': introSeconds,
+      'visual_intensity': visualIntensity,
+      'event_density': eventDensity,
+      'audience_cluster': audienceCluster,
+      'has_reaction_overlay': hasReactionOverlay,
+    };
+  }
+}
+
+class CreatorCopilotPrediction {
+  const CreatorCopilotPrediction({
+    required this.viralProbability,
+    required this.expectedViews,
+    required this.bestFormat,
+    required this.riskFlags,
+  });
+
+  final double viralProbability;
+  final int expectedViews;
+  final String bestFormat;
+  final List<String> riskFlags;
+
+  int get viralScorePercent => (viralProbability * 100).round();
+}
+
+class CreatorCopilotVariantRecommendation {
+  const CreatorCopilotVariantRecommendation({
+    required this.type,
+    required this.confidence,
+    required this.reason,
+    required this.exploratory,
+  });
+
+  final String type;
+  final double confidence;
+  final String reason;
+  final bool exploratory;
+}
+
+class CreatorCopilotVariantStrategy {
+  const CreatorCopilotVariantStrategy({
+    required this.recommendedVariants,
+    required this.explorationFactor,
+    required this.rationale,
+  });
+
+  final List<CreatorCopilotVariantRecommendation> recommendedVariants;
+  final double explorationFactor;
+  final List<String> rationale;
+}
+
+class CreatorCopilotTiming {
+  const CreatorCopilotTiming({
+    required this.postNow,
+    required this.bestTimeInMinutes,
+    required this.reason,
+    required this.competitionDensity,
+    required this.audienceActivity,
+  });
+
+  final bool postNow;
+  final int bestTimeInMinutes;
+  final String reason;
+  final double competitionDensity;
+  final double audienceActivity;
+}
+
+class CreatorCopilotHookAnalysis {
+  const CreatorCopilotHookAnalysis({
+    required this.hookScore,
+    required this.suggestion,
+    required this.introStrength,
+    required this.eventDensity,
+    required this.visualIntensity,
+  });
+
+  final double hookScore;
+  final String suggestion;
+  final String introStrength;
+  final double eventDensity;
+  final double visualIntensity;
+
+  int get hookScorePercent => (hookScore * 100).round();
+}
+
+class CreatorCopilotStrategyProfile {
+  const CreatorCopilotStrategyProfile({
+    required this.profileKey,
+    required this.archetype,
+    required this.summary,
+    required this.confidence,
+    required this.winningFormats,
+    required this.winningDuration,
+    required this.audienceCluster,
+  });
+
+  final String profileKey;
+  final String archetype;
+  final String summary;
+  final double confidence;
+  final List<String> winningFormats;
+  final String? winningDuration;
+  final String? audienceCluster;
+}
+
+class CreatorCopilotLiveCoaching {
+  const CreatorCopilotLiveCoaching({
+    required this.eventName,
+    required this.headline,
+    required this.message,
+    required this.recommendedAction,
+  });
+
+  final String eventName;
+  final String headline;
+  final String message;
+  final String recommendedAction;
+}
+
+class CreatorCopilotAnalysis {
+  const CreatorCopilotAnalysis({
+    required this.creatorId,
+    required this.draft,
+    required this.prediction,
+    required this.variantStrategy,
+    required this.timing,
+    required this.hookAnalysis,
+    required this.strategyProfile,
+    required this.liveCoaching,
+    required this.actionPlan,
+  });
+
+  final String creatorId;
+  final CreatorCopilotDraft draft;
+  final CreatorCopilotPrediction prediction;
+  final CreatorCopilotVariantStrategy variantStrategy;
+  final CreatorCopilotTiming timing;
+  final CreatorCopilotHookAnalysis hookAnalysis;
+  final CreatorCopilotStrategyProfile strategyProfile;
+  final CreatorCopilotLiveCoaching liveCoaching;
+  final List<String> actionPlan;
+}

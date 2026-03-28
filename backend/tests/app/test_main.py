@@ -310,6 +310,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/creators/profile" in paths
     assert "/api/creators/profile/me" in paths
     assert "/api/creators/me/summary" in paths
+    assert "/api/creators/me/copilot/analyze" in paths
     assert "/campaigns" in paths
     assert "/campaigns/create" in paths
     assert "/campaigns/{id}/apply" in paths
@@ -430,6 +431,26 @@ def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, monke
 
     assert "app.startup.complete" in messages
     assert any(message == "app.startup.seed.skipped seed=policy_documents reason=disabled" for message in messages)
+
+
+def test_main_module_exposes_lazy_asgi_app(monkeypatch) -> None:
+    sentinel = object()
+    call_count = 0
+
+    def _build_app():
+        nonlocal call_count
+        call_count += 1
+        return sentinel
+
+    monkeypatch.setattr(main_module, "_ASGI_APP", None)
+    monkeypatch.setattr(main_module, "create_app", _build_app)
+
+    first = getattr(main_module, "app")
+    second = getattr(main_module, "app")
+
+    assert first is sentinel
+    assert second is sentinel
+    assert call_count == 1
 
 
 @pytest.mark.anyio

@@ -1,22 +1,41 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import FastAPI
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.events import DomainEvent, InMemoryEventPublisher
 from app.core.config import get_settings
 from app.highlights.queue import FileHighlightRenderQueue
 from app.highlights.service import HighlightGenerationService
 from app.moments.service import MomentsEngine
+from app.models.base import Base
+from app.models.clip_variant import ClipVariant
 from app.storage import LocalObjectStorage
+from app.viral.promotion import ViralClipPromotionService
 from app.viral.ranking_service import InMemoryViralLeaderboardStore
 
 
-def _build_engine(tmp_path) -> tuple[MomentsEngine, InMemoryEventPublisher, InMemoryViralLeaderboardStore]:
+def _session_factory() -> sessionmaker[Session]:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[ClipVariant.__table__])
+    return sessionmaker(bind=engine, expire_on_commit=False)
+
+
+def _build_engine(tmp_path) -> tuple[MomentsEngine, InMemoryEventPublisher, InMemoryViralLeaderboardStore, sessionmaker[Session]]:
     app = FastAPI()
     queue = FileHighlightRenderQueue(tmp_path)
     storage = LocalObjectStorage(tmp_path)
     publisher = InMemoryEventPublisher()
     leaderboard = InMemoryViralLeaderboardStore()
+    session_factory = _session_factory()
     highlight_service = HighlightGenerationService(
         settings=get_settings(),
         queue=queue,
@@ -27,12 +46,13 @@ def _build_engine(tmp_path) -> tuple[MomentsEngine, InMemoryEventPublisher, InMe
         highlight_generation_service=highlight_service,
         event_publisher=publisher,
         viral_leaderboard_store=leaderboard,
+        session_factory=session_factory,
     )
-    return engine, publisher, leaderboard
+    return engine, publisher, leaderboard, session_factory
 
 
 def test_moments_engine_applies_goal_boost_and_hot_window(tmp_path) -> None:
-    engine, publisher, leaderboard = _build_engine(tmp_path)
+    engine, publisher, leaderboard, _session_factory = _build_engine(tmp_path)
 
     engine.handle_event(
         DomainEvent(
@@ -78,7 +98,7 @@ def test_moments_engine_applies_goal_boost_and_hot_window(tmp_path) -> None:
 
 
 def test_moments_engine_detects_last_minute_win(tmp_path) -> None:
-    engine, _publisher, _leaderboard = _build_engine(tmp_path)
+    engine, _publisher, _leaderboard, _session_factory = _build_engine(tmp_path)
 
     engine.handle_event(
         DomainEvent(
@@ -105,3 +125,59 @@ def test_moments_engine_detects_last_minute_win(tmp_path) -> None:
     assert moment.detected_events == ["goal", "last_minute_win"]
     assert moment.boost.priority_boost == 0.8
     assert moment.boost.final_score == 1.8
+
+
+def test_moments_engine_creates_goal_variant_burst_and_fast_tracks_winner(tmp_path) -> None:
+    engine, _publisher, _leaderboard, session_factory = _build_engine(tmp_path)
+
+    engine.handle_event(
+        DomainEvent(
+            name="match.events",
+            payload={
+                "match_id": "match-viral",
+                "event_id": "evt-goal",
+                "event_type": "goal",
+                "source_event_type": "goal",
+                "minute": 12,
+                "clock": "12'",
+                "team": "Burst FC",
+                "player": "Finisher",
+                "home_score": 1,
+                "away_score": 0,
+                "metadata": {},
+            },
+        )
+    )
+
+    moment = engine.live(limit=1, match_id="match-viral").moments[0]
+
+    assert moment.metadata["variant_count"] == 5
+
+    with session_factory() as session:
+        variants = list(
+            session.scalars(
+                select(ClipVariant)
+                .where(ClipVariant.base_clip_id == moment.moment_id)
+                .order_by(ClipVariant.format_type.asc())
+            ).all()
+        )
+
+        assert len(variants) == 5
+        assert {variant.format_type for variant in variants} == {
+            "instant",
+            "cinematic",
+            "debate",
+            "tactical",
+            "meme",
+        }
+
+        expired_created_at = datetime.now(UTC) - timedelta(minutes=3, seconds=5)
+        for variant in variants:
+            variant.created_at = expired_created_at
+        session.commit()
+
+        decision = ViralClipPromotionService(session=session).refresh(moment.moment_id)
+
+        assert decision.resolved is True
+        assert decision.decision_reason == "time_threshold"
+        assert decision.winner_variant_id is not None

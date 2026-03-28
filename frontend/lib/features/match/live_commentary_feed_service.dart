@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:gte_frontend/services/reliability/reliable_event_queue.dart';
+import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dart';
 
 abstract interface class LiveCommentaryFeedService {
   Stream<List<LiveMatchEvent>> watch({
@@ -83,9 +84,13 @@ class StaticLiveCommentaryFeedService implements LiveCommentaryFeedService {
 }
 
 class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
-  const WebSocketLiveCommentaryFeedService({required this.socketUri});
+  WebSocketLiveCommentaryFeedService({
+    required this.socketUri,
+    this.managerFactory,
+  });
 
   final Uri socketUri;
+  final ReliableWebSocketManager Function(Uri socketUri)? managerFactory;
 
   @override
   Stream<List<LiveMatchEvent>> watch({
@@ -98,15 +103,15 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
       List<LiveMatchEvent> merged = _sortEvents(seedEvents);
       controller.add(List<LiveMatchEvent>.unmodifiable(merged));
 
-      WebSocketChannel? channel;
       StreamSubscription<dynamic>? subscription;
-      try {
-        channel = WebSocketChannel.connect(socketUri);
-      } catch (_) {
-        return;
-      }
+      final ReliableWebSocketManager manager =
+          managerFactory?.call(socketUri) ??
+          ReliableWebSocketManager(
+            socketUri: socketUri,
+            onConnectionRestored: gteReliableEventQueue.markConnectionRestored,
+          );
 
-      subscription = channel.stream.listen((dynamic message) {
+      subscription = manager.messages.listen((dynamic message) {
         final int fallbackMinute =
             merged.isEmpty ? 0 : merged.last.minute.clamp(0, 120);
         final List<LiveMatchEvent> incoming = _parseMessage(
@@ -119,10 +124,11 @@ class WebSocketLiveCommentaryFeedService implements LiveCommentaryFeedService {
         merged = _mergeEvents(merged, incoming);
         controller.add(List<LiveMatchEvent>.unmodifiable(merged));
       }, onError: (_) {});
+      manager.connect();
 
       controller.onCancel = () async {
         await subscription?.cancel();
-        await channel?.sink.close();
+        await manager.dispose();
       };
     });
   }

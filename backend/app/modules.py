@@ -358,6 +358,13 @@ DOMAIN_MODULES = (
         on_startup=("app.viral.router:startup",),
         on_shutdown=("app.viral.router:shutdown",),
     ),
+    _module("attention_orchestrator", router_path="app.orchestrator.router:router"),
+    _module(
+        "agents",
+        router_path="app.agents.router:router",
+        on_startup=("app.agents.agent_manager:bind_creator_agent_manager",),
+        on_shutdown=("app.agents.agent_manager:shutdown_creator_agent_manager",),
+    ),
     _module("pundits", router_path="app.pundits.router:router"),
     _module("integrity_engine", router_path="app.integrity_engine.router:router"),
     _module("integrity_engine_admin", router_path="app.integrity_engine.router:admin_router"),

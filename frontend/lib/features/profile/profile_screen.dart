@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +10,7 @@ import '../../core/utils/app_formatters.dart';
 import '../../core/widgets/app_hover_lift.dart';
 import '../../core/widgets/app_press_scale.dart';
 import '../../core/widgets/gtex_surface_card.dart';
+import '../../services/reliability/reliable_event_queue.dart';
 import '../../shared/models/auth_session.dart';
 import '../../shared/models/club.dart';
 import '../../shared/models/live_match.dart';
@@ -153,6 +156,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('$action $clubName.')));
+    unawaited(
+      gteReliableEventQueue.enqueue(
+        topic: 'social',
+        name: 'profile_follow_toggled',
+        payload: <String, Object?>{
+          'club_name': clubName,
+          'is_following': _isFollowing,
+        },
+        dedupeKey:
+            'profile-follow:${clubName.trim().toLowerCase()}:$_isFollowing',
+        feedRefreshTrigger: FeedRefreshTrigger.followAction,
+      ),
+    );
   }
 }
 

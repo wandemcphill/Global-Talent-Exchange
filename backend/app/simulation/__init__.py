@@ -11,8 +11,14 @@ from app.simulation.service import (
     SimulationSeedError,
     SimulationTickSummary,
 )
+from app.simulation.content_agent import ContentAgent, SimulatedClip
+from app.simulation.metrics_collector import SimulationMetricsCollector, SimulationReport
+from app.simulation.simulator import AttentionSimulationEngine, StrategyComparisonReport, StrategyScenario
+from app.simulation.user_agent import UserAgent
 
 __all__ = [
+    "AttentionSimulationEngine",
+    "ContentAgent",
     "DEFAULT_ILLIQUID_PLAYER_COUNT",
     "DEFAULT_LIQUID_PLAYER_COUNT",
     "DEFAULT_SIMULATION_SEED",
@@ -21,7 +27,13 @@ __all__ = [
     "DemoMarketSimulationService",
     "SeededPlayerSummary",
     "SIMULATION_USER_SPECS",
+    "SimulatedClip",
+    "SimulationMetricsCollector",
     "SimulationPlayerProfile",
+    "SimulationReport",
     "SimulationSeedError",
     "SimulationTickSummary",
+    "StrategyComparisonReport",
+    "StrategyScenario",
+    "UserAgent",
 ]

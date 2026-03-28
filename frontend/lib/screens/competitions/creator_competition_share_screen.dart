@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -82,14 +84,16 @@ class _CreatorCompetitionShareScreenState
                   code: share.shareCode,
                   shareUrl: share.shareUrl,
                   supportingText: share.supportingText,
-                  onCopyCode: () => _copyValue(
-                    value: share.shareCode,
-                    message: 'Competition share code copied.',
-                  ),
-                  onCopyLink: () => _copyValue(
-                    value: share.shareUrl,
-                    message: 'Competition invite link copied.',
-                  ),
+                  onCopyCode:
+                      () => _copyValue(
+                        value: share.shareCode,
+                        message: 'Competition share code copied.',
+                      ),
+                  onCopyLink:
+                      () => _copyValue(
+                        value: share.shareUrl,
+                        message: 'Competition invite link copied.',
+                      ),
                   onOpenChannelSheet: () => _shareInvite(share),
                 ),
                 const SizedBox(height: 16),
@@ -140,11 +144,12 @@ class _CreatorCompetitionShareScreenState
   Future<void> _shareInvite(CreatorCompetitionShareData share) async {
     final InviteChannel? channel = await showModalBottomSheet<InviteChannel>(
       context: context,
-      builder: (BuildContext context) => const InviteChannelSheet(
-        title: 'Share creator competition',
-        message:
-            'Pick a channel for this creator competition invite. Each option copies a ready message until device sharing is connected.',
-      ),
+      builder:
+          (BuildContext context) => const InviteChannelSheet(
+            title: 'Share creator competition',
+            message:
+                'Pick a channel for this creator competition invite. Each option copies a ready message until device sharing is connected.',
+          ),
     );
     if (!mounted || channel == null) {
       return;
@@ -155,9 +160,10 @@ class _CreatorCompetitionShareScreenState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${channel.label} invite copied.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${channel.label} invite copied.')));
+    unawaited(widget.creatorController.syncAfterCriticalAction());
   }
 
   Future<void> _copyValue({
@@ -168,8 +174,9 @@ class _CreatorCompetitionShareScreenState
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    unawaited(widget.creatorController.syncAfterCriticalAction());
   }
 }

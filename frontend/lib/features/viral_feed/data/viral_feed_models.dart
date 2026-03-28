@@ -1,14 +1,57 @@
 import '../../shared/data/gte_feature_support.dart';
 
-class ViralFeedDeck {
-  const ViralFeedDeck({required this.clips, required this.debatesByMatch});
+enum ViralFeedSource { forYou, following }
 
+extension ViralFeedSourceX on ViralFeedSource {
+  String get path {
+    switch (this) {
+      case ViralFeedSource.forYou:
+        return '/feed/for-you';
+      case ViralFeedSource.following:
+        return '/feed/following';
+    }
+  }
+
+  String get feedType {
+    switch (this) {
+      case ViralFeedSource.forYou:
+        return 'for_you';
+      case ViralFeedSource.following:
+        return 'following';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case ViralFeedSource.forYou:
+        return 'FOR YOU';
+      case ViralFeedSource.following:
+        return 'FOLLOWING';
+    }
+  }
+}
+
+class ViralFeedDeck {
+  const ViralFeedDeck({
+    required this.source,
+    required this.feedKey,
+    required this.generatedAt,
+    required this.cacheHit,
+    required this.clips,
+    this.debatesByMatch = const <String, PunditDebate>{},
+  });
+
+  final ViralFeedSource source;
+  final String feedKey;
+  final DateTime generatedAt;
+  final bool cacheHit;
   final List<ViralClip> clips;
   final Map<String, PunditDebate> debatesByMatch;
 }
 
 class ViralClip {
   const ViralClip({
+    required this.clipId,
     required this.matchId,
     required this.highlightId,
     required this.title,
@@ -18,18 +61,29 @@ class ViralClip {
     required this.rankingScore,
     required this.caption,
     required this.tags,
+    required this.rank,
+    required this.score,
+    required this.feedSource,
+    required this.metadata,
     this.teamName,
     this.playerName,
     this.scorelineLabel,
     this.videoUrl,
+    this.durationSeconds,
     this.shareChannel = 'whatsapp',
   });
 
   factory ViralClip.fromJson(Object? value) {
     final JsonMap json = jsonMap(value, label: 'viral clip');
+    final String matchId = stringValue(json['match_id']);
+    final String highlightId = stringValue(json['highlight_id']);
     return ViralClip(
-      matchId: stringValue(json['match_id']),
-      highlightId: stringValue(json['highlight_id']),
+      clipId: stringValue(
+        json['clip_id'],
+        fallback: '$matchId::$highlightId',
+      ),
+      matchId: matchId,
+      highlightId: highlightId,
       title: stringValue(json['title']),
       eventType: stringValue(json['event_type']),
       minute: intValue(json['minute']),
@@ -37,14 +91,24 @@ class ViralClip {
       rankingScore: numberValue(json['ranking_score']),
       caption: ViralCaption.fromJson(json['caption']),
       tags: stringListValue(json['tags']),
+      rank: intValue(json['rank']),
+      score: numberValue(json['score']),
+      feedSource: stringValue(json['feed_source']),
+      metadata: jsonMap(
+        json['metadata'],
+        label: 'viral clip metadata',
+        fallback: const <String, Object?>{},
+      ),
       teamName: stringOrNullValue(json['team_name']),
       playerName: stringOrNullValue(json['player_name']),
       scorelineLabel: stringOrNullValue(json['scoreline_label']),
       videoUrl: stringOrNullValue(json['video_url']),
+      durationSeconds: _numberOrNullValue(json['duration_seconds']),
       shareChannel: stringValue(json['share_channel'], fallback: 'whatsapp'),
     );
   }
 
+  final String clipId;
   final String matchId;
   final String highlightId;
   final String title;
@@ -54,11 +118,50 @@ class ViralClip {
   final double rankingScore;
   final ViralCaption caption;
   final List<String> tags;
+  final int rank;
+  final double score;
+  final String feedSource;
+  final JsonMap metadata;
   final String? teamName;
   final String? playerName;
   final String? scorelineLabel;
   final String? videoUrl;
+  final double? durationSeconds;
   final String shareChannel;
+
+  int? get videoLengthMs {
+    if (durationSeconds == null || durationSeconds! <= 0) {
+      return null;
+    }
+    return (durationSeconds! * 1000).round();
+  }
+
+  String? get summaryLine => stringOrNullValue(metadata['summary_line']);
+
+  String? get creatorId => _firstString(
+    metadata,
+    const <String>['creator_user_id', 'creator_id', 'author_user_id'],
+  );
+}
+
+double? _numberOrNullValue(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value.toString());
+}
+
+String? _firstString(JsonMap payload, List<String> keys) {
+  for (final String key in keys) {
+    final String? resolved = stringOrNullValue(payload[key]);
+    if (resolved != null) {
+      return resolved;
+    }
+  }
+  return null;
 }
 
 class ViralCaption {

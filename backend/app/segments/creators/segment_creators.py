@@ -7,9 +7,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_session
+from app.copilot.copilot_service import CreatorCopilotService
 from app.models.user import User
-from app.schemas.creator_requests import CreatorProfileCreateRequest, CreatorProfileUpdateRequest
+from app.schemas.creator_requests import (
+    CreatorCopilotDraftRequest,
+    CreatorProfileCreateRequest,
+    CreatorProfileUpdateRequest,
+)
 from app.schemas.creator_responses import (
+    CreatorCopilotAnalysisView,
     CreatorCompetitionView,
     CreatorFinanceSummaryView,
     CreatorInsightsView,
@@ -178,6 +184,27 @@ def get_my_creator_insights(
         CreatorInsightsService(session=session).build_creator_insights(
             actor=current_user,
             creator_id=creator.creator_id,
+        )
+    )
+
+
+@router.post("/me/copilot/analyze", response_model=CreatorCopilotAnalysisView)
+@alias_router.post("/me/copilot/analyze", response_model=CreatorCopilotAnalysisView)
+def analyze_my_creator_draft(
+    payload: CreatorCopilotDraftRequest,
+    current_user: User = Depends(get_current_user),
+    orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
+    session: Session = Depends(get_session),
+) -> CreatorCopilotAnalysisView:
+    try:
+        creator = orchestrator.get_my_creator_profile(current_user=current_user)
+    except ReferralActionError as exc:
+        raise _to_http_error(exc) from exc
+    return CreatorCopilotAnalysisView.model_validate(
+        CreatorCopilotService(session=session).analyze_draft(
+            actor=current_user,
+            creator_id=creator.creator_id,
+            draft=payload.model_dump(mode="python"),
         )
     )
 

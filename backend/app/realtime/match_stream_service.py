@@ -74,6 +74,7 @@ class MatchStreamService:
                     producer="match-stream-service",
                 )
             )
+            self._publish_feed_injection(match_id=match_id, envelope=envelope)
         if self._redis is None:
             return envelope
         try:
@@ -152,6 +153,27 @@ class MatchStreamService:
             self._redis.close()
         except RedisError:
             logger.exception("realtime.match_stream.close_failed")
+
+    def _publish_feed_injection(self, *, match_id: str, envelope: Mapping[str, Any]) -> None:
+        if self._event_publisher is None or not self._is_feed_moment(envelope):
+            return
+        metadata = dict(envelope.get("metadata") or {})
+        metadata["source"] = "moment"
+        metadata["stream_channel"] = envelope.get("channel")
+        self._event_publisher.publish(
+            DomainEvent(
+                name="feed.inject.moment",
+                payload={
+                    **dict(envelope),
+                    "source": "moment",
+                    "metadata": metadata,
+                },
+                aggregate_id=match_id,
+                aggregate_type="match",
+                partition_key=match_id,
+                producer="match-stream-service",
+            )
+        )
 
     def _normalize_event(self, *, match_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
         payload = make_json_safe(dict(event))
@@ -232,6 +254,20 @@ class MatchStreamService:
             "pass": "pass",
         }
         return mapping.get(candidate, candidate)
+
+    @staticmethod
+    def _is_feed_moment(envelope: Mapping[str, Any]) -> bool:
+        candidate = str(envelope.get("source_event_type") or envelope.get("event_type") or "").strip().lower()
+        return candidate in {
+            "goal",
+            "penalty_goal",
+            "penalty_scored",
+            "red_card",
+            "red_cards",
+            "penalty_awarded",
+            "penalty_missed",
+            "penalty_miss",
+        }
 
 
 def _optional_string(value: Any) -> str | None:

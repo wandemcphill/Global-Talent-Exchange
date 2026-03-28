@@ -33,7 +33,13 @@ class CreatorApi {
     );
   }
 
-  factory CreatorApi.fixture({String baseUrl = 'https://community.gte.local'}) {
+  factory CreatorApi.fixture({
+    String baseUrl = 'https://community.gte.local',
+    CreatorProfile? profile,
+    CreatorFinanceSummary? financeSummary,
+  }) {
+    final CreatorProfile seededProfile =
+        profile ?? _buildFixtureProfile(baseUrl);
     return CreatorApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -45,7 +51,10 @@ class CreatorApi {
         mode: GteBackendMode.fixture,
       ),
       baseUrl: baseUrl,
-      fixtures: _CreatorFixtures.seed(baseUrl),
+      fixtures: _CreatorFixtures(
+        seededProfile,
+        financeSummary: financeSummary ?? seededProfile.financeSummary,
+      ),
     );
   }
 
@@ -89,6 +98,39 @@ class CreatorApi {
 
   Future<CreatorLeaderboardSnapshot> fetchCreatorLeaderboard() async {
     return fixtures.leaderboard();
+  }
+
+  Future<CreatorCopilotAnalysis> analyzeCopilotDraft(
+    CreatorCopilotDraft draft,
+  ) async {
+    if (client.mode == GteBackendMode.fixture) {
+      return fixtures.copilotAnalysis(draft);
+    }
+    return client.withFallback<CreatorCopilotAnalysis>(() async {
+      final Object? response = await client.post(
+        '/api/creators/me/copilot/analyze',
+        body: draft.toJson(),
+      );
+      if (response is Map) {
+        return _creatorCopilotAnalysisFromJson(
+          Map<String, dynamic>.from(response),
+        );
+      }
+      throw const GteApiException(
+        type: GteApiErrorType.parsing,
+        message: 'Unexpected copilot response shape.',
+      );
+    }, () async => fixtures.copilotAnalysis(draft));
+  }
+
+  Future<CreatorFinanceSummary> fetchCreatorFinance() async {
+    if (client.mode == GteBackendMode.fixture) {
+      return fixtures.financeSummary();
+    }
+    final Map<String, dynamic> financePayload = await client.getMap(
+      '/api/creators/me/finance',
+    );
+    return _creatorFinanceFromJson(financePayload);
   }
 
   Future<CreatorProfile> _fetchCurrentCreatorProfile() async {
@@ -304,15 +346,20 @@ CreatorFinanceSummary _creatorFinanceFromJson(Object? value) {
 }
 
 class _CreatorFixtures {
-  _CreatorFixtures(this._profile);
+  _CreatorFixtures(this._profile, {CreatorFinanceSummary? financeSummary})
+    : _financeSummary = financeSummary ?? _profile.financeSummary;
 
   final CreatorProfile _profile;
+  final CreatorFinanceSummary _financeSummary;
 
   static _CreatorFixtures seed(String baseUrl) {
-    return _CreatorFixtures(_buildFixtureProfile(baseUrl));
+    final CreatorProfile profile = _buildFixtureProfile(baseUrl);
+    return _CreatorFixtures(profile, financeSummary: profile.financeSummary);
   }
 
   Future<CreatorProfile> profile() async => _profile;
+
+  Future<CreatorFinanceSummary> financeSummary() async => _financeSummary;
 
   Future<CreatorLeaderboardSnapshot> leaderboard() async {
     return const CreatorLeaderboardSnapshot(
@@ -340,6 +387,12 @@ class _CreatorFixtures {
         ),
       ],
     );
+  }
+
+  Future<CreatorCopilotAnalysis> copilotAnalysis(
+    CreatorCopilotDraft draft,
+  ) async {
+    return _buildFixtureCopilotAnalysis(draft);
   }
 }
 
@@ -424,4 +477,312 @@ String _normalizedBase(String baseUrl) {
   return baseUrl.endsWith('/')
       ? baseUrl.substring(0, baseUrl.length - 1)
       : baseUrl;
+}
+
+CreatorCopilotAnalysis _creatorCopilotAnalysisFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotAnalysis(
+    creatorId: json['creator_id']?.toString() ?? 'creator',
+    draft: _creatorCopilotDraftFromJson(json['draft']),
+    prediction: _creatorCopilotPredictionFromJson(json['prediction']),
+    variantStrategy: _creatorCopilotVariantStrategyFromJson(
+      json['variant_strategy'],
+    ),
+    timing: _creatorCopilotTimingFromJson(json['timing']),
+    hookAnalysis: _creatorCopilotHookAnalysisFromJson(json['hook_analysis']),
+    strategyProfile: _creatorCopilotStrategyProfileFromJson(
+      json['strategy_profile'],
+    ),
+    liveCoaching: _creatorCopilotLiveCoachingFromJson(json['live_coaching']),
+    actionPlan: _stringList(json['action_plan']),
+  );
+}
+
+CreatorCopilotDraft _creatorCopilotDraftFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotDraft(
+    title: json['title']?.toString() ?? 'Upload draft',
+    durationSeconds: (json['duration_seconds'] as num?)?.toDouble() ?? 18,
+    eventType: json['event_type']?.toString() ?? 'goal',
+    tags: _stringList(json['tags']),
+    preferredFormat: json['preferred_format']?.toString() ?? 'instant',
+    introSeconds: (json['intro_seconds'] as num?)?.toDouble() ?? 1.1,
+    visualIntensity: (json['visual_intensity'] as num?)?.toDouble() ?? 0.62,
+    eventDensity: (json['event_density'] as num?)?.toDouble() ?? 0.58,
+    audienceCluster: json['audience_cluster']?.toString() ?? 'general',
+    hasReactionOverlay: json['has_reaction_overlay'] == true,
+  );
+}
+
+CreatorCopilotPrediction _creatorCopilotPredictionFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotPrediction(
+    viralProbability: (json['viral_probability'] as num?)?.toDouble() ?? 0,
+    expectedViews: (json['expected_views'] as num?)?.toInt() ?? 0,
+    bestFormat: json['best_format']?.toString() ?? 'instant',
+    riskFlags: _stringList(json['risk_flags']),
+  );
+}
+
+CreatorCopilotVariantStrategy _creatorCopilotVariantStrategyFromJson(
+  Object? value,
+) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotVariantStrategy(
+    recommendedVariants: (json['recommended_variants'] as List<dynamic>? ??
+            const <dynamic>[])
+        .map(_creatorCopilotVariantRecommendationFromJson)
+        .toList(growable: false),
+    explorationFactor: (json['exploration_factor'] as num?)?.toDouble() ?? 0.2,
+    rationale: _stringList(json['rationale']),
+  );
+}
+
+CreatorCopilotVariantRecommendation
+_creatorCopilotVariantRecommendationFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotVariantRecommendation(
+    type: json['type']?.toString() ?? 'instant',
+    confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
+    reason: json['reason']?.toString() ?? 'No reason provided.',
+    exploratory: json['exploratory'] == true,
+  );
+}
+
+CreatorCopilotTiming _creatorCopilotTimingFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotTiming(
+    postNow: json['post_now'] == true,
+    bestTimeInMinutes: (json['best_time_in_minutes'] as num?)?.toInt() ?? 0,
+    reason: json['reason']?.toString() ?? 'Window unavailable.',
+    competitionDensity: (json['competition_density'] as num?)?.toDouble() ?? 0,
+    audienceActivity: (json['audience_activity'] as num?)?.toDouble() ?? 0,
+  );
+}
+
+CreatorCopilotHookAnalysis _creatorCopilotHookAnalysisFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotHookAnalysis(
+    hookScore: (json['hook_score'] as num?)?.toDouble() ?? 0,
+    suggestion: json['suggestion']?.toString() ?? 'Tighten the opening beat.',
+    introStrength: json['intro_strength']?.toString() ?? 'weak',
+    eventDensity: (json['event_density'] as num?)?.toDouble() ?? 0,
+    visualIntensity: (json['visual_intensity'] as num?)?.toDouble() ?? 0,
+  );
+}
+
+CreatorCopilotStrategyProfile _creatorCopilotStrategyProfileFromJson(
+  Object? value,
+) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotStrategyProfile(
+    profileKey: json['profile_key']?.toString() ?? 'creator:copilot:strategy',
+    archetype: json['archetype']?.toString() ?? 'instant closer',
+    summary:
+        json['summary']?.toString() ?? 'This creator wins with instant clips.',
+    confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
+    winningFormats: _stringList(json['winning_formats']),
+    winningDuration: json['winning_duration']?.toString(),
+    audienceCluster: json['audience_cluster']?.toString(),
+  );
+}
+
+CreatorCopilotLiveCoaching _creatorCopilotLiveCoachingFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorCopilotLiveCoaching(
+    eventName: json['event_name']?.toString() ?? 'copilot.alert.triggered',
+    headline: json['headline']?.toString() ?? 'Switch fast if pace softens',
+    message:
+        json['message']?.toString() ??
+        'If early retention drops, switch the lead variant immediately.',
+    recommendedAction:
+        json['recommended_action']?.toString() ??
+        'Promote the stronger variant and shorten the intro.',
+  );
+}
+
+CreatorCopilotAnalysis _buildFixtureCopilotAnalysis(CreatorCopilotDraft draft) {
+  final double hookScore = _clampDouble(
+    ((1 - (draft.introSeconds / 3.5)) * 0.5) +
+        (draft.visualIntensity * 0.24) +
+        (draft.eventDensity * 0.2) +
+        (draft.hasReactionOverlay ? 0.06 : 0),
+  );
+  final String bestFormat;
+  if (draft.eventType == 'analysis' || draft.preferredFormat == 'debate') {
+    bestFormat = 'debate';
+  } else if (draft.preferredFormat == 'meme' && draft.hasReactionOverlay) {
+    bestFormat = 'meme';
+  } else if (draft.durationSeconds <= 18 && draft.eventDensity >= 0.6) {
+    bestFormat = 'instant';
+  } else {
+    bestFormat = draft.preferredFormat;
+  }
+  final double viralProbability = _clampDouble(
+    0.34 +
+        (hookScore * 0.26) +
+        (draft.eventDensity * 0.14) +
+        (draft.visualIntensity * 0.12) +
+        (draft.durationSeconds <= 20 ? 0.08 : 0.0) +
+        (bestFormat == 'debate' ? 0.04 : 0.0),
+  );
+  final List<String> riskFlags = <String>[
+    if (draft.durationSeconds > 24) 'too long',
+    if (hookScore < 0.5) 'low hook strength',
+  ];
+  final List<CreatorCopilotVariantRecommendation> recommendations =
+      bestFormat == 'debate'
+          ? const <CreatorCopilotVariantRecommendation>[
+            CreatorCopilotVariantRecommendation(
+              type: 'debate',
+              confidence: 0.91,
+              reason: 'creator history and audience fit both lean analytical',
+              exploratory: false,
+            ),
+            CreatorCopilotVariantRecommendation(
+              type: 'tactical',
+              confidence: 0.81,
+              reason:
+                  'a second explainer lane keeps depth without losing intent',
+              exploratory: false,
+            ),
+            CreatorCopilotVariantRecommendation(
+              type: 'instant',
+              confidence: 0.59,
+              reason: 'exploration slot kept for a faster first-test cut',
+              exploratory: true,
+            ),
+          ]
+          : const <CreatorCopilotVariantRecommendation>[
+            CreatorCopilotVariantRecommendation(
+              type: 'meme',
+              confidence: 0.89,
+              reason: 'fast payoff plus overlay energy lifts share odds',
+              exploratory: false,
+            ),
+            CreatorCopilotVariantRecommendation(
+              type: 'instant',
+              confidence: 0.83,
+              reason: 'keeps the opening cleaner for first-window testing',
+              exploratory: false,
+            ),
+            CreatorCopilotVariantRecommendation(
+              type: 'debate',
+              confidence: 0.54,
+              reason: 'exploration slot preserved to avoid style lock-in',
+              exploratory: true,
+            ),
+          ];
+  final bool postNow = viralProbability >= 0.7 && hookScore >= 0.56;
+  final int bestTimeInMinutes = postNow ? 0 : 23;
+  final String durationLabel =
+      draft.durationSeconds <= 20 ? 'under 20s' : 'around 20-30s';
+  final String summary =
+      'This creator wins with ${bestFormat == 'debate' ? 'precise' : 'chaotic'} $bestFormat clips $durationLabel.';
+  return CreatorCopilotAnalysis(
+    creatorId: 'creator-maya',
+    draft: draft,
+    prediction: CreatorCopilotPrediction(
+      viralProbability: viralProbability,
+      expectedViews:
+          (68400 *
+                  (0.72 + viralProbability) *
+                  (bestFormat == 'debate' ? 0.92 : 0.98))
+              .round(),
+      bestFormat: bestFormat,
+      riskFlags: riskFlags,
+    ),
+    variantStrategy: CreatorCopilotVariantStrategy(
+      recommendedVariants: recommendations,
+      explorationFactor: 0.2,
+      rationale: <String>[
+        if (bestFormat == 'debate')
+          'Analytical drafts are outperforming slower creative lanes.'
+        else
+          'Fast-payoff formats are favored for this draft.',
+        'One slot remains exploratory so creativity does not collapse into one style.',
+      ],
+    ),
+    timing: CreatorCopilotTiming(
+      postNow: postNow,
+      bestTimeInMinutes: bestTimeInMinutes,
+      reason:
+          postNow
+              ? 'current audience activity is healthy and competition pressure is manageable'
+              : 'high competition window',
+      competitionDensity: postNow ? 0.46 : 0.74,
+      audienceActivity: 0.71,
+    ),
+    hookAnalysis: CreatorCopilotHookAnalysis(
+      hookScore: hookScore,
+      suggestion:
+          hookScore < 0.5
+              ? 'start with goal moment, not buildup'
+              : 'hook is competitive; keep the payoff inside the first beat',
+      introStrength:
+          hookScore >= 0.78
+              ? 'elite'
+              : hookScore >= 0.56
+              ? 'solid'
+              : 'weak',
+      eventDensity: draft.eventDensity,
+      visualIntensity: draft.visualIntensity,
+    ),
+    strategyProfile: CreatorCopilotStrategyProfile(
+      profileKey: 'creator:creator-maya:strategy_profile',
+      archetype:
+          bestFormat == 'debate'
+              ? 'conversation spike operator'
+              : 'chaotic meme accelerator',
+      summary: summary,
+      confidence: 0.84,
+      winningFormats: <String>[
+        bestFormat,
+        recommendations.first.type,
+        recommendations[1].type,
+      ],
+      winningDuration: durationLabel,
+      audienceCluster: draft.audienceCluster,
+    ),
+    liveCoaching: CreatorCopilotLiveCoaching(
+      eventName: 'copilot.alert.triggered',
+      headline: 'Switch fast if first-minute pace softens',
+      message:
+          'If the first 60 seconds land below 60% of expected pace, switch emphasis to ${recommendations.first.type}.',
+      recommendedAction:
+          'Promote the ${recommendations.first.type} variant and trim the intro immediately.',
+    ),
+    actionPlan: <String>[
+      'Lead with the $bestFormat format.',
+      if (riskFlags.contains('low hook strength'))
+        'Start with the payoff, not the buildup.',
+      if (!postNow) 'Wait $bestTimeInMinutes minutes before posting.',
+      'Keep ${recommendations.first.type} ready as the first performance fallback.',
+    ],
+  );
+}
+
+List<String> _stringList(Object? value) {
+  return (value as List<dynamic>? ?? const <dynamic>[])
+      .map((dynamic item) => item.toString())
+      .toList(growable: false);
+}
+
+double _clampDouble(double value) {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 0.99) {
+    return 0.99;
+  }
+  return value;
 }

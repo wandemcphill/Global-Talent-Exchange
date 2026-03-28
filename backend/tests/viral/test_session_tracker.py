@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 from uuid import uuid4
 
 from app.viral.ingestion_schemas import ClipEvent, ClipEventMetadata, ClipEventType
@@ -14,6 +15,20 @@ from app.viral.schemas import (
     ViralScoreBreakdownView,
 )
 from app.viral.session_tracker import ViralSessionTracker
+
+
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.expiry: dict[str, int] = {}
+
+    def setex(self, key: str, ttl: int, value: str) -> bool:
+        self.values[key] = value
+        self.expiry[key] = ttl
+        return True
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
 
 
 def _clip(
@@ -228,3 +243,43 @@ def test_session_tracker_personalization_overrides_global_affinity() -> None:
     assert personalized.clips[0].metadata["base_score"] > 0
     assert personalized.clips[0].metadata["session_affinity"] > personalized.clips[0].metadata["base_score"]
     assert personalized.clips[0].metadata["session_score_adjustment"] > 0
+
+
+def test_session_tracker_persists_state_across_restart_with_redis() -> None:
+    redis_client = _FakeRedis()
+    tracker = ViralSessionTracker()
+    tracker._redis_client = redis_client
+
+    tracker.observe_many(
+        [
+            _event(
+                clip_id="match::restart-tactical",
+                session_id="session-restart",
+                event_type=ClipEventType.COMPLETE,
+                watch_time_ms=12000,
+                video_length_ms=12000,
+                content_type="tactical",
+                format_key="breakdown",
+                clip_event_type="tactical_swing",
+                team_name="Restart FC",
+                tags=["tactical"],
+            )
+        ]
+    )
+
+    payload = redis_client.get("session:session-restart")
+    assert payload is not None
+    assert redis_client.expiry["session:session-restart"] == 3600
+    persisted = json.loads(payload)
+    assert persisted["session_id"] == "session-restart"
+    assert persisted["affinity"]["content_types"]["tactical"] > 0
+
+    restarted_tracker = ViralSessionTracker()
+    restarted_tracker._redis_client = redis_client
+
+    state = restarted_tracker.get_state("session-restart")
+
+    assert state.clips_seen == 1
+    assert state.interactions == 1
+    assert state.affinity.content_types["tactical"] > 0
+    assert state.affinity.formats["breakdown"] > 0

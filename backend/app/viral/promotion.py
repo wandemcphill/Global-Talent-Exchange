@@ -25,6 +25,7 @@ class ViralClipPromotionService:
     session: Session
     comparator: ViralVariantScoringComparator = field(default_factory=ViralVariantScoringComparator)
     winner_window: timedelta = field(default_factory=lambda: timedelta(minutes=10))
+    moment_winner_window: timedelta = field(default_factory=lambda: timedelta(minutes=3))
     winner_view_threshold: int = 1000
     exploitation_weight: float = 0.8
 
@@ -89,9 +90,22 @@ class ViralClipPromotionService:
 
         oldest_variant = min(variants, key=lambda variant: variant.created_at)
         created_at = oldest_variant.created_at.astimezone(UTC) if oldest_variant.created_at.tzinfo is not None else oldest_variant.created_at.replace(tzinfo=UTC)
-        if datetime.now(UTC) - created_at >= self.winner_window:
+        if datetime.now(UTC) - created_at >= self._winner_window_for(variants):
             return "time_threshold"
         return None
+
+    def _winner_window_for(self, variants: list[ClipVariant]) -> timedelta:
+        if any(self._is_moment_variant(variant) for variant in variants):
+            return self.moment_winner_window
+        return self.winner_window
+
+    @staticmethod
+    def _is_moment_variant(variant: ClipVariant) -> bool:
+        metadata = dict(variant.metadata_json or {})
+        source = str(metadata.get("source") or "").strip().lower()
+        if source in {"moment", "moments_engine"}:
+            return True
+        return str(variant.base_clip_id).strip().lower().startswith("moment")
 
     def _apply_exploration_weights(self, *, variants: list[ClipVariant], leading_variant: ClipVariant) -> None:
         if len(variants) == 1:

@@ -305,6 +305,10 @@ class ViralRankingService:
             refreshed = True
         return self._response_from_store(limit=normalized_limit, refreshed=refreshed)
 
+    def get_candidates(self, *, limit: int = 20, refresh: bool = False) -> list[ViralTrendingClipView]:
+        response = self.get_trending(limit=limit, refresh=refresh)
+        return [clip.model_copy(deep=True) for clip in response.clips]
+
     def recompute(self, *, scope: str = "all") -> ViralTrendingResponse:
         if scope not in {"all", "hot"}:
             raise ValueError(f"Unsupported viral ranking scope: {scope}")

@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-03-28T17:25:01.780208+00:00",
+  "checks": {
+    "follow_system": {
+      "status": "validated",
+      "endpoint": "POST /follow/{user_id}",
+      "mutation": {
+        "follower_id": "viewer-1",
+        "following_id": "creator-followed",
+        "following": true,
+        "target_followers_count": 1,
+        "current_following_count": 1
+      },
+      "feed_refresh": {
+        "refresh_parameter_supported": true,
+        "feed_type": "following",
+        "feed_key": "user:viewer-1:following_feed",
+        "top_clip_before_follow": "clip-viral",
+        "top_clip_after_follow": "clip-followed"
+      },
+      "creator_visibility_increased": true,
+      "rank_before_follow": 1,
+      "rank_after_follow": 0
+    },
+    "marketplace": {
+      "status": "validated",
+      "apply_offer_id": "d8251ae6-ff6f-4ad4-a3e2-e53abe71feef",
+      "participation_id": "99b65a9f-316a-40f1-9036-d3d6217c5a46",
+      "db_record_created": true,
+      "clip_linked_to_campaign": true,
+      "payout_tracked": true,
+      "wallet_transaction_id": "db1e3794-1f45-40d1-ad08-a280d8632a64",
+      "gross_payout": "80.0000",
+      "payout_earned": "72.0000"
+    },
+    "monetization": {
+      "status": "validated",
+      "summary_endpoint": "GET /media-engine/me/clip-earnings",
+      "earnings_reflect_backend": true,
+      "source_of_truth": "creator_clip_revenue_attribution",
+      "monetized_clip_count": 1,
+      "total_creator_payout_credit": "48.6000",
+      "attribution_creator_payout_credit": "48.6000",
+      "local_calculation_detected": false
+    },
+    "ads": {
+      "status": "validated",
+      "feed_endpoint": "GET /feed/sponsored",
+      "ads_appear_via_ranking": true,
+      "hardcoded_insertion_detected": false,
+      "sponsored_positions": [
+        0
+      ],
+      "ranked_item_types": [
+        "sponsored",
+        "organic",
+        "organic",
+        "organic",
+        "organic"
+      ],
+      "ranking_function_sample": [
+        "organic",
+        "sponsored",
+        "organic"
+      ]
+    },
+    "observability": {
+      "status": "validated",
+      "endpoint": "POST /analytics/frontend",
+      "event_name": "frontend.api_result.fetch_deck",
+      "stores_button_click_metadata": true,
+      "stores_latency": true,
+      "stores_drop_off": true,
+      "device_fingerprint_enriched": true
+    }
+  },
+  "frontend_gaps": [
+    {
+      "feature": "follow_system",
+      "status": "frontend_gap",
+      "detail": "Profile follow state is still local-only and does not call POST /follow/{user_id}.",
+      "file": "C:\\Users\\ayomc\\Desktop\\GLOBAL TALENT EXCHANGE\\frontend\\lib\\features\\profile\\profile_screen.dart"
+    },
+    {
+      "feature": "marketplace",
+      "status": "frontend_gap",
+      "detail": "No Flutter client flow currently calls creator marketplace apply/accept endpoints."
+    },
+    {
+      "feature": "monetization",
+      "status": "frontend_gap",
+      "detail": "No Flutter screen currently consumes GET /media-engine/me/clip-earnings."
+    },
+    {
+      "feature": "ads",
+      "status": "frontend_gap",
+      "detail": "Viral feed models do not expose sponsored item type or campaign attribution yet.",
+      "file": "C:\\Users\\ayomc\\Desktop\\GLOBAL TALENT EXCHANGE\\frontend\\lib\\features\\viral_feed\\data\\viral_feed_models.dart"
+    }
+  ]
+}

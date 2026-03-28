@@ -1,10 +1,14 @@
 from .command_bus import CommandBus, CommandHandlerNotRegisteredError
 from .event_bus import EventBus
-from .orchestrator_service import OrchestratorService
+from .orchestrator_service import AttentionOrchestratorService, OrchestratorService, build_attention_orchestrator_service
 from .schemas import (
+    AttentionOrchestratorConfigUpdateRequest,
+    AttentionOrchestratorConfigView,
+    AttentionOrchestratorMetricsView,
     BaseCommand,
     BaseEvent,
     CalculateRewardsCommand,
+    ClipAttentionStateView,
     CompleteMatchCommand,
     MatchCompletedEvent,
     MatchStartedEvent,
@@ -13,9 +17,14 @@ from .schemas import (
 )
 
 __all__ = [
+    "AttentionOrchestratorConfigUpdateRequest",
+    "AttentionOrchestratorConfigView",
+    "AttentionOrchestratorMetricsView",
+    "AttentionOrchestratorService",
     "BaseCommand",
     "BaseEvent",
     "CalculateRewardsCommand",
+    "ClipAttentionStateView",
     "CommandBus",
     "CommandHandlerNotRegisteredError",
     "CompleteMatchCommand",
@@ -25,4 +34,5 @@ __all__ = [
     "OrchestratorService",
     "RewardsDistributedEvent",
     "StartMatchCommand",
+    "build_attention_orchestrator_service",
 ]

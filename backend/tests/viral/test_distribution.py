@@ -132,6 +132,26 @@ def test_distribution_manager_applies_cascade_cap_multiplier() -> None:
     assert boosted_state.impressions_cap == base_state.impressions_cap * 3
 
 
+def test_distribution_manager_doubles_caps_for_moment_source() -> None:
+    manager = _manager()
+
+    base_state = manager.refresh_distribution(
+        clip_id="clip-standard",
+        viral_score=88,
+        analytics={"view_count": 420, "completion_rate": 0.81, "share_rate": 0.05, "skips": 44},
+        performance_tier="high_retention",
+    )
+    moment_state = manager.refresh_distribution(
+        clip_id="clip-moment",
+        viral_score=88,
+        analytics={"view_count": 420, "completion_rate": 0.81, "share_rate": 0.05, "skips": 44},
+        performance_tier="high_retention",
+        clip_source="moment",
+    )
+
+    assert moment_state.impressions_cap == base_state.impressions_cap * 2
+
+
 def test_distribution_manager_freezes_when_viral_score_drops_below_stage_threshold() -> None:
     manager = _manager()
 

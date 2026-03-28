@@ -378,6 +378,7 @@ class ClipDistributionManager:
         viral_score: float,
         analytics: Mapping[str, Any],
         performance_tier: str | None = None,
+        clip_source: str | None = None,
         cap_multiplier: int = 1,
         cap_boost: float = 1.0,
         minimum_cap: int = 0,
@@ -394,6 +395,8 @@ class ClipDistributionManager:
             * max(int(cap_multiplier or 1), 1)
             * max(float(cap_boost or 1.0), 1.0)
         )
+        if str(clip_source or "").strip().lower() == "moment":
+            target_cap *= 2
         minimum_cap_value = int(max(minimum_cap, 0))
         current_cap = int(state.impressions_cap)
         if current_cap <= 0:

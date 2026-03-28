@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import ConfigDict, Field
 
 from app.common.schemas.base import CommonSchema
+from app.schemas.creator_requests import CreatorCopilotDraftRequest
 
 
 class CreatorProfileView(CommonSchema):
@@ -111,3 +112,68 @@ class CreatorInsightsView(CommonSchema):
     analyzer: CreatorInsightAnalyzerView
     recommendations: CreatorInsightRecommendationView
     viral_feedback_loop: CreatorViralFeedbackLoopView
+
+
+class CreatorCopilotPredictionView(CommonSchema):
+    viral_probability: float = Field(default=0.0, ge=0.0, le=1.0)
+    expected_views: int = Field(default=0, ge=0)
+    best_format: str
+    risk_flags: list[str] = Field(default_factory=list)
+
+
+class CreatorCopilotVariantRecommendationView(CommonSchema):
+    type: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reason: str
+    exploratory: bool = False
+
+
+class CreatorCopilotVariantStrategyView(CommonSchema):
+    recommended_variants: list[CreatorCopilotVariantRecommendationView] = Field(default_factory=list)
+    exploration_factor: float = Field(default=0.2, ge=0.0, le=1.0)
+    rationale: list[str] = Field(default_factory=list)
+
+
+class CreatorCopilotTimingView(CommonSchema):
+    post_now: bool = False
+    best_time_in_minutes: int = Field(default=0, ge=0)
+    reason: str
+    competition_density: float = Field(default=0.0, ge=0.0, le=1.0)
+    audience_activity: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class CreatorCopilotHookAnalysisView(CommonSchema):
+    hook_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    suggestion: str
+    intro_strength: str
+    event_density: float = Field(default=0.0, ge=0.0, le=1.0)
+    visual_intensity: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class CreatorCopilotStrategyProfileView(CommonSchema):
+    profile_key: str
+    archetype: str
+    summary: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    winning_formats: list[str] = Field(default_factory=list)
+    winning_duration: str | None = None
+    audience_cluster: str | None = None
+
+
+class CreatorCopilotLiveCoachingView(CommonSchema):
+    event_name: str = "copilot.alert.triggered"
+    headline: str
+    message: str
+    recommended_action: str
+
+
+class CreatorCopilotAnalysisView(CommonSchema):
+    creator_id: str
+    draft: CreatorCopilotDraftRequest
+    prediction: CreatorCopilotPredictionView
+    variant_strategy: CreatorCopilotVariantStrategyView
+    timing: CreatorCopilotTimingView
+    hook_analysis: CreatorCopilotHookAnalysisView
+    strategy_profile: CreatorCopilotStrategyProfileView
+    live_coaching: CreatorCopilotLiveCoachingView
+    action_plan: list[str] = Field(default_factory=list)

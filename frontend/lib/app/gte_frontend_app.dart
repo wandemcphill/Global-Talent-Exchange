@@ -9,6 +9,7 @@ import '../providers/gte_exchange_controller.dart';
 import '../screens/gte_login_screen.dart';
 import '../screens/gte_exchange_shell_screen.dart';
 import '../services/match_3d_monetization_service.dart';
+import '../services/reliability/reliable_event_queue.dart';
 import '../theme/gte_theme_controller.dart';
 import '../theme/gte_theme_scope.dart';
 import '../widgets/gte_shell_theme.dart';
@@ -43,13 +44,30 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
     _config = widget.config ?? GteAppConfig.fromEnvironment();
     _ownsController = widget.controller == null;
     _ownsThemeController = widget.themeController == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         GteExchangeController(
           api: GteExchangeApiClient.standard(
             baseUrl: _config.apiBaseUrl,
             mode: _config.backendMode,
           ),
         );
+    gteReliableEventQueue.configure(
+      sender: (ReliableQueuedEvent event) async {
+        await _controller.api.trackAnalyticsEvent(
+          event.name,
+          metadata: <String, Object?>{
+            'client_event_id': event.id,
+            'topic': event.topic,
+            'queued_at': event.createdAt.toUtc().toIso8601String(),
+            if (event.feedRefreshTrigger != null)
+              'feed_refresh_trigger': event.feedRefreshTrigger!.name,
+            ...event.payload,
+          },
+        );
+      },
+      canSend: () => _controller.isAuthenticated,
+    );
     _themeController = widget.themeController ?? GteThemeController();
   }
 
@@ -81,29 +99,31 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       onOpenLogin: (BuildContext context) async {
         final bool? signedIn = await Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(
-            builder: (BuildContext context) =>
-                GteLoginScreen(controller: _controller),
+            builder:
+                (BuildContext context) =>
+                    GteLoginScreen(controller: _controller),
           ),
         );
         return signedIn == true;
       },
-      currentUserIdProvider: () =>
-          GteSessionIdentity.fromExchangeController(_controller).userId,
-      currentUserNameProvider: () =>
-          GteSessionIdentity.fromExchangeController(_controller).userName,
+      currentUserIdProvider:
+          () => GteSessionIdentity.fromExchangeController(_controller).userId,
+      currentUserNameProvider:
+          () => GteSessionIdentity.fromExchangeController(_controller).userName,
       currentUserRoleProvider: () => _controller.session?.user.role,
-      currentClubIdProvider: () =>
-          GteSessionIdentity.fromExchangeController(_controller).clubId,
-      currentClubNameProvider: () =>
-          GteSessionIdentity.fromExchangeController(_controller).clubName,
+      currentClubIdProvider:
+          () => GteSessionIdentity.fromExchangeController(_controller).clubId,
+      currentClubNameProvider:
+          () => GteSessionIdentity.fromExchangeController(_controller).clubName,
       accessTokenProvider: () => _controller.accessToken,
       isAuthenticatedProvider: () => _controller.isAuthenticated,
-      match3dEntitlementProvider: () => Match3dUserEntitlement(
-        isPremiumUser: _resolvePremiumUser(_controller.session),
-        availableCoins: _controller.walletSummary?.availableBalance ?? 0,
-        premiumCameraAccess: _resolvePremiumUser(_controller.session),
-        fastReplayAccess: _resolvePremiumUser(_controller.session),
-      ),
+      match3dEntitlementProvider:
+          () => Match3dUserEntitlement(
+            isPremiumUser: _resolvePremiumUser(_controller.session),
+            availableCoins: _controller.walletSummary?.availableBalance ?? 0,
+            premiumCameraAccess: _resolvePremiumUser(_controller.session),
+            fastReplayAccess: _resolvePremiumUser(_controller.session),
+          ),
     );
     final GteAppRouteRegistry registry = GteAppRouteRegistry(
       dependencies: dependencies,
@@ -129,13 +149,13 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
               if (name != null && name.startsWith('/app')) {
                 return MaterialPageRoute<void>(
                   settings: settings,
-                  builder: (BuildContext context) =>
-                      GteExchangeShellScreen.fromPath(
-                    controller: _controller,
-                    apiBaseUrl: _config.apiBaseUrl,
-                    backendMode: _config.backendMode,
-                    initialPath: name,
-                  ),
+                  builder:
+                      (BuildContext context) => GteExchangeShellScreen.fromPath(
+                        controller: _controller,
+                        apiBaseUrl: _config.apiBaseUrl,
+                        backendMode: _config.backendMode,
+                        initialPath: name,
+                      ),
                 );
               }
               return registry.onGenerateRoute(settings);
@@ -155,15 +175,9 @@ bool _resolvePremiumUser(GteAuthSession? session) {
   }
   final Map<String, Object?> userJson = session.user.rawJson;
   final Map<String, Object?> sessionJson = session.rawJson;
-  return _boolFromJson(
-        userJson['is_premium_user'],
-      ) ||
-      _boolFromJson(
-        userJson['premium_access'],
-      ) ||
-      _boolFromJson(
-        sessionJson['is_premium_user'],
-      ) ||
+  return _boolFromJson(userJson['is_premium_user']) ||
+      _boolFromJson(userJson['premium_access']) ||
+      _boolFromJson(sessionJson['is_premium_user']) ||
       session.permissions
           .map((String value) => value.trim().toLowerCase())
           .contains('match_3d_premium');

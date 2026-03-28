@@ -14,11 +14,13 @@ from app.models.follow import Follow
 from app.models.notification_record import NotificationRecord
 from app.models.user import User, UserRole
 from app.users.follow_service import FollowGraphNotificationService, FollowGraphService, NullFollowGraphCache
+from app.viral.ingestion_schemas import ClipEvent, ClipEventMetadata, ClipEventType
 from app.viral.personalized_feed_service import (
     ClipAffinityCalculator,
     InMemoryPersonalizedFeedStore,
     PersonalizedFeedRankingService,
 )
+from app.viral.session_tracker import ViralSessionTracker
 from app.viral.schemas import (
     ViralCaptionView,
     ViralClipAnalyticsView,
@@ -28,6 +30,11 @@ from app.viral.schemas import (
     ViralFeedbackLoopView,
     ViralScoreBreakdownView,
 )
+
+
+class _NoDbSession:
+    def get_bind(self):
+        return None
 
 
 def test_clip_affinity_calculator_scores_creator_and_format_preferences() -> None:
@@ -292,19 +299,217 @@ def test_personalized_feed_boosts_creators_trending_inside_follow_network() -> N
         assert response.clips[0].score_breakdown.social_boost >= 0.2
 
 
-def _build_clip(*, clip_id: str, creator_id: str, viral_score: int, ranking_score: float) -> ViralClipView:
+def test_personalized_feed_reranks_after_two_session_interactions() -> None:
+    class _FeedService:
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            clips = [
+                _build_clip(
+                    clip_id="clip-global",
+                    creator_id="creator-global",
+                    viral_score=92,
+                    ranking_score=92.0,
+                    event_type="goal",
+                    tags=["goal"],
+                    metadata={"creator_id": "creator-global", "content_type": "highlight", "format_key": "instant_clip"},
+                ),
+                _build_clip(
+                    clip_id="clip-session",
+                    creator_id="creator-session",
+                    viral_score=70,
+                    ranking_score=70.0,
+                    event_type="tactical_swing",
+                    tags=["tactical"],
+                    metadata={"creator_id": "creator-session", "content_type": "tactical", "format_key": "breakdown"},
+                ),
+            ]
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    tracker = ViralSessionTracker()
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=_FeedService(),
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+        session_tracker=tracker,
+    )
+
+    baseline = service.get_for_you(user_id="viewer-live", limit=2, refresh=True, session_id="session-live")
+    assert baseline.clips[0].clip_id == "clip-global"
+
+    tracker.observe_many(
+        [
+            _build_session_event(
+                clip_id="clip-session",
+                session_id="session-live",
+                event_type=ClipEventType.COMPLETE,
+                watch_time_ms=12_000,
+                video_length_ms=12_000,
+                content_type="tactical",
+                format_key="breakdown",
+                clip_event_type="tactical_swing",
+                tags=["tactical"],
+            ),
+            _build_session_event(
+                clip_id="clip-session",
+                session_id="session-live",
+                event_type=ClipEventType.LIKE,
+                watch_time_ms=12_000,
+                video_length_ms=12_000,
+                content_type="tactical",
+                format_key="breakdown",
+                clip_event_type="tactical_swing",
+                tags=["tactical"],
+            ),
+            _build_session_event(
+                clip_id="clip-global",
+                session_id="session-live",
+                event_type=ClipEventType.SCROLL,
+                watch_time_ms=400,
+                video_length_ms=12_000,
+                content_type="highlight",
+                format_key="instant_clip",
+                clip_event_type="goal",
+                tags=["goal"],
+            ),
+        ]
+    )
+
+    refreshed = service.get_for_you(user_id="viewer-live", limit=2, refresh=True, session_id="session-live")
+
+    assert refreshed.clips[0].clip_id == "clip-session"
+    assert refreshed.clips[0].score_breakdown.session_boost > refreshed.clips[1].score_breakdown.session_boost
+
+
+def test_personalized_feed_filters_seen_clips_from_future_results() -> None:
+    class _FeedService:
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            clips = [
+                _build_clip(clip_id="clip-1", creator_id="creator-1", viral_score=95, ranking_score=95.0),
+                _build_clip(clip_id="clip-2", creator_id="creator-2", viral_score=90, ranking_score=90.0),
+                _build_clip(clip_id="clip-3", creator_id="creator-3", viral_score=80, ranking_score=80.0),
+            ]
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=_FeedService(),
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+    )
+
+    first_response = service.get_for_you(user_id="viewer-seen", limit=2, refresh=True)
+    service.record_delivery(first_response)
+
+    refreshed = service.get_for_you(user_id="viewer-seen", limit=3, refresh=True)
+
+    assert {clip.clip_id for clip in refreshed.clips}.isdisjoint({clip.clip_id for clip in first_response.clips})
+    assert refreshed.clips[0].clip_id == "clip-3"
+
+
+def test_personalized_feed_refresh_returns_replacements_after_cursor() -> None:
+    class _FeedService:
+        def __init__(self) -> None:
+            self.variant = "initial"
+
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            initial = [
+                _build_clip(clip_id="clip-1", creator_id="creator-1", viral_score=95, ranking_score=95.0),
+                _build_clip(clip_id="clip-2", creator_id="creator-2", viral_score=90, ranking_score=90.0),
+                _build_clip(clip_id="clip-3", creator_id="creator-3", viral_score=85, ranking_score=85.0),
+            ]
+            refreshed = [
+                _build_clip(clip_id="clip-1", creator_id="creator-1", viral_score=95, ranking_score=95.0),
+                _build_clip(clip_id="clip-9", creator_id="creator-9", viral_score=94, ranking_score=94.0),
+                _build_clip(clip_id="clip-8", creator_id="creator-8", viral_score=93, ranking_score=93.0),
+            ]
+            clips = initial if self.variant == "initial" else refreshed
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    feed_service = _FeedService()
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=feed_service,
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+    )
+
+    initial = service.get_for_you(user_id="viewer-refresh", limit=3, refresh=True)
+    assert [clip.clip_id for clip in initial.clips] == ["clip-1", "clip-2", "clip-3"]
+
+    feed_service.variant = "refreshed"
+    refresh_payload = service.refresh_for_you(user_id="viewer-refresh", cursor=0, limit=3)
+
+    assert refresh_payload.replace_indices == [1, 2]
+    assert [clip.clip_id for clip in refresh_payload.new_items] == ["clip-9", "clip-8"]
+
+
+def _build_clip(
+    *,
+    clip_id: str,
+    creator_id: str,
+    viral_score: int,
+    ranking_score: float,
+    event_type: str = "goal",
+    tags: list[str] | None = None,
+    metadata: dict[str, object] | None = None,
+) -> ViralClipView:
     return ViralClipView(
         clip_id=clip_id,
         match_id=f"match-{clip_id}",
         highlight_id=f"highlight-{clip_id}",
         title=clip_id,
-        event_type="goal",
+        event_type=event_type,
         minute=88,
         viral_score=viral_score,
         engagement=80.0,
         freshness=90.0,
         ranking_score=ranking_score,
-        tags=["goal"],
+        tags=tags or ["goal"],
         breakdown=ViralScoreBreakdownView(total=viral_score, base_event=50),
         caption=ViralCaptionView(hook=clip_id, caption=clip_id),
         distribution_accounts=[],
@@ -334,5 +539,38 @@ def _build_clip(*, clip_id: str, creator_id: str, viral_score: int, ranking_scor
             actions=["boost"],
             viral_analysis="strong retention",
         ),
-        metadata={"creator_id": creator_id},
+        metadata={"creator_id": creator_id, **(metadata or {})},
+    )
+
+
+def _build_session_event(
+    *,
+    clip_id: str,
+    session_id: str,
+    event_type: ClipEventType,
+    watch_time_ms: int,
+    video_length_ms: int,
+    content_type: str,
+    format_key: str,
+    clip_event_type: str,
+    tags: list[str],
+) -> ClipEvent:
+    return ClipEvent(
+        event_id="00000000-0000-0000-0000-000000000001",
+        clip_id=clip_id,
+        user_id=None,
+        session_id=session_id,
+        timestamp=datetime.now(UTC),
+        event_type=event_type,
+        watch_time_ms=watch_time_ms,
+        video_length_ms=video_length_ms,
+        metadata=ClipEventMetadata(
+            device="ios",
+            country="NG",
+            referrer="feed",
+            content_type=content_type,
+            format_key=format_key,
+            clip_event_type=clip_event_type,
+            tags=tags,
+        ),
     )

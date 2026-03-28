@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -8,11 +9,10 @@ import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
+import '../services/reliability/reliable_event_queue.dart';
 
 class GteExchangeController extends ChangeNotifier {
-  GteExchangeController({
-    required GteExchangeApiClient api,
-  }) : _api = api;
+  GteExchangeController({required GteExchangeApiClient api}) : _api = api;
 
   final GteExchangeApiClient _api;
   GteExchangeApiClient get api => _api;
@@ -122,17 +122,19 @@ class GteExchangeController extends ChangeNotifier {
         return order;
       }
     }
-    final List<GteOrderRecord> fallback =
-        _ordersById.values.toList(growable: false)
-          ..sort((GteOrderRecord left, GteOrderRecord right) {
-            final DateTime leftStamp = left.updatedAt ??
-                left.createdAt ??
-                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-            final DateTime rightStamp = right.updatedAt ??
-                right.createdAt ??
-                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-            return rightStamp.compareTo(leftStamp);
-          });
+    final List<GteOrderRecord> fallback = _ordersById.values.toList(
+      growable: false,
+    )..sort((GteOrderRecord left, GteOrderRecord right) {
+      final DateTime leftStamp =
+          left.updatedAt ??
+          left.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      final DateTime rightStamp =
+          right.updatedAt ??
+          right.createdAt ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return rightStamp.compareTo(leftStamp);
+    });
     for (final GteOrderRecord order in fallback) {
       if (order.playerId == playerId) {
         return order;
@@ -161,9 +163,11 @@ class GteExchangeController extends ChangeNotifier {
     PlayerFilter? filter,
     bool reset = false,
   }) async {
-    final PlayerFilter nextFilter = ((filter ?? marketFilter).copyWith(
-      search: search ?? (filter == null ? marketFilter.search : filter.search),
-    )).normalized();
+    final PlayerFilter nextFilter =
+        ((filter ?? marketFilter).copyWith(
+          search:
+              search ?? (filter == null ? marketFilter.search : filter.search),
+        )).normalized();
     final bool shouldReset =
         reset || marketPage == null || nextFilter != marketFilter;
     if ((isLoadingMarket || isLoadingMoreMarket) && !shouldReset) {
@@ -256,10 +260,7 @@ class GteExchangeController extends ChangeNotifier {
     );
   }
 
-  Future<void> openPlayer(
-    String playerId, {
-    String interval = '1h',
-  }) async {
+  Future<void> openPlayer(String playerId, {String interval = '1h'}) async {
     final int requestId = _playerGate.begin();
     selectedCandleInterval = interval;
     playerError = null;
@@ -275,10 +276,10 @@ class GteExchangeController extends ChangeNotifier {
                 _PlayerProfileLoadResult(profile: profile),
           )
           .catchError((Object error) {
-        return _PlayerProfileLoadResult(
-          errorMessage: AppFeedback.messageFor(error),
-        );
-      });
+            return _PlayerProfileLoadResult(
+              errorMessage: AppFeedback.messageFor(error),
+            );
+          });
       final GtePlayerMarketSnapshot snapshot = await _api.fetchPlayerMarket(
         playerId,
         interval: interval,
@@ -344,22 +345,27 @@ class GteExchangeController extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     final int requestId = _authGate.begin();
     authError = null;
     isSigningIn = true;
     notifyListeners();
 
     try {
-      final GteAuthSession nextSession =
-          await _api.login(email: email, password: password);
+      final GteAuthSession nextSession = await _api.login(
+        email: email,
+        password: password,
+      );
       if (!_authGate.isActive(requestId)) {
         return;
       }
       session = nextSession;
+      _queueSessionRefreshEvent(
+        state: 'signed_in',
+        source: 'login',
+        sessionContext: nextSession,
+        dedupeKey: 'session:${nextSession.accessToken}:signed_in',
+      );
       await Future.wait<void>(<Future<void>>[
         _refreshTradingState(
           playerId: selectedPlayer?.detail.playerId,
@@ -406,6 +412,12 @@ class GteExchangeController extends ChangeNotifier {
       }
       session = nextSession;
       authError = null;
+      _queueSessionRefreshEvent(
+        state: 'registered',
+        source: 'register',
+        sessionContext: nextSession,
+        dedupeKey: 'session:${nextSession.accessToken}:registered',
+      );
       await refreshAccount();
     } catch (error) {
       if (_authGate.isActive(requestId)) {
@@ -420,6 +432,7 @@ class GteExchangeController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final GteAuthSession? previousSession = session;
     await _api.logout();
     session = null;
     walletSummary = null;
@@ -449,6 +462,12 @@ class GteExchangeController extends ChangeNotifier {
     portfolioSyncedAt = null;
     ordersSyncedAt = null;
     complianceSyncedAt = null;
+    _queueSessionRefreshEvent(
+      state: 'signed_out',
+      source: 'logout',
+      sessionContext: previousSession,
+      requiresDelivery: false,
+    );
     notifyListeners();
   }
 
@@ -485,11 +504,12 @@ class GteExchangeController extends ChangeNotifier {
 
     final Future<void> task = () async {
       try {
-        final List<dynamic> payload =
-            await Future.wait<dynamic>(<Future<dynamic>>[
-          _api.fetchComplianceStatus(),
-          _api.fetchPolicyRequirements(),
-        ]);
+        final List<dynamic> payload = await Future.wait<dynamic>(
+          <Future<dynamic>>[
+            _api.fetchComplianceStatus(),
+            _api.fetchPolicyRequirements(),
+          ],
+        );
         if (!_complianceGate.isActive(requestId)) {
           return;
         }
@@ -529,10 +549,10 @@ class GteExchangeController extends ChangeNotifier {
       try {
         final List<dynamic> payload =
             await Future.wait<dynamic>(<Future<dynamic>>[
-          _api.fetchWalletSummary(),
-          _api.fetchPortfolio(),
-          _api.fetchPortfolioSummary(),
-        ]);
+              _api.fetchWalletSummary(),
+              _api.fetchPortfolio(),
+              _api.fetchPortfolioSummary(),
+            ]);
         if (!_portfolioGate.isActive(requestId)) {
           return;
         }
@@ -557,9 +577,7 @@ class GteExchangeController extends ChangeNotifier {
     return task;
   }
 
-  Future<void> loadOrders({
-    int limit = 20,
-  }) {
+  Future<void> loadOrders({int limit = 20}) {
     if (!isAuthenticated) {
       return Future<void>.value();
     }
@@ -573,17 +591,18 @@ class GteExchangeController extends ChangeNotifier {
 
     final Future<void> task = () async {
       try {
-        final List<dynamic> payload =
-            await Future.wait<dynamic>(<Future<dynamic>>[
-          _api.listOrders(limit: limit),
-          _api.listOrders(
-            limit: limit,
-            statuses: const <GteOrderStatus>[
-              GteOrderStatus.open,
-              GteOrderStatus.partiallyFilled,
-            ],
-          ),
-        ]);
+        final List<dynamic> payload = await Future.wait<dynamic>(
+          <Future<dynamic>>[
+            _api.listOrders(limit: limit),
+            _api.listOrders(
+              limit: limit,
+              statuses: const <GteOrderStatus>[
+                GteOrderStatus.open,
+                GteOrderStatus.partiallyFilled,
+              ],
+            ),
+          ],
+        );
         if (!_ordersGate.isActive(requestId)) {
           return;
         }
@@ -633,11 +652,19 @@ class GteExchangeController extends ChangeNotifier {
         quantity: quantity,
         maxPrice: maxPrice,
       );
-      _mergeOrder(order);
-      await _refreshTradingState(
-        playerId: playerId,
-        refreshPlayer: true,
+      _queueMajorInteraction(
+        action: 'place_order',
+        payload: <String, Object?>{
+          'order_id': order.id,
+          'player_id': playerId,
+          'side': side.name,
+          'quantity': quantity,
+          if (maxPrice != null) 'max_price': maxPrice,
+        },
+        dedupeKey: 'order:${order.id}:placed',
       );
+      _mergeOrder(order);
+      await _refreshTradingState(playerId: playerId, refreshPlayer: true);
       return _ordersById[order.id] ?? order;
     } catch (error) {
       orderError = AppFeedback.messageFor(error);
@@ -683,6 +710,15 @@ class GteExchangeController extends ChangeNotifier {
     notifyListeners();
     try {
       final GteOrderRecord order = await _api.cancelOrder(orderId);
+      _queueMajorInteraction(
+        action: 'cancel_order',
+        payload: <String, Object?>{
+          'order_id': order.id,
+          'player_id': order.playerId,
+          'status': order.status.name,
+        },
+        dedupeKey: 'order:${order.id}:cancelled',
+      );
       _mergeOrder(order);
       await _refreshTradingState(
         playerId: order.playerId,
@@ -721,19 +757,33 @@ class GteExchangeController extends ChangeNotifier {
 
   void toggleScouted(String playerId) {
     final _PlayerEngagementState current = _engagementStateFor(playerId);
-    _playerEngagement[playerId] = current.copyWith(
-      isScouted: !current.isScouted,
-    );
+    final bool nextValue = !current.isScouted;
+    _playerEngagement[playerId] = current.copyWith(isScouted: nextValue);
     _syncSelectedProfileEngagement(playerId);
+    _queueMajorInteraction(
+      action: nextValue ? 'follow_player' : 'unfollow_player',
+      payload: <String, Object?>{
+        'player_id': playerId,
+        'is_following': nextValue,
+      },
+      dedupeKey: 'player:$playerId:follow:$nextValue',
+    );
     notifyListeners();
   }
 
   void toggleShortlist(String playerId) {
     final _PlayerEngagementState current = _engagementStateFor(playerId);
-    _playerEngagement[playerId] = current.copyWith(
-      isShortlisted: !current.isShortlisted,
-    );
+    final bool nextValue = !current.isShortlisted;
+    _playerEngagement[playerId] = current.copyWith(isShortlisted: nextValue);
     _syncSelectedProfileEngagement(playerId);
+    _queueMajorInteraction(
+      action: 'toggle_shortlist',
+      payload: <String, Object?>{
+        'player_id': playerId,
+        'is_shortlisted': nextValue,
+      },
+      dedupeKey: 'player:$playerId:shortlist:$nextValue',
+    );
     notifyListeners();
   }
 
@@ -747,12 +797,7 @@ class GteExchangeController extends ChangeNotifier {
       tasks.add(loadOrders());
     }
     if (refreshPlayer && playerId != null) {
-      tasks.add(
-        openPlayer(
-          playerId,
-          interval: selectedCandleInterval,
-        ),
-      );
+      tasks.add(openPlayer(playerId, interval: selectedCandleInterval));
     }
     if (tasks.isEmpty) {
       return;
@@ -796,13 +841,16 @@ class GteExchangeController extends ChangeNotifier {
     }
   }
 
-  _PlayerEngagementState _engagementStateFor(String playerId,
-      {PlayerProfile? profile}) {
+  _PlayerEngagementState _engagementStateFor(
+    String playerId, {
+    PlayerProfile? profile,
+  }) {
     final _PlayerEngagementState? existing = _playerEngagement[playerId];
     if (existing != null) {
       return existing;
     }
-    final PlayerSnapshot? snapshot = profile?.snapshot ??
+    final PlayerSnapshot? snapshot =
+        profile?.snapshot ??
         (selectedProfile?.snapshot.id == playerId
             ? selectedProfile?.snapshot
             : null);
@@ -832,13 +880,51 @@ class GteExchangeController extends ChangeNotifier {
     }
     selectedProfile = _applyEngagementToProfile(profile);
   }
+
+  void _queueSessionRefreshEvent({
+    required String state,
+    required String source,
+    GteAuthSession? sessionContext,
+    String? dedupeKey,
+    bool requiresDelivery = true,
+  }) {
+    final GteAuthSession? context = sessionContext ?? session;
+    unawaited(
+      gteReliableEventQueue.enqueue(
+        topic: 'session',
+        name: 'session_changed',
+        payload: <String, Object?>{
+          'state': state,
+          'source': source,
+          if (context != null) 'user_id': context.user.id,
+          if (context != null) 'role': context.user.role,
+        },
+        dedupeKey: dedupeKey,
+        feedRefreshTrigger: FeedRefreshTrigger.sessionChange,
+        requiresDelivery: requiresDelivery,
+      ),
+    );
+  }
+
+  void _queueMajorInteraction({
+    required String action,
+    required Map<String, Object?> payload,
+    String? dedupeKey,
+  }) {
+    unawaited(
+      gteReliableEventQueue.enqueue(
+        topic: 'interaction',
+        name: 'major_interaction',
+        payload: <String, Object?>{'action': action, ...payload},
+        dedupeKey: dedupeKey,
+        feedRefreshTrigger: FeedRefreshTrigger.majorInteraction,
+      ),
+    );
+  }
 }
 
 class _PlayerProfileLoadResult {
-  const _PlayerProfileLoadResult({
-    this.profile,
-    this.errorMessage,
-  });
+  const _PlayerProfileLoadResult({this.profile, this.errorMessage});
 
   final PlayerProfile? profile;
   final String? errorMessage;
@@ -853,10 +939,7 @@ class _PlayerEngagementState {
   final bool isScouted;
   final bool isShortlisted;
 
-  _PlayerEngagementState copyWith({
-    bool? isScouted,
-    bool? isShortlisted,
-  }) {
+  _PlayerEngagementState copyWith({bool? isScouted, bool? isShortlisted}) {
     return _PlayerEngagementState(
       isScouted: isScouted ?? this.isScouted,
       isShortlisted: isShortlisted ?? this.isShortlisted,

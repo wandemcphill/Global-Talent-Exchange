@@ -22,6 +22,19 @@ class AnalyticsEventView(BaseModel):
     created_at: datetime
 
 
+class FrontendAnalyticsEventCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    category: str = Field(min_length=1, max_length=32)
+    screen: str | None = Field(default=None, max_length=64)
+    flow: str | None = Field(default=None, max_length=64)
+    target: str | None = Field(default=None, max_length=64)
+    stage: str | None = Field(default=None, max_length=64)
+    success: bool | None = None
+    status_code: int | None = Field(default=None, ge=100, le=599)
+    latency_ms: int | None = Field(default=None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class AnalyticsSummaryItem(BaseModel):
     name: str
     count: int

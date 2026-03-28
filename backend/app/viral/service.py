@@ -333,6 +333,7 @@ class ViralFeedService:
                 viral_score=clip.viral_score,
                 analytics=clip.analytics.model_dump(mode="python"),
                 performance_tier=clip.feedback.performance_tier,
+                clip_source=str(clip.metadata.get("source") or "").strip() if isinstance(clip.metadata, dict) else None,
                 cap_multiplier=cap_multiplier,
                 cap_boost=max(cap_boost, 1.0),
                 minimum_cap=minimum_cap,

@@ -17,6 +17,17 @@ from app.models.follow import Follow
 from app.models.user import User, UserRole
 from app.viral.distribution import build_clip_distribution_manager
 from app.viral.router import router as viral_router
+from app.viral.schemas import (
+    PersonalizedFeedAffinityView,
+    PersonalizedFeedClipView,
+    PersonalizedFeedRefreshResponse,
+    PersonalizedFeedScoreBreakdownView,
+    ViralCaptionView,
+    ViralClipAnalyticsView,
+    ViralEditPlanView,
+    ViralFeedbackLoopView,
+    ViralScoreBreakdownView,
+)
 from app.viral.service import ViralFeedService
 from backend.tests.match_engine.helpers import build_request
 
@@ -234,11 +245,82 @@ def test_personalized_feed_router_ranks_and_caches_per_user_feed() -> None:
     assert any(item["clip_id"] == preferred_clip.clip_id for item in first_body["clips"][:3])
     assert first_body["clips"][0]["score_breakdown"]["user_affinity"] >= 0.2
     assert "diversity_penalty" in first_body["clips"][0]["score_breakdown"]
+    assert first_body["clips"][0]["score_breakdown"]["orchestrator_weight"] >= 0.0
+    assert first_body["clips"][0]["score_breakdown"]["session_boost"] >= 1.0
+    assert first_body["clips"][0]["orchestrator"]["allocated_impressions"] >= first_body["clips"][0]["orchestrator"]["consumed_impressions"]
 
     assert second_response.status_code == 200
     second_body = second_response.json()
     assert second_body["cache_hit"] is True
     assert [item["clip_id"] for item in second_body["clips"]] == [item["clip_id"] for item in first_body["clips"]]
+
+
+def test_personalized_feed_refresh_router_returns_replace_contract(monkeypatch) -> None:
+    app, _session_factory, current_user = _build_app()
+
+    class _FakeFeedService:
+        def __init__(self) -> None:
+            self.recorded = None
+
+        def refresh_for_you(self, *, user_id: str, cursor: int, limit: int, session_id: str | None = None):
+            assert user_id == current_user.id
+            assert cursor == 1
+            assert limit == 5
+            assert session_id == "session-refresh"
+            return PersonalizedFeedRefreshResponse(
+                new_items=[
+                    PersonalizedFeedClipView(
+                        clip_id="clip-refresh-1",
+                        match_id="match-refresh-1",
+                        highlight_id="highlight-refresh-1",
+                        title="clip-refresh-1",
+                        event_type="goal",
+                        minute=87,
+                        viral_score=88,
+                        engagement=80.0,
+                        freshness=75.0,
+                        ranking_score=70.0,
+                        tags=["goal"],
+                        breakdown=ViralScoreBreakdownView(total=88),
+                        caption=ViralCaptionView(hook="Hook", caption="Caption"),
+                        editor=ViralEditPlanView(crop_filter="scale=1080:1920", overlay_text="Hook"),
+                        formats=[],
+                        analytics=ViralClipAnalyticsView(clip_id="clip-refresh-1"),
+                        feedback=ViralFeedbackLoopView(
+                            performance_tier="high_retention",
+                            recommendation="increase",
+                            viral_analysis="strong retention",
+                        ),
+                        metadata={},
+                        rank=2,
+                        score=1.23,
+                        feed_source="for_you",
+                        score_breakdown=PersonalizedFeedScoreBreakdownView(
+                            affinity=PersonalizedFeedAffinityView(),
+                            final_score=1.23,
+                        ),
+                    )
+                ],
+                replace_indices=[2],
+            )
+
+        def record_refresh_delivery(self, *, user_id: str, clips):
+            self.recorded = (user_id, [clip.clip_id for clip in clips])
+
+    fake_service = _FakeFeedService()
+    monkeypatch.setattr("app.viral.router.build_personalized_feed_service", lambda app, session: fake_service)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/feed/for-you/refresh",
+            params={"cursor": 1, "limit": 5, "session_id": "session-refresh"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["replace_indices"] == [2]
+    assert body["new_items"][0]["clip_id"] == "clip-refresh-1"
+    assert fake_service.recorded == (current_user.id, ["clip-refresh-1"])
 
 
 def test_following_feed_router_returns_a_feed_contract() -> None:

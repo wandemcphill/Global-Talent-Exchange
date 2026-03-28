@@ -7,14 +7,17 @@ import '../features/home/home_screen.dart';
 import '../features/match/match_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/tasks/tasks_screen.dart';
+import '../features/viral_feed/data/viral_feed_repository.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
 import '../features/viral_feed/presentation/viral_feed_screen.dart';
 import '../features/world/world_screen.dart';
+import '../shared/providers/auth_provider.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
 import 'app_destinations.dart';
 
-final Provider<GoRouter> appRouterProvider = Provider<GoRouter>(
-  (Ref ref) => GoRouter(
+final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
+  final String? accessToken = ref.watch(authProvider).accessToken;
+  return GoRouter(
     initialLocation: AppRoutes.home,
     routes: <RouteBase>[
       GoRoute(
@@ -99,9 +102,13 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>(
             (BuildContext context, GoRouterState state) =>
                 AppMotion.slidePage<void>(
                   state: state,
-                  child: const ViralFeedScreen(),
+                  child: ViralFeedScreen(
+                    repository: ViralFeedApiRepository.standard(
+                      accessToken: accessToken,
+                    ),
+                  ),
                 ),
       ),
     ],
-  ),
-);
+  );
+});

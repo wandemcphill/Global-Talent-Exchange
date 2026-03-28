@@ -23,6 +23,7 @@ INITIAL_ADMIN_PASSWORD = "NewPass1234!"
 INITIAL_ADMIN_USERNAME = "vidvimedialtd"
 INITIAL_ADMIN_DISPLAY_NAME = "GTEX God Mode Admin"
 logger = logging.getLogger(__name__)
+_ASGI_APP: FastAPI | None = None
 
 
 def create_app(
@@ -89,6 +90,13 @@ def create_app(
             engine=context.database.engine,
         )
     return app
+
+
+def get_asgi_app() -> FastAPI:
+    global _ASGI_APP
+    if _ASGI_APP is None:
+        _ASGI_APP = create_app()
+    return _ASGI_APP
 
 
 def register_core(app: FastAPI) -> None:
@@ -230,3 +238,12 @@ def _ensure_initial_admin(session_factory: sessionmaker[Session]) -> None:
             role=UserRole.SUPER_ADMIN,
         )
         session.commit()
+
+
+def __getattr__(name: str) -> FastAPI:
+    if name == "app":
+        return get_asgi_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = ["app", "create_app", "get_asgi_app"]

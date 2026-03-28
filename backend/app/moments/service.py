@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.events import DomainEvent, EventPublisher
 from app.highlights.queue import HighlightRenderJob
@@ -20,6 +21,8 @@ from app.moments.schemas import (
     MomentClipView,
     MomentDestinationView,
 )
+from app.viral.comparator import ViralVariantScoringComparator
+from app.viral.promotion import ViralClipPromotionService
 from app.viral.ranking_service import LeaderboardEnvelope, ViralLeaderboardStore, ensure_viral_leaderboard_store
 from app.viral.schemas import (
     ViralCaptionView,
@@ -30,6 +33,7 @@ from app.viral.schemas import (
     ViralTrendingClipView,
     ViralTrendingMetricsView,
 )
+from app.viral.variant_manager import ViralClipVariantManager
 
 
 def _utcnow() -> datetime:
@@ -78,6 +82,7 @@ class MomentsEngine:
     highlight_generation_service: HighlightGenerationService
     event_publisher: EventPublisher | None = None
     viral_leaderboard_store: ViralLeaderboardStore | None = None
+    session_factory: sessionmaker[Session] | None = None
     max_live_moments: int = 200
     _moments: deque[LiveMomentView] = field(default_factory=deque, init=False, repr=False)
     _match_state: dict[str, _MatchMomentState] = field(default_factory=dict, init=False, repr=False)
@@ -107,6 +112,11 @@ class MomentsEngine:
             self._remember_source_event(source_key)
 
         moment = self._build_moment(normalized, detected_events=detected_events)
+        variant_ids = self._trigger_variant_burst(moment)
+        if variant_ids:
+            moment.metadata["variant_ids"] = variant_ids
+            moment.metadata["variant_count"] = len(variant_ids)
+
         with self._lock:
             self._moments.appendleft(moment)
             while len(self._moments) > self.max_live_moments:
@@ -267,6 +277,42 @@ class MomentsEngine:
                 },
             )
         )
+
+    def _trigger_variant_burst(self, moment: LiveMomentView) -> list[str]:
+        if self.session_factory is None:
+            return []
+        try:
+            with self.session_factory() as session:
+                comparator = ViralVariantScoringComparator()
+                variant_manager = ViralClipVariantManager(session=session, comparator=comparator)
+                variants = variant_manager.generate_variants(self._moment_variant_payload(moment))
+                if variants:
+                    ViralClipPromotionService(session=session, comparator=comparator).refresh(moment.moment_id)
+                session.commit()
+        except Exception:
+            return []
+        return [variant.variant_id for variant in variants]
+
+    def _moment_variant_payload(self, moment: LiveMomentView) -> dict[str, Any]:
+        title = self._clip_title_from_moment(moment)
+        return {
+            "clip_id": moment.moment_id,
+            "moment_id": moment.moment_id,
+            "match_id": moment.match_id,
+            "source_event_id": moment.source_event_id,
+            "source_event_type": moment.source_event_type,
+            "event_type": moment.event_type,
+            "detected_events": list(moment.detected_events),
+            "team": moment.team,
+            "player": moment.player,
+            "title": title,
+            "overlay_text": title,
+            "storage_key": moment.clip.storage_key,
+            "cdn_path": moment.clip.cdn_path,
+            "duration_seconds": 14,
+            "priority_score": moment.boost.final_score,
+            "created_at": moment.created_at,
+        }
 
     def _push_to_trending_feed(self, moment: LiveMomentView) -> None:
         if self.viral_leaderboard_store is None:
@@ -516,6 +562,7 @@ def ensure_moments_engine(app: FastAPI) -> MomentsEngine:
         highlight_generation_service=highlight_generation_service,
         event_publisher=event_publisher,
         viral_leaderboard_store=ensure_viral_leaderboard_store(app, settings=getattr(app.state, "settings", None)),
+        session_factory=getattr(app.state, "session_factory", None),
     )
     app.state.moments_engine = engine
     if event_publisher is not None:

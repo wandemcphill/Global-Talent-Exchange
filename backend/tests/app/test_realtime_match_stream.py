@@ -86,12 +86,19 @@ def test_match_stream_service_publishes_match_events_to_domain_bus() -> None:
     )
 
     assert payload["source_event_type"] == "penalty_scored"
-    assert len(publisher.published_events) == 1
-    event = publisher.published_events[0]
-    assert event.name == "match.events"
-    assert event.aggregate_id == "match-77"
-    assert event.payload["match_id"] == "match-77"
-    assert event.payload["source_event_type"] == "penalty_scored"
+    assert [event.name for event in publisher.published_events] == [
+        "match.events",
+        "feed.inject.moment",
+    ]
+    stream_event = publisher.published_events[0]
+    feed_event = publisher.published_events[1]
+    assert stream_event.aggregate_id == "match-77"
+    assert stream_event.payload["match_id"] == "match-77"
+    assert stream_event.payload["source_event_type"] == "penalty_scored"
+    assert feed_event.aggregate_id == "match-77"
+    assert feed_event.payload["source"] == "moment"
+    assert feed_event.payload["metadata"]["source"] == "moment"
+    assert feed_event.payload["source_event_type"] == "penalty_scored"
 
 
 def test_match_stream_websocket_gateway_broadcasts_messages() -> None:

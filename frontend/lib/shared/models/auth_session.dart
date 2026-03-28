@@ -5,6 +5,7 @@ class AuthSession {
     required this.clubName,
     required this.avatarAsset,
     required this.notifications,
+    this.accessToken,
   });
 
   final String userName;
@@ -12,4 +13,5 @@ class AuthSession {
   final String clubName;
   final String avatarAsset;
   final int notifications;
+  final String? accessToken;
 }
