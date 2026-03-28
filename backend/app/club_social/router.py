@@ -15,9 +15,20 @@ from app.club_social.schemas import (
     ClubChallengesView,
     ClubIdentityMetricsView,
     ClubRivalriesView,
+    MatchChatFeedView,
+    MatchChatMessageCreateRequest,
+    MatchLiveReactionCreateRequest,
+    MatchLiveReactionFeedView,
     MatchReactionFeedView,
+    MatchShareEventRequest,
+    MatchShareLinkCreateRequest,
+    MatchShareLinkView,
+    MatchSharePageView,
     RivalryDetailView,
     RivalryMatchRecordRequest,
+    SocialFollowRequest,
+    SocialFollowingView,
+    SocialFollowView,
 )
 from app.club_social.service import ClubSocialError, ClubSocialService
 from app.db import get_session
@@ -180,9 +191,152 @@ def refresh_identity_metrics(club_id: str, service: ClubSocialService = Depends(
     return ClubIdentityMetricsView.model_validate(metrics, from_attributes=True)
 
 
+@router.post("/api/social/follows", response_model=SocialFollowView, status_code=status.HTTP_201_CREATED)
+def follow_target(
+    payload: SocialFollowRequest,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> SocialFollowView:
+    try:
+        follow = service.follow_target(actor=current_user, **payload.model_dump())
+        body = service._follow_view(follow)
+        service.session.commit()
+    except ClubSocialError as exc:
+        _raise(exc)
+    return SocialFollowView.model_validate(body)
+
+
+@router.delete("/api/social/follows", response_model=dict)
+def unfollow_target(
+    payload: SocialFollowRequest,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> dict[str, str]:
+    try:
+        service.unfollow_target(actor=current_user, target_type=payload.target_type, club_id=payload.club_id, player_id=payload.player_id)
+        service.session.commit()
+    except ClubSocialError as exc:
+        _raise(exc)
+    return {"status": "deleted"}
+
+
+@router.get("/api/social/follows/me", response_model=SocialFollowingView)
+def list_my_follows(
+    target_type: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> SocialFollowingView:
+    try:
+        follows = service.list_follows(actor=current_user, target_type=target_type)
+    except ClubSocialError as exc:
+        _raise(exc)
+    return SocialFollowingView(follows=follows)
+
+
 @router.get("/api/matches/{match_id}/reactions", response_model=MatchReactionFeedView)
 def list_match_reactions(match_id: str, limit: int = Query(default=30, ge=1, le=100), service: ClubSocialService = Depends(get_service)) -> MatchReactionFeedView:
     return MatchReactionFeedView(match_id=match_id, reactions=service.list_match_reactions(match_id, limit=limit))
+
+
+@router.post("/api/matches/{match_id}/share-links", response_model=MatchShareLinkView, status_code=status.HTTP_201_CREATED)
+def create_match_share_link(
+    match_id: str,
+    payload: MatchShareLinkCreateRequest,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> MatchShareLinkView:
+    try:
+        link = service.create_match_share_link(actor=current_user, match_id=match_id, **payload.model_dump())
+        body = service._match_share_link_view(link)
+        service.session.commit()
+    except ClubSocialError as exc:
+        _raise(exc)
+    return MatchShareLinkView.model_validate(body)
+
+
+@router.post("/api/match-share-links/{share_code}/events", response_model=dict, status_code=status.HTTP_201_CREATED)
+def record_match_share_event(
+    share_code: str,
+    payload: MatchShareEventRequest,
+    service: ClubSocialService = Depends(get_service),
+) -> dict[str, str]:
+    try:
+        service.record_match_share_event(
+            share_code=share_code,
+            actor_user_id=None,
+            **payload.model_dump(),
+        )
+        service.session.commit()
+    except ClubSocialError as exc:
+        _raise(exc)
+    return {"status": "recorded"}
+
+
+@router.get("/api/match-share-links/{share_code}", response_model=MatchSharePageView)
+def get_match_share_page(share_code: str, service: ClubSocialService = Depends(get_service)) -> MatchSharePageView:
+    try:
+        body = service.match_share_page(share_code=share_code)
+    except ClubSocialError as exc:
+        _raise(exc)
+    return MatchSharePageView.model_validate(body)
+
+
+@router.post("/api/matches/{match_id}/live-reactions", response_model=MatchLiveReactionFeedView, status_code=status.HTTP_201_CREATED)
+def create_live_reaction(
+    match_id: str,
+    payload: MatchLiveReactionCreateRequest,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> MatchLiveReactionFeedView:
+    try:
+        service.create_live_reaction(actor=current_user, match_id=match_id, **payload.model_dump())
+        reactions = service.list_live_reactions(match_id)
+        service.session.commit()
+    except ClubSocialError as exc:
+        _raise(exc)
+    return MatchLiveReactionFeedView(match_id=match_id, reactions=reactions)
+
+
+@router.get("/api/matches/{match_id}/live-reactions", response_model=MatchLiveReactionFeedView)
+def list_live_reactions(
+    match_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    service: ClubSocialService = Depends(get_service),
+) -> MatchLiveReactionFeedView:
+    try:
+        reactions = service.list_live_reactions(match_id, limit=limit)
+    except ClubSocialError as exc:
+        _raise(exc)
+    return MatchLiveReactionFeedView(match_id=match_id, reactions=reactions)
+
+
+@router.post("/api/matches/{match_id}/chat", response_model=MatchChatFeedView, status_code=status.HTTP_201_CREATED)
+def create_match_chat_message(
+    match_id: str,
+    payload: MatchChatMessageCreateRequest,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> MatchChatFeedView:
+    try:
+        service.create_chat_message(actor=current_user, match_id=match_id, **payload.model_dump())
+        messages = service.list_chat_messages(match_id)
+        service.session.commit()
+    except ClubSocialError as exc:
+        _raise(exc)
+    return MatchChatFeedView(match_id=match_id, messages=messages)
+
+
+@router.get("/api/matches/{match_id}/chat", response_model=MatchChatFeedView)
+def list_match_chat_messages(
+    match_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    service: ClubSocialService = Depends(get_service),
+) -> MatchChatFeedView:
+    try:
+        messages = service.list_chat_messages(match_id, limit=limit)
+    except ClubSocialError as exc:
+        _raise(exc)
+    return MatchChatFeedView(match_id=match_id, messages=messages)
 
 
 @router.get("/api/clubs/{club_id}/rivalries", response_model=ClubRivalriesView)

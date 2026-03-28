@@ -69,6 +69,8 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/world-super-cup/countdown" in openapi_paths
     assert "/fast-cups/upcoming" in openapi_paths
     assert "/match-engine/replay" in openapi_paths
+    assert "/matches/start" in openapi_paths
+    assert "/matches/complete" in openapi_paths
     assert "/matches/{match_id}/replay" in openapi_paths
     assert "/matches/{match_id}/analysis" in openapi_paths
     assert "/predictions" in openapi_paths
@@ -141,6 +143,8 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
         academy_response = client.post("/academy/season-summary", json={})
         ai_manager_response = client.post("/ai-manager/autopilot/run", json={})
         match_engine_response = client.post("/match-engine/summary", json={})
+        match_start_response = client.post("/matches/start", json={})
+        match_complete_response = client.post("/matches/complete", json={})
         replay_response = client.get("/matches/nonexistent/replay")
         analysis_response = client.get("/matches/nonexistent/analysis")
         predictions_response = client.get("/predictions")
@@ -193,6 +197,8 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert academy_response.status_code == 422
     assert ai_manager_response.status_code == 422
     assert match_engine_response.status_code == 422
+    assert match_start_response.status_code == 422
+    assert match_complete_response.status_code == 422
     assert replay_response.status_code == 404
     assert analysis_response.status_code == 404
     assert predictions_response.status_code == 401

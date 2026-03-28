@@ -344,9 +344,32 @@ class WalletRailService:
                 select(FancoinPurchaseOrder).where(FancoinPurchaseOrder.reference == event.purchase_order_reference)
             )
         if order is None and event.provider_reference:
-            order = self.session.scalar(
-                select(FancoinPurchaseOrder).where(FancoinPurchaseOrder.provider_reference == event.provider_reference)
+            matching_orders = self._list_orders_by_provider_reference(
+                provider_key=event.provider_key,
+                provider_reference=event.provider_reference,
             )
+            if len(matching_orders) > 1:
+                self._create_system_event(
+                    event_key=f"purchase-order-duplicate-provider-reference-{event.provider_key}-{event.provider_reference}",
+                    severity=SystemEventSeverity.ERROR,
+                    title="Duplicate provider reference detected",
+                    body=(
+                        "Provider webhook matched multiple purchase orders with the same external "
+                        "reference and was not applied automatically."
+                    ),
+                    subject_type="purchase_order",
+                    subject_id=event.provider_reference,
+                    metadata={
+                        "provider_key": event.provider_key,
+                        "provider_reference": event.provider_reference,
+                        "purchase_order_ids": [item.id for item in matching_orders],
+                        "purchase_order_references": [item.reference for item in matching_orders],
+                        "event_id": event.event_id,
+                    },
+                )
+                return None
+            if matching_orders:
+                order = matching_orders[0]
         if order is None:
             self._create_system_event(
                 event_key=f"purchase-order-webhook-miss-{event.provider_key}-{event.provider_reference or event.purchase_order_reference or 'unknown'}",
@@ -377,6 +400,29 @@ class WalletRailService:
                 },
             )
             return order
+        duplicate_orders = self._list_orders_by_provider_reference(
+            provider_key=event.provider_key,
+            provider_reference=event.provider_reference,
+        )
+        if len(duplicate_orders) > 1:
+            self._create_system_event(
+                event_key=f"purchase-order-duplicate-provider-reference-{event.provider_key}-{event.provider_reference}",
+                severity=SystemEventSeverity.ERROR,
+                title="Duplicate provider reference detected",
+                body=(
+                    "Provider reference is shared by multiple purchase orders. "
+                    "The targeted order was resolved explicitly, but the duplicate reference remains under review."
+                ),
+                subject_type="purchase_order",
+                subject_id=order.id,
+                metadata={
+                    "provider_key": event.provider_key,
+                    "provider_reference": event.provider_reference,
+                    "purchase_order_ids": [item.id for item in duplicate_orders],
+                    "purchase_order_references": [item.reference for item in duplicate_orders],
+                    "event_id": event.event_id,
+                },
+            )
         if event.event_id and order.provider_event_id == event.event_id and order.status in {
             PurchaseOrderStatus.SETTLED,
             PurchaseOrderStatus.REFUNDED,
@@ -450,6 +496,24 @@ class WalletRailService:
             ProviderEventType.DISPUTED: PurchaseOrderStatus.DISPUTED,
         }
         return mapping.get(event_type)
+
+    def _list_orders_by_provider_reference(
+        self,
+        *,
+        provider_key: str,
+        provider_reference: str | None,
+    ) -> list[FancoinPurchaseOrder]:
+        normalized_reference = str(provider_reference or "").strip()
+        if not normalized_reference:
+            return []
+        return self.session.scalars(
+            select(FancoinPurchaseOrder)
+            .where(
+                FancoinPurchaseOrder.provider_key == provider_key,
+                FancoinPurchaseOrder.provider_reference == normalized_reference,
+            )
+            .order_by(FancoinPurchaseOrder.created_at.asc(), FancoinPurchaseOrder.id.asc())
+        ).all()
 
     def quote_market_topup(self, *, amount: Decimal, fee_bps: int, unit: LedgerUnit) -> MarketTopupQuote:
         gross_amount = self._normalize_amount(amount)

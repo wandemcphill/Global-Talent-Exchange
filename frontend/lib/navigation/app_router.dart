@@ -8,6 +8,7 @@ import '../features/match/match_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
+import '../features/viral_feed/presentation/viral_feed_screen.dart';
 import '../features/world/world_screen.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
 import 'app_destinations.dart';
@@ -90,6 +91,15 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>(
                 AppMotion.slidePage<void>(
                   state: state,
                   child: const TasksScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.clips,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const ViralFeedScreen(),
                 ),
       ),
     ],

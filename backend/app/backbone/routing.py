@@ -15,6 +15,9 @@ class OutboxTopicRouter:
 
 
 _EVENT_TOPIC_MAP = {
+    "orchestrator.command.match.start": "orchestrator.match.start",
+    "orchestrator.command.match.complete": "orchestrator.match.complete",
+    "orchestrator.command.match.rewards": "orchestrator.match.rewards",
     "competition_engine.queue.match_simulation.queued": "match.scheduled",
     "competition_engine.queue.notification.queued": "competition.notification.requested",
     "competition_engine.queue.bracket_advancement.queued": "competition.advancement.requested",

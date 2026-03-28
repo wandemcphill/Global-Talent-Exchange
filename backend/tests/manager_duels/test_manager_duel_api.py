@@ -137,6 +137,7 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         assert spectate_payload["watch_party_enabled"] is True
         assert spectate_payload["reactions_enabled"] is True
         assert spectate_payload["commentary_websocket_path"].endswith(f"/api/matches/{duel_id}/commentary/stream?session_id={spectate_payload['id']}")
+        assert spectate_payload["tts_websocket_path"] == "/tts/live?voice=default"
 
         websocket_path = spectate_payload["websocket_path"]
         with client.websocket_connect(websocket_path) as websocket:

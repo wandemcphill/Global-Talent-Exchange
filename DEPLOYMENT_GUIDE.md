@@ -23,15 +23,21 @@
 - `BREVO_SMTP_PASSWORD` from env only, using a regenerated Brevo SMTP key
 - payment gateway secrets
 - storage / attachment secrets where applicable
-- any moderation, telemetry, or error reporting DSNs
+- `GTE_METRICS_ENABLED`
+- `GTE_LOG_JSON`
+- `GTE_OBSERVABILITY_TRACING_ENABLED`
+- `GTE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+- `GTE_OTEL_SERVICE_NAME`
+- any moderation or error reporting DSNs
 
 ## Local verification before deploy
 1. Run migrations to head.
 2. Boot the backend.
 3. Confirm `/health`, `/ready`, and `/version`.
-4. Confirm `/docs` loads.
-5. Log in with seeded admin credentials and change the password immediately.
-6. Confirm wallet, market, competitions, and policy endpoints respond.
+4. Confirm `/metrics`.
+5. Confirm `/docs` loads.
+6. Log in with seeded admin credentials and change the password immediately.
+7. Confirm wallet, market, competitions, and policy endpoints respond.
 
 ## Backend deploy flow
 1. Create the database.
@@ -73,5 +79,6 @@ Starter Kubernetes manifests and container path:
 - configure HTTPS and secure cookies if web auth is used
 - pin dependency versions for repeatable builds
 - enable backups for database and media assets
+- run the control-tower stack in `ops/observability/` for logs, metrics, traces, and alert rules
 - monitor fraud, suspicious trading, gifting, and view clusters
 - review country feature policies before opening deposits and withdrawals in a region

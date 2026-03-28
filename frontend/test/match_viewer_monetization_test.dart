@@ -3,15 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
+import 'support/gtex_match_broadcast_fixture.dart';
+
 void main() {
-  testWidgets('non-premium users are prompted before switching into 3D',
-      (WidgetTester tester) async {
+  testWidgets('non-premium users are prompted before switching into 3D', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1440, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -61,48 +65,51 @@ void main() {
     expect(find.byType(Gtex3dScene), findsOneWidget);
   });
 
-  testWidgets('premium users bypass the paywall and spectator mode hides replay controls',
-      (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1440, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'premium users bypass the paywall and spectator mode hides replay controls',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1440, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    final CompetitionSummary competition = _buildCompetition(
-      id: 'viewer-premium-spectator',
-    );
-    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-      competition,
-    );
+      final CompetitionSummary competition = _buildCompetition(
+        id: 'viewer-premium-spectator',
+      );
+      final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
+        competition,
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexMatchViewerScreen(
-          competition: competition,
-          matchKey: competition.id,
-          fallbackSnapshot: snapshot,
-          preferFallback: true,
-          presentationMode: MatchViewerPresentationMode.broadcast,
-          renderMode: RenderMode.threeD,
-          isSpectator: true,
-          entitlement: const Match3dUserEntitlement.proManager(),
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GtexMatchViewerScreen(
+            competition: competition,
+            matchKey: competition.id,
+            fallbackSnapshot: snapshot,
+            preferFallback: true,
+            presentationMode: MatchViewerPresentationMode.broadcast,
+            renderMode: RenderMode.threeD,
+            isSpectator: true,
+            entitlement: const Match3dUserEntitlement.proManager(),
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(Gtex3dScene), findsOneWidget);
-    expect(find.text('Pro Manager'), findsWidgets);
-    expect(find.text('Watch in Cinematic Mode 🎬'), findsNothing);
-    expect(find.text('Restart'), findsNothing);
-    expect(find.textContaining('Gift'), findsOneWidget);
-  });
+      expect(find.byType(Gtex3dScene), findsOneWidget);
+      expect(find.text('Pro Manager'), findsWidgets);
+      expect(find.text('Watch in Cinematic Mode 🎬'), findsNothing);
+      expect(find.text('Restart'), findsNothing);
+      expect(find.textContaining('Gift'), findsOneWidget);
+    },
+  );
 
-  testWidgets('gifting and fallback to 2D stay non-disruptive',
-      (WidgetTester tester) async {
+  testWidgets('gifting and fallback to 2D stay non-disruptive', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1440, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -147,15 +154,65 @@ void main() {
     expect(find.text('0.1 coin gift'), findsOneWidget);
     expect(find.text('Pause'), findsOneWidget);
 
-    monetization.fallbackToTwoD(
-      reason: Match3dFailureReason.performanceDrop,
-    );
+    monetization.fallbackToTwoD(reason: Match3dFailureReason.performanceDrop);
     await _pumpForOverlayTransition(tester);
 
     expect(find.byType(Pitch2dWidget), findsOneWidget);
     expect(find.byType(Gtex3dScene), findsNothing);
     expect(find.text('Pause'), findsOneWidget);
   });
+
+  testWidgets(
+    'viewer surfaces sponsored clips, ad banners, and rewarded coins',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1440, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final CompetitionSummary competition = _buildCompetition(
+        id: 'viewer-ads',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GtexMatchViewerScreen(
+            competition: competition,
+            matchKey: competition.id,
+            viewStateLoader:
+                () async =>
+                    buildBroadcastTestViewState(includeMonetization: true),
+            entitlement: const Match3dUserEntitlement(availableCoins: 1),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.byKey(const Key('match-ad-preroll')), findsOneWidget);
+      expect(
+        find.byKey(const Key('match-sponsored-highlight')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('match-rewarded-ad-card')), findsOneWidget);
+
+      await tester.tap(find.text('Watch Ad · +50 coins'));
+      await tester.pump();
+
+      expect(
+        find.text('50 coin reward added to your balance.'),
+        findsOneWidget,
+      );
+      expect(find.text('Reward claimed'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 16));
+      await tester.pump();
+
+      expect(find.byKey(const Key('match-ad-live-banner')), findsOneWidget);
+    },
+  );
 }
 
 CompetitionSummary _buildCompetition({required String id}) {
@@ -178,6 +235,7 @@ CompetitionSummary _buildCompetition({required String id}) {
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: 'Replay validation fixture',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),

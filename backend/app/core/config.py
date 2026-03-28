@@ -8,6 +8,18 @@ from pathlib import Path
 import re
 import tomllib
 
+from pydantic import AliasChoices, Field, field_validator
+
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except ImportError:  # pragma: no cover - compatibility fallback when dependency bootstrap lags
+    from pydantic import BaseModel, ConfigDict
+
+    class BaseSettings(BaseModel):
+        pass
+
+    SettingsConfigDict = ConfigDict
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
 DEFAULT_CONFIG_ROOT = BACKEND_ROOT / "config"
@@ -27,6 +39,161 @@ REGEN_GENERATION_FILE = "regen_generation.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 
 
+class SettingsSource(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore", populate_by_name=True)
+
+    app_name: str = Field(default="Global Talent Exchange API", validation_alias="GTE_APP_NAME")
+    app_version: str = Field(default="0.1.0", validation_alias="GTE_APP_VERSION")
+    app_env: str = Field(default="development", validation_alias="GTE_APP_ENV")
+    phase_marker: str = Field(default="phase-8", validation_alias="GTE_PHASE_MARKER")
+    config_root_override: str | None = Field(default=None, validation_alias="GTE_CONFIG_DIR")
+    redis_url: str | None = Field(default=None, validation_alias="GTE_REDIS_URL")
+    redis_event_channel: str = Field(default="gtex.events", validation_alias="GTE_REDIS_EVENT_CHANNEL")
+    redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
+    broadcast_delay_seconds: int = Field(default=3, validation_alias="GTE_BROADCAST_DELAY_SECONDS")
+    broadcast_presence_ttl_seconds: int = Field(
+        default=45,
+        validation_alias="GTE_BROADCAST_PRESENCE_TTL_SECONDS",
+    )
+    broadcast_presence_heartbeat_interval_seconds: int = Field(
+        default=15,
+        validation_alias="GTE_BROADCAST_HEARTBEAT_INTERVAL_SECONDS",
+    )
+    broadcast_max_pending_messages: int = Field(
+        default=256,
+        validation_alias="GTE_BROADCAST_MAX_PENDING_MESSAGES",
+    )
+    auth_secret: str = Field(default="gte-dev-secret-change-me", validation_alias="GTE_AUTH_SECRET")
+    media_signing_secret: str = Field(default="gte-media-secret-change-me", validation_alias="GTE_MEDIA_SIGNING_SECRET")
+    crypto_deposit_enabled: bool = Field(default=False, validation_alias="GTE_CRYPTO_DEPOSIT_ENABLED")
+    crypto_provider_key: str = Field(default="crypto_fiat", validation_alias="GTE_CRYPTO_PROVIDER_KEY")
+    run_migration_check: bool = Field(default=True, validation_alias="GTE_RUN_MIGRATION_CHECK")
+    run_startup_seeding: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RUN_STARTUP_SEEDING", "GTE_RUN_STARTUP_SEEDING"),
+    )
+    default_ingestion_provider: str = Field(default="mock", validation_alias="GTE_INGESTION_PROVIDER")
+    real_player_mapping_auto_create_missing_entities: bool = Field(
+        default=False,
+        validation_alias="GTE_REAL_PLAYER_MAPPING_AUTO_CREATE_MISSING_ENTITIES",
+    )
+    provider_timeout_seconds: int = Field(default=20, validation_alias="GTE_PROVIDER_TIMEOUT_SECONDS")
+    football_data_base_url: str = Field(
+        default="https://api.football-data.org/v4",
+        validation_alias="FOOTBALL_DATA_BASE_URL",
+    )
+    football_data_api_key: str | None = Field(default=None, validation_alias="FOOTBALL_DATA_API_KEY")
+    value_snapshot_lookback_days: int = Field(default=7, validation_alias="GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS")
+    kafka_brokers: tuple[str, ...] = Field(default=(), validation_alias="GTE_KAFKA_BROKERS")
+    kafka_client_id: str = Field(default="gtex-api", validation_alias="GTE_KAFKA_CLIENT_ID")
+    kafka_topic_prefix: str = Field(default="gtex", validation_alias="GTE_KAFKA_TOPIC_PREFIX")
+    kafka_queue_consumer_group: str = Field(
+        default="gtex-api-queue",
+        validation_alias="GTE_KAFKA_QUEUE_CONSUMER_GROUP",
+    )
+    kafka_projection_consumer_group: str = Field(
+        default="gtex-projections",
+        validation_alias="GTE_KAFKA_PROJECTION_CONSUMER_GROUP",
+    )
+    viral_event_consumer_group: str = Field(
+        default="gtex-viral-analytics",
+        validation_alias="GTE_VIRAL_EVENT_CONSUMER_GROUP",
+    )
+    viral_event_batch_size: int = Field(default=500, validation_alias="GTE_VIRAL_EVENT_BATCH_SIZE")
+    viral_event_batch_interval_ms: int = Field(
+        default=25,
+        validation_alias="GTE_VIRAL_EVENT_BATCH_INTERVAL_MS",
+    )
+    viral_event_queue_maxsize: int = Field(default=50000, validation_alias="GTE_VIRAL_EVENT_QUEUE_MAXSIZE")
+    viral_event_topic_partitions: int = Field(
+        default=12,
+        validation_alias="GTE_VIRAL_EVENT_TOPIC_PARTITIONS",
+    )
+    viral_event_topic_replication_factor: int = Field(
+        default=1,
+        validation_alias="GTE_VIRAL_EVENT_TOPIC_REPLICATION_FACTOR",
+    )
+    viral_event_dedupe_ttl_seconds: int = Field(
+        default=86400,
+        validation_alias="GTE_VIRAL_EVENT_DEDUPE_TTL_SECONDS",
+    )
+    outbox_relay_enabled: bool = Field(default=True, validation_alias="GTE_OUTBOX_RELAY_ENABLED")
+    outbox_relay_batch_size: int = Field(default=100, validation_alias="GTE_OUTBOX_RELAY_BATCH_SIZE")
+    outbox_relay_poll_interval_ms: int = Field(default=1000, validation_alias="GTE_OUTBOX_RELAY_POLL_INTERVAL_MS")
+    kafka_api_queue_consumer_enabled: bool = Field(
+        default=True,
+        validation_alias="GTE_KAFKA_API_QUEUE_CONSUMER_ENABLED",
+    )
+    kafka_simulation_consumer_enabled: bool = Field(
+        default=True,
+        validation_alias="GTE_KAFKA_SIMULATION_CONSUMER_ENABLED",
+    )
+    projection_workers_enabled: bool = Field(default=True, validation_alias="GTE_PROJECTION_WORKERS_ENABLED")
+    observability_metrics_enabled: bool = Field(default=True, validation_alias="GTE_METRICS_ENABLED")
+    observability_metrics_port: int = Field(default=0, validation_alias="GTE_METRICS_PORT")
+    observability_log_json: bool = Field(default=False, validation_alias="GTE_LOG_JSON")
+    observability_tracing_enabled: bool = Field(
+        default=False,
+        validation_alias="GTE_OBSERVABILITY_TRACING_ENABLED",
+    )
+    observability_otlp_traces_endpoint: str | None = Field(
+        default=None,
+        validation_alias="GTE_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+    )
+    observability_trace_sample_ratio: float = Field(
+        default=1.0,
+        validation_alias="GTE_OTEL_TRACES_SAMPLER_RATIO",
+    )
+    observability_service_name: str | None = Field(default=None, validation_alias="GTE_OTEL_SERVICE_NAME")
+    live_commentary_llm_enabled: bool = Field(
+        default=False,
+        validation_alias="GTE_LIVE_COMMENTARY_LLM_ENABLED",
+    )
+    live_commentary_llm_endpoint_url: str | None = Field(
+        default=None,
+        validation_alias="GTE_LIVE_COMMENTARY_LLM_ENDPOINT_URL",
+    )
+    live_commentary_llm_model: str | None = Field(default=None, validation_alias="GTE_LIVE_COMMENTARY_LLM_MODEL")
+    live_commentary_llm_api_key: str | None = Field(
+        default=None,
+        validation_alias="GTE_LIVE_COMMENTARY_LLM_API_KEY",
+    )
+    live_commentary_llm_timeout_seconds: int = Field(
+        default=8,
+        validation_alias="GTE_LIVE_COMMENTARY_LLM_TIMEOUT_SECONDS",
+    )
+    live_commentary_max_llm_calls_per_match: int = Field(
+        default=30,
+        validation_alias="GTE_LIVE_COMMENTARY_MAX_LLM_CALLS_PER_MATCH",
+    )
+    live_commentary_memory_ttl_seconds: int = Field(
+        default=21_600,
+        validation_alias="GTE_LIVE_COMMENTARY_MEMORY_TTL_SECONDS",
+    )
+    social_content_llm_enabled: bool = Field(default=False, validation_alias="GTE_SOCIAL_CONTENT_LLM_ENABLED")
+    social_content_llm_endpoint_url: str | None = Field(
+        default=None,
+        validation_alias="GTE_SOCIAL_CONTENT_LLM_ENDPOINT_URL",
+    )
+    social_content_llm_model: str | None = Field(default=None, validation_alias="GTE_SOCIAL_CONTENT_LLM_MODEL")
+    social_content_llm_api_key: str | None = Field(default=None, validation_alias="GTE_SOCIAL_CONTENT_LLM_API_KEY")
+    social_content_llm_timeout_seconds: int = Field(
+        default=8,
+        validation_alias="GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS",
+    )
+
+    @field_validator("kafka_brokers", mode="before")
+    @classmethod
+    def _parse_kafka_brokers(cls, value: object) -> tuple[str, ...]:
+        if value is None or value == "":
+            return ()
+        if isinstance(value, str):
+            return tuple(item.strip() for item in value.split(",") if item.strip())
+        if isinstance(value, (list, tuple)):
+            return tuple(str(item).strip() for item in value if str(item).strip())
+        raise TypeError("GTE_KAFKA_BROKERS must be a comma-separated string or sequence of broker names.")
+
+
 def _get_bool(environ: Mapping[str, str], name: str, default: bool) -> bool:
     value = environ.get(name)
     if value is None:
@@ -40,6 +207,16 @@ def _get_int(environ: Mapping[str, str], name: str, default: int) -> int:
         return default
     try:
         return int(value)
+    except ValueError:
+        return default
+
+
+def _get_float(environ: Mapping[str, str], name: str, default: float) -> float:
+    value = environ.get(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
     except ValueError:
         return default
 
@@ -459,6 +636,10 @@ class Settings:
     redis_url: str | None
     redis_event_channel: str
     redis_realtime_channel: str
+    broadcast_delay_seconds: int
+    broadcast_presence_ttl_seconds: int
+    broadcast_presence_heartbeat_interval_seconds: int
+    broadcast_max_pending_messages: int
     auth_secret: str
     media_signing_secret: str
     crypto_deposit_enabled: bool
@@ -476,12 +657,26 @@ class Settings:
     kafka_topic_prefix: str
     kafka_queue_consumer_group: str
     kafka_projection_consumer_group: str
+    viral_event_consumer_group: str
+    viral_event_batch_size: int
+    viral_event_batch_interval_ms: int
+    viral_event_queue_maxsize: int
+    viral_event_topic_partitions: int
+    viral_event_topic_replication_factor: int
+    viral_event_dedupe_ttl_seconds: int
     outbox_relay_enabled: bool
     outbox_relay_batch_size: int
     outbox_relay_poll_interval_ms: int
     kafka_api_queue_consumer_enabled: bool
     kafka_simulation_consumer_enabled: bool
     projection_workers_enabled: bool
+    observability_metrics_enabled: bool
+    observability_metrics_port: int
+    observability_log_json: bool
+    observability_tracing_enabled: bool
+    observability_otlp_traces_endpoint: str | None
+    observability_trace_sample_ratio: float
+    observability_service_name: str | None
     email: EmailConfig
     real_player_import: RealPlayerImportConfig
     player_universe_weighting: PlayerUniverseWeightingConfig
@@ -494,6 +689,18 @@ class Settings:
     suspicion_thresholds: SuspicionThresholdsConfig
     player_card_market_integrity: PlayerCardMarketIntegrityConfig
     value_engine_weighting: ValueEngineWeightingConfig
+    live_commentary_llm_enabled: bool = False
+    live_commentary_llm_endpoint_url: str | None = None
+    live_commentary_llm_model: str | None = None
+    live_commentary_llm_api_key: str | None = None
+    live_commentary_llm_timeout_seconds: int = 8
+    live_commentary_max_llm_calls_per_match: int = 30
+    live_commentary_memory_ttl_seconds: int = 21_600
+    social_content_llm_enabled: bool = False
+    social_content_llm_endpoint_url: str | None = None
+    social_content_llm_model: str | None = None
+    social_content_llm_api_key: str | None = None
+    social_content_llm_timeout_seconds: int = 8
 
     @property
     def environment(self) -> str:
@@ -502,6 +709,18 @@ class Settings:
     @property
     def kafka_enabled(self) -> bool:
         return bool(self.kafka_brokers)
+
+    @property
+    def cdn_base_url(self) -> str | None:
+        return self.media_storage.cdn_base_url
+
+    @property
+    def highlight_temp_prefix(self) -> str:
+        return self.media_storage.highlight_temp_prefix
+
+    @property
+    def highlight_archive_prefix(self) -> str:
+        return self.media_storage.highlight_archive_prefix
 
 
 def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
@@ -1544,57 +1763,69 @@ def load_settings(
     config_root: str | Path | None = None,
 ) -> Settings:
     resolved_environ = os.environ if environ is None else environ
-    resolved_config_root = _resolve_config_root(resolved_environ, config_root)
-    default_ingestion_provider = resolved_environ.get("GTE_INGESTION_PROVIDER", "mock")
-    provider_timeout_seconds = _get_int(resolved_environ, "GTE_PROVIDER_TIMEOUT_SECONDS", 20)
+    source = SettingsSource.model_validate(dict(resolved_environ))
+    resolved_config_root = _resolve_config_root(
+        resolved_environ,
+        config_root if config_root is not None else source.config_root_override,
+    )
     return Settings(
-        app_name=resolved_environ.get("GTE_APP_NAME", "Global Talent Exchange API"),
-        app_version=resolved_environ.get("GTE_APP_VERSION", "0.1.0"),
-        app_env=resolved_environ.get("GTE_APP_ENV", "development"),
-        phase_marker=resolved_environ.get("GTE_PHASE_MARKER", "phase-8"),
+        app_name=source.app_name,
+        app_version=source.app_version,
+        app_env=source.app_env,
+        phase_marker=source.phase_marker,
         project_root=PROJECT_ROOT,
         backend_root=BACKEND_ROOT,
         config_root=resolved_config_root,
         database_url=resolve_database_url(resolved_environ),
-        redis_url=resolved_environ.get("GTE_REDIS_URL"),
-        redis_event_channel=resolved_environ.get("GTE_REDIS_EVENT_CHANNEL", "gtex.events"),
-        redis_realtime_channel=resolved_environ.get("GTE_REDIS_REALTIME_CHANNEL", "gtex.realtime"),
-        auth_secret=resolved_environ.get("GTE_AUTH_SECRET", "gte-dev-secret-change-me"),
-        media_signing_secret=resolved_environ.get("GTE_MEDIA_SIGNING_SECRET", "gte-media-secret-change-me"),
-        crypto_deposit_enabled=_get_bool(resolved_environ, "GTE_CRYPTO_DEPOSIT_ENABLED", False),
-        crypto_provider_key=resolved_environ.get("GTE_CRYPTO_PROVIDER_KEY", "crypto_fiat"),
-        run_migration_check=_get_bool(resolved_environ, "GTE_RUN_MIGRATION_CHECK", True),
-        run_startup_seeding=_get_bool(
-            resolved_environ,
-            "RUN_STARTUP_SEEDING",
-            _get_bool(resolved_environ, "GTE_RUN_STARTUP_SEEDING", True),
-        ),
-        default_ingestion_provider=default_ingestion_provider,
-        real_player_mapping_auto_create_missing_entities=_get_bool(
-            resolved_environ,
-            "GTE_REAL_PLAYER_MAPPING_AUTO_CREATE_MISSING_ENTITIES",
-            False,
-        ),
-        provider_timeout_seconds=provider_timeout_seconds,
-        football_data_base_url=resolved_environ.get("FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"),
-        football_data_api_key=resolved_environ.get("FOOTBALL_DATA_API_KEY"),
-        value_snapshot_lookback_days=_get_int(resolved_environ, "GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS", 7),
-        kafka_brokers=_get_csv(resolved_environ, "GTE_KAFKA_BROKERS"),
-        kafka_client_id=resolved_environ.get("GTE_KAFKA_CLIENT_ID", "gtex-api"),
-        kafka_topic_prefix=resolved_environ.get("GTE_KAFKA_TOPIC_PREFIX", "gtex"),
-        kafka_queue_consumer_group=resolved_environ.get("GTE_KAFKA_QUEUE_CONSUMER_GROUP", "gtex-api-queue"),
-        kafka_projection_consumer_group=resolved_environ.get("GTE_KAFKA_PROJECTION_CONSUMER_GROUP", "gtex-projections"),
-        outbox_relay_enabled=_get_bool(resolved_environ, "GTE_OUTBOX_RELAY_ENABLED", True),
-        outbox_relay_batch_size=_get_int(resolved_environ, "GTE_OUTBOX_RELAY_BATCH_SIZE", 100),
-        outbox_relay_poll_interval_ms=_get_int(resolved_environ, "GTE_OUTBOX_RELAY_POLL_INTERVAL_MS", 1000),
-        kafka_api_queue_consumer_enabled=_get_bool(resolved_environ, "GTE_KAFKA_API_QUEUE_CONSUMER_ENABLED", True),
-        kafka_simulation_consumer_enabled=_get_bool(resolved_environ, "GTE_KAFKA_SIMULATION_CONSUMER_ENABLED", True),
-        projection_workers_enabled=_get_bool(resolved_environ, "GTE_PROJECTION_WORKERS_ENABLED", True),
+        redis_url=source.redis_url,
+        redis_event_channel=source.redis_event_channel,
+        redis_realtime_channel=source.redis_realtime_channel,
+        broadcast_delay_seconds=source.broadcast_delay_seconds,
+        broadcast_presence_ttl_seconds=source.broadcast_presence_ttl_seconds,
+        broadcast_presence_heartbeat_interval_seconds=source.broadcast_presence_heartbeat_interval_seconds,
+        broadcast_max_pending_messages=source.broadcast_max_pending_messages,
+        auth_secret=source.auth_secret,
+        media_signing_secret=source.media_signing_secret,
+        crypto_deposit_enabled=source.crypto_deposit_enabled,
+        crypto_provider_key=source.crypto_provider_key,
+        run_migration_check=source.run_migration_check,
+        run_startup_seeding=source.run_startup_seeding,
+        default_ingestion_provider=source.default_ingestion_provider,
+        real_player_mapping_auto_create_missing_entities=source.real_player_mapping_auto_create_missing_entities,
+        provider_timeout_seconds=source.provider_timeout_seconds,
+        football_data_base_url=source.football_data_base_url,
+        football_data_api_key=source.football_data_api_key,
+        value_snapshot_lookback_days=source.value_snapshot_lookback_days,
+        kafka_brokers=source.kafka_brokers,
+        kafka_client_id=source.kafka_client_id,
+        kafka_topic_prefix=source.kafka_topic_prefix,
+        kafka_queue_consumer_group=source.kafka_queue_consumer_group,
+        kafka_projection_consumer_group=source.kafka_projection_consumer_group,
+        viral_event_consumer_group=source.viral_event_consumer_group,
+        viral_event_batch_size=max(1, source.viral_event_batch_size),
+        viral_event_batch_interval_ms=max(1, source.viral_event_batch_interval_ms),
+        viral_event_queue_maxsize=max(1, source.viral_event_queue_maxsize),
+        viral_event_topic_partitions=max(1, source.viral_event_topic_partitions),
+        viral_event_topic_replication_factor=max(1, source.viral_event_topic_replication_factor),
+        viral_event_dedupe_ttl_seconds=max(60, source.viral_event_dedupe_ttl_seconds),
+        outbox_relay_enabled=source.outbox_relay_enabled,
+        outbox_relay_batch_size=source.outbox_relay_batch_size,
+        outbox_relay_poll_interval_ms=source.outbox_relay_poll_interval_ms,
+        kafka_api_queue_consumer_enabled=source.kafka_api_queue_consumer_enabled,
+        kafka_simulation_consumer_enabled=source.kafka_simulation_consumer_enabled,
+        projection_workers_enabled=source.projection_workers_enabled,
+        observability_metrics_enabled=source.observability_metrics_enabled,
+        observability_metrics_port=source.observability_metrics_port,
+        observability_log_json=source.observability_log_json,
+        observability_tracing_enabled=source.observability_tracing_enabled,
+        observability_otlp_traces_endpoint=source.observability_otlp_traces_endpoint,
+        observability_trace_sample_ratio=source.observability_trace_sample_ratio,
+        observability_service_name=source.observability_service_name,
         email=load_email_config(resolved_environ),
         real_player_import=load_real_player_import_config(
             resolved_environ,
-            default_provider_name=default_ingestion_provider,
-            default_timeout_seconds=provider_timeout_seconds,
+            default_provider_name=source.default_ingestion_provider,
+            default_timeout_seconds=source.provider_timeout_seconds,
         ),
         player_universe_weighting=load_player_universe_weighting_config(resolved_config_root),
         supply_tiers=load_supply_tiers_config(resolved_config_root),
@@ -1606,6 +1837,21 @@ def load_settings(
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
         player_card_market_integrity=load_player_card_market_integrity_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
+        live_commentary_llm_enabled=source.live_commentary_llm_enabled,
+        live_commentary_llm_endpoint_url=source.live_commentary_llm_endpoint_url,
+        live_commentary_llm_model=source.live_commentary_llm_model,
+        live_commentary_llm_api_key=source.live_commentary_llm_api_key,
+        live_commentary_llm_timeout_seconds=source.live_commentary_llm_timeout_seconds,
+        live_commentary_max_llm_calls_per_match=max(
+            0,
+            source.live_commentary_max_llm_calls_per_match,
+        ),
+        live_commentary_memory_ttl_seconds=source.live_commentary_memory_ttl_seconds,
+        social_content_llm_enabled=source.social_content_llm_enabled,
+        social_content_llm_endpoint_url=source.social_content_llm_endpoint_url,
+        social_content_llm_model=source.social_content_llm_model,
+        social_content_llm_api_key=source.social_content_llm_api_key,
+        social_content_llm_timeout_seconds=source.social_content_llm_timeout_seconds,
     )
 
 

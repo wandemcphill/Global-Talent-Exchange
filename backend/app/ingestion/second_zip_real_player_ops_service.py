@@ -13,8 +13,8 @@ from time import perf_counter
 from typing import Any, Iterator
 from uuid import uuid4
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, load_only, selectinload, sessionmaker
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, load_only, object_session, selectinload, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.ingestion.canonical_countries import seed_canonical_countries
@@ -64,6 +64,23 @@ SECOND_ZIP_PLAYER_IMPORT_SOURCE_LABEL = "2nd.zip real-player ops"
 DEFAULT_SECOND_ZIP_PUBLISH_BATCH_SIZE = 100
 DEFAULT_SECOND_ZIP_PUBLISH_CHECKPOINT_INTERVAL = 500
 SECOND_ZIP_PUBLISH_CHECKPOINT_INTERVAL_ENV = "GTE_SECOND_ZIP_PUBLISH_CHECKPOINT_INTERVAL"
+DEFAULT_SECOND_ZIP_EVALUATION_BATCH_SIZE = 200
+SECOND_ZIP_EVALUATION_BATCH_SIZE_ENV = "GTE_SECOND_ZIP_EVALUATION_BATCH_SIZE"
+SECOND_ZIP_SUMMARY_COUNT_KEYS = (
+    "total_rows_read",
+    "eligible_rows",
+    "inserted",
+    "updated",
+    "duplicate_skipped",
+    "mapped_ready",
+    "mapped_partial",
+    "unresolved",
+    "fallback_valued",
+    "free_agent_fallback",
+    "publish_ready",
+    "published",
+    "failed",
+)
 
 
 logger = logging.getLogger(__name__)
@@ -267,7 +284,6 @@ class SecondZipRealPlayerOpsService:
         with self.session_factory() as session:
             batch = session.scalar(
                 select(RealPlayerImportBatch)
-                .options(selectinload(RealPlayerImportBatch.rows))
                 .where(RealPlayerImportBatch.batch_key == batch_key)
             )
             if batch is None:
@@ -289,8 +305,10 @@ class SecondZipRealPlayerOpsService:
                         status_code=409,
                     )
                 if bool(metadata.get("scope_complete")):
-                    self._refresh_batch_summary(batch)
-                    session.commit()
+                    if not self._has_summary_counts(batch):
+                        batch = self._load_batch(session, batch.id)
+                        self._refresh_batch_summary(batch)
+                        session.commit()
                     return self._report_from_batch(batch)
                 metadata["batch_size"] = batch_size
                 batch.metadata_json = metadata
@@ -342,7 +360,7 @@ class SecondZipRealPlayerOpsService:
 
         with self.session_factory() as session:
             assert batch_id is not None
-            batch = self._load_batch(session, batch_id)
+            batch = self._load_batch_header(session, batch_id)
             metadata = self._batch_metadata(batch)
             if reference_preload_report is not None:
                 metadata["reference_preload"] = reference_preload_report.counts.to_dict()
@@ -359,8 +377,11 @@ class SecondZipRealPlayerOpsService:
                 metadata["next_resume_row_number"] = self._next_resume_row_number_from_metadata(metadata)
                 batch.error_message = error_message
             batch.metadata_json = metadata
-            batch.status = RealPlayerImportBatchStatus.COMPLETED.value if error_message is None else RealPlayerImportBatchStatus.FAILED.value
-            self._refresh_batch_summary(batch)
+            self._apply_batch_summary(
+                batch,
+                counts=self._counts_from_batch(batch),
+                metadata=metadata,
+            )
             if error_message is not None:
                 batch.status = RealPlayerImportBatchStatus.FAILED.value
             session.commit()
@@ -368,7 +389,7 @@ class SecondZipRealPlayerOpsService:
 
     def resume_run(self, *, run_id: str) -> SecondZipRunReport:
         with self.session_factory() as session:
-            batch = self._load_batch(session, run_id)
+            batch = self._load_batch_header(session, run_id)
             metadata = self._batch_metadata(batch)
             archive_path = self._metadata_archive_path(metadata)
             if archive_path is None:
@@ -544,7 +565,7 @@ class SecondZipRealPlayerOpsService:
 
     def report_run(self, *, run_id: str, refresh_summary: bool = False) -> SecondZipRunReport:
         with self.session_factory() as session:
-            batch = self._load_batch(session, run_id)
+            batch = self._load_batch(session, run_id) if refresh_summary else self._load_batch_header(session, run_id)
             if refresh_summary:
                 self._refresh_batch_summary(batch)
                 session.commit()
@@ -798,11 +819,15 @@ class SecondZipRealPlayerOpsService:
         last_read_row_number = 0
 
         with self.session_factory() as session:
-            batch = self._load_batch(session, batch_id)
-            seen_source_keys = {
-                row.source_player_key.casefold()
-                for row in batch.rows
-            }
+            batch = self._load_batch_header(session, batch_id)
+            seen_source_keys = self._existing_source_keys(
+                session,
+                batch.id,
+                [
+                    str(source_row.get("player_id") or f"row-{source_row_number}").strip()
+                    for source_row_number, source_row in source_rows
+                ],
+            )
 
             for source_row_number, source_row in source_rows:
                 total_rows_increment += 1
@@ -856,13 +881,22 @@ class SecondZipRealPlayerOpsService:
         self._materialize_player_import_items(batch_id=batch_id, candidates=candidates)
         evaluation_by_key = self._evaluate_candidates(candidates)
         with self.session_factory() as session:
-            batch = self._load_batch(session, batch_id)
+            batch = self._load_batch_header(session, batch_id)
+            current_counts = self._counts_from_batch(batch)
             metadata = self._batch_metadata(batch)
             metadata["total_rows_read"] = int(metadata.get("total_rows_read") or 0) + total_rows_increment
             metadata["eligible_rows"] = int(metadata.get("eligible_rows") or 0) + eligible_rows_increment
             metadata["duplicate_skipped_count"] = int(metadata.get("duplicate_skipped_count") or 0) + duplicate_count
             metadata["last_read_row_number"] = last_read_row_number
             batch.metadata_json = metadata
+            rows_by_source_key = self._rows_by_source_key(
+                session,
+                batch.id,
+                [
+                    *[source_player_key for _, _, _, _, source_player_key, _ in blocked_rows],
+                    *[candidate.seed_input.source_player_key for candidate in candidates],
+                ],
+            )
             for source_row_number, source_row, eligibility_summary, errors, source_player_key, state in blocked_rows:
                 row = self._upsert_row(
                     session,
@@ -870,6 +904,7 @@ class SecondZipRealPlayerOpsService:
                     source_player_key=source_player_key,
                     canonical_name=str(source_row.get("name") or source_player_key),
                     row_number=source_row_number,
+                    rows_by_source_key=rows_by_source_key,
                 )
                 row_metadata = self._base_row_metadata(
                     source_row_number=source_row_number,
@@ -908,6 +943,7 @@ class SecondZipRealPlayerOpsService:
                     source_player_key=candidate.seed_input.source_player_key,
                     canonical_name=candidate.seed_input.canonical_name,
                     row_number=candidate.source_row_number,
+                    rows_by_source_key=rows_by_source_key,
                 )
                 self._apply_evaluation_to_row(
                     row=row,
@@ -922,7 +958,29 @@ class SecondZipRealPlayerOpsService:
             metadata["next_resume_row_number"] = self._next_resume_row_number_from_metadata(metadata)
             metadata["last_duplicate_batch_count"] = duplicate_count
             batch.metadata_json = metadata
-            self._refresh_batch_summary(batch)
+            evaluations = list(evaluation_by_key.values())
+            self._apply_batch_summary(
+                batch,
+                counts=self._counts_after_import(
+                    current_counts=current_counts,
+                    total_rows_increment=total_rows_increment,
+                    eligible_rows_increment=eligible_rows_increment,
+                    duplicate_count=duplicate_count,
+                    blocked_rows=blocked_rows,
+                    evaluations=evaluations,
+                ),
+                metadata=metadata,
+                matched_existing_count=int(batch.matched_existing_count or 0)
+                + sum(
+                    1
+                    for evaluation in evaluations
+                    if evaluation.match_action in {"matched_existing", "source_link"}
+                ),
+                skipped_row_count=int(batch.skipped_row_count or 0)
+                + duplicate_count
+                + sum(1 for _, _, _, _, _, state in blocked_rows if state == "base_ineligible")
+                + sum(1 for evaluation in evaluations if evaluation.state in {"mapped_partial", "unresolved"}),
+            )
             session.commit()
             return batch
 
@@ -980,54 +1038,55 @@ class SecondZipRealPlayerOpsService:
             return {}
 
         service = self._strict_ingestion_service()
-        request = RealPlayerIngestionRequest(
-            mode="curated_seed",
-            players=[candidate.seed_input for candidate in candidates],
-            ingestion_batch_id=f"2ndzip-eval-{uuid4().hex[:12]}",
-            ingestion_source_version=f"2ndzip-eval-{uuid4().hex[:8]}",
-            as_of=utcnow(),
-        )
+        evaluations: dict[tuple[str, str], SecondZipEvaluationResult] = {}
+        for candidate_chunk in self._chunk_candidates(candidates, self._evaluation_batch_size()):
+            request = RealPlayerIngestionRequest(
+                mode="curated_seed",
+                players=[candidate.seed_input for candidate in candidate_chunk],
+                ingestion_batch_id=f"2ndzip-eval-{uuid4().hex[:12]}",
+                ingestion_source_version=f"2ndzip-eval-{uuid4().hex[:8]}",
+                as_of=utcnow(),
+            )
 
-        with self.session_factory() as session:
-            transaction = session.begin()
-            try:
-                prepared = service._prepare_batch(  # type: ignore[attr-defined]
-                    session=session,
-                    request=request,
-                    ingestion_batch_id=request.ingestion_batch_id or f"2ndzip-eval-{uuid4().hex[:12]}",
-                    as_of=request.as_of or utcnow(),
-                )
-                temp_batch = session.get(RealPlayerImportBatch, prepared.import_batch_id)
-                if temp_batch is None:
-                    raise SecondZipRealPlayerOpsError("Temporary 2nd.zip evaluation batch was not materialized.")
-                rows_by_key = {
-                    (row.source_name, row.source_player_key): row
-                    for row in temp_batch.rows
-                }
-                issues_by_key: dict[tuple[str, str], list[Any]] = {}
-                for issue in prepared.report.issues:
-                    issues_by_key.setdefault((issue.source_name, issue.source_player_key), []).append(issue)
-                staged_by_key = {
-                    (staged.source_name, staged.source_player_key): staged
-                    for staged in prepared.staged_players
-                }
-                evaluations: dict[tuple[str, str], SecondZipEvaluationResult] = {}
-                for candidate in candidates:
-                    key = (candidate.seed_input.source_name, candidate.seed_input.source_player_key)
-                    row = rows_by_key.get(key)
-                    staged = staged_by_key.get(key)
-                    evaluations[key] = self._evaluation_result_for_candidate(
+            with self.session_factory() as session:
+                transaction = session.begin()
+                try:
+                    prepared = service._prepare_batch(  # type: ignore[attr-defined]
                         session=session,
-                        candidate=candidate,
-                        prepared=prepared,
-                        row=row,
-                        staged=staged,
-                        issue_list=issues_by_key.get(key, []),
+                        request=request,
+                        ingestion_batch_id=request.ingestion_batch_id or f"2ndzip-eval-{uuid4().hex[:12]}",
+                        as_of=request.as_of or utcnow(),
                     )
-                return evaluations
-            finally:
-                if transaction.is_active:
-                    transaction.rollback()
+                    temp_batch = session.get(RealPlayerImportBatch, prepared.import_batch_id)
+                    if temp_batch is None:
+                        raise SecondZipRealPlayerOpsError("Temporary 2nd.zip evaluation batch was not materialized.")
+                    rows_by_key = {
+                        (row.source_name, row.source_player_key): row
+                        for row in temp_batch.rows
+                    }
+                    issues_by_key: dict[tuple[str, str], list[Any]] = {}
+                    for issue in prepared.report.issues:
+                        issues_by_key.setdefault((issue.source_name, issue.source_player_key), []).append(issue)
+                    staged_by_key = {
+                        (staged.source_name, staged.source_player_key): staged
+                        for staged in prepared.staged_players
+                    }
+                    for candidate in candidate_chunk:
+                        key = (candidate.seed_input.source_name, candidate.seed_input.source_player_key)
+                        row = rows_by_key.get(key)
+                        staged = staged_by_key.get(key)
+                        evaluations[key] = self._evaluation_result_for_candidate(
+                            session=session,
+                            candidate=candidate,
+                            prepared=prepared,
+                            row=row,
+                            staged=staged,
+                            issue_list=issues_by_key.get(key, []),
+                        )
+                finally:
+                    if transaction.is_active:
+                        transaction.rollback()
+        return evaluations
 
     def _materialize_player_import_items(
         self,
@@ -1042,11 +1101,17 @@ class SecondZipRealPlayerOpsService:
             batch = self._load_batch_header(session, batch_id)
             job = self._ensure_player_import_job(session=session, batch=batch)
             created_count = 0
+            items_by_row_number = self._player_import_items_by_row_number(
+                session,
+                job.id,
+                [candidate.source_row_number for candidate in candidates],
+            )
             for candidate in candidates:
                 item, was_created = self._upsert_player_import_item(
                     session=session,
                     job=job,
                     candidate=candidate,
+                    items_by_row_number=items_by_row_number,
                 )
                 candidate.seed_input.player_import_item_id = item.id
                 if was_created:
@@ -1092,13 +1157,16 @@ class SecondZipRealPlayerOpsService:
         session: Session,
         job: PlayerImportJob,
         candidate: SecondZipCandidate,
+        items_by_row_number: dict[int, PlayerImportItem] | None = None,
     ) -> tuple[PlayerImportItem, bool]:
-        item = session.scalar(
-            select(PlayerImportItem).where(
-                PlayerImportItem.job_id == job.id,
-                PlayerImportItem.row_number == candidate.source_row_number,
+        item = items_by_row_number.get(candidate.source_row_number) if items_by_row_number is not None else None
+        if item is None:
+            item = session.scalar(
+                select(PlayerImportItem).where(
+                    PlayerImportItem.job_id == job.id,
+                    PlayerImportItem.row_number == candidate.source_row_number,
+                )
             )
-        )
         created = False
         if item is None:
             item = PlayerImportItem(
@@ -1111,6 +1179,8 @@ class SecondZipRealPlayerOpsService:
             session.add(item)
             session.flush()
             created = True
+            if items_by_row_number is not None:
+                items_by_row_number[candidate.source_row_number] = item
 
         candidate.seed_input.player_import_item_id = item.id
         item.external_source_id = self._clean_reference_value(candidate.seed_input.source_player_key, max_length=128)
@@ -1679,72 +1749,51 @@ class SecondZipRealPlayerOpsService:
             requested_at=utcnow(),
             started_at=utcnow(),
             metadata_json=metadata,
-            summary_json={},
+            summary_json=self._summary_payload(
+                counts=SecondZipReportCounts(),
+                metadata=metadata,
+            ),
         )
 
     def _refresh_batch_summary(self, batch: RealPlayerImportBatch) -> None:
         metadata = self._batch_metadata(batch)
-        counts = self._counts_from_batch(batch)
+        if "rows" not in batch.__dict__:
+            session = object_session(batch)
+            if session is None:
+                raise SecondZipRealPlayerOpsError("Batch summary refresh requires an attached SQLAlchemy session.")
+            batch = self._load_batch(session, batch.id)
+        rows = list(batch.rows)
+        counts = self._counts_from_rows(rows, metadata=metadata)
         publish_in_progress = bool(metadata.get("publish_in_progress"))
-        batch.submitted_row_count = counts.total_rows_read
-        batch.normalized_row_count = counts.eligible_rows
-        batch.matched_existing_count = sum(
+        matched_existing_count = sum(
             1
-            for row in batch.rows
+            for row in rows
             if row.match_action in {"matched_existing", "source_link"}
         )
-        batch.created_player_count = counts.inserted
-        batch.updated_player_count = counts.updated
-        batch.skipped_row_count = counts.duplicate_skipped + sum(
+        skipped_row_count = counts.duplicate_skipped + sum(
             1
-            for row in batch.rows
+            for row in rows
             if self._row_state(row) in {"base_ineligible", "mapped_partial", "unresolved"}
         )
-        batch.failed_row_count = counts.failed
-        batch.authoritative_snapshot_count = counts.published
-        batch.summary_json = {
-            **counts.to_dict(),
-            "read_exhausted": bool(metadata.get("read_exhausted")),
-            "scope_complete": bool(metadata.get("scope_complete")),
-            "next_resume_row_number": self._next_resume_row_number_from_metadata(metadata),
-        }
-        batch.status = self._status_for_batch(
+        self._apply_batch_summary(
             batch,
             counts=counts,
             metadata=metadata,
+            matched_existing_count=matched_existing_count,
+            skipped_row_count=skipped_row_count,
             publish_in_progress=publish_in_progress,
         )
-        if batch.status == RealPlayerImportBatchStatus.RUNNING.value:
-            batch.completed_at = None
-        elif bool(metadata.get("scope_complete")) or batch.status == RealPlayerImportBatchStatus.FAILED.value:
-            batch.completed_at = utcnow()
 
     def _counts_from_batch(self, batch: RealPlayerImportBatch) -> SecondZipReportCounts:
+        summary_counts = self._counts_from_summary(batch)
+        if summary_counts is not None:
+            return summary_counts
+        if "rows" not in batch.__dict__:
+            session = object_session(batch)
+            if session is not None:
+                batch = self._load_batch(session, batch.id)
         metadata = self._batch_metadata(batch)
-        rows = list(batch.rows)
-        return SecondZipReportCounts(
-            total_rows_read=int(metadata.get("total_rows_read") or 0),
-            eligible_rows=int(metadata.get("eligible_rows") or 0),
-            inserted=sum(
-                1
-                for row in rows
-                if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "created"
-            ),
-            updated=sum(
-                1
-                for row in rows
-                if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "updated"
-            ),
-            duplicate_skipped=int(metadata.get("duplicate_skipped_count") or 0),
-            mapped_ready=sum(1 for row in rows if self._row_mapping_status(row) == "ready"),
-            mapped_partial=sum(1 for row in rows if self._row_mapping_status(row) == "partial"),
-            unresolved=sum(1 for row in rows if self._row_mapping_status(row) == "unresolved"),
-            fallback_valued=sum(1 for row in rows if bool(self._row_metadata(row).get("fallback_valued"))),
-            free_agent_fallback=sum(1 for row in rows if bool(self._row_metadata(row).get("free_agent_fallback"))),
-            publish_ready=sum(1 for row in rows if self._row_publish_ready(row)),
-            published=sum(1 for row in rows if self._row_is_published(row)),
-            failed=sum(1 for row in rows if self._row_state(row) == "failed"),
-        )
+        return self._counts_from_rows(list(batch.rows), metadata=metadata)
 
     def _report_from_batch(self, batch: RealPlayerImportBatch, *, selected_row_count: int = 0) -> SecondZipRunReport:
         metadata = self._batch_metadata(batch)
@@ -1845,14 +1894,18 @@ class SecondZipRealPlayerOpsService:
         source_player_key: str,
         canonical_name: str,
         row_number: int,
+        rows_by_source_key: dict[str, RealPlayerImportRow] | None = None,
     ) -> RealPlayerImportRow:
-        row = session.scalar(
-            select(RealPlayerImportRow).where(
-                RealPlayerImportRow.batch_id == batch.id,
-                RealPlayerImportRow.source_name == SECOND_ZIP_SOURCE_NAME,
-                RealPlayerImportRow.source_player_key == source_player_key,
+        normalized_key = source_player_key.casefold()
+        row = rows_by_source_key.get(normalized_key) if rows_by_source_key is not None else None
+        if row is None:
+            row = session.scalar(
+                select(RealPlayerImportRow).where(
+                    RealPlayerImportRow.batch_id == batch.id,
+                    RealPlayerImportRow.source_name == SECOND_ZIP_SOURCE_NAME,
+                    RealPlayerImportRow.source_player_key == source_player_key,
+                )
             )
-        )
         if row is None:
             row = RealPlayerImportRow(
                 batch_id=batch.id,
@@ -1862,6 +1915,8 @@ class SecondZipRealPlayerOpsService:
                 canonical_name=canonical_name,
             )
             session.add(row)
+            if rows_by_source_key is not None:
+                rows_by_source_key[normalized_key] = row
         return row
 
     def _batch_key(self, *, archive_sha256: str, limit: int | None) -> str:
@@ -1900,6 +1955,160 @@ class SecondZipRealPlayerOpsService:
 
     def _batch_metadata(self, batch: RealPlayerImportBatch) -> dict[str, object]:
         return dict(batch.metadata_json or {})
+
+    def _summary_payload(
+        self,
+        *,
+        counts: SecondZipReportCounts,
+        metadata: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            **counts.to_dict(),
+            "read_exhausted": bool(metadata.get("read_exhausted")),
+            "scope_complete": bool(metadata.get("scope_complete")),
+            "next_resume_row_number": self._next_resume_row_number_from_metadata(metadata),
+        }
+
+    def _has_summary_counts(self, batch: RealPlayerImportBatch) -> bool:
+        summary = dict(batch.summary_json or {})
+        return all(key in summary for key in SECOND_ZIP_SUMMARY_COUNT_KEYS)
+
+    def _counts_from_summary(self, batch: RealPlayerImportBatch) -> SecondZipReportCounts | None:
+        if not self._has_summary_counts(batch):
+            return None
+        summary = dict(batch.summary_json or {})
+        return SecondZipReportCounts(
+            total_rows_read=int(summary.get("total_rows_read") or 0),
+            eligible_rows=int(summary.get("eligible_rows") or 0),
+            inserted=int(summary.get("inserted") or 0),
+            updated=int(summary.get("updated") or 0),
+            duplicate_skipped=int(summary.get("duplicate_skipped") or 0),
+            mapped_ready=int(summary.get("mapped_ready") or 0),
+            mapped_partial=int(summary.get("mapped_partial") or 0),
+            unresolved=int(summary.get("unresolved") or 0),
+            fallback_valued=int(summary.get("fallback_valued") or 0),
+            free_agent_fallback=int(summary.get("free_agent_fallback") or 0),
+            publish_ready=int(summary.get("publish_ready") or 0),
+            published=int(summary.get("published") or 0),
+            failed=int(summary.get("failed") or 0),
+        )
+
+    def _counts_from_rows(
+        self,
+        rows: list[RealPlayerImportRow],
+        *,
+        metadata: dict[str, object],
+    ) -> SecondZipReportCounts:
+        return SecondZipReportCounts(
+            total_rows_read=int(metadata.get("total_rows_read") or 0),
+            eligible_rows=int(metadata.get("eligible_rows") or 0),
+            inserted=sum(
+                1
+                for row in rows
+                if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "created"
+            ),
+            updated=sum(
+                1
+                for row in rows
+                if row.status == RealPlayerImportRowStatus.IMPORTED.value and row.import_action == "updated"
+            ),
+            duplicate_skipped=int(metadata.get("duplicate_skipped_count") or 0),
+            mapped_ready=sum(1 for row in rows if self._row_mapping_status(row) == "ready"),
+            mapped_partial=sum(1 for row in rows if self._row_mapping_status(row) == "partial"),
+            unresolved=sum(1 for row in rows if self._row_mapping_status(row) == "unresolved"),
+            fallback_valued=sum(1 for row in rows if bool(self._row_metadata(row).get("fallback_valued"))),
+            free_agent_fallback=sum(1 for row in rows if bool(self._row_metadata(row).get("free_agent_fallback"))),
+            publish_ready=sum(1 for row in rows if self._row_publish_ready(row)),
+            published=sum(1 for row in rows if self._row_is_published(row)),
+            failed=sum(1 for row in rows if self._row_state(row) == "failed"),
+        )
+
+    def _apply_batch_summary(
+        self,
+        batch: RealPlayerImportBatch,
+        *,
+        counts: SecondZipReportCounts,
+        metadata: dict[str, object],
+        matched_existing_count: int | None = None,
+        skipped_row_count: int | None = None,
+        publish_in_progress: bool | None = None,
+    ) -> None:
+        resolved_publish_in_progress = (
+            bool(metadata.get("publish_in_progress"))
+            if publish_in_progress is None
+            else publish_in_progress
+        )
+        batch.submitted_row_count = counts.total_rows_read
+        batch.normalized_row_count = counts.eligible_rows
+        batch.matched_existing_count = int(batch.matched_existing_count or 0) if matched_existing_count is None else matched_existing_count
+        batch.created_player_count = counts.inserted
+        batch.updated_player_count = counts.updated
+        batch.skipped_row_count = int(batch.skipped_row_count or 0) if skipped_row_count is None else skipped_row_count
+        batch.failed_row_count = counts.failed
+        batch.authoritative_snapshot_count = counts.published
+        batch.summary_json = self._summary_payload(counts=counts, metadata=metadata)
+        batch.status = self._status_for_batch(
+            batch,
+            counts=counts,
+            metadata=metadata,
+            publish_in_progress=resolved_publish_in_progress,
+        )
+        if batch.status == RealPlayerImportBatchStatus.RUNNING.value:
+            batch.completed_at = None
+        elif bool(metadata.get("scope_complete")) or batch.status == RealPlayerImportBatchStatus.FAILED.value:
+            batch.completed_at = utcnow()
+
+    def _counts_after_import(
+        self,
+        *,
+        current_counts: SecondZipReportCounts,
+        total_rows_increment: int,
+        eligible_rows_increment: int,
+        duplicate_count: int,
+        blocked_rows: list[tuple[int, dict[str, Any], dict[str, object], list[str], str, str]],
+        evaluations: list[SecondZipEvaluationResult],
+    ) -> SecondZipReportCounts:
+        blocked_failed = 0
+        mapped_ready = 0
+        mapped_partial = 0
+        unresolved = 0
+        fallback_valued = 0
+        free_agent_fallback = 0
+        publish_ready = 0
+        failed = 0
+        for _, _, _, _, _, state in blocked_rows:
+            if state == "failed":
+                blocked_failed += 1
+        for evaluation in evaluations:
+            if evaluation.mapping_status == "ready":
+                mapped_ready += 1
+            elif evaluation.mapping_status == "partial":
+                mapped_partial += 1
+            elif evaluation.mapping_status == "unresolved":
+                unresolved += 1
+            if evaluation.fallback_valued:
+                fallback_valued += 1
+            if evaluation.free_agent_fallback:
+                free_agent_fallback += 1
+            if evaluation.publish_ready:
+                publish_ready += 1
+            if evaluation.state == "failed":
+                failed += 1
+        return SecondZipReportCounts(
+            total_rows_read=current_counts.total_rows_read + total_rows_increment,
+            eligible_rows=current_counts.eligible_rows + eligible_rows_increment,
+            inserted=current_counts.inserted,
+            updated=current_counts.updated,
+            duplicate_skipped=current_counts.duplicate_skipped + duplicate_count,
+            mapped_ready=current_counts.mapped_ready + mapped_ready,
+            mapped_partial=current_counts.mapped_partial + mapped_partial,
+            unresolved=current_counts.unresolved + unresolved,
+            fallback_valued=current_counts.fallback_valued + fallback_valued,
+            free_agent_fallback=current_counts.free_agent_fallback + free_agent_fallback,
+            publish_ready=current_counts.publish_ready + publish_ready,
+            published=current_counts.published,
+            failed=current_counts.failed + blocked_failed + failed,
+        )
 
     def _mark_publish_started(
         self,
@@ -1946,6 +2155,23 @@ class SecondZipRealPlayerOpsService:
             return max(int(raw_value), 1)
         except ValueError:
             return DEFAULT_SECOND_ZIP_PUBLISH_CHECKPOINT_INTERVAL
+
+    def _evaluation_batch_size(self) -> int:
+        raw_value = os.environ.get(SECOND_ZIP_EVALUATION_BATCH_SIZE_ENV)
+        if raw_value is None:
+            return DEFAULT_SECOND_ZIP_EVALUATION_BATCH_SIZE
+        try:
+            return max(int(raw_value), 1)
+        except ValueError:
+            return DEFAULT_SECOND_ZIP_EVALUATION_BATCH_SIZE
+
+    def _chunk_candidates(
+        self,
+        candidates: list[SecondZipCandidate],
+        chunk_size: int,
+    ) -> Iterator[list[SecondZipCandidate]]:
+        for index in range(0, len(candidates), chunk_size):
+            yield candidates[index:index + chunk_size]
 
     def _checkpoint_publish_progress(
         self,
@@ -2065,6 +2291,65 @@ class SecondZipRealPlayerOpsService:
 
     def _row_state(self, row: RealPlayerImportRow) -> str:
         return str(self._row_metadata(row).get("state") or "")
+
+    def _existing_source_keys(
+        self,
+        session: Session,
+        batch_id: str,
+        source_player_keys: list[str],
+    ) -> set[str]:
+        normalized_keys = {key.casefold() for key in source_player_keys if key}
+        if not normalized_keys:
+            return set()
+        return {
+            str(source_player_key).casefold()
+            for source_player_key in session.scalars(
+                select(RealPlayerImportRow.source_player_key).where(
+                    RealPlayerImportRow.batch_id == batch_id,
+                    RealPlayerImportRow.source_name == SECOND_ZIP_SOURCE_NAME,
+                    func.lower(RealPlayerImportRow.source_player_key).in_(normalized_keys),
+                )
+            )
+        }
+
+    def _rows_by_source_key(
+        self,
+        session: Session,
+        batch_id: str,
+        source_player_keys: list[str],
+    ) -> dict[str, RealPlayerImportRow]:
+        normalized_keys = {key.casefold() for key in source_player_keys if key}
+        if not normalized_keys:
+            return {}
+        return {
+            row.source_player_key.casefold(): row
+            for row in session.scalars(
+                select(RealPlayerImportRow).where(
+                    RealPlayerImportRow.batch_id == batch_id,
+                    RealPlayerImportRow.source_name == SECOND_ZIP_SOURCE_NAME,
+                    func.lower(RealPlayerImportRow.source_player_key).in_(normalized_keys),
+                )
+            )
+        }
+
+    def _player_import_items_by_row_number(
+        self,
+        session: Session,
+        job_id: str,
+        row_numbers: list[int],
+    ) -> dict[int, PlayerImportItem]:
+        normalized_row_numbers = sorted({int(row_number) for row_number in row_numbers})
+        if not normalized_row_numbers:
+            return {}
+        return {
+            item.row_number: item
+            for item in session.scalars(
+                select(PlayerImportItem).where(
+                    PlayerImportItem.job_id == job_id,
+                    PlayerImportItem.row_number.in_(normalized_row_numbers),
+                )
+            )
+        }
 
     def _remaining_row_budget(self, metadata: dict[str, object]) -> int | None:
         limit = self._metadata_limit(metadata)

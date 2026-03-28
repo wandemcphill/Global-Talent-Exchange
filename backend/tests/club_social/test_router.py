@@ -4,7 +4,63 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.models.competition import UserCompetition
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.user import User
+
+
+def _seed_match_context(session: Session) -> None:
+    competition = UserCompetition(
+        id="competition-router",
+        host_user_id="user-alpha",
+        name="Router Cup",
+        format="league",
+        visibility="public",
+        status="live",
+        start_mode="scheduled",
+        currency="coin",
+        metadata_json={},
+    )
+    round_ = CompetitionRound(
+        id="round-router",
+        competition_id=competition.id,
+        round_number=1,
+        stage="league",
+        status="live",
+        metadata_json={},
+    )
+    rule_set = CompetitionRuleSet(
+        id="rules-router",
+        competition_id=competition.id,
+        format="league",
+        min_participants=2,
+        max_participants=20,
+        league_win_points=3,
+        league_draw_points=1,
+        league_loss_points=0,
+        league_tie_break_order=["points", "goal_diff", "goals_for"],
+        cup_allowed_participant_sizes=[],
+    )
+    match = CompetitionMatch(
+        id="match-router",
+        competition_id=competition.id,
+        round_id=round_.id,
+        round_number=1,
+        stage="final",
+        home_club_id="club-alpha",
+        away_club_id="club-bravo",
+        status="in_progress",
+        metadata_json={},
+    )
+    participants = [
+        CompetitionParticipant(id="participant-router-1", competition_id=competition.id, club_id="club-alpha"),
+        CompetitionParticipant(id="participant-router-2", competition_id=competition.id, club_id="club-bravo"),
+    ]
+    session.add_all([competition, round_, rule_set, match, *participants])
+    session.commit()
 
 
 def test_challenge_creation_acceptance_and_share_links(
@@ -83,3 +139,50 @@ def test_challenge_creation_acceptance_and_share_links(
     listed = challenge_list.json()["challenges"]
     assert len(listed) == 1
     assert listed[0]["challenge_id"] == challenge_id
+
+
+def test_social_follow_match_share_and_live_match_surfaces(
+    client,
+    session: Session,
+) -> None:
+    _seed_match_context(session)
+
+    follow_response = client.post(
+        "/api/social/follows",
+        json={"target_type": "club", "club_id": "club-bravo"},
+    )
+    assert follow_response.status_code == 201
+    assert follow_response.json()["target_key"] == "club:club-bravo"
+
+    share_response = client.post(
+        "/api/matches/match-router/share-links",
+        json={"reward_amount_minor": 50},
+    )
+    assert share_response.status_code == 201
+    share_payload = share_response.json()
+    share_code = share_payload["share_code"]
+    assert "50 GTex" in share_payload["share_text"]
+
+    record_share_response = client.post(
+        f"/api/match-share-links/{share_code}/events",
+        json={"event_type": "open", "source_platform": "social"},
+    )
+    assert record_share_response.status_code == 201
+
+    share_page_response = client.get(f"/api/match-share-links/{share_code}")
+    assert share_page_response.status_code == 200
+    assert share_page_response.json()["link"]["click_count"] == 1
+
+    reaction_response = client.post(
+        "/api/matches/match-router/live-reactions",
+        json={"reaction_type": "hype", "intensity_score": 80, "club_id": "club-alpha"},
+    )
+    assert reaction_response.status_code == 201
+    assert reaction_response.json()["reactions"][0]["reaction_type"] == "hype"
+
+    chat_response = client.post(
+        "/api/matches/match-router/chat",
+        json={"body": "That goal was insane!", "club_id": "club-alpha"},
+    )
+    assert chat_response.status_code == 201
+    assert chat_response.json()["messages"][0]["body"] == "That goal was insane!"

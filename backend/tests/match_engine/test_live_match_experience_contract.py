@@ -34,9 +34,30 @@ def test_live_match_hub_projects_experience_layers_into_events_and_state() -> No
     assert event.experience.motion.model_key == "gtex_motion_blend_v1"
     assert event.experience.commentary is not None
     assert event.experience.commentary.tts_ready is True
+    assert event.metadata["description"]
+    assert event.metadata["commentary_tier"] in {"rule", "template", "llm"}
+    assert event.metadata["commentary_provider"] in {"local-template", "local-dramatic", "remote-llm"}
+    assert isinstance(event.metadata["commentary_context"], dict)
+    assert event.experience.commentary.line == event.metadata["description"]
     assert event.experience.crowd is not None
     assert event.experience.spectator_sync is not None
     assert event.experience.spectator_sync.room_id == f"match_{replay_payload.match_id}"
+
+    major = next(
+        (
+            item
+            for item in streamed_events
+            if item.metadata.get("raw_event_type") in {
+                MatchEventType.GOAL.value,
+                MatchEventType.PENALTY_GOAL.value,
+                MatchEventType.PENALTY_SCORED.value,
+                MatchEventType.RED_CARD.value,
+            }
+        ),
+        None,
+    )
+    if major is not None:
+        assert major.metadata["commentary_tier"] == "llm"
 
     hub.start_stream(replay_payload.match_id, replay_payload)
 

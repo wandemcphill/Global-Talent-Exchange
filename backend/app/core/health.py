@@ -161,3 +161,8 @@ def read_diagnostics(
     service: SystemStatusService = Depends(get_system_status_service),
 ) -> DiagnosticsResponse:
     return service.build_diagnostics(request)
+
+
+@router.get("/metrics", include_in_schema=False)
+def read_metrics(request: Request) -> Response:
+    return request.app.state.metrics.metrics_response()

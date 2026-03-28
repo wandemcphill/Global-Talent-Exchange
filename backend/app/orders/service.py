@@ -15,6 +15,7 @@ from app.matching.service import ExecutionSnapshot, InvalidOrderTransitionError,
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.orders.models import Order, OrderSide, OrderStatus
+from app.risk.service import RiskControlService, RiskValidationError
 from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -38,6 +39,7 @@ class OrderService:
         self.wallet_service = WalletService(event_publisher=self.event_publisher)
         self.ledger_event_service = LedgerEventService(event_publisher=self.event_publisher)
         self.matching_service = MatchingService()
+        self.risk_service = RiskControlService(wallet_service=self.wallet_service)
 
     def place_order(
         self,
@@ -57,11 +59,19 @@ class OrderService:
         if max_price is None:
             raise OrderPlacementError("Limit price is required for player asset orders.")
 
-        normalized_quantity = self._normalize_amount(quantity)
-        normalized_max_price = self._normalize_amount(max_price)
-        reserved_amount = Decimal("0.0000")
-        if side == OrderSide.BUY:
-            reserved_amount = self._normalize_amount(normalized_quantity * normalized_max_price)
+        try:
+            _, normalized_quantity, normalized_max_price, reserved_amount = self.risk_service.validate_trade(
+                session,
+                user,
+                player_id=player.id,
+                side=side.value,
+                quantity=quantity,
+                price=max_price,
+            )
+        except RiskValidationError as exc:
+            raise OrderPlacementError(str(exc)) from exc
+        if side != OrderSide.BUY:
+            reserved_amount = Decimal("0.0000")
 
         order = Order(
             user_id=user.id,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Event as ThreadEvent, Thread
+from time import perf_counter
 import traceback
 from typing import Any, Protocol
 
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.backbone.kafka import KafkaJsonConsumer
 from app.models.notification_record import NotificationRecord
 from app.models.projections import CompetitionStandingProjection, PlayerStatsProjection, ProjectionEventReceipt
+from app.observability.metrics import GTexMetrics
+from app.observability.tracing import start_consumer_span
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -234,6 +237,7 @@ class MatchFeedProjectionHandler:
 class ProjectionWorkerService:
     session_factory: sessionmaker[Session]
     consumer: KafkaJsonConsumer
+    metrics: GTexMetrics | None = None
     handlers: tuple[ProjectionHandler, ...] = field(
         default_factory=lambda: (
             StandingsProjectionHandler(),
@@ -263,12 +267,43 @@ class ProjectionWorkerService:
         for message in self.consumer.poll():
             envelope = dict(message.value or {})
             envelope["topic"] = message.topic
-            with self.session_factory() as session:
-                for handler in self.handlers:
-                    handler.apply(session, envelope=envelope)
-                session.commit()
-            self.consumer.commit()
-            handled += 1
+            started_at = perf_counter()
+            try:
+                with start_consumer_span(
+                    "queue.consume.projection",
+                    carrier=_message_carrier(message),
+                    attributes={"messaging.destination.name": message.topic},
+                ):
+                    with self.session_factory() as session:
+                        for handler in self.handlers:
+                            handler.apply(session, envelope=envelope)
+                        session.commit()
+                self.consumer.commit()
+                handled += 1
+                if self.metrics is not None:
+                    self.metrics.record_queue_message(
+                        queue_name="projection",
+                        job_name="projection",
+                        result="processed",
+                    )
+                    self.metrics.record_worker_job(
+                        job_name="projection",
+                        result="success",
+                        duration_seconds=perf_counter() - started_at,
+                    )
+            except Exception:
+                if self.metrics is not None:
+                    self.metrics.record_queue_message(
+                        queue_name="projection",
+                        job_name="projection",
+                        result="error",
+                    )
+                    self.metrics.record_worker_job(
+                        job_name="projection",
+                        result="error",
+                        duration_seconds=perf_counter() - started_at,
+                    )
+                raise
         return handled
 
     def _run_loop(self) -> None:
@@ -293,6 +328,21 @@ def _as_int(value: Any) -> int:
 
 def _as_float(value: Any) -> float:
     return float(value or 0.0)
+
+
+def _message_carrier(message) -> dict[str, str]:
+    carrier = {
+        str(key): str(value)
+        for key, value in dict(message.headers or {}).items()
+        if value is not None
+    }
+    envelope_headers = message.value.get("headers") if isinstance(message.value, dict) else None
+    if isinstance(envelope_headers, dict):
+        for key, value in envelope_headers.items():
+            if value is None:
+                continue
+            carrier.setdefault(str(key), str(value))
+    return carrier
 
 
 __all__ = [

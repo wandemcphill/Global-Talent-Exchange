@@ -15,12 +15,19 @@ spec:
       labels:
         app.kubernetes.io/name: gtex-outbox-relay
         app.kubernetes.io/component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9103"
     spec:
       containers:
         - name: outbox-relay
           image: ghcr.io/your-org/gtex-backend:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "-m", "app.backbone.outbox_relay_main"]
+          ports:
+            - name: metrics
+              containerPort: 9103
           envFrom:
             - configMapRef:
                 name: gtex-shared-config
@@ -37,6 +44,10 @@ spec:
               value: "false"
             - name: GTE_PROJECTION_WORKERS_ENABLED
               value: "false"
+            - name: GTE_METRICS_PORT
+              value: "9103"
+            - name: GTE_OTEL_SERVICE_NAME
+              value: gtex-outbox-relay
           resources:
             requests:
               cpu: 100m
@@ -44,4 +55,3 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-

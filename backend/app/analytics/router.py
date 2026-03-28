@@ -20,6 +20,12 @@ from .schemas import (
     AnalyticsEventCreate,
     AnalyticsEventView,
     AnalyticsFunnelView,
+    ClipAnalyticsDetailView,
+    ClipDashboardItemView,
+    ClipDashboardResponse,
+    ClipDropOffDashboardResponse,
+    ClipDropOffItemView,
+    ClipLifecycleStageView,
     AnalyticsMatchOutcomeView,
     AnalyticsPricePredictionResponse,
     AnalyticsSummaryView,
@@ -32,6 +38,7 @@ from .service import AnalyticsService
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 admin_router = APIRouter(prefix="/api/admin/analytics", tags=["admin-analytics"])
+public_router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.post("/events", response_model=AnalyticsEventView, status_code=status.HTTP_201_CREATED)
@@ -52,6 +59,34 @@ def create_event(
     session.commit()
     session.refresh(event)
     return AnalyticsEventView.model_validate(event)
+
+
+@public_router.get("/clip/{clip_id}", response_model=ClipAnalyticsDetailView)
+def read_clip_analytics(
+    clip_id: str,
+    session: Session = Depends(get_session),
+) -> ClipAnalyticsDetailView:
+    snapshot = AnalyticsService().clip_snapshot(session, clip_id=clip_id)
+    analytics = snapshot["analytics"]
+    lifecycle = snapshot["lifecycle"]
+    return ClipAnalyticsDetailView(
+        clip_id=clip_id,
+        impressions=int(analytics["impressions"]),
+        views=int(analytics["view_count"]),
+        completions=int(analytics["completions"]),
+        completion_rate=float(analytics["completion_rate"]),
+        shares=int(analytics["shares"]),
+        revenue=snapshot["revenue"],
+        avg_watch_time_seconds=float(analytics["watch_time"]),
+        drop_off_point_seconds=analytics.get("drop_off_point_seconds"),
+        funnel=[
+            ClipLifecycleStageView(stage="generated", count=int(lifecycle["generated"])),
+            ClipLifecycleStageView(stage="viewed", count=int(lifecycle["viewed"])),
+            ClipLifecycleStageView(stage="completed", count=int(lifecycle["completed"])),
+            ClipLifecycleStageView(stage="shared", count=int(lifecycle["shared"])),
+            ClipLifecycleStageView(stage="monetized", count=int(lifecycle["monetized"])),
+        ],
+    )
 
 
 @router.get("/device-fingerprint", response_model=AnalyticsDeviceFingerprintView)
@@ -80,6 +115,32 @@ def read_summary(
     service = AnalyticsService()
     since, totals = service.summary(session)
     return AnalyticsSummaryView(since=since, totals=totals)
+
+
+@public_router.get("/dashboard/top-clips", response_model=ClipDashboardResponse)
+def read_top_clip_dashboard(
+    limit: int = Query(default=10, ge=1, le=50),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> ClipDashboardResponse:
+    items = AnalyticsService().clip_dashboard(session, limit=limit)
+    return ClipDashboardResponse(
+        generated_at=datetime.now(timezone.utc),
+        items=[ClipDashboardItemView.model_validate(item) for item in items],
+    )
+
+
+@public_router.get("/dashboard/drop-off", response_model=ClipDropOffDashboardResponse)
+def read_clip_drop_off_dashboard(
+    limit: int = Query(default=10, ge=1, le=50),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> ClipDropOffDashboardResponse:
+    items = AnalyticsService().clip_drop_off_dashboard(session, limit=limit)
+    return ClipDropOffDashboardResponse(
+        generated_at=datetime.now(timezone.utc),
+        items=[ClipDropOffItemView.model_validate(item) for item in items],
+    )
 
 
 @admin_router.get("/funnels", response_model=AnalyticsFunnelView)

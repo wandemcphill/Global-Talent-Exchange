@@ -89,10 +89,20 @@ class CreatorFinanceSummary {
     required this.currency,
     required this.totalGiftIncome,
     required this.totalRewardIncome,
+    required this.totalClipIncome,
+    required this.totalClipViews,
+    required this.monetizedClips,
+    required this.viralClipCount,
+    required this.totalViralBonus,
+    required this.totalReferralBonus,
+    required this.totalWeeklyTopCreatorBonus,
     required this.totalWithdrawnGross,
     required this.totalWithdrawalFees,
     required this.totalWithdrawnNet,
     required this.pendingWithdrawals,
+    required this.walletBalance,
+    required this.walletAvailableBalance,
+    required this.walletCurrency,
     required this.activeCompetitions,
     required this.attributedSignups,
     required this.qualifiedJoins,
@@ -102,10 +112,20 @@ class CreatorFinanceSummary {
   final String currency;
   final double totalGiftIncome;
   final double totalRewardIncome;
+  final double totalClipIncome;
+  final int totalClipViews;
+  final int monetizedClips;
+  final int viralClipCount;
+  final double totalViralBonus;
+  final double totalReferralBonus;
+  final double totalWeeklyTopCreatorBonus;
   final double totalWithdrawnGross;
   final double totalWithdrawalFees;
   final double totalWithdrawnNet;
   final double pendingWithdrawals;
+  final double walletBalance;
+  final double walletAvailableBalance;
+  final String walletCurrency;
   final int activeCompetitions;
   final int attributedSignups;
   final int qualifiedJoins;

@@ -98,6 +98,7 @@ from app.models.club_sponsorship_contract import ClubSponsorshipContract
 from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from app.models.club_trophy import ClubTrophy
+from app.models.clip_variant import ClipVariant
 from app.models.competition import Competition, UserCompetition
 from app.models.competition_autofill_rule import CompetitionAutofillRule
 from app.models.competition_entry import CompetitionEntry
@@ -120,6 +121,16 @@ from app.models.competition_seed_rule import CompetitionSeedRule
 from app.models.competition_visibility_rule import CompetitionVisibilityRule
 from app.models.competition_wallet_ledger import CompetitionWalletLedger
 from app.models.creator_campaign import CreatorCampaign
+from app.models.creator_marketplace import (
+    CreatorMarketplaceCampaign,
+    CreatorMarketplaceCampaignPayoutBasis,
+    CreatorMarketplaceCampaignPayoutType,
+    CreatorMarketplaceCampaignStatus,
+    CreatorMarketplaceOffer,
+    CreatorMarketplaceOfferStatus,
+    CreatorMarketplaceParticipation,
+    CreatorMarketplaceReputationScore,
+)
 from app.models.creator_monetization import (
     CreatorBroadcastModeConfig,
     CreatorBroadcastPurchase,
@@ -310,7 +321,9 @@ from app.models.treasury import (
     TreasuryWithdrawalStatus,
     UserBankAccount,
 )
+from app.models.follow import Follow
 from app.models.user import KycStatus, User, UserRole
+from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user_region import UserRegionProfile
 from app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
 from app.models.notification_record import NotificationRecord
@@ -416,6 +429,8 @@ from app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, Ri
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
 from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
+from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
+from app.models.sponsored_clip import SponsoredClip
 from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
 from app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
 from app.models.history_engagement import (
@@ -761,6 +776,7 @@ __all__ = [
     "UserBankAccount",
     "UserRegionProfile",
     "User",
+    "UserAffinityProfile",
     "UserRole",
     "NotificationRecord",
     "OwnershipGroup",
@@ -846,6 +862,8 @@ __all__ = [
     "SystemEventSeverity",
     "SponsorshipLead",
     "CreatorCampaignMetricSnapshot",
+    "CreatorClipRevenueAttribution",
+    "SponsoredClip",
     "GovernanceProposal",
     "GovernanceProposalScope",
     "GovernanceProposalStatus",
@@ -871,6 +889,7 @@ __all__ = [
     "HistoricalLeaderboardEntry",
     "Achievement",
     "AchievementCategory",
+    "Follow",
     "UserAchievement",
     "MilestoneProgress",
     "UserProfile",

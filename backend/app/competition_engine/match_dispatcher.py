@@ -20,6 +20,7 @@ from .queue_contracts import (
     QueuePublisher,
     QueuedJobRecord,
 )
+from app.observability.tracing import start_internal_span
 
 
 def scale_strength_rating(
@@ -102,33 +103,41 @@ class MatchDispatcher:
         home_user_id: str | None = None,
         away_user_id: str | None = None,
     ) -> QueuedJobRecord:
-        job = MatchSimulationJob(
-            fixture_id=fixture.fixture_id,
-            competition_id=fixture.competition_id,
-            competition_type=fixture.competition_type,
-            match_date=fixture.match_date,
-            window=fixture.window,
-            slot_sequence=fixture.slot_sequence,
-            season_id=season_id,
-            competition_name=competition_name,
-            stage_name=stage_name or fixture.stage_name,
-            round_number=fixture.round_number,
-            scheduled_kickoff_at=scheduled_kickoff_at,
-            simulation_seed=simulation_seed,
-            home_club_id=fixture.home_club_id,
-            home_club_name=home_club_name,
-            home_strength_rating=home_strength_rating,
-            home_user_id=home_user_id,
-            away_club_id=fixture.away_club_id,
-            away_club_name=away_club_name,
-            away_strength_rating=away_strength_rating,
-            away_user_id=away_user_id,
-            replay_visibility=fixture.replay_visibility,
-            is_cup_match=fixture.is_cup_match,
-            allow_penalties=fixture.allow_penalties,
-            is_final=is_final,
-        )
-        return self.queue_publisher.publish(job)
+        with start_internal_span(
+            "competition.dispatch_match_simulation",
+            attributes={
+                "competition.id": fixture.competition_id,
+                "competition.fixture_id": fixture.fixture_id,
+                "competition.type": getattr(fixture.competition_type, "value", fixture.competition_type),
+            },
+        ):
+            job = MatchSimulationJob(
+                fixture_id=fixture.fixture_id,
+                competition_id=fixture.competition_id,
+                competition_type=fixture.competition_type,
+                match_date=fixture.match_date,
+                window=fixture.window,
+                slot_sequence=fixture.slot_sequence,
+                season_id=season_id,
+                competition_name=competition_name,
+                stage_name=stage_name or fixture.stage_name,
+                round_number=fixture.round_number,
+                scheduled_kickoff_at=scheduled_kickoff_at,
+                simulation_seed=simulation_seed,
+                home_club_id=fixture.home_club_id,
+                home_club_name=home_club_name,
+                home_strength_rating=home_strength_rating,
+                home_user_id=home_user_id,
+                away_club_id=fixture.away_club_id,
+                away_club_name=away_club_name,
+                away_strength_rating=away_strength_rating,
+                away_user_id=away_user_id,
+                replay_visibility=fixture.replay_visibility,
+                is_cup_match=fixture.is_cup_match,
+                allow_penalties=fixture.allow_penalties,
+                is_final=is_final,
+            )
+            return self.queue_publisher.publish(job)
 
     def dispatch_match_simulations(
         self,

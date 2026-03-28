@@ -4,24 +4,31 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.competition_engine.queue_contracts import MatchSimulationJob
-from app.fairness.fairness_guard import FairnessViolation
-from app.match_engine.schemas import MatchClubContextInput, MatchSimulationRequest, MatchTeamInput
 from app.models.creator_monetization import CreatorBroadcastPurchase, CreatorSeasonPass
 from app.models.gift_transaction import GiftTransaction
 from app.models.media_engine import PremiumVideoPurchase
 from app.models.wallet import LedgerUnit
+
+if TYPE_CHECKING:
+    from app.match_engine.schemas import MatchClubContextInput, MatchSimulationRequest, MatchTeamInput
 
 _ZERO = Decimal("0.0000")
 _CASUAL_THRESHOLD = Decimal("250.0000")
 _WHALE_THRESHOLD = Decimal("1500.0000")
 _UNDERDOG_MAX_BPS = 75
 _COIN_COMPATIBLE_UNITS = {LedgerUnit.COIN}
+
+
+def _fairness_violation(detail: str, *, reason: str) -> Exception:
+    from app.fairness.fairness_guard import FairnessViolation
+
+    return FairnessViolation(detail, reason=reason)
 
 
 class SpendTier(StrEnum):
@@ -73,7 +80,7 @@ class SpendBalanceController:
         self._enforce_s_plus_cap(request.away_team, policy=policy)
         team_rating_spread = abs(self._average_team_rating(request.home_team) - self._average_team_rating(request.away_team))
         if team_rating_spread > policy.max_team_rating_spread:
-            raise FairnessViolation(
+            raise _fairness_violation(
                 f"Balanced squad spread exceeded the {policy.max_team_rating_spread}-point limit for this match.",
                 reason="team_rating_spread_exceeded",
             )
@@ -159,7 +166,7 @@ class SpendBalanceController:
     def _enforce_s_plus_cap(self, team: MatchTeamInput, *, policy: FairnessModePolicy) -> None:
         s_plus_count = self._count_s_plus_players(team)
         if s_plus_count > policy.max_s_plus_players:
-            raise FairnessViolation(
+            raise _fairness_violation(
                 f"{team.team_name} exceeds the {policy.max_s_plus_players} S+ player cap for {policy.mode.value} fairness mode.",
                 reason="s_plus_cap_exceeded",
             )
@@ -197,6 +204,8 @@ class SpendBalanceController:
         }
 
     def _boost_team_context(self, team: MatchTeamInput, *, bonus_points: int) -> MatchTeamInput:
+        from app.match_engine.schemas import MatchClubContextInput
+
         context = team.club_context
         boosted_context = MatchClubContextInput(
             club_tier=context.club_tier,

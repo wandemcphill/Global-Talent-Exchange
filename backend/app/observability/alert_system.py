@@ -4,9 +4,10 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import RLock
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.core.events import DomainEvent
+if TYPE_CHECKING:
+    from app.core.events import DomainEvent
 
 
 @dataclass(frozen=True, slots=True)

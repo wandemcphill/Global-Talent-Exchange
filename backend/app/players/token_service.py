@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.models.base import generate_uuid
 from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
@@ -195,7 +196,12 @@ class PlayerTokenMarketService:
         normalized_multiplier = self._amount(multiplier)
         if normalized_multiplier <= Decimal("0.0000"):
             raise PlayerTokenMarketError("Performance multiplier must be greater than zero.", reason="multiplier_invalid")
-        market.share_price_coin = self._amount(Decimal(market.share_price_coin) * normalized_multiplier)
+        reference_price = self._amount(market.share_price_coin)
+        proposed_price = self._amount(reference_price * normalized_multiplier)
+        market.share_price_coin = EconomyGovernorService(self.session).clamp_price_change(
+            reference_price=reference_price,
+            proposed_price=proposed_price,
+        )
         self._record_event(
             player_id=player_id,
             actor_user_id=actor.id,

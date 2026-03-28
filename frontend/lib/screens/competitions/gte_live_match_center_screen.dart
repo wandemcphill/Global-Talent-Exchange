@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/data/match/match_simulation_engine.dart';
 import 'package:gte_frontend/data/match/match_simulation_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/match/live_commentary_feed_service.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match/gtex_match_render_mode.dart';
@@ -19,6 +21,7 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/competitions/competition_dynamic_prize_pool_card.dart';
+import 'package:gte_frontend/widgets/match/gte_highlight_player_sheet.dart';
 import 'package:gte_frontend/widgets/match/match_hud_avatar.dart';
 import 'package:gte_frontend/widgets/squad/squad_avatar_badge.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
@@ -31,6 +34,9 @@ import '../match/gtex_match_viewer_screen.dart';
 
 enum _LiveViewMode { commentary, keyMoments }
 
+typedef GteLiveCommentaryStreamLoader =
+    Stream<List<LiveMatchEvent>> Function(LiveMatchSnapshot match);
+
 class GteLiveMatchCenterScreen extends StatefulWidget {
   const GteLiveMatchCenterScreen({
     super.key,
@@ -39,6 +45,7 @@ class GteLiveMatchCenterScreen extends StatefulWidget {
     this.onOpenLogin,
     this.navigationDependencies,
     this.snapshotLoader,
+    this.commentaryStreamLoader,
   });
 
   final CompetitionSummary competition;
@@ -47,6 +54,7 @@ class GteLiveMatchCenterScreen extends StatefulWidget {
   final GteNavigationDependencies? navigationDependencies;
   final Future<LiveMatchSnapshot> Function(CompetitionSummary competition)?
   snapshotLoader;
+  final GteLiveCommentaryStreamLoader? commentaryStreamLoader;
 
   @override
   State<GteLiveMatchCenterScreen> createState() =>
@@ -58,12 +66,20 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   late final Timer _countdownTicker;
   late DateTime _countdownStartedAt;
   _LiveViewMode _viewMode = _LiveViewMode.commentary;
+  final LiveCommentaryFeedService _commentaryFeedService =
+      HybridLiveCommentaryFeedService();
   final Map<String, bool> _tacticToggles = <String, bool>{
     'High press': true,
     'Overlap fullbacks': false,
     'Early crosses': false,
     'Compact mid-block': true,
   };
+  Stream<List<LiveMatchEvent>>? _commentaryStream;
+  StreamSubscription<List<LiveMatchEvent>>? _commentarySubscription;
+  String? _commentaryBindingKey;
+  final Set<String> _seenCommentaryKeys = <String>{};
+  bool _commentarySeedHydrated = false;
+  bool _bigMomentPromptOpen = false;
 
   @override
   void initState() {
@@ -82,6 +98,7 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   }
 
   void _reload() {
+    _disposeCommentaryFeed();
     setState(() {
       _snapshotFuture = _loadSnapshot();
       _countdownStartedAt = DateTime.now();
@@ -126,6 +143,32 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               isAuthenticated: widget.isAuthenticated,
             ),
       ),
+    );
+  }
+
+  Future<void> _openHighlightClip(
+    LiveMatchSnapshot match,
+    LiveMatchHighlightClip clip,
+  ) async {
+    if (!clip.hasPlayableStream) {
+      await _openReplayViewer(
+        match,
+        presentationMode: MatchViewerPresentationMode.replay,
+      );
+      return;
+    }
+    await showGteMatchHighlightPlayerSheet(
+      context,
+      clip: clip,
+      onWatchReplay: () {
+        Navigator.of(context).pop();
+        unawaited(
+          _openReplayViewer(
+            match,
+            presentationMode: MatchViewerPresentationMode.replay,
+          ),
+        );
+      },
     );
   }
 
@@ -194,6 +237,207 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     );
   }
 
+  void _bindCommentaryFeed(LiveMatchSnapshot match) {
+    final String matchKey =
+        match.matchId?.trim().isNotEmpty == true
+            ? match.matchId!.trim()
+            : widget.competition.id;
+    final String bindingKey = <Object>[
+      matchKey,
+      match.minute,
+      match.homeScore,
+      match.awayScore,
+      match.commentary.length,
+    ].join('|');
+    if (_commentaryBindingKey == bindingKey && _commentaryStream != null) {
+      return;
+    }
+    _disposeCommentaryFeed(clearBindingKey: false);
+    _commentaryBindingKey = bindingKey;
+    final GteLiveCommentaryStreamLoader loader =
+        widget.commentaryStreamLoader ??
+        (LiveMatchSnapshot snapshot) {
+          return _commentaryFeedService.watch(
+            matchId: matchKey,
+            seedEvents: snapshot.commentary,
+          );
+        };
+    final Stream<List<LiveMatchEvent>> stream =
+        loader(match).asBroadcastStream();
+    _commentaryStream = stream;
+    _commentarySubscription = stream.listen(
+      (List<LiveMatchEvent> events) => _handleCommentaryUpdate(match, events),
+      onError: (_) {},
+    );
+  }
+
+  void _disposeCommentaryFeed({bool clearBindingKey = true}) {
+    _commentarySubscription?.cancel();
+    _commentarySubscription = null;
+    _commentaryStream = null;
+    _seenCommentaryKeys.clear();
+    _commentarySeedHydrated = false;
+    if (clearBindingKey) {
+      _commentaryBindingKey = null;
+    }
+  }
+
+  void _handleCommentaryUpdate(
+    LiveMatchSnapshot match,
+    List<LiveMatchEvent> events,
+  ) {
+    final List<LiveMatchEvent> normalized = _normalizeCommentary(events);
+    if (normalized.isEmpty) {
+      return;
+    }
+    if (!_commentarySeedHydrated) {
+      _seenCommentaryKeys.addAll(normalized.map(_liveCommentaryEventKey));
+      _commentarySeedHydrated = true;
+      return;
+    }
+    final List<LiveMatchEvent> newEvents = normalized
+        .where(
+          (LiveMatchEvent event) =>
+              !_seenCommentaryKeys.contains(_liveCommentaryEventKey(event)),
+        )
+        .toList(growable: false);
+    if (newEvents.isEmpty) {
+      return;
+    }
+    _seenCommentaryKeys.addAll(newEvents.map(_liveCommentaryEventKey));
+    final List<LiveMatchEvent> bigMoments = newEvents
+        .where(_isBigMoment)
+        .toList(growable: false);
+    if (bigMoments.isEmpty) {
+      return;
+    }
+    final LiveMatchEvent spotlight = bigMoments.last;
+    if (spotlight.type == LiveMatchEventType.goal) {
+      unawaited(HapticFeedback.heavyImpact());
+      unawaited(SystemSound.play(SystemSoundType.click));
+    }
+    if (!mounted) {
+      return;
+    }
+    unawaited(_showBigMomentPrompt(match, spotlight));
+  }
+
+  Future<void> _showBigMomentPrompt(
+    LiveMatchSnapshot match,
+    LiveMatchEvent event,
+  ) async {
+    if (_bigMomentPromptOpen || !mounted) {
+      return;
+    }
+    _bigMomentPromptOpen = true;
+    final LiveMatchHighlightClip? relatedClip = _relatedClipForEvent(
+      match,
+      event,
+    );
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF08111B),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Big moment',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "${event.minute}' ${event.title}",
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  event.detail,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: <Widget>[
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        unawaited(
+                          _openReplayViewer(
+                            match,
+                            presentationMode:
+                                MatchViewerPresentationMode.replay,
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.sports_soccer_rounded),
+                      label: const Text('Watch Replay'),
+                    ),
+                    if (relatedClip != null)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          if (relatedClip.hasPlayableStream) {
+                            unawaited(_openHighlightClip(match, relatedClip));
+                            return;
+                          }
+                          unawaited(_openHighlights());
+                        },
+                        icon: const Icon(Icons.play_circle_outline),
+                        label: Text(
+                          relatedClip.hasPlayableStream
+                              ? 'Play Highlight'
+                              : 'Highlights Hub',
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    _bigMomentPromptOpen = false;
+  }
+
+  LiveMatchHighlightClip? _relatedClipForEvent(
+    LiveMatchSnapshot match,
+    LiveMatchEvent event,
+  ) {
+    final Iterable<LiveMatchHighlightClip> clips = <LiveMatchHighlightClip>[
+      ...match.keyMoments,
+      ...match.highlights,
+    ];
+    LiveMatchHighlightClip? selected;
+    int? bestMinuteDelta;
+    for (final LiveMatchHighlightClip clip in clips) {
+      final int delta = (clip.minute - event.minute).abs();
+      if (bestMinuteDelta == null || delta < bestMinuteDelta) {
+        bestMinuteDelta = delta;
+        selected = clip;
+      }
+    }
+    if (bestMinuteDelta == null || bestMinuteDelta > 3) {
+      return null;
+    }
+    return selected;
+  }
+
   Future<void> _openSimulation(LiveMatchSnapshot match) async {
     final MatchSimulationImportance importance =
         widget.competition.capacity <= 2
@@ -254,6 +498,7 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   @override
   void dispose() {
     _countdownTicker.cancel();
+    _disposeCommentaryFeed();
     super.dispose();
   }
 
@@ -313,6 +558,9 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
             }
 
             final LiveMatchSnapshot match = snapshot.data!;
+            _bindCommentaryFeed(match);
+            final Stream<List<LiveMatchEvent>>? commentaryStream =
+                _commentaryStream;
             final CompetitionDynamicPrizePool? dynamicPrizePool =
                 widget.competition.dynamicPrizePool;
             final String? jackpotCountdown = _jackpotCountdownLabel(match);
@@ -537,12 +785,46 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                       ),
                       const SizedBox(height: 14),
                       if (_viewMode == _LiveViewMode.commentary)
-                        _CommentaryPanel(match: match)
+                        StreamBuilder<List<LiveMatchEvent>>(
+                          stream: commentaryStream,
+                          initialData: match.commentary,
+                          builder: (
+                            BuildContext context,
+                            AsyncSnapshot<List<LiveMatchEvent>> snapshot,
+                          ) {
+                            return _CommentaryPanel(
+                              events: _normalizeCommentary(
+                                snapshot.data ?? match.commentary,
+                              ),
+                              onWatchReplay: (LiveMatchEvent _) {
+                                unawaited(
+                                  _openReplayViewer(
+                                    match,
+                                    presentationMode:
+                                        MatchViewerPresentationMode.replay,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        )
                       else
                         _KeyMomentPanel(
                           match: match,
                           isAuthenticated: widget.isAuthenticated,
                           onOpenLogin: widget.onOpenLogin,
+                          onPlayClip: (LiveMatchHighlightClip clip) {
+                            unawaited(_openHighlightClip(match, clip));
+                          },
+                          onWatchReplay: () {
+                            unawaited(
+                              _openReplayViewer(
+                                match,
+                                presentationMode:
+                                    MatchViewerPresentationMode.replay,
+                              ),
+                            );
+                          },
                         ),
                     ],
                   ),
@@ -798,15 +1080,64 @@ class _TeamScore extends StatelessWidget {
   }
 }
 
-class _CommentaryPanel extends StatelessWidget {
-  const _CommentaryPanel({required this.match});
+class _CommentaryPanel extends StatefulWidget {
+  const _CommentaryPanel({required this.events, required this.onWatchReplay});
 
-  final LiveMatchSnapshot match;
+  final List<LiveMatchEvent> events;
+  final ValueChanged<LiveMatchEvent> onWatchReplay;
+
+  @override
+  State<_CommentaryPanel> createState() => _CommentaryPanelState();
+}
+
+class _CommentaryPanelState extends State<_CommentaryPanel> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scheduleAutoScroll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CommentaryPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.events.length != widget.events.length) {
+      _scheduleAutoScroll();
+    }
+  }
+
+  void _scheduleAutoScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) {
+        return;
+      }
+      final double target = _scrollController.position.maxScrollExtent;
+      if ((_scrollController.offset - target).abs() < 4) {
+        _scrollController.jumpTo(target);
+        return;
+      }
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final List<LiveMatchEvent> events =
-        match.commentary.reversed.take(6).toList();
+        widget.events.length > 14
+            ? widget.events.sublist(widget.events.length - 14)
+            : widget.events;
     if (events.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,42 +1162,76 @@ class _CommentaryPanel extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
-        ...events.map(
-          (LiveMatchEvent event) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: Colors.white.withValues(alpha: 0.04),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '${event.minute}\'',
-                    style: Theme.of(context).textTheme.labelLarge,
+        Text(
+          'The feed stays pinned to the latest moment automatically.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 300,
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: ListView.separated(
+              controller: _scrollController,
+              itemCount: events.length,
+              itemBuilder: (BuildContext context, int index) {
+                final LiveMatchEvent event = events[index];
+                final Color accent = _commentaryAccentFor(event.type);
+                final bool replayable = _isBigMoment(event);
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: accent.withValues(alpha: 0.12),
+                    border: Border.all(color: accent.withValues(alpha: 0.38)),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          event.title,
-                          style: Theme.of(context).textTheme.titleSmall,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accent.withValues(alpha: 0.18),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          event.detail,
-                          style: Theme.of(context).textTheme.bodySmall,
+                        child: Icon(
+                          _commentaryIconFor(event.type),
+                          size: 18,
+                          color: accent,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              "${event.minute}'  ${event.title}",
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              event.detail,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            if (replayable) ...<Widget>[
+                              const SizedBox(height: 10),
+                              TextButton.icon(
+                                onPressed: () => widget.onWatchReplay(event),
+                                icon: const Icon(Icons.play_circle_outline),
+                                label: const Text('Watch Replay'),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
             ),
           ),
         ),
@@ -880,11 +1245,15 @@ class _KeyMomentPanel extends StatelessWidget {
     required this.match,
     required this.isAuthenticated,
     required this.onOpenLogin,
+    required this.onPlayClip,
+    required this.onWatchReplay,
   });
 
   final LiveMatchSnapshot match;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final ValueChanged<LiveMatchHighlightClip> onPlayClip;
+  final VoidCallback onWatchReplay;
 
   @override
   Widget build(BuildContext context) {
@@ -975,15 +1344,28 @@ class _KeyMomentPanel extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${clip.minute}\' • ${clip.durationLabel}',
+                          "${clip.minute}' | ${clip.durationLabel}",
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          clip.hasPlayableStream
+                              ? 'Highlight stream ready now.'
+                              : 'Clip render pending. Replay is available now.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
                   ),
                   FilledButton.tonal(
-                    onPressed: () {},
-                    child: const Text('Play'),
+                    onPressed:
+                        () =>
+                            clip.hasPlayableStream
+                                ? onPlayClip(clip)
+                                : onWatchReplay(),
+                    child: Text(
+                      clip.hasPlayableStream ? 'Play' : 'Watch Replay',
+                    ),
                   ),
                 ],
               ),
@@ -992,6 +1374,67 @@ class _KeyMomentPanel extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+List<LiveMatchEvent> _normalizeCommentary(List<LiveMatchEvent> events) {
+  final List<LiveMatchEvent> sorted = events.toList(growable: false);
+  sorted.sort((LiveMatchEvent left, LiveMatchEvent right) {
+    final int minuteCompare = left.minute.compareTo(right.minute);
+    if (minuteCompare != 0) {
+      return minuteCompare;
+    }
+    final int typeCompare = left.type.index.compareTo(right.type.index);
+    if (typeCompare != 0) {
+      return typeCompare;
+    }
+    final int titleCompare = left.title.compareTo(right.title);
+    if (titleCompare != 0) {
+      return titleCompare;
+    }
+    return left.detail.compareTo(right.detail);
+  });
+  return sorted;
+}
+
+String _liveCommentaryEventKey(LiveMatchEvent event) {
+  return <Object>[
+    event.minute,
+    event.type.name,
+    event.team.trim().toLowerCase(),
+    event.title.trim().toLowerCase(),
+    event.detail.trim().toLowerCase(),
+    event.isKeyMoment,
+  ].join('|');
+}
+
+bool _isBigMoment(LiveMatchEvent event) {
+  return event.type == LiveMatchEventType.goal || event.isKeyMoment;
+}
+
+Color _commentaryAccentFor(LiveMatchEventType type) {
+  switch (type) {
+    case LiveMatchEventType.goal:
+      return GteShellTheme.accentCommunity;
+    case LiveMatchEventType.card:
+      return GteShellTheme.accentWarm;
+    case LiveMatchEventType.substitution:
+      return GteShellTheme.accentArena;
+    case LiveMatchEventType.incident:
+      return Colors.white;
+  }
+}
+
+IconData _commentaryIconFor(LiveMatchEventType type) {
+  switch (type) {
+    case LiveMatchEventType.goal:
+      return Icons.sports_soccer_rounded;
+    case LiveMatchEventType.card:
+      return Icons.crop_portrait_rounded;
+    case LiveMatchEventType.substitution:
+      return Icons.swap_horiz_rounded;
+    case LiveMatchEventType.incident:
+      return Icons.graphic_eq_rounded;
   }
 }
 

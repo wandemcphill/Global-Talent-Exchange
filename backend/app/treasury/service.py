@@ -32,7 +32,7 @@ from app.models.withdrawal_review import WithdrawalReview
 from app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from app.models.user import KycStatus, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
-from app.risk_ops_engine.service import RiskOpsService
+from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -566,6 +566,11 @@ class TreasuryService:
         use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
         processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
         payout_channel = "bank_transfer" if use_manual_payout else "gateway"
+
+        try:
+            RiskOpsService(session).assert_withdrawal_allowed(user.id)
+        except RiskActionBlockedError as exc:
+            raise TreasuryConflictError(str(exc)) from exc
 
         eligibility = self.get_withdrawal_eligibility(session, user)
         if eligibility.requires_kyc:

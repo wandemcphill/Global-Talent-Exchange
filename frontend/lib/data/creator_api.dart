@@ -33,9 +33,7 @@ class CreatorApi {
     );
   }
 
-  factory CreatorApi.fixture({
-    String baseUrl = 'https://community.gte.local',
-  }) {
+  factory CreatorApi.fixture({String baseUrl = 'https://community.gte.local'}) {
     return CreatorApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -56,14 +54,13 @@ class CreatorApi {
       return fixtures.profile();
     }
     if (creatorId != 'me') {
-      return client.withFallback<CreatorProfile>(
-        () async {
-          final Map<String, dynamic> payload =
-              await client.getMap('/api/creators/$creatorId', auth: false);
-          return _buildProfileFromPublic(payload, baseUrl: baseUrl);
-        },
-        () async => fixtures.profile(),
-      );
+      return client.withFallback<CreatorProfile>(() async {
+        final Map<String, dynamic> payload = await client.getMap(
+          '/api/creators/$creatorId',
+          auth: false,
+        );
+        return _buildProfileFromPublic(payload, baseUrl: baseUrl);
+      }, () async => fixtures.profile());
     }
     return _fetchCurrentCreatorProfile();
   }
@@ -95,12 +92,15 @@ class CreatorApi {
   }
 
   Future<CreatorProfile> _fetchCurrentCreatorProfile() async {
-    final Map<String, dynamic> summaryPayload =
-        await client.getMap('/api/creators/me/summary');
-    final List<dynamic> competitionsPayload =
-        await client.getList('/api/creators/me/competitions');
-    final Map<String, dynamic> financePayload =
-        await client.getMap('/api/creators/me/finance');
+    final Map<String, dynamic> summaryPayload = await client.getMap(
+      '/api/creators/me/summary',
+    );
+    final List<dynamic> competitionsPayload = await client.getList(
+      '/api/creators/me/competitions',
+    );
+    final Map<String, dynamic> financePayload = await client.getMap(
+      '/api/creators/me/finance',
+    );
     return _buildProfileFromSummary(
       summaryPayload,
       competitionsPayload,
@@ -143,18 +143,20 @@ CreatorProfile _buildProfileFromSummary(
     weeklyInviteLift:
         '${max(0, qualifiedJoins ~/ 2)} qualified joins this week',
     topChannel: 'Creator share codes',
-    inviteAttributionRate: totalSignups == 0
-        ? '0% attribution rate'
-        : '${((qualifiedJoins / totalSignups) * 100).toStringAsFixed(1)}% attribution rate',
+    inviteAttributionRate:
+        totalSignups == 0
+            ? '0% attribution rate'
+            : '${((qualifiedJoins / totalSignups) * 100).toStringAsFixed(1)}% attribution rate',
   );
   final CreatorRewardSummary rewardSummary = CreatorRewardSummary(
     pendingCommunityRewards: '$pendingRewards rewards pending review',
     lifetimeMilestoneRewards: '$approvedRewards rewards approved',
     competitionEntryCredits:
         '${finance.totalGiftIncome.toStringAsFixed(2)} credits unlocked',
-    ledgerStatus: finance.pendingWithdrawals > 0
-        ? 'Withdrawals in flight'
-        : 'Ledger balanced',
+    ledgerStatus:
+        finance.pendingWithdrawals > 0
+            ? 'Withdrawals in flight'
+            : 'Ledger balanced',
   );
 
   return CreatorProfile(
@@ -189,10 +191,20 @@ CreatorProfile _buildProfileFromPublic(
     currency: 'credits',
     totalGiftIncome: 0,
     totalRewardIncome: 0,
+    totalClipIncome: 0,
+    totalClipViews: 0,
+    monetizedClips: 0,
+    viralClipCount: 0,
+    totalViralBonus: 0,
+    totalReferralBonus: 0,
+    totalWeeklyTopCreatorBonus: 0,
     totalWithdrawnGross: 0,
     totalWithdrawalFees: 0,
     totalWithdrawnNet: 0,
     pendingWithdrawals: 0,
+    walletBalance: 0,
+    walletAvailableBalance: 0,
+    walletCurrency: 'credits',
     activeCompetitions: 0,
     attributedSignups: 0,
     qualifiedJoins: 0,
@@ -264,12 +276,24 @@ CreatorFinanceSummary _creatorFinanceFromJson(Object? value) {
     currency: json['currency']?.toString() ?? 'credits',
     totalGiftIncome: (json['total_gift_income'] as num?)?.toDouble() ?? 0,
     totalRewardIncome: (json['total_reward_income'] as num?)?.toDouble() ?? 0,
+    totalClipIncome: (json['total_clip_income'] as num?)?.toDouble() ?? 0,
+    totalClipViews: (json['total_clip_views'] as num?)?.toInt() ?? 0,
+    monetizedClips: (json['monetized_clips'] as num?)?.toInt() ?? 0,
+    viralClipCount: (json['viral_clip_count'] as num?)?.toInt() ?? 0,
+    totalViralBonus: (json['total_viral_bonus'] as num?)?.toDouble() ?? 0,
+    totalReferralBonus: (json['total_referral_bonus'] as num?)?.toDouble() ?? 0,
+    totalWeeklyTopCreatorBonus:
+        (json['total_weekly_top_creator_bonus'] as num?)?.toDouble() ?? 0,
     totalWithdrawnGross:
         (json['total_withdrawn_gross'] as num?)?.toDouble() ?? 0,
     totalWithdrawalFees:
         (json['total_withdrawal_fees'] as num?)?.toDouble() ?? 0,
     totalWithdrawnNet: (json['total_withdrawn_net'] as num?)?.toDouble() ?? 0,
     pendingWithdrawals: (json['pending_withdrawals'] as num?)?.toDouble() ?? 0,
+    walletBalance: (json['wallet_balance'] as num?)?.toDouble() ?? 0,
+    walletAvailableBalance:
+        (json['wallet_available_balance'] as num?)?.toDouble() ?? 0,
+    walletCurrency: json['wallet_currency']?.toString() ?? 'credits',
     activeCompetitions: (json['active_competitions'] as num?)?.toInt() ?? 0,
     attributedSignups: (json['attributed_signups'] as num?)?.toInt() ?? 0,
     qualifiedJoins: (json['qualified_joins'] as num?)?.toInt() ?? 0,
@@ -358,16 +382,27 @@ CreatorProfile _buildFixtureProfile(String baseUrl) {
       currency: 'credits',
       totalGiftIncome: 420,
       totalRewardIncome: 980,
+      totalClipIncome: 132.5,
+      totalClipViews: 68400,
+      monetizedClips: 6,
+      viralClipCount: 1,
+      totalViralBonus: 12,
+      totalReferralBonus: 4.5,
+      totalWeeklyTopCreatorBonus: 6,
       totalWithdrawnGross: 600,
       totalWithdrawalFees: 45,
       totalWithdrawnNet: 555,
       pendingWithdrawals: 120,
+      walletBalance: 214.5,
+      walletAvailableBalance: 214.5,
+      walletCurrency: 'credits',
       activeCompetitions: 2,
       attributedSignups: 184,
       qualifiedJoins: 72,
       insights: <String>[
         '2 creator competitions are currently linked to your profile.',
         'Gift income settled: 420.0000 credits.',
+        'Clip monetization is active with one viral highlight this week.',
       ],
     ),
     competitions: const <CreatorCompetition>[

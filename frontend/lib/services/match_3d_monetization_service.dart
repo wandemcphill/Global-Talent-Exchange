@@ -4,17 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
 
-enum RenderMode {
-  auto,
-  twoD,
-  threeD,
-}
+enum RenderMode { auto, twoD, threeD }
 
-enum Match3dCameraPreset {
-  broadcast,
-  sideline,
-  goalbox,
-}
+enum Match3dCameraPreset { broadcast, sideline, goalbox }
 
 enum Match3dPaidInteraction {
   slowMotionReplay,
@@ -22,11 +14,7 @@ enum Match3dPaidInteraction {
   highlightNextAttack,
 }
 
-enum Match3dReaction {
-  fire,
-  applause,
-  hype,
-}
+enum Match3dReaction { fire, applause, hype }
 
 enum Match3dPurchaseKind {
   threeDUnlock,
@@ -37,11 +25,7 @@ enum Match3dPurchaseKind {
   highlightNextAttack,
 }
 
-enum Match3dPromptMoment {
-  preMatch,
-  halftime,
-  bigMoment,
-}
+enum Match3dPromptMoment { preMatch, halftime, bigMoment }
 
 enum Match3dFailureReason {
   cancelled,
@@ -107,9 +91,9 @@ class Match3dUserEntitlement {
     this.availableCoins = 0,
     this.unlockedMatchIds = const <String>{},
     this.tournamentBoostCompetitionIds = const <String>{},
-  })  : isPremiumUser = true,
-        premiumCameraAccess = true,
-        fastReplayAccess = true;
+  }) : isPremiumUser = true,
+       premiumCameraAccess = true,
+       fastReplayAccess = true;
 
   final bool isPremiumUser;
   final double availableCoins;
@@ -154,9 +138,8 @@ bool canAccess3D(
 
 typedef Match3dEntitlementProvider = Match3dUserEntitlement? Function();
 
-typedef Match3dPurchaseIntentHandler = Future<Match3dPurchaseDecision> Function(
-  Match3dPurchaseRequest request,
-);
+typedef Match3dPurchaseIntentHandler =
+    Future<Match3dPurchaseDecision> Function(Match3dPurchaseRequest request);
 
 class Match3dPurchaseRequest {
   const Match3dPurchaseRequest({
@@ -188,10 +171,9 @@ class Match3dPurchaseDecision {
     this.message,
   }) : approved = true;
 
-  const Match3dPurchaseDecision.denied({
-    this.message,
-  })  : approved = false,
-        consumeLocalBalance = false;
+  const Match3dPurchaseDecision.denied({this.message})
+    : approved = false,
+      consumeLocalBalance = false;
 
   final bool approved;
   final bool consumeLocalBalance;
@@ -222,17 +204,13 @@ class Match3dActionResult {
     this.overlayBurst,
   });
 
-  const Match3dActionResult.success({
-    this.message,
-    this.overlayBurst,
-  })  : success = true,
-        failureReason = null;
+  const Match3dActionResult.success({this.message, this.overlayBurst})
+    : success = true,
+      failureReason = null;
 
-  const Match3dActionResult.failure({
-    this.message,
-    this.failureReason,
-  })  : success = false,
-        overlayBurst = null;
+  const Match3dActionResult.failure({this.message, this.failureReason})
+    : success = false,
+      overlayBurst = null;
 
   final bool success;
   final String? message;
@@ -246,9 +224,9 @@ class Match3dMonetizationService extends ChangeNotifier {
     RenderMode initialRenderMode = RenderMode.twoD,
     Match3dPurchaseIntentHandler? onPurchaseIntent,
     this.tournamentBoostPrice,
-  })  : _baseEntitlement = entitlement ?? const Match3dUserEntitlement(),
-        _selectedRenderMode = initialRenderMode,
-        _onPurchaseIntent = onPurchaseIntent;
+  }) : _baseEntitlement = entitlement ?? const Match3dUserEntitlement(),
+       _selectedRenderMode = initialRenderMode,
+       _onPurchaseIntent = onPurchaseIntent;
 
   static const double threeDUnlockPrice = 0.2;
   static const double slowMotionReplayPrice = 0.05;
@@ -263,8 +241,10 @@ class Match3dMonetizationService extends ChangeNotifier {
   RenderMode _selectedRenderMode;
   Match3dCameraPreset _cameraPreset = Match3dCameraPreset.broadcast;
   double _coinsSpentLocally = 0;
+  double _rewardedCoinsEarnedLocally = 0;
   int _burstSequence = 0;
 
+  final Set<String> _claimedRewardedAdIds = <String>{};
   final Set<String> _sessionUnlockedMatchIds = <String>{};
   final Set<String> _sessionBoostedCompetitionIds = <String>{};
   final Map<String, Set<Match3dPaidInteraction>> _interactionUnlocksByMatch =
@@ -293,8 +273,12 @@ class Match3dMonetizationService extends ChangeNotifier {
 
   Match3dCameraPreset get cameraPreset => _cameraPreset;
 
-  double get availableCoinBalance =>
-      math.max(0, _baseEntitlement.availableCoins - _coinsSpentLocally);
+  double get availableCoinBalance => math.max(
+    0,
+    _baseEntitlement.availableCoins +
+        _rewardedCoinsEarnedLocally -
+        _coinsSpentLocally,
+  );
 
   void updateEntitlement(Match3dUserEntitlement? entitlement) {
     _baseEntitlement = entitlement ?? const Match3dUserEntitlement();
@@ -418,10 +402,40 @@ class Match3dMonetizationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool hasClaimedRewardedAd(String adId) =>
+      _claimedRewardedAdIds.contains(adId);
+
+  Future<Match3dActionResult> claimRewardedAd({
+    required String adId,
+    required int rewardCoins,
+    String? brand,
+  }) async {
+    if (_claimedRewardedAdIds.contains(adId)) {
+      return const Match3dActionResult.failure(
+        message: 'Reward already claimed for this ad.',
+        failureReason: Match3dFailureReason.unavailable,
+      );
+    }
+    _claimedRewardedAdIds.add(adId);
+    _rewardedCoinsEarnedLocally += rewardCoins.toDouble();
+    notifyListeners();
+    return Match3dActionResult.success(
+      message: '$rewardCoins coin reward added to your balance.',
+      overlayBurst: Match3dOverlayBurst(
+        id: 'rewarded-${_burstSequence++}',
+        label: '+$rewardCoins coins',
+        emoji: '🎁',
+        accentColor: const Color(0xFFF79009),
+        coinAmount: rewardCoins.toDouble(),
+      ),
+    );
+  }
+
   List<double> speedOptionsFor(Match3dMatchContext context) {
-    final List<double> options = canUseFastReplay(context)
-        ? _premiumSpeedOptions
-        : _standardSpeedOptions;
+    final List<double> options =
+        canUseFastReplay(context)
+            ? _premiumSpeedOptions
+            : _standardSpeedOptions;
     if (hasInteraction(
       context.matchId,
       Match3dPaidInteraction.slowMotionReplay,
@@ -515,11 +529,8 @@ class Match3dMonetizationService extends ChangeNotifier {
       successMessage: successMessage,
     );
     if (result.success) {
-      final Set<Match3dPaidInteraction> unlocked =
-          _interactionUnlocksByMatch.putIfAbsent(
-        context.matchId,
-        () => <Match3dPaidInteraction>{},
-      );
+      final Set<Match3dPaidInteraction> unlocked = _interactionUnlocksByMatch
+          .putIfAbsent(context.matchId, () => <Match3dPaidInteraction>{});
       unlocked.add(interaction);
       notifyListeners();
     }
@@ -561,22 +572,22 @@ class Match3dMonetizationService extends ChangeNotifier {
   ) {
     final ({String emoji, String label, Color accent}) burst =
         switch (reaction) {
-      Match3dReaction.fire => (
-          emoji: '\u{1F525}',
-          label: 'Fire reaction',
-          accent: const Color(0xFFF97066),
-        ),
-      Match3dReaction.applause => (
-          emoji: '\u{1F44F}',
-          label: 'Applause reaction',
-          accent: const Color(0xFF53B1FD),
-        ),
-      Match3dReaction.hype => (
-          emoji: '\u{26A1}',
-          label: 'Hype reaction',
-          accent: const Color(0xFF17B26A),
-        ),
-    };
+          Match3dReaction.fire => (
+            emoji: '\u{1F525}',
+            label: 'Fire reaction',
+            accent: const Color(0xFFF97066),
+          ),
+          Match3dReaction.applause => (
+            emoji: '\u{1F44F}',
+            label: 'Applause reaction',
+            accent: const Color(0xFF53B1FD),
+          ),
+          Match3dReaction.hype => (
+            emoji: '\u{26A1}',
+            label: 'Hype reaction',
+            accent: const Color(0xFF17B26A),
+          ),
+        };
     return Match3dActionResult.success(
       message: burst.label,
       overlayBurst: Match3dOverlayBurst(
@@ -609,7 +620,7 @@ class Match3dMonetizationService extends ChangeNotifier {
     }
     final Match3dPurchaseDecision decision =
         await _onPurchaseIntent?.call(request) ??
-            const Match3dPurchaseDecision.approved();
+        const Match3dPurchaseDecision.approved();
     if (!decision.approved) {
       return Match3dActionResult.failure(
         message: decision.message ?? 'Purchase cancelled.',

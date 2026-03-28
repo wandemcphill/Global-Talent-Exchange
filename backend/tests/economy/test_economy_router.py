@@ -114,12 +114,18 @@ def test_admin_governor_and_fx_controls_are_available(client) -> None:
             "tournament_entry_multiplier": "1.0000",
             "match_view_cost_multiplier": "1.0000",
             "reward_payout_multiplier": "1.0000",
+            "free_prize_multiplier": "1.0000",
+            "agent_activity_multiplier": "1.0000",
+            "price_change_limit": "0.2500",
             "conversion_bonus_bps": 0,
             "burn_bonus_bps": 0,
         },
     )
     assert governor_response.status_code == 200, governor_response.text
     assert governor_response.json()["mode"] == "manual"
+    assert Decimal(governor_response.json()["free_prize_multiplier"]) == Decimal("1.0000")
+    assert Decimal(governor_response.json()["agent_activity_multiplier"]) == Decimal("1.0000")
+    assert Decimal(governor_response.json()["price_change_limit"]) == Decimal("0.2500")
 
     apply_response = client.post(
         "/admin/economy/governor/apply",
@@ -132,6 +138,10 @@ def test_admin_governor_and_fx_controls_are_available(client) -> None:
                 "daily_mint": "12000.0000",
                 "avg_user_spend": "35.0000",
                 "inflation_rate": "0.1800",
+                "treasury_balance": "10.0000",
+                "liquidity_pool_balance": "20.0000",
+                "active_users": 4000,
+                "market_volatility": "0.6000",
             },
             "allow_manual_override": True,
         },
@@ -140,6 +150,12 @@ def test_admin_governor_and_fx_controls_are_available(client) -> None:
     apply_payload = apply_response.json()
     assert Decimal(apply_payload["tournament_entry_multiplier"]) > Decimal("1.0000")
     assert int(apply_payload["burn_bonus_bps"]) >= 500
+    assert Decimal(apply_payload["reward_payout_multiplier"]) == Decimal("0.8000")
+    assert Decimal(apply_payload["free_prize_multiplier"]) == Decimal("0.8000")
+    assert Decimal(apply_payload["agent_activity_multiplier"]) == Decimal("0.5000")
+    assert Decimal(apply_payload["price_change_limit"]) == Decimal("0.0500")
+    assert apply_payload["metrics"]["active_users"] == "4000.0000"
+    assert apply_payload["metrics"]["market_volatility"] == "0.6000"
 
     fx_update = client.post(
         "/admin/economy/fx-rates",

@@ -14,10 +14,7 @@ void main() {
 
   test('canAccess3D allows premium, tournament boost, and match unlock', () {
     expect(
-      canAccess3D(
-        baseContext,
-        const Match3dUserEntitlement.proManager(),
-      ),
+      canAccess3D(baseContext, const Match3dUserEntitlement.proManager()),
       isTrue,
     );
     expect(
@@ -32,19 +29,11 @@ void main() {
     expect(
       canAccess3D(
         baseContext,
-        const Match3dUserEntitlement(
-          unlockedMatchIds: <String>{'match-1'},
-        ),
+        const Match3dUserEntitlement(unlockedMatchIds: <String>{'match-1'}),
       ),
       isTrue,
     );
-    expect(
-      canAccess3D(
-        baseContext,
-        const Match3dUserEntitlement(),
-      ),
-      isFalse,
-    );
+    expect(canAccess3D(baseContext, const Match3dUserEntitlement()), isFalse);
   });
 
   test('unlockThreeDForMatch persists for that match session only', () async {
@@ -57,10 +46,7 @@ void main() {
     );
 
     expect(result.success, isTrue);
-    expect(
-      canAccess3D(baseContext, service.effectiveEntitlement),
-      isTrue,
-    );
+    expect(canAccess3D(baseContext, service.effectiveEntitlement), isTrue);
     expect(
       canAccess3D(
         const Match3dMatchContext(
@@ -84,8 +70,8 @@ void main() {
       tournamentBoostPrice: 0.4,
     );
 
-    final Match3dActionResult result =
-        await service.upgradeTournamentExperience(baseContext);
+    final Match3dActionResult result = await service
+        .upgradeTournamentExperience(baseContext);
 
     expect(result.success, isTrue);
     expect(service.hasTournamentBoost(baseContext), isTrue);
@@ -104,24 +90,26 @@ void main() {
     );
   });
 
-  test('speed options follow standard, premium, and slow motion rules',
-      () async {
-    final Match3dMonetizationService standard = Match3dMonetizationService(
-      entitlement: const Match3dUserEntitlement(availableCoins: 1),
-    );
-    expect(standard.speedOptionsFor(baseContext), <double>[1, 2, 4]);
+  test(
+    'speed options follow standard, premium, and slow motion rules',
+    () async {
+      final Match3dMonetizationService standard = Match3dMonetizationService(
+        entitlement: const Match3dUserEntitlement(availableCoins: 1),
+      );
+      expect(standard.speedOptionsFor(baseContext), <double>[1, 2, 4]);
 
-    final Match3dMonetizationService premium = Match3dMonetizationService(
-      entitlement: const Match3dUserEntitlement.proManager(availableCoins: 1),
-    );
-    expect(premium.speedOptionsFor(baseContext), <double>[1, 2, 4, 6]);
+      final Match3dMonetizationService premium = Match3dMonetizationService(
+        entitlement: const Match3dUserEntitlement.proManager(availableCoins: 1),
+      );
+      expect(premium.speedOptionsFor(baseContext), <double>[1, 2, 4, 6]);
 
-    await standard.unlockInteraction(
-      Match3dPaidInteraction.slowMotionReplay,
-      baseContext,
-    );
-    expect(standard.speedOptionsFor(baseContext), <double>[0.5, 1, 2, 4]);
-  });
+      await standard.unlockInteraction(
+        Match3dPaidInteraction.slowMotionReplay,
+        baseContext,
+      );
+      expect(standard.speedOptionsFor(baseContext), <double>[0.5, 1, 2, 4]);
+    },
+  );
 
   test('prompt offers are throttled per match and moment', () {
     final Match3dMonetizationService service = Match3dMonetizationService();
@@ -157,5 +145,26 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  test('claimRewardedAd credits the balance once per ad id', () async {
+    final Match3dMonetizationService service = Match3dMonetizationService(
+      entitlement: const Match3dUserEntitlement(availableCoins: 1),
+    );
+
+    final Match3dActionResult first = await service.claimRewardedAd(
+      adId: 'rewarded-1',
+      rewardCoins: 50,
+      brand: 'MTN',
+    );
+    final Match3dActionResult second = await service.claimRewardedAd(
+      adId: 'rewarded-1',
+      rewardCoins: 50,
+      brand: 'MTN',
+    );
+
+    expect(first.success, isTrue);
+    expect(service.availableCoinBalance, closeTo(51, 0.0001));
+    expect(second.success, isFalse);
   });
 }

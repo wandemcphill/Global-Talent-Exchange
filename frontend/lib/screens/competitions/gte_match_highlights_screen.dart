@@ -6,7 +6,7 @@ import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
-import 'package:gte_frontend/widgets/gtex_branding.dart';
+import 'package:gte_frontend/widgets/match/gte_highlight_player_sheet.dart';
 
 class GteMatchHighlightsScreen extends StatefulWidget {
   const GteMatchHighlightsScreen({
@@ -46,6 +46,10 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
     });
   }
 
+  Future<void> _openClip(LiveMatchHighlightClip clip) async {
+    await showGteMatchHighlightPlayerSheet(context, clip: clip);
+  }
+
   @override
   void dispose() {
     _ticker?.cancel();
@@ -58,13 +62,13 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Match highlights'),
-        ),
+        appBar: AppBar(title: const Text('Match highlights')),
         body: FutureBuilder<LiveMatchSnapshot>(
           future: _snapshotFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<LiveMatchSnapshot> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<LiveMatchSnapshot> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
                 padding: EdgeInsets.all(20),
@@ -84,8 +88,7 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
                 padding: const EdgeInsets.all(20),
                 child: GteStatePanel(
                   title: 'Highlights unavailable',
-                  message:
-                      'Unable to load the highlight archive right now.',
+                  message: 'Unable to load the highlight archive right now.',
                   icon: Icons.warning_amber_outlined,
                   actionLabel: 'Retry',
                   onAction: _reload,
@@ -94,10 +97,11 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
             }
 
             final LiveMatchSnapshot match = snapshot.data!;
-            final Duration standardRemaining =
-                match.standardHighlightExpiresAt.difference(_now);
-            final String standardCountdown =
-                _formatCountdown(standardRemaining);
+            final Duration standardRemaining = match.standardHighlightExpiresAt
+                .difference(_now);
+            final String standardCountdown = _formatCountdown(
+              standardRemaining,
+            );
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -162,6 +166,7 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
                             clip: clip,
                             now: _now,
                             isAuthenticated: widget.isAuthenticated,
+                            onPlay: _openClip,
                           ),
                         ),
                     ],
@@ -193,6 +198,7 @@ class _GteMatchHighlightsScreenState extends State<GteMatchHighlightsScreen> {
                             clip: clip,
                             now: _now,
                             isAuthenticated: widget.isAuthenticated,
+                            onPlay: _openClip,
                           ),
                         ),
                     ],
@@ -245,17 +251,24 @@ class _HighlightTile extends StatelessWidget {
     required this.clip,
     required this.now,
     required this.isAuthenticated,
+    required this.onPlay,
   });
 
   final LiveMatchHighlightClip clip;
   final DateTime now;
   final bool isAuthenticated;
+  final ValueChanged<LiveMatchHighlightClip> onPlay;
 
   @override
   Widget build(BuildContext context) {
     final bool expired = clip.expiresAt.isBefore(now);
     final bool locked = clip.isPremium && !isAuthenticated;
     final bool canDownload = clip.downloadEligible && !expired && !locked;
+    final bool canOpen = !locked;
+    final String stateLabel =
+        expired
+            ? 'Archive badge applied'
+            : '${_renderStatusLabel(clip.renderStatus)} | ${clip.downloadEligible ? 'Download eligible' : 'Streaming only'}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
@@ -277,31 +290,80 @@ class _HighlightTile extends StatelessWidget {
                     clip.title,
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
+                  if (clip.subtitle != null &&
+                      clip.subtitle!.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Text(
+                      clip.subtitle!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
-                    '${clip.minute}\' • ${clip.durationLabel}',
+                    "${clip.minute}' | ${clip.durationLabel}",
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (clip.cameraSequence.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Text(
+                      _cameraSequenceLabel(clip.cameraSequence),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
-                    expired
-                        ? 'Archive badge applied'
-                        : clip.downloadEligible
-                            ? 'Download eligible'
-                            : 'Streaming only',
+                    stateLabel,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            FilledButton.tonal(
-              onPressed: canDownload ? () {} : null,
-              child: Text(canDownload ? 'Download' : 'Locked'),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                FilledButton.tonal(
+                  onPressed: canOpen ? () => onPlay(clip) : null,
+                  child: Text(locked ? 'Locked' : 'Play'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: canDownload ? () {} : null,
+                  child: const Text('Download'),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _cameraSequenceLabel(List<String> sequence) {
+    return sequence.take(4).map(_humanizeTag).join(' -> ');
+  }
+
+  String _humanizeTag(String value) {
+    return value
+        .split('_')
+        .where((String chunk) => chunk.isNotEmpty)
+        .map(
+          (String chunk) =>
+              '${chunk[0].toUpperCase()}${chunk.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  String _renderStatusLabel(String status) {
+    switch (status) {
+      case 'manifest_ready':
+        return 'Manifest ready';
+      case 'queued':
+        return 'Queued for render';
+      case 'ready':
+        return 'Clip ready';
+      default:
+        return _humanizeTag(status);
+    }
   }
 }

@@ -22,6 +22,8 @@ from app.match_engine.simulation.models import (
     PlayerRole,
     TacticalStyle,
 )
+from app.schemas.match_viewer import MatchViewerMonetizationView
+from app.services.ads.schemas import MatchAdPlacementView
 
 
 def _validate_formation_string(formation: str, *, allowed_outfield_totals: tuple[int, ...] = (10,)) -> str:
@@ -894,6 +896,48 @@ class MatchHighlightItemView(CommonSchema):
     access_state: str = "available"
     archive_available: bool = False
     download_available: bool = False
+    reel_start_second: int | None = Field(default=None, ge=0)
+    reel_end_second: int | None = Field(default=None, ge=0)
+    match_clock_start_second: int | None = Field(default=None, ge=0)
+    match_clock_end_second: int | None = Field(default=None, ge=0)
+    match_clock_start_label: str | None = None
+    match_clock_end_label: str | None = None
+    duration_seconds: int | None = Field(default=None, ge=1)
+    importance: int = Field(default=1, ge=1, le=5)
+    camera_sequence: list[str] = Field(default_factory=list)
+    slow_motion: bool = False
+    replay_speed: float | None = Field(default=None, gt=0.0)
+    overlay_title: str | None = None
+    overlay_subtitle: str | None = None
+    scoreline_label: str | None = None
+    crowd_profile: str | None = None
+    crowd_spike: bool = False
+    commentary_language: str | None = None
+    storage_key: str | None = None
+    cdn_path: str | None = None
+    render_status: str = "unavailable"
+    ad_placement: MatchAdPlacementView | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchHighlightPipelineView(CommonSchema):
+    queue_name: str = "clip_builder_queue"
+    worker_profile: str = "ffmpeg_gpu_preferred"
+    gpu_preferred: bool = True
+    object_storage_prefix: str
+    object_archive_prefix: str | None = None
+    cdn_base_url: str | None = None
+    commentary_languages: list[str] = Field(default_factory=list)
+    commentary_modes: list[str] = Field(default_factory=list)
+
+
+class MatchHighlightReelView(CommonSchema):
+    title: str
+    clip_count: int = Field(ge=0)
+    runtime_seconds: int = Field(ge=0)
+    storage_key: str | None = None
+    cdn_path: str | None = None
+    render_status: str = "manifest_ready"
 
 
 class MatchHighlightListView(CommonSchema):
@@ -902,6 +946,12 @@ class MatchHighlightListView(CommonSchema):
     replay_available: bool = False
     archive_available: bool = False
     download_available: bool = False
+    highlight_profile: MatchHighlightProfile | None = None
+    access: MatchHighlightAccessView | None = None
+    pipeline: MatchHighlightPipelineView | None = None
+    reel: MatchHighlightReelView | None = None
+    monetization: MatchViewerMonetizationView | None = None
+    generated_at: datetime | None = None
 
 
 class MatchReplayPayloadView(CommonSchema):

@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.media_engine.schemas import (
+    CreatorClipEarningsSummaryView,
+    CreatorClipRevenueAttributionRequest,
+    CreatorClipRevenueAttributionView,
     CreatorAnalyticsDashboardView,
     CreatorAnalyticsTopGifterView,
     CreatorBroadcastModeView,
@@ -49,6 +52,11 @@ from app.media_engine.service import MediaEngineError, MediaEngineService
 from app.models.user import User
 from app.services.creator_analytics_service import CreatorAnalyticsDashboard, CreatorAnalyticsService, CreatorTopGifterMetric
 from app.services.creator_broadcast_service import CreatorBroadcastError, CreatorBroadcastQuote, CreatorBroadcastService
+from app.services.creator_clip_monetization_service import (
+    CreatorClipEarningsSummary,
+    CreatorClipMonetizationError,
+    CreatorClipMonetizationService,
+)
 from app.services.creator_revenue_service import CreatorRevenueService
 from app.services.creator_stadium_service import CreatorMatchStadiumOffer, CreatorStadiumBundle, CreatorStadiumError, CreatorStadiumService
 from app.services.media_access_service import MediaAccessError, MediaAccessService
@@ -228,6 +236,40 @@ def _creator_settlement(item) -> CreatorRevenueSettlementView:
     return CreatorRevenueSettlementView.model_validate(item, from_attributes=True)
 
 
+def _creator_clip_attribution(item) -> CreatorClipRevenueAttributionView:
+    return CreatorClipRevenueAttributionView.model_validate(item, from_attributes=True)
+
+
+def _creator_clip_summary(item: CreatorClipEarningsSummary, *, user_id: str) -> CreatorClipEarningsSummaryView:
+    incentives: list[str] = []
+    if item.total_viral_bonus_credit > 0:
+        incentives.append(f"Viral bonuses unlocked: {item.total_viral_bonus_credit:.4f} credits.")
+    if item.total_referral_bonus_credit > 0:
+        incentives.append(f"Referral boosts contributed {item.total_referral_bonus_credit:.4f} credits.")
+    if item.total_weekly_top_creator_bonus_credit > 0:
+        incentives.append(
+            f"Top Creator of the Week bonuses paid {item.total_weekly_top_creator_bonus_credit:.4f} credits."
+        )
+    return CreatorClipEarningsSummaryView(
+        generated_clip_count=item.generated_clip_count,
+        monetized_clip_count=item.monetized_clip_count,
+        total_views=item.total_views,
+        total_gross_revenue_credit=item.total_gross_revenue_credit,
+        total_creator_payout_credit=item.total_creator_payout_credit,
+        total_platform_share_credit=item.total_platform_share_credit,
+        total_growth_pool_retained_credit=item.total_growth_pool_retained_credit,
+        total_viral_bonus_credit=item.total_viral_bonus_credit,
+        total_referral_bonus_credit=item.total_referral_bonus_credit,
+        total_weekly_top_creator_bonus_credit=item.total_weekly_top_creator_bonus_credit,
+        viral_clip_count=item.viral_clip_count,
+        wallet_user_id=user_id,
+        wallet_balance_credit=item.wallet_balance_credit,
+        wallet_available_credit=item.wallet_available_credit,
+        wallet_currency=item.wallet_currency,
+        incentives=incentives,
+    )
+
+
 def _creator_top_gifter(item: CreatorTopGifterMetric) -> CreatorAnalyticsTopGifterView:
     return CreatorAnalyticsTopGifterView(
         user_id=item.user_id,
@@ -289,6 +331,10 @@ def _highlight_share_service(request: Request, session: Session) -> HighlightSha
         storage_service=_storage_service(request),
         placement_service=placement_service,
     )
+
+
+def _creator_clip_service(session: Session) -> CreatorClipMonetizationService:
+    return CreatorClipMonetizationService(session=session)
 
 
 @router.post('/views', response_model=MatchViewView, status_code=201)
@@ -720,6 +766,15 @@ def list_share_exports(
     return [_share_export(item) for item in service.list_exports(actor=user, match_key=match_key, limit=limit)]
 
 
+@router.get('/me/clip-earnings', response_model=CreatorClipEarningsSummaryView)
+def get_my_clip_earnings(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CreatorClipEarningsSummaryView:
+    summary = _creator_clip_service(session).build_creator_summary(actor=user)
+    return _creator_clip_summary(summary, user_id=user.id)
+
+
 @router.post('/share-exports', response_model=HighlightShareExportView, status_code=201)
 def create_share_export(
     payload: HighlightShareExportRequest,
@@ -778,6 +833,30 @@ def create_share_export_amplification(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     session.commit()
     return _share_amplification(item)
+
+
+@admin_router.post(
+    '/share-exports/{export_id}/revenue-attributions',
+    response_model=CreatorClipRevenueAttributionView,
+    status_code=201,
+)
+def attribute_clip_revenue(
+    export_id: str,
+    payload: CreatorClipRevenueAttributionRequest,
+    admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> CreatorClipRevenueAttributionView:
+    try:
+        item = _creator_clip_service(session).attribute_revenue(
+            export_id=export_id,
+            payload=payload,
+            actor=admin,
+        )
+    except CreatorClipMonetizationError as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
+    session.commit()
+    return _creator_clip_attribution(item)
 
 
 @router.post('/downloads', response_model=MediaDownloadResponse)

@@ -9,10 +9,6 @@ import os
 from pathlib import Path
 import time
 
-from alembic import command
-from alembic.config import Config
-from alembic.runtime.migration import MigrationContext
-from alembic.script import ScriptDirectory
 from sqlalchemy import MetaData, create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
@@ -25,6 +21,7 @@ MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "app.models",
+    "app.leaderboards.models",
     "app.models.economy_governor",
     "app.models.fx_pricing",
     "app.models.player_token_market",
@@ -104,6 +101,8 @@ def get_session() -> Iterator[Session]:
 
 
 def build_alembic_config(database_url: str | None = None) -> Config:
+    from alembic.config import Config
+
     config = Config(str(ALEMBIC_INI_PATH.resolve()))
     config.set_main_option("script_location", str(MIGRATIONS_ROOT.resolve()))
     config.set_main_option("prepend_sys_path", str(PROJECT_ROOT.resolve()))
@@ -169,6 +168,10 @@ def initialize_database_connection(
 
 
 def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, ...]:
+    from alembic import command
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
     load_model_modules()
     database_engine = engine or get_engine()
     config = build_alembic_config(str(database_engine.url))

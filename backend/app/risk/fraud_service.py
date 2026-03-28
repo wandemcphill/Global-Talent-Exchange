@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.event_backbone import defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.base import utcnow
 from app.models.risk_ops import (
     RiskSeverity,
@@ -21,10 +22,12 @@ from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
     LedgerEntry,
+    LedgerEntryReason,
     PaymentEvent,
     PaymentStatus,
     PayoutRequest,
     PayoutStatus,
+    LedgerTransaction,
 )
 from app.risk_ops_engine.service import RiskOpsService
 
@@ -37,6 +40,7 @@ class FraudRuleHit:
     severity: RiskSeverity
     confidence_score: Decimal
     metadata_json: dict[str, Any]
+    dedupe_key: str | None = None
 
 
 @dataclass(slots=True)
@@ -172,6 +176,7 @@ class FraudDetectionService:
                     },
                 )
             )
+        hits.extend(self._detect_duplicate_deposit_hits(session=session, event=event))
         return hits
 
     def _detect_withdrawal_hits(
@@ -272,7 +277,8 @@ class FraudDetectionService:
         risk_ops = RiskOpsService(session)
         emitted = False
         for hit in hits:
-            event_key = f"fraud:{hit.rule_key}:{source_event.event_id}:{user.id}"
+            dedupe_component = hit.dedupe_key or source_event.event_id
+            event_key = f"fraud:{hit.rule_key}:{dedupe_component}:{user.id}"
             existing_alert = session.scalar(
                 select(SystemEvent.id).where(SystemEvent.event_key == event_key)
             )
@@ -337,6 +343,108 @@ class FraudDetectionService:
             )
             emitted = True
         return emitted
+
+    def _detect_duplicate_deposit_hits(
+        self,
+        *,
+        session: Session,
+        event: DomainEvent,
+    ) -> list[FraudRuleHit]:
+        reason = str(event.payload.get("reason") or "").strip().lower()
+        external_reference = str(event.payload.get("external_reference") or "").strip()
+        if reason != LedgerEntryReason.DEPOSIT.value or not external_reference:
+            return []
+
+        metadata = event.payload.get("metadata")
+        normalized_metadata = dict(metadata) if isinstance(metadata, dict) else {}
+        purchase_order_meta = normalized_metadata.get("purchase_order")
+        if not isinstance(purchase_order_meta, dict):
+            purchase_order_meta = {}
+        provider_key = str(
+            purchase_order_meta.get("provider_key")
+            or normalized_metadata.get("provider")
+            or ""
+        ).strip().lower()
+
+        transaction_ids = list(
+            session.scalars(
+                select(LedgerTransaction.id)
+                .where(
+                    LedgerTransaction.reason == LedgerEntryReason.DEPOSIT,
+                    LedgerTransaction.external_reference == external_reference,
+                )
+                .order_by(LedgerTransaction.created_at.asc(), LedgerTransaction.id.asc())
+            ).all()
+        )
+        if len(transaction_ids) > 1:
+            return [
+                FraudRuleHit(
+                    rule_key="duplicate_deposit_replay",
+                    title="Duplicate deposit replay detected",
+                    description=(
+                        "The same external deposit reference has already credited wallet balances "
+                        "and was seen on more than one committed deposit transaction."
+                    ),
+                    severity=RiskSeverity.CRITICAL,
+                    confidence_score=Decimal("97.00"),
+                    metadata_json={
+                        "external_reference": external_reference,
+                        "provider_key": provider_key or None,
+                        "duplicate_transaction_count": len(transaction_ids),
+                        "transaction_ids": transaction_ids,
+                    },
+                    dedupe_key=f"deposit-replay:{provider_key or 'unknown'}:{external_reference}",
+                )
+            ]
+
+        if not provider_key:
+            return []
+
+        duplicate_orders = session.scalars(
+            select(FancoinPurchaseOrder)
+            .where(
+                FancoinPurchaseOrder.provider_key == provider_key,
+                FancoinPurchaseOrder.provider_reference == external_reference,
+            )
+            .order_by(FancoinPurchaseOrder.created_at.asc(), FancoinPurchaseOrder.id.asc())
+        ).all()
+        if len(duplicate_orders) <= 1:
+            return []
+
+        settled_order_ids = [
+            item.id
+            for item in duplicate_orders
+            if item.status == PurchaseOrderStatus.SETTLED
+        ]
+        affected_user_ids = sorted(
+            {
+                str(item.user_id).strip()
+                for item in duplicate_orders
+                if str(item.user_id).strip()
+            }
+        )
+        return [
+            FraudRuleHit(
+                rule_key="duplicate_deposit_candidate",
+                title="Duplicate deposit reference detected",
+                description=(
+                    "A provider deposit reference is attached to multiple purchase orders, "
+                    "which creates a replay path even though only one committed deposit credit "
+                    "has been observed so far."
+                ),
+                severity=RiskSeverity.HIGH,
+                confidence_score=Decimal("89.00"),
+                metadata_json={
+                    "external_reference": external_reference,
+                    "provider_key": provider_key,
+                    "purchase_order_count": len(duplicate_orders),
+                    "purchase_order_ids": [item.id for item in duplicate_orders],
+                    "affected_user_ids": affected_user_ids,
+                    "settled_order_ids": settled_order_ids,
+                },
+                dedupe_key=f"deposit-candidate:{provider_key}:{external_reference}",
+            )
+        ]
 
     @staticmethod
     def _primary_user_entries(*, user_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:

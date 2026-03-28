@@ -6,6 +6,7 @@ class AppRoutes {
   static const String root = '/';
   static const String home = '/home';
   static const String matches = '/matches';
+  static const String clips = '/clips';
   static const String market = '/market';
   static const String world = '/world';
   static const String tasks = '/tasks';

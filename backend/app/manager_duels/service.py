@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from app.cache import HotPathCache
+from app.core.cache import CacheBackend, NullCacheBackend
 from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -48,12 +50,16 @@ class ManagerDuelService:
     session_factory: sessionmaker[Session]
     event_publisher: EventPublisher
     live_hub: LiveMatchHub
+    cache_backend: CacheBackend = field(default_factory=NullCacheBackend)
     match_service: MatchSimulationService = field(default_factory=MatchSimulationService)
     team_factory: SyntheticSquadFactory = field(default_factory=SyntheticSquadFactory)
     highlight_service: SmartHighlightService | None = None
+    leaderboard_cache_ttl_seconds: int = 120
+    _hot_cache: HotPathCache = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.team_factory.session_factory = self.session_factory
+        self._hot_cache = HotPathCache(self.cache_backend)
         if self.highlight_service is None:
             self.highlight_service = SmartHighlightService(self.session_factory)
 
@@ -167,6 +173,22 @@ class ManagerDuelService:
             return self._to_view(duel, live_state=live_state)
 
     def get_leaderboard(self, *, limit: int = 25) -> list[ManagerDuelLeaderboardEntryView]:
+        cached_entries = self._hot_cache.get_global_leaderboard(limit=limit)
+        if cached_entries:
+            resolved_entries: list[ManagerDuelLeaderboardEntryView] = []
+            for item in cached_entries:
+                try:
+                    resolved_entries.append(ManagerDuelLeaderboardEntryView.model_validate(item))
+                except Exception:
+                    resolved_entries.clear()
+                    break
+            if resolved_entries:
+                return resolved_entries
+        entries = self._load_leaderboard_entries(limit=limit)
+        self._cache_leaderboard(entries)
+        return entries
+
+    def _load_leaderboard_entries(self, *, limit: int) -> list[ManagerDuelLeaderboardEntryView]:
         with self.session_factory() as session:
             rows = list(
                 session.scalars(
@@ -197,6 +219,19 @@ class ManagerDuelService:
                 )
             )
         return entries
+
+    def _cache_leaderboard(self, entries: list[ManagerDuelLeaderboardEntryView]) -> None:
+        self._hot_cache.replace_global_leaderboard(
+            [
+                (
+                    entry.manager_id,
+                    float((entry.duel_wins * 10000) + entry.reputation_score),
+                    entry.model_dump(mode="json"),
+                )
+                for entry in entries
+            ],
+            ttl_seconds=self.leaderboard_cache_ttl_seconds,
+        )
 
     def _build_match_request(
         self,
@@ -404,6 +439,7 @@ class ManagerDuelService:
                 outcome=self._outcome(duel.away_score, duel.home_score),
             )
             session.commit()
+        self._cache_leaderboard(self._load_leaderboard_entries(limit=100))
 
         self._notify_participants(
             duel_id=duel_id,
@@ -544,12 +580,15 @@ def ensure_manager_duel_service(app: FastAPI) -> ManagerDuelService:
             session_factory=app.state.session_factory,
             event_publisher=app.state.event_publisher,
             live_hub=ensure_live_match_hub(app),
+            cache_backend=getattr(app.state, "cache_backend", NullCacheBackend()),
         )
         app.state.manager_duel_service = service
         return service
     service.session_factory = app.state.session_factory
     service.event_publisher = app.state.event_publisher
     service.live_hub = ensure_live_match_hub(app)
+    service.cache_backend = getattr(app.state, "cache_backend", service.cache_backend)
+    service._hot_cache = HotPathCache(service.cache_backend)
     service.team_factory.session_factory = app.state.session_factory
     if service.highlight_service is None:
         service.highlight_service = SmartHighlightService(app.state.session_factory)

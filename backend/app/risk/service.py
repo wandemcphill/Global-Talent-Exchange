@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerUnit
+from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
 from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -42,6 +43,10 @@ class DuplicateSettlementError(RiskValidationError):
     pass
 
 
+class TradingBlockedError(RiskValidationError):
+    pass
+
+
 class RiskControlService:
     def __init__(self, wallet_service: WalletService | None = None) -> None:
         self.wallet_service = wallet_service or WalletService()
@@ -57,6 +62,10 @@ class RiskControlService:
         price: Decimal,
         use_reserved_balance: bool = False,
     ) -> tuple[TradeSide, Decimal, Decimal, Decimal]:
+        try:
+            RiskOpsService(session).assert_trading_allowed(user.id)
+        except RiskActionBlockedError as exc:
+            raise TradingBlockedError(str(exc)) from exc
         normalized_side = TradeSide(str(side).lower())
         normalized_quantity = self._normalize_amount(quantity)
         normalized_price = self._normalize_amount(price)

@@ -7,6 +7,7 @@ from pydantic import Field
 from app.common.schemas.base import CommonSchema
 from app.fairness.spend_balance_controller import SpendTier, TournamentFairnessMode
 from app.match_engine.simulation.models import PlayerRole
+from app.services.ads.schemas import MatchViewerMonetizationView
 
 
 class MatchViewerEventType(StrEnum):
@@ -184,6 +185,7 @@ class MatchViewStateView(CommonSchema):
     away_team: MatchViewerTeamView
     events: list[MatchViewerEventView] = Field(default_factory=list)
     frames: list[MatchTimelineFrameView] = Field(default_factory=list)
+    monetization: MatchViewerMonetizationView | None = None
 
 
 class FairnessIndicatorStatus(StrEnum):

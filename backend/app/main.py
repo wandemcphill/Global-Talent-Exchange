@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import logging
 from threading import Thread
 
@@ -8,17 +7,15 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api_v1.router import install_exception_handlers as install_api_v1_exception_handlers
-from app.auth.service import AuthService
-from app.models.user import UserRole
-
-from app.auth.dependencies import get_session as auth_get_session
 from app.core.config import Settings, get_settings
-from app.core.container import ApplicationContext, build_application_context
-from app.core.database import create_database_engine, create_session_factory, get_session as core_get_session
-from app.core.module import DomainModule, register_domain_modules, run_module_hooks
-from app.core.rate_limit import RateLimitMiddleware
-from app.db import get_session as db_get_session
+from app.core.container import (
+    ApplicationContext,
+    Container,
+    bind_application_state,
+    ensure_session_factory,
+    resolve_database_engine,
+)
+from app.core.module import DomainModule, run_module_hooks
 from app.modules import DOMAIN_MODULES
 
 INITIAL_ADMIN_EMAIL = "vidvimedialtd@gmail.com"
@@ -36,108 +33,149 @@ def create_app(
     modules: tuple[DomainModule, ...] = DOMAIN_MODULES,
     run_migration_check: bool | None = None,
 ) -> FastAPI:
+    from app.modules import register_modules
+    from app.observability.logging import configure_logging
+
     resolved_settings = settings or get_settings()
-    database_engine = _resolve_database_engine(
+    service_name = resolved_settings.observability_service_name or resolved_settings.kafka_client_id
+    configure_logging(
+        json_logs=resolved_settings.observability_log_json,
+        service_name=service_name,
+        environment=resolved_settings.app_env,
+    )
+    database_engine = resolve_database_engine(
         settings=resolved_settings,
         engine=engine,
         session_factory=session_factory,
     )
-    database_session_factory = session_factory or create_session_factory(database_engine)
-    context = build_application_context(
+    database_session_factory = ensure_session_factory(
+        engine=database_engine,
+        session_factory=session_factory,
+    )
+    context = Container(
         settings=resolved_settings,
         engine=database_engine,
         session_factory=database_session_factory,
     )
 
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        logger.info("app.startup.begin")
-        try:
-            logger.info("app.startup.database_initialize.begin")
-            initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
-            logger.info("app.startup.database_initialize.complete")
-        except Exception:
-            logger.exception("app.startup.database_initialize.failed")
-            raise
-
-        logger.info("app.startup.application_state_bind.begin")
-        _bind_application_state(app, context=context, engine=initialized_engine, modules=modules)
-        logger.info("app.startup.application_state_bind.complete")
-
-        logger.info("app.startup.deferred_startup.begin")
-        _start_deferred_startup(app, context=context, modules=modules)
-        logger.info("app.startup.deferred_startup.complete")
-        logger.info("app.startup.complete")
-        try:
-            yield
-        finally:
-            logger.info("app.shutdown.begin")
-            startup_thread = getattr(app.state, "deferred_startup_thread", None)
-            if startup_thread is not None and startup_thread.is_alive():
-                startup_thread.join(timeout=1)
-            run_module_hooks(app, context, modules, phase="shutdown")
-            api_queue_consumer = getattr(app.state, "api_queue_consumer", None)
-            if api_queue_consumer is not None:
-                api_queue_consumer.stop()
-            outbox_relay = getattr(context, "outbox_relay", None)
-            if outbox_relay is not None:
-                outbox_relay.stop()
-            if hasattr(context.event_publisher, "close"):
-                context.event_publisher.close()
-            logger.info("app.shutdown.complete")
-
     app = FastAPI(
         title=resolved_settings.app_name,
         version=resolved_settings.app_version,
-        lifespan=lifespan,
     )
-    app.add_middleware(RateLimitMiddleware)
-    install_api_v1_exception_handlers(app, context)
-    app.dependency_overrides[auth_get_session] = context.database.get_session
-    app.dependency_overrides[db_get_session] = context.database.get_session
-    app.dependency_overrides[core_get_session] = context.database.get_session
-    register_domain_modules(app, modules)
+    app.state.settings = resolved_settings
+    app.state.container = context
+    app.state.context = context
+    app.state.db_engine = context.database.engine
+    app.state.session_factory = context.database.session_factory
+    app.state.metrics = context.metrics
+    app.state.module_specs = modules
+    app.state.domain_modules = tuple(module.name for module in modules)
+    app.state.run_migration_check = run_migration_check
+    app.state.deferred_startup_thread = None
+
+    register_core(app)
+    register_modules(app, modules)
+    if resolved_settings.observability_tracing_enabled:
+        from app.observability.tracing import configure_tracing
+
+        configure_tracing(
+            enabled=resolved_settings.observability_tracing_enabled,
+            service_name=service_name,
+            environment=resolved_settings.app_env,
+            service_version=resolved_settings.app_version,
+            exporter_endpoint=resolved_settings.observability_otlp_traces_endpoint,
+            sample_ratio=resolved_settings.observability_trace_sample_ratio,
+            app=app,
+            engine=context.database.engine,
+        )
     return app
 
 
-def _resolve_database_engine(
-    *,
-    settings: Settings,
-    engine: Engine | None,
-    session_factory: sessionmaker[Session] | None,
-) -> Engine:
-    if engine is not None:
-        return engine
-    bound_engine = session_factory.kw.get("bind") if session_factory is not None else None  # type: ignore[union-attr]
-    if bound_engine is not None:
-        return bound_engine
-    return create_database_engine(settings.database_url)
+def register_core(app: FastAPI) -> None:
+    from app.auth.dependencies import get_session as auth_get_session
+    from app.core.database import get_session as core_get_session
+    from app.core.health import router as health_router
+    from app.core.rate_limit import RateLimitMiddleware
+    from app.db import get_session as db_get_session
+    from app.observability.middleware import ObservabilityMiddleware
+
+    context: Container = app.state.container
+    settings: Settings = app.state.settings
+
+    _mount_tts_app(app)
+    app.include_router(health_router)
+    app.add_middleware(RateLimitMiddleware)
+    if settings.observability_metrics_enabled:
+        app.add_middleware(ObservabilityMiddleware, metrics=context.metrics)
+    app.dependency_overrides[db_get_session] = context.database.get_session
+    app.dependency_overrides[core_get_session] = context.database.get_session
+    app.dependency_overrides[auth_get_session] = context.database.get_session
+
+    @app.on_event("startup")
+    async def startup() -> None:
+        runtime_context: Container = app.state.container
+        module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
+        logger.info("app.startup.begin")
+        runtime_context.initialize(run_migration_check=app.state.run_migration_check)
+        bind_application_state(app, context=runtime_context, modules=module_specs)
+        check_db(app)
+        check_redis(app)
+        runtime_context.metrics.refresh_from_database()
+        _start_deferred_startup(app, context=runtime_context, modules=module_specs)
+        logger.info("app.startup.complete")
+
+    @app.on_event("shutdown")
+    async def shutdown() -> None:
+        from app.realtime.websocket_gateway import shutdown_match_stream_websocket_gateway
+
+        runtime_context: Container = app.state.container
+        module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
+        logger.info("app.shutdown.begin")
+        startup_thread = getattr(app.state, "deferred_startup_thread", None)
+        if startup_thread is not None and startup_thread.is_alive():
+            startup_thread.join(timeout=1)
+        await shutdown_match_stream_websocket_gateway(app)
+        run_module_hooks(app, runtime_context, module_specs, phase="shutdown")
+        runtime_context.shutdown()
+        logger.info("app.shutdown.complete")
 
 
-def _bind_application_state(
-    app: FastAPI,
-    *,
-    context: ApplicationContext,
-    engine: Engine,
-    modules: tuple[DomainModule, ...],
-) -> None:
-    app.state.settings = context.settings
-    app.state.context = context
-    app.state.db_engine = engine
-    app.state.session_factory = context.database.session_factory
-    app.state.email_service = context.email_service
-    app.state.cache_backend = context.cache_backend
-    app.state.event_publisher = context.event_publisher
-    app.state.job_backend = context.job_backend
-    app.state.outbox_relay = context.outbox_relay
-    app.state.notifications = context.notifications
-    app.state.alert_system = context.alert_system
-    app.state.realtime = context.realtime
-    app.state.market_engine = context.market_engine
-    app.state.ingestion_pipeline = context.ingestion_pipeline
-    app.state.value_engine_bridge = context.value_engine_bridge
-    app.state.ingestion_job_runner = context.ingestion_job_runner
-    app.state.domain_modules = tuple(module.name for module in modules)
+def check_db(app: FastAPI) -> None:
+    logger.info("app.startup.health.database.begin")
+    app.state.container.check_db()
+    logger.info("app.startup.health.database.complete")
+
+
+def check_redis(app: FastAPI) -> None:
+    logger.info("app.startup.health.redis.begin")
+    app.state.container.check_redis()
+    logger.info("app.startup.health.redis.complete")
+
+
+def _mount_tts_app(app: FastAPI) -> None:
+    if getattr(app.state, "tts_mounted", False):
+        return
+    from importlib import import_module
+    import sys
+
+    from app.core.config import PROJECT_ROOT
+
+    module = None
+    try:
+        module = import_module("services.tts.app")
+    except ModuleNotFoundError:
+        project_root = str(PROJECT_ROOT)
+        if project_root not in sys.path:
+            sys.path.append(project_root)
+        try:
+            module = import_module("services.tts.app")
+        except ModuleNotFoundError:
+            logger.warning("app.tts.mount.skipped reason=module_not_found")
+            app.state.tts_mounted = False
+            return
+
+    app.mount("/tts", module.create_app())
+    app.state.tts_mounted = True
 
 
 def _start_deferred_startup(
@@ -177,10 +215,10 @@ def _run_deferred_startup(
         logger.exception("app.startup.bootstrap_failed")
 
 
-app = create_app()
-
-
 def _ensure_initial_admin(session_factory: sessionmaker[Session]) -> None:
+    from app.auth.service import AuthService
+    from app.models.user import UserRole
+
     with session_factory() as session:
         service = AuthService()
         service.ensure_admin_user(

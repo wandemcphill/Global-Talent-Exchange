@@ -1,0 +1,149 @@
+name: gtex-infra
+
+x-backend-env: &backend-env
+  KAFKA_URL: ${KAFKA_URL:-kafka:9092}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/gtex}
+  GTE_KAFKA_BROKERS: ${GTE_KAFKA_BROKERS:-kafka:9092}
+  GTE_KAFKA_TOPIC_PREFIX: ${GTE_KAFKA_TOPIC_PREFIX:-}
+  GTE_REDIS_URL: ${GTE_REDIS_URL:-redis://redis:6379/0}
+  GTE_DATABASE_URL: ${GTE_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/gtex}
+  GTE_APP_ENV: ${GTE_APP_ENV:-development}
+  GTE_APP_NAME: ${GTE_APP_NAME:-Global Talent Exchange API}
+  GTE_APP_VERSION: ${GTE_APP_VERSION:-0.1.0}
+  GTE_RUN_MIGRATION_CHECK: ${GTE_RUN_MIGRATION_CHECK:-false}
+  GTE_AUTH_SECRET: ${GTE_AUTH_SECRET:-gtex-dev-secret-change-me}
+  GTE_MEDIA_SIGNING_SECRET: ${GTE_MEDIA_SIGNING_SECRET:-gtex-media-secret-change-me}
+  PYTHONUNBUFFERED: "1"
+
+services:
+  kafka:
+    image: redpandadata/redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://kafka:9092
+      - --set
+      - redpanda.auto_create_topics_enabled=true
+    ports:
+      - "${KAFKA_HOST_PORT:-9092}:9092"
+    volumes:
+      - kafka_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info -X brokers=localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - gtex
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - gtex
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gtex}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - gtex
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api/Dockerfile
+    working_dir: /app/backend
+    command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+    environment:
+      <<: *backend-env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    networks:
+      - gtex
+
+  simulation_worker:
+    build:
+      context: ..
+      dockerfile: infra/workers/Dockerfile
+    working_dir: /app/backend
+    command: python -m app.workers.simulation_worker
+    environment:
+      <<: *backend-env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - gtex
+
+  reward_worker:
+    build:
+      context: ..
+      dockerfile: infra/workers/Dockerfile
+    working_dir: /app/backend
+    command: python -m app.workers.reward_worker
+    environment:
+      <<: *backend-env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - gtex
+
+volumes:
+  kafka_data:
+  postgres_data:
+
+networks:
+  gtex:
+    driver: bridge

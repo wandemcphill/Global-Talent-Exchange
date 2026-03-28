@@ -15,6 +15,10 @@ spec:
       labels:
         app.kubernetes.io/name: gtex-api
         app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8000"
     spec:
       containers:
         - name: api
@@ -39,6 +43,8 @@ spec:
               value: "false"
             - name: GTE_PROJECTION_WORKERS_ENABLED
               value: "false"
+            - name: GTE_OTEL_SERVICE_NAME
+              value: gtex-api
           startupProbe:
             httpGet:
               path: /health
@@ -79,4 +85,3 @@ spec:
     - name: http
       port: 80
       targetPort: http
-

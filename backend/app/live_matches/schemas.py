@@ -95,6 +95,7 @@ class SpectatorSessionView(CommonSchema):
     channel: str
     websocket_path: str
     commentary_websocket_path: str | None = None
+    tts_websocket_path: str | None = None
     access_source: str | None = None
     rights_owner_id: str | None = None
     viewing_fee_coin: Decimal = Decimal("0.0000")

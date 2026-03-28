@@ -7,7 +7,8 @@ from app.backbone.outbox_relay import OutboxRelayService
 from app.backbone.routing import OutboxTopicRouter
 from app.core.database import ensure_database_schema_current
 from app.core.event_backbone import build_outbox_event
-from app.core.events import DomainEvent
+from app.core.events import DomainEvent, InMemoryEventPublisher
+from app.infrastructure.outbox import RedisKafkaOutboxPublisher
 from app.models.event_backbone import EventOutbox
 
 
@@ -70,10 +71,14 @@ def test_outbox_relay_routes_queue_events_to_kafka_topics(tmp_path) -> None:
         session.commit()
 
     producer = FakeKafkaProducer()
+    event_publisher = InMemoryEventPublisher()
     relay = OutboxRelayService(
         session_factory=session_factory,
-        producer=producer,
-        router=OutboxTopicRouter(topic_prefix="gtex"),
+        publisher=RedisKafkaOutboxPublisher(
+            event_publisher=event_publisher,
+            kafka_producer=producer,
+            topic_router=OutboxTopicRouter(topic_prefix="gtex"),
+        ),
         batch_size=10,
         poll_interval_ms=50,
     )
@@ -103,11 +108,14 @@ def test_outbox_relay_routes_queue_events_to_kafka_topics(tmp_path) -> None:
             },
             "key": "fixture-200",
             "headers": {
+                "delivery_mode": "durable",
                 "event_type": "competition_engine.queue.match_simulation.queued",
                 "producer": "competition-engine",
             },
         }
     ]
+    assert len(event_publisher.published_events) == 1
+    assert event_publisher.published_events[0].name == "competition_engine.queue.match_simulation.queued"
 
     with session_factory() as session:
         row = session.scalar(select(EventOutbox).where(EventOutbox.event_id == "8c7f8474-53c4-43ef-b724-b6b66a3e10b5"))

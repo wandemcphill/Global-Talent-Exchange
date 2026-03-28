@@ -41,6 +41,6 @@ kubectl logs -n gtex job/gtex-db-migrate
 ## Notes
 
 - The starter HPAs use CPU utilization because that is available on most clusters. For production workers, move to queue-lag-driven autoscaling when you have KEDA or custom metrics in place.
+- The starter manifests now expose Prometheus scrape targets for the API and worker metrics endpoints. Tracing stays opt-in until you provide an OpenTelemetry collector endpoint.
 - Postgres, Redis, and Kafka or Redpanda are treated as external dependencies in this starter. Use managed services or dedicated platform charts instead of baking them into the application manifests.
 - The API pod disables the outbox relay and worker consumers so those responsibilities stay isolated to their own deployments.
-

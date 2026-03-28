@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 import pytest
 
 from app.core.database import load_model_modules
+from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.models.base import Base
 from app.models.user import User, UserRole
@@ -114,3 +115,29 @@ def test_player_share_market_lifecycle(session) -> None:
     assert holding.average_cost_coin == Decimal("0.0750")
     assert holding.dividends_earned_coin == Decimal("7.5000")
     assert len(events) >= 4
+
+
+def test_player_share_market_respects_governor_price_caps(session) -> None:
+    admin = _create_user(session, user_id="token-cap-admin", role=UserRole.ADMIN)
+    player = _create_player(session, player_id="player-token-cap")
+
+    EconomyGovernorService(session).update_policy(
+        actor=admin,
+        price_change_limit=Decimal("0.0500"),
+    )
+
+    service = PlayerTokenMarketService(session=session)
+    service.issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=1000,
+        share_price_coin=Decimal("0.0750"),
+    )
+    repriced = service.apply_performance_adjustment(
+        actor=admin,
+        player_id=player.id,
+        multiplier=Decimal("1.5000"),
+        reason="viral_breakout",
+    )
+
+    assert repriced.share_price_coin == Decimal("0.0788")

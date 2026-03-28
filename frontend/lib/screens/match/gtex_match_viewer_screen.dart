@@ -6,6 +6,7 @@ import 'package:gte_frontend/controllers/match_3d_timeline_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
@@ -620,6 +621,19 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     _showActionResult(result);
   }
 
+  Future<void> _handleClaimRewardedAd(MatchAdPlacement ad) async {
+    final int rewardCoins = ad.rewardCoins ?? 50;
+    final Match3dActionResult result = await _monetization.claimRewardedAd(
+      adId: ad.id,
+      rewardCoins: rewardCoins,
+      brand: ad.brand,
+    );
+    if (!mounted) {
+      return;
+    }
+    _showActionResult(result);
+  }
+
   void _syncControllerSpeeds(
     Match3dTimelineController controller,
     Match3dMatchContext matchContext,
@@ -795,6 +809,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           onSendReaction:
                               (Match3dReaction reaction) =>
                                   _handleSendReaction(reaction, matchContext),
+                          onClaimRewardedAd: _handleClaimRewardedAd,
                           presentation: presentation,
                         )
                         : _ReplayViewer(
@@ -848,6 +863,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           onSendReaction:
                               (Match3dReaction reaction) =>
                                   _handleSendReaction(reaction, matchContext),
+                          onClaimRewardedAd: _handleClaimRewardedAd,
                         );
                 final String? continuationStatus = _continuationStatusMessage();
                 if (continuationStatus == null) {
@@ -924,6 +940,7 @@ class _ReplayViewer extends StatelessWidget {
     required this.onUpgradeTournament,
     required this.onSendGift,
     required this.onSendReaction,
+    required this.onClaimRewardedAd,
   });
 
   final Match3dTimelineController controller;
@@ -945,6 +962,7 @@ class _ReplayViewer extends StatelessWidget {
   final VoidCallback? onUpgradeTournament;
   final Future<void> Function(double amount) onSendGift;
   final Future<void> Function(Match3dReaction reaction) onSendReaction;
+  final Future<void> Function(MatchAdPlacement ad) onClaimRewardedAd;
 
   @override
   Widget build(BuildContext context) {
@@ -1037,6 +1055,17 @@ class _ReplayViewer extends StatelessWidget {
                 ),
               ),
               Positioned.fill(
+                child: IgnorePointer(
+                  child: _MatchAdOverlay(
+                    viewState: viewState,
+                    monetizationService: monetization,
+                    activeEvent: activeEvent,
+                    positionSeconds: controller.positionSeconds,
+                    broadcastMode: false,
+                  ),
+                ),
+              ),
+              Positioned.fill(
                 child: GiftingOverlay(
                   activeBursts:
                       matchContext.isSpectator && spectatorReactionsMuted
@@ -1091,7 +1120,22 @@ class _ReplayViewer extends StatelessWidget {
 
         final Widget rail = Padding(
           padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-          child: _EventRail(controller: controller, viewState: viewState),
+          child: Column(
+            children: <Widget>[
+              _MatchMonetizationRail(
+                viewState: viewState,
+                monetizationService: monetization,
+                activeEvent: activeEvent,
+                positionSeconds: controller.positionSeconds,
+                onClaimRewardedAd: onClaimRewardedAd,
+              ),
+              if (_showsAdRail(viewState, monetization))
+                const SizedBox(height: 12),
+              Expanded(
+                child: _EventRail(controller: controller, viewState: viewState),
+              ),
+            ],
+          ),
         );
 
         if (wide) {
@@ -1119,10 +1163,24 @@ class _ReplayViewer extends StatelessWidget {
                     if (showPremiumControls) controls,
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
-                      child: _EventRail(
-                        controller: controller,
-                        viewState: viewState,
-                        shrinkWrap: true,
+                      child: Column(
+                        children: <Widget>[
+                          _MatchMonetizationRail(
+                            viewState: viewState,
+                            monetizationService: monetization,
+                            activeEvent: activeEvent,
+                            positionSeconds: controller.positionSeconds,
+                            onClaimRewardedAd: onClaimRewardedAd,
+                            compact: true,
+                          ),
+                          if (_showsAdRail(viewState, monetization))
+                            const SizedBox(height: 12),
+                          _EventRail(
+                            controller: controller,
+                            viewState: viewState,
+                            shrinkWrap: true,
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1156,6 +1214,7 @@ class _BroadcastViewer extends StatelessWidget {
     required this.onUpgradeTournament,
     required this.onSendGift,
     required this.onSendReaction,
+    required this.onClaimRewardedAd,
     required this.presentation,
   });
 
@@ -1177,6 +1236,7 @@ class _BroadcastViewer extends StatelessWidget {
   final VoidCallback? onUpgradeTournament;
   final Future<void> Function(double amount) onSendGift;
   final Future<void> Function(Match3dReaction reaction) onSendReaction;
+  final Future<void> Function(MatchAdPlacement ad) onClaimRewardedAd;
   final MatchBroadcastPresentationState presentation;
 
   @override
@@ -1228,6 +1288,17 @@ class _BroadcastViewer extends StatelessWidget {
                     ),
                   ),
                 ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: _MatchAdOverlay(
+                      viewState: viewState,
+                      monetizationService: monetization,
+                      activeEvent: activeEvent,
+                      positionSeconds: controller.positionSeconds,
+                      broadcastMode: true,
+                    ),
+                  ),
+                ),
                 Positioned(
                   top: 12,
                   left: 12,
@@ -1265,6 +1336,31 @@ class _BroadcastViewer extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (monetization.effectiveEntitlement.isPremiumUser)
+                  Positioned(
+                    top: compactHeader ? 72 : 84,
+                    right: 18,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        color: const Color(0xCC102030),
+                        border: Border.all(
+                          color: const Color(0xFFFEC84B).withValues(alpha: 0.7),
+                        ),
+                      ),
+                      child: Text(
+                        'Pro Manager',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: const Color(0xFFFEC84B),
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 12,
                   right: 12,
@@ -1280,6 +1376,29 @@ class _BroadcastViewer extends StatelessWidget {
                         isVarChecking: presentation.isVarChecking,
                       ),
                     ),
+                  ),
+                ),
+                Positioned(
+                  right: 16,
+                  bottom: compactHeader ? 92 : 76,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _RewardedAdFloatingCard(
+                        viewState: viewState,
+                        monetizationService: monetization,
+                        onClaimRewardedAd: onClaimRewardedAd,
+                      ),
+                      if (matchContext.isSpectator) ...<Widget>[
+                        const SizedBox(height: 12),
+                        FilledButton.tonalIcon(
+                          onPressed: () => onSendGift(0.1),
+                          icon: const Icon(Icons.card_giftcard_rounded),
+                          label: const Text('Gift 0.1 coin'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -1671,6 +1790,375 @@ class _ContinuationStatusBanner extends StatelessWidget {
   }
 }
 
+class _MatchAdOverlay extends StatelessWidget {
+  const _MatchAdOverlay({
+    required this.viewState,
+    required this.monetizationService,
+    required this.activeEvent,
+    required this.positionSeconds,
+    required this.broadcastMode,
+  });
+
+  final MatchViewState viewState;
+  final Match3dMonetizationService monetizationService;
+  final MatchEvent? activeEvent;
+  final double positionSeconds;
+  final bool broadcastMode;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showAds(viewState, monetizationService)) {
+      return const SizedBox.shrink();
+    }
+    final MatchAdPlacement? preRoll = viewState.monetization.firstActiveOfType(
+      MatchAdPlacementType.preRoll,
+      positionSeconds,
+    );
+    final MatchAdPlacement? liveBanner = viewState.monetization
+        .firstActiveOfType(MatchAdPlacementType.liveBanner, positionSeconds);
+    final MatchAdPlacement? sponsored =
+        viewState.monetization.sponsoredPlacementForEvent(activeEvent?.id) ??
+        viewState.monetization.firstOfType(
+          MatchAdPlacementType.sponsoredHighlight,
+        );
+    return Stack(
+      children: <Widget>[
+        if (preRoll != null)
+          Positioned(
+            top: broadcastMode ? 86 : 96,
+            left: 18,
+            right: 18,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: _AdChip(
+                  key: const Key('match-ad-preroll'),
+                  label: 'Pre-roll',
+                  message: preRoll.message,
+                  brand: preRoll.brand,
+                  accent: const Color(0xFF53B1FD),
+                ),
+              ),
+            ),
+          ),
+        if (sponsored != null)
+          Positioned(
+            top: broadcastMode ? 144 : 146,
+            right: 18,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: _AdChip(
+                key: const Key('match-sponsored-highlight'),
+                label: 'Sponsored Highlight',
+                message: sponsored.message,
+                brand: sponsored.brand,
+                accent: const Color(0xFF17B26A),
+              ),
+            ),
+          ),
+        if (liveBanner != null)
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: broadcastMode ? 18 : 20,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: _AdChip(
+                  key: const Key('match-ad-live-banner'),
+                  label: 'Live Banner',
+                  message: liveBanner.message,
+                  brand: liveBanner.brand,
+                  accent: const Color(0xFFF79009),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _MatchMonetizationRail extends StatelessWidget {
+  const _MatchMonetizationRail({
+    required this.viewState,
+    required this.monetizationService,
+    required this.activeEvent,
+    required this.positionSeconds,
+    required this.onClaimRewardedAd,
+    this.compact = false,
+  });
+
+  final MatchViewState viewState;
+  final Match3dMonetizationService monetizationService;
+  final MatchEvent? activeEvent;
+  final double positionSeconds;
+  final Future<void> Function(MatchAdPlacement ad) onClaimRewardedAd;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showAds(viewState, monetizationService)) {
+      return const SizedBox.shrink();
+    }
+    final MatchAdPlacement? sponsored =
+        viewState.monetization.sponsoredPlacementForEvent(activeEvent?.id) ??
+        viewState.monetization.firstOfType(
+          MatchAdPlacementType.sponsoredHighlight,
+        );
+    final MatchAdPlacement? rewarded = viewState.monetization.firstOfType(
+      MatchAdPlacementType.rewardedAd,
+    );
+    if (sponsored == null && rewarded == null) {
+      return const SizedBox.shrink();
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 14 : 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Monetization lane',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 10),
+            if (sponsored != null) ...<Widget>[
+              _SponsoredHighlightCard(placement: sponsored),
+              if (rewarded != null) const SizedBox(height: 12),
+            ],
+            if (rewarded != null)
+              _RewardedAdCard(
+                placement: rewarded,
+                monetizationService: monetizationService,
+                onClaimRewardedAd: onClaimRewardedAd,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RewardedAdFloatingCard extends StatelessWidget {
+  const _RewardedAdFloatingCard({
+    required this.viewState,
+    required this.monetizationService,
+    required this.onClaimRewardedAd,
+  });
+
+  final MatchViewState viewState;
+  final Match3dMonetizationService monetizationService;
+  final Future<void> Function(MatchAdPlacement ad) onClaimRewardedAd;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showAds(viewState, monetizationService)) {
+      return const SizedBox.shrink();
+    }
+    final MatchAdPlacement? rewarded = viewState.monetization.firstOfType(
+      MatchAdPlacementType.rewardedAd,
+    );
+    if (rewarded == null) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      width: 260,
+      child: _RewardedAdCard(
+        placement: rewarded,
+        monetizationService: monetizationService,
+        onClaimRewardedAd: onClaimRewardedAd,
+        compact: true,
+      ),
+    );
+  }
+}
+
+class _SponsoredHighlightCard extends StatelessWidget {
+  const _SponsoredHighlightCard({required this.placement});
+
+  final MatchAdPlacement placement;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('match-sponsored-clip-card'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: <Color>[Color(0xFF0F2A22), Color(0xFF123B30)],
+        ),
+        border: Border.all(
+          color: const Color(0xFF17B26A).withValues(alpha: 0.6),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            placement.brand,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: const Color(0xFF9FF0B7),
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            placement.message,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Sponsored clip overlay active for the current key moment.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RewardedAdCard extends StatelessWidget {
+  const _RewardedAdCard({
+    required this.placement,
+    required this.monetizationService,
+    required this.onClaimRewardedAd,
+    this.compact = false,
+  });
+
+  final MatchAdPlacement placement;
+  final Match3dMonetizationService monetizationService;
+  final Future<void> Function(MatchAdPlacement ad) onClaimRewardedAd;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool claimed = monetizationService.hasClaimedRewardedAd(placement.id);
+    final int rewardCoins = placement.rewardCoins ?? 50;
+    return Container(
+      key: const Key('match-rewarded-ad-card'),
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF111C29),
+        border: Border.all(
+          color: const Color(0xFFF79009).withValues(alpha: 0.58),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Rewarded Ad',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: const Color(0xFFFEC84B),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            placement.message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            claimed
+                ? 'Reward claimed for this session.'
+                : 'Watch once to bank +$rewardCoins coins for upgrades and gifting.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: claimed ? null : () => onClaimRewardedAd(placement),
+              child: Text(
+                claimed ? 'Reward claimed' : 'Watch Ad · +$rewardCoins coins',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdChip extends StatelessWidget {
+  const _AdChip({
+    super.key,
+    required this.label,
+    required this.message,
+    required this.brand,
+    required this.accent,
+  });
+
+  final String label;
+  final String message;
+  final String brand;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xE6111C28),
+        border: Border.all(color: accent.withValues(alpha: 0.64)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: accent.withValues(alpha: 0.18),
+            blurRadius: 18,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '$label  •  $brand',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EventRail extends StatelessWidget {
   const _EventRail({
     required this.controller,
@@ -1832,6 +2320,31 @@ Color _overlayAccent(MatchTimelineFrame frame, MatchEvent? event) {
     return const Color(0xFFEF4444);
   }
   return _tileAccent(event?.type ?? MatchViewerEventType.neutral);
+}
+
+bool _showAds(
+  MatchViewState viewState,
+  Match3dMonetizationService monetizationService,
+) {
+  return viewState.monetization.adsEnabled &&
+      !viewState.monetization.premiumAdFree &&
+      !monetizationService.effectiveEntitlement.isPremiumUser &&
+      viewState.monetization.hasPlacements;
+}
+
+bool _showsAdRail(
+  MatchViewState viewState,
+  Match3dMonetizationService monetizationService,
+) {
+  if (!_showAds(viewState, monetizationService)) {
+    return false;
+  }
+  return viewState.monetization.firstOfType(
+            MatchAdPlacementType.sponsoredHighlight,
+          ) !=
+          null ||
+      viewState.monetization.firstOfType(MatchAdPlacementType.rewardedAd) !=
+          null;
 }
 
 bool _listEquals(List<double> left, List<double> right) {

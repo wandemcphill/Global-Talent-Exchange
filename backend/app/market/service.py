@@ -8,6 +8,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import uuid4
 
+from app.core.cache import CacheBackend, NullCacheBackend
 from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.market.models import (
@@ -69,12 +70,16 @@ class MarketEngine:
         summary_projector: MarketSummaryProjector | None = None,
         event_publisher: EventPublisher | None = None,
         pricing_service: MarketPricingService | None = None,
+        cache_backend: CacheBackend | None = None,
     ) -> None:
         self.repository = repository or InMemoryMarketRepository()
         self.summary_projector = summary_projector
         self.event_publisher = event_publisher or InMemoryEventPublisher()
         session_factory = self.summary_projector.session_factory if self.summary_projector is not None else None
-        self.pricing_service = pricing_service or MarketPricingService(session_factory=session_factory)
+        self.pricing_service = pricing_service or MarketPricingService(
+            session_factory=session_factory,
+            cache_backend=cache_backend or NullCacheBackend(),
+        )
 
     def create_listing(
         self,

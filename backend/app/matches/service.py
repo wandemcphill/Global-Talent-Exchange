@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Iterable
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.common.enums.match_status import MatchStatus
 from app.match_engine.schemas import MatchReplayPayloadView, ReplayEventLogEntryView
+from app.models.competition_match import CompetitionMatch
 from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
+from app.orchestrator.orchestrator_service import OrchestratorService
 
 from .schemas import (
+    MatchCommandAcceptedView,
+    MatchCompleteRequest,
     MatchAnalysisView,
     MatchKeyMomentView,
+    MatchStartRequest,
     MatchMomentumShiftView,
     MatchReplayEventView,
     MatchReplayStatsView,
@@ -23,6 +30,14 @@ from .schemas import (
 
 
 class MatchReplayNotFoundError(LookupError):
+    pass
+
+
+class MatchCommandError(ValueError):
+    pass
+
+
+class MatchCommandNotFoundError(MatchCommandError):
     pass
 
 
@@ -802,3 +817,163 @@ class MatchEventLoggerService:
         if big_chance is not None:
             metadata["big_chance"] = big_chance
         row.metadata_json = metadata
+
+
+@dataclass(slots=True)
+class MatchCommandService:
+    session: Session
+    orchestrator: OrchestratorService
+
+    def start_match(self, payload: MatchStartRequest) -> MatchCommandAcceptedView:
+        match = self.session.get(CompetitionMatch, payload.match_id)
+        if match is None:
+            match = self._create_match(payload)
+            self.session.add(match)
+        else:
+            self._prepare_existing_match_for_start(match, payload)
+
+        self.session.flush()
+        outbox_event = self.orchestrator.start_match(payload.model_dump(mode="json"))
+        self.session.commit()
+        return MatchCommandAcceptedView(
+            match_id=match.id,
+            status=MatchStatus(match.status),
+            command_name="StartMatchCommand",
+            outbox_event_id=outbox_event.event_id,
+            outbox_event_type=outbox_event.event_type,
+            queued_at=outbox_event.occurred_at,
+        )
+
+    def complete_match(self, payload: MatchCompleteRequest) -> MatchCommandAcceptedView:
+        match = self.session.get(CompetitionMatch, payload.match_id)
+        if match is None:
+            raise MatchCommandNotFoundError(f"Match {payload.match_id} was not found.")
+
+        now = payload.completed_at or _utcnow()
+        match.status = MatchStatus.COMPLETED.value
+        match.home_score = payload.home_score
+        match.away_score = payload.away_score
+        match.completed_at = now
+        match.decided_by_penalties = payload.decided_by_penalties
+        if payload.winner_club_id is not None:
+            match.winner_club_id = payload.winner_club_id
+        elif payload.home_score > payload.away_score:
+            match.winner_club_id = match.home_club_id
+        elif payload.away_score > payload.home_score:
+            match.winner_club_id = match.away_club_id
+        else:
+            match.winner_club_id = None
+        match.metadata_json = _merge_orchestrator_metadata(
+            match.metadata_json,
+            key="complete_request",
+            payload=payload.model_dump(mode="json"),
+            recorded_at=now,
+        )
+
+        self.session.flush()
+        outbox_event = self.orchestrator.complete_match(payload.model_dump(mode="json"))
+        self.session.commit()
+        return MatchCommandAcceptedView(
+            match_id=match.id,
+            status=MatchStatus(match.status),
+            command_name="CompleteMatchCommand",
+            outbox_event_id=outbox_event.event_id,
+            outbox_event_type=outbox_event.event_type,
+            queued_at=outbox_event.occurred_at,
+        )
+
+    def _create_match(self, payload: MatchStartRequest) -> CompetitionMatch:
+        missing_fields = [
+            field_name
+            for field_name, value in (
+                ("competition_id", payload.competition_id),
+                ("round_id", payload.round_id),
+                ("home_club_id", payload.home_club_id),
+                ("away_club_id", payload.away_club_id),
+            )
+            if value is None or not str(value).strip()
+        ]
+        if missing_fields:
+            raise MatchCommandError(
+                "Missing fields for new match creation: " + ", ".join(sorted(missing_fields)) + "."
+            )
+        now = payload.scheduled_at or _utcnow()
+        match_date = payload.match_date or now.date()
+        return CompetitionMatch(
+            id=payload.match_id,
+            competition_id=str(payload.competition_id),
+            round_id=str(payload.round_id),
+            round_number=payload.round_number or 1,
+            stage=(payload.stage or "league").strip() or "league",
+            home_club_id=str(payload.home_club_id),
+            away_club_id=str(payload.away_club_id),
+            scheduled_at=payload.scheduled_at,
+            match_date=match_date,
+            window=payload.window,
+            slot_sequence=payload.slot_sequence or 1,
+            status=MatchStatus.QUEUED.value,
+            requires_winner=bool(payload.requires_winner),
+            metadata_json=_merge_orchestrator_metadata(
+                {},
+                key="start_request",
+                payload=payload.model_dump(mode="json"),
+                recorded_at=_utcnow(),
+            ),
+        )
+
+    def _prepare_existing_match_for_start(self, match: CompetitionMatch, payload: MatchStartRequest) -> None:
+        match.status = MatchStatus.QUEUED.value
+        match.home_score = 0
+        match.away_score = 0
+        match.winner_club_id = None
+        match.decided_by_penalties = False
+        match.completed_at = None
+        if payload.competition_id is not None:
+            match.competition_id = payload.competition_id
+        if payload.round_id is not None:
+            match.round_id = payload.round_id
+        if payload.round_number is not None:
+            match.round_number = payload.round_number
+        if payload.stage is not None:
+            match.stage = payload.stage
+        if payload.home_club_id is not None:
+            match.home_club_id = payload.home_club_id
+        if payload.away_club_id is not None:
+            match.away_club_id = payload.away_club_id
+        if payload.scheduled_at is not None:
+            match.scheduled_at = payload.scheduled_at
+        if payload.match_date is not None:
+            match.match_date = payload.match_date
+        elif match.match_date is None and payload.scheduled_at is not None:
+            match.match_date = payload.scheduled_at.date()
+        if payload.window is not None:
+            match.window = payload.window
+        if payload.slot_sequence is not None:
+            match.slot_sequence = payload.slot_sequence
+        if payload.requires_winner is not None:
+            match.requires_winner = payload.requires_winner
+        match.metadata_json = _merge_orchestrator_metadata(
+            match.metadata_json,
+            key="start_request",
+            payload=payload.model_dump(mode="json"),
+            recorded_at=_utcnow(),
+        )
+
+
+def _merge_orchestrator_metadata(
+    metadata_json: dict[str, Any] | None,
+    *,
+    key: str,
+    payload: dict[str, Any],
+    recorded_at: datetime,
+) -> dict[str, Any]:
+    metadata = dict(metadata_json or {})
+    orchestrator_metadata = dict(metadata.get("orchestrator") or {})
+    orchestrator_metadata[key] = payload
+    orchestrator_metadata[f"{key}_at"] = recorded_at.isoformat()
+    metadata["orchestrator"] = orchestrator_metadata
+    return metadata
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)

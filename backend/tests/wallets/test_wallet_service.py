@@ -253,6 +253,43 @@ def test_get_balance_uses_post_commit_cache(session, monkeypatch) -> None:
     assert cache_backend.values[service._balance_cache_key(user_account.id)]
 
 
+def test_get_wallet_summary_uses_write_through_cache(session, monkeypatch) -> None:
+    user = _create_user(session)
+    cache_backend = FakeCacheBackend()
+    service = WalletService(cache_backend=cache_backend)
+    user_account = service.get_user_account(session, user, LedgerUnit.CREDIT)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.CREDIT)
+
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("15")),
+            LedgerPosting(account=platform_account, amount=Decimal("-15")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-wallet-summary-cache",
+        actor=user,
+    )
+    session.commit()
+
+    monkeypatch.setattr(
+        service,
+        "get_user_account",
+        lambda *_args, **_kwargs: pytest.fail("expected cached wallet summary lookup"),
+    )
+    monkeypatch.setattr(
+        service,
+        "_get_user_account_balance_by_kind",
+        lambda *_args, **_kwargs: pytest.fail("expected cached wallet summary lookup"),
+    )
+
+    summary = service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
+
+    assert summary.available_balance == Decimal("15.0000")
+    assert summary.reserved_balance == Decimal("0.0000")
+    assert cache_backend.values[service._wallet_summary_cache_key(user.id, LedgerUnit.CREDIT)]
+
+
 def test_convert_wallet_units_moves_value_across_coin_and_credit_wallets(session) -> None:
     user = _create_user(session)
     service = WalletService()

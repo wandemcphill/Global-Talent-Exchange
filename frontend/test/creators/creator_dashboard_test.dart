@@ -6,30 +6,35 @@ import 'package:gte_frontend/screens/creators/creator_dashboard_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('creator dashboard shows growth summary and creator competitions',
-      (WidgetTester tester) async {
-    final CreatorController controller = CreatorController(
-      api: CreatorApi.fixture(),
-    );
+  testWidgets(
+    'creator dashboard shows growth summary and creator competitions',
+    (WidgetTester tester) async {
+      final CreatorController controller = CreatorController(
+        api: CreatorApi.fixture(),
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: CreatorDashboardScreen(controller: controller),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: CreatorDashboardScreen(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Creator command deck'), findsOneWidget);
-    expect(find.text('Maya Scout'), findsOneWidget);
-    expect(find.text('Creator stats'), findsOneWidget);
-    expect(find.text('Growth summary'), findsOneWidget);
-    expect(find.text('LIVE CREATOR COMPETITIONS'), findsOneWidget);
-    expect(find.text('Spring Scout Sprint'), findsOneWidget);
-  });
+      expect(find.text('Creator command deck'), findsOneWidget);
+      expect(find.text('Maya Scout'), findsOneWidget);
+      expect(find.text('Creator stats'), findsOneWidget);
+      expect(find.text('Growth summary'), findsOneWidget);
+      expect(find.text('Clip income'), findsOneWidget);
+      expect(find.text('Wallet balance'), findsOneWidget);
+      expect(find.text('LIVE CREATOR COMPETITIONS'), findsOneWidget);
+      expect(find.text('Spring Scout Sprint'), findsOneWidget);
+    },
+  );
 
-  testWidgets('creator dashboard opens profile and share surfaces',
-      (WidgetTester tester) async {
+  testWidgets('creator dashboard opens profile and share surfaces', (
+    WidgetTester tester,
+  ) async {
     final CreatorController controller = CreatorController(
       api: CreatorApi.fixture(),
     );

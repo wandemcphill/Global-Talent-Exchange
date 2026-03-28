@@ -10,8 +10,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.risk_ops_engine.service import RiskOpsService
-
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -150,6 +148,8 @@ class ApiRateLimiter:
         limit: int,
         retry_after_seconds: int,
     ) -> None:
+        from app.risk_ops_engine.service import RiskOpsService
+
         session_factory = getattr(self.app.state, "session_factory", None)
         if session_factory is None:
             return

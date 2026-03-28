@@ -6,6 +6,7 @@ from app.risk.service import (
     NonPositiveQuantityError,
     RiskControlService,
     RiskValidationError,
+    TradingBlockedError,
     TradeSide,
 )
 from app.risk.fraud_service import FraudDetectionService
@@ -19,5 +20,6 @@ __all__ = [
     "RiskControlService",
     "FraudDetectionService",
     "RiskValidationError",
+    "TradingBlockedError",
     "TradeSide",
 ]

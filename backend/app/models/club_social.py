@@ -338,13 +338,153 @@ class ChallengeShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class SocialFollow(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "social_follows"
+    __table_args__ = (
+        UniqueConstraint("user_id", "target_key", name="uq_social_follows_user_target"),
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    target_key: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    target_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    club_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    player_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("ingestion_players.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class MatchShareLink(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "match_share_links"
+    __table_args__ = (
+        UniqueConstraint("share_code", name="uq_match_share_links_share_code"),
+    )
+
+    match_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("competition_matches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    challenge_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_challenges.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    share_code: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    share_text: Mapped[str] = mapped_column(Text, nullable=False)
+    web_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    deep_link_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    reward_amount_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    click_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class MatchShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "match_share_events"
+
+    share_link_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("match_share_links.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_platform: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class MatchLiveReaction(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "match_live_reactions"
+
+    match_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("competition_matches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    club_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reaction_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    reaction_label: Mapped[str] = mapped_column(String(80), nullable=False)
+    intensity_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class MatchChatMessage(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
+    __tablename__ = "match_chat_messages"
+
+    match_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("competition_matches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    club_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    visibility: Mapped[str] = mapped_column(String(24), nullable=False, default="public", server_default="public", index=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
 __all__ = [
     "ChallengeShareEvent",
     "ClubChallenge",
     "ClubChallengeLink",
     "ClubChallengeResponse",
     "ClubIdentityMetrics",
+    "MatchChatMessage",
+    "MatchLiveReaction",
     "MatchReactionEvent",
+    "MatchShareEvent",
+    "MatchShareLink",
     "RivalryMatchHistory",
     "RivalryProfile",
+    "SocialFollow",
 ]

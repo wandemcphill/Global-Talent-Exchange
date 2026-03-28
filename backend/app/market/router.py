@@ -43,7 +43,10 @@ def get_market_engine(request: Request) -> MarketEngine:
     if market_engine is None:
         session_factory = getattr(request.app.state, "session_factory", None)
         summary_projector = MarketSummaryProjector(session_factory) if session_factory is not None else None
-        market_engine = MarketEngine(summary_projector=summary_projector)
+        market_engine = MarketEngine(
+            summary_projector=summary_projector,
+            cache_backend=getattr(request.app.state, "cache_backend", None),
+        )
         request.app.state.market_engine = market_engine
     return market_engine
 

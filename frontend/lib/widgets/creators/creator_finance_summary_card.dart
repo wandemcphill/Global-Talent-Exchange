@@ -46,6 +46,35 @@ class CreatorFinanceSummaryCard extends StatelessWidget {
                 ),
               ),
               _FinanceMetric(
+                label: 'Clip income',
+                value: gteFormatFiat(
+                  summary.totalClipIncome,
+                  currency: summary.currency,
+                ),
+              ),
+              _FinanceMetric(
+                label: 'Clip views',
+                value: summary.totalClipViews.toString(),
+              ),
+              _FinanceMetric(
+                label: 'Monetized clips',
+                value: summary.monetizedClips.toString(),
+              ),
+              _FinanceMetric(
+                label: 'Viral bonuses',
+                value: gteFormatFiat(
+                  summary.totalViralBonus,
+                  currency: summary.currency,
+                ),
+              ),
+              _FinanceMetric(
+                label: 'Wallet balance',
+                value: gteFormatFiat(
+                  summary.walletBalance,
+                  currency: summary.walletCurrency,
+                ),
+              ),
+              _FinanceMetric(
                 label: 'Withdrawn net',
                 value: gteFormatFiat(
                   summary.totalWithdrawnNet,
@@ -82,16 +111,13 @@ class CreatorFinanceSummaryCard extends StatelessWidget {
           ),
           if (summary.insights.isNotEmpty) ...<Widget>[
             const SizedBox(height: 12),
-            Text(
-              'Insights',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Insights', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
             for (final String insight in summary.insights)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
-                  '• $insight',
+                  '- $insight',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -103,10 +129,7 @@ class CreatorFinanceSummaryCard extends StatelessWidget {
 }
 
 class _FinanceMetric extends StatelessWidget {
-  const _FinanceMetric({
-    required this.label,
-    required this.value,
-  });
+  const _FinanceMetric({required this.label, required this.value});
 
   final String label;
   final String value;

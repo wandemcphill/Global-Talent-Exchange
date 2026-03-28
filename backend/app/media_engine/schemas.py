@@ -159,6 +159,68 @@ class HighlightShareAmplificationView(BaseModel):
     created_at: datetime
 
 
+class CreatorClipRevenueAttributionRequest(BaseModel):
+    views: int = Field(default=0, ge=0)
+    platform_payout_revenue_credit: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    in_app_ad_revenue_credit: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    sponsored_clip_revenue_credit: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    rpm_per_view: Decimal = Field(default=Decimal("0.0020"), gt=0)
+    referral_boost_bps: int = Field(default=0, ge=0, le=10000)
+    weekly_top_creator_bonus_credit: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    force_viral_bonus: bool | None = None
+    clip_id: str | None = Field(default=None, max_length=128)
+    clip_trust_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    avg_trust_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    user_trust_scores: list[float] = Field(default_factory=list)
+    source_reference: str | None = Field(default=None, max_length=128)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class CreatorClipRevenueAttributionView(BaseModel):
+    id: str
+    export_id: str
+    creator_user_id: str
+    match_key: str
+    source_reference: str | None = None
+    views: int
+    rpm_per_view: Decimal
+    platform_payout_revenue_credit: Decimal
+    in_app_ad_revenue_credit: Decimal
+    sponsored_clip_revenue_credit: Decimal
+    gross_revenue_credit: Decimal
+    creator_base_share_credit: Decimal
+    platform_share_credit: Decimal
+    growth_pool_share_credit: Decimal
+    viral_bonus_credit: Decimal
+    referral_bonus_credit: Decimal
+    weekly_top_creator_bonus_credit: Decimal
+    creator_payout_credit: Decimal
+    growth_pool_retained_credit: Decimal
+    is_viral: bool
+    wallet_reference: str | None = None
+    metadata_json: dict[str, Any]
+    created_at: datetime
+
+
+class CreatorClipEarningsSummaryView(BaseModel):
+    generated_clip_count: int
+    monetized_clip_count: int
+    total_views: int
+    total_gross_revenue_credit: Decimal
+    total_creator_payout_credit: Decimal
+    total_platform_share_credit: Decimal
+    total_growth_pool_retained_credit: Decimal
+    total_viral_bonus_credit: Decimal
+    total_referral_bonus_credit: Decimal
+    total_weekly_top_creator_bonus_credit: Decimal
+    viral_clip_count: int
+    wallet_user_id: str
+    wallet_balance_credit: Decimal
+    wallet_available_credit: Decimal
+    wallet_currency: str
+    incentives: list[str] = Field(default_factory=list)
+
+
 class CreatorBroadcastPurchaseRequest(BaseModel):
     duration_minutes: int = Field(ge=10, le=90)
 

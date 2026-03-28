@@ -108,10 +108,14 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "club_identity" in app.state.domain_modules
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules
+        assert "viral" in app.state.domain_modules
+        assert "pundits" in app.state.domain_modules
+        assert "infinite_league" in app.state.domain_modules
         assert "regen_universe" in app.state.domain_modules
         assert "football_universe" in app.state.domain_modules
         assert "broadcast_rights" in app.state.domain_modules
         assert "creators" in app.state.domain_modules
+        assert "creator_marketplace" in app.state.domain_modules
         assert "referrals" in app.state.domain_modules
         assert "admin_referrals" in app.state.domain_modules
         assert "ownership_groups" in app.state.domain_modules
@@ -203,6 +207,10 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/fast-cups/upcoming" in paths
     assert "/match-engine/replay" in paths
     assert "/api/match-engine/replay" in paths
+    assert "/matches/start" in paths
+    assert "/api/matches/start" in paths
+    assert "/matches/complete" in paths
+    assert "/api/matches/complete" in paths
     assert "/matches/{match_id}/replay" in paths
     assert "/api/matches/{match_id}/replay" in paths
     assert "/matches/{match_id}/analysis" in paths
@@ -302,6 +310,20 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/creators/profile" in paths
     assert "/api/creators/profile/me" in paths
     assert "/api/creators/me/summary" in paths
+    assert "/campaigns" in paths
+    assert "/campaigns/create" in paths
+    assert "/campaigns/{id}/apply" in paths
+    assert "/campaigns/{id}/accept" in paths
+    assert "/campaigns/{id}/performance" in paths
+    assert "/creators/marketplace" in paths
+    assert "/creators/me/reputation" in paths
+    assert "/api/campaigns" in paths
+    assert "/api/campaigns/create" in paths
+    assert "/api/campaigns/{id}/apply" in paths
+    assert "/api/campaigns/{id}/accept" in paths
+    assert "/api/campaigns/{id}/performance" in paths
+    assert "/api/creators/marketplace" in paths
+    assert "/api/creators/me/reputation" in paths
     assert "/api/referrals/share-codes" in paths
     assert "/api/referrals/me/summary" in paths
     assert "/api/admin/referrals/dashboard" in paths
@@ -310,6 +332,11 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/notifications" in paths
     assert "/api/notifications/me" in paths
     assert "/api/notifications" in paths
+    assert "/api/viral/feed" in paths
+    assert "/api/pundits/matches/{match_key}" in paths
+    assert "/infinite-league/status" in paths
+    assert "/api/infinite-league/status" in paths
+    assert "/api/infinite-league/tick" in paths
     assert "/admin/ops/fan-updates" in paths
     assert "/admin/ops/media-generation" in paths
     assert "/admin/ops/identity-evolution" in paths

@@ -12,6 +12,8 @@ def test_openapi_exposes_newly_integrated_module_routes(integration_client) -> N
     assert "/api/academy/registration" in paths
     assert "/api/fast-cups/upcoming" in paths
     assert "/api/match-engine/replay" in paths
+    assert "/api/matches/start" in paths
+    assert "/api/matches/complete" in paths
     assert "/api/matches/{match_id}/replay" in paths
     assert "/api/matches/{match_id}/analysis" in paths
     assert "/api/matches/{match_id}/highlights" in paths
@@ -31,12 +33,23 @@ def test_openapi_exposes_newly_integrated_module_routes(integration_client) -> N
     assert "/api/clubs/{club_id}/identity" in paths
     assert "/api/replays/public/featured" in paths
     assert "/api/notifications/me" in paths
+    assert "/api/viral/feed" in paths
+    assert "/api/pundits/matches/{match_key}" in paths
+    assert "/api/campaigns" in paths
+    assert "/api/campaigns/create" in paths
+    assert "/api/campaigns/{id}/apply" in paths
+    assert "/api/campaigns/{id}/accept" in paths
+    assert "/api/campaigns/{id}/performance" in paths
+    assert "/api/creators/marketplace" in paths
+    assert "/api/creators/me/reputation" in paths
 
 
 def test_integrated_read_routes_are_reachable(integration_client, demo_auth_headers) -> None:
     fast_cups_response = integration_client.get("/api/fast-cups/upcoming")
     world_super_cup_response = integration_client.get("/api/world-super-cup/countdown")
     simulation_matchmaking_response = integration_client.post("/api/simulation-matchmaking/quick-game", json={})
+    match_start_response = integration_client.post("/api/matches/start", json={})
+    match_complete_response = integration_client.post("/api/matches/complete", json={})
     match_replay_response = integration_client.get("/api/matches/nonexistent/replay")
     match_analysis_response = integration_client.get("/api/matches/nonexistent/analysis")
     predictions_response = integration_client.get("/api/predictions")
@@ -48,10 +61,13 @@ def test_integrated_read_routes_are_reachable(integration_client, demo_auth_head
     reputation_response = integration_client.get("/api/clubs/royal-lagos-fc/reputation")
     replay_archive_response = integration_client.get("/api/replays/public/featured")
     notifications_response = integration_client.get("/api/notifications/me", headers=demo_auth_headers)
+    viral_feed_response = integration_client.get("/api/viral/feed")
 
     assert fast_cups_response.status_code == 200
     assert world_super_cup_response.status_code == 200
     assert simulation_matchmaking_response.status_code == 422
+    assert match_start_response.status_code == 422
+    assert match_complete_response.status_code == 422
     assert match_replay_response.status_code == 404
     assert match_analysis_response.status_code == 404
     assert predictions_response.status_code == 401
@@ -63,3 +79,4 @@ def test_integrated_read_routes_are_reachable(integration_client, demo_auth_head
     assert reputation_response.status_code == 200
     assert replay_archive_response.status_code == 200
     assert notifications_response.status_code == 200
+    assert viral_feed_response.status_code == 200

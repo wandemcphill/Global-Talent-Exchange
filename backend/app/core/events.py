@@ -7,6 +7,15 @@ from typing import Any, Callable, Protocol
 from uuid import uuid4
 
 from app.core.event_backbone import make_json_safe
+try:
+    from app.observability.tracing import enrich_trace_headers
+except Exception:  # pragma: no cover - optional observability dependency
+    def enrich_trace_headers(headers: dict[str, Any] | None = None) -> dict[str, str]:
+        return {
+            str(key): str(value)
+            for key, value in dict(headers or {}).items()
+            if value is not None
+        }
 
 EventSubscriber = Callable[["DomainEvent"], None]
 
@@ -47,7 +56,7 @@ class DomainEvent:
             "producer": self.producer or "gtex-app",
             "partition_key": self.partition_key or self.aggregate_id,
             "payload": make_json_safe(self.payload),
-            "headers": make_json_safe(self.headers),
+            "headers": make_json_safe(enrich_trace_headers(self.headers)),
         }
 
 

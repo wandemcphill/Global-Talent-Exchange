@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.match_engine.schemas import MatchSimulationRequest
+if TYPE_CHECKING:
+    from app.match_engine.schemas import MatchSimulationRequest
 
 _MONETIZATION_TERMS = (
     "gift",

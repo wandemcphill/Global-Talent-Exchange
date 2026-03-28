@@ -233,13 +233,11 @@ def test_reactions_and_rivalry_accumulate_from_match_flow(session: Session, serv
     assert rule_set is not None
     match = session.get(CompetitionMatch, "match-1")
     assert match is not None
-    match_service.complete_match(
-        match=match,
-        rule_set=rule_set,
-        home_score=0,
-        away_score=2,
-        winner_club_id="club-bravo",
-    )
+    match.home_score = 0
+    match.away_score = 2
+    match.winner_club_id = "club-bravo"
+    match.status = "completed"
+    service.record_match_outcome_from_match(match=match)
     session.commit()
 
     rivalry = service.rivalry_detail(club_id="club-alpha", opponent_club_id="club-bravo")
@@ -271,16 +269,83 @@ def test_match_completion_with_legacy_club_ids_does_not_break(session: Session) 
     rule_set = session.get(CompetitionRuleSet, "rules-legacy")
     assert rule_set is not None
 
-    updated = match_service.complete_match(
-        match=match,
-        rule_set=rule_set,
-        home_score=1,
-        away_score=0,
-        winner_club_id="legacy-club-a",
-    )
+    match.home_score = 1
+    match.away_score = 0
+    match.winner_club_id = "legacy-club-a"
+    match.status = "completed"
+    updated = match
+    ClubSocialService(session).record_match_outcome_from_match(match=match)
     session.commit()
 
     assert updated.status == "completed"
     social_service = ClubSocialService(session)
     assert social_service.list_match_reactions("match-legacy") == []
     assert social_service._rivalry_profile("legacy-club-a", "legacy-club-b") is None
+
+
+def test_follows_match_shares_live_reactions_and_chat(session: Session, service: ClubSocialService) -> None:
+    actor = session.get(User, "user-alpha")
+    assert actor is not None
+    match = _seed_match_context(session)
+
+    club_follow = service.follow_target(
+        actor=actor,
+        target_type="club",
+        club_id="club-bravo",
+        player_id=None,
+        metadata_json={"source": "feed"},
+    )
+    player_follow = service.follow_target(
+        actor=actor,
+        target_type="player",
+        club_id=None,
+        player_id="player-1",
+        metadata_json={"source": "feed"},
+    )
+    share_link = service.create_match_share_link(
+        actor=actor,
+        match_id=match.id,
+        challenge_id=None,
+        share_text=None,
+        reward_amount_minor=50,
+        metadata_json={"surface": "result_card"},
+    )
+    service.record_match_share_event(
+        share_code=share_link.share_code,
+        actor_user_id=actor.id,
+        event_type="open",
+        source_platform="social",
+        metadata_json={},
+    )
+    service.create_live_reaction(
+        actor=actor,
+        match_id=match.id,
+        club_id="club-alpha",
+        reaction_type="hype",
+        reaction_label=None,
+        intensity_score=87,
+        metadata_json={"emoji": "fire"},
+    )
+    service.create_chat_message(
+        actor=actor,
+        match_id=match.id,
+        club_id="club-alpha",
+        body="That goal was insane!",
+        metadata_json={"sentiment": "positive"},
+    )
+    metrics = service.refresh_identity_metrics(club_id="club-bravo")
+    session.commit()
+
+    follows = service.list_follows(actor=actor)
+    share_page = service.match_share_page(share_code=share_link.share_code)
+    live_reactions = service.list_live_reactions(match.id)
+    chat_messages = service.list_chat_messages(match.id)
+
+    assert club_follow.target_key == "club:club-bravo"
+    assert player_follow.target_key == "player:player-1"
+    assert len(follows) == 2
+    assert share_page["link"]["click_count"] == 1
+    assert "50 GTex" in share_page["link"]["share_text"]
+    assert live_reactions[0]["reaction_type"] == "hype"
+    assert chat_messages[0]["body"] == "That goal was insane!"
+    assert metrics.metadata_json["club_followers"] == 1

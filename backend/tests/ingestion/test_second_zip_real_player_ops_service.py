@@ -16,6 +16,7 @@ from app.core.config import load_settings
 from app.core.database import load_model_modules
 from app.ingestion.canonical_countries import CANONICAL_COUNTRY_SEEDS
 from app.ingestion.models import Club, Competition, Country
+from app.ingestion.real_player_ingestion_service import RealPlayerIngestionService
 from app.ingestion.second_zip_real_player_ops_service import (
     SecondZipEvaluationResult,
     SecondZipRealPlayerOpsService,
@@ -589,6 +590,71 @@ def test_import_archive_supports_2000_row_dry_run(tmp_path: Path, monkeypatch) -
     engine.dispose()
 
 
+def test_import_archive_avoids_full_batch_row_loads_on_hot_path(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-header-only-import.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_evaluate_candidates",
+        lambda self, candidates: _stub_evaluator({})(candidates),
+    )
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(index) for index in range(1, 4)],
+    )
+
+    def fail_load_batch(self, session, batch_id):
+        raise AssertionError("import hot path should not require a full batch row load")
+
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_load_batch",
+        fail_load_batch,
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=3, limit=3)
+
+    assert imported.status == "completed"
+    assert imported.counts.total_rows_read == 3
+    assert imported.counts.publish_ready == 3
+    engine.dispose()
+
+
+def test_import_archive_chunks_candidate_evaluation(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-eval-chunks.db")
+    engine = _initialize_database(database_url)
+    _seed_canonical_entities(engine)
+    service = _service(database_url, engine)
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(index, name=f"Ready Player {index}") for index in range(1, 6)],
+    )
+    service._strict_ingestion_service()
+    original_prepare = RealPlayerIngestionService._prepare_batch
+    prepare_sizes: list[int] = []
+
+    def tracked_prepare(self, *, session, request, ingestion_batch_id, as_of):
+        prepare_sizes.append(len(request.players))
+        return original_prepare(
+            self,
+            session=session,
+            request=request,
+            ingestion_batch_id=ingestion_batch_id,
+            as_of=as_of,
+        )
+
+    monkeypatch.setenv("GTE_SECOND_ZIP_EVALUATION_BATCH_SIZE", "2")
+    monkeypatch.setattr(RealPlayerIngestionService, "_prepare_batch", tracked_prepare)
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=5, limit=5)
+
+    assert imported.status == "completed"
+    assert imported.counts.total_rows_read == 5
+    assert prepare_sizes == [2, 2, 1]
+    engine.dispose()
+
+
 def test_evaluation_result_uses_row_mapping_summary_when_profile_was_never_staged(tmp_path: Path) -> None:
     database_url = _database_url(tmp_path / "2ndzip-row-metadata.db")
     engine = _initialize_database(database_url)
@@ -1072,5 +1138,37 @@ def test_read_only_report_derives_running_status_without_refresh(tmp_path: Path,
     reported = service.report_run(run_id=imported.run_id, refresh_summary=False)
 
     assert reported.status == "running"
+    assert reported.counts.publish_ready == 1
+    engine.dispose()
+
+
+def test_read_only_report_uses_header_only_batch_load(tmp_path: Path, monkeypatch) -> None:
+    database_url = _database_url(tmp_path / "2ndzip-report-header-only.db")
+    engine = _initialize_database(database_url)
+    service = _service(database_url, engine)
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_evaluate_candidates",
+        lambda self, candidates: _stub_evaluator({})(candidates),
+    )
+    archive_path = _write_second_zip(
+        tmp_path / "2nd.zip",
+        players=[_player_row(1)],
+    )
+
+    imported = service.import_archive(archive_path=archive_path, batch_size=10, limit=1)
+
+    def fail_load_batch(self, session, batch_id):
+        raise AssertionError("read-only report should use the header-only batch loader")
+
+    monkeypatch.setattr(
+        SecondZipRealPlayerOpsService,
+        "_load_batch",
+        fail_load_batch,
+    )
+
+    reported = service.report_run(run_id=imported.run_id, refresh_summary=False)
+
+    assert reported.status == "completed"
     assert reported.counts.publish_ready == 1
     engine.dispose()

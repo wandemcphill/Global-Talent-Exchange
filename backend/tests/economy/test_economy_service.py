@@ -428,3 +428,73 @@ def test_governor_snapshot_surfaces_whale_decay_and_circuit_breaker_metrics(sess
     action_types = {item['type'] for item in snapshot['recommended_actions']}
     assert 'activate_circuit_breaker' in action_types
     assert 'apply_reward_decay' in action_types
+
+
+def test_governor_thread_c_cycle_sets_reward_agent_and_price_controls(session) -> None:
+    wallet = WalletService()
+    admin = _create_user(
+        session,
+        user_id='thread-c-admin',
+        email='thread-c-admin@example.com',
+        username='thread-c-admin',
+        role=UserRole.ADMIN,
+    )
+    governor = EconomyGovernorService(session=session, wallet_service=wallet)
+    metrics = {
+        'gtex_supply': Decimal('1000.0000'),
+        'fan_supply': Decimal('2000.0000'),
+        'daily_burn': Decimal('40.0000'),
+        'daily_mint': Decimal('40.0000'),
+        'avg_user_spend': Decimal('30.0000'),
+        'inflation_rate': Decimal('0.1200'),
+        'treasury_balance': Decimal('10.0000'),
+        'rewards_pool_balance': Decimal('50.0000'),
+        'liquidity_pool_balance': Decimal('25.0000'),
+        'treasury_reward_threshold': Decimal('25.0000'),
+        'active_users': 4000,
+        'market_volatility': Decimal('0.6000'),
+    }
+
+    analysis = governor.analyze(metrics=metrics)
+    action_types = {item['type'] for item in analysis['actions']}
+
+    snapshot = governor.run_cycle(actor=admin, metrics=metrics)
+
+    assert action_types >= {
+        'set_reward_multiplier',
+        'set_free_prize_multiplier',
+        'set_agent_activity',
+        'adjust_price_caps',
+    }
+    assert snapshot['reward_payout_multiplier'] == Decimal('0.8000')
+    assert snapshot['free_prize_multiplier'] == Decimal('0.8000')
+    assert snapshot['agent_activity_multiplier'] == Decimal('0.5000')
+    assert snapshot['price_change_limit'] == Decimal('0.0500')
+
+
+def test_governor_price_change_limit_caps_service_pricing(session) -> None:
+    admin = _create_user(
+        session,
+        user_id='pricing-cap-admin',
+        email='pricing-cap-admin@example.com',
+        username='pricing-cap-admin',
+        role=UserRole.ADMIN,
+    )
+    _create_service_pricing_rule(
+        session,
+        service_key='tournament-entry',
+        price_coin=Decimal('1.0000'),
+        price_fancoin_equivalent=Decimal('100.0000'),
+    )
+
+    governor = EconomyGovernorService(session=session)
+    governor.update_policy(
+        actor=admin,
+        tournament_entry_multiplier=Decimal('1.2000'),
+        price_change_limit=Decimal('0.0500'),
+    )
+
+    quote = PricingEngine(session).quote_service('tournament-entry')
+
+    assert quote.gtex_amount == Decimal('1.0500')
+    assert quote.fancoin_amount == Decimal('105.0000')

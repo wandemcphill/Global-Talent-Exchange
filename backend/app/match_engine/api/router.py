@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.common.enums.match_status import MatchStatus
+from app.core.config import Settings, get_settings
 from app.db import get_session
 from app.fairness.fairness_guard import FairnessGuard, FairnessViolation
+from app.highlights.service import HighlightGenerationService
 from app.match_engine.schemas import (
     MatchEventTimelineView,
     MatchFinalSummaryView,
@@ -20,9 +22,11 @@ from app.match_engine.schemas import (
     MatchSimulationRequest,
 )
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.match_engine.services.highlight_manifest import MatchHighlightManifestBuilder
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
 from app.replay_archive.service import ensure_replay_archive
+from app.services.ads.engine import AdDecisionEngine
 
 router = APIRouter(tags=["match-engine"])
 legacy_router = APIRouter(prefix="/match-engine")
@@ -35,6 +39,23 @@ def get_match_simulation_service() -> MatchSimulationService:
 
 def get_fairness_guard() -> FairnessGuard:
     return FairnessGuard()
+
+
+def _settings_from_request(request: Request) -> Settings:
+    state_settings = getattr(request.app.state, "settings", None)
+    return state_settings if isinstance(state_settings, Settings) else get_settings()
+
+
+def _highlight_generation_service(request: Request) -> HighlightGenerationService:
+    existing = getattr(request.app.state, "highlight_generation_service", None)
+    if isinstance(existing, HighlightGenerationService):
+        return existing
+    settings = _settings_from_request(request)
+    return HighlightGenerationService(settings=settings)
+
+
+def get_ad_decision_engine() -> AdDecisionEngine:
+    return AdDecisionEngine()
 
 
 def _resolve_status_from_record(record) -> MatchStatus:
@@ -321,7 +342,37 @@ def read_match_live_feed(match_key: str, request: Request) -> MatchLiveFeedView:
 
 @legacy_router.get("/highlights/{match_key}", response_model=MatchHighlightListView)
 @api_router.get("/highlights/{match_key}", response_model=MatchHighlightListView)
-def read_match_highlights(match_key: str, request: Request) -> MatchHighlightListView:
+def read_match_highlights(
+    match_key: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
+) -> MatchHighlightListView:
+    manifest_builder = MatchHighlightManifestBuilder(settings=_settings_from_request(request))
+    generation_service = _highlight_generation_service(request)
+    match = session.get(CompetitionMatch, match_key)
+    match_metadata = match.metadata_json if match is not None and isinstance(match.metadata_json, dict) else {}
+    ad_profile = match_metadata.get("ad_profile") if isinstance(match_metadata.get("ad_profile"), dict) else None
+    try:
+        payload = _load_stored_replay_payload(match_key, session)
+    except HTTPException:
+        payload = None
+    if payload is not None:
+        manifest = ad_engine.attach_highlight_ads(
+            manifest_builder.build_from_replay_payload(payload),
+            ad_profile=ad_profile,
+            match_context={
+                "home_team_name": payload.visual_identity.home_team.team_name if payload.visual_identity is not None else "",
+                "away_team_name": payload.visual_identity.away_team.team_name if payload.visual_identity is not None else "",
+                "competition_name": (
+                    f"{payload.visual_identity.home_team.team_name} vs {payload.visual_identity.away_team.team_name}"
+                    if payload.visual_identity is not None
+                    else match_key
+                ),
+            },
+        )
+        return generation_service.prepare_manifest(manifest)
+
     archive = ensure_replay_archive(request.app)
     record = archive.repository.get_latest_record(f"replay:{match_key}")
     if record is None:
@@ -336,19 +387,20 @@ def read_match_highlights(match_key: str, request: Request) -> MatchHighlightLis
             download_available=False,
         )
 
-    archive_available = True
-    highlights = [_map_highlight(event, archive_available=archive_available) for event in record.timeline]
-    return MatchHighlightListView(
-        match_id=match_key,
-        highlights=highlights,
-        replay_available=True,
-        archive_available=archive_available,
-        download_available=False,
+    manifest = ad_engine.attach_highlight_ads(
+        manifest_builder.build_from_archive_record(match_key, record),
+        ad_profile=ad_profile,
+        match_context={
+            "home_team_name": record.home_club.club_name,
+            "away_team_name": record.away_club.club_name,
+            "competition_name": record.competition_context.competition_label,
+        },
     )
+    return generation_service.prepare_manifest(manifest)
 
 
 router.include_router(legacy_router)
 router.include_router(api_router)
 
 
-__all__ = ["get_match_simulation_service", "router"]
+__all__ = ["get_ad_decision_engine", "get_match_simulation_service", "router"]

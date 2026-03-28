@@ -37,6 +37,24 @@ class EconomyGovernorPolicy(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=Decimal("1.0000"),
         server_default="1.0000",
     )
+    free_prize_multiplier: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        default=Decimal("1.0000"),
+        server_default="1.0000",
+    )
+    agent_activity_multiplier: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        default=Decimal("1.0000"),
+        server_default="1.0000",
+    )
+    price_change_limit: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        default=Decimal("0.2500"),
+        server_default="0.2500",
+    )
     conversion_bonus_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     burn_bonus_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     last_metrics_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

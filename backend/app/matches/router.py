@@ -1,14 +1,30 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_session
 from app.models.match_event import MatchEventTeam
+from app.orchestrator.command_bus import OutboxCommandDispatcher
+from app.orchestrator.orchestrator_service import OrchestratorService
 from app.services.commentary_service import MatchCommentaryNotFoundError, MatchCommentaryService
 
-from .schemas import MatchAnalysisView, MatchCommentaryView, MatchReplayView
-from .service import AnalysisService, MatchReplayNotFoundError, ReplayService
+from .schemas import (
+    MatchAnalysisView,
+    MatchCommandAcceptedView,
+    MatchCommentaryView,
+    MatchCompleteRequest,
+    MatchReplayView,
+    MatchStartRequest,
+)
+from .service import (
+    AnalysisService,
+    MatchCommandError,
+    MatchCommandNotFoundError,
+    MatchCommandService,
+    MatchReplayNotFoundError,
+    ReplayService,
+)
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
@@ -23,6 +39,31 @@ def get_analysis_service(session: Session = Depends(get_session)) -> AnalysisSer
 
 def get_commentary_service(session: Session = Depends(get_session)) -> MatchCommentaryService:
     return MatchCommentaryService(session)
+
+
+def get_orchestrator_service(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> OrchestratorService:
+    settings = getattr(request.app.state, "settings", None)
+    producer_name = (
+        f"{settings.kafka_client_id}.matches"
+        if settings is not None and getattr(settings, "kafka_client_id", None)
+        else "gtex-api.matches"
+    )
+    return OrchestratorService(
+        command_bus=OutboxCommandDispatcher(
+            session=session,
+            producer_name=producer_name,
+        )
+    )
+
+
+def get_match_command_service(
+    session: Session = Depends(get_session),
+    orchestrator: OrchestratorService = Depends(get_orchestrator_service),
+) -> MatchCommandService:
+    return MatchCommandService(session=session, orchestrator=orchestrator)
 
 
 @router.get("/{match_id}/replay", response_model=MatchReplayView)
@@ -43,6 +84,30 @@ def get_match_analysis(
         return service.analyze_match(match_id, team)
     except MatchReplayNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match analysis not found.") from exc
+
+
+@router.post("/start", response_model=MatchCommandAcceptedView, status_code=status.HTTP_202_ACCEPTED)
+def start_match(
+    payload: MatchStartRequest,
+    service: MatchCommandService = Depends(get_match_command_service),
+) -> MatchCommandAcceptedView:
+    try:
+        return service.start_match(payload)
+    except MatchCommandError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/complete", response_model=MatchCommandAcceptedView, status_code=status.HTTP_202_ACCEPTED)
+def complete_match(
+    payload: MatchCompleteRequest,
+    service: MatchCommandService = Depends(get_match_command_service),
+) -> MatchCommandAcceptedView:
+    try:
+        return service.complete_match(payload)
+    except MatchCommandNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MatchCommandError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/{match_id}/commentary", response_model=MatchCommentaryView)

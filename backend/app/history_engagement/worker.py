@@ -31,7 +31,7 @@ class HistoryEngagementScheduler:
 
     def stop(self) -> None:
         self._stop_event.set()
-        if self._thread is not None:
+        if self._thread is not None and self._thread.ident is not None:
             self._thread.join(timeout=1.0)
 
     def run_once(self) -> None:

@@ -1,0 +1,43 @@
+groups:
+  - name: gtex-control-tower
+    rules:
+      - record: gtex:matches_per_minute:rate5m
+        expr: sum(rate(gtex_matches_total[5m])) * 60
+
+      - record: gtex:api_error_rate:ratio5m
+        expr: |
+          sum(rate(gtex_http_requests_total{job="gtex-api",status_code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(gtex_http_requests_total{job="gtex-api"}[5m])), 1)
+
+      - alert: GTexWithdrawalFailureRateHigh
+        expr: |
+          sum(rate(gtex_withdrawal_transitions_total{job="gtex-api",status="failed"}[5m]))
+          /
+          clamp_min(sum(rate(gtex_withdrawal_transitions_total{job="gtex-api",status=~"requested|paid|failed"}[5m])), 1)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Withdrawal failures exceed 5%
+          description: Investigate payout rails, treasury processing, and release events.
+
+      - alert: GTexMatchQueueDelayHigh
+        expr: max_over_time(gtex_match_queue_delay_seconds{job="gtex-simulation-worker"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          action: scale_workers
+        annotations:
+          summary: Match queue delay exceeded 10 seconds
+          description: Simulation workers are falling behind and should be scaled.
+
+      - alert: GTexTreasuryBalanceCritical
+        expr: min_over_time(gtex_treasury_balance{job="gtex-api",account_code="platform:coin:treasury",unit="coin"}[5m]) < 1000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Treasury balance fell below the red-alert threshold
+          description: GTex treasury balance is under 1000 coin. Investigate immediately.

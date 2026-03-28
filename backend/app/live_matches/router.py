@@ -14,6 +14,7 @@ from app.live_matches.schemas import (
     SpectatorSessionView,
 )
 from app.live_matches.service import LiveMatchError, ensure_live_match_hub
+from app.infinite_league.service import ensure_infinite_league_runtime
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.manager_duel import ManagerDuel
 from app.models.user import User
@@ -23,6 +24,40 @@ from app.services.device_fingerprint_service import DeviceFingerprintService
 router = APIRouter(tags=["live-matches"])
 legacy_router = APIRouter(prefix="/matches", tags=["live-matches"])
 api_router = APIRouter(prefix="/api/matches", tags=["live-matches"])
+
+
+def _generated_match_access_payload() -> dict[str, object]:
+    return {
+        "has_access": True,
+        "access_source": "infinite_league",
+        "viewing_fee_coin": 0,
+        "premium_features": {
+            "generated_commentary": True,
+            "instant_replay": True,
+        },
+    }
+
+
+def _bootstrap_infinite_league_stream(app, hub, match_id: str) -> bool:
+    stream = ensure_infinite_league_runtime(app).live_stream(match_id)
+    if stream is None:
+        return False
+    hub.start_synthetic_stream(
+        match_id=stream.match_id,
+        home_team_id=stream.home_team_id,
+        away_team_id=stream.away_team_id,
+        home_team_name=stream.home_team_name,
+        away_team_name=stream.away_team_name,
+        base_home_possession=stream.base_home_possession,
+        base_away_possession=stream.base_away_possession,
+        events=stream.events,
+        atmosphere_profile=stream.atmosphere_profile,
+        sync_strategy=stream.sync_strategy,
+        checkpoint_interval_seconds=stream.checkpoint_interval_seconds,
+        max_latency_ms=stream.max_latency_ms,
+        read_only=True,
+    )
+    return True
 
 
 def _build_session_view(match_id: str, item, access: dict[str, object] | None = None) -> SpectatorSessionView:
@@ -36,6 +71,7 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         channel=f"match:{match_id}",
         websocket_path=f"/api/matches/{match_id}/stream?session_id={item.id}",
         commentary_websocket_path=f"/api/matches/{match_id}/commentary/stream?session_id={item.id}",
+        tts_websocket_path="/tts/live?voice=default",
         access_source=payload.get("access_source"),
         rights_owner_id=payload.get("rights_owner_id"),
         viewing_fee_coin=payload.get("viewing_fee_coin") or 0,
@@ -78,27 +114,31 @@ def join_spectate(
 ) -> SpectatorSessionView:
     access_payload: dict[str, object] | None = None
     hub = ensure_live_match_hub(request.app)
+    is_generated_match = _bootstrap_infinite_league_stream(request.app, hub, match_id)
+    if is_generated_match:
+        access_payload = _generated_match_access_payload()
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is not None:
         with session_factory() as session:
-            try:
-                service = BroadcastRightsService(session)
-                access_payload = service.resolve_match_access(
-                    actor=current_user,
-                    match_id=match_id,
-                    pay_to_view=pay_to_view,
-                )
-                if not bool(access_payload.get("has_access", False)):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail={
-                            "message": "Broadcast rights access is restricted for this match.",
-                            "access": access_payload,
-                        },
+            if not is_generated_match:
+                try:
+                    service = BroadcastRightsService(session)
+                    access_payload = service.resolve_match_access(
+                        actor=current_user,
+                        match_id=match_id,
+                        pay_to_view=pay_to_view,
                     )
-            except BroadcastRightsError as exc:
-                session.rollback()
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+                    if not bool(access_payload.get("has_access", False)):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail={
+                                "message": "Broadcast rights access is restricted for this match.",
+                                "access": access_payload,
+                            },
+                        )
+                except BroadcastRightsError as exc:
+                    session.rollback()
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
             try:
                 spectator_session = hub.join_spectate(match_id, current_user.id)
             except LiveMatchError as exc:
@@ -139,6 +179,9 @@ def read_match_highlights(match_id: str, request: Request) -> MatchHighlightResp
     if record is not None:
         rebuilt = service.persist_from_archive_timeline(match_id, record.timeline)
         return MatchHighlightResponseView(highlights=rebuilt)
+    generated = ensure_infinite_league_runtime(request.app).highlight_response(match_id)
+    if generated is not None:
+        return generated
     return MatchHighlightResponseView(highlights=[])
 
 
@@ -182,6 +225,8 @@ async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> 
         return
 
     state = hub.get_state(match_id)
+    if state is None and _bootstrap_infinite_league_stream(app, hub, match_id):
+        state = hub.get_state(match_id)
     if state is None:
         await websocket.close(code=4404)
         return
@@ -236,6 +281,8 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
         return
 
     state = hub.get_state(match_id)
+    if state is None and _bootstrap_infinite_league_stream(app, hub, match_id):
+        state = hub.get_state(match_id)
     if state is None:
         await websocket.close(code=4404)
         return

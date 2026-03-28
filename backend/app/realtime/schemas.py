@@ -16,6 +16,8 @@ class RealtimeStatusView(BaseModel):
     last_event_at: datetime | None
     active_wallet_connections: int = 0
     tracked_wallet_streams: int = 0
+    active_match_connections: int = 0
+    tracked_match_streams: int = 0
     delivered_messages: int = 0
 
 
@@ -63,3 +65,17 @@ class WalletGatewayView(BaseModel):
     channel: str
     websocket_path: str
     snapshot: WalletGatewaySnapshotView
+
+
+class MatchGatewaySnapshotView(BaseModel):
+    match_id: str
+    channel: str
+    latest_cursor: int
+    websocket_connections: int
+    delivered_messages: int
+
+
+class MatchGatewayView(BaseModel):
+    channel: str
+    websocket_path: str
+    snapshot: MatchGatewaySnapshotView

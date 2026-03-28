@@ -53,6 +53,7 @@ class MatchSimulationJob(CommonSchema):
     competition_name: str | None = None
     stage_name: str | None = None
     round_number: int = Field(default=1, ge=1)
+    queued_at: datetime = Field(default_factory=utcnow)
     scheduled_kickoff_at: datetime | None = None
     simulation_seed: int | None = Field(default=None, ge=0)
     home_club_id: str | None = None

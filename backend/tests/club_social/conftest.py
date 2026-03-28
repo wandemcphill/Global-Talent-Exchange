@@ -14,6 +14,7 @@ from app.club_identity.models.reputation import ClubReputationProfile
 from app.club_social.router import router as club_social_router
 from app.club_social.service import ClubSocialService
 from app.db import get_session
+from app.ingestion.models import Player
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.club_social import (
@@ -22,10 +23,18 @@ from app.models.club_social import (
     ClubChallengeLink,
     ClubChallengeResponse,
     ClubIdentityMetrics,
+    MatchChatMessage,
+    MatchLiveReaction,
     MatchReactionEvent,
+    MatchShareEvent,
+    MatchShareLink,
     RivalryMatchHistory,
     RivalryProfile,
+    SocialFollow,
 )
+from app.models.fan_prediction import FanPredictionFixture
+from app.predictions.models import Prediction
+from app.live_ops.models import LiveEvent
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
@@ -61,7 +70,16 @@ def session() -> Iterator[Session]:
             MatchReactionEvent.__table__,
             RivalryProfile.__table__,
             RivalryMatchHistory.__table__,
+            SocialFollow.__table__,
+            MatchShareLink.__table__,
+            MatchShareEvent.__table__,
+            MatchLiveReaction.__table__,
+            MatchChatMessage.__table__,
             ClubReputationProfile.__table__,
+            Player.__table__,
+            FanPredictionFixture.__table__,
+            LiveEvent.__table__,
+            Prediction.__table__,
         ],
     )
     session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
@@ -140,6 +158,13 @@ def session() -> Iterator[Session]:
                 ClubReputationProfile(club_id="club-alpha", current_score=260, highest_score=260, prestige_tier="Established"),
                 ClubReputationProfile(club_id="club-bravo", current_score=60, highest_score=60, prestige_tier="Rising"),
                 ClubReputationProfile(club_id="club-charlie", current_score=180, highest_score=180, prestige_tier="Established"),
+                Player(
+                    id="player-1",
+                    source_provider="seed",
+                    provider_external_id="player-1",
+                    full_name="Alpha Star",
+                    canonical_display_name="Alpha Star",
+                ),
             ]
         )
         db_session.commit()

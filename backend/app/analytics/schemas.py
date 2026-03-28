@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -151,3 +152,49 @@ class AnalyticsAgentLearningView(BaseModel):
     status: str
     since: datetime
     analytics: PlayerMatchAnalyticsView
+
+
+class ClipLifecycleStageView(BaseModel):
+    stage: str
+    count: int
+
+
+class ClipAnalyticsDetailView(BaseModel):
+    clip_id: str
+    impressions: int
+    views: int
+    completions: int
+    completion_rate: float
+    shares: int
+    revenue: Decimal
+    avg_watch_time_seconds: float
+    drop_off_point_seconds: float | None = None
+    funnel: list[ClipLifecycleStageView] = Field(default_factory=list)
+
+
+class ClipDashboardItemView(BaseModel):
+    clip_id: str
+    title: str | None = None
+    views: int
+    completion_rate: float
+    shares: int
+    revenue: Decimal
+    score: float
+
+
+class ClipDropOffItemView(BaseModel):
+    clip_id: str
+    title: str | None = None
+    views: int
+    completion_rate: float
+    drop_off_point_seconds: float | None = None
+
+
+class ClipDashboardResponse(BaseModel):
+    generated_at: datetime
+    items: list[ClipDashboardItemView] = Field(default_factory=list)
+
+
+class ClipDropOffDashboardResponse(BaseModel):
+    generated_at: datetime
+    items: list[ClipDropOffItemView] = Field(default_factory=list)

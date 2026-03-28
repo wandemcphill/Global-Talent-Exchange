@@ -74,6 +74,7 @@ class LedgerSourceTag(StrEnum):
     PROMO_POOL_CREDIT = "promo_pool_credit"
     ADMIN_ADJUSTMENT = "admin_adjustment"
     HIGHLIGHT_DOWNLOAD_SPEND = "highlight_download_spend"
+    CREATOR_CLIP_REVENUE = "creator_clip_revenue"
 
 
 class PaymentProvider(StrEnum):

@@ -7,6 +7,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app.broadcast_rights.service import BroadcastRightsService
 from app.core.config import Settings
+from app.highlights.ffmpeg_builder import FFmpegHighlightRenderer
+from app.highlights.queue import FileHighlightRenderQueue
+from app.highlights.worker import HighlightRenderWorker
 from app.club_sale_market.service import ClubSaleMarketService
 from app.club_finance.service import ClubFinanceService
 from app.football_universe.service import FootballUniverseService
@@ -38,6 +41,25 @@ class OpsJobRunner:
             purged = worker.purge_expired_archives()
             session.commit()
         return {"archive": archived, "purge": purged}
+
+    def run_highlight_render_cycle(self, *, limit: int = 10) -> dict[str, Any]:
+        worker = HighlightRenderWorker(
+            queue=FileHighlightRenderQueue(self.settings.media_storage.storage_root),
+            storage=LocalObjectStorage(self.settings.media_storage.storage_root),
+            renderer=FFmpegHighlightRenderer(),
+        )
+        outcomes: list[dict[str, Any]] = []
+        for _ in range(max(0, limit)):
+            outcome = worker.process_next()
+            if outcome is None:
+                break
+            outcomes.append(outcome)
+        return {
+            "processed_count": len(outcomes),
+            "succeeded_count": sum(1 for outcome in outcomes if outcome["status"] == "succeeded"),
+            "failed_count": sum(1 for outcome in outcomes if outcome["status"] == "failed"),
+            "outcomes": outcomes,
+        }
 
     def run_integrity_scan(self) -> dict[str, Any]:
         with self.session_factory() as session:

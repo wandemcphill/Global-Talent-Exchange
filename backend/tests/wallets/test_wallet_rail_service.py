@@ -11,8 +11,10 @@ from app.auth.service import AuthService
 from app.core.database import load_model_modules
 from app.models import AmlCase, Base, CountryFeaturePolicy, LedgerUnit
 from app.models.fancoin_purchase_order import PurchaseOrderStatus
+from app.models.risk_ops import SystemEvent
 from app.models.treasury import PaymentMode, RateDirection
 from app.treasury.service import TreasuryService
+from app.wallets.providers.base import ProviderEvent, ProviderEventType
 from app.wallets.providers.korapay import KoraPayProviderAdapter
 from app.wallets.rail_service import WalletRailService
 
@@ -170,3 +172,65 @@ def test_hybrid_mode_supports_manual_deposit_and_korapay_webhook(session) -> Non
     assert manual_request.reference.startswith("DEP")
     assert settled is not None
     assert settled.status == PurchaseOrderStatus.SETTLED
+
+
+def test_provider_webhook_does_not_auto_settle_duplicate_provider_reference(session) -> None:
+    first_user = _create_user(session)
+    second_user = AuthService().register_user(
+        session,
+        email="rails-duplicate@example.com",
+        username="railsduplicate",
+        password="SuperSecret1",
+    )
+    _configure_deposit_settings(session)
+    treasury = TreasuryService()
+    settings = treasury.ensure_settings(session)
+    rail_service = WalletRailService(session)
+    first_order = rail_service.create_purchase_order(
+        user=first_user,
+        settings=settings,
+        amount=Decimal("90.0000"),
+        input_unit="fiat",
+        provider_key="korapay",
+        source_scope="wallet",
+        unit=LedgerUnit.COIN,
+        processor_mode="automatic_gateway",
+        payout_channel="gateway",
+        provider_reference="dup-webhook-ref",
+    )
+    second_order = rail_service.create_purchase_order(
+        user=second_user,
+        settings=settings,
+        amount=Decimal("90.0000"),
+        input_unit="fiat",
+        provider_key="korapay",
+        source_scope="wallet",
+        unit=LedgerUnit.COIN,
+        processor_mode="automatic_gateway",
+        payout_channel="gateway",
+        provider_reference="dup-webhook-ref",
+    )
+
+    settled = rail_service.handle_provider_event(
+        event=ProviderEvent(
+            provider_key="korapay",
+            event_type=ProviderEventType.SETTLED,
+            provider_reference="dup-webhook-ref",
+            purchase_order_reference=None,
+            event_id="dup-webhook-event-1",
+            amount=Decimal("90.0000"),
+            currency="NGN",
+            raw_payload={"reference": "dup-webhook-ref"},
+        )
+    )
+
+    duplicate_event = session.scalar(
+        select(SystemEvent).where(
+            SystemEvent.event_key == "purchase-order-duplicate-provider-reference-korapay-dup-webhook-ref"
+        )
+    )
+
+    assert settled is None
+    assert duplicate_event is not None
+    assert first_order.status == PurchaseOrderStatus.PROCESSING
+    assert second_order.status == PurchaseOrderStatus.PROCESSING

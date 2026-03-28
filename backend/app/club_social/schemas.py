@@ -144,6 +144,67 @@ class ChallengeShareEventView(CommonSchema):
     created_at: datetime
 
 
+class SocialFollowRequest(CommonSchema):
+    target_type: str = Field(min_length=4, max_length=16)
+    club_id: str | None = None
+    player_id: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class SocialFollowView(CommonSchema):
+    id: str
+    user_id: str
+    target_key: str
+    target_type: str
+    club_id: str | None = None
+    player_id: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class SocialFollowingView(CommonSchema):
+    follows: list[SocialFollowView] = Field(default_factory=list)
+
+
+class MatchShareLinkCreateRequest(CommonSchema):
+    challenge_id: str | None = None
+    share_text: str | None = Field(default=None, min_length=8, max_length=280)
+    reward_amount_minor: int = Field(default=0, ge=0)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchShareEventRequest(CommonSchema):
+    event_type: str = Field(min_length=2, max_length=32)
+    source_platform: str | None = Field(default=None, max_length=48)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchShareLinkView(CommonSchema):
+    id: str
+    match_id: str
+    challenge_id: str | None = None
+    created_by_user_id: str | None = None
+    share_code: str
+    share_text: str
+    web_path: str
+    deep_link_path: str
+    reward_amount_minor: int
+    click_count: int
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class MatchSharePageView(CommonSchema):
+    link: MatchShareLinkView
+    home_club_id: str | None = None
+    home_club_name: str | None = None
+    away_club_id: str | None = None
+    away_club_name: str | None = None
+    scoreline_text: str | None = None
+
+
 class ChallengeShareStatsView(CommonSchema):
     challenge_id: str
     total_events: int
@@ -172,6 +233,54 @@ class MatchReactionView(CommonSchema):
 class MatchReactionFeedView(CommonSchema):
     match_id: str
     reactions: list[MatchReactionView] = Field(default_factory=list)
+
+
+class MatchLiveReactionCreateRequest(CommonSchema):
+    club_id: str | None = None
+    reaction_type: str = Field(min_length=2, max_length=32)
+    reaction_label: str | None = Field(default=None, max_length=80)
+    intensity_score: int = Field(default=50, ge=0, le=100)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchLiveReactionView(CommonSchema):
+    id: str
+    match_id: str
+    user_id: str
+    club_id: str | None = None
+    reaction_type: str
+    reaction_label: str
+    intensity_score: int
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class MatchLiveReactionFeedView(CommonSchema):
+    match_id: str
+    reactions: list[MatchLiveReactionView] = Field(default_factory=list)
+
+
+class MatchChatMessageCreateRequest(CommonSchema):
+    club_id: str | None = None
+    body: str = Field(min_length=1, max_length=400)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchChatMessageView(CommonSchema):
+    id: str
+    match_id: str
+    user_id: str
+    user_display_name: str | None = None
+    club_id: str | None = None
+    body: str
+    visibility: str
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class MatchChatFeedView(CommonSchema):
+    match_id: str
+    messages: list[MatchChatMessageView] = Field(default_factory=list)
 
 
 class RivalrySummaryView(CommonSchema):

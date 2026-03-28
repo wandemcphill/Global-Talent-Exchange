@@ -10,6 +10,8 @@ from app.auth.security import TokenError, decode_access_token
 from app.models.user import User
 from app.models.wallet import LedgerUnit
 from app.realtime.schemas import (
+    MatchGatewaySnapshotView,
+    MatchGatewayView,
     RealtimeStatusView,
     WalletGatewaySnapshotView,
     WalletGatewayView,
@@ -17,18 +19,20 @@ from app.realtime.schemas import (
     WalletRealtimeFraudCaseView,
     WalletRealtimeLedgerEntryView,
 )
+from app.realtime.websocket_gateway import get_match_stream_websocket_gateway
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import WalletService
 
-router = APIRouter(prefix="/realtime", tags=["realtime"])
+router = APIRouter(tags=["realtime"])
+realtime_router = APIRouter(prefix="/realtime", tags=["realtime"])
 
 
-@router.get("/status", response_model=RealtimeStatusView)
+@realtime_router.get("/status", response_model=RealtimeStatusView)
 def get_realtime_status(request: Request) -> RealtimeStatusView:
     return RealtimeStatusView.model_validate(request.app.state.realtime.snapshot())
 
 
-@router.get("/wallet/gateway", response_model=WalletGatewayView)
+@realtime_router.get("/wallet/gateway", response_model=WalletGatewayView)
 def get_wallet_gateway(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -41,7 +45,21 @@ def get_wallet_gateway(
     )
 
 
-@router.websocket("/wallet/stream")
+@realtime_router.get("/matches/{match_id}/gateway", response_model=MatchGatewayView)
+def get_match_gateway(
+    match_id: str,
+    request: Request,
+    _current_user: User = Depends(get_current_user),
+) -> MatchGatewayView:
+    snapshot = _build_match_gateway_snapshot(request.app, match_id)
+    return MatchGatewayView(
+        channel=snapshot.channel,
+        websocket_path=f"/ws/match/{match_id}",
+        snapshot=snapshot,
+    )
+
+
+@realtime_router.websocket("/wallet/stream")
 async def stream_wallet_updates(websocket: WebSocket) -> None:
     user_id = _resolve_websocket_user_id(websocket)
     if user_id is None:
@@ -102,6 +120,96 @@ async def stream_wallet_updates(websocket: WebSocket) -> None:
     finally:
         realtime.unregister_wallet_connection()
     await websocket.close()
+
+
+@realtime_router.websocket("/matches/{match_id}/stream")
+async def stream_match_updates(websocket: WebSocket, match_id: str) -> None:
+    user_id = _resolve_websocket_user_id(websocket)
+    if user_id is None:
+        await websocket.close(code=4401)
+        return
+    del user_id
+
+    app = websocket.scope["app"]
+    realtime = app.state.realtime
+    channel = realtime.match_channel(match_id)
+    await websocket.accept()
+    realtime.register_match_connection()
+    cursor = realtime.match_latest_cursor(match_id)
+    snapshot = _build_match_gateway_snapshot(app, match_id)
+    await websocket.send_json(
+        {
+            "channel": channel,
+            "kind": "snapshot",
+            "payload": snapshot.model_dump(mode="json"),
+        }
+    )
+    realtime.record_match_delivery()
+    last_heartbeat = time.monotonic()
+    try:
+        while True:
+            events, cursor = realtime.match_events_since(match_id, cursor)
+            if events:
+                await websocket.send_json(
+                    {
+                        "channel": channel,
+                        "kind": "events",
+                        "payload": events,
+                    }
+                )
+                realtime.record_match_delivery()
+                snapshot = _build_match_gateway_snapshot(app, match_id)
+                await websocket.send_json(
+                    {
+                        "channel": channel,
+                        "kind": "snapshot",
+                        "payload": snapshot.model_dump(mode="json"),
+                    }
+                )
+                realtime.record_match_delivery()
+                last_heartbeat = time.monotonic()
+            elif time.monotonic() - last_heartbeat >= 15:
+                await websocket.send_json(
+                    {
+                        "channel": channel,
+                        "kind": "heartbeat",
+                        "payload": {"match_id": match_id},
+                    }
+                )
+                realtime.record_match_delivery()
+                last_heartbeat = time.monotonic()
+            await asyncio.sleep(0.25)
+    except WebSocketDisconnect:
+        return
+    finally:
+        realtime.unregister_match_connection()
+    await websocket.close()
+
+
+@router.websocket("/ws/match/{match_id}")
+async def stream_live_match_events(websocket: WebSocket, match_id: str) -> None:
+    app = websocket.scope["app"]
+    realtime = app.state.realtime
+    gateway = get_match_stream_websocket_gateway(app)
+
+    subscription = await gateway.connect(websocket, match_id)
+    realtime.register_match_connection()
+    try:
+        await websocket.send_json(subscription)
+        realtime.record_match_delivery()
+        while True:
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                break
+            text = (message.get("text") or "").strip().lower()
+            if text == "ping":
+                await websocket.send_json({"type": "pong", "match_id": match_id})
+                realtime.record_match_delivery()
+    except WebSocketDisconnect:
+        return
+    finally:
+        await gateway.disconnect(websocket, match_id)
+        realtime.unregister_match_connection()
 
 
 def _resolve_websocket_user_id(websocket: WebSocket) -> str | None:
@@ -193,5 +301,19 @@ def _build_wallet_gateway_snapshot(app, user_id: str) -> WalletGatewaySnapshotVi
             delivered_messages=metrics.delivered_messages,
         )
 
+
+def _build_match_gateway_snapshot(app, match_id: str) -> MatchGatewaySnapshotView:
+    realtime = app.state.realtime
+    metrics = realtime.snapshot()
+    return MatchGatewaySnapshotView(
+        match_id=match_id,
+        channel=realtime.match_channel(match_id),
+        latest_cursor=realtime.match_latest_cursor(match_id),
+        websocket_connections=metrics.active_match_connections,
+        delivered_messages=metrics.delivered_messages,
+    )
+
+
+router.include_router(realtime_router)
 
 __all__ = ["router"]

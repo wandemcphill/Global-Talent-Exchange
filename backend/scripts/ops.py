@@ -21,6 +21,8 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("media-retention", help="Archive expired highlights and purge old archives.")
+    highlight_render = subparsers.add_parser("highlight-render", help="Drain queued highlight clip and reel render jobs.")
+    highlight_render.add_argument("--limit", type=int, default=10, help="Maximum queued jobs to process.")
     subparsers.add_parser("integrity-scan", help="Run integrity scan and suspicious cluster scan.")
     subparsers.add_parser("config-snapshot", help="Print config snapshot for media/sponsorship/payments.")
 
@@ -29,6 +31,8 @@ def main() -> int:
 
     if args.command == "media-retention":
         result = runner.run_media_retention()
+    elif args.command == "highlight-render":
+        result = runner.run_highlight_render_cycle(limit=max(0, int(args.limit)))
     elif args.command == "integrity-scan":
         result = runner.run_integrity_scan()
     else:

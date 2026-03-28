@@ -2,18 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-import json
 import math
 from threading import RLock, Thread
 import time
-from typing import Callable
+from typing import Callable, Sequence
 
 from fastapi import FastAPI
-from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.cache import CacheBackend, JsonCacheNamespace, NullCacheBackend, RedisCacheBackend
+from app.cache import HotPathCache
+from app.core.cache import CacheBackend, NullCacheBackend
 from app.live_matches.schemas import (
     LiveMatchPossessionEstimateView,
     LiveMatchMarketPulseView,
@@ -24,6 +23,7 @@ from app.live_matches.schemas import (
     LiveMatchStreamEventView,
     LiveMatchWinProbabilityView,
 )
+from app.match_engine.commentary.live_engine import GeneratedCommentary, LiveCommentaryEngine
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.schemas import (
     MatchCommentaryCueView,
@@ -88,13 +88,15 @@ class LiveMatchHub:
     cache_backend: CacheBackend = field(default_factory=NullCacheBackend)
     step_interval_seconds: float = 0.25
     snapshot_ttl_seconds: int = 600
+    commentary_engine: LiveCommentaryEngine = field(default_factory=LiveCommentaryEngine)
     _matches: dict[str, _LiveMatchRuntime] = field(default_factory=dict)
     _halted_matches: dict[str, dict[str, object]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
-    _cache: JsonCacheNamespace = field(init=False)
+    _hot_cache: HotPathCache = field(init=False)
 
     def __post_init__(self) -> None:
-        self._cache = JsonCacheNamespace(self.cache_backend)
+        self._hot_cache = HotPathCache(self.cache_backend)
+        self.commentary_engine.configure(cache_backend=self.cache_backend)
 
     def start_stream(
         self,
@@ -107,6 +109,7 @@ class LiveMatchHub:
     ) -> None:
         if self.is_match_halted(match_id):
             raise LiveMatchError("Match is currently halted by the admin kill switch.")
+        self.commentary_engine.reset_match(match_id)
         runtime = _LiveMatchRuntime(
             match_id=match_id,
             channel=f"match:{match_id}",
@@ -126,50 +129,68 @@ class LiveMatchHub:
             event_batches=self._build_batches(replay_payload),
             on_batch=on_batch,
             on_complete=on_complete,
-            last_snapshot=LiveMatchSnapshotView(
-                score=LiveMatchScoreView(home=0, away=0),
-                possession_estimate=LiveMatchPossessionEstimateView(
-                    home=replay_payload.summary.home_stats.possession,
-                    away=replay_payload.summary.away_stats.possession,
-                ),
-                current_minute=0,
-                momentum_indicator="balanced",
-                win_probability=_build_win_probability(
-                    minute=0,
-                    home_score=0,
-                    away_score=0,
-                    home_possession=replay_payload.summary.home_stats.possession,
-                    dramatic_event=False,
-                ),
-                market_pulse=_build_market_pulse(
-                    probability=_build_win_probability(
-                        minute=0,
-                        home_score=0,
-                        away_score=0,
-                        home_possession=replay_payload.summary.home_stats.possession,
-                        dramatic_event=False,
-                    ),
-                    minute=0,
-                    dramatic_event=False,
-                ),
-                dramatic_event=False,
-                status="live",
+            last_snapshot=self._build_initial_snapshot(
+                home_possession=replay_payload.summary.home_stats.possession,
+                away_possession=replay_payload.summary.away_stats.possession,
                 read_only=read_only,
             ),
         )
+        self._start_runtime(runtime)
+
+    def start_synthetic_stream(
+        self,
+        *,
+        match_id: str,
+        home_team_id: str,
+        away_team_id: str,
+        home_team_name: str,
+        away_team_name: str,
+        base_home_possession: int,
+        base_away_possession: int,
+        events: Sequence[LiveMatchStreamEventView],
+        atmosphere_profile: str = "standard",
+        sync_strategy: str = "deterministic_playback",
+        checkpoint_interval_seconds: int = 15,
+        max_latency_ms: int = 320,
+        pause_replay_enabled: bool = False,
+        reactions_enabled: bool = True,
+        read_only: bool = True,
+        on_batch: BatchCallback | None = None,
+        on_complete: CompleteCallback | None = None,
+    ) -> None:
+        if self.is_match_halted(match_id):
+            raise LiveMatchError("Match is currently halted by the admin kill switch.")
         with self._lock:
-            self._matches[match_id] = runtime
-        self._cache_snapshot(runtime)
-        self._publish_channel(
-            runtime.channel,
-            {"kind": "snapshot", "payload": runtime.last_snapshot.model_dump(mode="json")},
+            existing = self._matches.get(match_id)
+            if existing is not None and existing.live:
+                return
+        self.commentary_engine.reset_match(match_id)
+        runtime = _LiveMatchRuntime(
+            match_id=match_id,
+            channel=f"match:{match_id}",
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
+            home_team_name=home_team_name,
+            away_team_name=away_team_name,
+            base_home_possession=base_home_possession,
+            base_away_possession=base_away_possession,
+            atmosphere_profile=atmosphere_profile,
+            sync_strategy=sync_strategy,
+            checkpoint_interval_seconds=checkpoint_interval_seconds,
+            max_latency_ms=max_latency_ms,
+            pause_replay_enabled=pause_replay_enabled,
+            reactions_enabled=reactions_enabled,
+            read_only=read_only,
+            event_batches=self._build_event_batches(events),
+            on_batch=on_batch,
+            on_complete=on_complete,
+            last_snapshot=self._build_initial_snapshot(
+                home_possession=base_home_possession,
+                away_possession=base_away_possession,
+                read_only=read_only,
+            ),
         )
-        Thread(
-            target=self._run_stream,
-            args=(match_id,),
-            name=f"live-match-{match_id[:8]}",
-            daemon=True,
-        ).start()
+        self._start_runtime(runtime)
 
     def join_spectate(self, match_id: str, user_id: str) -> SpectatorSession:
         runtime = self._require_live_match(match_id)
@@ -209,26 +230,38 @@ class LiveMatchHub:
     def get_state(self, match_id: str) -> LiveMatchStateView | None:
         with self._lock:
             runtime = self._matches.get(match_id)
-            if runtime is None or runtime.last_snapshot is None:
-                return None
-            return LiveMatchStateView(
-                match_id=runtime.match_id,
-                channel=runtime.channel,
-                is_live=runtime.live,
-                read_only=runtime.read_only,
-                spectator_count=len(runtime.spectator_user_ids),
-                event_count=len(runtime.published_events),
-                snapshot=runtime.last_snapshot,
-                crowd_state=_runtime_crowd_state(runtime),
-                spectator_sync=_runtime_spectator_sync(runtime),
-            )
+            if runtime is not None and runtime.last_snapshot is not None:
+                return self._build_state_view(runtime)
+        cached_state = self._hot_cache.get_match_state(match_id)
+        if not isinstance(cached_state, dict):
+            return None
+        try:
+            return LiveMatchStateView.model_validate(cached_state)
+        except Exception:
+            return None
 
     def get_events_since(self, match_id: str, cursor: int) -> tuple[list[LiveMatchStreamEventView], int]:
         with self._lock:
             runtime = self._matches.get(match_id)
-            if runtime is None:
-                return [], cursor
-            return list(runtime.published_events[cursor:]), len(runtime.published_events)
+            if runtime is not None:
+                return list(runtime.published_events[cursor:]), len(runtime.published_events)
+        cached_events = self._hot_cache.get_match_events(match_id, cursor=0)
+        if not cached_events:
+            return [], cursor
+        events: list[LiveMatchStreamEventView] = []
+        for item in cached_events[cursor:]:
+            try:
+                events.append(LiveMatchStreamEventView.model_validate(item))
+            except Exception:
+                continue
+        return events, len(cached_events)
+
+    def list_active_matches(self) -> list[str]:
+        with self._lock:
+            active = sorted(runtime.match_id for runtime in self._matches.values() if runtime.live)
+        if active:
+            return active
+        return self._hot_cache.list_active_matches()
 
     def halt_match(
         self,
@@ -245,6 +278,7 @@ class LiveMatchHub:
             }
             runtime = self._matches.get(match_id)
             if runtime is None:
+                self._hot_cache.clear_match_state(match_id)
                 return {"match_id": match_id, "enabled": True, **self._halted_matches[match_id]}
             runtime.live = False
             runtime.completed_at = utcnow()
@@ -323,6 +357,11 @@ class LiveMatchHub:
                 batch_callback = runtime.on_batch
                 channel = runtime.channel
             self._cache_snapshot(runtime)
+            self._hot_cache.append_match_events(
+                match_id,
+                [event.model_dump(mode="json") for event in next_batch.events],
+                ttl_seconds=self.snapshot_ttl_seconds,
+            )
             self._publish_channel(
                 channel,
                 {"kind": "events", "payload": [event.model_dump(mode="json") for event in next_batch.events]},
@@ -371,6 +410,8 @@ class LiveMatchHub:
                     raw_event=raw_event,
                     home_team_id=replay_payload.summary.home_stats.team_id,
                     away_team_id=replay_payload.summary.away_stats.team_id,
+                    home_team_name=replay_payload.summary.home_stats.team_name,
+                    away_team_name=replay_payload.summary.away_stats.team_name,
                     tick_rate_hz=tick_rate_hz,
                     atmosphere_profile=replay_payload.atmosphere_profile or "standard",
                     max_latency_ms=max_latency_ms,
@@ -380,10 +421,13 @@ class LiveMatchHub:
             )
             if event is not None
         ]
+        return self._build_event_batches(mapped_events)
+
+    def _build_event_batches(self, events: Sequence[LiveMatchStreamEventView]) -> list[_LiveBatch]:
         batches: list[_LiveBatch] = []
         current: list[LiveMatchStreamEventView] = []
         last_minute: int | None = None
-        for event in mapped_events:
+        for event in events:
             if current and (len(current) >= 3 or (last_minute is not None and abs(event.minute - last_minute) > 2)):
                 batches.append(_LiveBatch(events=list(current)))
                 current.clear()
@@ -393,6 +437,56 @@ class LiveMatchHub:
             batches.append(_LiveBatch(events=list(current)))
         return batches
 
+    def _build_initial_snapshot(
+        self,
+        *,
+        home_possession: int,
+        away_possession: int,
+        read_only: bool,
+    ) -> LiveMatchSnapshotView:
+        win_probability = _build_win_probability(
+            minute=0,
+            home_score=0,
+            away_score=0,
+            home_possession=home_possession,
+            dramatic_event=False,
+        )
+        return LiveMatchSnapshotView(
+            score=LiveMatchScoreView(home=0, away=0),
+            possession_estimate=LiveMatchPossessionEstimateView(
+                home=home_possession,
+                away=away_possession,
+            ),
+            current_minute=0,
+            momentum_indicator="balanced",
+            win_probability=win_probability,
+            market_pulse=_build_market_pulse(
+                probability=win_probability,
+                minute=0,
+                dramatic_event=False,
+            ),
+            dramatic_event=False,
+            status="live",
+            read_only=read_only,
+        )
+
+    def _start_runtime(self, runtime: _LiveMatchRuntime) -> None:
+        match_id = runtime.match_id
+        with self._lock:
+            self._matches[match_id] = runtime
+        self._hot_cache.clear_match_events(match_id)
+        self._cache_snapshot(runtime)
+        self._publish_channel(
+            runtime.channel,
+            {"kind": "snapshot", "payload": runtime.last_snapshot.model_dump(mode="json")},
+        )
+        Thread(
+            target=self._run_stream,
+            args=(match_id,),
+            name=f"live-match-{match_id[:8]}",
+            daemon=True,
+        ).start()
+
     def _map_event(
         self,
         *,
@@ -400,6 +494,8 @@ class LiveMatchHub:
         raw_event,
         home_team_id: str,
         away_team_id: str,
+        home_team_name: str,
+        away_team_name: str,
         tick_rate_hz: int,
         atmosphere_profile: str,
         max_latency_ms: int,
@@ -439,6 +535,14 @@ class LiveMatchHub:
             team_side = render_team_side
         position = self._render_point(render.get("origin"))
         target_position = self._render_point(render.get("target"), fallback=position)
+        generated_commentary = self.commentary_engine.generate(
+            match_id=match_id,
+            event=raw_event,
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
+            home_team_name=home_team_name,
+            away_team_name=away_team_name,
+        )
 
         metadata = {
             "team_id": raw_event.team_id,
@@ -446,10 +550,13 @@ class LiveMatchHub:
             "player_name": raw_event.primary_player.player_name if raw_event.primary_player is not None else None,
             "secondary_player_name": raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None,
             "raw_event_type": raw_event.event_type.value,
-            "description": raw_event.commentary,
+            "description": generated_commentary.line,
             "home_score": raw_event.home_score,
             "away_score": raw_event.away_score,
             "team_side": team_side,
+            "commentary_tier": generated_commentary.tier,
+            "commentary_provider": generated_commentary.provider,
+            "commentary_context": generated_commentary.context,
         }
         meta = {
             "render_type": render.get("type"),
@@ -466,6 +573,8 @@ class LiveMatchHub:
             "review_decision": raw_event.metadata.get("review_decision"),
             "clock_label": raw_event.clock_label,
             "presentation_second": raw_event.presentation_second,
+            "commentary_tier": generated_commentary.tier,
+            "commentary_provider": generated_commentary.provider,
         }
         if meta["ball_speed"] > 0:
             meta["shot_power"] = round(meta["ball_speed"], 2)
@@ -497,6 +606,7 @@ class LiveMatchHub:
                 profile=atmosphere_profile,
                 max_latency_ms=max_latency_ms,
                 checkpoint_interval_seconds=checkpoint_interval_seconds,
+                generated_commentary=generated_commentary,
             ),
         )
 
@@ -605,22 +715,32 @@ class LiveMatchHub:
                 raise LiveMatchError("Match is not currently live for spectating.")
             return runtime
 
+    def _build_state_view(self, runtime: _LiveMatchRuntime) -> LiveMatchStateView:
+        return LiveMatchStateView(
+            match_id=runtime.match_id,
+            channel=runtime.channel,
+            is_live=runtime.live,
+            read_only=runtime.read_only,
+            spectator_count=len(runtime.spectator_user_ids),
+            event_count=len(runtime.published_events),
+            snapshot=runtime.last_snapshot,
+            crowd_state=_runtime_crowd_state(runtime),
+            spectator_sync=_runtime_spectator_sync(runtime),
+        )
+
     def _cache_snapshot(self, runtime: _LiveMatchRuntime) -> None:
         if runtime.last_snapshot is None:
             return
-        self._cache.set_json(
-            f"live-match:snapshot:{runtime.match_id}",
-            runtime.last_snapshot.model_dump(mode="json"),
+        self._hot_cache.set_match_state(
+            runtime.match_id,
+            self._build_state_view(runtime).model_dump(mode="json"),
             ttl_seconds=self.snapshot_ttl_seconds,
         )
 
     def _publish_channel(self, channel: str, payload: dict[str, object]) -> None:
-        if not isinstance(self.cache_backend, RedisCacheBackend):
+        if not channel.startswith("match:"):
             return
-        try:
-            self.cache_backend.client.publish(channel, json.dumps(payload, default=str))
-        except RedisError:
-            return
+        self._hot_cache.publish_match_channel(channel.split(":", 1)[1], dict(payload))
 
 
 def _build_win_probability(
@@ -707,7 +827,11 @@ def ensure_live_match_hub(app: FastAPI, *, step_interval_seconds: float | None =
         app.state.live_match_hub = hub
     hub.session_factory = getattr(app.state, "session_factory", hub.session_factory)
     hub.cache_backend = getattr(app.state, "cache_backend", hub.cache_backend)
-    hub._cache = JsonCacheNamespace(hub.cache_backend)
+    hub._hot_cache = HotPathCache(hub.cache_backend)
+    hub.commentary_engine.configure(
+        settings=getattr(app.state, "settings", None),
+        cache_backend=hub.cache_backend,
+    )
     if step_interval_seconds is not None:
         hub.step_interval_seconds = step_interval_seconds
     return hub
@@ -722,6 +846,7 @@ def _live_experience_layer(
     profile: str,
     max_latency_ms: int,
     checkpoint_interval_seconds: int,
+    generated_commentary: GeneratedCommentary | None,
 ) -> MatchExperienceLayerView:
     pressure = _pressure_value(raw_event.metadata.get("pressure_level"))
     speed = _clamp_float(float(meta.get("ball_speed", 0.0) or 0.0) / 36.0, 0.0, 1.0)
@@ -734,6 +859,12 @@ def _live_experience_layer(
     home = _clamp_float(float(raw_event.metadata.get("crowd_home", 0.5) or 0.5), 0.0, 1.0)
     away = _clamp_float(float(raw_event.metadata.get("crowd_away", 0.5) or 0.5), 0.0, 1.0)
     top_moment = raw_event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.MISSED_BIG_CHANCE, MatchEventType.RED_CARD}
+
+    commentary_line = generated_commentary.line if generated_commentary is not None else raw_event.commentary
+    commentary_tone = generated_commentary.tone if generated_commentary is not None else "hype" if top_moment else "tactical"
+    commentary_commentator = generated_commentary.commentator if generated_commentary is not None else "lead" if top_moment else "analyst"
+    commentary_intensity = generated_commentary.intensity if generated_commentary is not None else round(_clamp_float(((int(meta.get("importance", 1) or 1) - 1) / 4.0) + (0.25 if top_moment else 0.0), 0.18, 1.0), 3)
+    commentary_audio_channel = generated_commentary.audio_channel if generated_commentary is not None else "headline" if top_moment else "match_bed"
 
     return MatchExperienceLayerView(
         motion=MatchMotionPredictionView(
@@ -752,14 +883,14 @@ def _live_experience_layer(
             role_encoding="featured_actor" if raw_event.primary_player is not None else None,
         ),
         commentary=MatchCommentaryCueView(
-            line=raw_event.commentary,
-            tone="hype" if top_moment else "tactical",
-            commentator="lead" if top_moment else "analyst",
+            line=commentary_line,
+            tone=commentary_tone,
+            commentator=commentary_commentator,
             language="en",
-            intensity=round(_clamp_float(((int(meta.get("importance", 1) or 1) - 1) / 4.0) + (0.25 if top_moment else 0.0), 0.18, 1.0), 3),
-            tts_ready=bool(raw_event.commentary.strip()),
+            intensity=commentary_intensity,
+            tts_ready=bool(str(commentary_line).strip()),
             banter_layer=raw_event.secondary_player is not None and top_moment,
-            audio_channel="headline" if top_moment else "match_bed",
+            audio_channel=commentary_audio_channel,
         ),
         crowd=MatchCrowdStateView(
             profile=profile,

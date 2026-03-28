@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import Field
 
+from app.common.enums.match_status import MatchStatus
 from app.common.schemas.base import CommonSchema
 from app.models.match_event import MatchEventTeam, MatchEventType
 
@@ -71,6 +72,41 @@ class MatchAnalysisView(CommonSchema):
     team: MatchEventTeam
     problems: list[str] = Field(default_factory=list)
     suggestions: list[str] = Field(default_factory=list)
+
+
+class MatchStartRequest(CommonSchema):
+    match_id: str = Field(min_length=1)
+    competition_id: str | None = None
+    round_id: str | None = None
+    round_number: int | None = Field(default=None, ge=1)
+    stage: str | None = None
+    home_club_id: str | None = None
+    away_club_id: str | None = None
+    scheduled_at: datetime | None = None
+    match_date: date | None = None
+    window: str | None = None
+    slot_sequence: int | None = Field(default=None, ge=1)
+    requires_winner: bool | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchCompleteRequest(CommonSchema):
+    match_id: str = Field(min_length=1)
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    winner_club_id: str | None = None
+    decided_by_penalties: bool = False
+    completed_at: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MatchCommandAcceptedView(CommonSchema):
+    match_id: str
+    status: MatchStatus
+    command_name: str
+    outbox_event_id: str
+    outbox_event_type: str
+    queued_at: datetime
 
 
 class CommentaryVoiceView(CommonSchema):

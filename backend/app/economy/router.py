@@ -123,7 +123,7 @@ def evaluate_governor(
 ) -> EconomyGovernorSnapshotView:
     del actor
     service = EconomyGovernorService(session)
-    metrics = None if payload is None else payload.model_dump(mode="json")
+    metrics = None if payload is None else payload.model_dump(mode="json", exclude_none=True)
     service.evaluate(metrics=metrics)
     session.commit()
     return EconomyGovernorSnapshotView.model_validate(service.snapshot(metrics=metrics))
@@ -140,7 +140,7 @@ def apply_governor_actions(
         snapshot = service.apply_actions(
             actor=actor,
             actions=None if payload.actions is None else [item.model_dump(mode="json") for item in payload.actions],
-            metrics=None if payload.metrics is None else payload.metrics.model_dump(mode="json"),
+            metrics=None if payload.metrics is None else payload.metrics.model_dump(mode="json", exclude_none=True),
             allow_manual_override=payload.allow_manual_override,
         )
     except EconomyGovernorError as exc:

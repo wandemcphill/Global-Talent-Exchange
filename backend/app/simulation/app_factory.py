@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import os
 
 from fastapi import FastAPI
@@ -9,10 +8,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.dependencies import get_session
 from app.core.config import Settings, get_settings
-from app.core.container import ApplicationContext, build_application_context
-from app.core.module import DomainModule, register_domain_modules, run_module_hooks
-from app.main import _bind_application_state, _resolve_database_engine
-from app.modules import DOMAIN_MODULES
+from app.core.container import ApplicationContext, Container, bind_application_state, ensure_session_factory, resolve_database_engine
+from app.core.module import DomainModule, run_module_hooks
+from app.modules import DOMAIN_MODULES, register_modules
 from app.simulation.runtime import seed_demo_simulation_for_app
 
 
@@ -25,17 +23,16 @@ def create_demo_simulation_app(
     run_migration_check: bool | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
-    database_engine = _resolve_database_engine(
+    database_engine = resolve_database_engine(
         settings=resolved_settings,
         engine=engine,
         session_factory=session_factory,
     )
-    database_session_factory = session_factory or sessionmaker(
-        bind=database_engine,
-        autoflush=False,
-        expire_on_commit=False,
+    database_session_factory = ensure_session_factory(
+        engine=database_engine,
+        session_factory=session_factory,
     )
-    context = build_application_context(
+    context = Container(
         settings=resolved_settings,
         engine=database_engine,
         session_factory=database_session_factory,
@@ -49,11 +46,28 @@ def create_demo_simulation_app(
     illiquid_player_count = _get_int("GTE_DEMO_SIMULATION_ILLIQUID_PLAYERS", 2)
     simulation_seed = _get_int("GTE_DEMO_SIMULATION_SEED", 20260311)
 
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        initialized_engine = context.database.initialize(run_migration_check=run_migration_check)
-        _bind_application_state(app, context=context, engine=initialized_engine, modules=modules)
-        run_module_hooks(app, context, modules, phase="startup")
+    app = FastAPI(
+        title=resolved_settings.app_name,
+        version=resolved_settings.app_version,
+    )
+    app.state.settings = resolved_settings
+    app.state.container = context
+    app.state.context = context
+    app.state.db_engine = context.database.engine
+    app.state.session_factory = context.database.session_factory
+    app.state.metrics = context.metrics
+    app.state.module_specs = modules
+    app.state.domain_modules = tuple(module.name for module in modules)
+    app.state.run_migration_check = run_migration_check
+    app.dependency_overrides[get_session] = context.database.get_session
+    register_modules(app, modules)
+
+    @app.on_event("startup")
+    async def startup() -> None:
+        runtime_context: Container = app.state.container
+        runtime_context.initialize(run_migration_check=app.state.run_migration_check)
+        bind_application_state(app, context=runtime_context, modules=modules)
+        run_module_hooks(app, runtime_context, modules, phase="startup")
         if demo_simulation_enabled:
             seed_demo_simulation_for_app(
                 app,
@@ -64,18 +78,13 @@ def create_demo_simulation_app(
                 liquid_player_count=liquid_player_count,
                 illiquid_player_count=illiquid_player_count,
             )
-        try:
-            yield
-        finally:
-            run_module_hooks(app, context, modules, phase="shutdown")
 
-    app = FastAPI(
-        title=resolved_settings.app_name,
-        version=resolved_settings.app_version,
-        lifespan=lifespan,
-    )
-    app.dependency_overrides[get_session] = context.database.get_session
-    register_domain_modules(app, modules)
+    @app.on_event("shutdown")
+    async def shutdown() -> None:
+        runtime_context: ApplicationContext = app.state.container
+        run_module_hooks(app, runtime_context, modules, phase="shutdown")
+        runtime_context.shutdown()
+
     return app
 
 

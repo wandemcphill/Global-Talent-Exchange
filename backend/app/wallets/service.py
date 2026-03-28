@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.cache import HotPathCache
 from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.event_backbone import (
     build_outbox_event,
@@ -40,6 +41,7 @@ from app.models.wallet import (
 AMOUNT_QUANTUM = Decimal("0.0001")
 COIN_TO_CREDIT_RATE = Decimal("100.0000")
 DEFAULT_BALANCE_CACHE_TTL_SECONDS = 300
+DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS = 60
 TRADE_BUY_SOURCE_TAGS = frozenset(
     {
         LedgerSourceTag.PLAYER_CARD_PURCHASE,
@@ -135,10 +137,13 @@ class WalletService:
         *,
         cache_backend: CacheBackend | None = None,
         balance_cache_ttl_seconds: int = DEFAULT_BALANCE_CACHE_TTL_SECONDS,
+        wallet_summary_cache_ttl_seconds: int = DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS,
     ) -> None:
         self.event_publisher = event_publisher or InMemoryEventPublisher()
         self.cache_backend = cache_backend or NullCacheBackend()
+        self.hot_cache = HotPathCache(self.cache_backend)
         self.balance_cache_ttl_seconds = max(1, int(balance_cache_ttl_seconds))
+        self.wallet_summary_cache_ttl_seconds = max(1, int(wallet_summary_cache_ttl_seconds))
         self.trade_settlement_reason = LedgerEntryReason.TRADE_SETTLEMENT
 
     def _stage_domain_event(
@@ -225,6 +230,109 @@ class WalletService:
             unit=account.unit.value,
             balance=str(balance),
         )
+
+    def _read_cached_wallet_summary(self, *, user_id: str, currency: LedgerUnit) -> WalletSummary | None:
+        payload = self.hot_cache.get_wallet_summary(user_id=user_id, currency=currency.value)
+        if payload is None:
+            return None
+        try:
+            available_balance = self._normalize_amount(payload.get("balance"))
+            reserved_balance = self._normalize_amount(payload.get("locked"))
+            total_balance = self._normalize_amount(payload.get("total"))
+        except (TypeError, ValueError):
+            return None
+        return WalletSummary(
+            available_balance=available_balance,
+            reserved_balance=reserved_balance,
+            total_balance=total_balance,
+            currency=currency,
+        )
+
+    def _write_cached_wallet_summary(
+        self,
+        *,
+        user_id: str,
+        currency: LedgerUnit,
+        available_balance: Decimal,
+        reserved_balance: Decimal,
+    ) -> None:
+        total_balance = self._normalize_amount(available_balance + reserved_balance)
+        self.hot_cache.set_wallet_summary(
+            user_id=user_id,
+            currency=currency.value,
+            payload={
+                "user_id": user_id,
+                "currency": currency.value,
+                "balance": str(available_balance),
+                "locked": str(reserved_balance),
+                "total": str(total_balance),
+            },
+            ttl_seconds=self.wallet_summary_cache_ttl_seconds,
+        )
+
+    def _prime_wallet_summary_cache(
+        self,
+        session: Session,
+        *,
+        user_id: str,
+        currency: LedgerUnit,
+        available_balance: Decimal,
+        reserved_balance: Decimal,
+    ) -> None:
+        if self._session_has_pending_state(session):
+            defer_session_callback_until_commit(
+                session,
+                callback=lambda resolved_user_id=user_id, resolved_currency=currency,
+                resolved_available=str(available_balance), resolved_reserved=str(reserved_balance): self._write_cached_wallet_summary(
+                    user_id=resolved_user_id,
+                    currency=resolved_currency,
+                    available_balance=self._normalize_amount(resolved_available),
+                    reserved_balance=self._normalize_amount(resolved_reserved),
+                ),
+            )
+            return
+        self._write_cached_wallet_summary(
+            user_id=user_id,
+            currency=currency,
+            available_balance=available_balance,
+            reserved_balance=reserved_balance,
+        )
+
+    def _prime_impacted_wallet_summary_caches(
+        self,
+        session: Session,
+        *,
+        accounts: dict[str, LedgerAccount],
+    ) -> None:
+        impacted_pairs = {
+            (account.owner_user_id, account.unit)
+            for account in accounts.values()
+            if account.owner_user_id is not None and account.kind in {LedgerAccountKind.USER, LedgerAccountKind.ESCROW}
+        }
+        for owner_user_id, unit in impacted_pairs:
+            available_account = session.scalar(
+                select(LedgerAccount).where(
+                    LedgerAccount.owner_user_id == owner_user_id,
+                    LedgerAccount.unit == unit,
+                    LedgerAccount.kind == LedgerAccountKind.USER,
+                )
+            )
+            escrow_account = session.scalar(
+                select(LedgerAccount).where(
+                    LedgerAccount.owner_user_id == owner_user_id,
+                    LedgerAccount.unit == unit,
+                    LedgerAccount.kind == LedgerAccountKind.ESCROW,
+                )
+            )
+            available_balance = self.get_balance(session, available_account) if available_account is not None else Decimal("0.0000")
+            reserved_balance = self.get_balance(session, escrow_account) if escrow_account is not None else Decimal("0.0000")
+            self._prime_wallet_summary_cache(
+                session,
+                user_id=owner_user_id,
+                currency=unit,
+                available_balance=available_balance,
+                reserved_balance=reserved_balance,
+            )
 
     def ensure_default_accounts(self, session: Session, user: User) -> dict[LedgerUnit, LedgerAccount]:
         accounts: dict[LedgerUnit, LedgerAccount] = {}
@@ -343,6 +451,15 @@ class WalletService:
             label=f"Platform {unit.value.capitalize()} Rewards Pool",
             unit=unit,
             allow_negative=False,
+        )
+
+    def ensure_creator_clip_revenue_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
+        return self._ensure_system_account(
+            session,
+            code=f"platform:{unit.value}:creator_clip_revenue",
+            label=f"Platform {unit.value.capitalize()} Creator Clip Revenue",
+            unit=unit,
+            allow_negative=True,
         )
 
     def ensure_liquidity_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
@@ -795,6 +912,7 @@ class WalletService:
                     "payout_request_id": payout_request.id,
                     "user_id": user.id,
                     "source_scope": source_scope,
+                    "unit": unit.value,
                     "amount": str(normalized_amount),
                     "fee_amount": str(fee_amount),
                     "total_debit": str(total_debit),
@@ -1232,6 +1350,7 @@ class WalletService:
                     partition_key=account.owner_user_id or account.id,
                 ),
             )
+        self._prime_impacted_wallet_summary_caches(session, accounts=accounts_by_id)
         return entries
 
     def get_balance(self, session: Session, account: LedgerAccount) -> Decimal:
@@ -1245,15 +1364,27 @@ class WalletService:
         return balance
 
     def get_wallet_summary(self, session: Session, user: User, *, currency: LedgerUnit = LedgerUnit.CREDIT) -> WalletSummary:
+        if not self._session_has_pending_state(session):
+            cached_summary = self._read_cached_wallet_summary(user_id=user.id, currency=currency)
+            if cached_summary is not None:
+                return cached_summary
         available_account = self.get_user_account(session, user, currency)
         reserved_balance = self._get_user_account_balance_by_kind(session, user, currency, LedgerAccountKind.ESCROW)
         available_balance = self.get_balance(session, available_account)
-        return WalletSummary(
+        summary = WalletSummary(
             available_balance=available_balance,
             reserved_balance=reserved_balance,
             total_balance=self._normalize_amount(available_balance + reserved_balance),
             currency=currency,
         )
+        self._prime_wallet_summary_cache(
+            session,
+            user_id=user.id,
+            currency=currency,
+            available_balance=summary.available_balance,
+            reserved_balance=summary.reserved_balance,
+        )
+        return summary
 
     def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
         from app.portfolio.service import PortfolioService
@@ -1695,6 +1826,10 @@ class WalletService:
     @staticmethod
     def _balance_cache_key(account_id: str) -> str:
         return f"wallet:balance:{account_id}"
+
+    @staticmethod
+    def _wallet_summary_cache_key(user_id: str, currency: LedgerUnit) -> str:
+        return HotPathCache.wallet_key(user_id, currency.value)
 
     @staticmethod
     def _session_has_pending_state(session: Session) -> bool:

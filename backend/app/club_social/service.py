@@ -15,6 +15,7 @@ from app.config.club_social import (
     DEFAULT_HIGH_GIFT_THRESHOLD,
     DEFAULT_HIGH_VIEW_THRESHOLD,
 )
+from app.ingestion.models import Player
 from app.models.club_profile import ClubProfile
 from app.models.club_social import (
     ChallengeShareEvent,
@@ -22,9 +23,14 @@ from app.models.club_social import (
     ClubChallengeLink,
     ClubChallengeResponse,
     ClubIdentityMetrics,
+    MatchChatMessage,
+    MatchLiveReaction,
     MatchReactionEvent,
+    MatchShareEvent,
+    MatchShareLink,
     RivalryMatchHistory,
     RivalryProfile,
+    SocialFollow,
 )
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
@@ -382,6 +388,15 @@ class ClubSocialService:
         rivalry_intensity = max((profile.intensity_score for profile in rivalry_profiles), default=0)
         share_event_count = len(share_events)
         recent_share_count = sum(1 for event in share_events if self._coerce_datetime(event.created_at) >= thirty_days_ago)
+        club_followers = int(
+            self.session.scalar(
+                select(func.count(SocialFollow.id)).where(
+                    SocialFollow.target_type == "club",
+                    SocialFollow.club_id == club_id,
+                )
+            )
+            or 0
+        )
         challenge_wins = sum(1 for item in issued_challenges + accepted_challenges if item.winner_club_id == club_id)
         challenge_losses = sum(
             1
@@ -391,15 +406,30 @@ class ClubSocialService:
         settled_challenges = sum(1 for item in issued_challenges + accepted_challenges if item.status == "settled")
         fan_count = max(
             100,
-            100 + (reputation_score * 3) + (share_event_count * 25) + (reaction_count * 10) + (challenge_wins * 40) + (rivalry_intensity * 2),
+            100
+            + (reputation_score * 3)
+            + (share_event_count * 25)
+            + (reaction_count * 10)
+            + (challenge_wins * 40)
+            + (rivalry_intensity * 2)
+            + (club_followers * 35),
         )
         media_popularity = max(
             0,
-            (reputation_score // 10) + (share_event_count * 6) + (reaction_count * 4) + (len(issued_challenges) * 8) + (settled_challenges * 5),
+            (reputation_score // 10)
+            + (share_event_count * 6)
+            + (reaction_count * 4)
+            + (len(issued_challenges) * 8)
+            + (settled_challenges * 5)
+            + (club_followers * 2),
         )
         support_momentum = max(
             0,
-            (recent_share_count * 8) + (recent_reaction_count * 6) + (challenge_wins * 12) + (rivalry_intensity // 2),
+            (recent_share_count * 8)
+            + (recent_reaction_count * 6)
+            + (challenge_wins * 12)
+            + (rivalry_intensity // 2)
+            + club_followers,
         )
         metrics.fan_count = fan_count
         metrics.reputation_score = reputation_score
@@ -421,6 +451,7 @@ class ClubSocialService:
             "share_events": share_event_count,
             "reaction_events": reaction_count,
             "rivalry_count": len(rivalry_profiles),
+            "club_followers": club_followers,
         }
         self.session.flush()
         return metrics
@@ -505,6 +536,213 @@ class ClubSocialService:
             metadata["bucket_window_seconds"] = 10
             rendered[anchor_index]["metadata_json"] = metadata
         return rendered
+
+    def follow_target(
+        self,
+        *,
+        actor: User,
+        target_type: str,
+        club_id: str | None,
+        player_id: str | None,
+        metadata_json: dict[str, object],
+    ) -> SocialFollow:
+        normalized_target_type = self._normalize(target_type, default="club")
+        if normalized_target_type not in {"club", "player"}:
+            raise ClubSocialError("follow_target_type_invalid")
+        target_club_id = None
+        target_player_id = None
+        if normalized_target_type == "club":
+            target_club_id = self._require_club(club_id).id
+        else:
+            target_player_id = self._require_player(player_id).id
+        target_key = self._follow_target_key(normalized_target_type, target_club_id, target_player_id)
+        follow = self.session.scalar(
+            select(SocialFollow).where(
+                SocialFollow.user_id == actor.id,
+                SocialFollow.target_key == target_key,
+            )
+        )
+        if follow is None:
+            follow = SocialFollow(
+                user_id=actor.id,
+                target_key=target_key,
+                target_type=normalized_target_type,
+                club_id=target_club_id,
+                player_id=target_player_id,
+                metadata_json=dict(metadata_json),
+            )
+            self.session.add(follow)
+            self.session.flush()
+        else:
+            follow.metadata_json = dict(metadata_json)
+        if target_club_id is not None:
+            self.refresh_identity_metrics(club_id=target_club_id)
+        return follow
+
+    def unfollow_target(self, *, actor: User, target_type: str, club_id: str | None, player_id: str | None) -> None:
+        normalized_target_type = self._normalize(target_type, default="club")
+        target_key = self._follow_target_key(
+            normalized_target_type,
+            self._clean(club_id),
+            self._clean(player_id),
+        )
+        follow = self.session.scalar(
+            select(SocialFollow).where(
+                SocialFollow.user_id == actor.id,
+                SocialFollow.target_key == target_key,
+            )
+        )
+        if follow is None:
+            raise ClubSocialError("follow_not_found")
+        club_target_id = follow.club_id
+        self.session.delete(follow)
+        self.session.flush()
+        if club_target_id is not None:
+            self.refresh_identity_metrics(club_id=club_target_id)
+
+    def list_follows(self, *, actor: User, target_type: str | None = None) -> list[dict[str, object]]:
+        stmt = select(SocialFollow).where(SocialFollow.user_id == actor.id)
+        if target_type:
+            stmt = stmt.where(SocialFollow.target_type == self._normalize(target_type))
+        follows = list(self.session.scalars(stmt.order_by(SocialFollow.created_at.desc())).all())
+        return [self._follow_view(item) for item in follows]
+
+    def create_match_share_link(
+        self,
+        *,
+        actor: User,
+        match_id: str,
+        challenge_id: str | None,
+        share_text: str | None,
+        reward_amount_minor: int,
+        metadata_json: dict[str, object],
+    ) -> MatchShareLink:
+        match = self._require_match(match_id)
+        if challenge_id is not None:
+            self._require_challenge(challenge_id)
+        share_code = self._generate_unique_share_code(MatchShareLink, "share_code")
+        rendered_text = self._clean(share_text) or self._default_match_share_text(match, reward_amount_minor)
+        link = MatchShareLink(
+            match_id=match.id,
+            challenge_id=challenge_id,
+            created_by_user_id=actor.id,
+            share_code=share_code,
+            share_text=rendered_text,
+            web_path=f"/match-share/{share_code}",
+            deep_link_path=f"/match/share/{match.id}?code={share_code}",
+            reward_amount_minor=max(0, int(reward_amount_minor)),
+            metadata_json=dict(metadata_json),
+        )
+        self.session.add(link)
+        self.session.flush()
+        return link
+
+    def record_match_share_event(
+        self,
+        *,
+        share_code: str,
+        actor_user_id: str | None,
+        event_type: str,
+        source_platform: str | None,
+        metadata_json: dict[str, object],
+    ) -> MatchShareEvent:
+        link = self.session.scalar(select(MatchShareLink).where(MatchShareLink.share_code == share_code))
+        if link is None:
+            raise ClubSocialError("match_share_link_not_found")
+        normalized_event = self._normalize(event_type, default="share")
+        event = MatchShareEvent(
+            share_link_id=link.id,
+            actor_user_id=actor_user_id,
+            event_type=normalized_event,
+            source_platform=self._normalize(source_platform),
+            metadata_json=dict(metadata_json),
+        )
+        self.session.add(event)
+        if normalized_event in {"open", "click", "view"}:
+            link.click_count += 1
+        self.session.flush()
+        return event
+
+    def match_share_page(self, *, share_code: str) -> dict[str, object]:
+        link = self.session.scalar(select(MatchShareLink).where(MatchShareLink.share_code == share_code))
+        if link is None:
+            raise ClubSocialError("match_share_link_not_found")
+        match = self._require_match(link.match_id)
+        return self._match_share_page(link, match)
+
+    def create_live_reaction(
+        self,
+        *,
+        actor: User,
+        match_id: str,
+        club_id: str | None,
+        reaction_type: str,
+        reaction_label: str | None,
+        intensity_score: int,
+        metadata_json: dict[str, object],
+    ) -> MatchLiveReaction:
+        self._require_match(match_id)
+        club = self._require_club(club_id) if club_id else None
+        normalized_type = self._normalize(reaction_type, default="hype")
+        reaction = MatchLiveReaction(
+            match_id=match_id,
+            user_id=actor.id,
+            club_id=club.id if club is not None else None,
+            reaction_type=normalized_type,
+            reaction_label=self._clean(reaction_label) or normalized_type.replace("_", " ").title(),
+            intensity_score=max(0, min(100, int(intensity_score))),
+            metadata_json=dict(metadata_json),
+        )
+        self.session.add(reaction)
+        self.session.flush()
+        return reaction
+
+    def list_live_reactions(self, match_id: str, *, limit: int = 50) -> list[dict[str, object]]:
+        self._require_match(match_id)
+        reactions = list(
+            self.session.scalars(
+                select(MatchLiveReaction)
+                .where(MatchLiveReaction.match_id == match_id)
+                .order_by(MatchLiveReaction.created_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        return [self._live_reaction_view(item) for item in reactions]
+
+    def create_chat_message(
+        self,
+        *,
+        actor: User,
+        match_id: str,
+        club_id: str | None,
+        body: str,
+        metadata_json: dict[str, object],
+    ) -> MatchChatMessage:
+        self._require_match(match_id)
+        club = self._require_club(club_id) if club_id else None
+        message = MatchChatMessage(
+            match_id=match_id,
+            user_id=actor.id,
+            club_id=club.id if club is not None else None,
+            body=body.strip(),
+            visibility="public",
+            metadata_json=dict(metadata_json),
+        )
+        self.session.add(message)
+        self.session.flush()
+        return message
+
+    def list_chat_messages(self, match_id: str, *, limit: int = 100) -> list[dict[str, object]]:
+        self._require_match(match_id)
+        messages = list(
+            self.session.scalars(
+                select(MatchChatMessage)
+                .where(MatchChatMessage.match_id == match_id)
+                .order_by(MatchChatMessage.created_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        return [self._chat_message_view(item) for item in messages]
 
     def record_match_outcome(
         self,
@@ -751,11 +989,33 @@ class ClubSocialService:
             raise ClubSocialError("club_not_found")
         return club
 
+    def _require_player(self, player_id: str | None) -> Player:
+        player = self.session.get(Player, player_id) if player_id else None
+        if player is None:
+            raise ClubSocialError("player_not_found")
+        return player
+
+    def _require_match(self, match_id: str) -> CompetitionMatch:
+        match = self.session.get(CompetitionMatch, match_id)
+        if match is None:
+            raise ClubSocialError("match_not_found")
+        return match
+
     def _require_owned_club(self, actor_user_id: str, club_id: str) -> ClubProfile:
         club = self._require_club(club_id)
         if club.owner_user_id != actor_user_id:
             raise ClubSocialError("club_owner_required")
         return club
+
+    def _follow_target_key(self, target_type: str, club_id: str | None, player_id: str | None) -> str:
+        normalized_type = self._normalize(target_type, default="club") or "club"
+        if normalized_type == "club":
+            resolved_club_id = self._require_club(club_id).id
+            return f"club:{resolved_club_id}"
+        if normalized_type == "player":
+            resolved_player_id = self._require_player(player_id).id
+            return f"player:{resolved_player_id}"
+        raise ClubSocialError("follow_target_type_invalid")
 
     def _generate_unique_slug(self, title: str) -> str:
         base = _NON_ALPHANUMERIC_RE.sub("-", title.strip().lower()).strip("-") or "club-challenge"
@@ -774,6 +1034,23 @@ class ClubSocialService:
             existing = self.session.scalar(select(ClubChallengeLink).where(ClubChallengeLink.link_code == candidate))
             if existing is None:
                 return candidate
+
+    def _generate_unique_share_code(self, model, field_name: str) -> str:
+        while True:
+            candidate = token_urlsafe(6).replace("-", "").replace("_", "").lower()[:10]
+            if not candidate:
+                continue
+            field = getattr(model, field_name)
+            if self.session.scalar(select(model).where(field == candidate)) is None:
+                return candidate
+
+    def _default_match_share_text(self, match: CompetitionMatch, reward_amount_minor: int) -> str:
+        reward_text = max(0, int(reward_amount_minor))
+        if reward_text > 0:
+            return f"🔥 I just won {reward_text} GTex! Can you beat me?"
+        home_name = self._club_name(match.home_club_id)
+        away_name = self._club_name(match.away_club_id)
+        return f"🔥 {home_name} vs {away_name} is live on GTex. Can you beat me?"
 
     def _sync_challenge_status(self, challenge: ClubChallenge) -> None:
         now = self._now()
@@ -863,6 +1140,51 @@ class ClubSocialService:
             "metadata_json": link.metadata_json or {},
             "created_at": link.created_at,
             "updated_at": link.updated_at,
+        }
+
+    def _follow_view(self, follow: SocialFollow) -> dict[str, object]:
+        return {
+            "id": follow.id,
+            "user_id": follow.user_id,
+            "target_key": follow.target_key,
+            "target_type": follow.target_type,
+            "club_id": follow.club_id,
+            "player_id": follow.player_id,
+            "metadata_json": follow.metadata_json or {},
+            "created_at": follow.created_at,
+            "updated_at": follow.updated_at,
+        }
+
+    def _match_share_link_view(self, link: MatchShareLink) -> dict[str, object]:
+        return {
+            "id": link.id,
+            "match_id": link.match_id,
+            "challenge_id": link.challenge_id,
+            "created_by_user_id": link.created_by_user_id,
+            "share_code": link.share_code,
+            "share_text": link.share_text,
+            "web_path": link.web_path,
+            "deep_link_path": link.deep_link_path,
+            "reward_amount_minor": link.reward_amount_minor,
+            "click_count": link.click_count,
+            "metadata_json": link.metadata_json or {},
+            "created_at": link.created_at,
+            "updated_at": link.updated_at,
+        }
+
+    def _match_share_page(self, link: MatchShareLink, match: CompetitionMatch) -> dict[str, object]:
+        home_club = self._club(match.home_club_id)
+        away_club = self._club(match.away_club_id)
+        scoreline_text = None
+        if match.home_score is not None and match.away_score is not None:
+            scoreline_text = f"{match.home_score}-{match.away_score}"
+        return {
+            "link": self._match_share_link_view(link),
+            "home_club_id": match.home_club_id,
+            "home_club_name": home_club.club_name if home_club is not None else None,
+            "away_club_id": match.away_club_id,
+            "away_club_name": away_club.club_name if away_club is not None else None,
+            "scoreline_text": scoreline_text,
         }
 
     def _share_stats(self, challenge_id: str) -> dict[str, object]:
@@ -958,6 +1280,36 @@ class ClubSocialService:
             "happened_at": reaction.happened_at,
             "metadata_json": reaction.metadata_json or {},
             "created_at": reaction.created_at,
+        }
+
+    def _live_reaction_view(self, reaction: MatchLiveReaction) -> dict[str, object]:
+        return {
+            "id": reaction.id,
+            "match_id": reaction.match_id,
+            "user_id": reaction.user_id,
+            "club_id": reaction.club_id,
+            "reaction_type": reaction.reaction_type,
+            "reaction_label": reaction.reaction_label,
+            "intensity_score": reaction.intensity_score,
+            "metadata_json": reaction.metadata_json or {},
+            "created_at": reaction.created_at,
+        }
+
+    def _chat_message_view(self, message: MatchChatMessage) -> dict[str, object]:
+        user = self.session.get(User, message.user_id)
+        display_name = None
+        if user is not None:
+            display_name = user.display_name or user.username
+        return {
+            "id": message.id,
+            "match_id": message.match_id,
+            "user_id": message.user_id,
+            "user_display_name": display_name,
+            "club_id": message.club_id,
+            "body": message.body,
+            "visibility": message.visibility,
+            "metadata_json": message.metadata_json or {},
+            "created_at": message.created_at,
         }
 
     def _rivalry_profile(self, club_one_id: str, club_two_id: str) -> RivalryProfile | None:

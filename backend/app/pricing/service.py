@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from threading import RLock
 from uuid import uuid4
@@ -9,6 +9,8 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.cache import HotPathCache
+from app.core.cache import CacheBackend, NullCacheBackend
 from app.ingestion.models import Player
 from app.market.models import (
     Listing,
@@ -38,6 +40,7 @@ SUPPORTED_CANDLE_INTERVALS: dict[str, timedelta] = {
     "1h": timedelta(hours=1),
     "1d": timedelta(days=1),
 }
+DEFAULT_PLAYER_SNAPSHOT_CACHE_TTL_SECONDS = 60
 
 
 class PricingValidationError(ValueError):
@@ -47,10 +50,16 @@ class PricingValidationError(ValueError):
 @dataclass(slots=True)
 class MarketPricingService:
     session_factory: sessionmaker[Session] | None = None
+    cache_backend: CacheBackend = field(default_factory=NullCacheBackend)
+    snapshot_cache_ttl_seconds: int = DEFAULT_PLAYER_SNAPSHOT_CACHE_TTL_SECONDS
     _snapshots: dict[str, PlayerPricingSnapshot] = field(default_factory=dict)
     _executions: dict[str, list[PlayerExecution]] = field(default_factory=lambda: defaultdict(list))
     _history: dict[str, list[PricingHistoryPoint]] = field(default_factory=lambda: defaultdict(list))
     _lock: RLock = field(default_factory=RLock)
+    _hot_cache: HotPathCache = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._hot_cache = HotPathCache(self.cache_backend)
 
     def record_execution(
         self,
@@ -123,6 +132,11 @@ class MarketPricingService:
                     )
                 )
                 self._history[player_id].sort(key=lambda item: item.timestamp)
+        self._hot_cache.set_player_snapshot(
+            player_id,
+            self._snapshot_payload(snapshot),
+            ttl_seconds=self.snapshot_cache_ttl_seconds,
+        )
         return snapshot
 
     def get_snapshot(
@@ -139,6 +153,13 @@ class MarketPricingService:
             cached_snapshot = self._snapshots.get(player_id)
         if cached_snapshot is not None:
             return cached_snapshot
+        cached_snapshot_payload = self._hot_cache.get_player_snapshot(player_id)
+        if isinstance(cached_snapshot_payload, dict):
+            snapshot = self._snapshot_from_payload(cached_snapshot_payload)
+            if snapshot is not None:
+                with self._lock:
+                    self._snapshots[player_id] = snapshot
+                return snapshot
         return self._build_snapshot(
             player_id=player_id,
             listings=listings,
@@ -398,3 +419,43 @@ class MarketPricingService:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _snapshot_payload(snapshot: PlayerPricingSnapshot) -> dict[str, object]:
+        return asdict(snapshot)
+
+    @staticmethod
+    def _snapshot_from_payload(payload: dict[str, object]) -> PlayerPricingSnapshot | None:
+        try:
+            return PlayerPricingSnapshot(
+                player_id=str(payload["player_id"]),
+                symbol=None if payload.get("symbol") is None else str(payload.get("symbol")),
+                last_price=None if payload.get("last_price") is None else float(payload.get("last_price")),
+                best_bid=None if payload.get("best_bid") is None else float(payload.get("best_bid")),
+                best_ask=None if payload.get("best_ask") is None else float(payload.get("best_ask")),
+                spread=None if payload.get("spread") is None else float(payload.get("spread")),
+                mid_price=None if payload.get("mid_price") is None else float(payload.get("mid_price")),
+                reference_price=None if payload.get("reference_price") is None else float(payload.get("reference_price")),
+                market_price=None if payload.get("market_price") is None else float(payload.get("market_price")),
+                day_change=float(payload.get("day_change") or 0.0),
+                day_change_percent=float(payload.get("day_change_percent") or 0.0),
+                volume_24h=float(payload.get("volume_24h") or 0.0),
+                last_trade_at=None
+                if payload.get("last_trade_at") is None
+                else MarketPricingService._normalize_cached_timestamp(payload.get("last_trade_at")),
+                updated_at=MarketPricingService._normalize_cached_timestamp(payload.get("updated_at")),
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _normalize_cached_timestamp(value: object) -> datetime:
+        if isinstance(value, datetime):
+            candidate = value
+        elif isinstance(value, str):
+            candidate = datetime.fromisoformat(value)
+        else:
+            raise ValueError("unsupported cached timestamp")
+        if candidate.tzinfo is None:
+            return candidate.replace(tzinfo=UTC)
+        return candidate.astimezone(UTC)

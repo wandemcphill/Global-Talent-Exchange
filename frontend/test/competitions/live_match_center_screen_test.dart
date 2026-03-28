@@ -1,13 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/screens/competitions/gte_live_match_center_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('live match center exposes broadcast and replay entry points',
-      (WidgetTester tester) async {
+  testWidgets('live match center exposes broadcast and replay entry points', (
+    WidgetTester tester,
+  ) async {
     final CompetitionSummary competition = _buildCompetition();
     final LiveMatchSnapshot base = LiveMatchFixtures.buildSnapshot(competition);
     final LiveMatchSnapshot snapshot = LiveMatchSnapshot(
@@ -58,6 +62,55 @@ void main() {
     expect(find.text('Tactical match simulation'), findsOneWidget);
     expect(find.text('Run simulation'), findsOneWidget);
   });
+
+  testWidgets('live match center prompts replay after a new big moment', (
+    WidgetTester tester,
+  ) async {
+    final CompetitionSummary competition = _buildCompetition();
+    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
+      competition,
+    );
+    final StreamController<List<LiveMatchEvent>> commentaryController =
+        StreamController<List<LiveMatchEvent>>();
+    addTearDown(() async {
+      await commentaryController.close();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteLiveMatchCenterScreen(
+          competition: competition,
+          snapshotLoader: (_) async => snapshot,
+          commentaryStreamLoader: (_) => commentaryController.stream,
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 64));
+
+    commentaryController.add(snapshot.commentary);
+    await tester.pump();
+
+    commentaryController.add(<LiveMatchEvent>[
+      ...snapshot.commentary,
+      const LiveMatchEvent(
+        minute: 87,
+        title: 'Late winner',
+        detail: 'GTEX Live bury the rebound at the far post.',
+        team: 'GTEX Live',
+        type: LiveMatchEventType.goal,
+        isKeyMoment: true,
+      ),
+    ]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 64));
+
+    expect(find.text('Big moment'), findsOneWidget);
+    expect(find.textContaining('Late winner'), findsOneWidget);
+    expect(find.text('Watch Replay'), findsWidgets);
+  });
 }
 
 CompetitionSummary _buildCompetition() {
@@ -80,6 +133,7 @@ CompetitionSummary _buildCompetition() {
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: 'Live center fixture',
+    matchType: MatchType.userHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),
