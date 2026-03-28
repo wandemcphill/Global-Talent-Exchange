@@ -1230,6 +1230,27 @@ class RealPlayerIngestionService:
                 "resolver_confidence": resolver_resolution.confidence_score,
             },
         )
+        if (
+            resolver_resolution.status == "skipped"
+            and resolver_resolution.reason_code == "missing_reference"
+            and payload.current_real_world_club_key
+        ):
+            provider_match = session.scalar(
+                select(Club).where(
+                    Club.source_provider == payload.source_name,
+                    Club.provider_external_id == payload.current_real_world_club_key,
+                )
+            )
+            if provider_match is not None:
+                return self.strict_canonical_mapping_service._persist_mapping(
+                    session,
+                    reference,
+                    entity=provider_match,
+                    mapping_status="resolved",
+                    resolution_method="provider_exact_fallback",
+                    confidence_score=1.0,
+                    as_of=as_of,
+                )
         return self._persist_mapping_resolution(
             session=session,
             reference=reference,

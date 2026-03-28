@@ -10,6 +10,7 @@ from app.core.config import load_settings
 from app.core.database import load_model_modules
 from app.ingestion.models import Club, Competition, Country, Player, PlayerImageMetadata
 from app.ingestion.real_player_ingestion_service import RealPlayerIngestionService
+from app.ingestion.transfermarkt_second_zip import SECOND_ZIP_SOURCE_NAME
 from app.models.base import Base
 from app.models.player_cards import PlayerMarketValueSnapshot, PlayerStatsSnapshot
 from app.models.real_player_import_batch import RealPlayerImportRow
@@ -591,5 +592,98 @@ def test_real_player_ingestion_resolves_aliases_without_breaking_idempotency() -
             assert player is not None
             assert player.current_club_id == psg.id
             assert session.scalar(select(func.count()).select_from(RealPlayerSourceLink)) == 1
+    finally:
+        engine.dispose()
+
+
+def test_real_player_ingestion_resolves_cyrillic_club_names_via_provider_id_fallback() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            russia = Country(
+                source_provider=SECOND_ZIP_SOURCE_NAME,
+                provider_external_id="141",
+                name="Russia",
+                alpha3_code="RUS",
+            )
+            premier_liga = Competition(
+                source_provider=SECOND_ZIP_SOURCE_NAME,
+                provider_external_id="RU1",
+                country=russia,
+                name="premier-liga",
+                slug="premier-liga",
+                competition_type="league",
+                format_type="real_world",
+                is_major=True,
+                is_tradable=True,
+            )
+            lokomotiv = Club(
+                source_provider=SECOND_ZIP_SOURCE_NAME,
+                provider_external_id="932",
+                country=russia,
+                current_competition=premier_liga,
+                name='Футбольный клуб "Локомотив" Москва',
+                slug="lokomotiv-moskau",
+                short_name="Lokomotiv Moskva",
+                is_tradable=True,
+            )
+            session.add_all([russia, premier_liga, lokomotiv])
+            session.commit()
+
+        request = RealPlayerIngestionRequest.model_validate(
+            {
+                "mode": "curated_seed",
+                "as_of": "2026-03-23T12:00:00+00:00",
+                "ingestion_source_version": "2ndzip-cyrillic-provider-fallback",
+                "players": [
+                    {
+                        "source_name": SECOND_ZIP_SOURCE_NAME,
+                        "source_player_key": "932-player",
+                        "canonical_name": "Dmitriy Vorobyov",
+                        "nationality": "Russia",
+                        "nationality_code": "141",
+                        "date_of_birth": "1997-10-10",
+                        "dominant_foot": "right",
+                        "primary_position": "Centre-Forward",
+                        "current_real_world_club": 'Футбольный клуб "Локомотив" Москва',
+                        "current_real_world_club_key": "932",
+                        "current_real_world_league": "premier-liga",
+                        "current_real_world_league_key": "RU1",
+                        "competition_level": "top_flight",
+                        "appearances": 25,
+                        "minutes_played": 1800,
+                        "goals": 8,
+                        "assists": 3,
+                        "height_cm": 187,
+                        "current_market_reference_value": 4000000,
+                        "market_reference_currency": "EUR",
+                    }
+                ],
+            }
+        )
+
+        service = RealPlayerIngestionService(session_factory=session_factory, settings=_settings())
+        result = service.ingest(request)
+
+        assert result.players_processed == 1
+        assert result.players_created == 1
+
+        with session_factory() as session:
+            player = session.scalar(select(Player).where(Player.source_provider == SECOND_ZIP_SOURCE_NAME))
+            profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.source_name == SECOND_ZIP_SOURCE_NAME))
+            unresolved_clubs = list(
+                session.scalars(
+                    select(RealPlayerUnresolvedReference).where(
+                        RealPlayerUnresolvedReference.entity_type == "club"
+                    )
+                )
+            )
+
+            assert player is not None
+            assert profile is not None
+            assert player.current_club_id == lokomotiv.id
+            assert profile.metadata_json["canonical_mapping"]["club"]["status"] == "resolved"
+            assert profile.metadata_json["canonical_mapping"]["club"]["resolution_method"] == "provider_exact_fallback"
+            assert unresolved_clubs == []
     finally:
         engine.dispose()
