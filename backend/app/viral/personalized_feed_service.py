@@ -370,10 +370,10 @@ class ClipAffinityCalculator:
     analytics_event_limit: int = DEFAULT_ANALYTICS_EVENT_LIMIT
 
     def build_snapshot(self, user_id: str) -> UserInteractionSnapshot:
-        bind = self.session.get_bind()
-        if bind is None:
-            return UserInteractionSnapshot()
-        if not inspect(bind).has_table(AnalyticsEvent.__tablename__):
+        try:
+            if not inspect(self.session.connection()).has_table(AnalyticsEvent.__tablename__):
+                return UserInteractionSnapshot()
+        except Exception:
             return UserInteractionSnapshot()
         since = datetime.now(UTC) - timedelta(days=self.analytics_lookback_days)
         stmt = (

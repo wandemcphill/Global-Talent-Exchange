@@ -528,11 +528,8 @@ class FollowGraphService:
         return user
 
     def _table_exists(self, table_name: str) -> bool:
-        bind = self.session.get_bind()
-        if bind is None:
-            return False
         try:
-            return bool(inspect(bind).has_table(table_name))
+            return bool(inspect(self.session.connection()).has_table(table_name))
         except Exception:
             return False
 

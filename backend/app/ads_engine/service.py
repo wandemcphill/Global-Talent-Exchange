@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import FastAPI
 from redis import Redis
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.ads_engine.schemas import (
@@ -255,25 +255,37 @@ class SponsoredClipTrackingService:
         ad_id = payload.get("ad_id")
         if not isinstance(ad_id, str) or not ad_id.strip():
             return None
-        ad = self.session.get(SponsoredClip, ad_id)
-        if ad is None:
-            return None
 
         event_name = str(name).strip().lower()
-        if event_name in IMPRESSION_EVENT_NAMES:
-            ad.impressions_served = int(ad.impressions_served or 0) + 1
-        if event_name in CLICK_EVENT_NAMES:
-            ad.clicks = int(ad.clicks or 0) + 1
-        if event_name in CONVERSION_EVENT_NAMES:
-            ad.conversions = int(ad.conversions or 0) + 1
+        impression_delta = 1 if event_name in IMPRESSION_EVENT_NAMES else 0
+        click_delta = 1 if event_name in CLICK_EVENT_NAMES else 0
+        conversion_delta = 1 if event_name in CONVERSION_EVENT_NAMES else 0
+        watch_delta = 0.0
         if event_name in WATCH_EVENT_NAMES:
-            watch_time = max(
+            watch_delta = max(
                 _safe_float(payload.get("watch_time_seconds"), default=_safe_float(payload.get("watch_time"), default=0.0)),
                 0.0,
             )
-            ad.total_watch_time_seconds = float(ad.total_watch_time_seconds or 0.0) + watch_time
+        if impression_delta == 0 and click_delta == 0 and conversion_delta == 0 and watch_delta <= 0:
+            return self.session.get(SponsoredClip, ad_id)
 
+        result = self.session.execute(
+            update(SponsoredClip)
+            .where(SponsoredClip.id == ad_id)
+            .values(
+                impressions_served=func.coalesce(SponsoredClip.impressions_served, 0) + impression_delta,
+                clicks=func.coalesce(SponsoredClip.clicks, 0) + click_delta,
+                conversions=func.coalesce(SponsoredClip.conversions, 0) + conversion_delta,
+                total_watch_time_seconds=func.coalesce(SponsoredClip.total_watch_time_seconds, 0.0) + watch_delta,
+                updated_at=_utcnow(),
+            )
+        )
+        if result.rowcount == 0:
+            return None
         self.session.flush()
+        ad = self.session.get(SponsoredClip, ad_id, populate_existing=True)
+        if ad is None:
+            return None
         self.cache.sync(ad, active=_is_active_campaign(ad, now=_utcnow()))
         return ad
 

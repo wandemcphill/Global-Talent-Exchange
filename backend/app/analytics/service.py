@@ -55,11 +55,8 @@ def _clip_id_from_metadata(metadata: dict[str, Any]) -> str | None:
 
 
 def _has_table(session: Session, table_name: str) -> bool:
-    bind = session.get_bind()
-    if bind is None:
-        return False
     try:
-        return bool(inspect(bind).has_table(table_name))
+        return bool(inspect(session.connection()).has_table(table_name))
     except Exception:
         return False
 
@@ -159,7 +156,7 @@ class AnalyticsService:
         fallback: dict[str, Any] | None = None,
         since_days: int = DEFAULT_CLIP_ANALYTICS_LOOKBACK_DAYS,
     ) -> dict[str, Any]:
-        baseline = dict(fallback or {})
+        baseline = dict(fallback or self._aggregate_recent_clip_records(session).get(clip_id) or {})
         since = datetime.now(UTC) - timedelta(days=since_days)
         rows: list[AnalyticsEvent] = []
         if _has_table(session, AnalyticsEvent.__tablename__):

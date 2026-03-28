@@ -527,8 +527,10 @@ class ViralRankingService:
         return limited
 
     def _recent_replay_candidates(self) -> list[_ReplayCandidate]:
-        bind = self.session.get_bind()
-        inspector = inspect(bind)
+        try:
+            inspector = inspect(self.session.connection())
+        except Exception:
+            return []
         candidates: list[_ReplayCandidate] = []
 
         if inspector.has_table(CompetitionMatch.__tablename__):
