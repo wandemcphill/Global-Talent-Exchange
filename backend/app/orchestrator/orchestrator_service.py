@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from math import ceil
 from typing import Any, Protocol
 
 from fastapi import FastAPI
@@ -141,11 +142,13 @@ class AttentionOrchestratorService:
                 str(self._clip_id(clip)),
             ),
         )
-        return self.allocate_impressions(ranked, limit=max(int(limit), 1))
+        balanced = self._rebalance_origin_mix(ranked, limit=max(int(limit), 1))
+        return self.allocate_impressions(balanced, limit=max(int(limit), 1))
 
     def allocate_impressions(self, clips: list[Any], *, limit: int | None = None, count_per_clip: int = 1) -> list[Any]:
+        balanced = self._rebalance_origin_mix(clips, limit=limit)
         allocated: list[Any] = []
-        for clip in clips:
+        for clip in balanced:
             clip_id = self._clip_id(clip)
             state = self.refresh_clip_state(clip)
             if state.stage == DECAY_STAGE or state.consumed_impressions >= state.allocated_impressions:
@@ -247,10 +250,38 @@ class AttentionOrchestratorService:
         splits = self.variant_budget_manager.sync(state)
         if not splits:
             return
+        state.metadata["variant_budget_splits"] = [
+            {
+                "variant_id": split.variant_id,
+                "share": round(split.share, 4),
+                "allocated_impressions": int(split.allocated_impressions),
+                "locked": bool(split.locked),
+                "viral_score": round(split.viral_score, 4),
+                "global_exposure_feedback": round(split.global_exposure_feedback, 4),
+            }
+            for split in splits
+        ]
+        state.metadata["global_exposure_feedback"] = round(
+            max((split.global_exposure_feedback for split in splits), default=0.0),
+            4,
+        )
+        state.metadata["variant_winner_score"] = round(
+            max(
+                (
+                    split.viral_score
+                    if split.viral_score <= 1.0
+                    else (split.viral_score / 100.0)
+                    for split in splits
+                ),
+                default=0.0,
+            ),
+            4,
+        )
         winner = next((split for split in splits if split.locked and split.share > 0.0), None)
         if winner is not None:
             state.winner_variant_id = winner.variant_id
             state.metadata["winner_variant_id"] = winner.variant_id
+        self.state_store.save_clip(state)
 
     def _state_view(self, state: ClipGlobalState) -> ClipAttentionStateView:
         return ClipAttentionStateView(
@@ -453,9 +484,97 @@ class AttentionOrchestratorService:
                 "format_key": self._format_key(clip),
                 "team_name": _coerce_text(getattr(clip, "team_name", None)),
                 "base_clip_id": self._base_clip_id(clip, existing=existing),
+                "origin": _coerce_text(metadata.get("origin")),
+                "agent_id": _coerce_text(metadata.get("agent_id")),
+                "is_agent_generated": bool(metadata.get("is_agent_generated", False)),
             }
         )
         return {key: value for key, value in payload.items() if value is not None}
+
+    def _rebalance_origin_mix(self, clips: list[Any], *, limit: int | None = None) -> list[Any]:
+        if not clips:
+            return []
+        max_items = max(int(limit if limit is not None else len(clips)), 0)
+        if max_items <= 0:
+            return []
+        ranked = list(clips)
+        if len(ranked) <= 1:
+            return ranked[:max_items]
+
+        human_available = sum(1 for clip in ranked if not self._is_agent_clip(clip))
+        agent_available = len(ranked) - human_available
+        if human_available == 0 or agent_available == 0:
+            return ranked[:max_items]
+
+        config = self.config()
+        human_target = min(human_available, max_items, ceil(max_items * float(config.min_human_exposure_guarantee)))
+        agent_cap = min(agent_available, max_items, int(max_items * float(config.max_agent_feed_ratio)))
+
+        selected: list[Any] = []
+        selected_clip_ids: set[str] = set()
+        human_count = 0
+        agent_count = 0
+
+        def append_clip(candidate: Any) -> None:
+            nonlocal human_count, agent_count
+            clip_id = self._clip_id(candidate)
+            if clip_id in selected_clip_ids or len(selected) >= max_items:
+                return
+            selected.append(candidate)
+            selected_clip_ids.add(clip_id)
+            if self._is_agent_clip(candidate):
+                agent_count += 1
+            else:
+                human_count += 1
+
+        for clip in ranked:
+            if len(selected) >= max_items:
+                break
+            if self._is_agent_clip(clip):
+                if human_count < human_target or agent_count >= agent_cap:
+                    continue
+            elif human_count >= human_target:
+                continue
+            append_clip(clip)
+
+        for clip in ranked:
+            if len(selected) >= max_items:
+                break
+            if self._is_agent_clip(clip):
+                continue
+            append_clip(clip)
+
+        for clip in ranked:
+            if len(selected) >= max_items:
+                break
+            if not self._is_agent_clip(clip):
+                continue
+            if agent_count >= agent_cap and human_count >= min(human_available, max_items):
+                append_clip(clip)
+                continue
+            if agent_count >= agent_cap:
+                continue
+            append_clip(clip)
+
+        if len(selected) < max_items:
+            for clip in ranked:
+                if len(selected) >= max_items:
+                    break
+                append_clip(clip)
+
+        return selected[:max_items]
+
+    @staticmethod
+    def _is_agent_clip(clip: Any) -> bool:
+        metadata = AttentionOrchestratorService._metadata(clip)
+        origin = _coerce_text(metadata.get("origin"))
+        if origin == "creator_agent":
+            return True
+        if bool(metadata.get("is_agent_generated", False)):
+            return True
+        if _coerce_text(metadata.get("agent_id")) is not None:
+            return True
+        return _coerce_text(getattr(clip, "agent_id", None)) is not None
 
     @staticmethod
     def _preferences_payload(user: Any) -> dict[str, Any]:

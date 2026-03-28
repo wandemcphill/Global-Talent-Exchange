@@ -3,16 +3,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.moments.priority_cache import ensure_moment_priority_cache
 from app.models.analytics_event import AnalyticsEvent
 from app.models.base import Base
 from app.models.follow import Follow
 from app.models.notification_record import NotificationRecord
 from app.models.user import User, UserRole
+from app.orchestrator.global_state import InMemoryGlobalFeedStateStore
+from app.orchestrator.orchestrator_service import AttentionOrchestratorService
+from app.orchestrator.schemas import AttentionOrchestratorConfigUpdateRequest
 from app.users.follow_service import FollowGraphNotificationService, FollowGraphService, NullFollowGraphCache
 from app.viral.ingestion_schemas import ClipEvent, ClipEventMetadata, ClipEventType
 from app.viral.personalized_feed_service import (
@@ -29,6 +34,8 @@ from app.viral.schemas import (
     ViralFeedResponse,
     ViralFeedbackLoopView,
     ViralScoreBreakdownView,
+    ViralTrendingClipView,
+    ViralTrendingMetricsView,
 )
 
 
@@ -486,6 +493,162 @@ def test_personalized_feed_refresh_returns_replacements_after_cursor() -> None:
 
     assert refresh_payload.replace_indices == [1, 2]
     assert [clip.clip_id for clip in refresh_payload.new_items] == ["clip-9", "clip-8"]
+
+
+def test_personalized_feed_prioritizes_live_moment_cache_candidates() -> None:
+    class _FeedService:
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            clips = [
+                _build_clip(clip_id="clip-feed", creator_id="creator-feed", viral_score=88, ranking_score=88.0),
+            ]
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    app = FastAPI()
+    priority_cache = ensure_moment_priority_cache(app)
+    priority_clip = ViralTrendingClipView(
+        **_build_clip(
+            clip_id="clip-moment",
+            creator_id="creator-moment",
+            viral_score=99,
+            ranking_score=99.0,
+            metadata={"source": "moments_engine", "is_moment": True},
+        ).model_dump(mode="json"),
+        rank=1,
+        trending_score=99.0,
+        age_hours=0.0,
+        recompute_bucket="hot",
+        last_ranked_at=datetime.now(UTC),
+        trending_metrics=ViralTrendingMetricsView(
+            completion_rate=0.0,
+            avg_watch_time=0.0,
+            avg_watch_time_normalized=0.0,
+            loop_rate=0.0,
+            share_rate=0.0,
+            comment_rate=0.0,
+            skip_rate=0.0,
+            velocity=2.6,
+            views_last_10min=300,
+            views_last_60min=500,
+            velocity_boost_applied=True,
+            decay_multiplier=1.0,
+        ),
+    )
+    priority_cache.put(
+        clip_id=priority_clip.clip_id,
+        score=priority_clip.trending_score,
+        payload=priority_clip.model_dump(mode="json"),
+    )
+
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=_FeedService(),
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+        moment_priority_cache=priority_cache,
+    )
+
+    response = service.get_for_you(user_id="viewer-priority", limit=2, refresh=True)
+
+    assert response.clips[0].clip_id == "clip-moment"
+    assert {clip.clip_id for clip in response.clips} == {"clip-moment", "clip-feed"}
+
+
+def test_personalized_feed_applies_agent_fairness_cap_when_humans_exist() -> None:
+    class _FeedService:
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            clips = [
+                _build_clip(
+                    clip_id="agent-1",
+                    creator_id="agent-1",
+                    viral_score=99,
+                    ranking_score=99.0,
+                    metadata={"origin": "creator_agent", "is_agent_generated": True, "agent_id": "agent-1"},
+                ),
+                _build_clip(
+                    clip_id="agent-2",
+                    creator_id="agent-2",
+                    viral_score=97,
+                    ranking_score=97.0,
+                    metadata={"origin": "creator_agent", "is_agent_generated": True, "agent_id": "agent-2"},
+                ),
+                _build_clip(
+                    clip_id="human-1",
+                    creator_id="creator-human-1",
+                    viral_score=90,
+                    ranking_score=90.0,
+                    metadata={"origin": "human_creator"},
+                ),
+                _build_clip(
+                    clip_id="human-2",
+                    creator_id="creator-human-2",
+                    viral_score=89,
+                    ranking_score=89.0,
+                    metadata={"origin": "human_creator"},
+                ),
+                _build_clip(
+                    clip_id="human-3",
+                    creator_id="creator-human-3",
+                    viral_score=88,
+                    ranking_score=88.0,
+                    metadata={"origin": "human_creator"},
+                ),
+            ]
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    orchestrator = AttentionOrchestratorService(state_store=InMemoryGlobalFeedStateStore())
+    orchestrator.update_config(
+        AttentionOrchestratorConfigUpdateRequest(
+            max_agent_feed_ratio=0.25,
+            min_human_exposure_guarantee=0.75,
+        )
+    )
+
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=_FeedService(),
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+        attention_orchestrator=orchestrator,
+    )
+
+    response = service.get_for_you(user_id="viewer-fair", limit=4, refresh=True)
+
+    agent_count = sum(1 for clip in response.clips if clip.metadata.get("origin") == "creator_agent")
+    human_count = sum(1 for clip in response.clips if clip.metadata.get("origin") == "human_creator")
+
+    assert len(response.clips) == 4
+    assert agent_count <= 1
+    assert human_count >= 3
 
 
 def _build_clip(

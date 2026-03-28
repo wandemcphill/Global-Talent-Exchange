@@ -14,6 +14,7 @@ from app.simulation.service import (
 from app.simulation.content_agent import ContentAgent, SimulatedClip
 from app.simulation.metrics_collector import SimulationMetricsCollector, SimulationReport
 from app.simulation.simulator import AttentionSimulationEngine, StrategyComparisonReport, StrategyScenario
+from app.simulation.tuning_service import SimulationAutoTuneResult, SimulationTuningService
 from app.simulation.user_agent import UserAgent
 
 __all__ = [
@@ -29,10 +30,12 @@ __all__ = [
     "SIMULATION_USER_SPECS",
     "SimulatedClip",
     "SimulationMetricsCollector",
+    "SimulationAutoTuneResult",
     "SimulationPlayerProfile",
     "SimulationReport",
     "SimulationSeedError",
     "SimulationTickSummary",
+    "SimulationTuningService",
     "StrategyComparisonReport",
     "StrategyScenario",
     "UserAgent",

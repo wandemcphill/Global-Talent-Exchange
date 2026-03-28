@@ -11,6 +11,7 @@ from app.core.events import DomainEvent, InMemoryEventPublisher
 from app.core.config import get_settings
 from app.highlights.queue import FileHighlightRenderQueue
 from app.highlights.service import HighlightGenerationService
+from app.moments.priority_cache import ensure_moment_priority_cache
 from app.moments.service import MomentsEngine
 from app.models.base import Base
 from app.models.clip_variant import ClipVariant
@@ -125,6 +126,35 @@ def test_moments_engine_detects_last_minute_win(tmp_path) -> None:
     assert moment.detected_events == ["goal", "last_minute_win"]
     assert moment.boost.priority_boost == 0.8
     assert moment.boost.final_score == 1.8
+
+
+def test_moments_engine_seeds_priority_cache_for_live_feed_injection(tmp_path) -> None:
+    engine, _publisher, _leaderboard, _session_factory = _build_engine(tmp_path)
+
+    engine.handle_event(
+        DomainEvent(
+            name="match.events",
+            payload={
+                "match_id": "match-priority",
+                "event_id": "evt-priority",
+                "event_type": "goal",
+                "source_event_type": "goal",
+                "minute": 11,
+                "team": "Priority FC",
+                "player": "Closer",
+                "home_score": 1,
+                "away_score": 0,
+                "metadata": {},
+            },
+        )
+    )
+
+    moment = engine.live(limit=1, match_id="match-priority").moments[0]
+    cached = ensure_moment_priority_cache(engine.app).top(limit=1)
+
+    assert len(cached) == 1
+    assert cached[0]["clip_id"] == moment.moment_id
+    assert cached[0]["metadata"]["is_moment"] is True
 
 
 def test_moments_engine_creates_goal_variant_burst_and_fast_tracks_winner(tmp_path) -> None:

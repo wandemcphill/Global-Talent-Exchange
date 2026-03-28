@@ -186,6 +186,11 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("season_pass_claims")
     assert inspector.has_table("season_pass_xp_grants")
     assert inspector.has_table("live_events")
+    assert inspector.has_table("agents")
+    assert inspector.has_table("agent_strategies")
+    assert inspector.has_table("agent_learning_state")
+    assert inspector.has_table("agent_wallets")
+    assert inspector.has_table("agent_performance_logs")
 
     creator_league_config_columns = {column["name"] for column in inspector.get_columns("creator_league_configs")}
     assert {

@@ -5,12 +5,26 @@ from dataclasses import dataclass
 from app.orchestrator.global_state import AttentionOrchestratorConfig, ClipGlobalState
 
 
+def _as_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 @dataclass(slots=True)
 class ExposureAllocator:
     config: AttentionOrchestratorConfig = AttentionOrchestratorConfig()
 
     def allocate(self, clip: ClipGlobalState) -> float:
         score = max(float(clip.quality_score), 0.0) * max(float(clip.velocity_score), 0.0) * max(float(clip.trust_score), 0.0)
+        metadata = dict(clip.metadata or {})
+        winner_variant_score = max(_as_float(metadata.get("variant_winner_score"), 0.0), 0.0)
+        global_exposure_feedback = max(_as_float(metadata.get("global_exposure_feedback"), 0.0), 0.0)
+        if winner_variant_score > 0.0:
+            score *= 0.85 + min(winner_variant_score, 1.0) * 0.30
+        if global_exposure_feedback > 0.0:
+            score *= 1.0 + min(global_exposure_feedback, 0.35)
         if clip.is_moment:
             score *= max(float(self.config.moment_boost), 1.0)
         if clip.is_ad:

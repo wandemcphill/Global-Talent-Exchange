@@ -2,31 +2,32 @@ import 'package:flutter/material.dart';
 
 import '../theme/gte_theme_registry.dart';
 import '../theme/gte_theme_scope.dart';
+import '../theme/gte_theme_specs.dart';
 import '../theme/gte_theme_tokens.dart';
 
 class GteShellTheme {
   const GteShellTheme._();
 
-  // Dark Gold stays as the compatibility fallback for legacy static references.
-  static const Color background = Color(0xFF080604);
-  static const Color backgroundSoft = Color(0xFF120D08);
-  static const Color panel = Color(0xFF17100B);
-  static const Color panelStrong = Color(0xFF24170E);
-  static const Color panelElevated = Color(0xFF322012);
-  static const Color stroke = Color(0xFF5C4632);
-  static const Color accent = Color(0xFFF6C453);
-  static const Color accentWarm = Color(0xFFFFE18A);
-  static const Color accentArena = Color(0xFFFF8A3D);
-  static const Color accentCapital = Color(0xFFF0D17A);
-  static const Color accentCommunity = Color(0xFF6BE3B4);
-  static const Color accentClub = Color(0xFF7EC4FF);
-  static const Color accentAdmin = Color(0xFFFF906B);
-  static const Color textPrimary = Color(0xFFF9F3EA);
-  static const Color textMuted = Color(0xFFC8B49B);
+  // Creator Gold stays as the compatibility fallback for legacy static refs.
+  static const Color background = Color(0xFF120C07);
+  static const Color backgroundSoft = Color(0xFF1A120B);
+  static const Color panel = Color(0xFF22180F);
+  static const Color panelStrong = Color(0xFF2F2114);
+  static const Color panelElevated = Color(0xFF412C18);
+  static const Color stroke = Color(0xFF6B5132);
+  static const Color accent = Color(0xFFD7A43B);
+  static const Color accentWarm = Color(0xFFFF8E4D);
+  static const Color accentArena = Color(0xFF5DD5C1);
+  static const Color accentCapital = Color(0xFFF2D470);
+  static const Color accentCommunity = Color(0xFF5FD49B);
+  static const Color accentClub = Color(0xFF8BBEFF);
+  static const Color accentAdmin = Color(0xFFFF9B75);
+  static const Color textPrimary = Color(0xFFFFF8ED);
+  static const Color textMuted = Color(0xFFD0B796);
   static const Color textSecondary = textMuted;
-  static const Color positive = Color(0xFF63E79C);
-  static const Color negative = Color(0xFFFF8E7A);
-  static const Color warning = Color(0xFFFFD36F);
+  static const Color positive = Color(0xFF6BDE9C);
+  static const Color negative = Color(0xFFFF8B82);
+  static const Color warning = Color(0xFFF9C96D);
 
   static GteThemeDefinition _activeDefinition = GteThemeRegistry.defaultTheme;
 
@@ -38,22 +39,24 @@ class GteShellTheme {
         definition ?? GteThemeRegistry.defaultTheme;
     _activeDefinition = resolvedDefinition;
     final GteThemeTokens tokens = resolvedDefinition.tokens;
+    final GteThemeButtonSpec button = resolvedDefinition.button;
+    final GteThemeMotion motion = resolvedDefinition.motion;
     final bool isDark =
         resolvedDefinition.metadata.brightness == Brightness.dark;
     final ColorScheme colorScheme = ColorScheme.fromSeed(
-      seedColor: tokens.accent,
+      seedColor: resolvedDefinition.primaryColor,
       brightness: resolvedDefinition.metadata.brightness,
     ).copyWith(
-      primary: tokens.accent,
-      onPrimary: tokens.textInverse,
-      secondary: tokens.accentWarm,
-      onSecondary: tokens.textInverse,
-      tertiary: tokens.accentArena,
-      onTertiary: tokens.textInverse,
-      surface: tokens.panel,
+      primary: resolvedDefinition.primaryColor,
+      onPrimary: resolvedDefinition.onPrimaryColor,
+      secondary: resolvedDefinition.secondaryColor,
+      onSecondary: resolvedDefinition.onSecondaryColor,
+      tertiary: resolvedDefinition.accentColor,
+      onTertiary: resolvedDefinition.onAccentColor,
+      surface: resolvedDefinition.surfaceColor,
       onSurface: tokens.textPrimary,
       error: tokens.negative,
-      onError: tokens.textInverse,
+      onError: _foregroundOn(tokens.negative, tokens),
       outline: tokens.stroke,
       shadow: tokens.shadow,
       surfaceTint: Colors.transparent,
@@ -68,8 +71,11 @@ class GteShellTheme {
       dividerColor: tokens.stroke,
       shadowColor: tokens.shadow,
       splashColor: tokens.accent.withValues(alpha: isDark ? 0.12 : 0.08),
-      extensions: <ThemeExtension<dynamic>>[tokens],
-      textTheme: _textTheme(tokens),
+      extensions: <ThemeExtension<dynamic>>[tokens, motion],
+      textTheme: resolvedDefinition.typography.buildTextTheme(
+        primary: tokens.textPrimary,
+        muted: tokens.textMuted,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
@@ -92,32 +98,41 @@ class GteShellTheme {
         filled: true,
         fillColor: _surfaceTint(tokens, isDark ? 0.05 : 0.04),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusMedium),
+          borderRadius: BorderRadius.circular(button.cornerRadius),
           borderSide: BorderSide(color: tokens.stroke),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusMedium),
+          borderRadius: BorderRadius.circular(button.cornerRadius),
           borderSide: BorderSide(color: tokens.stroke),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(tokens.radiusMedium),
-          borderSide: BorderSide(color: tokens.accent, width: 1.4),
+          borderRadius: BorderRadius.circular(button.cornerRadius),
+          borderSide: BorderSide(
+            color: resolvedDefinition.primaryColor,
+            width: 1.4,
+          ),
         ),
         contentPadding: EdgeInsets.symmetric(
-          horizontal: tokens.spaceLg - 2,
-          vertical: tokens.spaceLg - 2,
+          horizontal: button.horizontalPadding,
+          vertical: button.verticalPadding,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: tokens.accent,
-          foregroundColor: tokens.textInverse,
+          backgroundColor: resolvedDefinition.primaryColor,
+          foregroundColor: resolvedDefinition.onPrimaryColor,
+          elevation: button.filledElevation,
           padding: EdgeInsets.symmetric(
-            horizontal: tokens.spaceLg - 2,
-            vertical: tokens.spaceMd,
+            horizontal: button.horizontalPadding,
+            vertical: button.verticalPadding,
+          ),
+          textStyle: TextStyle(
+            fontSize: resolvedDefinition.typography.scale['label'],
+            fontWeight: button.labelWeight,
+            letterSpacing: button.labelLetterSpacing,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusMedium - 2),
+            borderRadius: BorderRadius.circular(button.cornerRadius),
           ),
         ),
       ),
@@ -125,20 +140,52 @@ class GteShellTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: tokens.textPrimary,
           padding: EdgeInsets.symmetric(
-            horizontal: tokens.spaceLg - 2,
-            vertical: tokens.spaceMd,
+            horizontal: button.horizontalPadding,
+            vertical: button.verticalPadding,
+          ),
+          textStyle: TextStyle(
+            fontSize: resolvedDefinition.typography.scale['label'],
+            fontWeight: button.labelWeight,
+            letterSpacing: button.labelLetterSpacing,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(tokens.radiusMedium - 2),
+            borderRadius: BorderRadius.circular(button.cornerRadius),
           ),
-          side: BorderSide(color: tokens.stroke),
+          side: BorderSide(
+            color: resolvedDefinition.secondaryColor.withValues(alpha: 0.72),
+            width: button.strokeWidth,
+          ),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: resolvedDefinition.accentColor,
+          foregroundColor: resolvedDefinition.onAccentColor,
+          elevation: button.filledElevation,
+          padding: EdgeInsets.symmetric(
+            horizontal: button.horizontalPadding,
+            vertical: button.verticalPadding,
+          ),
+          textStyle: TextStyle(
+            fontSize: resolvedDefinition.typography.scale['label'],
+            fontWeight: button.labelWeight,
+            letterSpacing: button.labelLetterSpacing,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(button.cornerRadius),
+          ),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: tokens.panel,
-        indicatorColor: tokens.accent.withValues(alpha: isDark ? 0.22 : 0.16),
-        labelTextStyle: const WidgetStatePropertyAll<TextStyle>(
-          TextStyle(fontWeight: FontWeight.w700),
+        indicatorColor: resolvedDefinition.primaryColor.withValues(
+          alpha: isDark ? 0.2 : 0.12,
+        ),
+        labelTextStyle: WidgetStatePropertyAll<TextStyle>(
+          TextStyle(
+            fontWeight: button.labelWeight,
+            letterSpacing: button.labelLetterSpacing,
+          ),
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
@@ -165,59 +212,15 @@ class GteShellTheme {
     return tokens ?? activeTokens;
   }
 
+  static GteThemeMotion motionOf(BuildContext context) {
+    final GteThemeMotion? motion =
+        Theme.of(context).extension<GteThemeMotion>();
+    return motion ?? activeDefinition.motion;
+  }
+
   static GteThemeDefinition definitionOf(BuildContext context) {
     return GteThemeControllerScope.maybeOf(context)?.activeTheme ??
         _activeDefinition;
-  }
-
-  static TextTheme _textTheme(GteThemeTokens tokens) {
-    return TextTheme(
-      displaySmall: TextStyle(
-        fontSize: 34,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -1.5,
-        color: tokens.textPrimary,
-        height: 1.04,
-      ),
-      headlineSmall: TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.9,
-        color: tokens.textPrimary,
-      ),
-      titleLarge: TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.4,
-        color: tokens.textPrimary,
-      ),
-      titleMedium: TextStyle(
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        color: tokens.textPrimary,
-      ),
-      bodyLarge: TextStyle(
-        fontSize: 15,
-        height: 1.55,
-        color: tokens.textPrimary,
-      ),
-      bodyMedium: TextStyle(
-        fontSize: 13,
-        height: 1.5,
-        color: tokens.textMuted,
-      ),
-      bodySmall: TextStyle(
-        fontSize: 12,
-        height: 1.4,
-        color: tokens.textMuted,
-      ),
-      labelLarge: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.25,
-        color: tokens.textPrimary,
-      ),
-    );
   }
 }
 
@@ -230,6 +233,7 @@ Color _surfaceTint(GteThemeTokens tokens, double alpha) {
 
 BoxDecoration gteBackdropDecoration() {
   final GteThemeTokens tokens = GteShellTheme.activeTokens;
+  final GteThemeDefinition definition = GteShellTheme.activeDefinition;
   return BoxDecoration(
     gradient: LinearGradient(
       begin: Alignment.topLeft,
@@ -237,16 +241,41 @@ BoxDecoration gteBackdropDecoration() {
       colors: <Color>[
         tokens.background,
         Color.alphaBlend(
-          tokens.accent.withValues(alpha: 0.06),
+          definition.primaryColor.withValues(alpha: 0.08),
           tokens.backgroundSoft,
         ),
-        tokens.backgroundSoft,
         Color.alphaBlend(
-          tokens.accentArena.withValues(alpha: 0.08),
+          definition.secondaryColor.withValues(alpha: 0.05),
+          tokens.backgroundSoft,
+        ),
+        Color.alphaBlend(
+          definition.accentColor.withValues(alpha: 0.1),
           tokens.panelElevated,
         ),
       ],
       stops: const <double>[0.02, 0.28, 0.68, 1],
     ),
   );
+}
+
+Color _foregroundOn(Color background, GteThemeTokens tokens) {
+  final double contrastWithPrimaryText = _contrastRatio(
+    background,
+    tokens.textPrimary,
+  );
+  final double contrastWithInverseText = _contrastRatio(
+    background,
+    tokens.textInverse,
+  );
+  return contrastWithInverseText >= contrastWithPrimaryText
+      ? tokens.textInverse
+      : tokens.textPrimary;
+}
+
+double _contrastRatio(Color a, Color b) {
+  final double luminanceA = a.computeLuminance();
+  final double luminanceB = b.computeLuminance();
+  final double lighter = luminanceA > luminanceB ? luminanceA : luminanceB;
+  final double darker = luminanceA > luminanceB ? luminanceB : luminanceA;
+  return (lighter + 0.05) / (darker + 0.05);
 }

@@ -17,6 +17,8 @@ class VariantBudgetSplit:
     share: float
     allocated_impressions: int
     locked: bool = False
+    viral_score: float = 0.0
+    global_exposure_feedback: float = 0.0
 
 
 @dataclass(slots=True)
@@ -43,11 +45,16 @@ class VariantBudgetManager:
         winner = next((variant for variant in variants if bool(variant.is_winner)), None)
         leader = winner or variants[0]
         locked = winner is not None
-        winner_share = 1.0 if locked else min(max(float(self.config.winner_share), 0.0), 1.0)
+        leader_score = self._normalized_variant_score(float(leader.viral_score or 0.0))
+        exposure_feedback = self._global_exposure_feedback(state)
+        winner_share = 1.0 if locked else min(
+            max(float(self.config.winner_share) + (leader_score * 0.12) + exposure_feedback, 0.0),
+            1.0,
+        )
         exploration_share = 0.0 if locked else min(max(float(self.config.exploration_share), 0.0), 1.0)
         residual_share = max(0.0, 1.0 - winner_share)
-        if not locked and exploration_share > 0.0:
-            residual_share = min(residual_share or exploration_share, exploration_share)
+        if not locked and exploration_share > 0.0 and residual_share > 0.0:
+            residual_share = min(residual_share, exploration_share)
 
         non_leaders = [variant for variant in variants if variant.variant_id != leader.variant_id]
         exploration_unit = (residual_share / len(non_leaders)) if non_leaders else 0.0
@@ -58,6 +65,12 @@ class VariantBudgetManager:
             if locked and variant.variant_id != leader.variant_id:
                 share = 0.0
             variant.distribution_weight = round(share, 4)
+            metadata = dict(variant.metadata_json or {})
+            metadata["global_exposure_feedback"] = round(exposure_feedback, 4)
+            metadata["variant_winner_score"] = round(leader_score, 4)
+            metadata["orchestrator_stage"] = state.stage
+            metadata["orchestrator_allocated_impressions"] = int(state.allocated_impressions)
+            variant.metadata_json = metadata
             if locked:
                 variant.is_winner = variant.variant_id == leader.variant_id
             splits.append(
@@ -66,6 +79,8 @@ class VariantBudgetManager:
                     share=round(share, 4),
                     allocated_impressions=int(round(max(state.allocated_impressions, 0) * max(share, 0.0))),
                     locked=locked,
+                    viral_score=round(float(variant.viral_score or 0.0), 4),
+                    global_exposure_feedback=round(exposure_feedback, 4),
                 )
             )
         self.session.flush()
@@ -106,6 +121,18 @@ class VariantBudgetManager:
         if "::" in highlight_id:
             highlight_id = highlight_id.split("::", 1)[0]
         return f"{match_id}::{highlight_id}"
+
+    @staticmethod
+    def _normalized_variant_score(score: float) -> float:
+        normalized = score if score <= 1.0 else (score / 100.0)
+        return min(max(normalized, 0.0), 1.0)
+
+    @staticmethod
+    def _global_exposure_feedback(state: ClipGlobalState) -> float:
+        stage_bonus = {"test": 0.0, "expand": 0.06, "viral": 0.14, "decay": -0.08}.get(state.stage, 0.0)
+        utilization = state.consumed_impressions / max(state.allocated_impressions, 1)
+        velocity = min(max(float(state.velocity_score), 0.0), 2.0)
+        return round(min(max(stage_bonus + (utilization * 0.10) + (velocity * 0.05), 0.0), 0.35), 4)
 
 
 __all__ = ["VariantBudgetManager", "VariantBudgetSplit"]

@@ -36,6 +36,8 @@ DEFAULT_VIRAL_THRESHOLD = 1.35
 DEFAULT_DECAY_THRESHOLD = 0.2
 DEFAULT_WINNER_SHARE = 0.70
 DEFAULT_EXPLORATION_SHARE = 0.30
+DEFAULT_MAX_AGENT_FEED_RATIO = 0.40
+DEFAULT_MIN_HUMAN_EXPOSURE_GUARANTEE = 0.60
 
 
 def clip_global_state_key(clip_id: str) -> str:
@@ -64,6 +66,8 @@ class AttentionOrchestratorConfig:
     decay_threshold: float = DEFAULT_DECAY_THRESHOLD
     winner_share: float = DEFAULT_WINNER_SHARE
     exploration_share: float = DEFAULT_EXPLORATION_SHARE
+    max_agent_feed_ratio: float = DEFAULT_MAX_AGENT_FEED_RATIO
+    min_human_exposure_guarantee: float = DEFAULT_MIN_HUMAN_EXPOSURE_GUARANTEE
 
     def as_payload(self) -> dict[str, Any]:
         return {
@@ -79,6 +83,8 @@ class AttentionOrchestratorConfig:
             "decay_threshold": round(max(float(self.decay_threshold), 0.0), 4),
             "winner_share": round(min(max(float(self.winner_share), 0.0), 1.0), 4),
             "exploration_share": round(min(max(float(self.exploration_share), 0.0), 1.0), 4),
+            "max_agent_feed_ratio": round(min(max(float(self.max_agent_feed_ratio), 0.0), 1.0), 4),
+            "min_human_exposure_guarantee": round(min(max(float(self.min_human_exposure_guarantee), 0.0), 1.0), 4),
         }
 
     @classmethod
@@ -104,6 +110,14 @@ class AttentionOrchestratorConfig:
             winner_share=min(max(_as_float(source.get("winner_share"), DEFAULT_WINNER_SHARE), 0.0), 1.0),
             exploration_share=min(
                 max(_as_float(source.get("exploration_share"), DEFAULT_EXPLORATION_SHARE), 0.0),
+                1.0,
+            ),
+            max_agent_feed_ratio=min(
+                max(_as_float(source.get("max_agent_feed_ratio"), DEFAULT_MAX_AGENT_FEED_RATIO), 0.0),
+                1.0,
+            ),
+            min_human_exposure_guarantee=min(
+                max(_as_float(source.get("min_human_exposure_guarantee"), DEFAULT_MIN_HUMAN_EXPOSURE_GUARANTEE), 0.0),
                 1.0,
             ),
         )

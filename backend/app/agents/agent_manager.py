@@ -13,7 +13,9 @@ from app.agents.agent_brain import AgentBrain, AgentDecisionContext, AgentIdenti
 from app.agents.agent_wallet import AgentWallet, AgentWalletService
 from app.agents.content_generator import AgentContentGenerator, AgentGeneratedClip
 from app.agents.learning_engine import AgentLearningEngine, AgentLearningState, AgentPerformanceSignal
+from app.agents.state_store import AgentPerformanceLogEntry, AgentStateStore, build_agent_state_store
 from app.agents.variant_planner import VariantPlanner
+from app.copilot.agent_copilot_service import AgentCopilotService
 from app.core.config import Settings, get_settings
 from app.core.events import DomainEvent, EventPublisher
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService, build_attention_orchestrator_service
@@ -45,6 +47,13 @@ def _coerce_text(value: object) -> str | None:
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(float(value), maximum))
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +113,24 @@ class CreatorAgent:
     last_generated_clip_id: str | None = None
     last_generated_at: datetime | None = None
     post_history: deque[datetime] = field(default_factory=deque, repr=False)
+    state_store: AgentStateStore | None = field(default=None, repr=False, compare=False)
+
+    def save_state(self) -> None:
+        if self.state_store is not None:
+            self.state_store.save_agent(self)
+
+    def load_state(self) -> bool:
+        if self.state_store is None:
+            return False
+        snapshot = self.state_store.load_agent(self.profile.identity.agent_id)
+        if snapshot is None:
+            return False
+        self.profile = snapshot.profile
+        self.learning_state = snapshot.learning_state
+        self.wallet = snapshot.wallet
+        self.last_generated_clip_id = snapshot.last_generated_clip_id
+        self.last_generated_at = snapshot.last_generated_at
+        return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +275,10 @@ class AgentPerformanceReceiptView(AgentManagerSchema):
     average_reward: float = Field(ge=0.0)
     balance: float
     roi: float
+    quality_score: float = Field(ge=0.0, le=1.0)
+    trust_score: float = Field(ge=0.0, le=1.0)
+    payout_eligible: bool = True
+    payout_block_reason: str | None = None
 
 
 class CreatorAgentManager:
@@ -261,10 +292,12 @@ class CreatorAgentManager:
         settings: Settings | None = None,
         config: AgentRuntimeConfig | None = None,
         brain: AgentBrain | None = None,
+        copilot_service: AgentCopilotService | None = None,
         variant_planner: VariantPlanner | None = None,
         content_generator: AgentContentGenerator | None = None,
         wallet_service: AgentWalletService | None = None,
         learning_engine: AgentLearningEngine | None = None,
+        state_store: AgentStateStore | None = None,
     ) -> None:
         self.app = app
         self.settings = settings or getattr(app.state, "settings", None) or get_settings()
@@ -272,11 +305,13 @@ class CreatorAgentManager:
         self.leaderboard_store = leaderboard_store
         self.orchestrator_service = orchestrator_service
         self.config = config or AgentRuntimeConfig()
-        self.brain = brain or AgentBrain()
+        self.copilot_service = copilot_service or AgentCopilotService()
+        self.brain = brain or AgentBrain(copilot_service=self.copilot_service)
         self.variant_planner = variant_planner or VariantPlanner()
         self.content_generator = content_generator or AgentContentGenerator()
         self.wallet_service = wallet_service or AgentWalletService()
         self.learning_engine = learning_engine or AgentLearningEngine()
+        self.state_store = state_store or build_agent_state_store(session_factory=getattr(app.state, "session_factory", None))
         self._agents: dict[str, CreatorAgent] = {}
         self._candidate_pool: deque[AgentMomentCandidate] = deque()
         self._dispatch_window: deque[DispatchWindowEntry] = deque()
@@ -290,11 +325,16 @@ class CreatorAgentManager:
     def bootstrap_population(self, *, count: int | None = None) -> None:
         desired = count or self.config.initial_population
         with self._lock:
+            self._hydrate_persisted_agents()
             if len(self._agents) >= desired:
                 return
-            for index in range(len(self._agents), desired):
-                agent = self._build_agent(index + 1)
+            next_index = self._next_agent_index()
+            while len(self._agents) < desired:
+                agent = self._build_agent(next_index)
+                agent.state_store = self.state_store
                 self._agents[agent.profile.identity.agent_id] = agent
+                agent.save_state()
+                next_index += 1
 
     def subscribe(self) -> None:
         if self._subscribed or self.event_publisher is None:
@@ -399,6 +439,8 @@ class CreatorAgentManager:
                     risk_level=decision.risk_level,
                     feed_pressure=self._feed_pressure(),
                 )
+                agent.profile.strategy.global_exposure_feedback = decision.global_exposure_feedback
+                agent.profile.strategy.shared_brain = decision.shared_brain
                 variants = self.variant_planner.plan(profile=agent.profile, decision=decision)
                 generated = self.content_generator.generate(
                     profile=agent.profile,
@@ -411,6 +453,11 @@ class CreatorAgentManager:
                 agent.last_generated_clip_id = generated.clip_id
                 agent.last_generated_at = generated.created_at
                 agent.post_history.append(generated.created_at)
+                if self.state_store is not None:
+                    self.state_store.update_strategy_feedback(
+                        agent_id=agent.profile.identity.agent_id,
+                        global_exposure_feedback=decision.global_exposure_feedback,
+                    )
                 self._candidate_usage[generated.candidate_id] += 1
                 record = GeneratedClipRecord(
                     clip_id=generated.clip_id,
@@ -423,6 +470,7 @@ class CreatorAgentManager:
                 )
                 self._generated_records.append(record)
                 self._generated_by_clip[generated.clip_id] = record
+                agent.save_state()
                 results.append(
                     AgentRunResultView(
                         agent_id=generated.agent_id,
@@ -471,7 +519,36 @@ class CreatorAgentManager:
                 performance=signal,
                 chosen_formats=record.variant_formats or (record.primary_format,),
             )
-            agent.wallet = self.wallet_service.settle(agent.wallet, earnings=payload.earnings)
+            quality_score = self._quality_score(agent=agent, signal=signal)
+            trust_score = self._trust_score(agent=agent, signal=signal, quality_score=quality_score)
+            repetition_ratio = self._repetition_ratio(agent_id=record.agent_id, primary_format=record.primary_format)
+            agent.wallet, settlement = self.wallet_service.settle(
+                agent.wallet,
+                earnings=payload.earnings,
+                quality_score=quality_score,
+                trust_score=trust_score,
+                repetition_ratio=repetition_ratio,
+            )
+            agent.save_state()
+            if self.state_store is not None:
+                self.state_store.record_performance_log(
+                    AgentPerformanceLogEntry(
+                        agent_id=record.agent_id,
+                        clip_id=record.clip_id,
+                        primary_format=record.primary_format,
+                        variant_formats=record.variant_formats,
+                        reward_total=reward.total,
+                        quality_score=quality_score,
+                        trust_score=trust_score,
+                        payout_eligible=settlement.approved,
+                        payout_block_reason=None if settlement.approved else settlement.reason,
+                        performance=signal,
+                        orchestrator_weight=self._orchestrator_weight_for(record.clip_id),
+                        global_exposure_feedback=self._exposure_feedback_for(record.primary_format),
+                        winner_variant_score=self._winner_variant_scores().get(record.primary_format, 0.0),
+                        metadata={"agent_handle": agent.profile.identity.handle},
+                    )
+                )
             return AgentPerformanceReceiptView(
                 agent_id=record.agent_id,
                 clip_id=record.clip_id,
@@ -482,10 +559,40 @@ class CreatorAgentManager:
                 average_reward=agent.learning_state.average_reward,
                 balance=agent.wallet.balance,
                 roi=agent.wallet.roi,
+                quality_score=quality_score,
+                trust_score=trust_score,
+                payout_eligible=settlement.approved,
+                payout_block_reason=None if settlement.approved else settlement.reason,
             )
 
     def close(self) -> None:
         self._closed = True
+
+    def _hydrate_persisted_agents(self) -> None:
+        if self.state_store is None or self._agents:
+            return
+        for snapshot in self.state_store.list_agents():
+            agent = CreatorAgent(
+                profile=snapshot.profile,
+                learning_state=snapshot.learning_state,
+                wallet=snapshot.wallet,
+                last_generated_clip_id=snapshot.last_generated_clip_id,
+                last_generated_at=snapshot.last_generated_at,
+                state_store=self.state_store,
+            )
+            self._agents[agent.profile.identity.agent_id] = agent
+
+    def _next_agent_index(self) -> int:
+        indices = [self._agent_index(agent_id) for agent_id in self._agents]
+        return (max(indices) + 1) if indices else 1
+
+    @staticmethod
+    def _agent_index(agent_id: str) -> int:
+        suffix = agent_id.rsplit("_", 1)[-1]
+        try:
+            return max(int(suffix), 0)
+        except ValueError:
+            return 0
 
     def _ordered_agents(self, *, now: datetime) -> list[CreatorAgent]:
         return sorted(
@@ -513,6 +620,8 @@ class CreatorAgentManager:
             candidate_usage=dict(self._candidate_usage),
             max_agent_ratio=self.config.max_agent_ratio,
             max_agents_per_candidate=self.config.max_agents_per_candidate,
+            global_exposure_feedback=self._global_exposure_feedback(),
+            winner_variant_scores=self._winner_variant_scores(),
         )
 
     def _agent_can_post(self, agent: CreatorAgent, *, now: datetime) -> bool:
@@ -535,6 +644,97 @@ class CreatorAgentManager:
         agent_dispatches = sum(1 for item in self._dispatch_window if item.origin == "agent")
         denominator = max(len(self._dispatch_window), self.config.ratio_warm_start_denominator)
         return round(agent_dispatches / max(denominator, 1), 4)
+
+    def _global_exposure_feedback(self) -> dict[str, float]:
+        feedback: dict[str, float] = {}
+        recent_records = list(self._generated_records)[-10:]
+        if not recent_records:
+            return feedback
+        format_counts = Counter(item.primary_format for item in recent_records)
+        total = max(len(recent_records), 1)
+        for format_key, count in format_counts.items():
+            scarcity = 1.0 - (count / total)
+            feedback[format_key] = round(_clamp(scarcity * (1.0 - min(self._feed_pressure(), 1.2) * 0.25), 0.0, 0.6), 4)
+        return feedback
+
+    def _winner_variant_scores(self) -> dict[str, float]:
+        scores: dict[str, float] = {}
+        if self.orchestrator_service is None:
+            return scores
+        for record in list(self._generated_records)[-10:]:
+            try:
+                state = self.orchestrator_service.state_store.load_clip(record.clip_id)
+            except Exception:
+                state = None
+            if state is None:
+                continue
+            metadata = dict(state.metadata or {})
+            winner_score = _coerce_float(metadata.get("variant_winner_score"), 0.0)
+            if winner_score > 0.0:
+                scores[record.primary_format] = max(scores.get(record.primary_format, 0.0), round(winner_score, 4))
+        return scores
+
+    def _orchestrator_weight_for(self, clip_id: str) -> float:
+        if self.orchestrator_service is None:
+            return 0.0
+        try:
+            state = self.orchestrator_service.state_store.load_clip(clip_id)
+        except Exception:
+            state = None
+        if state is None:
+            return 0.0
+        return round(self.orchestrator_service.weight_for_state(state), 6)
+
+    def _exposure_feedback_for(self, format_key: str) -> float:
+        return round(self._global_exposure_feedback().get(format_key, 0.0), 4)
+
+    def _quality_score(self, *, agent: CreatorAgent, signal: AgentPerformanceSignal) -> float:
+        avg_duration = max(int(agent.profile.strategy.avg_duration), 1)
+        watch_ratio = _clamp(signal.watch_time / avg_duration, 0.0, 1.0)
+        share_signal = _clamp(signal.share_rate / 0.15, 0.0, 1.0)
+        comment_signal = _clamp(signal.comment_rate / 0.08, 0.0, 1.0)
+        velocity_signal = _clamp(signal.velocity / 1.5, 0.0, 1.0)
+        penalty_signal = _clamp(signal.penalties + signal.skip_rate, 0.0, 1.0)
+        return round(
+            _clamp(
+                (signal.completion_rate * 0.40)
+                + (watch_ratio * 0.25)
+                + (share_signal * 0.15)
+                + (comment_signal * 0.05)
+                + (velocity_signal * 0.15)
+                - (penalty_signal * 0.20),
+                0.0,
+                1.0,
+            ),
+            4,
+        )
+
+    def _trust_score(self, *, agent: CreatorAgent, signal: AgentPerformanceSignal, quality_score: float) -> float:
+        behavior_signal = _clamp(
+            1.0 - signal.skip_rate - min(signal.penalties, 1.0),
+            0.0,
+            1.0,
+        )
+        return round(
+            _clamp(
+                (agent.wallet.trust_score * 0.60)
+                + (quality_score * 0.25)
+                + (behavior_signal * 0.10)
+                + (_clamp(signal.share_rate / 0.12, 0.0, 1.0) * 0.05),
+                0.0,
+                1.0,
+            ),
+            4,
+        )
+
+    def _repetition_ratio(self, *, agent_id: str, primary_format: str) -> float:
+        if self.state_store is not None:
+            return self.state_store.repetition_ratio(agent_id=agent_id, primary_format=primary_format)
+        records = [item for item in list(self._generated_records)[-5:] if item.agent_id == agent_id]
+        if not records:
+            return 0.0
+        repeated = sum(1 for item in records if item.primary_format == primary_format)
+        return round(repeated / max(len(records), 1), 4)
 
     def _prune_windows(self, *, now: datetime) -> None:
         dispatch_threshold = now - timedelta(minutes=self.config.dispatch_window_minutes)

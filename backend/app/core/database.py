@@ -21,6 +21,7 @@ MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "app.models",
+    "app.agents.models",
     "app.leaderboards.models",
     "app.models.economy_governor",
     "app.models.fx_pricing",

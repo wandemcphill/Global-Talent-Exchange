@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 
 enum GteThemeId {
-  darkGold,
-  stadiumNight,
-  ultraRed,
-  iceWhite,
+  neonVelocity,
+  midnightGlass,
+  auroraIntelligence,
+  creatorGold,
+  minimalCarbon,
 }
 
 extension GteThemeIdX on GteThemeId {
   String get storageKey {
     switch (this) {
-      case GteThemeId.darkGold:
-        return 'dark_gold';
-      case GteThemeId.stadiumNight:
-        return 'stadium_night';
-      case GteThemeId.ultraRed:
-        return 'ultra_red';
-      case GteThemeId.iceWhite:
-        return 'ice_white';
+      case GteThemeId.neonVelocity:
+        return 'neon_velocity';
+      case GteThemeId.midnightGlass:
+        return 'midnight_glass';
+      case GteThemeId.auroraIntelligence:
+        return 'aurora_intelligence';
+      case GteThemeId.creatorGold:
+        return 'creator_gold';
+      case GteThemeId.minimalCarbon:
+        return 'minimal_carbon';
     }
   }
 

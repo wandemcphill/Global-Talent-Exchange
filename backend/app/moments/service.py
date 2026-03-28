@@ -21,6 +21,7 @@ from app.moments.schemas import (
     MomentClipView,
     MomentDestinationView,
 )
+from app.moments.priority_cache import ensure_moment_priority_cache
 from app.viral.comparator import ViralVariantScoringComparator
 from app.viral.promotion import ViralClipPromotionService
 from app.viral.ranking_service import LeaderboardEnvelope, ViralLeaderboardStore, ensure_viral_leaderboard_store
@@ -315,8 +316,6 @@ class MomentsEngine:
         }
 
     def _push_to_trending_feed(self, moment: LiveMomentView) -> None:
-        if self.viral_leaderboard_store is None:
-            return
         score = float(moment.boost.final_score)
         title = self._clip_title_from_moment(moment)
         caption = self._caption_from_moment(moment)
@@ -373,6 +372,7 @@ class MomentsEngine:
             metadata={
                 "source": "moments_engine",
                 "detected_events": list(moment.detected_events),
+                "is_moment": True,
             },
             rank=1,
             trending_score=score,
@@ -387,6 +387,13 @@ class MomentsEngine:
                 decay_multiplier=1.0,
             ),
         )
+        ensure_moment_priority_cache(self.app).put(
+            clip_id=trending_clip.clip_id,
+            score=score,
+            payload=trending_clip.model_dump(mode="json"),
+        )
+        if self.viral_leaderboard_store is None:
+            return
         self.viral_leaderboard_store.upsert(
             [
                 LeaderboardEnvelope(

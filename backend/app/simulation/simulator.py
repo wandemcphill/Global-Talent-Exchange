@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 import random
 from typing import Any
 
+from fastapi import FastAPI
+from sqlalchemy.orm import Session
+
 from app.orchestrator.global_state import AttentionOrchestratorConfig, InMemoryGlobalFeedStateStore
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService
 from app.simulation.content_agent import ContentAgent
@@ -23,12 +26,14 @@ class StrategyComparisonReport:
     baseline: SimulationReport
     scenarios: dict[str, SimulationReport]
     deltas: dict[str, dict[str, Any]]
+    scenario_overrides: dict[str, dict[str, Any]]
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "baseline": self.baseline.as_dict(),
             "scenarios": {name: report.as_dict() for name, report in self.scenarios.items()},
             "deltas": deepcopy(self.deltas),
+            "scenario_overrides": deepcopy(self.scenario_overrides),
         }
 
 
@@ -89,6 +94,7 @@ class AttentionSimulationEngine:
         )
         scenario_reports: dict[str, SimulationReport] = {}
         deltas: dict[str, dict[str, Any]] = {}
+        scenario_overrides: dict[str, dict[str, Any]] = {}
         for scenario in scenarios:
             scenario_engine = self._engine_for_overrides(scenario.config_overrides)
             report = scenario_engine.run(
@@ -98,6 +104,7 @@ class AttentionSimulationEngine:
                 feed_size=feed_size,
             )
             scenario_reports[scenario.name] = report
+            scenario_overrides[scenario.name] = dict(scenario.config_overrides)
             deltas[scenario.name] = {
                 "avg_session_time": round(report.avg_session_time - baseline.avg_session_time, 4),
                 "avg_watch_time": round(report.avg_watch_time - baseline.avg_watch_time, 4),
@@ -109,7 +116,20 @@ class AttentionSimulationEngine:
             baseline=baseline,
             scenarios=scenario_reports,
             deltas=deltas,
+            scenario_overrides=scenario_overrides,
         )
+
+    def auto_tune(
+        self,
+        *,
+        app: FastAPI,
+        session: Session,
+        comparison: StrategyComparisonReport,
+        actor_id: str | None = "simulation.auto_tuner",
+    ):
+        from app.simulation.tuning_service import SimulationTuningService
+
+        return SimulationTuningService(app=app, session=session).apply(comparison, actor_id=actor_id)
 
     def _engine_for_overrides(self, overrides: dict[str, Any]) -> "AttentionSimulationEngine":
         store = InMemoryGlobalFeedStateStore()

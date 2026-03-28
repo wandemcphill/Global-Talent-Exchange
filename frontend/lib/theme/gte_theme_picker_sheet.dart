@@ -4,6 +4,7 @@ import '../widgets/gte_shell_theme.dart';
 import 'gte_theme_controller.dart';
 import 'gte_theme_registry.dart';
 import 'gte_theme_scope.dart';
+import 'gte_theme_specs.dart';
 import 'gte_theme_tokens.dart';
 
 class GteThemePickerSheet extends StatelessWidget {
@@ -56,7 +57,7 @@ class GteThemePickerSheet extends StatelessWidget {
               ),
               SizedBox(height: tokens.spaceSm),
               Text(
-                'Choose the shell mood for the transfer market, club lane, and live arena.',
+                'Choose the shell system for feed, dashboard, and profile while keeping motion, buttons, and contrast consistent.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               SizedBox(height: tokens.spaceLg),
@@ -64,8 +65,9 @@ class GteThemePickerSheet extends StatelessWidget {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: GteThemeRegistry.themes.length,
-                  separatorBuilder: (BuildContext context, int index) =>
-                      SizedBox(height: tokens.spaceSm),
+                  separatorBuilder:
+                      (BuildContext context, int index) =>
+                          SizedBox(height: tokens.spaceSm),
                   itemBuilder: (BuildContext context, int index) {
                     final GteThemeDefinition definition =
                         GteThemeRegistry.themes[index];
@@ -105,6 +107,7 @@ class _ThemeOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GteThemeTokens activeTokens = GteShellTheme.tokensOf(context);
+    final GteThemeMotion motion = definition.motion;
     final GteThemeTokens preview = definition.tokens;
     return Material(
       color: Colors.transparent,
@@ -112,7 +115,8 @@ class _ThemeOptionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(preview.radiusLarge),
         onTap: onSelected,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: motion.medium,
+          curve: motion.standardCurve,
           padding: EdgeInsets.all(activeTokens.spaceMd),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(preview.radiusLarge),
@@ -154,12 +158,8 @@ class _ThemeOptionTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             definition.metadata.label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  color: preview.textPrimary,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: preview.textPrimary),
                           ),
                         ),
                         if (selected)
@@ -174,15 +174,22 @@ class _ThemeOptionTile extends StatelessWidget {
                     Text(
                       definition.metadata.tagline,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: preview.accentWarm,
-                          ),
+                        color: preview.accentWarm,
+                      ),
                     ),
                     SizedBox(height: activeTokens.spaceXs),
                     Text(
                       definition.metadata.description,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: preview.textMuted),
+                    ),
+                    SizedBox(height: activeTokens.spaceXs),
+                    Text(
+                      '${definition.typography.styleName} • ${definition.motion.feel}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: preview.textMuted,
-                          ),
+                        color: preview.accentClub,
+                      ),
                     ),
                   ],
                 ),
@@ -208,11 +215,11 @@ class _ThemePreviewSwatches extends StatelessWidget {
       spacing: 10,
       runSpacing: 10,
       children: <Color>[
-        tokens.accent,
-        tokens.accentArena,
-        tokens.accentClub,
-        tokens.accentCapital,
-      ]
+            tokens.accent,
+            tokens.accentArena,
+            tokens.accentClub,
+            tokens.accentCapital,
+          ]
           .map(
             (Color color) => Container(
               width: 24,

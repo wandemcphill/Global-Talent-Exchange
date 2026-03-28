@@ -3,9 +3,20 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.agents.agent_manager import AgentPerformanceRequest, AgentRuntimeConfig, CreatorAgentManager
+from app.agents.models import (
+    AgentLearningStateRecord,
+    AgentPerformanceLogRecord,
+    AgentRecord,
+    AgentStrategyRecord,
+    AgentWalletRecord,
+)
 from app.core.events import DomainEvent, InMemoryEventPublisher
+from app.models.base import Base
 from app.viral.ranking_service import InMemoryViralLeaderboardStore
 
 
@@ -35,6 +46,22 @@ def _build_manager(*, config: AgentRuntimeConfig) -> tuple[CreatorAgentManager, 
     app = FastAPI()
     publisher = InMemoryEventPublisher()
     leaderboard = InMemoryViralLeaderboardStore()
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            AgentRecord.__table__,
+            AgentStrategyRecord.__table__,
+            AgentLearningStateRecord.__table__,
+            AgentWalletRecord.__table__,
+            AgentPerformanceLogRecord.__table__,
+        ],
+    )
+    app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     app.state.event_publisher = publisher
     manager = CreatorAgentManager(
         app=app,
@@ -142,3 +169,68 @@ def test_manager_learning_updates_wallet_and_strategy_after_performance_feedback
     assert receipt.balance > 0.0
     assert agent.profile.strategy.avg_duration <= initial_duration
     assert agent.learning_state.preferred_formats[result.primary_format] > 0.0
+
+
+def test_manager_persists_agent_state_and_performance_logs_across_restart() -> None:
+    manager, _publisher, _leaderboard = _build_manager(
+        config=AgentRuntimeConfig(
+            initial_population=1,
+            max_posts_per_cycle=1,
+            auto_run_on_moment=False,
+            ratio_warm_start_denominator=5,
+        )
+    )
+
+    manager.handle_event(DomainEvent(name="moments.live.created", payload=_moment_payload(moment_id="moment-persist", final_score=2.9)))
+    response = manager.run_cycle(max_agents=1, trigger="persist")
+
+    assert response.published_count == 1
+    result = response.results[0]
+
+    receipt = manager.record_performance(
+        AgentPerformanceRequest(
+            clip_id=result.clip_id,
+            watch_time=16.0,
+            shares=6,
+            comments=2,
+            completion_rate=0.78,
+            share_rate=0.05,
+            comment_rate=0.015,
+            velocity=1.1,
+            impressions=400,
+            earnings=2.25,
+        )
+    )
+
+    agent_id = result.agent_id
+    manager.close()
+
+    app = manager.app
+    restored = CreatorAgentManager(
+        app=app,
+        event_publisher=app.state.event_publisher,
+        leaderboard_store=InMemoryViralLeaderboardStore(),
+        config=AgentRuntimeConfig(initial_population=1, max_posts_per_cycle=1, auto_run_on_moment=False),
+    )
+    restored.bootstrap_population()
+
+    restored_agent = restored._agents[agent_id]
+    assert restored_agent.last_generated_clip_id == result.clip_id
+    assert restored_agent.learning_state.total_posts == 1
+    assert restored_agent.learning_state.average_reward == receipt.average_reward
+    assert restored_agent.wallet.last_earnings > 0.0
+    assert restored_agent.profile.strategy.shared_brain == "copilot"
+
+    with app.state.session_factory() as session:
+        logs = list(
+            session.scalars(
+                select(AgentPerformanceLogRecord)
+                .where(AgentPerformanceLogRecord.agent_id == agent_id)
+                .order_by(AgentPerformanceLogRecord.created_at.asc())
+            ).all()
+        )
+
+    assert len(logs) == 1
+    assert logs[0].clip_id == result.clip_id
+    assert logs[0].payout_eligible is True
+    assert logs[0].quality_score > 0.0

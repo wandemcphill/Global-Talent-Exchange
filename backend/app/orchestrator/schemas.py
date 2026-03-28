@@ -86,6 +86,8 @@ class AttentionOrchestratorConfigView(OrchestratorSchema):
     decay_threshold: float = Field(default=0.2, ge=0.0)
     winner_share: float = Field(default=0.70, ge=0.0, le=1.0)
     exploration_share: float = Field(default=0.30, ge=0.0, le=1.0)
+    max_agent_feed_ratio: float = Field(default=0.40, ge=0.0, le=1.0)
+    min_human_exposure_guarantee: float = Field(default=0.60, ge=0.0, le=1.0)
 
 
 class AttentionOrchestratorConfigUpdateRequest(OrchestratorSchema):
@@ -101,6 +103,8 @@ class AttentionOrchestratorConfigUpdateRequest(OrchestratorSchema):
     decay_threshold: float | None = Field(default=None, ge=0.0)
     winner_share: float | None = Field(default=None, ge=0.0, le=1.0)
     exploration_share: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_agent_feed_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    min_human_exposure_guarantee: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class AttentionOrchestratorMetricsView(OrchestratorSchema):

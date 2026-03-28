@@ -15,15 +15,15 @@ void main() {
     });
 
     test('restores a persisted theme id', () async {
-      SharedPreferences.setMockInitialValues(
-        <String, Object>{'gte_theme_id': 'ice_white'},
-      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'gte_theme_id': 'minimal_carbon',
+      });
 
       final GteThemeController controller = await GteThemeController.bootstrap(
         store: await GteSharedPreferencesThemeStore.create(),
       );
 
-      expect(controller.activeThemeId, GteThemeId.iceWhite);
+      expect(controller.activeThemeId, GteThemeId.minimalCarbon);
     });
 
     test('writes the selected theme id to preferences', () async {
@@ -31,30 +31,29 @@ void main() {
         store: await GteSharedPreferencesThemeStore.create(),
       );
 
-      await controller.selectTheme(GteThemeId.ultraRed);
+      await controller.selectTheme(GteThemeId.neonVelocity);
 
       final SharedPreferences preferences =
           await SharedPreferences.getInstance();
-      expect(preferences.getString('gte_theme_id'), 'ultra_red');
+      expect(preferences.getString('gte_theme_id'), 'neon_velocity');
     });
 
-    testWidgets(
-      'builds a renderable ThemeData for every registered theme',
-      (WidgetTester tester) async {
-        for (final GteThemeDefinition definition in GteThemeRegistry.themes) {
-          await tester.pumpWidget(
-            MaterialApp(
-              theme: GteShellTheme.build(definition),
-              home: Scaffold(
-                body: Center(child: Text(definition.metadata.label)),
-              ),
+    testWidgets('builds a renderable ThemeData for every registered theme', (
+      WidgetTester tester,
+    ) async {
+      for (final GteThemeDefinition definition in GteThemeRegistry.themes) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: GteShellTheme.build(definition),
+            home: Scaffold(
+              body: Center(child: Text(definition.metadata.label)),
             ),
-          );
-          await tester.pump();
+          ),
+        );
+        await tester.pump();
 
-          expect(find.text(definition.metadata.label), findsOneWidget);
-        }
-      },
-    );
+        expect(find.text(definition.metadata.label), findsOneWidget);
+      }
+    });
   });
 }

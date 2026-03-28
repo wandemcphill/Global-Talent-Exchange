@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from math import exp
+from math import ceil, exp
 import json
 import logging
 import re
@@ -21,6 +21,7 @@ from app.feedback_engine.service import FeedbackEngine
 from app.models.analytics_event import AnalyticsEvent
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
+from app.moments.priority_cache import ensure_moment_priority_cache
 from app.orchestrator.orchestrator_service import build_attention_orchestrator_service
 from app.runtime_config.service import ensure_runtime_config_loader
 from app.users.follow_service import (
@@ -39,6 +40,7 @@ from app.viral.schemas import (
     PersonalizedFeedRefreshResponse,
     PersonalizedFeedResponse,
     PersonalizedFeedScoreBreakdownView,
+    ViralTrendingClipView,
 )
 from app.viral.session_tracker import ensure_viral_session_tracker
 from app.viral.service import ViralFeedService
@@ -539,6 +541,7 @@ class PersonalizedFeedRankingService:
     ranking_service: Any | None = None
     attention_orchestrator: Any | None = None
     session_tracker: Any | None = None
+    moment_priority_cache: Any | None = None
     hybrid_for_you_share: float = DEFAULT_HYBRID_FOR_YOU_SHARE
     hybrid_following_share: float = DEFAULT_HYBRID_FOLLOWING_SHARE
 
@@ -965,9 +968,10 @@ class PersonalizedFeedRankingService:
                     payload=clip_view.model_dump(mode="json"),
                 )
             )
+        balanced_envelopes = self._rebalance_entry_mix(envelopes, limit=limit)
         if not allocate:
-            return envelopes
-        return self._allocate_ranked_entries(envelopes, limit=limit)
+            return self._rerank_entries(balanced_envelopes)
+        return self._allocate_ranked_entries(balanced_envelopes, limit=limit)
 
     def _blend_entries(
         self,
@@ -1008,7 +1012,8 @@ class PersonalizedFeedRankingService:
             if len(selected) >= limit:
                 break
 
-        return self._rerank_entries(selected[:limit])
+        balanced = self._rebalance_entry_mix(selected[:limit], limit=limit)
+        return self._rerank_entries(balanced)
 
     def _build_cold_start_entries(
         self,
@@ -1104,9 +1109,10 @@ class PersonalizedFeedRankingService:
                     payload=clip_view.model_dump(mode="json"),
                 )
             )
+        balanced_envelopes = self._rebalance_entry_mix(envelopes, limit=limit)
         if not allocate:
-            return envelopes
-        return self._allocate_ranked_entries(envelopes, limit=limit)
+            return self._rerank_entries(balanced_envelopes)
+        return self._allocate_ranked_entries(balanced_envelopes, limit=limit)
 
     def _candidate_from_clip(
         self,
@@ -1182,6 +1188,24 @@ class PersonalizedFeedRankingService:
         candidates: list[Any] = []
         seen_clip_ids: set[str] = set()
         blocked_clip_ids = excluded_clip_ids or set()
+        if self.moment_priority_cache is not None:
+            try:
+                priority_payloads = self.moment_priority_cache.top(
+                    limit=max(limit, 1),
+                    excluded_clip_ids=blocked_clip_ids,
+                )
+            except Exception:
+                priority_payloads = []
+            for payload in priority_payloads:
+                try:
+                    clip = ViralTrendingClipView.model_validate(payload)
+                except Exception:
+                    continue
+                clip_id = str(getattr(clip, "clip_id", "") or "")
+                if not clip_id or clip_id in seen_clip_ids or clip_id in blocked_clip_ids:
+                    continue
+                candidates.append(clip)
+                seen_clip_ids.add(clip_id)
         if self.ranking_service is not None:
             try:
                 ranked_candidates = self.ranking_service.get_candidates(limit=max(limit, 1), refresh=False)
@@ -1201,6 +1225,93 @@ class PersonalizedFeedRankingService:
             candidates.append(clip)
             seen_clip_ids.add(clip_id)
         return candidates
+
+    def _rebalance_entry_mix(
+        self,
+        entries: list[PersonalizedFeedEnvelope],
+        *,
+        limit: int,
+    ) -> list[PersonalizedFeedEnvelope]:
+        if self.attention_orchestrator is None or not entries:
+            return entries[: max(int(limit), 0)]
+        max_items = max(int(limit), 0)
+        if max_items <= 0:
+            return []
+
+        human_available = sum(1 for entry in entries if not self._is_agent_entry(entry))
+        agent_available = len(entries) - human_available
+        if human_available == 0 or agent_available == 0:
+            return entries[:max_items]
+
+        config = self.attention_orchestrator.config()
+        human_target = min(human_available, max_items, ceil(max_items * float(config.min_human_exposure_guarantee)))
+        agent_cap = min(agent_available, max_items, int(max_items * float(config.max_agent_feed_ratio)))
+
+        selected: list[PersonalizedFeedEnvelope] = []
+        selected_clip_ids: set[str] = set()
+        human_count = 0
+        agent_count = 0
+
+        def append_entry(candidate: PersonalizedFeedEnvelope) -> None:
+            nonlocal human_count, agent_count
+            if candidate.clip_id in selected_clip_ids or len(selected) >= max_items:
+                return
+            selected.append(candidate)
+            selected_clip_ids.add(candidate.clip_id)
+            if self._is_agent_entry(candidate):
+                agent_count += 1
+            else:
+                human_count += 1
+
+        for entry in entries:
+            if len(selected) >= max_items:
+                break
+            if self._is_agent_entry(entry):
+                if human_count < human_target or agent_count >= agent_cap:
+                    continue
+            elif human_count >= human_target:
+                continue
+            append_entry(entry)
+
+        for entry in entries:
+            if len(selected) >= max_items:
+                break
+            if self._is_agent_entry(entry):
+                continue
+            append_entry(entry)
+
+        for entry in entries:
+            if len(selected) >= max_items:
+                break
+            if not self._is_agent_entry(entry):
+                continue
+            if agent_count >= agent_cap and human_count >= min(human_available, max_items):
+                append_entry(entry)
+                continue
+            if agent_count >= agent_cap:
+                continue
+            append_entry(entry)
+
+        if len(selected) < max_items:
+            for entry in entries:
+                if len(selected) >= max_items:
+                    break
+                append_entry(entry)
+
+        return selected[:max_items]
+
+    @staticmethod
+    def _is_agent_entry(entry: PersonalizedFeedEnvelope) -> bool:
+        metadata = entry.payload.get("metadata") if isinstance(entry.payload, dict) else None
+        if not isinstance(metadata, dict):
+            return False
+        origin = str(metadata.get("origin") or "").strip().lower()
+        if origin == "creator_agent":
+            return True
+        if bool(metadata.get("is_agent_generated", False)):
+            return True
+        agent_id = metadata.get("agent_id")
+        return isinstance(agent_id, str) and bool(agent_id.strip())
 
     def _record_clip_delivery(
         self,
@@ -1397,6 +1508,7 @@ def build_personalized_feed_service(*, app: FastAPI, session: Session) -> Person
         ranking_service=build_viral_ranking_service(app=app, session=session),
         attention_orchestrator=build_attention_orchestrator_service(app=app, session=session),
         session_tracker=ensure_viral_session_tracker(app),
+        moment_priority_cache=ensure_moment_priority_cache(app),
     )
 
 

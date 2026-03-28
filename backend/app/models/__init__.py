@@ -1,4 +1,5 @@
 import app.ingestion.models  # noqa: F401
+import app.agents.models  # noqa: F401
 
 from app.models.academy_graduation_event import AcademyGraduationEvent
 from app.models.academy_player import AcademyPlayer

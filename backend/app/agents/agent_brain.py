@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.agents.learning_engine import AgentLearningState
+    from app.copilot.agent_copilot_service import AgentCopilotAnalysis, AgentCopilotService
 
 
 FAST_EVENT_TYPES = frozenset({"goal", "winner", "equalizer", "penalty", "penalty_goal", "red_card", "late_drama"})
@@ -46,6 +47,8 @@ class AgentStrategy:
     event_focus: tuple[str, ...] = ()
     cadence_minutes: int = 8
     experimental_share: float = 0.30
+    global_exposure_feedback: float = 0.0
+    shared_brain: str = "copilot"
 
 
 @dataclass(slots=True)
@@ -88,6 +91,8 @@ class AgentDecisionContext:
     candidate_usage: dict[str, int]
     max_agent_ratio: float
     max_agents_per_candidate: int
+    global_exposure_feedback: dict[str, float] = field(default_factory=dict)
+    winner_variant_scores: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -101,9 +106,20 @@ class AgentDecision:
     caption_seed: str = "live_reaction"
     predicted_reward: float = 0.0
     confidence: float = 0.0
+    shared_brain: str = "heuristic"
+    best_format_key: str | None = None
+    global_exposure_feedback: float = 0.0
+    winner_variant_score: float = 0.0
 
 
 class AgentBrain:
+    def __init__(self, *, copilot_service: "AgentCopilotService | None" = None) -> None:
+        if copilot_service is None:
+            from app.copilot.agent_copilot_service import AgentCopilotService as _AgentCopilotService
+
+            copilot_service = _AgentCopilotService()
+        self.copilot_service = copilot_service
+
     def decide(
         self,
         *,
@@ -117,6 +133,15 @@ class AgentBrain:
 
         reference = now or _utcnow()
         ratio_pressure = context.recent_agent_ratio / max(context.max_agent_ratio, 0.01)
+        analyses = {
+            item.candidate_id: self.copilot_service.analyze(
+                profile=profile,
+                learning_state=learning_state,
+                context=context,
+                candidate=item,
+            )
+            for item in context.candidate_pool
+        }
         ranked_candidates = sorted(
             context.candidate_pool,
             key=lambda item: (
@@ -125,21 +150,27 @@ class AgentBrain:
                     learning_state=learning_state,
                     candidate=item,
                     context=context,
+                    analysis=analyses[item.candidate_id],
                     now=reference,
                 ),
                 item.candidate_id,
             ),
         )
         best_candidate = ranked_candidates[0]
+        best_analysis = analyses[best_candidate.candidate_id]
         score = self._candidate_score(
             profile=profile,
             learning_state=learning_state,
             candidate=best_candidate,
             context=context,
+            analysis=best_analysis,
             now=reference,
         )
         confidence = _clamp(
-            score * (1.0 - max(ratio_pressure - 0.85, 0.0) * 0.30) * (1.0 + min(learning_state.average_reward, 2.0) * 0.08),
+            score
+            * (1.0 - max(ratio_pressure - 0.85, 0.0) * 0.30)
+            * (1.0 + min(learning_state.average_reward, 2.0) * 0.08)
+            * (1.0 + best_analysis.viral_probability * 0.20),
             0.0,
             4.0,
         )
@@ -150,9 +181,18 @@ class AgentBrain:
                 reason="insufficient_confidence",
                 candidate=best_candidate,
                 confidence=round(confidence, 4),
+                shared_brain="copilot",
+                best_format_key=best_analysis.best_format_key,
+                global_exposure_feedback=best_analysis.global_exposure_feedback,
+                winner_variant_score=best_analysis.winner_variant_score,
             )
 
-        selected_formats = self._select_formats(profile=profile, learning_state=learning_state, context=context)
+        selected_formats = self._select_formats(
+            profile=profile,
+            learning_state=learning_state,
+            context=context,
+            analysis=best_analysis,
+        )
         risk_level = _clamp(
             profile.strategy.risk_level
             + (0.04 * min(learning_state.loss_streak, 3))
@@ -174,8 +214,17 @@ class AgentBrain:
             duration_seconds=duration_seconds,
             selected_formats=selected_formats,
             caption_seed=self._caption_seed(profile.identity.style, best_candidate),
-            predicted_reward=round(confidence * (1.0 + (risk_level * 0.30)), 4),
+            predicted_reward=round(
+                confidence
+                * (1.0 + (risk_level * 0.30))
+                * (1.0 + (best_analysis.global_exposure_feedback * 0.10)),
+                4,
+            ),
             confidence=round(confidence, 4),
+            shared_brain="copilot",
+            best_format_key=best_analysis.best_format_key,
+            global_exposure_feedback=best_analysis.global_exposure_feedback,
+            winner_variant_score=best_analysis.winner_variant_score,
         )
 
     def _candidate_score(
@@ -185,6 +234,7 @@ class AgentBrain:
         learning_state: AgentLearningState,
         candidate: AgentMomentCandidate,
         context: AgentDecisionContext,
+        analysis: "AgentCopilotAnalysis",
         now: datetime,
     ) -> float:
         freshness = max(0.35, 1.30 - min(candidate.age_minutes(now=now), 75.0) / 75.0)
@@ -198,11 +248,25 @@ class AgentBrain:
         )
         streak_bonus = 0.04 * min(learning_state.win_streak, 4)
         exploration_bonus = 0.08 * learning_state.exploration_rate
+        copilot_bonus = (
+            (analysis.confidence * 0.22)
+            + (analysis.global_exposure_feedback * 0.18)
+            + (analysis.winner_variant_score * 0.16)
+        )
         return max(
             (
                 max(candidate.priority_score, 0.05)
                 * freshness
-                * (1.0 + focus_bonus + chaos_bonus + tempo_bonus + audience_bonus + streak_bonus + exploration_bonus)
+                * (
+                    1.0
+                    + focus_bonus
+                    + chaos_bonus
+                    + tempo_bonus
+                    + audience_bonus
+                    + streak_bonus
+                    + exploration_bonus
+                    + copilot_bonus
+                )
             )
             - candidate_penalty,
             0.0,
@@ -214,13 +278,15 @@ class AgentBrain:
         profile: AgentProfile,
         learning_state: AgentLearningState,
         context: AgentDecisionContext,
+        analysis: "AgentCopilotAnalysis",
     ) -> tuple[str, ...]:
         defaults = STYLE_PRIMARY_FORMATS.get(profile.identity.style, ("instant_clip", "meme_version", "debate_clip"))
         ranked_preferences = sorted(
             learning_state.preferred_formats.items(),
             key=lambda item: (-item[1], item[0]),
         )
-        format_candidates: list[str] = list(profile.strategy.preferred_formats) or list(defaults)
+        format_candidates: list[str] = [analysis.best_format_key]
+        format_candidates.extend(list(profile.strategy.preferred_formats) or list(defaults))
         format_candidates.extend(name for name, score in ranked_preferences if score > 0.0)
         format_candidates.extend(defaults)
         unique_formats: list[str] = []
@@ -231,6 +297,7 @@ class AgentBrain:
             unique_formats,
             key=lambda item: (
                 context.recent_format_counts.get(item, 0),
+                -analysis.format_scores.get(item, 0.0),
                 -learning_state.preferred_formats.get(item, 0.0),
                 unique_formats.index(item),
             ),
