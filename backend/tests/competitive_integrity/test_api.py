@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 
 from app.auth.service import AuthService
 from app.main import create_app
+from app.models.user import UserRole
 from backend.tests.match_engine.helpers import build_team
 
 
@@ -44,6 +45,22 @@ def _create_user(app, email: str, username: str) -> tuple[str, str]:
             password="SuperSecret1",
             display_name=username,
         )
+        token, _ = service.issue_access_token(user, session=session)
+        session.commit()
+        return user.id, token
+
+
+def _create_admin(app, email: str, username: str) -> tuple[str, str]:
+    with app.state.session_factory() as session:
+        service = AuthService()
+        user = service.register_user(
+            session,
+            email=email,
+            username=username,
+            password="SuperSecret1",
+            display_name=username,
+        )
+        user.role = UserRole.ADMIN
         token, _ = service.issue_access_token(user, session=session)
         session.commit()
         return user.id, token
@@ -138,3 +155,44 @@ def test_gtex_hosted_match_rejects_frozen_control(app_client) -> None:
 
     assert execute_response.status_code == 409
     assert "appointed real manager" in execute_response.json()["detail"]
+
+
+def test_admin_can_fetch_match_validation_summary(app_client) -> None:
+    app, client = app_client
+    home_user_id, home_token = _create_user(app, "validation-home@example.com", "validation_home")
+    away_user_id, _away_token = _create_user(app, "validation-away@example.com", "validation_away")
+    _admin_user_id, admin_token = _create_admin(app, "validation-admin@example.com", "validation_admin")
+
+    match_response = client.post(
+        "/api/competitive-integrity/matches",
+        headers={"Authorization": f"Bearer {home_token}"},
+        json={
+            "competition_type": "casual",
+            "home_user_id": home_user_id,
+            "away_user_id": away_user_id,
+            "is_user_online_home": False,
+            "is_user_online_away": True,
+            "locked_lineup_home": build_team("validation-home", "Validation Home", 82).model_dump(mode="json"),
+            "locked_lineup_away": build_team("validation-away", "Validation Away", 78).model_dump(mode="json"),
+        },
+    )
+    assert match_response.status_code == 201
+    match_id = match_response.json()["id"]
+
+    execute_response = client.post(
+        f"/api/competitive-integrity/matches/{match_id}/execute",
+        headers={"Authorization": f"Bearer {home_token}"},
+        json={},
+    )
+    assert execute_response.status_code == 200
+
+    validation_response = client.get(
+        f"/api/admin/competitive-integrity/matches/{match_id}/validation",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    assert validation_response.status_code == 200, validation_response.text
+    payload = validation_response.json()
+    assert payload["match_id"] == match_id
+    assert payload["anti_cheat_score"] <= 100
+    assert payload["recommended_action"] in {"allow", "manual_review", "freeze_rewards_and_review"}

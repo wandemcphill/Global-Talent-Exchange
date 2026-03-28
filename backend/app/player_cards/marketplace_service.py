@@ -29,13 +29,16 @@ from app.models.player_cards import (
     PlayerCardHolding,
     PlayerCardHistory,
     PlayerCardListing,
+    PlayerCardMomentum,
     PlayerMarketValueSnapshot,
     PlayerCardOwnerHistory,
     PlayerCardSale,
+    PlayerStatsSnapshot,
     PlayerCardTier,
     PlayerMoniker,
 )
 from app.models.regen import RegenProfile
+from app.models.real_world_football import PlayerDemandSignal, TrendingPlayerFlag
 from app.models.risk_ops import SystemEventSeverity
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerSourceTag, LedgerUnit
@@ -55,6 +58,57 @@ REGEN_LOAN_PLATFORM_FEE_BPS = 4_000
 MAX_LOAN_DURATION_DAYS = 30
 DEFAULT_SEARCH_LIMIT = 20
 MAX_SEARCH_LIMIT = 100
+PLAYER_PRICE_MAX_CHANGE_PER_TICK = Decimal("0.10")
+PLAYER_PRICE_MIN_CREDITS = Decimal("1.0000")
+PLAYER_PRICE_MAX_MULTIPLIER = Decimal("10.0")
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerPriceEngineSignal:
+    base_value_credits: Decimal
+    anchor_price_credits: Decimal
+    market_price_credits: Decimal
+    price_change_credits: Decimal
+    price_change_percent: float
+    price_direction: str
+    performance_score: float
+    demand_pressure: float
+    scarcity_factor: float
+    hype_factor: float
+    buy_volume: int
+    sell_volume: int
+    available_shares: int
+    trend_score: float
+    market_buzz_score: float
+    is_trending: bool
+    trending_badge: str | None
+    liquidity_signal: str
+    low_liquidity_warning: bool
+    change_capped: bool
+
+    def as_payload(self) -> dict[str, Any]:
+        return {
+            "base_value_credits": self.base_value_credits,
+            "anchor_price_credits": self.anchor_price_credits,
+            "market_price_credits": self.market_price_credits,
+            "price_change_credits": self.price_change_credits,
+            "price_change_percent": self.price_change_percent,
+            "price_direction": self.price_direction,
+            "performance_score": self.performance_score,
+            "demand_pressure": self.demand_pressure,
+            "scarcity_factor": self.scarcity_factor,
+            "hype_factor": self.hype_factor,
+            "buy_volume": self.buy_volume,
+            "sell_volume": self.sell_volume,
+            "available_shares": self.available_shares,
+            "trend_score": self.trend_score,
+            "market_buzz_score": self.market_buzz_score,
+            "is_trending": self.is_trending,
+            "trending_badge": self.trending_badge,
+            "liquidity_signal": self.liquidity_signal,
+            "low_liquidity_warning": self.low_liquidity_warning,
+            "change_capped": self.change_capped,
+        }
 
 
 @dataclass(slots=True)
@@ -372,6 +426,412 @@ class PlayerCardMarketplaceService:
             return self._normalize_amount(summary.current_value_credits), "player_summary.current_value", sale_count
 
         return self._base_value_credits(context), "tier_or_value_fallback", sale_count
+
+    @staticmethod
+    def _coerce_float(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError, ArithmeticError):
+            return None
+
+    @staticmethod
+    def _find_numeric_value(payload: Any, *keys: str) -> float | None:
+        if payload is None:
+            return None
+        expected = {key.lower() for key in keys}
+        queue: list[Any] = [payload]
+        while queue:
+            current = queue.pop(0)
+            if isinstance(current, dict):
+                for key, value in current.items():
+                    if str(key).lower() in expected:
+                        number = PlayerCardMarketplaceService._coerce_float(value)
+                        if number is not None:
+                            return number
+                    if isinstance(value, (dict, list, tuple)):
+                        queue.append(value)
+            elif isinstance(current, (list, tuple)):
+                for value in current:
+                    if isinstance(value, (dict, list, tuple)):
+                        queue.append(value)
+        return None
+
+    def _positive_amount(self, value: Decimal | float | int | str | None) -> Decimal | None:
+        if value is None:
+            return None
+        normalized = self._normalize_amount(value)
+        if normalized <= Decimal("0"):
+            return None
+        return normalized
+
+    def _resolve_engine_base_value(
+        self,
+        *,
+        player: Player | None,
+        summary: PlayerSummaryReadModel | None,
+        latest_snapshot: PlayerMarketValueSnapshot | None,
+        latest_value_override: Decimal | float | int | str | None = None,
+    ) -> Decimal:
+        for candidate in (
+            latest_value_override,
+            summary.current_value_credits if summary is not None else None,
+            latest_snapshot.avg_trade_price_credits if latest_snapshot is not None else None,
+            latest_snapshot.last_trade_price_credits if latest_snapshot is not None else None,
+            latest_snapshot.listing_floor_price_credits if latest_snapshot is not None else None,
+        ):
+            positive_amount = self._positive_amount(candidate)
+            if positive_amount is not None:
+                return positive_amount
+        if player is not None and player.market_value_eur and player.market_value_eur > 0:
+            return self._normalize_amount(credits_from_real_world_value(player.market_value_eur))
+        return Decimal("1.0000")
+
+    def _resolve_engine_anchor_price(
+        self,
+        *,
+        summary: PlayerSummaryReadModel | None,
+        latest_snapshot: PlayerMarketValueSnapshot | None,
+        base_value: Decimal,
+    ) -> Decimal:
+        for candidate in (
+            latest_snapshot.last_trade_price_credits if latest_snapshot is not None else None,
+            latest_snapshot.avg_trade_price_credits if latest_snapshot is not None else None,
+            latest_snapshot.listing_floor_price_credits if latest_snapshot is not None else None,
+            summary.current_value_credits if summary is not None else None,
+        ):
+            positive_amount = self._positive_amount(candidate)
+            if positive_amount is not None:
+                return positive_amount
+        return base_value
+
+    def _performance_score(
+        self,
+        *,
+        stats_payload: dict[str, Any] | None,
+        fallback_rating: float | None,
+    ) -> float:
+        goals = self._find_numeric_value(stats_payload, "goals", "goal_count", "goals_scored", "recent_goals") or 0.0
+        assists = self._find_numeric_value(stats_payload, "assists", "assist_count", "recent_assists") or 0.0
+        rating = self._find_numeric_value(stats_payload, "rating", "average_rating", "match_rating", "form_rating")
+        if rating is None and stats_payload is not None:
+            rating = self._coerce_float(fallback_rating) or 0.0
+        if rating is None:
+            rating = 0.0
+        mistakes = self._find_numeric_value(
+            stats_payload,
+            "mistakes",
+            "errors",
+            "errors_leading_to_goal",
+            "defensive_errors",
+        ) or 0.0
+        return round((goals * 2.0) + (assists * 1.5) + (rating * 1.2) - mistakes, 4)
+
+    def _record_market_snapshot(self, player_id: str) -> None:
+        now = datetime.now(UTC)
+        window_start = now - timedelta(hours=24)
+        sales_rows = self.session.execute(
+            select(PlayerCardSale.price_per_card_credits, PlayerCardSale.quantity)
+            .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
+            .where(PlayerCard.player_id == player_id, PlayerCardSale.created_at >= window_start)
+            .order_by(PlayerCardSale.created_at.desc())
+        ).all()
+        total_quantity = sum(int(row.quantity) for row in sales_rows)
+        weighted_total = sum(self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows)
+        avg_price = None
+        high_price = None
+        low_price = None
+        if sales_rows:
+            prices = [self._normalize_amount(row.price_per_card_credits) for row in sales_rows]
+            high_price = max(prices)
+            low_price = min(prices)
+            if total_quantity > 0:
+                avg_price = self._normalize_amount(weighted_total / Decimal(total_quantity))
+
+        floor_price = self.session.scalar(
+            select(func.min(PlayerCardListing.price_per_card_credits))
+            .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
+            .where(
+                PlayerCard.player_id == player_id,
+                PlayerCardListing.status == "open",
+                or_(PlayerCardListing.expires_at.is_(None), PlayerCardListing.expires_at > now),
+            )
+        )
+        listing_count = self.session.scalar(
+            select(func.count(PlayerCardListing.id))
+            .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
+            .where(
+                PlayerCard.player_id == player_id,
+                PlayerCardListing.status == "open",
+                or_(PlayerCardListing.expires_at.is_(None), PlayerCardListing.expires_at > now),
+            )
+        ) or 0
+
+        snapshot = PlayerMarketValueSnapshot(
+            player_id=player_id,
+            as_of=now,
+            last_trade_price_credits=float(self._normalize_amount(sales_rows[0].price_per_card_credits)) if sales_rows else None,
+            avg_trade_price_credits=float(avg_price) if avg_price is not None else None,
+            volume_24h=int(total_quantity),
+            listing_floor_price_credits=float(self._normalize_amount(floor_price)) if floor_price is not None else None,
+            listing_count=int(listing_count),
+            high_24h_price_credits=float(high_price) if high_price is not None else None,
+            low_24h_price_credits=float(low_price) if low_price is not None else None,
+            metadata_json={},
+        )
+        self.session.add(snapshot)
+
+    def _average_trade_price(self, player_id: str, *, days: int) -> Decimal | None:
+        window_start = datetime.now(UTC) - timedelta(days=days)
+        sales_rows = self.session.execute(
+            select(PlayerCardSale.price_per_card_credits, PlayerCardSale.quantity)
+            .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
+            .where(PlayerCard.player_id == player_id, PlayerCardSale.created_at >= window_start)
+        ).all()
+        if not sales_rows:
+            return None
+        total_quantity = sum(int(row.quantity) for row in sales_rows)
+        if total_quantity <= 0:
+            return None
+        weighted_total = sum(self._normalize_amount(row.price_per_card_credits) * int(row.quantity) for row in sales_rows)
+        return self._normalize_amount(weighted_total / Decimal(total_quantity))
+
+    def _update_momentum(self, player_id: str) -> None:
+        avg_7d = self._average_trade_price(player_id, days=7)
+        avg_30d = self._average_trade_price(player_id, days=30)
+        momentum_7d = Decimal("0")
+        momentum_30d = Decimal("0")
+        if avg_30d and avg_30d > Decimal("0"):
+            momentum_7d = ((avg_7d or avg_30d) - avg_30d) / avg_30d * Decimal("100")
+            momentum_30d = ((avg_7d or avg_30d) - avg_30d) / avg_30d * Decimal("100")
+        trend_direction = "flat"
+        if momentum_7d > Decimal("2"):
+            trend_direction = "up"
+        elif momentum_7d < Decimal("-2"):
+            trend_direction = "down"
+        momentum = self.session.scalar(select(PlayerCardMomentum).where(PlayerCardMomentum.player_id == player_id))
+        if momentum is None:
+            momentum = PlayerCardMomentum(player_id=player_id, metadata_json={})
+            self.session.add(momentum)
+        momentum.last_trade_price_credits = float(avg_7d) if avg_7d is not None else momentum.last_trade_price_credits
+        momentum.momentum_7d_pct = float(momentum_7d)
+        momentum.momentum_30d_pct = float(momentum_30d)
+        momentum.trend_direction = trend_direction
+
+    def _build_price_engine_map(
+        self,
+        player_ids: list[str],
+        *,
+        latest_value_overrides: dict[str, Decimal | float | int | str | None] | None = None,
+    ) -> dict[str, PlayerPriceEngineSignal]:
+        normalized_player_ids = list(dict.fromkeys(player_id for player_id in player_ids if player_id))
+        if not normalized_player_ids:
+            return {}
+
+        now = datetime.now(UTC)
+        day_window_start = now - timedelta(hours=24)
+        player_id_filter = tuple(normalized_player_ids)
+
+        players = {
+            player.id: player
+            for player in self.session.scalars(
+                select(Player).where(Player.id.in_(player_id_filter))
+            ).all()
+        }
+        summaries = {
+            summary.player_id: summary
+            for summary in self.session.scalars(
+                select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_id_filter))
+            ).all()
+        }
+
+        latest_market_snapshots: dict[str, PlayerMarketValueSnapshot] = {}
+        for snapshot in self.session.scalars(
+            select(PlayerMarketValueSnapshot)
+            .where(PlayerMarketValueSnapshot.player_id.in_(player_id_filter))
+            .order_by(PlayerMarketValueSnapshot.player_id.asc(), PlayerMarketValueSnapshot.as_of.desc(), PlayerMarketValueSnapshot.created_at.desc())
+        ).all():
+            latest_market_snapshots.setdefault(snapshot.player_id, snapshot)
+
+        latest_stats_snapshots: dict[str, PlayerStatsSnapshot] = {}
+        for snapshot in self.session.scalars(
+            select(PlayerStatsSnapshot)
+            .where(PlayerStatsSnapshot.player_id.in_(player_id_filter))
+            .order_by(PlayerStatsSnapshot.player_id.asc(), PlayerStatsSnapshot.as_of.desc(), PlayerStatsSnapshot.created_at.desc())
+        ).all():
+            latest_stats_snapshots.setdefault(snapshot.player_id, snapshot)
+
+        buy_volume_map = {
+            str(row.player_id): int(row.buy_volume or 0)
+            for row in self.session.execute(
+                select(
+                    PlayerCard.player_id.label("player_id"),
+                    func.coalesce(func.sum(PlayerCardSale.quantity), 0).label("buy_volume"),
+                )
+                .join(PlayerCard, PlayerCardSale.player_card_id == PlayerCard.id)
+                .where(PlayerCard.player_id.in_(player_id_filter), PlayerCardSale.created_at >= day_window_start)
+                .group_by(PlayerCard.player_id)
+            ).all()
+        }
+        sell_volume_map = {
+            str(row.player_id): int(row.sell_volume or 0)
+            for row in self.session.execute(
+                select(
+                    PlayerCard.player_id.label("player_id"),
+                    func.coalesce(func.sum(PlayerCardListing.quantity), 0).label("sell_volume"),
+                )
+                .join(PlayerCard, PlayerCardListing.player_card_id == PlayerCard.id)
+                .where(
+                    PlayerCard.player_id.in_(player_id_filter),
+                    PlayerCardListing.status == "open",
+                    or_(PlayerCardListing.expires_at.is_(None), PlayerCardListing.expires_at > now),
+                )
+                .group_by(PlayerCard.player_id)
+            ).all()
+        }
+        trend_score_map = {
+            str(row.player_id): round(float(row.trend_score or 0.0), 4)
+            for row in self.session.execute(
+                select(
+                    TrendingPlayerFlag.player_id.label("player_id"),
+                    func.coalesce(func.sum(TrendingPlayerFlag.trend_score), 0.0).label("trend_score"),
+                )
+                .where(
+                    TrendingPlayerFlag.player_id.in_(player_id_filter),
+                    TrendingPlayerFlag.status == "active",
+                    or_(TrendingPlayerFlag.expires_at.is_(None), TrendingPlayerFlag.expires_at > now),
+                )
+                .group_by(TrendingPlayerFlag.player_id)
+            ).all()
+        }
+        market_buzz_map = {
+            str(row.player_id): round(float(row.market_buzz_score or 0.0), 4)
+            for row in self.session.execute(
+                select(
+                    PlayerDemandSignal.player_id.label("player_id"),
+                    func.coalesce(func.sum(PlayerDemandSignal.market_buzz_score), 0.0).label("market_buzz_score"),
+                )
+                .where(
+                    PlayerDemandSignal.player_id.in_(player_id_filter),
+                    PlayerDemandSignal.status == "active",
+                    or_(PlayerDemandSignal.expires_at.is_(None), PlayerDemandSignal.expires_at > now),
+                )
+                .group_by(PlayerDemandSignal.player_id)
+            ).all()
+        }
+
+        signals: dict[str, PlayerPriceEngineSignal] = {}
+        for player_id in normalized_player_ids:
+            player = players.get(player_id)
+            summary = summaries.get(player_id)
+            latest_snapshot = latest_market_snapshots.get(player_id)
+            latest_stats = latest_stats_snapshots.get(player_id)
+            base_value = self._resolve_engine_base_value(
+                player=player,
+                summary=summary,
+                latest_snapshot=latest_snapshot,
+                latest_value_override=(latest_value_overrides or {}).get(player_id),
+            )
+            anchor_price = self._resolve_engine_anchor_price(
+                summary=summary,
+                latest_snapshot=latest_snapshot,
+                base_value=base_value,
+            )
+            performance_score = self._performance_score(
+                stats_payload=latest_stats.stats_json if latest_stats is not None else None,
+                fallback_rating=float(summary.average_rating) if summary is not None and summary.average_rating is not None else None,
+            )
+            buy_volume = buy_volume_map.get(player_id, 0)
+            sell_volume = sell_volume_map.get(player_id, 0)
+            available_shares = max(sell_volume, 0)
+            demand_pressure = round((buy_volume - sell_volume) * 0.05, 4)
+            scarcity_factor = round(1.0 / (available_shares + 1), 4)
+            trend_score = trend_score_map.get(player_id, 0.0)
+            market_buzz_score = market_buzz_map.get(player_id, 0.0)
+            movement_pct = (
+                self._coerce_float(summary.movement_pct)
+                if summary is not None and hasattr(summary, "movement_pct")
+                else 0.0
+            ) or 0.0
+            is_trending = trend_score > 0.0 or market_buzz_score >= 1.0 or abs(movement_pct) >= 4.0
+            hype_factor = 0.0
+            if is_trending:
+                hype_factor = round(
+                    min(max(1.0 + (trend_score / 40.0) + (market_buzz_score / 20.0), 1.0), 5.0),
+                    4,
+                )
+            raw_delta = Decimal(str(round(performance_score + demand_pressure + scarcity_factor + hype_factor, 4)))
+            max_delta = self._normalize_amount(anchor_price * PLAYER_PRICE_MAX_CHANGE_PER_TICK)
+            bounded_delta = min(max(raw_delta, -max_delta), max_delta)
+            price_ceiling = self._normalize_amount(max(base_value, anchor_price) * PLAYER_PRICE_MAX_MULTIPLIER)
+            market_price = self._normalize_amount(
+                min(max(anchor_price + bounded_delta, PLAYER_PRICE_MIN_CREDITS), price_ceiling)
+            )
+            price_change_percent = 0.0
+            if anchor_price > Decimal("0"):
+                price_change_percent = round(float((bounded_delta / anchor_price) * Decimal("100")), 4)
+            if bounded_delta > Decimal("0.0001"):
+                price_direction = "up"
+            elif bounded_delta < Decimal("-0.0001"):
+                price_direction = "down"
+            else:
+                price_direction = "flat"
+            low_liquidity_warning = available_shares <= 1
+            if low_liquidity_warning:
+                liquidity_signal = "Low liquidity"
+            elif available_shares <= 4:
+                liquidity_signal = "Medium liquidity"
+            else:
+                liquidity_signal = "High liquidity"
+            signals[player_id] = PlayerPriceEngineSignal(
+                base_value_credits=base_value,
+                anchor_price_credits=anchor_price,
+                market_price_credits=market_price,
+                price_change_credits=self._normalize_amount(bounded_delta),
+                price_change_percent=price_change_percent,
+                price_direction=price_direction,
+                performance_score=performance_score,
+                demand_pressure=demand_pressure,
+                scarcity_factor=scarcity_factor,
+                hype_factor=hype_factor,
+                buy_volume=buy_volume,
+                sell_volume=sell_volume,
+                available_shares=available_shares,
+                trend_score=trend_score,
+                market_buzz_score=market_buzz_score,
+                is_trending=is_trending,
+                trending_badge="Trending" if is_trending else None,
+                liquidity_signal=liquidity_signal,
+                low_liquidity_warning=low_liquidity_warning,
+                change_capped=bounded_delta != raw_delta,
+            )
+        return signals
+
+    def _enrich_listing_payload_with_price_engine(
+        self,
+        payload: dict[str, Any],
+        *,
+        price_engine_cache: dict[str, PlayerPriceEngineSignal] | None = None,
+    ) -> dict[str, Any]:
+        player_id = str(payload.get("player_id") or "")
+        if not player_id:
+            return payload
+        latest_value = payload.get("latest_value_credits")
+        if latest_value is None:
+            summary = self.session.get(PlayerSummaryReadModel, player_id)
+            if summary is not None and summary.current_value_credits is not None:
+                latest_value = float(summary.current_value_credits)
+                payload["latest_value_credits"] = latest_value
+        signal = None if price_engine_cache is None else price_engine_cache.get(player_id)
+        if signal is None:
+            signal = self._build_price_engine_map(
+                [player_id],
+                latest_value_overrides={player_id: latest_value},
+            ).get(player_id)
+        if signal is not None:
+            payload.update(signal.as_payload())
+        return payload
 
     def _latest_recent_cancelled_sale_listing(
         self,
@@ -1115,7 +1575,12 @@ class PlayerCardMarketplaceService:
             .where(*filters)
         )
 
-    def _search_listing_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _search_listing_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        price_engine_cache: dict[str, PlayerPriceEngineSignal] | None = None,
+    ) -> dict[str, Any]:
         requested_filters = payload.pop("requested_filters_json", None)
         summary_payload = payload.pop("player_summary_json", None)
         if requested_filters in {None, "", "null"}:
@@ -1147,7 +1612,10 @@ class PlayerCardMarketplaceService:
                 avatar_dna_seed=summary_payload.get("avatar_dna_seed"),
             )
         ).model_dump()
-        return payload
+        return self._enrich_listing_payload_with_price_engine(
+            payload,
+            price_engine_cache=price_engine_cache,
+        )
 
     def search_marketplace(
         self,
@@ -1262,15 +1730,27 @@ class PlayerCardMarketplaceService:
             statement = statement.order_by(null_rating.asc(), listings_subquery.c.average_rating.desc(), listings_subquery.c.created_at.desc())
 
         rows = self.session.execute(statement.offset(offset).limit(limit)).mappings().all()
+        latest_value_overrides = {
+            str(row["player_id"]): row.get("latest_value_credits")
+            for row in rows
+            if row.get("player_id") is not None
+        }
+        price_engine_cache = self._build_price_engine_map(
+            [str(row["player_id"]) for row in rows if row.get("player_id") is not None],
+            latest_value_overrides=latest_value_overrides,
+        )
         return {
             "total": total,
             "limit": limit,
             "offset": offset,
-            "items": [self._search_listing_payload(dict(row)) for row in rows],
+            "items": [
+                self._search_listing_payload(dict(row), price_engine_cache=price_engine_cache)
+                for row in rows
+            ],
         }
 
     def _sale_listing_payload(self, listing: PlayerCardListing, context: dict[str, Any]) -> dict[str, Any]:
-        return {
+        payload = {
             "listing_id": listing.listing_id,
             "listing_type": "sale",
             "player_card_id": context["card"].id,
@@ -1294,10 +1774,12 @@ class PlayerCardMarketplaceService:
             "quantity": listing.quantity,
             "available_quantity": listing.quantity if listing.status == "open" else 0,
             "sale_price_credits": self._normalize_amount(listing.price_per_card_credits),
+            "latest_value_credits": float(self._base_value_credits(context)),
             "created_at": listing.created_at,
             "expires_at": listing.expires_at,
             "requested_filters_json": {},
         }
+        return self._enrich_listing_payload_with_price_engine(payload)
 
     def _sale_execution_payload(self, sale: PlayerCardSale) -> dict[str, Any]:
         return {
@@ -1380,6 +1862,8 @@ class PlayerCardMarketplaceService:
             },
         )
         self.session.flush()
+        self._record_market_snapshot(context["player"].id)
+        self.session.flush()
         return self._sale_listing_payload(listing, context)
 
     def cancel_sale_listing(self, *, actor: User, listing_id: str) -> dict[str, Any]:
@@ -1388,6 +1872,7 @@ class PlayerCardMarketplaceService:
             raise PlayerCardPermissionError("Only the listing owner can cancel this sale listing.")
         if listing.status != "open":
             raise PlayerCardValidationError("Only open sale listings can be cancelled.")
+        context = self._get_card_context(listing.player_card_id)
         holding = self._get_holding(actor.id, listing.player_card_id)
         holding.quantity_reserved = max(holding.quantity_reserved - listing.quantity, 0)
         previous_status = listing.status
@@ -1402,7 +1887,9 @@ class PlayerCardMarketplaceService:
             status_to=listing.status,
         )
         self.session.flush()
-        return self._sale_listing_payload(listing, self._get_card_context(listing.player_card_id))
+        self._record_market_snapshot(context["player"].id)
+        self.session.flush()
+        return self._sale_listing_payload(listing, context)
 
     def buy_sale_listing(self, *, actor: User, listing_id: str, quantity: int | None = None) -> dict[str, Any]:
         self._ensure_market_actor(actor)
@@ -1416,6 +1903,7 @@ class PlayerCardMarketplaceService:
         if quantity <= 0 or quantity > listing.quantity:
             raise PlayerCardValidationError("Purchase quantity is invalid.")
 
+        context = self._get_card_context(listing.player_card_id)
         seller = self._get_user(listing.seller_user_id)
         gross = self._normalize_amount(Decimal(listing.price_per_card_credits) * Decimal(quantity))
         fee = self._normalize_amount(gross * Decimal(NORMAL_LOAN_PLATFORM_FEE_BPS) / Decimal(10_000))
@@ -1492,7 +1980,9 @@ class PlayerCardMarketplaceService:
             payload={"sale_id": sale.sale_id, "gross_credits": str(gross), "fee_credits": str(fee), "seller_net_credits": str(seller_net)},
         )
         self.session.flush()
-        sale.integrity_flags_json = self._run_sale_integrity_checks(self._get_card_context(listing.player_card_id), sale)
+        sale.integrity_flags_json = self._run_sale_integrity_checks(context, sale)
+        self._record_market_snapshot(context["player"].id)
+        self._update_momentum(context["player"].id)
         self.session.flush()
         return self._sale_execution_payload(sale)
 

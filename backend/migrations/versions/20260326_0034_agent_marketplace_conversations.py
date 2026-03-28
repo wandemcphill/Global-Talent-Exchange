@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("player_id", sa.String(length=36), nullable=False),
         sa.Column("agent_user_id", sa.String(length=36), nullable=False),
-        sa.Column("is_available", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_available", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("asking_type", asking_type_enum, nullable=False, server_default="transfer"),
         sa.Column("note", sa.Text(), nullable=True),
         sa.ForeignKeyConstraint(["agent_user_id"], ["users.id"], ondelete="CASCADE"),

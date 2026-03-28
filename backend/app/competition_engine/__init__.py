@@ -4,6 +4,7 @@ from .calendar_service import CalendarConflictError, CalendarService
 from .match_dispatcher import MatchDispatchContext, MatchDispatcher, scale_strength_rating
 from .queue_contracts import (
     BracketAdvancementJob,
+    DurableQueuePublisher,
     InMemoryQueuePublisher,
     MatchSimulationJob,
     NotificationJob,
@@ -18,6 +19,7 @@ __all__ = [
     "CalendarService",
     "CompetitionScheduler",
     "CompetitionWindowResolver",
+    "DurableQueuePublisher",
     "InMemoryQueuePublisher",
     "MatchDispatchContext",
     "MatchDispatcher",

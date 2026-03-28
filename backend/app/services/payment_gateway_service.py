@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_PAYMENT_RAILS
 from app.core.config import Settings
+from app.models.treasury import PaymentMode
 from app.models.wallet import LedgerUnit
 from app.treasury.service import TreasuryService
 from app.wallets.rail_service import PurchaseOrderQuote, WalletRailService
@@ -38,23 +39,37 @@ class PaymentGatewayService:
 
     def list_methods(self) -> list[PaymentMethod]:
         rails = self._load_payment_rails()
-        live_deposit = any(bool(rail.get("is_live")) and bool(rail.get("deposits_enabled")) for rail in rails)
+        treasury_settings = TreasuryService().ensure_settings(self.session)
+        automatic_deposits_enabled = treasury_settings.deposit_mode in {PaymentMode.AUTOMATIC, PaymentMode.HYBRID}
+        manual_deposits_enabled = treasury_settings.deposit_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+        live_deposit = automatic_deposits_enabled and any(
+            bool(rail.get("is_live")) and bool(rail.get("deposits_enabled")) and str(rail.get("provider")) != "bank_transfer_manual"
+            for rail in rails
+        )
         methods: list[PaymentMethod] = []
 
         for rail in rails:
             provider_key = str(rail.get("provider") or "")
             if not provider_key:
                 continue
+            if provider_key == "bank_transfer_manual":
+                deposits_enabled = manual_deposits_enabled and bool(rail.get("deposits_enabled"))
+                is_live = manual_deposits_enabled and bool(rail.get("is_live"))
+                method_group = "manual_bank_transfer"
+            else:
+                deposits_enabled = automatic_deposits_enabled and bool(rail.get("deposits_enabled"))
+                is_live = automatic_deposits_enabled and bool(rail.get("is_live"))
+                method_group = "regional_processor"
             methods.append(
                 PaymentMethod(
                     method_key=provider_key,
                     display_name=self._display_name(provider_key),
                     provider_key=provider_key,
-                    method_group="regional_processor",
+                    method_group=method_group,
                     unit=LedgerUnit.COIN,
-                    deposits_enabled=bool(rail.get("deposits_enabled")),
+                    deposits_enabled=deposits_enabled,
                     withdrawals_enabled=bool(rail.get("withdrawals_enabled")),
-                    is_live=bool(rail.get("is_live")),
+                    is_live=is_live,
                     maintenance_message=rail.get("maintenance_message"),
                 )
             )
@@ -128,6 +143,8 @@ class PaymentGatewayService:
         provider_key = provider_key or self._resolve_provider(method_key)
         if unit is None:
             unit = LedgerUnit.CREDIT if method_key == "crypto_deposit" else LedgerUnit.COIN
+        if provider_key == "bank_transfer_manual":
+            raise PaymentGatewayError("Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders.")
         self._assert_provider_enabled(provider_key)
         settings = TreasuryService().ensure_settings(self.session)
         rail_service = WalletRailService(self.session)
@@ -160,6 +177,8 @@ class PaymentGatewayService:
         provider_key = provider_key or self._resolve_provider(method_key)
         if unit is None:
             unit = LedgerUnit.CREDIT if method_key == "crypto_deposit" else LedgerUnit.COIN
+        if provider_key == "bank_transfer_manual":
+            raise PaymentGatewayError("Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders.")
         self._assert_provider_enabled(provider_key)
         settings = TreasuryService().ensure_settings(self.session)
         rail_service = WalletRailService(self.session)
@@ -204,6 +223,8 @@ class PaymentGatewayService:
             return method_key
         rails = self._load_payment_rails()
         for rail in rails:
+            if str(rail.get("provider")) == "bank_transfer_manual":
+                continue
             if rail.get("deposits_enabled") and rail.get("is_live"):
                 return str(rail.get("provider"))
         raise PaymentGatewayError("No active payment provider is configured.")
@@ -215,6 +236,8 @@ class PaymentGatewayService:
             if not self.settings.crypto_deposit_enabled:
                 raise PaymentGatewayError("Crypto deposit rail is disabled.")
             return
+        if provider_key == "bank_transfer_manual":
+            raise PaymentGatewayError("Manual bank transfer must be handled through the treasury deposit flow.")
         rails = self._load_payment_rails()
         for rail in rails:
             if str(rail.get("provider")) == provider_key:
@@ -225,6 +248,8 @@ class PaymentGatewayService:
 
     @staticmethod
     def _display_name(provider_key: str) -> str:
+        if provider_key == "bank_transfer_manual":
+            return "Bank Transfer"
         label = provider_key.replace("_", " ").title()
         return label
 

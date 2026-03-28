@@ -8,6 +8,7 @@ from app.risk.service import (
     RiskValidationError,
     TradeSide,
 )
+from app.risk.fraud_service import FraudDetectionService
 
 __all__ = [
     "DuplicateSettlementError",
@@ -16,6 +17,7 @@ __all__ = [
     "InvalidPriceError",
     "NonPositiveQuantityError",
     "RiskControlService",
+    "FraudDetectionService",
     "RiskValidationError",
     "TradeSide",
 ]

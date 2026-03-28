@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -21,3 +24,31 @@ class PlayerAvatarView(BaseModel):
     accessory_type: int = Field(ge=0, le=3)
     jersey_style: int = Field(ge=0, le=3)
     accent_tone: int = Field(ge=0, le=5)
+
+
+class PlayerFaceView(BaseModel):
+    player_id: str = Field(min_length=1)
+    avatar_seed: str = Field(min_length=8)
+    facial_features: dict[str, Any] = Field(default_factory=dict)
+    hairstyle: str | None = None
+    skin_tone: str | None = None
+    accessories: list[str] = Field(default_factory=list)
+    generated_at: datetime
+    nationality: str | None = None
+    region_preset: str | None = None
+    age_stage: str = Field(min_length=3)
+    rarity: str = Field(default="standard", min_length=3)
+    visual_effects: list[str] = Field(default_factory=list)
+
+
+class PlayerAvatarRenderView(BaseModel):
+    player_id: str = Field(min_length=1)
+    render_format: Literal["json", "svg", "static", "model"] = "json"
+    face: PlayerFaceView
+    legacy_avatar: PlayerAvatarView
+    layered_svg: str | None = None
+    static_image_data_uri: str | None = None
+    model_manifest: dict[str, Any] | None = None
+    capabilities: list[str] = Field(
+        default_factory=lambda: ["static_image", "layered_svg", "future_3d_model"]
+    )

@@ -100,6 +100,7 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "manager_duels" in app.state.domain_modules
         assert "manager_marketplace" in app.state.domain_modules
         assert "simulation_matchmaking" in app.state.domain_modules
+        assert "ultimate_league" in app.state.domain_modules
         assert "competitive_integrity" in app.state.domain_modules
         assert "canonical_clubs" in app.state.domain_modules
         assert "player_lifecycle" in app.state.domain_modules
@@ -108,9 +109,12 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
         assert "replay_archive" in app.state.domain_modules
         assert "notifications" in app.state.domain_modules
         assert "regen_universe" in app.state.domain_modules
+        assert "football_universe" in app.state.domain_modules
+        assert "broadcast_rights" in app.state.domain_modules
         assert "creators" in app.state.domain_modules
         assert "referrals" in app.state.domain_modules
         assert "admin_referrals" in app.state.domain_modules
+        assert "ownership_groups" in app.state.domain_modules
 
         health_response = client.get("/health")
         ready_response = client.get("/ready")
@@ -218,6 +222,22 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/simulation-matchmaking/quick-tournament" in paths
     assert "/simulation-matchmaking/hosted-competitions/preview" in paths
     assert "/api/simulation-matchmaking/hosted-competitions/preview" in paths
+    assert "/ultimate-league/tiers" in paths
+    assert "/api/ultimate-league/tiers" in paths
+    assert "/ultimate-league/competitors/{competitor_id}" in paths
+    assert "/api/ultimate-league/competitors/{competitor_id}" in paths
+    assert "/ultimate-league/standings/{tier}" in paths
+    assert "/api/ultimate-league/standings/{tier}" in paths
+    assert "/ultimate-league/matchmaking/batch" in paths
+    assert "/api/ultimate-league/matchmaking/batch" in paths
+    assert "/ultimate-league/matches/result" in paths
+    assert "/api/ultimate-league/matches/result" in paths
+    assert "/ultimate-league/tournaments" in paths
+    assert "/api/ultimate-league/tournaments" in paths
+    assert "/ultimate-league/tournaments/{tournament_id}" in paths
+    assert "/api/ultimate-league/tournaments/{tournament_id}" in paths
+    assert "/ultimate-league/tournaments/{tournament_id}/payouts/preview" in paths
+    assert "/api/ultimate-league/tournaments/{tournament_id}/payouts/preview" in paths
     assert "/competitive-integrity/managers" in paths
     assert "/api/competitive-integrity/managers" in paths
     assert "/competitive-integrity/matches" in paths
@@ -226,6 +246,40 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/api/competitive-integrity/fast-game/runs" in paths
     assert "/competitive-integrity/notifications/events" in paths
     assert "/api/competitive-integrity/notifications/events" in paths
+    assert "/broadcast/{match_id}" in paths
+    assert "/api/broadcast/{match_id}" in paths
+    assert "/broadcast-rights/competitions/{competition_id}" in paths
+    assert "/api/broadcast-rights/competitions/{competition_id}" in paths
+    assert "/broadcast-rights/competitions/{competition_id}/acquire" in paths
+    assert "/api/broadcast-rights/competitions/{competition_id}/acquire" in paths
+    assert "/broadcast-rights/competitions/{competition_id}/auctions" in paths
+    assert "/api/broadcast-rights/competitions/{competition_id}/auctions" in paths
+    assert "/broadcast-rights/auctions/{auction_id}/bids" in paths
+    assert "/api/broadcast-rights/auctions/{auction_id}/bids" in paths
+    assert "/broadcast-rights/matches/{match_id}/access" in paths
+    assert "/api/broadcast-rights/matches/{match_id}/access" in paths
+    assert "/broadcast-rights/matches/{match_id}/distribute" in paths
+    assert "/api/broadcast-rights/matches/{match_id}/distribute" in paths
+    assert "/admin/broadcast-rights/jobs/run" in paths
+    assert "/fans/{club_id}" in paths
+    assert "/api/fans/{club_id}" in paths
+    assert "/club/identity" in paths
+    assert "/api/club/identity" in paths
+    assert "/media" in paths
+    assert "/api/media" in paths
+    assert "/ownership-groups" in paths
+    assert "/api/ownership-groups" in paths
+    assert "/ownership-groups/{group_id}" in paths
+    assert "/api/ownership-groups/{group_id}" in paths
+    assert "/ownership-groups/{group_id}/clubs" in paths
+    assert "/api/ownership-groups/{group_id}/clubs" in paths
+    assert "/ownership-groups/{group_id}/budget/allocate" in paths
+    assert "/api/ownership-groups/{group_id}/budget/allocate" in paths
+    assert "/ownership-groups/{group_id}/budget/transfer" in paths
+    assert "/api/ownership-groups/{group_id}/budget/transfer" in paths
+    assert "/ownership-groups/transfers/validate" in paths
+    assert "/api/ownership-groups/transfers/validate" in paths
+    assert "/admin/ownership-groups/reputation-cycle" in paths
     assert "/api/clubs/{club_id}/reputation" in paths
     assert "/api/clubs/{club_id}/reputation/history" in paths
     assert "/api/clubs/{club_id}/prestige" in paths
@@ -256,6 +310,12 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert "/notifications" in paths
     assert "/api/notifications/me" in paths
     assert "/api/notifications" in paths
+    assert "/admin/ops/fan-updates" in paths
+    assert "/admin/ops/media-generation" in paths
+    assert "/admin/ops/identity-evolution" in paths
+    assert "/admin/ops/broadcast-revenue" in paths
+    assert "/admin/ops/broadcast-expiration" in paths
+    assert "/admin/ops/ownership-groups/reputation" in paths
     assert "/api/admin/competitive-integrity/workers/run-once" in paths
     assert "/replays/public/featured" in paths
     assert "/api/replays/public/featured" in paths

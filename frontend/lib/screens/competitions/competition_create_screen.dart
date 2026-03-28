@@ -6,6 +6,7 @@ import 'package:gte_frontend/screens/competitions/competition_rule_builder_scree
 import 'package:gte_frontend/widgets/competitions/competition_financial_breakdown_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_payout_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_type_picker.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
@@ -53,9 +54,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create competition'),
-      ),
+      appBar: AppBar(title: const Text('Create competition')),
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
@@ -79,7 +78,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose a skill league or skill cup, set clear entry fees, publish rules, and preview the transparent payout before sharing.',
+                      'Choose a skill league or skill cup, set GTex entry stakes, publish rules, and preview the transparent payout before sharing.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -121,25 +120,29 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                           label: 'Public',
                           selected:
                               draft.visibility == CompetitionVisibility.public,
-                          onTap: () => widget.controller.updateDraftVisibility(
-                            CompetitionVisibility.public,
-                          ),
+                          onTap:
+                              () => widget.controller.updateDraftVisibility(
+                                CompetitionVisibility.public,
+                              ),
                         ),
                         _VisibilityChip(
                           label: 'Private',
                           selected:
                               draft.visibility == CompetitionVisibility.private,
-                          onTap: () => widget.controller.updateDraftVisibility(
-                            CompetitionVisibility.private,
-                          ),
+                          onTap:
+                              () => widget.controller.updateDraftVisibility(
+                                CompetitionVisibility.private,
+                              ),
                         ),
                         _VisibilityChip(
                           label: 'Invite only',
-                          selected: draft.visibility ==
+                          selected:
+                              draft.visibility ==
                               CompetitionVisibility.inviteOnly,
-                          onTap: () => widget.controller.updateDraftVisibility(
-                            CompetitionVisibility.inviteOnly,
-                          ),
+                          onTap:
+                              () => widget.controller.updateDraftVisibility(
+                                CompetitionVisibility.inviteOnly,
+                              ),
                         ),
                       ],
                     ),
@@ -165,11 +168,16 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                       'Financial setup',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Competition stakes settle in GTex Coin. Fan Coin stays on the viewing and gifting lanes.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                     const SizedBox(height: 16),
                     _SliderField(
                       title: 'Entry fee',
                       subtitle:
-                          '${draft.entryFee.toStringAsFixed(draft.entryFee == draft.entryFee.roundToDouble() ? 0 : 2)} credits per player',
+                          '${gteFormatCompetitionAmount(draft.entryFee, draft.currency)} per player',
                       value: draft.entryFee,
                       min: 0,
                       max: 100,
@@ -232,13 +240,21 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                       items: const <DropdownMenuItem<int>>[
                         DropdownMenuItem<int>(value: 1, child: Text('1 place')),
                         DropdownMenuItem<int>(
-                            value: 2, child: Text('2 places')),
+                          value: 2,
+                          child: Text('2 places'),
+                        ),
                         DropdownMenuItem<int>(
-                            value: 3, child: Text('3 places')),
+                          value: 3,
+                          child: Text('3 places'),
+                        ),
                         DropdownMenuItem<int>(
-                            value: 4, child: Text('4 places')),
+                          value: 4,
+                          child: Text('4 places'),
+                        ),
                         DropdownMenuItem<int>(
-                            value: 5, child: Text('5 places')),
+                          value: 5,
+                          child: Text('5 places'),
+                        ),
                       ],
                       onChanged: (int? count) {
                         if (count == null) {
@@ -270,6 +286,7 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
                     widget.controller.previewFinancials.hostFeeAmount,
                 prizePool: widget.controller.previewFinancials.prizePool,
                 currency: draft.currency,
+                matchType: widget.controller.previewSummary.matchType,
                 projected: true,
                 lockNotice:
                     'After the first paid entry clears, fee settings and payout structure lock for participant safety.',
@@ -350,9 +367,10 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
         title: 'Creator access required to host',
         message:
             'This account is not approved to host creator competitions yet, so the live publish form stays locked.',
-        actionLabel: widget.onOpenCreatorAccessRequest == null
-            ? null
-            : 'Request creator access',
+        actionLabel:
+            widget.onOpenCreatorAccessRequest == null
+                ? null
+                : 'Request creator access',
         onAction: widget.onOpenCreatorAccessRequest,
         icon: Icons.lock_outline,
       ),
@@ -366,9 +384,9 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
   Future<void> _openRuleBuilder() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionRuleBuilderScreen(
-          controller: widget.controller,
-        ),
+        builder:
+            (BuildContext context) =>
+                CompetitionRuleBuilderScreen(controller: widget.controller),
       ),
     );
   }
@@ -376,9 +394,9 @@ class _CompetitionCreateScreenState extends State<CompetitionCreateScreen> {
   Future<void> _openPreview() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionPublishPreviewScreen(
-          controller: widget.controller,
-        ),
+        builder:
+            (BuildContext context) =>
+                CompetitionPublishPreviewScreen(controller: widget.controller),
       ),
     );
   }

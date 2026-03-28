@@ -36,6 +36,26 @@ class PlayerCardMarketplaceListingView(BaseModel):
     sale_price_credits: Decimal | None = None
     loan_fee_credits: Decimal | None = None
     loan_duration_days: int | None = None
+    base_value_credits: Decimal | None = None
+    anchor_price_credits: Decimal | None = None
+    market_price_credits: Decimal | None = None
+    price_change_credits: Decimal | None = None
+    price_change_percent: float = 0.0
+    price_direction: str = "flat"
+    performance_score: float = 0.0
+    demand_pressure: float = 0.0
+    scarcity_factor: float = 0.0
+    hype_factor: float = 0.0
+    buy_volume: int = 0
+    sell_volume: int = 0
+    available_shares: int = 0
+    trend_score: float = 0.0
+    market_buzz_score: float = 0.0
+    is_trending: bool = False
+    trending_badge: str | None = None
+    liquidity_signal: str | None = None
+    low_liquidity_warning: bool = False
+    change_capped: bool = False
     requested_player_card_id: str | None = None
     requested_player_id: str | None = None
     requested_filters_json: dict[str, Any] = Field(default_factory=dict)

@@ -5,10 +5,15 @@ from typing import Any
 
 from sqlalchemy.orm import sessionmaker
 
+from app.broadcast_rights.service import BroadcastRightsService
 from app.core.config import Settings
+from app.club_sale_market.service import ClubSaleMarketService
 from app.club_finance.service import ClubFinanceService
+from app.football_universe.service import FootballUniverseService
 from app.live_ops.service import LiveOpsService
 from app.market.service import MarketEngine
+from app.national_team_engine.tournament_service import NationalTeamTournamentService
+from app.ownership_groups.service import OwnershipGroupService
 from app.services.regen_ecosystem_service import RegenEcosystemService
 from app.services.storage_media_service import MediaStorageService
 from app.storage import LocalObjectStorage
@@ -50,6 +55,24 @@ class OpsJobRunner:
             session.commit()
         return results
 
+    def run_broadcast_revenue_cycle(self) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = BroadcastRightsService(session).run_revenue_distribution_cycle()
+            session.commit()
+        return results
+
+    def run_broadcast_expiration_cycle(self) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = BroadcastRightsService(session).expire_rights_and_relist()
+            session.commit()
+        return results
+
+    def run_ownership_group_reputation_cycle(self) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = OwnershipGroupService(session).run_reputation_cycle()
+            session.commit()
+        return results
+
     def run_live_ops_cycle(self) -> dict[str, Any]:
         with self.session_factory() as session:
             results = LiveOpsService(session).run_live_event_cycle()
@@ -77,6 +100,48 @@ class OpsJobRunner:
     def run_regen_career_events(self) -> dict[str, Any]:
         with self.session_factory() as session:
             results = RegenEcosystemService(session, settings=self.settings).run_career_event_jobs()
+            session.commit()
+        return results
+
+    def run_fan_update_cycle(self) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = FootballUniverseService(session).run_fan_update_cycle()
+            session.commit()
+        return results
+
+    def run_media_generation_cycle(self) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = FootballUniverseService(session).run_media_generation_cycle()
+            session.commit()
+        return results
+
+    def run_identity_evolution_cycle(self) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = FootballUniverseService(session).run_identity_evolution_cycle()
+            session.commit()
+        return results
+
+    def run_club_market_valuation_refresh(self, *, limit: int = 250) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = ClubSaleMarketService(session).refresh_market_valuations(limit=limit)
+            session.commit()
+        return results
+
+    def run_national_team_rental_cleanup(self, *, competition_id: str | None = None) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = NationalTeamTournamentService(session).cleanup_expired_rentals(competition_id=competition_id)
+            session.commit()
+        return results
+
+    def run_tournament_storyline_generation(self, *, competition_id: str | None = None) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = NationalTeamTournamentService(session).generate_story_events(competition_id=competition_id)
+            session.commit()
+        return results
+
+    def run_stadium_ad_rotation(self, *, competition_id: str | None = None) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = NationalTeamTournamentService(session).rotate_ads(competition_id=competition_id)
             session.commit()
         return results
 

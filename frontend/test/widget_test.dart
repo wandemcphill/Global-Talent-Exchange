@@ -7,7 +7,7 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
-  testWidgets('app smoke test renders market shell', (WidgetTester tester) async {
+  testWidgets('app smoke test renders new GTEX shell', (WidgetTester tester) async {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
@@ -21,9 +21,16 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Global Talent Exchange'), findsOneWidget);
-    expect(find.text('Market players'), findsOneWidget);
+    expect(find.text('Command Center'), findsOneWidget);
+
+    await tester.tap(find.text('Market'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Transfer Market'), findsOneWidget);
+    expect(find.text('Search players, positions, countries'), findsOneWidget);
   });
 }

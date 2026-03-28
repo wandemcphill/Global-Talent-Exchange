@@ -133,24 +133,70 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         assert spectate_payload["user_id"] == spectator_user.id
         assert spectate_payload["read_only"] is True
         assert spectate_payload["channel"] == f"match:{duel_id}"
+        assert spectate_payload["sync_strategy"] == "deterministic_playback"
+        assert spectate_payload["watch_party_enabled"] is True
+        assert spectate_payload["reactions_enabled"] is True
+        assert spectate_payload["commentary_websocket_path"].endswith(f"/api/matches/{duel_id}/commentary/stream?session_id={spectate_payload['id']}")
 
         websocket_path = spectate_payload["websocket_path"]
         with client.websocket_connect(websocket_path) as websocket:
             first_message = websocket.receive_json()
             assert first_message["channel"] == f"match:{duel_id}"
             assert first_message["kind"] == "snapshot"
+            assert {"home", "draw", "away"} <= set(
+                first_message["payload"]["win_probability"].keys()
+            )
+            assert {"home_line", "draw_line", "away_line", "volatility", "tension"} <= set(
+                first_message["payload"]["market_pulse"].keys()
+            )
             saw_event_batch = False
             for _ in range(20):
                 message = websocket.receive_json()
                 if message["kind"] == "events":
                     assert isinstance(message["payload"], list)
+                    assert message["payload"][0]["experience"]["motion"]["model_key"] == "gtex_motion_blend_v1"
+                    assert message["payload"][0]["experience"]["commentary"]["tts_ready"] is True
+                    assert message["payload"][0]["experience"]["crowd"]["profile"]
+                    assert message["payload"][0]["experience"]["spectator_sync"]["sync_strategy"] == "deterministic_playback"
                     saw_event_batch = True
                     break
             assert saw_event_batch is True
 
+        with client.websocket_connect(spectate_payload["commentary_websocket_path"]) as commentary_socket:
+            first_commentary = commentary_socket.receive_json()
+            assert first_commentary["kind"] == "commentary_snapshot"
+            saw_commentary = False
+            for _ in range(20):
+                message = commentary_socket.receive_json()
+                if message["kind"] == "commentary":
+                    assert isinstance(message["payload"], list)
+                    assert message["payload"][0]["line"]
+                    assert message["payload"][0]["cue"]["tts_ready"] is True
+                    saw_commentary = True
+                    break
+            assert saw_commentary is True
+
         completed_payload = _wait_for_completion(client, duel_id)
         assert completed_payload["status"] == "completed"
         assert completed_payload["live_state"]["is_live"] is False
+        assert completed_payload["live_state"]["crowd_state"]["profile"]
+        assert completed_payload["live_state"]["spectator_sync"]["sync_strategy"] == "deterministic_playback"
+        assert {"home", "draw", "away"} <= set(
+            completed_payload["live_state"]["snapshot"]["win_probability"].keys()
+        )
+        assert completed_payload["live_state"]["snapshot"]["market_pulse"]["home_line"] > 0
+
+        commentary_response = client.get(
+            f"/api/matches/{duel_id}/commentary",
+            params={"tone": "hype", "voice_enabled": True},
+        )
+        assert commentary_response.status_code == 200, commentary_response.text
+        commentary_payload = commentary_response.json()
+        assert commentary_payload["match_id"] == duel_id
+        assert commentary_payload["tone"] == "hype"
+        assert commentary_payload["voice_enabled"] is True
+        assert commentary_payload["events"]
+        assert commentary_payload["events"][0]["voice"]["status"] == "not_configured"
 
         highlights_response = client.get(f"/api/matches/{duel_id}/highlights")
         assert highlights_response.status_code == 200, highlights_response.text
@@ -167,6 +213,7 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         notifications_response = client.get("/api/notifications/me", headers=home_headers)
         assert notifications_response.status_code == 200, notifications_response.text
         template_keys = {item["template_key"] for item in notifications_response.json()}
+        assert "COMMENTARY_HIGHLIGHT" in template_keys
         assert "LIVE_MATCH_STARTED" in template_keys
         assert "HIGHLIGHTS_READY" in template_keys
     engine.dispose()

@@ -6,7 +6,16 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.wallet import LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentProvider, PaymentStatus, PayoutStatus
+from app.models.wallet import (
+    LedgerAccountKind,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransactionType,
+    LedgerUnit,
+    PaymentProvider,
+    PaymentStatus,
+    PayoutStatus,
+)
 
 
 class WalletAccountBalance(BaseModel):
@@ -299,6 +308,35 @@ class PaymentEventView(BaseModel):
     ledger_transaction_id: str | None
 
 
+class WalletConversionQuoteRequest(BaseModel):
+    amount: Decimal
+    source_unit: LedgerUnit
+
+    @field_validator("amount")
+    @classmethod
+    def validate_conversion_amount(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("Conversion amount must be positive.")
+        return value
+
+
+class WalletConversionRequest(WalletConversionQuoteRequest):
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class WalletConversionQuoteView(BaseModel):
+    source_unit: LedgerUnit
+    source_amount: Decimal
+    target_unit: LedgerUnit
+    target_amount: Decimal
+    rate: Decimal
+
+
+class WalletConversionView(WalletConversionQuoteView):
+    transaction_id: str
+    reference: str
+
+
 class WalletSummaryView(BaseModel):
     model_config = ConfigDict(
         title="WalletSummaryView",
@@ -330,6 +368,7 @@ class WalletLedgerEntryView(BaseModel):
                 "amount": "-50.0000",
                 "unit": "credit",
                 "reason": "withdrawal_hold",
+                "transaction_type": "withdrawal",
                 "source_tag": "market_topup",
                 "reference": "ord-123",
                 "external_reference": None,
@@ -345,6 +384,7 @@ class WalletLedgerEntryView(BaseModel):
     amount: Decimal
     unit: LedgerUnit
     reason: LedgerEntryReason
+    transaction_type: LedgerTransactionType
     source_tag: LedgerSourceTag
     reference: str | None
     external_reference: str | None

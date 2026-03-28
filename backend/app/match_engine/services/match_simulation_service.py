@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.football_universe.service import FootballUniverseBuilder
 from app.match_engine.commentary.timeline import MatchCommentaryTimelineGenerator
 from app.match_engine.schemas import (
     MatchBadgeVisualView,
@@ -24,8 +25,10 @@ from app.match_engine.services.experience_layers import (
     MatchControlLogBuilder,
     MatchHalftimeAnalyticsBuilder,
     MatchHighlightBuilder,
+    MatchPostMatchAnalyticsBuilder,
     MatchPresentationBuilder,
     MatchReplayContractBuilder,
+    MatchRenderSyncBuilder,
     HighlightBundle,
 )
 from app.match_engine.services.player_rating_engine import PositionAwarePlayerRatingEngine
@@ -44,8 +47,11 @@ class MatchSimulationService:
         halftime_builder: MatchHalftimeAnalyticsBuilder | None = None,
         presentation_builder: MatchPresentationBuilder | None = None,
         replay_contract_builder: MatchReplayContractBuilder | None = None,
+        render_sync_builder: MatchRenderSyncBuilder | None = None,
+        post_match_analytics_builder: MatchPostMatchAnalyticsBuilder | None = None,
         control_log_builder: MatchControlLogBuilder | None = None,
         rating_engine: PositionAwarePlayerRatingEngine | None = None,
+        football_universe_builder: FootballUniverseBuilder | None = None,
     ) -> None:
         self.event_generator = event_generator or MatchEventGenerator()
         self.commentary_generator = commentary_generator or MatchCommentaryTimelineGenerator()
@@ -55,7 +61,10 @@ class MatchSimulationService:
         self.halftime_builder = halftime_builder or MatchHalftimeAnalyticsBuilder(rating_engine=self.rating_engine)
         self.presentation_builder = presentation_builder or MatchPresentationBuilder()
         self.replay_contract_builder = replay_contract_builder or MatchReplayContractBuilder()
+        self.render_sync_builder = render_sync_builder or MatchRenderSyncBuilder()
+        self.post_match_analytics_builder = post_match_analytics_builder or MatchPostMatchAnalyticsBuilder()
         self.control_log_builder = control_log_builder or MatchControlLogBuilder()
+        self.football_universe_builder = football_universe_builder or FootballUniverseBuilder()
 
     def build_replay_payload(self, request: MatchSimulationRequest) -> MatchReplayPayloadView:
         result = self.event_generator.simulate(request)
@@ -79,6 +88,118 @@ class MatchSimulationService:
             highlight_bundle=highlight_bundle,
         )
         replay_log = self.replay_builder.build(result)
+        universe_bundle = self.football_universe_builder.build(request=request, replay_payload=MatchReplayPayloadView(
+            match_id=result.match_id,
+            seed=result.seed,
+            win_probability_home=summary.win_probability_home,
+            win_probability_draw=summary.win_probability_draw,
+            win_probability_away=summary.win_probability_away,
+            expected_goals_home=summary.expected_goals_home,
+            expected_goals_away=summary.expected_goals_away,
+            key_highlights=summary.key_highlights,
+            highlight_package=summary.highlight_package,
+            highlight_profile=summary.highlight_profile,
+            highlight_runtime_seconds=summary.highlight_runtime_seconds,
+            highlight_access=summary.highlight_access,
+            key_moments=highlight_bundle.key_moments,
+            atmosphere_profile=summary.atmosphere_profile,
+            atmosphere_summary=summary.atmosphere_summary,
+            home_crowd_intensity=summary.home_crowd_intensity,
+            away_crowd_intensity=summary.away_crowd_intensity,
+            manager_influence_notes=summary.manager_influence_notes,
+            injury_report=summary.injury_report,
+            halftime_analytics=halftime_analytics,
+            spectator_package=spectator_package,
+            scene_assembly=scene_contract,
+            broadcast_presentation=broadcast_presentation,
+            replay_download=replay_download,
+            sync_contract=sync_contract,
+            tactical_change_log=tactical_log,
+            substitution_log=substitution_log,
+            critical_snapshots=critical_snapshots,
+            visual_identity=self._build_visual_identity(result),
+            status=result.status,
+            summary=summary,
+            timeline=timeline,
+            replay_log=replay_log,
+        ))
+        visual_identity = self._build_visual_identity(result)
+        render_sync = self.render_sync_builder.build(
+            MatchReplayPayloadView(
+                match_id=result.match_id,
+                seed=result.seed,
+                win_probability_home=summary.win_probability_home,
+                win_probability_draw=summary.win_probability_draw,
+                win_probability_away=summary.win_probability_away,
+                expected_goals_home=summary.expected_goals_home,
+                expected_goals_away=summary.expected_goals_away,
+                key_highlights=summary.key_highlights,
+                highlight_package=summary.highlight_package,
+                highlight_profile=summary.highlight_profile,
+                highlight_runtime_seconds=summary.highlight_runtime_seconds,
+                highlight_access=summary.highlight_access,
+                key_moments=highlight_bundle.key_moments,
+                manager_influence_notes=summary.manager_influence_notes,
+                injury_report=summary.injury_report,
+                halftime_analytics=halftime_analytics,
+                spectator_package=spectator_package,
+                scene_assembly=scene_contract,
+                broadcast_presentation=broadcast_presentation,
+                replay_download=replay_download,
+                sync_contract=sync_contract,
+                tactical_change_log=tactical_log,
+                substitution_log=substitution_log,
+                critical_snapshots=critical_snapshots,
+                visual_identity=visual_identity,
+                broadcast_session=universe_bundle.broadcast_session,
+                fan_reactions=universe_bundle.fan_reactions,
+                club_identities=universe_bundle.club_identities,
+                media_events=universe_bundle.media_events,
+                notifications=universe_bundle.notifications,
+                status=result.status,
+                summary=summary,
+                timeline=timeline,
+                replay_log=replay_log,
+            )
+        )
+        post_match_analytics = self.post_match_analytics_builder.build(
+            MatchReplayPayloadView(
+                match_id=result.match_id,
+                seed=result.seed,
+                win_probability_home=summary.win_probability_home,
+                win_probability_draw=summary.win_probability_draw,
+                win_probability_away=summary.win_probability_away,
+                expected_goals_home=summary.expected_goals_home,
+                expected_goals_away=summary.expected_goals_away,
+                key_highlights=summary.key_highlights,
+                highlight_package=summary.highlight_package,
+                highlight_profile=summary.highlight_profile,
+                highlight_runtime_seconds=summary.highlight_runtime_seconds,
+                highlight_access=summary.highlight_access,
+                key_moments=highlight_bundle.key_moments,
+                manager_influence_notes=summary.manager_influence_notes,
+                injury_report=summary.injury_report,
+                halftime_analytics=halftime_analytics,
+                spectator_package=spectator_package,
+                scene_assembly=scene_contract,
+                broadcast_presentation=broadcast_presentation,
+                replay_download=replay_download,
+                sync_contract=sync_contract,
+                tactical_change_log=tactical_log,
+                substitution_log=substitution_log,
+                critical_snapshots=critical_snapshots,
+                visual_identity=visual_identity,
+                broadcast_session=universe_bundle.broadcast_session,
+                fan_reactions=universe_bundle.fan_reactions,
+                club_identities=universe_bundle.club_identities,
+                media_events=universe_bundle.media_events,
+                notifications=universe_bundle.notifications,
+                status=result.status,
+                summary=summary,
+                timeline=timeline,
+                replay_log=replay_log,
+            )
+        )
         return MatchReplayPayloadView(
             match_id=result.match_id,
             seed=result.seed,
@@ -93,6 +214,10 @@ class MatchSimulationService:
             highlight_runtime_seconds=summary.highlight_runtime_seconds,
             highlight_access=summary.highlight_access,
             key_moments=highlight_bundle.key_moments,
+            atmosphere_profile=summary.atmosphere_profile,
+            atmosphere_summary=summary.atmosphere_summary,
+            home_crowd_intensity=summary.home_crowd_intensity,
+            away_crowd_intensity=summary.away_crowd_intensity,
             manager_influence_notes=summary.manager_influence_notes,
             injury_report=summary.injury_report,
             halftime_analytics=halftime_analytics,
@@ -101,10 +226,17 @@ class MatchSimulationService:
             broadcast_presentation=broadcast_presentation,
             replay_download=replay_download,
             sync_contract=sync_contract,
+            render_sync=render_sync,
             tactical_change_log=tactical_log,
             substitution_log=substitution_log,
             critical_snapshots=critical_snapshots,
-            visual_identity=self._build_visual_identity(result),
+            post_match_analytics=post_match_analytics,
+            visual_identity=visual_identity,
+            broadcast_session=universe_bundle.broadcast_session,
+            fan_reactions=universe_bundle.fan_reactions,
+            club_identities=universe_bundle.club_identities,
+            media_events=universe_bundle.media_events,
+            notifications=universe_bundle.notifications,
             status=result.status,
             summary=summary,
             timeline=timeline,
@@ -163,6 +295,10 @@ class MatchSimulationService:
             turning_points=list(result.turning_points),
             key_matchups=list(result.key_matchups),
             tactical_impact_notes=list(result.tactical_impact_notes),
+            atmosphere_profile=result.atmosphere_profile,
+            atmosphere_summary=result.atmosphere_summary,
+            home_crowd_intensity=round(result.home_crowd_intensity, 3),
+            away_crowd_intensity=round(result.away_crowd_intensity, 3),
             status=result.status,
             competition_type=result.competition_type,
             stage=result.stage,
@@ -306,21 +442,15 @@ class MatchSimulationService:
     def _expected_goals(self, result: SimulationResult) -> tuple[float, float]:
         home_xg = round(
             max(
-                0.35,
-                (result.home_stats.shots_on_target * 0.24)
-                + (result.home_strength.attack / 70.0)
-                + (result.home_strength.midfield / 210.0)
-                - (result.away_strength.defense / 240.0),
+                0.10,
+                sum(player.xg for player in result.player_stats if player.team_id == result.home_team_id),
             ),
             2,
         )
         away_xg = round(
             max(
-                0.30,
-                (result.away_stats.shots_on_target * 0.24)
-                + (result.away_strength.attack / 70.0)
-                + (result.away_strength.midfield / 210.0)
-                - (result.home_strength.defense / 240.0),
+                0.10,
+                sum(player.xg for player in result.player_stats if player.team_id == result.away_team_id),
             ),
             2,
         )

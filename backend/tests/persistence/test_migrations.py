@@ -54,6 +54,13 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("replay_archive_records")
     assert inspector.has_table("replay_archive_countdowns")
     assert inspector.has_table("match_events")
+    assert inspector.has_table("competition_queue_records")
+    assert inspector.has_table("player_faces")
+    assert inspector.has_table("commentary_events")
+    assert inspector.has_table("event_outbox")
+    assert inspector.has_table("projection_event_receipts")
+    assert inspector.has_table("competition_standing_projections")
+    assert inspector.has_table("player_stats_projections")
     assert inspector.has_table("manager_profiles")
     assert inspector.has_table("manager_contracts")
     assert inspector.has_table("fast_cup_records")
@@ -92,6 +99,21 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("club_sale_offers")
     assert inspector.has_table("club_sale_transfers")
     assert inspector.has_table("club_sale_audit_events")
+    assert inspector.has_table("real_data_providers")
+    assert inspector.has_table("real_world_competitions")
+    assert inspector.has_table("real_world_clubs")
+    assert inspector.has_table("real_players")
+    assert inspector.has_table("reality_mode_settings")
+    assert inspector.has_table("real_data_sync_jobs")
+    assert inspector.has_table("federations")
+    assert inspector.has_table("federation_leagues")
+    assert inspector.has_table("federation_memberships")
+    assert inspector.has_table("federation_proposals")
+    assert inspector.has_table("federation_votes")
+    assert inspector.has_table("federation_sanctions")
+    assert inspector.has_table("federation_treasury_entries")
+    assert inspector.has_table("federation_narrative_snapshots")
+    assert inspector.has_table("federation_rule_audits")
     assert inspector.has_table("creator_match_chat_rooms")
     assert inspector.has_table("creator_match_chat_messages")
     assert inspector.has_table("creator_match_tactical_advice")
@@ -140,7 +162,26 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("club_finance_profiles")
     assert inspector.has_table("club_finance_sponsors")
     assert inspector.has_table("club_finance_transactions")
+    assert inspector.has_table("broadcast_rights")
+    assert inspector.has_table("broadcast_rights_auctions")
+    assert inspector.has_table("broadcast_rights_bids")
+    assert inspector.has_table("broadcast_access_grants")
+    assert inspector.has_table("view_sessions")
+    assert inspector.has_table("broadcast_revenue_distributions")
+    assert inspector.has_table("ownership_groups")
+    assert inspector.has_table("ownership_group_clubs")
+    assert inspector.has_table("ownership_group_budget_movements")
+    assert inspector.has_table("ownership_group_events")
     assert inspector.has_table("player_relationships")
+    assert inspector.has_table("transfer_listings")
+    assert inspector.has_table("transfer_listing_bids")
+    assert inspector.has_table("player_decision_profiles")
+    assert inspector.has_table("coach_profiles")
+    assert inspector.has_table("coach_demands")
+    assert inspector.has_table("player_coach_relationships")
+    assert inspector.has_table("club_team_dynamics")
+    assert inspector.has_table("market_watchlist_entries")
+    assert inspector.has_table("transfer_negotiations")
     assert inspector.has_table("season_passes")
     assert inspector.has_table("season_pass_claims")
     assert inspector.has_table("season_pass_xp_grants")
@@ -451,12 +492,99 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
         "weekly_wages",
         "sponsorship_income",
         "match_income",
+        "broadcast_income",
         "transfer_profit",
         "expenses",
         "transfers_blocked",
         "forced_sale_required",
         "forced_sale_player_id",
     } <= finance_profile_columns
+
+    broadcast_right_columns = {column["name"] for column in inspector.get_columns("broadcast_rights")}
+    assert {
+        "competition_id",
+        "owner_id",
+        "acquisition_price",
+        "revenue_share_percentage",
+        "exclusivity",
+        "start_date",
+        "end_date",
+        "metadata_json",
+    } <= broadcast_right_columns
+
+    broadcast_auction_columns = {column["name"] for column in inspector.get_columns("broadcast_rights_auctions")}
+    assert {
+        "competition_id",
+        "seller_owner_id",
+        "reserve_price",
+        "revenue_share_percentage",
+        "exclusivity",
+        "start_date",
+        "end_date",
+        "starts_at",
+        "ends_at",
+        "status",
+        "winning_right_id",
+        "metadata_json",
+    } <= broadcast_auction_columns
+
+    view_session_columns = {column["name"] for column in inspector.get_columns("view_sessions")}
+    assert {
+        "user_id",
+        "match_id",
+        "competition_id",
+        "paid_amount",
+        "timestamp",
+        "metadata_json",
+    } <= view_session_columns
+
+    broadcast_distribution_columns = {
+        column["name"] for column in inspector.get_columns("broadcast_revenue_distributions")
+    }
+    assert {
+        "match_id",
+        "competition_id",
+        "broadcast_right_id",
+        "recipient_type",
+        "recipient_id",
+        "amount",
+        "reference_key",
+        "processed_at",
+        "metadata_json",
+    } <= broadcast_distribution_columns
+
+    ownership_group_columns = {column["name"] for column in inspector.get_columns("ownership_groups")}
+    assert {
+        "owner_user_id",
+        "name",
+        "clubs_json",
+        "budget_pool",
+        "reputation_score",
+        "philosophy",
+        "global_brand_strength",
+        "shared_budget_enabled",
+        "metadata_json",
+    } <= ownership_group_columns
+
+    ownership_group_club_columns = {column["name"] for column in inspector.get_columns("ownership_group_clubs")}
+    assert {"group_id", "club_id", "metadata_json"} <= ownership_group_club_columns
+
+    ownership_group_budget_columns = {
+        column["name"] for column in inspector.get_columns("ownership_group_budget_movements")
+    }
+    assert {
+        "group_id",
+        "source_club_id",
+        "target_club_id",
+        "movement_type",
+        "amount",
+        "reference_key",
+        "created_by_user_id",
+        "metadata_json",
+    } <= ownership_group_budget_columns
+
+    ownership_group_event_columns = {column["name"] for column in inspector.get_columns("ownership_group_events")}
+    assert {"group_id", "event_type", "headline", "impact_json", "metadata_json"} <= ownership_group_event_columns
 
     sponsor_columns = {column["name"] for column in inspector.get_columns("club_finance_sponsors")}
     assert {"name", "tier", "payout", "requirements_json", "active"} <= sponsor_columns
@@ -466,6 +594,90 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
 
     live_event_columns = {column["name"] for column in inspector.get_columns("live_events")}
     assert {"name", "start_date", "end_date", "rules_json", "rewards_json", "started_notification_sent_at"} <= live_event_columns
+
+    competition_queue_columns = {column["name"] for column in inspector.get_columns("competition_queue_records")}
+    assert {
+        "queue_name",
+        "job_name",
+        "idempotency_key",
+        "aggregate_id",
+        "partition_key",
+        "status",
+        "published_at",
+        "payload_json",
+        "metadata_json",
+    } <= competition_queue_columns
+
+    event_outbox_columns = {column["name"] for column in inspector.get_columns("event_outbox")}
+    assert {
+        "event_id",
+        "event_type",
+        "aggregate_type",
+        "aggregate_id",
+        "partition_key",
+        "producer",
+        "version",
+        "occurred_at",
+        "payload_json",
+        "headers_json",
+        "status",
+        "processed_at",
+        "relay_attempts",
+        "last_error",
+    } <= event_outbox_columns
+
+    projection_receipt_columns = {column["name"] for column in inspector.get_columns("projection_event_receipts")}
+    assert {
+        "projection_name",
+        "event_id",
+        "event_type",
+        "aggregate_id",
+        "metadata_json",
+    } <= projection_receipt_columns
+
+    standing_projection_columns = {column["name"] for column in inspector.get_columns("competition_standing_projections")}
+    assert {
+        "competition_id",
+        "season_id",
+        "competition_type",
+        "club_id",
+        "club_name",
+        "matches_played",
+        "wins",
+        "draws",
+        "losses",
+        "goals_for",
+        "goals_against",
+        "goal_difference",
+        "points",
+        "last_fixture_id",
+    } <= standing_projection_columns
+
+    player_projection_columns = {column["name"] for column in inspector.get_columns("player_stats_projections")}
+    assert {
+        "competition_id",
+        "season_id",
+        "competition_type",
+        "player_id",
+        "player_name",
+        "team_id",
+        "team_name",
+        "appearances",
+        "starts",
+        "minutes_played",
+        "goals",
+        "assists",
+        "saves",
+        "yellow_cards",
+        "red_cards",
+        "wins",
+        "draws",
+        "losses",
+        "cumulative_xg",
+        "average_rating",
+        "rating_samples",
+        "last_fixture_id",
+    } <= player_projection_columns
 
     with engine.connect() as connection:
         versions = connection.execute(text("SELECT version_num FROM alembic_version ORDER BY version_num")).scalars().all()

@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column("away_manager_asset_id", sa.String(length=36), nullable=True),
         sa.Column("controller_home", sa.String(length=24), nullable=False, server_default=sa.text("'manager'")),
         sa.Column("controller_away", sa.String(length=24), nullable=False, server_default=sa.text("'manager'")),
-        sa.Column("user_control_enabled", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("user_control_enabled", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("home_score", sa.Integer(), nullable=False, server_default="0"),

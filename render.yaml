@@ -26,6 +26,14 @@ services:
           name: gtex-cache
           type: keyvalue
           property: connectionString
+      - key: GTE_KAFKA_BROKERS
+        sync: false
+      - key: GTE_KAFKA_TOPIC_PREFIX
+        value: gtex
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+      - key: GTE_KAFKA_API_QUEUE_CONSUMER_ENABLED
+        value: "true"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_APP_NAME
@@ -60,6 +68,117 @@ services:
         value: /media-engine/downloads
       # Add FOOTBALL_DATA_API_KEY in the Render dashboard only if you switch
       # GTE_INGESTION_PROVIDER to football_data.
+
+  - type: worker
+    name: gtex-outbox-relay
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
+    startCommand: bash -lc "cd backend && python -m app.backbone.outbox_relay_main"
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
+      - key: GTE_REDIS_URL
+        fromService:
+          name: gtex-cache
+          type: keyvalue
+          property: connectionString
+      - key: GTE_KAFKA_BROKERS
+        sync: false
+      - key: GTE_KAFKA_TOPIC_PREFIX
+        value: gtex
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "true"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_APP_NAME
+        value: Global Talent Exchange Relay
+      - key: GTE_APP_VERSION
+        value: 0.1.0
+      - key: GTE_CONFIG_DIR
+        value: backend/config
+
+  - type: worker
+    name: gtex-simulation-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
+    startCommand: bash -lc "cd backend && python -m app.backbone.simulation_worker_main"
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
+      - key: GTE_REDIS_URL
+        fromService:
+          name: gtex-cache
+          type: keyvalue
+          property: connectionString
+      - key: GTE_KAFKA_BROKERS
+        sync: false
+      - key: GTE_KAFKA_TOPIC_PREFIX
+        value: gtex
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_APP_NAME
+        value: Global Talent Exchange Simulation Worker
+      - key: GTE_APP_VERSION
+        value: 0.1.0
+      - key: GTE_CONFIG_DIR
+        value: backend/config
+
+  - type: worker
+    name: gtex-projection-workers
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r backend/requirements.txt
+    startCommand: bash -lc "cd backend && python -m app.backbone.projection_worker_main"
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gtex-postgres
+          property: connectionString
+      - key: GTE_REDIS_URL
+        fromService:
+          name: gtex-cache
+          type: keyvalue
+          property: connectionString
+      - key: GTE_KAFKA_BROKERS
+        sync: false
+      - key: GTE_KAFKA_TOPIC_PREFIX
+        value: gtex
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_APP_NAME
+        value: Global Talent Exchange Projection Workers
+      - key: GTE_APP_VERSION
+        value: 0.1.0
+      - key: GTE_CONFIG_DIR
+        value: backend/config
 
   - type: web
     name: gtex-web

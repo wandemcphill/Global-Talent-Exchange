@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.match_status import MatchStatus
+from app.ownership_groups.service import OwnershipGroupService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.models.competition import Competition
 from app.models.club_profile import ClubProfile
@@ -34,6 +35,7 @@ from app.services.competition_reward_service import CompetitionRewardService
 from app.services.competition_schedule_service import CompetitionScheduleService
 from app.services.competition_seeding_service import CompetitionSeedingService
 from app.services.competition_visibility_service import CompetitionVisibilityService
+from app.services.dynamic_prize_pool_service import DynamicPrizePoolService
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -85,6 +87,13 @@ class CompetitionLifecycleService:
         if not any(participant.seed for participant in participants):
             self.seed_competition(competition)
             participants = self._participants(competition.id)
+        integrity_summary = OwnershipGroupService(self.session).build_competition_integrity_summary(
+            [participant.club_id for participant in participants]
+        )
+        competition.metadata_json = {
+            **dict(competition.metadata_json or {}),
+            "ownership_integrity": integrity_summary,
+        }
         if rule_set.group_stage_enabled:
             self._assign_groups(rule_set, participants)
 
@@ -99,6 +108,21 @@ class CompetitionLifecycleService:
         self.session.add_all(fixtures.matches)
         if fixtures.playoffs:
             self.session.add_all(fixtures.playoffs)
+        ownership_map = OwnershipGroupService(self.session).ownership_map(
+            [club_id for club_id in {match.home_club_id for match in fixtures.matches} | {match.away_club_id for match in fixtures.matches} if club_id]
+        )
+        for match in fixtures.matches:
+            home_group = ownership_map.get(match.home_club_id)
+            away_group = ownership_map.get(match.away_club_id)
+            if home_group is None or away_group is None or home_group != away_group:
+                continue
+            match.metadata_json = {
+                **dict(match.metadata_json or {}),
+                "ownership_integrity": {
+                    "shared_group_id": home_group,
+                    "review_required": True,
+                },
+            }
 
         competition.status = CompetitionStatus.LIVE.value
         competition.launched_at = datetime.now(timezone.utc)
@@ -219,6 +243,21 @@ class CompetitionLifecycleService:
             raise ValueError("GTEX-hosted competitions must use promo_pool reward pools.")
         if not is_platform and any(pool.pool_type == "promo_pool" for pool in reward_pools):
             raise ValueError("User-hosted competitions cannot use promo_pool reward pools.")
+        if is_platform:
+            dynamic_prize_pool_service = DynamicPrizePoolService(self.session)
+            dynamic_pool = dynamic_prize_pool_service.snapshot(
+                competition=competition,
+                rule_set=rule_set,
+                exclude_competition_id=competition.id,
+            )
+            for pool in reward_pools:
+                if pool.pool_type != "promo_pool" or pool.status not in {"planned", "projected", "pending"}:
+                    continue
+                pool.amount_minor = dynamic_pool.total_pool_minor
+                pool.metadata_json = dynamic_prize_pool_service.apply_to_reward_pool(
+                    metadata_json=pool.metadata_json,
+                    snapshot=dynamic_pool,
+                )
         rewards = list(
             self.session.scalars(
                 select(CompetitionReward)
@@ -477,9 +516,23 @@ class CompetitionLifecycleService:
         ordered = sorted(participants, key=lambda item: item.seed or 9999)
         group_size = rule_set.group_size or max(2, min(4, len(ordered)))
         group_count = rule_set.group_count or max(1, int((len(ordered) + group_size - 1) / group_size))
+        ownership_map = OwnershipGroupService(self.session).ownership_map([participant.club_id for participant in ordered])
+        grouped: dict[str, list[CompetitionParticipant]] = {f"g{index:02d}": [] for index in range(1, group_count + 1)}
         for index, participant in enumerate(ordered):
-            group_index = (index % group_count) + 1
-            participant.group_key = f"g{group_index:02d}"
+            preferred_keys = [f"g{((index + offset) % group_count) + 1:02d}" for offset in range(group_count)]
+            group_id = ownership_map.get(participant.club_id)
+            chosen_key = preferred_keys[0]
+            for key in preferred_keys:
+                current = grouped[key]
+                current_groups = {ownership_map.get(item.club_id) for item in current}
+                if len(current) >= group_size:
+                    continue
+                if group_id is not None and group_id in current_groups:
+                    continue
+                chosen_key = key
+                break
+            participant.group_key = chosen_key
+            grouped[chosen_key].append(participant)
 
     def _group_standings(
         self,

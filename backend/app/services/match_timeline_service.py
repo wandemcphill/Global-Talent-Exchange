@@ -1275,19 +1275,27 @@ class MatchTimelineService:
     ) -> dict[str, Any]:
         positions = {item["player_id"]: item["position"] for item in player_payloads}
         default_owner = self._default_owner(home_runtime if possession_side is MatchViewerSide.HOME else away_runtime)
-        if stage == "reset":
+        trajectory_point = self._render_ball_trajectory_point(active_event, stage=stage)
+        ball_height = self._render_ball_height(active_event, stage=stage)
+        ball_spin = self._render_ball_vector(active_event, key="spin")
+        ball_velocity = self._render_ball_vector(active_event, key="velocity")
+
+        def ball_frame(*, position: dict[str, float], owner_player_id: str | None, state: str) -> dict[str, Any]:
+            resolved_position = trajectory_point or position
             return {
-                "position": {"x": 50.0, "y": 50.0},
-                "owner_player_id": default_owner,
-                "state": "placed",
+                "position": resolved_position,
+                "height": ball_height,
+                "owner_player_id": owner_player_id,
+                "state": state,
+                "spin": ball_spin,
+                "velocity": ball_velocity,
             }
+
+        if stage == "reset":
+            return ball_frame(position={"x": 50.0, "y": 50.0}, owner_player_id=default_owner, state="placed")
         if active_event is None:
             owner = default_owner
-            return {
-                "position": self._ball_near_player(positions.get(owner) or {"x": 50.0, "y": 50.0}),
-                "owner_player_id": owner,
-                "state": "rolling",
-            }
+            return ball_frame(position=self._ball_near_player(positions.get(owner) or {"x": 50.0, "y": 50.0}), owner_player_id=owner, state="rolling")
 
         viewer_type = active_event.view.event_type
         primary = active_event.view.primary_player_id
@@ -1319,78 +1327,34 @@ class MatchTimelineService:
 
         if viewer_type is MatchViewerEventType.GOAL:
             if stage == "pre":
-                return {
-                    "position": self._ball_near_player(primary_pos or event_origin),
-                    "owner_player_id": primary,
-                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
-                }
+                return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary, state=self._ball_state_from_render(active_event, fallback="controlled"))
             if stage == "event":
-                return {
-                    "position": event_target,
-                    "owner_player_id": None,
-                    "state": self._ball_state_from_render(active_event, fallback="shot"),
-                }
-            return {"position": {"x": event_target["x"], "y": event_target["y"]}, "owner_player_id": None, "state": "in_goal"}
+                return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="shot"))
+            return ball_frame(position={"x": event_target["x"], "y": event_target["y"]}, owner_player_id=None, state="in_goal")
         if viewer_type is MatchViewerEventType.SAVE:
             if stage == "pre":
-                return {
-                    "position": self._ball_near_player(secondary_pos or primary_pos or event_origin),
-                    "owner_player_id": secondary or primary,
-                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
-                }
+                return ball_frame(position=self._ball_near_player(secondary_pos or primary_pos or event_origin), owner_player_id=secondary or primary, state=self._ball_state_from_render(active_event, fallback="controlled"))
             if stage == "event":
-                return {
-                    "position": event_target,
-                    "owner_player_id": None,
-                    "state": self._ball_state_from_render(active_event, fallback="saved"),
-                }
-            return {"position": self._ball_near_player(goalkeeper_target), "owner_player_id": primary if primary_side is defending_side else secondary, "state": "held"}
+                return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="saved"))
+            return ball_frame(position=self._ball_near_player(goalkeeper_target), owner_player_id=primary if primary_side is defending_side else secondary, state="held")
         if viewer_type is MatchViewerEventType.MISS:
             if stage == "pre":
-                return {
-                    "position": self._ball_near_player(primary_pos or event_origin),
-                    "owner_player_id": primary,
-                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
-                }
+                return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary, state=self._ball_state_from_render(active_event, fallback="controlled"))
             resolved_miss_target = event_target if stage == "event" else wide_target
-            return {
-                "position": resolved_miss_target if stage == "event" else self._ball_near_player(resolved_miss_target),
-                "owner_player_id": None,
-                "state": self._ball_state_from_render(active_event, fallback="missed"),
-            }
+            return ball_frame(position=resolved_miss_target if stage == "event" else self._ball_near_player(resolved_miss_target), owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="missed"))
         if viewer_type is MatchViewerEventType.FOUL:
-            return {
-                "position": self._ball_near_player(primary_pos or event_origin),
-                "owner_player_id": primary or default_owner,
-                "state": "stopped",
-            }
+            return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary or default_owner, state="stopped")
         if viewer_type is MatchViewerEventType.OFFSIDE:
-            return {
-                "position": event_target if stage != "pre" else self._ball_near_player(primary_pos or event_origin),
-                "owner_player_id": primary,
-                "state": "stopped",
-            }
+            return ball_frame(position=event_target if stage != "pre" else self._ball_near_player(primary_pos or event_origin), owner_player_id=primary, state="stopped")
         if viewer_type in {MatchViewerEventType.RED_CARD, MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
-            return {"position": self._ball_near_player(primary_pos or positions.get(default_owner) or {"x": 50.0, "y": 50.0}), "owner_player_id": primary or default_owner, "state": "stopped"}
+            return ball_frame(position=self._ball_near_player(primary_pos or positions.get(default_owner) or {"x": 50.0, "y": 50.0}), owner_player_id=primary or default_owner, state="stopped")
         if viewer_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE, MatchViewerEventType.ATTACK}:
             if stage == "pre":
-                return {
-                    "position": self._ball_near_player(primary_pos or event_origin),
-                    "owner_player_id": primary or default_owner,
-                    "state": self._ball_state_from_render(active_event, fallback="controlled"),
-                }
+                return ball_frame(position=self._ball_near_player(primary_pos or event_origin), owner_player_id=primary or default_owner, state=self._ball_state_from_render(active_event, fallback="controlled"))
             if stage == "event":
-                return {
-                    "position": event_target,
-                    "owner_player_id": None,
-                    "state": self._ball_state_from_render(active_event, fallback="traveling"),
-                }
+                return ball_frame(position=event_target, owner_player_id=None, state=self._ball_state_from_render(active_event, fallback="traveling"))
         owner = primary or default_owner
-        return {
-            "position": self._ball_near_player(positions.get(owner) or event_target),
-            "owner_player_id": owner,
-            "state": self._ball_state_from_render(active_event, fallback="rolling"),
-        }
+        return ball_frame(position=self._ball_near_player(positions.get(owner) or event_target), owner_player_id=owner, state=self._ball_state_from_render(active_event, fallback="rolling"))
 
     def _viewer_event_type_from_match_event(self, event: MatchEventView) -> MatchViewerEventType:
         mapping = {
@@ -1725,6 +1689,12 @@ class MatchTimelineService:
     def _render_contract(self, value: object | None) -> dict[str, Any] | None:
         return value if isinstance(value, dict) else None
 
+    def _render_ball_contract(self, event: _ViewerEventContext | None) -> dict[str, Any] | None:
+        if event is None or not event.render_contract:
+            return None
+        ball = event.render_contract.get("ball")
+        return ball if isinstance(ball, dict) else None
+
     def _render_point(self, event: _ViewerEventContext | None, key: str) -> dict[str, float] | None:
         if event is None or not event.render_contract:
             return None
@@ -1736,6 +1706,60 @@ class MatchTimelineService:
         if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
             return None
         return {"x": self._clamp(float(x)), "y": self._clamp(float(y))}
+
+    def _render_ball_trajectory_point(
+        self,
+        event: _ViewerEventContext | None,
+        *,
+        stage: str,
+    ) -> dict[str, float] | None:
+        ball = self._render_ball_contract(event)
+        if ball is None:
+            return None
+        trajectory = ball.get("trajectory")
+        if not isinstance(trajectory, list) or not trajectory:
+            return None
+        index = 0 if stage == "pre" else len(trajectory) // 2 if stage == "event" else len(trajectory) - 1
+        point = trajectory[max(0, min(index, len(trajectory) - 1))]
+        if not isinstance(point, dict):
+            return None
+        x = point.get("x")
+        y = point.get("y")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            return None
+        return {"x": self._clamp(float(x)), "y": self._clamp(float(y))}
+
+    def _render_ball_height(
+        self,
+        event: _ViewerEventContext | None,
+        *,
+        stage: str,
+    ) -> float:
+        ball = self._render_ball_contract(event)
+        if ball is None:
+            return 0.0
+        trajectory = ball.get("trajectory")
+        if isinstance(trajectory, list) and trajectory:
+            index = 0 if stage == "pre" else len(trajectory) // 2 if stage == "event" else len(trajectory) - 1
+            point = trajectory[max(0, min(index, len(trajectory) - 1))]
+            if isinstance(point, dict) and isinstance(point.get("z"), (int, float)):
+                return round(max(0.0, float(point["z"])), 3)
+        height = ball.get("max_height", ball.get("height", 0.0))
+        return round(max(0.0, float(height or 0.0)), 3)
+
+    def _render_ball_vector(self, event: _ViewerEventContext | None, *, key: str) -> dict[str, float] | None:
+        ball = self._render_ball_contract(event)
+        if ball is None:
+            return None
+        raw = ball.get(key)
+        if not isinstance(raw, dict):
+            return None
+        x = raw.get("x")
+        y = raw.get("y")
+        z = raw.get("z")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or not isinstance(z, (int, float)):
+            return None
+        return {"x": round(float(x), 3), "y": round(float(y), 3), "z": round(float(z), 3)}
 
     def _render_camera_mode(self, event: _ViewerEventContext | None) -> str | None:
         if event is None or not event.render_contract:

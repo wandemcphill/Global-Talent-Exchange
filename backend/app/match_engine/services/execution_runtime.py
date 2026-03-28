@@ -5,10 +5,12 @@ from datetime import UTC, datetime
 from math import ceil
 from threading import RLock
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.backbone.kafka import KafkaBackboneUnavailable, KafkaJsonConsumer
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.replay_visibility import ReplayVisibility
@@ -16,12 +18,14 @@ from app.common.schemas.competition import ScheduledFixture
 from app.competition_engine.match_dispatcher import MatchDispatcher
 from app.competition_engine.queue_contracts import (
     BracketAdvancementJob,
+    DurableQueuePublisher,
     InMemoryQueuePublisher,
     MatchSimulationJob,
     NotificationJob,
     PayoutSettlementJob,
     QueuedJobRecord,
 )
+from app.core.event_backbone import build_outbox_event
 from app.core.events import DomainEvent, EventPublisher
 from app.fairness.fairness_guard import FairnessGuard
 from app.fairness.match_integrity_service import MatchIntegrityService
@@ -39,6 +43,7 @@ from app.models.notification_record import NotificationRecord
 from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.match_engine.simulation.models import MatchEventType
+from app.services.commentary_service import MatchCommentaryService
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
 
@@ -248,6 +253,11 @@ class LocalMatchExecutionWorker:
                 if balance_session is not None:
                     balance_session.close()
             replay_payload = self.match_service.build_replay_payload(normalized_request)
+            replay_payload = self._enrich_replay_commentary(
+                job,
+                request=normalized_request,
+                replay_payload=replay_payload,
+            )
             viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
             fairness_envelope = MatchIntegrityService().build_fairness_envelope(
                 locked_context=locked_context,
@@ -260,6 +270,7 @@ class LocalMatchExecutionWorker:
                 job,
                 viewer_payload=viewer_payload,
                 fairness_envelope=fairness_envelope,
+                replay_payload=replay_payload,
             )
             self._persist_smart_highlights(job.fixture_id, replay_payload)
             self._publish_match_lifecycle_event(
@@ -413,6 +424,7 @@ class LocalMatchExecutionWorker:
             )
             return replay_payload
         except Exception as exc:
+            self._persist_failed_execution_event(job, exc)
             self._publish_match_lifecycle_event(
                 "competition.match.execution.failed",
                 job,
@@ -446,6 +458,7 @@ class LocalMatchExecutionWorker:
         job: MatchSimulationJob,
         viewer_payload,
         fairness_envelope: dict[str, Any],
+        replay_payload: MatchReplayPayloadView,
     ) -> None:
         if self.session_factory is None:
             return
@@ -458,6 +471,7 @@ class LocalMatchExecutionWorker:
                 **(match.metadata_json or {}),
                 "match_viewer": viewer_payload.model_dump(mode="json"),
                 "fairness": fairness_envelope,
+                "replay_payload": replay_payload.model_dump(mode="json"),
             }
             session.commit()
         except Exception:
@@ -483,6 +497,11 @@ class LocalMatchExecutionWorker:
             return
         session = self.session_factory()
         try:
+            MatchCommentaryService(session).persist_replay_commentary(
+                job.fixture_id,
+                replay_payload,
+                audience_user_ids=(job.home_user_id, job.away_user_id),
+            )
             insights = MatchEventLoggerService(session).persist_official_match(
                 match_id=job.fixture_id,
                 replay_payload=replay_payload,
@@ -510,9 +529,87 @@ class LocalMatchExecutionWorker:
                 home_analysis=insights.home_analysis,
                 away_analysis=insights.away_analysis,
             )
+            self._persist_projection_outbox_events(
+                session,
+                job=job,
+                replay_payload=replay_payload,
+            )
             session.commit()
         except Exception:
             session.rollback()
+        finally:
+            session.close()
+
+    def _persist_projection_outbox_events(
+        self,
+        session: Session,
+        *,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        payload = self._projection_payload(job, replay_payload)
+        for event_name in ("match.result", "match.replay.ready", "match.completed"):
+            session.add(
+                build_outbox_event(
+                    domain_event=DomainEvent(
+                        name=event_name,
+                        event_id=self._backbone_event_id(job.fixture_id, event_name),
+                        payload=payload,
+                        aggregate_id=job.fixture_id,
+                        aggregate_type="fixture",
+                        producer="simulation-service",
+                        partition_key=job.fixture_id,
+                    )
+                )
+            )
+
+    def _persist_failed_execution_event(self, job: MatchSimulationJob, exc: Exception) -> None:
+        if self.session_factory is None:
+            return
+        session = self.session_factory()
+        try:
+            session.add(
+                build_outbox_event(
+                    domain_event=DomainEvent(
+                        name="match.failed",
+                        event_id=self._backbone_event_id(job.fixture_id, "match.failed"),
+                        payload={
+                            **self._base_payload(job),
+                            "competition_type": getattr(job.competition_type, "value", job.competition_type),
+                            "season_id": job.season_id,
+                            "error_message": str(exc),
+                            "error_type": type(exc).__name__,
+                            "user_ids": [user_id for user_id in (job.home_user_id, job.away_user_id) if user_id],
+                        },
+                        aggregate_id=job.fixture_id,
+                        aggregate_type="fixture",
+                        producer="simulation-service",
+                        partition_key=job.fixture_id,
+                    )
+                )
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+        finally:
+            session.close()
+
+    def _enrich_replay_commentary(
+        self,
+        job: MatchSimulationJob,
+        *,
+        request,
+        replay_payload: MatchReplayPayloadView,
+    ) -> MatchReplayPayloadView:
+        if self.session_factory is None:
+            return replay_payload
+        session = self.session_factory()
+        try:
+            MatchCommentaryService(session).apply_to_replay_payload(
+                replay_payload,
+                request=request,
+            )
+            return replay_payload
         finally:
             session.close()
 
@@ -1124,6 +1221,48 @@ class LocalMatchExecutionWorker:
             "timeline_event_count": len(replay_payload.timeline.events),
         }
 
+    def _projection_payload(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> dict[str, Any]:
+        return {
+            **self._base_payload(job),
+            "competition_type": getattr(job.competition_type, "value", job.competition_type),
+            "season_id": job.season_id,
+            "stage_name": job.stage_name,
+            "round_number": job.round_number,
+            "home_club_id": job.home_club_id,
+            "away_club_id": job.away_club_id,
+            "home_goals": replay_payload.summary.home_score,
+            "away_goals": replay_payload.summary.away_score,
+            "winner_team_id": replay_payload.summary.winner_team_id,
+            "winner_team_name": replay_payload.summary.winner_team_name,
+            "decided_by_penalties": replay_payload.summary.decided_by_penalties,
+            "presentation_duration_seconds": replay_payload.timeline.presentation_duration_seconds,
+            "replay_id": f"replay:{job.fixture_id}",
+            "is_final": job.is_final,
+            "user_ids": [user_id for user_id in (job.home_user_id, job.away_user_id) if user_id],
+            "player_stats": [
+                {
+                    "player_id": item.player_id,
+                    "player_name": item.player_name,
+                    "team_id": item.team_id,
+                    "team_name": item.team_name,
+                    "started": item.started,
+                    "minutes_played": item.minutes_played,
+                    "goals": item.goals,
+                    "assists": item.assists,
+                    "saves": item.saves,
+                    "yellow_cards": item.yellow_cards,
+                    "red_card": item.red_card,
+                    "xg": item.xg,
+                    "rating": item.rating,
+                }
+                for item in replay_payload.summary.player_stats
+            ],
+        }
+
     def _build_key_moment_breakdown(self, replay_payload: MatchReplayPayloadView) -> dict[str, int]:
         breakdown: dict[str, int] = {}
         for event in replay_payload.timeline.events:
@@ -1150,6 +1289,10 @@ class LocalMatchExecutionWorker:
                 break
         return preview
 
+    @staticmethod
+    def _backbone_event_id(fixture_id: str, event_name: str) -> str:
+        return str(uuid5(NAMESPACE_URL, f"gtex:{fixture_id}:{event_name}"))
+
     def _claim_once(self, bucket: set[str], key: str) -> bool:
         with self._lock:
             if key in bucket:
@@ -1164,10 +1307,19 @@ class LocalMatchExecutionWorker:
 
 def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWorker:
     session_factory = getattr(app.state, "session_factory", None)
+    settings = getattr(app.state, "settings", None)
     queue_publisher = getattr(app.state, "competition_queue_publisher", None)
     if queue_publisher is None:
-        queue_publisher = InMemoryQueuePublisher(event_publisher=app.state.event_publisher)
+        if session_factory is not None:
+            queue_publisher = DurableQueuePublisher(
+                session_factory=session_factory,
+                event_publisher=app.state.event_publisher,
+            )
+        else:
+            queue_publisher = InMemoryQueuePublisher(event_publisher=app.state.event_publisher)
         app.state.competition_queue_publisher = queue_publisher
+    elif isinstance(queue_publisher, DurableQueuePublisher):
+        queue_publisher.session_factory = session_factory
 
     dispatcher = getattr(app.state, "match_dispatcher", None)
     if dispatcher is None:
@@ -1187,9 +1339,36 @@ def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWor
         worker.session_factory = session_factory
         worker.team_factory.session_factory = session_factory
 
-    if not getattr(app.state, "_match_execution_worker_subscribed", False):
+    kafka_queue_mode = bool(getattr(settings, "kafka_enabled", False))
+    if not kafka_queue_mode and not getattr(app.state, "_match_execution_worker_subscribed", False):
         app.state.event_publisher.subscribe(worker.handle_event)
         app.state._match_execution_worker_subscribed = True
+    if kafka_queue_mode and getattr(settings, "kafka_api_queue_consumer_enabled", False):
+        consumer_runtime = getattr(app.state, "api_queue_consumer", None)
+        if consumer_runtime is None:
+            try:
+                from app.backbone.queue_runtime import ApiQueueConsumerService
+
+                consumer_runtime = ApiQueueConsumerService(
+                    consumer=KafkaJsonConsumer(
+                        brokers=settings.kafka_brokers,
+                        group_id=settings.kafka_queue_consumer_group,
+                        client_id=f"{settings.kafka_client_id}-api-queue",
+                        topics=KafkaJsonConsumer.topic_names(
+                            prefix=settings.kafka_topic_prefix,
+                            topics=(
+                                "competition.notification.requested",
+                                "competition.advancement.requested",
+                                "competition.settlement.requested",
+                            ),
+                        ),
+                    ),
+                    worker=worker,
+                )
+                consumer_runtime.start()
+                app.state.api_queue_consumer = consumer_runtime
+            except KafkaBackboneUnavailable:
+                pass
 
     if not hasattr(app.state, "league_match_execution"):
         app.state.league_match_execution = LeagueFixtureExecutionService(

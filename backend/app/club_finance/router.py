@@ -26,6 +26,7 @@ def get_finance(
         weekly_wages=profile.weekly_wages,
         sponsorship_income=profile.sponsorship_income,
         match_income=profile.match_income,
+        broadcast_income=profile.broadcast_income,
         transfer_profit=profile.transfer_profit,
         expenses=profile.expenses,
         transfers_blocked=profile.transfers_blocked,

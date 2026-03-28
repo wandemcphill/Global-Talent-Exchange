@@ -80,6 +80,12 @@ class MatchViewerPointView(CommonSchema):
     y: float = Field(ge=0.0, le=100.0)
 
 
+class MatchViewerVector3View(CommonSchema):
+    x: float
+    y: float
+    z: float
+
+
 class MatchViewerTeamView(CommonSchema):
     team_id: str
     team_name: str
@@ -109,8 +115,11 @@ class MatchViewerPlayerFrameView(CommonSchema):
 
 class MatchViewerBallFrameView(CommonSchema):
     position: MatchViewerPointView
+    height: float = Field(default=0.0, ge=0.0)
     owner_player_id: str | None = None
     state: str = Field(default="rolling", min_length=1)
+    spin: MatchViewerVector3View | None = None
+    velocity: MatchViewerVector3View | None = None
 
 
 class MatchViewerEventView(CommonSchema):

@@ -72,12 +72,14 @@ class _PlayerCardMarketplaceScreenState
   Future<void> _reload() async {
     await Future.wait<void>(<Future<void>>[
       _controller.loadMarketplace(
-        query:
-            PlayerCardMarketplaceQuery(search: _searchController.text.trim()),
+        query: PlayerCardMarketplaceQuery(
+          search: _searchController.text.trim(),
+        ),
       ),
       _controller.loadSupport(
-        playersQuery:
-            PlayerCardPlayersQuery(search: _searchController.text.trim()),
+        playersQuery: PlayerCardPlayersQuery(
+          search: _searchController.text.trim(),
+        ),
         includeAuthed: _hasAuth,
       ),
       if (_hasAuth) _controller.loadLoanContracts(),
@@ -96,10 +98,7 @@ class _PlayerCardMarketplaceScreenState
             appBar: AppBar(
               title: const Text('Player Card Market'),
               actions: <Widget>[
-                IconButton(
-                  onPressed: _reload,
-                  icon: const Icon(Icons.refresh),
-                ),
+                IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
               ],
             ),
             body: RefreshIndicator(
@@ -244,23 +243,27 @@ class _PlayerCardMarketplaceScreenState
       );
     }
     return Column(
-      children: items.map((PlayerCardMarketplaceListing item) {
-        final bool isOwner = widget.currentUserId == item.listingOwnerUserId;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _MarketplaceListingTile(
-            listing: item,
-            onPrimary: isOwner
-                ? () => _controller.cancelSaleListing(item.listingId)
-                : !_hasAuth
-                    ? widget.onOpenLogin
-                    : () => _showBuySaleDialog(context, item),
-            primaryLabel: isOwner ? 'Cancel sale' : 'Buy card',
-            onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-            secondaryLabel: 'View player',
-          ),
-        );
-      }).toList(growable: false),
+      children: items
+          .map((PlayerCardMarketplaceListing item) {
+            final bool isOwner =
+                widget.currentUserId == item.listingOwnerUserId;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _MarketplaceListingTile(
+                listing: item,
+                onPrimary:
+                    isOwner
+                        ? () => _controller.cancelSaleListing(item.listingId)
+                        : !_hasAuth
+                        ? widget.onOpenLogin
+                        : () => _showBuySaleDialog(context, item),
+                primaryLabel: isOwner ? 'Cancel sale' : 'Buy card',
+                onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
+                secondaryLabel: 'View player',
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 
@@ -283,23 +286,27 @@ class _PlayerCardMarketplaceScreenState
       );
     }
     return Column(
-      children: items.map((PlayerCardMarketplaceListing item) {
-        final bool isOwner = widget.currentUserId == item.listingOwnerUserId;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _MarketplaceListingTile(
-            listing: item,
-            onPrimary: isOwner
-                ? () => _controller.cancelLoanListing(item.listingId)
-                : !_hasAuth
-                    ? widget.onOpenLogin
-                    : () => _showLoanNegotiationDialog(context, item),
-            primaryLabel: isOwner ? 'Cancel loan' : 'Negotiate',
-            onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-            secondaryLabel: 'View player',
-          ),
-        );
-      }).toList(growable: false),
+      children: items
+          .map((PlayerCardMarketplaceListing item) {
+            final bool isOwner =
+                widget.currentUserId == item.listingOwnerUserId;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _MarketplaceListingTile(
+                listing: item,
+                onPrimary:
+                    isOwner
+                        ? () => _controller.cancelLoanListing(item.listingId)
+                        : !_hasAuth
+                        ? widget.onOpenLogin
+                        : () => _showLoanNegotiationDialog(context, item),
+                primaryLabel: isOwner ? 'Cancel loan' : 'Negotiate',
+                onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
+                secondaryLabel: 'View player',
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 
@@ -322,23 +329,27 @@ class _PlayerCardMarketplaceScreenState
       );
     }
     return Column(
-      children: items.map((PlayerCardMarketplaceListing item) {
-        final bool isOwner = widget.currentUserId == item.listingOwnerUserId;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _MarketplaceListingTile(
-            listing: item,
-            onPrimary: isOwner
-                ? () => _controller.cancelSwapListing(item.listingId)
-                : !_hasAuth
-                    ? widget.onOpenLogin
-                    : () => _showExecuteSwapDialog(context, item),
-            primaryLabel: isOwner ? 'Cancel swap' : 'Execute swap',
-            onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
-            secondaryLabel: 'View player',
-          ),
-        );
-      }).toList(growable: false),
+      children: items
+          .map((PlayerCardMarketplaceListing item) {
+            final bool isOwner =
+                widget.currentUserId == item.listingOwnerUserId;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _MarketplaceListingTile(
+                listing: item,
+                onPrimary:
+                    isOwner
+                        ? () => _controller.cancelSwapListing(item.listingId)
+                        : !_hasAuth
+                        ? widget.onOpenLogin
+                        : () => _showExecuteSwapDialog(context, item),
+                primaryLabel: isOwner ? 'Cancel swap' : 'Execute swap',
+                onSecondary: () => widget.onOpenPlayer?.call(item.playerId),
+                secondaryLabel: 'View player',
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 
@@ -346,8 +357,7 @@ class _PlayerCardMarketplaceScreenState
     if (!_hasAuth) {
       return GteStatePanel(
         title: 'Sign in required',
-        message:
-            'Sign in to list cards from your own squad.',
+        message: 'Sign in to list cards from your own squad.',
         actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
         onAction: widget.onOpenLogin,
         icon: Icons.lock_outline,
@@ -369,17 +379,19 @@ class _PlayerCardMarketplaceScreenState
       );
     }
     return Column(
-      children: _controller.inventory.map((PlayerCardHolding holding) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _HoldingTile(
-            holding: holding,
-            onSale: () => _showCreateSaleDialog(context, holding),
-            onLoan: () => _showCreateLoanDialog(context, holding),
-            onSwap: () => _showCreateSwapDialog(context, holding),
-          ),
-        );
-      }).toList(growable: false),
+      children: _controller.inventory
+          .map((PlayerCardHolding holding) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _HoldingTile(
+                holding: holding,
+                onSale: () => _showCreateSaleDialog(context, holding),
+                onLoan: () => _showCreateLoanDialog(context, holding),
+                onSwap: () => _showCreateSwapDialog(context, holding),
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 
@@ -387,8 +399,7 @@ class _PlayerCardMarketplaceScreenState
     if (!_hasAuth) {
       return GteStatePanel(
         title: 'Sign in required',
-        message:
-            'Sign in to view your listings and live loan deals.',
+        message: 'Sign in to view your listings and live loan deals.',
         actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
         onAction: widget.onOpenLogin,
         icon: Icons.lock_outline,
@@ -407,8 +418,10 @@ class _PlayerCardMarketplaceScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('My listings',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'My listings',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               if (_controller.myListings.isEmpty)
                 const Text('No live listings yet.')
@@ -439,8 +452,10 @@ class _PlayerCardMarketplaceScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Loan contracts',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Loan contracts',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               if (_controller.loanContracts.items.isEmpty)
                 const Text('No live loan deals yet.')
@@ -449,8 +464,9 @@ class _PlayerCardMarketplaceScreenState
                   (PlayerCardMarketplaceLoanContract contract) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: PlayerCardAvatar(
-                      avatar:
-                          AvatarMapper.fromMarketplaceLoanContract(contract),
+                      avatar: AvatarMapper.fromMarketplaceLoanContract(
+                        contract,
+                      ),
                       size: 42,
                     ),
                     title: Text(contract.playerName),
@@ -461,13 +477,17 @@ class _PlayerCardMarketplaceScreenState
                       spacing: 8,
                       children: <Widget>[
                         FilledButton.tonal(
-                          onPressed: () => _controller
-                              .settleLoanContract(contract.loanContractId),
+                          onPressed:
+                              () => _controller.settleLoanContract(
+                                contract.loanContractId,
+                              ),
                           child: const Text('Settle'),
                         ),
                         OutlinedButton(
-                          onPressed: () => _controller
-                              .returnLoanContract(contract.loanContractId),
+                          onPressed:
+                              () => _controller.returnLoanContract(
+                                contract.loanContractId,
+                              ),
                           child: const Text('Return'),
                         ),
                       ],
@@ -532,8 +552,9 @@ class _PlayerCardMarketplaceScreenState
     PlayerCardHolding holding,
   ) async {
     final TextEditingController priceController = TextEditingController();
-    final TextEditingController quantityController =
-        TextEditingController(text: '1');
+    final TextEditingController quantityController = TextEditingController(
+      text: '1',
+    );
     await _showSimpleSheet(
       context,
       title: 'Create sale listing',
@@ -577,10 +598,12 @@ class _PlayerCardMarketplaceScreenState
     PlayerCardHolding holding,
   ) async {
     final TextEditingController feeController = TextEditingController();
-    final TextEditingController slotsController =
-        TextEditingController(text: '1');
-    final TextEditingController durationController =
-        TextEditingController(text: '7');
+    final TextEditingController slotsController = TextEditingController(
+      text: '1',
+    );
+    final TextEditingController durationController = TextEditingController(
+      text: '7',
+    );
     await _showSimpleSheet(
       context,
       title: 'Create loan listing',
@@ -650,9 +673,10 @@ class _PlayerCardMarketplaceScreenState
         await _controller.createSwapListing(
           PlayerCardMarketplaceSwapListingCreateRequest(
             playerCardId: holding.playerCardId,
-            requestedPlayerCardId: requestedCardController.text.trim().isEmpty
-                ? null
-                : requestedCardController.text.trim(),
+            requestedPlayerCardId:
+                requestedCardController.text.trim().isEmpty
+                    ? null
+                    : requestedCardController.text.trim(),
           ),
         );
         return _controller.actionError == null;
@@ -665,8 +689,9 @@ class _PlayerCardMarketplaceScreenState
     BuildContext context,
     PlayerCardMarketplaceListing listing,
   ) async {
-    final TextEditingController quantityController =
-        TextEditingController(text: '1');
+    final TextEditingController quantityController = TextEditingController(
+      text: '1',
+    );
     await _showSimpleSheet(
       context,
       title: 'Buy sale listing',
@@ -703,8 +728,9 @@ class _PlayerCardMarketplaceScreenState
     PlayerCardMarketplaceListing listing,
   ) async {
     final TextEditingController feeController = TextEditingController();
-    final TextEditingController durationController =
-        TextEditingController(text: '${listing.loanDurationDays ?? 7}');
+    final TextEditingController durationController = TextEditingController(
+      text: '${listing.loanDurationDays ?? 7}',
+    );
     final TextEditingController noteController = TextEditingController();
     await _showSimpleSheet(
       context,
@@ -759,8 +785,9 @@ class _PlayerCardMarketplaceScreenState
       return;
     }
     final TextEditingController feeController = TextEditingController();
-    final TextEditingController durationController =
-        TextEditingController(text: '7');
+    final TextEditingController durationController = TextEditingController(
+      text: '7',
+    );
     final TextEditingController noteController = TextEditingController();
     await _showSimpleSheet(
       context,
@@ -893,9 +920,10 @@ class _PlayerCardMarketplaceScreenState
         await _controller.addWatchlist(
           PlayerCardWatchlistCreateRequest(
             playerId: playerController.text.trim(),
-            playerCardId: cardController.text.trim().isEmpty
-                ? null
-                : cardController.text.trim(),
+            playerCardId:
+                cardController.text.trim().isEmpty
+                    ? null
+                    : cardController.text.trim(),
             notes: noteController.text.trim(),
           ),
         );
@@ -954,9 +982,7 @@ class _PlayerCardMarketplaceScreenState
 }
 
 class _ExecutionSummaryPanel extends StatelessWidget {
-  const _ExecutionSummaryPanel({
-    required this.controller,
-  });
+  const _ExecutionSummaryPanel({required this.controller});
 
   final PlayerCardMarketplaceController controller;
 
@@ -974,8 +1000,7 @@ class _ExecutionSummaryPanel extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.insights_outlined),
           title: Text('Latest deal recap'),
-          subtitle:
-              Text('Finished sales, loans, and swaps show up here.'),
+          subtitle: Text('Finished sales, loans, and swaps show up here.'),
         ),
       );
     }
@@ -983,8 +1008,10 @@ class _ExecutionSummaryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Latest deal recap',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Latest deal recap',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           if (sale != null)
             Text(
@@ -1022,86 +1049,179 @@ class _MarketplaceListingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final avatar = AvatarMapper.fromMarketplaceListing(listing);
-    final String priceLabel = listing.salePriceCredits != null
-        ? gteFormatCredits(listing.salePriceCredits!)
-        : listing.loanFeeCredits != null
+    final tokens = GteShellTheme.tokensOf(context);
+    final String priceLabel =
+        listing.salePriceCredits != null
+            ? gteFormatCredits(listing.salePriceCredits!)
+            : listing.loanFeeCredits != null
             ? gteFormatCredits(listing.loanFeeCredits!)
             : 'Negotiated';
-    return GteSurfacePanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              PlayerCardAvatar(avatar: avatar),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      listing.playerName,
-                      style: Theme.of(context).textTheme.titleLarge,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
+    final bool isRising = listing.hasPriceGain;
+    final bool isFalling = listing.hasPriceDrop;
+    final Color accentColor =
+        isRising
+            ? tokens.positive
+            : isFalling
+            ? tokens.negative
+            : listing.isTrending
+            ? tokens.warning
+            : tokens.accentWarm;
+    final String moveLabel =
+        listing.priceDirection == 'flat'
+            ? 'Stable'
+            : '${listing.priceChangePercent >= 0 ? '+' : ''}${listing.priceChangePercent.toStringAsFixed(1)}%';
+    final String marketLabel =
+        listing.marketPriceCredits == null
+            ? 'No pulse'
+            : gteFormatCredits(listing.marketPriceCredits!);
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutCubic,
+      tween: Tween<double>(
+        begin:
+            isRising
+                ? 0.97
+                : isFalling
+                ? 1.03
+                : 1.0,
+        end: 1.0,
+      ),
+      builder: (BuildContext context, double scale, Widget? child) {
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: GteSurfacePanel(
+        emphasized: isRising || isFalling || listing.isTrending,
+        accentColor: accentColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                PlayerCardAvatar(avatar: avatar),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        listing.playerName,
+                        style: Theme.of(context).textTheme.titleLarge,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                GteMetricChip(
+                  label: listing.listingType.toUpperCase(),
+                  value: listing.status.toUpperCase(),
+                  positive: listing.status.toLowerCase() == 'open',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                GteMetricChip(label: 'Ask', value: priceLabel),
+                GteMetricChip(
+                  label: 'Market',
+                  value: marketLabel,
+                  positive: !isFalling,
+                ),
+                GteMetricChip(
+                  label: 'Move',
+                  value: moveLabel,
+                  positive: !isFalling,
+                ),
+                GteMetricChip(
+                  label: 'Liquidity',
+                  value: listing.liquidityLabel,
+                  positive: listing.hasHighLiquidity,
+                ),
+                if (listing.isTrending)
+                  GteMetricChip(
+                    label: 'Signal',
+                    value: listing.trendingBadge ?? 'Trending',
+                  ),
+                if (listing.latestValueCredits != null)
+                  GteMetricChip(
+                    label: 'Official GTEX',
+                    value: gteFormatCredits(listing.latestValueCredits!),
+                  ),
+                if (listing.availableQuantity != null)
+                  GteMetricChip(
+                    label: 'Available',
+                    value: listing.availableQuantity.toString(),
+                  ),
+                if (listing.loanDurationDays != null)
+                  GteMetricChip(
+                    label: 'Duration',
+                    value: '${listing.loanDurationDays}d',
+                  ),
+              ],
+            ),
+            if (listing.lowLiquidityWarning) ...<Widget>[
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 18,
+                    color: tokens.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Low liquidity: only ${listing.availableShares} share${listing.availableShares == 1 ? '' : 's'} are live on the market.',
                       style: Theme.of(context).textTheme.bodyMedium,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
-              ),
-              GteMetricChip(
-                label: listing.listingType.toUpperCase(),
-                value: listing.status.toUpperCase(),
-                positive: listing.status.toLowerCase() == 'open',
+                  ),
+                ],
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              GteMetricChip(label: 'Price', value: priceLabel),
-              if (listing.latestValueCredits != null)
-                GteMetricChip(
-                  label: 'Official GTEX',
-                  value: gteFormatCredits(listing.latestValueCredits!),
-                ),
-              if (listing.availableQuantity != null)
-                GteMetricChip(
-                  label: 'Available',
-                  value: listing.availableQuantity.toString(),
-                ),
-              if (listing.loanDurationDays != null)
-                GteMetricChip(
-                  label: 'Duration',
-                  value: '${listing.loanDurationDays}d',
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              FilledButton.tonal(
-                onPressed: onPrimary,
-                child: Text(primaryLabel),
-              ),
-              OutlinedButton(
-                onPressed: onSecondary,
-                child: Text(secondaryLabel),
+            const SizedBox(height: 12),
+            Text(
+              'Engine = base ${listing.baseValueCredits == null ? 'n/a' : gteFormatCredits(listing.baseValueCredits!)} + perf ${listing.performanceScore.toStringAsFixed(1)} + demand ${listing.demandPressure >= 0 ? '+' : ''}${listing.demandPressure.toStringAsFixed(2)} + scarcity ${listing.scarcityFactor.toStringAsFixed(2)} + hype ${listing.hypeFactor.toStringAsFixed(2)}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
+            ),
+            if (listing.changeCapped) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                'Anti-manipulation cap applied: move limited to 10% this tick.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: tokens.textMuted),
               ),
             ],
-          ),
-        ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                FilledButton.tonal(
+                  onPressed: onPrimary,
+                  child: Text(primaryLabel),
+                ),
+                OutlinedButton(
+                  onPressed: onSecondary,
+                  child: Text(secondaryLabel),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1136,8 +1256,10 @@ class _HoldingTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(holding.playerName,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      holding.playerName,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 6),
                     Text(
                       '${holding.tierName} | ${holding.quantityAvailable}/${holding.quantityTotal} available',
@@ -1172,11 +1294,17 @@ class _HoldingTile extends StatelessWidget {
             runSpacing: 12,
             children: <Widget>[
               FilledButton.tonal(
-                  onPressed: onSale, child: const Text('Create sale')),
+                onPressed: onSale,
+                child: const Text('Create sale'),
+              ),
               FilledButton.tonal(
-                  onPressed: onLoan, child: const Text('Create loan')),
+                onPressed: onLoan,
+                child: const Text('Create loan'),
+              ),
               OutlinedButton(
-                  onPressed: onSwap, child: const Text('Create swap')),
+                onPressed: onSwap,
+                child: const Text('Create swap'),
+              ),
             ],
           ),
         ],
@@ -1202,8 +1330,10 @@ class _NegotiationActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Loan negotiation actions',
-              style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Loan negotiation actions',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           Text(
             'The backend exposes direct negotiation action endpoints but no negotiation feed yet, so this adapter lets you continue a known negotiation by id.',
@@ -1220,7 +1350,9 @@ class _NegotiationActionPanel extends StatelessWidget {
             runSpacing: 12,
             children: <Widget>[
               FilledButton.tonal(
-                  onPressed: onCounter, child: const Text('Counter')),
+                onPressed: onCounter,
+                child: const Text('Counter'),
+              ),
               FilledButton(onPressed: onAccept, child: const Text('Accept')),
             ],
           ),

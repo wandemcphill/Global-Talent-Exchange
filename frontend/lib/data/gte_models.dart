@@ -29,6 +29,7 @@ enum GteLedgerUnit {
 enum GtePaymentMode {
   manual,
   automatic,
+  hybrid,
 }
 
 enum GteRateDirection {
@@ -3066,9 +3067,14 @@ GteLedgerUnit _ledgerUnitFromString(String value) {
 }
 
 GtePaymentMode _paymentModeFromString(String value) {
-  return value.toLowerCase() == 'automatic'
-      ? GtePaymentMode.automatic
-      : GtePaymentMode.manual;
+  switch (value.toLowerCase()) {
+    case 'automatic':
+      return GtePaymentMode.automatic;
+    case 'hybrid':
+      return GtePaymentMode.hybrid;
+    default:
+      return GtePaymentMode.manual;
+  }
 }
 
 GteRateDirection _rateDirectionFromString(String value) {

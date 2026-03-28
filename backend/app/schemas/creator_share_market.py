@@ -97,9 +97,42 @@ class CreatorClubOwnershipLedgerView(CommonSchema):
     recent_entries: list[CreatorClubOwnershipLedgerEntryView] = Field(default_factory=list)
 
 
+class CreatorClubRevenueStreamsView(CommonSchema):
+    match_winnings_coin: Decimal
+    fan_growth_bonus_coin: Decimal
+    trading_fees_coin: Decimal
+    sponsorship_pool_coin: Decimal
+    broadcast_rights_coin: Decimal
+    total_coin: Decimal
+    metadata_json: dict[str, object] = Field(default_factory=dict)
+
+
+class CreatorClubValuationTickerView(CommonSchema):
+    total_valuation_coin: Decimal
+    treasury_balance_coin: Decimal
+    player_market_value_coin: Decimal
+    infrastructure_value_coin: Decimal
+    recent_performance_score: Decimal
+    recent_performance_multiplier: Decimal
+    recent_performance_bonus_coin: Decimal
+    implied_share_price_coin: Decimal
+    market_share_price_coin: Decimal
+    market_price_delta_coin: Decimal
+    market_price_delta_bps: int
+    price_to_value_ratio: Decimal
+    fan_count: int
+    wins_last_five: int
+    draws_last_five: int
+    losses_last_five: int
+    points_last_five: int
+    last_refreshed_at: datetime | None = None
+    metadata_json: dict[str, object] = Field(default_factory=dict)
+
+
 class CreatorClubShareMarketView(CommonSchema):
     id: str
     club_id: str
+    club_name: str
     creator_user_id: str
     issued_by_user_id: str
     status: str
@@ -115,6 +148,8 @@ class CreatorClubShareMarketView(CommonSchema):
     total_purchase_volume_coin: Decimal
     total_revenue_distributed_coin: Decimal
     metadata_json: dict[str, object]
+    revenue_streams: CreatorClubRevenueStreamsView
+    valuation_ticker: CreatorClubValuationTickerView
     governance_policy: CreatorClubGovernancePolicyView
     ownership_ledger: CreatorClubOwnershipLedgerView
     created_at: datetime

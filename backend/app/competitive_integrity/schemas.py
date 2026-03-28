@@ -143,6 +143,21 @@ class CompetitiveMatchExecutionView(CommonSchema):
     replay: MatchReplayPayloadView | None = None
 
 
+class CompetitiveIntegritySignalView(CommonSchema):
+    code: str
+    severity: str
+    detail: str
+
+
+class CompetitiveIntegrityValidationView(CommonSchema):
+    match_id: str
+    anti_cheat_score: int
+    tampering_risk: str
+    recommended_action: str
+    signals: list[CompetitiveIntegritySignalView]
+    validated_at: datetime
+
+
 class FastGameRunStartRequest(CommonSchema):
     manager_id: str | None = None
     entry_fee_amount: Decimal = Field(default=Decimal("10.0000"), ge=Decimal("0.0000"))

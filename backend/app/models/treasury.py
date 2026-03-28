@@ -24,6 +24,7 @@ class RateDirection(StrEnum):
 class PaymentMode(StrEnum):
     MANUAL = "manual"
     AUTOMATIC = "automatic"
+    HYBRID = "hybrid"
 
 
 class DepositStatus(StrEnum):

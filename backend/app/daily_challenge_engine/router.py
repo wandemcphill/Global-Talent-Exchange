@@ -9,6 +9,7 @@ from app.auth.dependencies import get_current_user, get_session
 from app.daily_challenge_engine.schemas import (
     DailyChallengeClaimResponse,
     DailyChallengeClaimView,
+    DailyLoginStreakView,
     DailyChallengeListResponse,
     DailyChallengeMeResponse,
     DailyChallengeView,
@@ -48,6 +49,7 @@ def get_my_daily_challenges(user: User = Depends(get_current_user), session: Ses
         feature_enabled=service.feature_enabled(),
         claims_today=[_claim_view(item) for item in claims],
         available_challenge_keys=available,
+        login_streak=DailyLoginStreakView.model_validate(service.build_login_streak(user=user)),
     )
 
 

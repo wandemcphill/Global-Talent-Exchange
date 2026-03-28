@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.orm import Session
 
 from app.common.enums.match_status import MatchStatus
+from app.db import get_session
 from app.fairness.fairness_guard import FairnessGuard, FairnessViolation
 from app.match_engine.schemas import (
     MatchEventTimelineView,
@@ -12,10 +14,14 @@ from app.match_engine.schemas import (
     MatchLiveFeedEventView,
     MatchLiveFeedView,
     MatchMediaAvailabilityView,
+    MatchPostMatchAnalyticsView,
     MatchReplayPayloadView,
+    MatchRenderSyncPayloadView,
     MatchSimulationRequest,
 )
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.models.competition_match import CompetitionMatch
+from app.models.manager_duel import ManagerDuel
 from app.replay_archive.service import ensure_replay_archive
 
 router = APIRouter(tags=["match-engine"])
@@ -154,6 +160,22 @@ def _build_availability(record, timeline_events: list[MatchLiveFeedEventView]) -
     )
 
 
+def _load_stored_replay_payload(match_key: str, session: Session) -> MatchReplayPayloadView:
+    match = session.get(CompetitionMatch, match_key)
+    if match is not None:
+        payload = (match.metadata_json or {}).get("replay_payload")
+        if isinstance(payload, dict):
+            return MatchReplayPayloadView.model_validate(payload)
+
+    duel = session.get(ManagerDuel, match_key)
+    if duel is not None:
+        payload = (duel.metadata_json or {}).get("replay_payload")
+        if isinstance(payload, dict):
+            return MatchReplayPayloadView.model_validate(payload)
+
+    raise HTTPException(status_code=404, detail=f"Replay payload for {match_key} was not found.")
+
+
 @legacy_router.post("/replay", response_model=MatchReplayPayloadView)
 @api_router.post("/replay", response_model=MatchReplayPayloadView)
 def create_match_replay(
@@ -194,6 +216,64 @@ def create_match_summary(
     except FairnessViolation as exc:
         raise HTTPException(status_code=400, detail=exc.detail) from exc
     return service.build_summary(payload)
+
+
+@legacy_router.post("/render-sync", response_model=MatchRenderSyncPayloadView)
+@api_router.post("/render-sync", response_model=MatchRenderSyncPayloadView)
+def create_match_render_sync(
+    payload: MatchSimulationRequest,
+    service: MatchSimulationService = Depends(get_match_simulation_service),
+    fairness_guard: FairnessGuard = Depends(get_fairness_guard),
+) -> MatchRenderSyncPayloadView:
+    try:
+        fairness_guard.validate_public_request(payload)
+    except FairnessViolation as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
+    replay_payload = service.build_replay_payload(payload)
+    if replay_payload.render_sync is None:
+        raise HTTPException(status_code=500, detail="Render sync contract could not be built.")
+    return replay_payload.render_sync
+
+
+@legacy_router.post("/analytics", response_model=MatchPostMatchAnalyticsView)
+@api_router.post("/analytics", response_model=MatchPostMatchAnalyticsView)
+def create_post_match_analytics(
+    payload: MatchSimulationRequest,
+    service: MatchSimulationService = Depends(get_match_simulation_service),
+    fairness_guard: FairnessGuard = Depends(get_fairness_guard),
+) -> MatchPostMatchAnalyticsView:
+    try:
+        fairness_guard.validate_public_request(payload)
+    except FairnessViolation as exc:
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
+    replay_payload = service.build_replay_payload(payload)
+    if replay_payload.post_match_analytics is None:
+        raise HTTPException(status_code=500, detail="Post-match analytics could not be built.")
+    return replay_payload.post_match_analytics
+
+
+@legacy_router.get("/render-sync/{match_key}", response_model=MatchRenderSyncPayloadView)
+@api_router.get("/render-sync/{match_key}", response_model=MatchRenderSyncPayloadView)
+def read_match_render_sync(
+    match_key: str,
+    session: Session = Depends(get_session),
+) -> MatchRenderSyncPayloadView:
+    payload = _load_stored_replay_payload(match_key, session)
+    if payload.render_sync is None:
+        raise HTTPException(status_code=404, detail=f"Render sync payload for {match_key} was not found.")
+    return payload.render_sync
+
+
+@legacy_router.get("/analytics/{match_key}", response_model=MatchPostMatchAnalyticsView)
+@api_router.get("/analytics/{match_key}", response_model=MatchPostMatchAnalyticsView)
+def read_post_match_analytics(
+    match_key: str,
+    session: Session = Depends(get_session),
+) -> MatchPostMatchAnalyticsView:
+    payload = _load_stored_replay_payload(match_key, session)
+    if payload.post_match_analytics is None:
+        raise HTTPException(status_code=404, detail=f"Post-match analytics for {match_key} was not found.")
+    return payload.post_match_analytics
 
 
 @legacy_router.get("/live-feed/{match_key}", response_model=MatchLiveFeedView)

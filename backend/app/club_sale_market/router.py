@@ -14,12 +14,14 @@ from app.club_sale_market.schemas import (
     ClubSaleListingCollectionView,
     ClubSaleListingCreateRequest,
     ClubSaleListingDetailView,
+    ClubSaleInstantSellRequest,
     ClubSaleListingUpdateRequest,
     ClubSaleOfferCollectionView,
     ClubSaleOfferCounterRequest,
     ClubSaleOfferCreateRequest,
     ClubSaleOfferRespondRequest,
     ClubSaleOfferView,
+    ClubSalePricingAssistantView,
     ClubSaleTransferExecuteRequest,
     ClubSaleTransferExecutionView,
     ClubSaleValuationView,
@@ -85,12 +87,30 @@ def get_club_sale_market_valuation(
 
 
 @router.get("/api/clubs/sale-market/listings", response_model=ClubSaleListingCollectionView)
+@router.get("/clubs/marketplace", response_model=ClubSaleListingCollectionView)
 def list_public_club_sale_market_listings(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    min_price: float | None = Query(default=None, ge=0),
+    max_price: float | None = Query(default=None, ge=0),
+    league_tier: int | None = Query(default=None, ge=1),
+    min_squad_strength: int | None = Query(default=None, ge=1, le=100),
+    max_squad_strength: int | None = Query(default=None, ge=1, le=100),
+    min_fanbase_size: int | None = Query(default=None, ge=0),
+    max_fanbase_size: int | None = Query(default=None, ge=0),
     service: ClubSaleMarketService = Depends(get_service),
 ) -> ClubSaleListingCollectionView:
-    payload = service.list_public_listings(limit=limit, offset=offset)
+    payload = service.list_public_listings(
+        limit=limit,
+        offset=offset,
+        min_price=min_price,
+        max_price=max_price,
+        league_tier=league_tier,
+        min_squad_strength=min_squad_strength,
+        max_squad_strength=max_squad_strength,
+        min_fanbase_size=min_fanbase_size,
+        max_fanbase_size=max_fanbase_size,
+    )
     return ClubSaleListingCollectionView.model_validate(payload)
 
 
@@ -127,6 +147,22 @@ def create_club_sale_market_listing(
     return ClubSaleListingDetailView.model_validate(body)
 
 
+@router.get("/api/clubs/{club_id}/sale-market/assistant", response_model=ClubSalePricingAssistantView)
+def get_club_sale_market_assistant(
+    club_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: ClubSaleMarketService = Depends(get_service),
+) -> ClubSalePricingAssistantView:
+    try:
+        body = service.get_sell_assistant(actor=current_user, club_id=club_id)
+        session.commit()
+    except ClubSaleMarketError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return ClubSalePricingAssistantView.model_validate(body)
+
+
 @router.put("/api/clubs/{club_id}/sale-market/listing", response_model=ClubSaleListingDetailView)
 def update_club_sale_market_listing(
     club_id: str,
@@ -154,6 +190,29 @@ def cancel_club_sale_market_listing(
 ) -> ClubSaleListingDetailView:
     try:
         body = service.cancel_listing(actor=current_user, club_id=club_id, reason=payload.reason)
+        session.commit()
+    except ClubSaleMarketError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return ClubSaleListingDetailView.model_validate(body)
+
+
+@router.post("/api/clubs/{club_id}/sale-market/listing/instant-sell", response_model=ClubSaleListingDetailView)
+def configure_club_sale_market_instant_sell(
+    club_id: str,
+    payload: ClubSaleInstantSellRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: ClubSaleMarketService = Depends(get_service),
+) -> ClubSaleListingDetailView:
+    try:
+        body = service.configure_instant_sell(
+            actor=current_user,
+            club_id=club_id,
+            enabled=payload.enabled,
+            minimum_price=payload.minimum_price,
+            auto_accept_best_offer=payload.auto_accept_best_offer,
+        )
         session.commit()
     except ClubSaleMarketError as exc:
         session.rollback()

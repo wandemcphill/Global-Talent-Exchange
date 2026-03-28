@@ -237,7 +237,7 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${amount.toStringAsFixed(1)} coin gift'),
+            content: Text('${amount.toStringAsFixed(0)} Fan Coin gift queued'),
           ),
         );
       },
@@ -259,18 +259,13 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
   Widget build(BuildContext context) {
     return FutureBuilder<MatchViewState>(
       future: _viewStateFuture,
-      builder: (
-        BuildContext context,
-        AsyncSnapshot<MatchViewState> snapshot,
-      ) {
+      builder: (BuildContext context, AsyncSnapshot<MatchViewState> snapshot) {
         final bool loading =
             snapshot.connectionState == ConnectionState.waiting;
         if (loading) {
           return const Scaffold(
             backgroundColor: Color(0xFF08111B),
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
         if (snapshot.hasError || !snapshot.hasData) {
@@ -288,11 +283,14 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
             message: 'The signed spectator feed did not include any frames.',
           );
         }
-        final GtexMatchBroadcastController controller =
-            _ensureController(viewState);
-        final String matchTitle = widget.titleOverride ??
+        final GtexMatchBroadcastController controller = _ensureController(
+          viewState,
+        );
+        final String matchTitle =
+            widget.titleOverride ??
             '${viewState.homeTeam.teamName} vs ${viewState.awayTeam.teamName}';
-        final String competitionLabel = widget.competitionLabel ??
+        final String competitionLabel =
+            widget.competitionLabel ??
             widget.competition?.name ??
             'GTEX Broadcast';
 
@@ -368,9 +366,9 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
               Text(
                 title,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               if (message != null) ...<Widget>[
                 const SizedBox(height: 12),

@@ -43,6 +43,7 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
         "match_engine",
         "matches",
         "simulation_matchmaking",
+        "ultimate_league",
         "manager_marketplace",
         "predictions",
         "club_finance",
@@ -53,6 +54,13 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
         "replay_archive",
         "notifications",
         "regen_universe",
+        "football_universe",
+        "broadcast_rights",
+        "ownership_groups",
+        "real_world_hub",
+        "real_world_hub_admin",
+        "federations",
+        "federations_admin",
     }.issubset(registered_modules)
     assert "/leagues/register" in openapi_paths
     assert "/champions-league/qualification-map" in openapi_paths
@@ -76,10 +84,29 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/managers" in openapi_paths
     assert "/managers/leaderboard" in openapi_paths
     assert "/simulation-matchmaking/quick-game" in openapi_paths
+    assert "/ultimate-league/tiers" in openapi_paths
+    assert "/ultimate-league/tournaments" in openapi_paths
     assert "/api/competitive-integrity/managers" in openapi_paths
     assert "/api/competitive-integrity/matches" in openapi_paths
     assert "/api/competitive-integrity/fast-game/runs" in openapi_paths
     assert "/api/notifications" in openapi_paths
+    assert "/broadcast/{match_id}" in openapi_paths
+    assert "/broadcast-rights/competitions/{competition_id}" in openapi_paths
+    assert "/broadcast-rights/matches/{match_id}/access" in openapi_paths
+    assert "/admin/broadcast-rights/jobs/run" in openapi_paths
+    assert "/fans/{club_id}" in openapi_paths
+    assert "/club/identity" in openapi_paths
+    assert "/media" in openapi_paths
+    assert "/ownership-groups" in openapi_paths
+    assert "/ownership-groups/transfers/validate" in openapi_paths
+    assert "/admin/ownership-groups/reputation-cycle" in openapi_paths
+    assert "/real-world/providers" in openapi_paths
+    assert "/real-world/hybrid-players" in openapi_paths
+    assert "/admin/real-world/providers" in openapi_paths
+    assert "/federations" in openapi_paths
+    assert "/federations/rankings" in openapi_paths
+    assert "/federations/{federation_id}/governance" in openapi_paths
+    assert "/admin/federations/run-jobs" in openapi_paths
     assert "/api/clubs/{club_id}/reputation" in openapi_paths
     assert "/api/clubs/{club_id}/dynasty" in openapi_paths
     assert "/api/clubs/{club_id}/identity" in openapi_paths
@@ -94,6 +121,9 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/admin/regen-universe/jobs/rivalry-detection" in openapi_paths
     assert "/admin/regen-universe/jobs/dna-evolution" in openapi_paths
     assert "/admin/regen-universe/jobs/tournament-scheduling" in openapi_paths
+    assert "/admin/ops/fan-updates" in openapi_paths
+    assert "/admin/ops/media-generation" in openapi_paths
+    assert "/admin/ops/identity-evolution" in openapi_paths
     assert "/players/{player_id}/story" in openapi_paths
     assert "/players/{player_id}/dna" in openapi_paths
     assert "/players/{player_id}/rivalries" in openapi_paths
@@ -120,8 +150,31 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
         live_events_response = client.get("/live-events")
         managers_response = client.get("/managers")
         simulation_matchmaking_response = client.post("/simulation-matchmaking/quick-game", json={})
+        ultimate_league_tiers_response = client.get("/ultimate-league/tiers")
+        ultimate_league_tournament_response = client.post("/ultimate-league/tournaments", json={})
         competitive_integrity_response = client.get("/api/competitive-integrity/managers")
         competitive_notifications_response = client.get("/api/notifications")
+        broadcast_response = client.get("/broadcast/nonexistent")
+        broadcast_rights_response = client.get("/broadcast-rights/competitions/nonexistent")
+        broadcast_access_response = client.get("/broadcast-rights/matches/nonexistent/access")
+        broadcast_jobs_response = client.post("/admin/broadcast-rights/jobs/run")
+        fans_response = client.get("/fans/nonexistent")
+        club_identity_response = client.get("/club/identity", params={"club_id": "nonexistent"})
+        media_response = client.get("/media")
+        ownership_groups_response = client.get("/ownership-groups")
+        ownership_group_validation_response = client.get(
+            "/ownership-groups/transfers/validate",
+            params={
+                "player_id": "nonexistent",
+                "selling_club_id": "nonexistent",
+                "buying_club_id": "nonexistent",
+                "bid_amount": "1.0000",
+            },
+        )
+        ownership_group_reputation_response = client.post("/admin/ownership-groups/reputation-cycle")
+        fan_updates_response = client.post("/admin/ops/fan-updates")
+        media_generation_response = client.post("/admin/ops/media-generation")
+        identity_evolution_response = client.post("/admin/ops/identity-evolution")
         regen_universe_response = client.get("/regen-universe/awards")
         regen_rising_stars_response = client.get("/regen-universe/rising-stars")
         regen_bloodlines_response = client.get("/regen-universe/bloodlines")
@@ -149,8 +202,23 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert live_events_response.status_code == 401
     assert managers_response.status_code == 200
     assert simulation_matchmaking_response.status_code == 422
+    assert ultimate_league_tiers_response.status_code == 200
+    assert ultimate_league_tournament_response.status_code == 422
     assert competitive_integrity_response.status_code == 401
     assert competitive_notifications_response.status_code == 401
+    assert broadcast_response.status_code == 404
+    assert broadcast_rights_response.status_code == 404
+    assert broadcast_access_response.status_code == 401
+    assert broadcast_jobs_response.status_code == 401
+    assert fans_response.status_code == 404
+    assert club_identity_response.status_code == 404
+    assert media_response.status_code == 200
+    assert ownership_groups_response.status_code == 401
+    assert ownership_group_validation_response.status_code == 401
+    assert ownership_group_reputation_response.status_code == 401
+    assert fan_updates_response.status_code == 401
+    assert media_generation_response.status_code == 401
+    assert identity_evolution_response.status_code == 401
     assert regen_universe_response.status_code == 200
     assert regen_rising_stars_response.status_code == 200
     assert regen_bloodlines_response.status_code == 200

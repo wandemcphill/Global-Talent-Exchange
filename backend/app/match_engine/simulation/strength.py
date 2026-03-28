@@ -25,6 +25,7 @@ class DefaultTeamStrengthCalculator:
         discipline = fmean(player.discipline for player in starters)
         fitness = fmean(player.fitness for player in starters)
         chemistry = self._chemistry(team)
+        average_identity_fit = self._identity_fit(team)
         recent_form = self._blend_context(
             fmean(player.recent_form for player in starters),
             float(context.get("recent_form", 58)),
@@ -43,6 +44,11 @@ class DefaultTeamStrengthCalculator:
         fatigue_load = self._fatigue_load(team)
         coach_quality, tactical_quality, adaptability = self._coach_and_tactical_quality(team)
         tactical_cohesion = self._tactical_cohesion(team, chemistry, tactical_quality, adaptability)
+        culture_score = float(context.get("culture_score", 55))
+        brand_strength = float(context.get("brand_strength", 50))
+        expectation_pressure = float(context.get("expectation_level", 55))
+        fan_pressure = float(context.get("fan_pressure", 48))
+        media_pressure = float(context.get("media_pressure", 45))
 
         style_attack, style_midfield, style_defense = self._style_adjustments(team.tactics.style)
         squad_balance = self._squad_balance_bonus(team)
@@ -55,6 +61,9 @@ class DefaultTeamStrengthCalculator:
         form_boost = (recent_form - 55.0) * 0.12
         morale_boost = (morale - 55.0) * 0.08
         tactical_boost = (tactical_cohesion - 60.0) * 0.08
+        identity_fit_boost = (average_identity_fit - 65.0) * 0.07
+        culture_boost = (culture_score - 55.0) * 0.06
+        pressure_drag = max(0.0, (((expectation_pressure + fan_pressure + media_pressure) / 3.0) - 62.0) * 0.07)
 
         attack = self._clamp(
             attack
@@ -67,6 +76,9 @@ class DefaultTeamStrengthCalculator:
             + form_boost
             + morale_boost
             + tactical_boost
+            + identity_fit_boost
+            + culture_boost
+            - pressure_drag
             + base_home_edge,
             20.0,
             99.0,
@@ -77,7 +89,10 @@ class DefaultTeamStrengthCalculator:
             + ((team.tactics.pressing - 50) * 0.07)
             + (chemistry - 60.0) * 0.09
             + (coach_quality - 60.0) * 0.05
+            + (culture_score - 55.0) * 0.05
             + manager_midfield
+            + (identity_fit_boost * 0.8)
+            - (pressure_drag * 0.6)
             + (base_home_edge * 0.7),
             20.0,
             99.0,
@@ -96,14 +111,22 @@ class DefaultTeamStrengthCalculator:
         )
         depth = self._clamp(depth + manager_depth + ((coach_quality - 60.0) * 0.06), 20.0, 99.0)
         fitness = self._clamp(fitness + manager_fitness - fatigue_drag + ((morale - 55.0) * 0.04), 20.0, 99.0)
-        chemistry = self._clamp(chemistry + squad_balance + ((coach_quality - 60.0) * 0.05), 20.0, 99.0)
-        tactical_cohesion = self._clamp(tactical_cohesion + ((chemistry - 60.0) * 0.05), 20.0, 99.0)
+        chemistry = self._clamp(
+            chemistry + squad_balance + ((coach_quality - 60.0) * 0.05) + (culture_boost * 1.2) + (identity_fit_boost * 1.4),
+            20.0,
+            99.0,
+        )
+        tactical_cohesion = self._clamp(
+            tactical_cohesion + ((chemistry - 60.0) * 0.05) + (culture_boost * 1.1) + identity_fit_boost,
+            20.0,
+            99.0,
+        )
         coach_quality = self._clamp(coach_quality, 20.0, 99.0)
         tactical_quality = self._clamp(tactical_quality, 20.0, 99.0)
         adaptability = self._clamp(adaptability, 20.0, 99.0)
         recent_form = self._clamp(recent_form, 20.0, 99.0)
-        morale = self._clamp(morale, 20.0, 99.0)
-        motivation = self._clamp(motivation + (base_home_edge * 2.0), 20.0, 99.0)
+        morale = self._clamp(morale + (culture_boost * 0.7) - (pressure_drag * 0.8), 20.0, 99.0)
+        motivation = self._clamp(motivation + (base_home_edge * 2.0) + ((brand_strength - 50.0) * 0.04) - (pressure_drag * 0.3), 20.0, 99.0)
         fatigue_load = self._clamp(fatigue_load, 5.0, 99.0)
 
         upset_resistance = self._clamp(
@@ -220,6 +243,11 @@ class DefaultTeamStrengthCalculator:
         )
         base = fmean(starter_values)
         return self._blend_context(base, float(context.get("team_chemistry", 62)), weight=0.74)
+
+    def _identity_fit(self, team: MatchTeamProfile) -> float:
+        if not team.starters:
+            return 68.0
+        return fmean(player.identity_fit_score for player in team.starters)
 
     def _tactical_cohesion(
         self,

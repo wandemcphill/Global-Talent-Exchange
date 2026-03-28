@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -24,6 +25,17 @@ class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft", server_default="draft")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    linked_competition_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("user_competitions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    entry_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    entry_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    kickoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     created_by_user: Mapped["User | None"] = relationship()

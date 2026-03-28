@@ -17,7 +17,7 @@ from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from app.models.treasury import PaymentMode, RateDirection, TreasurySettings
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 from app.wallets.providers.base import ProviderEvent, ProviderEventType
@@ -188,13 +188,19 @@ class WalletRailService:
         if user is None:
             raise WalletRailError("Purchase order references a missing user.")
         user_account = self.wallet_service.get_user_account(self.session, user, order.unit)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, order.unit)
+        platform_account = self.wallet_service.ensure_deposit_clearing_account(self.session, order.unit)
         postings = [
-            LedgerPosting(account=user_account, amount=order.net_amount),
-            LedgerPosting(account=platform_account, amount=-order.gross_amount),
+            LedgerPosting(account=user_account, amount=order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
+            LedgerPosting(account=platform_account, amount=-order.gross_amount, transaction_type=LedgerTransactionType.DEPOSIT),
         ]
         if order.fee_amount > Decimal("0.0000"):
-            postings.append(LedgerPosting(account=platform_account, amount=order.fee_amount))
+            postings.append(
+                LedgerPosting(
+                    account=platform_account,
+                    amount=order.fee_amount,
+                    transaction_type=LedgerTransactionType.DEPOSIT,
+                )
+            )
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,
@@ -204,6 +210,18 @@ class WalletRailService:
             description=f"FanCoin purchase via {order.provider_key}",
             external_reference=order.provider_reference,
             actor=actor or user,
+            idempotency_key=f"purchase-order:{order.id}:settle",
+            transaction_type=LedgerTransactionType.DEPOSIT,
+            metadata={
+                "purchase_order": {
+                    "purchase_order_id": order.id,
+                    "provider_key": order.provider_key,
+                    "provider_reference": order.provider_reference,
+                    "gross_amount": str(order.gross_amount),
+                    "net_amount": str(order.net_amount),
+                    "fee_amount": str(order.fee_amount),
+                }
+            },
         )
         order.status = PurchaseOrderStatus.SETTLED
         order.settled_at = utcnow()
@@ -249,13 +267,13 @@ class WalletRailService:
         if user is None:
             raise WalletRailError("Purchase order references a missing user.")
         user_account = self.wallet_service.get_user_account(self.session, user, order.unit)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, order.unit)
+        platform_account = self.wallet_service.ensure_deposit_clearing_account(self.session, order.unit)
         try:
             self.wallet_service.append_transaction(
                 self.session,
                 postings=[
-                    LedgerPosting(account=user_account, amount=-order.net_amount),
-                    LedgerPosting(account=platform_account, amount=order.net_amount),
+                    LedgerPosting(account=user_account, amount=-order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
+                    LedgerPosting(account=platform_account, amount=order.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
                 source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
@@ -263,6 +281,16 @@ class WalletRailService:
                 description=f"Reverse FanCoin purchase {order.reference}",
                 external_reference=order.provider_reference,
                 actor=actor,
+                idempotency_key=f"purchase-order:{order.id}:reverse:{status.value}",
+                transaction_type=LedgerTransactionType.DEPOSIT,
+                metadata={
+                    "purchase_order": {
+                        "purchase_order_id": order.id,
+                        "action": "reverse",
+                        "status": status.value,
+                        "net_amount": str(order.net_amount),
+                    }
+                },
             )
             order.status = status
             order.notes = notes or order.notes
@@ -511,13 +539,19 @@ class WalletRailService:
         if user is None:
             raise WalletRailError("Market topup references a missing user.")
         user_account = self.wallet_service.get_user_account(self.session, user, topup.unit)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, topup.unit)
+        platform_account = self.wallet_service.ensure_deposit_clearing_account(self.session, topup.unit)
         postings = [
-            LedgerPosting(account=user_account, amount=topup.net_amount),
-            LedgerPosting(account=platform_account, amount=-topup.gross_amount),
+            LedgerPosting(account=user_account, amount=topup.net_amount, transaction_type=LedgerTransactionType.DEPOSIT),
+            LedgerPosting(account=platform_account, amount=-topup.gross_amount, transaction_type=LedgerTransactionType.DEPOSIT),
         ]
         if topup.fee_amount > Decimal("0.0000"):
-            postings.append(LedgerPosting(account=platform_account, amount=topup.fee_amount))
+            postings.append(
+                LedgerPosting(
+                    account=platform_account,
+                    amount=topup.fee_amount,
+                    transaction_type=LedgerTransactionType.DEPOSIT,
+                )
+            )
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,
@@ -527,6 +561,17 @@ class WalletRailService:
             description="Market topup credited",
             external_reference=topup.reference,
             actor=actor or user,
+            idempotency_key=f"market-topup:{topup.id}:settle",
+            transaction_type=LedgerTransactionType.DEPOSIT,
+            metadata={
+                "market_topup": {
+                    "market_topup_id": topup.id,
+                    "source_scope": topup.source_scope,
+                    "gross_amount": str(topup.gross_amount),
+                    "net_amount": str(topup.net_amount),
+                    "fee_amount": str(topup.fee_amount),
+                }
+            },
         )
         topup.status = MarketTopupStatus.SETTLED
         topup.processed_at = utcnow()

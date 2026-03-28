@@ -19,7 +19,9 @@ from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
 from app.models.base import Base
+from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
+from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
 from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -39,10 +41,12 @@ def api_context():
     current_user = AuthService().register_user(
         session,
         email="wallet-http@example.com",
+        region_code="NG",
         username="wallethttp",
         password="SuperSecret1",
     )
     session.commit()
+    _seed_policy_defaults(session, current_user)
 
     app = FastAPI()
     app.include_router(router)
@@ -108,6 +112,46 @@ def _seed_policy_defaults(session, current_user) -> None:
     session.commit()
 
 
+def _enable_automatic_deposits(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.AUTOMATIC
+    session.commit()
+
+
+def _enable_automatic_withdrawals(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.withdrawal_mode = PaymentMode.AUTOMATIC
+    session.commit()
+
+
+def _provision_withdrawable_user(session, current_user) -> None:
+    treasury = TreasuryService()
+    treasury.create_user_bank_account(
+        session,
+        user=current_user,
+        bank_name="GT Bank",
+        account_number="0123456789",
+        account_name="Wallet HTTP",
+        bank_code="058",
+        currency_code="NGN",
+        set_active=True,
+    )
+    treasury.submit_kyc(
+        session,
+        user=current_user,
+        nin="12345678901",
+        bvn=None,
+        address_line1="12 Marina",
+        address_line2=None,
+        city="Lagos",
+        state="Lagos",
+        country="Nigeria",
+        id_document_attachment_id=None,
+    )
+    current_user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+
+
 def test_get_portfolio_returns_empty_holdings_for_new_user(api_context) -> None:
     client, _session, current_user = api_context
 
@@ -126,7 +170,7 @@ def test_get_portfolio_returns_empty_holdings_for_new_user(api_context) -> None:
 def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_context) -> None:
     client, session, current_user = api_context
     player = _create_player(session)
-    _fund_user(session, current_user, amount=Decimal("100"))
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
 
     order_response = client.post(
         "/api/orders",
@@ -139,7 +183,7 @@ def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_co
     )
     assert order_response.status_code == 201
 
-    response = client.get("/api/wallets/summary")
+    response = client.get("/api/wallets/summary", params={"currency": "coin"})
 
     assert response.status_code == 200
     payload = response.json()
@@ -149,7 +193,7 @@ def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_co
         "total_balance",
         "currency",
     }
-    assert payload["currency"] == "credit"
+    assert payload["currency"] == "coin"
     assert Decimal(str(payload["available_balance"])) == Decimal("50.0000")
     assert Decimal(str(payload["reserved_balance"])) == Decimal("50.0000")
     assert Decimal(str(payload["total_balance"])) == Decimal("100.0000")
@@ -186,6 +230,7 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
         "account_id",
         "amount",
         "unit",
+        "transaction_type",
         "reason",
         "source_tag",
         "reference",
@@ -198,7 +243,8 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
 
 
 def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
-    client, _session, _current_user = api_context
+    client, session, _current_user = api_context
+    _enable_automatic_deposits(session)
 
     accounts_response = client.get("/api/wallets/accounts")
     payment_event_response = client.post(
@@ -246,64 +292,66 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
 
 def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
     client, session, current_user = api_context
-    _fund_user(session, current_user, amount=Decimal("100"))
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
 
     response = client.post(
         "/api/wallets/withdrawals",
         json={
-            "amount": 20,
-            "unit": "credit",
+            "amount_coin": "20.0000",
             "source_scope": "trade",
-            "destination_reference": "bank:0012345678",
         },
     )
 
     assert response.status_code == 201
     payload = response.json()
     assert payload["source_scope"] == "trade"
+    assert payload["status"] == "pending_review"
+    assert payload["processor_mode"] == "manual_bank_transfer"
     assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
     assert Decimal(str(payload["total_debit"])) == Decimal("25.0000")
 
 
 def test_create_competition_withdrawal_request_is_blocked_by_default(api_context) -> None:
     client, session, current_user = api_context
-    _fund_user(session, current_user, amount=Decimal("100"))
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
 
     response = client.post(
         "/api/wallets/withdrawals",
         json={
-            "amount": 20,
-            "unit": "credit",
+            "amount_coin": "20.0000",
             "source_scope": "competition",
-            "destination_reference": "bank:0012345678",
         },
     )
 
     assert response.status_code == 409
-    assert "locked" in response.json()["detail"].lower()
+    assert "e-game reward withdrawals" in response.json()["detail"].lower()
 
 
-def test_create_trade_withdrawal_request_requires_bank_reference_in_manual_mode(api_context) -> None:
+def test_create_trade_withdrawal_request_requires_bank_account_details(api_context) -> None:
     client, session, current_user = api_context
-    _fund_user(session, current_user, amount=Decimal("100"))
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    current_user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
 
     response = client.post(
         "/api/wallets/withdrawals",
         json={
-            "amount": 20,
-            "unit": "credit",
+            "amount_coin": "20.0000",
             "source_scope": "trade",
-            "destination_reference": "acct-0012345678",
         },
     )
 
-    assert response.status_code == 422
-    assert "bank:" in response.json()["detail"].lower()
+    assert response.status_code == 409
+    assert "bank account details are required" in response.json()["detail"].lower()
 
 
 def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabled(api_context) -> None:
     client, session, current_user = api_context
-    _fund_user(session, current_user, amount=Decimal("100"))
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+    _enable_automatic_withdrawals(session)
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
     (client.app.state.settings.config_root / "admin_god_mode.json").write_text(
         '{"commissions":{"withdrawal_fee_bps":1000,"minimum_withdrawal_fee_credits":"5.0000"},"withdrawal_controls":{"egame_withdrawals_enabled":false,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
@@ -313,17 +361,15 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
     response = client.post(
         "/api/wallets/withdrawals",
         json={
-            "amount": 20,
-            "unit": "credit",
+            "amount_coin": "20.0000",
             "source_scope": "trade",
-            "destination_reference": "gateway:user-bank-token",
         },
     )
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["status"] == "processing"
-    assert payload["processing_mode"] == "automatic_gateway"
+    assert payload["status"] == "pending_review"
+    assert payload["processor_mode"] == "automatic_gateway"
     assert payload["payout_channel"] == "gateway"
 
 
@@ -350,34 +396,7 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
 def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None:
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("120"), unit=LedgerUnit.COIN)
-    _seed_policy_defaults(session, current_user)
-
-    from app.treasury.service import TreasuryService
-    treasury = TreasuryService()
-    treasury.create_user_bank_account(
-        session,
-        user=current_user,
-        bank_name="GT Bank",
-        account_number="0123456789",
-        account_name="Wallet HTTP",
-        bank_code="058",
-        currency_code="NGN",
-        set_active=True,
-    )
-    treasury.submit_kyc(
-        session,
-        user=current_user,
-        nin="12345678901",
-        bvn=None,
-        address_line1="12 Marina",
-        address_line2=None,
-        city="Lagos",
-        state="Lagos",
-        country="Nigeria",
-        id_document_attachment_id=None,
-    )
-    current_user.kyc_status = KycStatus.FULLY_VERIFIED
-    session.commit()
+    _provision_withdrawable_user(session, current_user)
 
     quote_response = client.post(
         "/api/wallets/withdrawals/quote",
@@ -398,6 +417,13 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
     assert payload["source_scope"] == "trade"
     assert payload["processor_mode"] == "manual_bank_transfer"
     assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
+    assert payload["platform_positioning"] == GTEX_PLATFORM_POSITIONING
+    assert payload["legal_disclosures"] == [
+        "No guaranteed profit.",
+        "Prices are volatile.",
+        "Platform controls mechanics.",
+        "Rewards are promotional for GTEX competitions.",
+    ]
 
     receipt_response = client.get(f"/api/wallets/withdrawals/{payload['id']}/receipt")
     assert receipt_response.status_code == 200, receipt_response.text
@@ -406,3 +432,4 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
     assert Decimal(str(receipt["gross_amount"])) == Decimal("20.0000")
     assert Decimal(str(receipt["fee_amount"])) == Decimal("5.0000")
     assert Decimal(str(receipt["total_debit"])) == Decimal("25.0000")
+    assert receipt["platform_positioning"] == GTEX_PLATFORM_POSITIONING

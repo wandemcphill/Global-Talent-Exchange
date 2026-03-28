@@ -1,10 +1,6 @@
 import 'package:gte_frontend/models/competition_models.dart';
 
-enum CompetitionTieBreaker {
-  headToHead,
-  scoreDifference,
-  playoffRound,
-}
+enum CompetitionTieBreaker { headToHead, scoreDifference, playoffRound }
 
 class CompetitionRuleSet {
   const CompetitionRuleSet({
@@ -28,9 +24,10 @@ class CompetitionRuleSet {
       allowLateJoin: format == CompetitionFormat.league,
       lineupLockMinutes: format == CompetitionFormat.league ? 30 : 45,
       reviewWindowHours: 12,
-      tieBreaker: format == CompetitionFormat.league
-          ? CompetitionTieBreaker.headToHead
-          : CompetitionTieBreaker.playoffRound,
+      tieBreaker:
+          format == CompetitionFormat.league
+              ? CompetitionTieBreaker.headToHead
+              : CompetitionTieBreaker.playoffRound,
       requireVerification: true,
       showEscrowLedger: true,
     );
@@ -46,10 +43,16 @@ class CompetitionRuleSet {
   }) {
     return CompetitionRuleSet(
       allowLateJoin: allowLateJoin ?? this.allowLateJoin,
-      lineupLockMinutes:
-          _clamp(lineupLockMinutes ?? this.lineupLockMinutes, 15, 180),
-      reviewWindowHours:
-          _clamp(reviewWindowHours ?? this.reviewWindowHours, 2, 48),
+      lineupLockMinutes: _clamp(
+        lineupLockMinutes ?? this.lineupLockMinutes,
+        15,
+        180,
+      ),
+      reviewWindowHours: _clamp(
+        reviewWindowHours ?? this.reviewWindowHours,
+        2,
+        48,
+      ),
       tieBreaker: tieBreaker ?? this.tieBreaker,
       requireVerification: requireVerification ?? this.requireVerification,
       showEscrowLedger: showEscrowLedger ?? this.showEscrowLedger,
@@ -101,10 +104,7 @@ class CompetitionDraftPayoutRule {
   final int place;
   final double percent;
 
-  CompetitionDraftPayoutRule copyWith({
-    int? place,
-    double? percent,
-  }) {
+  CompetitionDraftPayoutRule copyWith({int? place, double? percent}) {
     return CompetitionDraftPayoutRule(
       place: place ?? this.place,
       percent: percent ?? this.percent,
@@ -153,8 +153,8 @@ class CompetitionDraft {
       name: '',
       format: CompetitionFormat.league,
       visibility: CompetitionVisibility.public,
-      entryFee: 12,
-      currency: 'credit',
+      entryFee: 5,
+      currency: 'coin',
       capacity: 12,
       creatorId: creatorId,
       creatorName: creatorName,
@@ -198,7 +198,7 @@ class CompetitionDraft {
       errors.add('Capacity must stay between 2 and 500 players.');
     }
     if (entryFee < 0 || entryFee > 10000) {
-      errors.add('Entry fee must stay between 0 and 10,000 credits.');
+      errors.add('Entry fee must stay between 0 and 10,000 GTex.');
     }
     if (platformFeePct < 0 || platformFeePct > 0.20) {
       errors.add('Platform service fee must stay between 0% and 20%.');
@@ -249,8 +249,11 @@ class CompetitionDraft {
       creatorId: creatorId ?? this.creatorId,
       creatorName: creatorName ?? this.creatorName,
       payoutRules: payoutRules ?? this.payoutRules,
-      platformFeePct:
-          _clampDouble(platformFeePct ?? this.platformFeePct, 0, 0.20),
+      platformFeePct: _clampDouble(
+        platformFeePct ?? this.platformFeePct,
+        0,
+        0.20,
+      ),
       hostFeePct: _clampDouble(hostFeePct ?? this.hostFeePct, 0, 0.15),
       rules: rules ?? this.rules,
       beginnerFriendly: beginnerFriendly ?? this.beginnerFriendly,

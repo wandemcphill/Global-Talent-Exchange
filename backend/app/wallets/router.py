@@ -8,12 +8,14 @@ from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.admin_finance.service import AdminFinanceService
+from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
 from app.admin_godmode.service import (
     AdminGodModeService,
     DEFAULT_COMMISSION_SETTINGS,
     DEFAULT_WITHDRAWAL_CONTROLS,
 )
+from app.economy.governor_service import EconomyGovernorService
 from app.models.user import User
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
@@ -40,6 +42,10 @@ from app.wallets.schemas import (
     MarketTopupStatusUpdate,
     MarketTopupView,
     WalletAccountBalance,
+    WalletConversionQuoteRequest,
+    WalletConversionQuoteView,
+    WalletConversionRequest,
+    WalletConversionView,
     WalletLedgerEntryView,
     WalletLedgerPageView,
     WalletSummaryView,
@@ -49,7 +55,7 @@ from app.wallets.schemas import (
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
 from app.wallets.providers import get_provider_adapter
-from app.models.wallet import LedgerEntry, PayoutRequest, PayoutStatus
+from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskOpsService
 from app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
 from app.treasury.schemas import (
@@ -79,14 +85,22 @@ def _api_operation_id(route: APIRoute) -> str:
 
 
 def _build_wallet_service(request: Request | None) -> WalletService:
-    if request is not None and hasattr(request.app.state, "event_publisher"):
-        return WalletService(event_publisher=request.app.state.event_publisher)
+    if request is not None:
+        return WalletService(
+            event_publisher=getattr(request.app.state, "event_publisher", None),
+            cache_backend=getattr(request.app.state, "cache_backend", None),
+        )
     return WalletService()
 
 
 def _build_treasury_service(request: Request | None) -> TreasuryService:
-    if request is not None and hasattr(request.app.state, "event_publisher"):
-        return TreasuryService(wallet_service=WalletService(event_publisher=request.app.state.event_publisher))
+    if request is not None:
+        return TreasuryService(
+            wallet_service=WalletService(
+                event_publisher=getattr(request.app.state, "event_publisher", None),
+                cache_backend=getattr(request.app.state, "cache_backend", None),
+            )
+        )
     return TreasuryService()
 
 
@@ -104,7 +118,7 @@ def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
 
 
 def _require_payment_rails_permission(request: Request, actor: User) -> None:
-    service = AdminGodModeService(wallet_service=WalletService())
+    service = AdminGodModeService(wallet_service=_build_wallet_service(request))
     state = service._load_state(request.app)
     profile = service.resolve_profile(actor, state)
     service._assert_has_permission(profile, "manage_payment_rails")
@@ -127,6 +141,12 @@ def _build_withdrawal_view(withdrawal: TreasuryWithdrawalRequest, payout: Payout
     total_debit = gross_amount + fee_amount
     if meta.get("total_debit") is not None:
         total_debit = Decimal(str(meta.get("total_debit")))
+    legal_disclosures = meta.get("legal_disclosures")
+    if isinstance(legal_disclosures, (list, tuple)):
+        disclosure_items = [str(item) for item in legal_disclosures]
+    else:
+        disclosure_items = list(TreasuryService().legal_disclosures())
+    platform_positioning = str(meta.get("platform_positioning") or TreasuryService.platform_positioning())
     return TreasuryWithdrawalRequestView(
         id=withdrawal.id,
         payout_request_id=withdrawal.payout_request_id,
@@ -150,6 +170,8 @@ def _build_withdrawal_view(withdrawal: TreasuryWithdrawalRequest, payout: Payout
         net_amount=net_amount,
         processor_mode=processor_mode,
         payout_channel=payout_channel,
+        platform_positioning=platform_positioning,
+        legal_disclosures=disclosure_items,
         notes=withdrawal.notes,
         created_at=withdrawal.created_at,
         reviewed_at=withdrawal.reviewed_at,
@@ -171,8 +193,9 @@ def _build_withdrawal_quote(*, request: Request | None, session: Session, curren
     fee_amount = max((Decimal(amount_coin) * Decimal(fee_bps) / Decimal(10000)), minimum_fee).quantize(Decimal("0.0001"))
     gross_amount = Decimal(amount_coin).quantize(Decimal("0.0001"))
     total_debit = (gross_amount + fee_amount).quantize(Decimal("0.0001"))
-    payout_channel = "bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "gateway"
-    processor_mode = "manual_bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "automatic_gateway"
+    use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+    payout_channel = "bank_transfer" if use_manual_payout else "gateway"
+    processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
     blocked_reason = None
     controls = _withdrawal_controls(request)
     if source_scope == WithdrawalSourceScope.COMPETITION and not bool(controls.get("egame_withdrawals_enabled", False)):
@@ -209,6 +232,8 @@ def _build_withdrawal_quote(*, request: Request | None, session: Session, curren
             remaining_allowance=eligibility.remaining_allowance,
             next_eligible_at=eligibility.next_eligible_at,
             kyc_status=eligibility.kyc_status,
+            kyc_tier=eligibility.kyc_tier,
+            per_request_limit_fiat=eligibility.per_request_limit_fiat,
             requires_kyc=eligibility.requires_kyc,
             requires_bank_account=eligibility.requires_bank_account,
             pending_withdrawals=eligibility.pending_withdrawals,
@@ -217,8 +242,12 @@ def _build_withdrawal_quote(*, request: Request | None, session: Session, curren
             missing_required_policies=list(eligibility.missing_required_policies),
             policy_blocked=eligibility.policy_blocked,
             policy_block_reason=eligibility.policy_block_reason,
+            platform_positioning=eligibility.platform_positioning,
+            legal_disclosures=list(eligibility.legal_disclosures),
         ),
         blocked_reason=blocked_reason,
+        platform_positioning=eligibility.platform_positioning,
+        legal_disclosures=list(eligibility.legal_disclosures),
     )
 
 def _load_admin_god_mode_state(request: Request | None) -> dict[str, object]:
@@ -345,17 +374,66 @@ def list_wallet_accounts(
 
 @wallet_router.get("/summary", response_model=WalletSummaryView)
 def get_wallet_summary(
+    currency: LedgerUnit = Query(default=LedgerUnit.CREDIT),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
     request: Request = None,
 ) -> WalletSummaryView:
     service = _build_wallet_service(request)
-    summary = service.get_wallet_summary(session, current_user)
+    summary = service.get_wallet_summary(session, current_user, currency=currency)
     return WalletSummaryView(
         available_balance=summary.available_balance,
         reserved_balance=summary.reserved_balance,
         total_balance=summary.total_balance,
         currency=summary.currency,
+    )
+
+
+@wallet_router.post("/conversions/quote", response_model=WalletConversionQuoteView)
+def quote_wallet_conversion(
+    payload: WalletConversionQuoteRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> WalletConversionQuoteView:
+    del current_user
+    quote = EconomyGovernorService(session).quote_conversion(source_unit=payload.source_unit, amount=payload.amount)
+    return WalletConversionQuoteView(
+        source_unit=quote.source_unit,
+        source_amount=quote.source_amount,
+        target_unit=quote.target_unit,
+        target_amount=quote.target_amount,
+        rate=quote.rate,
+    )
+
+
+@wallet_router.post("/conversions", response_model=WalletConversionView, status_code=status.HTTP_201_CREATED)
+def create_wallet_conversion(
+    payload: WalletConversionRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+    request: Request = None,
+) -> WalletConversionView:
+    try:
+        result = EconomyGovernorService(session).convert_wallet_units(
+            user=current_user,
+            amount=payload.amount,
+            source_unit=payload.source_unit,
+            actor=current_user,
+            idempotency_key=payload.idempotency_key,
+        )
+        session.commit()
+    except LedgerError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return WalletConversionView(
+        transaction_id=result.transaction_id,
+        reference=result.reference,
+        source_unit=result.source_unit,
+        source_amount=result.source_amount,
+        target_unit=result.target_unit,
+        target_amount=result.target_amount,
+        rate=EconomyGovernorService(session).quote_conversion(source_unit=result.source_unit, amount=result.source_amount).rate,
     )
 
 
@@ -378,7 +456,7 @@ def get_wallet_adaptive_overview(
     overview.update(policy)
     overview["country_code"] = compliance_policy.country_code
     insights = list(overview.get("insights") or [])
-    payout_mode = "bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "gateway"
+    payout_mode = "bank_transfer" if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID} else "gateway"
     deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else "gateway"
     insights.append({
         "label": "Deposit rail",
@@ -525,7 +603,7 @@ def list_deposits(
 def create_purchase_order_quote(
     payload: PurchaseOrderQuoteRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> PurchaseOrderQuoteView:
     try:
@@ -569,7 +647,7 @@ def create_purchase_order_quote(
 def create_purchase_order(
     payload: PurchaseOrderCreateRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> PurchaseOrderView:
     try:
@@ -734,7 +812,7 @@ def get_withdrawal_eligibility(
 def create_withdrawal_quote(
     payload: WithdrawalQuoteRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> WithdrawalQuoteView:
     return _build_withdrawal_quote(request=request, session=session, current_user=current_user, amount_coin=payload.amount_coin, source_scope=payload.source_scope)
@@ -766,6 +844,8 @@ def get_withdrawal_receipt(
         source_scope=view.source_scope,
         processor_mode=view.processor_mode,
         payout_channel=view.payout_channel,
+        platform_positioning=view.platform_positioning,
+        legal_disclosures=view.legal_disclosures,
     )
 
 
@@ -773,7 +853,7 @@ def get_withdrawal_receipt(
 def create_withdrawal_request(
     payload: TreasuryWithdrawalRequestCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> TreasuryWithdrawalRequestView:
     service = _build_treasury_service(request)
@@ -812,9 +892,20 @@ async def handle_provider_webhook(
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     try:
-        payload = await request.json()
+        raw_body = await request.body()
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
     except json.JSONDecodeError:
+        raw_body = b""
         payload = {}
+    try:
+        AdminFinanceService(session=session, settings=request.app.state.settings).verify_provider_webhook(
+            provider_key=provider_key,
+            payload=payload,
+            raw_body=raw_body,
+            headers=dict(request.headers),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     event = adapter.parse_webhook(payload, headers=dict(request.headers))
     rail_service = _build_wallet_rail_service(request, session)
     if event is None:
@@ -1000,7 +1091,7 @@ def update_market_topup_status(
 def create_payment_event(
     payload: PaymentEventCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> PaymentEventView:
     service = _build_wallet_service(request)

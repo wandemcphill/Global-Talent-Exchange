@@ -1,0 +1,143 @@
+Traceback (most recent call last):
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 3309, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 447, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 1264, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 716, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 714, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 836, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 899, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 895, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\create.py", line 661, in connect
+    return dialect.connect(*cargs, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\psycopg\connection.py", line 98, in connect
+    attempts = conninfo_attempts(params)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\psycopg\_conninfo_attempts.py", line 55, in conninfo_attempts
+    raise last_exc
+psycopg.OperationalError: failed to resolve host 'dpg-d71k6p7fte5s73a3marg-a.frankfurt-postgres.render.com': [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\backend\scripts\real_player_import_from_2nd_zip.py", line 195, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\backend\scripts\real_player_import_from_2nd_zip.py", line 131, in main
+    result = service.resume_run(run_id=args.run_id)
+  File "C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\backend\app\ingestion\second_zip_real_player_ops_service.py", line 381, in resume_run
+    return self.import_archive(
+           ~~~~~~~~~~~~~~~~~~~^
+        archive_path=archive_path,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        batch_size=batch_size,
+        ^^^^^^^^^^^^^^^^^^^^^^
+        limit=limit,
+        ^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\backend\app\ingestion\second_zip_real_player_ops_service.py", line 345, in import_archive
+    batch = self._load_batch(session, batch_id)
+  File "C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\backend\app\ingestion\second_zip_real_player_ops_service.py", line 1817, in _load_batch
+    return self._load_batch_record(session, batch_id, include_rows=True)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\backend\app\ingestion\second_zip_real_player_ops_service.py", line 1827, in _load_batch_record
+    batch = session.scalar(
+        statement
+    )
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\session.py", line 2399, in scalar
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        **kw,
+        ^^^^^
+    )
+    ^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\orm\session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 3285, in connect
+    return self._connection_cls(self)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 145, in __init__
+    Connection._handle_dbapi_exception_noconnection(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        err, dialect, engine
+        ^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 2448, in _handle_dbapi_exception_noconnection
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\base.py", line 3309, in raw_connection
+    return self.pool.connect()
+           ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 447, in connect
+    return _ConnectionFairy._checkout(self)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 1264, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 716, in checkout
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 714, in checkout
+    dbapi_connection = rec.get_connection()
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 836, in get_connection
+    self.__connect()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 899, in __connect
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\pool\base.py", line 895, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\create.py", line 661, in connect
+    return dialect.connect(*cargs, **cparams)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\sqlalchemy\engine\default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\psycopg\connection.py", line 98, in connect
+    attempts = conninfo_attempts(params)
+  File "C:\Users\ayomc\AppData\Roaming\Python\Python314\site-packages\psycopg\_conninfo_attempts.py", line 55, in conninfo_attempts
+    raise last_exc
+sqlalchemy.exc.OperationalError: (psycopg.OperationalError) failed to resolve host 'dpg-d71k6p7fte5s73a3marg-a.frankfurt-postgres.render.com': [Errno 11001] getaddrinfo failed
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

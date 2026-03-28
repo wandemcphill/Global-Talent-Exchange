@@ -1,0 +1,14 @@
+{
+  "name": "GtexMatch3D.Runtime",
+  "rootNamespace": "Gtex.Match3D.Runtime",
+  "references": [],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

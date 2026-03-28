@@ -1,3 +1,5 @@
+import app.ingestion.models  # noqa: F401
+
 from app.models.academy_graduation_event import AcademyGraduationEvent
 from app.models.academy_player import AcademyPlayer
 from app.models.academy_player_progress import AcademyPlayerProgress
@@ -73,6 +75,23 @@ from app.models.club_social import (
     RivalryProfile,
 )
 from app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
+from app.models.football_universe import (
+    BroadcastSession,
+    ClubIdentity,
+    ClubPhilosophy,
+    FanBase,
+    FanSentiment,
+    MediaEvent,
+    MediaEventType,
+)
+from app.models.broadcast_rights import (
+    BroadcastAccessGrant,
+    BroadcastRevenueDistribution,
+    BroadcastRight,
+    BroadcastRightsAuction,
+    BroadcastRightsBid,
+    ViewSession,
+)
 from app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
 from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
@@ -86,6 +105,7 @@ from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.highlight_event import HighlightEvent
+from app.models.commentary_event import CommentaryEvent
 from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerControlMode, ManagerProfile
 from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
 from app.models.competition_participant import CompetitionParticipant
@@ -167,6 +187,7 @@ from app.models.discovery_engine import FeaturedRail, SavedSearch
 from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule
 from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
@@ -174,6 +195,7 @@ from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.player_rivalry import PlayerRivalry
 from app.models.player_story import PlayerStory
+from app.models.player_face import PlayerFace
 from app.models.player_career_entry import PlayerCareerEntry
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
@@ -181,6 +203,16 @@ from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, P
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_personality import PlayerPersonality
+from app.models.real_world_hub import (
+    RealClub,
+    RealCompetition,
+    RealDataProvider,
+    RealDataSyncJob,
+    RealDataSyncStatus,
+    RealPlayer,
+    RealityMode,
+    RealityModeSetting,
+)
 from app.models.real_player_import_batch import (
     RealPlayerImportBatch,
     RealPlayerImportBatchStatus,
@@ -217,6 +249,23 @@ from app.models.real_world_football import (
     RealWorldFootballEvent,
     TrendingPlayerFlag,
 )
+from app.models.federation import (
+    Federation,
+    FederationCompetitionType,
+    FederationLeague,
+    FederationMembership,
+    FederationMembershipStatus,
+    FederationNarrativeSnapshot,
+    FederationProposal,
+    FederationProposalStatus,
+    FederationRuleAudit,
+    FederationRuleAuditStatus,
+    FederationSanction,
+    FederationSanctionType,
+    FederationTreasuryEntry,
+    FederationVote,
+    FederationVoteType,
+)
 from app.models.referral_attribution import ReferralAttribution
 from app.models.referral_event import ReferralEvent
 from app.models.referral_reward import ReferralReward
@@ -236,6 +285,17 @@ from app.models.manager_market import (
 )
 from app.models.manager_duel import ManagerDuel, ManagerDuelProfile
 from app.models.transfer_bid import TransferBid
+from app.models.transfer_market import (
+    ClubTeamDynamics,
+    CoachDemand,
+    CoachProfile,
+    MarketWatchlistEntry,
+    PlayerCoachRelationship,
+    PlayerDecisionProfile,
+    TransferListing,
+    TransferListingBid,
+    TransferNegotiation,
+)
 from app.models.transfer_window import TransferWindow
 from app.models.treasury import (
     DepositRequest,
@@ -332,6 +392,14 @@ from app.models.regen_ecosystem import (
     Scout,
     YouthAcademy,
 )
+from app.regen_universe.models import (
+    RegenAward as RegenUniverseAward,
+    RegenAwardWinner,
+    RegenHallOfFame,
+    RegenPerformanceRecord,
+    RegenRankingSnapshot,
+    RegenSeason,
+)
 from app.models.scouting_intelligence import (
     AcademySupplySignal,
     HiddenPotentialEstimate,
@@ -350,8 +418,49 @@ from app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
 from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
 from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
 from app.models.moderation_report import ModerationPriority, ModerationReport, ModerationReportStatus, ModerationResolutionAction
+from app.models.history_engagement import (
+    Achievement,
+    AchievementCategory,
+    DailyTask,
+    FollowTargetType,
+    HistoricalLeaderboardEntry,
+    HistoricalRecord,
+    HistoricalRecordType,
+    MilestoneProgress,
+    ObjectiveFrequency,
+    SeasonPassMission,
+    SeasonPassReward,
+    SeasonPassSeason,
+    SocialActivity,
+    UserAchievement,
+    UserFollow,
+    UserObjectiveProgress,
+    UserProfile,
+    UserSeasonMissionProgress,
+    UserSeasonProgress,
+    UserSeasonRewardClaim,
+    UserStreak,
+    WeeklyTask,
+)
 from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
+from app.models.ownership_group import (
+    OwnershipGroup,
+    OwnershipGroupBudgetMovement,
+    OwnershipGroupClub,
+    OwnershipGroupEvent,
+)
 from app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
+from app.models.national_team_tournament import (
+    FreePlayerTier,
+    NationalTeamRentalSquadMember,
+    RentalContract,
+    RentalContractStatus,
+    StadiumAd,
+    StadiumAdPlacement,
+    StoryEvent,
+    StoryEventType,
+    TournamentTheme,
+)
 from app.models.story_feed import StoryFeedItem
 from app.models.youth_tournament import YouthTournament
 from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
@@ -363,6 +472,7 @@ from app.models.wallet import (
     LedgerEntry,
     LedgerEntryReason,
     LedgerSourceTag,
+    LedgerTransactionType,
     LedgerUnit,
     PaymentEvent,
     PaymentProvider,
@@ -433,6 +543,18 @@ __all__ = [
     "MatchReactionEvent",
     "RivalryMatchHistory",
     "RivalryProfile",
+    "BroadcastSession",
+    "BroadcastAccessGrant",
+    "BroadcastRevenueDistribution",
+    "BroadcastRight",
+    "BroadcastRightsAuction",
+    "BroadcastRightsBid",
+    "ClubIdentity",
+    "ClubPhilosophy",
+    "FanBase",
+    "FanSentiment",
+    "MediaEvent",
+    "MediaEventType",
     "ClubSponsor",
     "ClubSponsorshipAsset",
     "ClubSponsorshipContract",
@@ -447,6 +569,7 @@ __all__ = [
     "CompetitionMatch",
     "CompetitionMatchEvent",
     "HighlightEvent",
+    "CommentaryEvent",
     "ManagerContract",
     "ManagerContractStatus",
     "ManagerControlMode",
@@ -539,6 +662,7 @@ __all__ = [
     "DisputeStatus",
     "GiftCatalogItem",
     "EconomyBurnEvent",
+    "EconomyDailyStat",
     "FancoinPurchaseOrder",
     "PurchaseOrderStatus",
     "GiftComboEvent",
@@ -565,6 +689,7 @@ __all__ = [
     "WithdrawalReview",
     "PlayerRivalry",
     "PlayerStory",
+    "PlayerFace",
     "PlayerCareerEntry",
     "PlayerAgencyState",
     "PlayerContract",
@@ -638,6 +763,10 @@ __all__ = [
     "User",
     "UserRole",
     "NotificationRecord",
+    "OwnershipGroup",
+    "OwnershipGroupBudgetMovement",
+    "OwnershipGroupClub",
+    "OwnershipGroupEvent",
     "SpectatorSession",
     "CountryFeaturePolicy",
     "PolicyAcceptanceRecord",
@@ -693,6 +822,12 @@ __all__ = [
     "RegenBloodlineLink",
     "Scout",
     "YouthAcademy",
+    "RegenUniverseAward",
+    "RegenAwardWinner",
+    "RegenHallOfFame",
+    "RegenPerformanceRecord",
+    "RegenRankingSnapshot",
+    "RegenSeason",
     "AcademySupplySignal",
     "HiddenPotentialEstimate",
     "ManagerScoutingProfile",
@@ -730,6 +865,23 @@ __all__ = [
     "MatchRevenueSnapshot",
     "MatchView",
     "PremiumVideoPurchase",
+    "ViewSession",
+    "HistoricalRecord",
+    "HistoricalRecordType",
+    "HistoricalLeaderboardEntry",
+    "Achievement",
+    "AchievementCategory",
+    "UserAchievement",
+    "MilestoneProgress",
+    "UserProfile",
+    "UserFollow",
+    "FollowTargetType",
+    "SocialActivity",
+    "DailyTask",
+    "WeeklyTask",
+    "UserObjectiveProgress",
+    "ObjectiveFrequency",
+    "UserStreak",
     "NationalTeamCompetition",
     "NationalTeamEntry",
     "NationalTeamManagerHistory",

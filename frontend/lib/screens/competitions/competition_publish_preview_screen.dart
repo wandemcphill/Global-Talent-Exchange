@@ -9,10 +9,7 @@ import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
 class CompetitionPublishPreviewScreen extends StatefulWidget {
-  const CompetitionPublishPreviewScreen({
-    super.key,
-    required this.controller,
-  });
+  const CompetitionPublishPreviewScreen({super.key, required this.controller});
 
   final CompetitionController controller;
 
@@ -26,9 +23,7 @@ class _CompetitionPublishPreviewScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Publish preview'),
-      ),
+      appBar: AppBar(title: const Text('Publish preview')),
       body: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
@@ -51,7 +46,8 @@ class _CompetitionPublishPreviewScreenState
                             children: <Widget>[
                               Text(
                                 preview.name,
-                                style: Theme.of(context).textTheme.headlineSmall,
+                                style:
+                                    Theme.of(context).textTheme.headlineSmall,
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -69,11 +65,15 @@ class _CompetitionPublishPreviewScreenState
                       spacing: 10,
                       runSpacing: 10,
                       children: <Widget>[
-                        CompetitionVisibilityChip(visibility: preview.visibility),
+                        CompetitionVisibilityChip(
+                          visibility: preview.visibility,
+                        ),
                         Material(
                           color: Colors.transparent,
                           child: Chip(
-                            label: Text('Contest status: ${preview.status.name}'),
+                            label: Text(
+                              'Contest status: ${preview.status.name}',
+                            ),
                           ),
                         ),
                         if (preview.beginnerFriendly == true)
@@ -102,6 +102,7 @@ class _CompetitionPublishPreviewScreenState
                 hostFeeAmount: financials.hostFeeAmount,
                 prizePool: financials.prizePool,
                 currency: financials.currency,
+                matchType: preview.matchType,
                 projected: true,
                 lockNotice:
                     'After the first paid entry clears, fee settings and transparent payout lock for participant safety.',
@@ -143,9 +144,9 @@ class _CompetitionPublishPreviewScreenState
     }
     await Navigator.of(context).pushReplacement<void, void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionShareScreen(
-          controller: widget.controller,
-        ),
+        builder:
+            (BuildContext context) =>
+                CompetitionShareScreen(controller: widget.controller),
       ),
     );
   }

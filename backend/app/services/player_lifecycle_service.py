@@ -51,6 +51,7 @@ from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.club_finance.service import ClubFinanceService
+from app.ownership_groups.service import OwnershipGroupService
 from app.schemas.player_lifecycle import (
     AvailabilityBadgeView,
     BigClubApproachRequest,
@@ -1586,13 +1587,30 @@ class PlayerLifecycleService:
                     "primary_reasons": [item.code for item in contract_preview.primary_reasons],
                 }
 
+        proposed_bid_amount = offer_market.training_fee_gtex_coin if offer_market is not None else payload.bid_amount
+        ownership_validation = OwnershipGroupService(self.session).validate_transfer(
+            player_id=player.id,
+            selling_club_id=selling_club_id,
+            buying_club_id=payload.buying_club_id,
+            bid_amount=proposed_bid_amount,
+        )
+        if ownership_validation["blocked"]:
+            raise PlayerLifecycleValidationError(ownership_validation["reason"] or "Ownership-group transfer validation failed")
+        structured_terms["ownership_group_validation"] = {
+            "group_id": ownership_validation.get("group_id"),
+            "fair_value": self._serialize_decimal(ownership_validation.get("fair_value")),
+            "min_allowed": self._serialize_decimal(ownership_validation.get("min_allowed")),
+            "max_allowed": self._serialize_decimal(ownership_validation.get("max_allowed")),
+            "recent_internal_transfer_count": ownership_validation.get("recent_internal_transfer_count", 0),
+        }
+
         bid = TransferBid(
             window_id=window_id,
             player_id=payload.player_id,
             selling_club_id=selling_club_id,
             buying_club_id=payload.buying_club_id,
             status=TransferBidStatus.SUBMITTED.value,
-            bid_amount=offer_market.training_fee_gtex_coin if offer_market is not None else payload.bid_amount,
+            bid_amount=proposed_bid_amount,
             wage_offer_amount=offered_salary if offer_market is not None else payload.wage_offer_amount,
             sell_on_clause_pct=payload.sell_on_clause_pct,
             notes=payload.notes,
@@ -1699,6 +1717,14 @@ class PlayerLifecycleService:
         )
 
         current_contract = self._select_primary_contract(self.get_contracts(bid.player_id), reference_on=contract_starts_on)
+        ownership_validation = OwnershipGroupService(self.session).validate_transfer(
+            player_id=player.id,
+            selling_club_id=bid.selling_club_id,
+            buying_club_id=bid.buying_club_id,
+            bid_amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
+        )
+        if ownership_validation["blocked"]:
+            raise PlayerLifecycleValidationError(ownership_validation["reason"] or "Ownership-group transfer validation failed")
         if current_contract is not None:
             if bid.selling_club_id is not None and current_contract.club_id != bid.selling_club_id:
                 raise PlayerLifecycleValidationError("Transfer bid selling club no longer matches the player's contract")
@@ -1889,6 +1915,13 @@ class PlayerLifecycleService:
                 "contract_id": new_contract.id,
             },
         )
+        if ownership_validation.get("group_id") is not None and bid.selling_club_id is not None and bid.buying_club_id is not None:
+            OwnershipGroupService(self.session).record_internal_transfer(
+                group_id=ownership_validation["group_id"],
+                source_club_id=bid.selling_club_id,
+                target_club_id=bid.buying_club_id,
+                amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
+            )
         self.session.commit()
         self.session.refresh(bid)
         self.session.expunge(bid)

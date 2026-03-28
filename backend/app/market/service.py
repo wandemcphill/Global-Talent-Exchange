@@ -32,6 +32,7 @@ from app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, Play
 from app.pricing.service import MarketPricingService, PricingValidationError
 from app.schemas.avatar import PlayerAvatarView
 from app.services.avatar_service import AvatarIdentityInput, AvatarService
+from app.services.runtime_control_service import RuntimeControlService
 from app.value_engine.authority import authoritative_reference_credits
 from app.value_engine.scoring import credits_from_real_world_value
 from sqlalchemy.orm import Session
@@ -865,6 +866,7 @@ class MarketPlayerQueryService:
     market_engine: MarketEngine | None = None
     today: date | None = None
     avatar_service: AvatarService | None = None
+    runtime_controls: RuntimeControlService | None = None
     _real_world_impact_cache: dict[str, PlayerRealWorldImpact] = field(init=False, default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
@@ -1449,6 +1451,9 @@ class MarketPlayerQueryService:
         return record.latest_snapshot.breakdown_json
 
     def _current_value_credits(self, record: MarketPlayerRecord) -> float | None:
+        override = self._manual_price_override(record.player.id)
+        if override is not None:
+            return override
         if record.summary is not None:
             return record.summary.current_value_credits
         if record.latest_snapshot is not None:
@@ -1463,6 +1468,12 @@ class MarketPlayerQueryService:
         return None
 
     def _movement_pct(self, record: MarketPlayerRecord) -> float | None:
+        override = self._manual_price_override(record.player.id)
+        if override is not None:
+            previous_value = self._previous_value_credits(record)
+            if previous_value in {None, 0}:
+                return None
+            return round(((override - previous_value) / previous_value) * 100.0, 4)
         if record.summary is not None:
             return record.summary.movement_pct
         if record.latest_snapshot is not None:
@@ -1488,6 +1499,9 @@ class MarketPlayerQueryService:
         return None
 
     def _published_card_value_credits(self, record: MarketPlayerRecord) -> float | None:
+        override = self._manual_price_override(record.player.id)
+        if override is not None:
+            return override
         summary_payload = self._summary_payload(record)
         value = self._coerce_float(summary_payload.get("published_card_value_credits"))
         if value is not None:
@@ -1539,6 +1553,9 @@ class MarketPlayerQueryService:
         return ()
 
     def _reference_price(self, record: MarketPlayerRecord) -> float | None:
+        override = self._manual_price_override(record.player.id)
+        if override is not None:
+            return override
         authoritative_value = authoritative_reference_credits(
             summary=record.summary,
             latest_snapshot=record.latest_snapshot,
@@ -1718,3 +1735,13 @@ class MarketPlayerQueryService:
             return int(round(float(value)))
         except (TypeError, ValueError):
             return None
+
+    def _manual_price_override(self, player_id: str) -> float | None:
+        if self.runtime_controls is None:
+            return None
+        for asset_type in ("player", "player_card", "market_player"):
+            override = self.runtime_controls.get_price_override(asset_type=asset_type, asset_id=player_id)
+            if override is None:
+                continue
+            return self._coerce_float(override.override_price)
+        return None

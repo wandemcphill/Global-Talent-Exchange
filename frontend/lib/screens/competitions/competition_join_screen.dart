@@ -8,10 +8,7 @@ import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
 class CompetitionJoinScreen extends StatefulWidget {
-  const CompetitionJoinScreen({
-    super.key,
-    required this.controller,
-  });
+  const CompetitionJoinScreen({super.key, required this.controller});
 
   final CompetitionController controller;
 
@@ -35,9 +32,7 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Join competition'),
-        ),
+        appBar: AppBar(title: const Text('Join competition')),
         body: AnimatedBuilder(
           animation: widget.controller,
           builder: (BuildContext context, Widget? child) {
@@ -62,10 +57,16 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Review entry fee, rules, and contest status before you confirm your place in this creator competition.',
+                        competition.isGtexHosted
+                            ? 'GTEX is funding this competition, so entry is free. Review the rules before you lock your place.'
+                            : competition.isFastMatch
+                            ? 'Fast Match is a paid lane. Review the wallet charge and rules before you lock your slot.'
+                            : 'Review entry fee, rules, and contest status before you confirm your place in this hosted competition.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      if (competition.joinEligibility.requiresInvite) ...<Widget>[
+                      if (competition
+                          .joinEligibility
+                          .requiresInvite) ...<Widget>[
                         const SizedBox(height: 16),
                         TextField(
                           controller: _inviteCodeController,
@@ -75,6 +76,38 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                           ),
                         ),
                       ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                GteSurfacePanel(
+                  accentColor:
+                      competition.isGtexHosted
+                          ? Colors.green
+                          : competition.isFastMatch
+                          ? GteShellTheme.accentWarm
+                          : GteShellTheme.accentCapital,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(
+                        competition.isGtexHosted
+                            ? Icons.celebration_outlined
+                            : Icons.account_balance_wallet_outlined,
+                        color:
+                            competition.isGtexHosted
+                                ? Colors.green
+                                : competition.isFastMatch
+                                ? GteShellTheme.accentWarm
+                                : GteShellTheme.accentCapital,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          competition.economyNotice,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -89,9 +122,11 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                   hostFeeAmount: financials.hostFeeAmount,
                   prizePool: financials.prizePool,
                   currency: financials.currency,
-                  lockNotice: competition.isLockedForPaidEntryEdits
-                      ? 'Paid entries have begun, so these settings are locked.'
-                      : 'If this is a paid competition, settings lock once the first paid entry clears.',
+                  matchType: competition.matchType,
+                  lockNotice:
+                      competition.isLockedForPaidEntryEdits
+                          ? 'Paid entries have begun, so these settings are locked.'
+                          : 'If this is a paid competition, settings lock once the first paid entry clears.',
                 ),
                 const SizedBox(height: 16),
                 CompetitionPayoutCard(
@@ -105,8 +140,10 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Icon(Icons.verified_outlined,
-                          color: GteShellTheme.accentWarm),
+                      const Icon(
+                        Icons.verified_outlined,
+                        color: GteShellTheme.accentWarm,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -128,8 +165,12 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                       });
                     },
                     title: const Text('I understand the published rules'),
-                    subtitle: const Text(
-                      'I understand that entry fees are held in secure escrow and the transparent payout follows the published rules and verified results.',
+                    subtitle: Text(
+                      competition.isGtexHosted
+                          ? 'I understand this GTEX-hosted competition is free to join and the payout follows the published rules and verified results.'
+                          : competition.isFastMatch
+                          ? 'I understand this fast-match entry is paid from my wallet and the payout follows the published rules and verified results.'
+                          : 'I understand that entry fees are held in secure escrow and the transparent payout follows the published rules and verified results.',
                     ),
                   ),
                 ),
@@ -143,13 +184,14 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
                 ],
                 const SizedBox(height: 20),
                 FilledButton(
-                  onPressed: !_agreed || widget.controller.isJoining
-                      ? null
-                      : _joinCompetition,
+                  onPressed:
+                      !_agreed || widget.controller.isJoining
+                          ? null
+                          : _joinCompetition,
                   child: Text(
                     widget.controller.isJoining
                         ? 'Joining...'
-                        : 'Confirm join',
+                        : competition.entryButtonLabel,
                   ),
                 ),
               ],
@@ -161,12 +203,13 @@ class _CompetitionJoinScreenState extends State<CompetitionJoinScreen> {
   }
 
   Future<void> _joinCompetition() async {
-    final CompetitionSummary? joined =
-        await widget.controller.joinSelectedCompetition(
-      inviteCode: _inviteCodeController.text.trim().isEmpty
-          ? null
-          : _inviteCodeController.text.trim(),
-    );
+    final CompetitionSummary? joined = await widget.controller
+        .joinSelectedCompetition(
+          inviteCode:
+              _inviteCodeController.text.trim().isEmpty
+                  ? null
+                  : _inviteCodeController.text.trim(),
+        );
     if (!mounted || joined == null) {
       return;
     }

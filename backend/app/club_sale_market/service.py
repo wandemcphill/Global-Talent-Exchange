@@ -8,7 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.calendar_engine.service import CalendarEngineService
+from app.club_finance.models import ClubFinanceProfile
 from app.models.base import generate_uuid, utcnow
+from app.models.club_finance_account import ClubFinanceAccount
 from app.models.club_dynasty_progress import ClubDynastyProgress
 from app.models.club_profile import ClubProfile
 from app.models.club_sale_market import (
@@ -19,10 +21,16 @@ from app.models.club_sale_market import (
     ClubSaleTransfer,
     ClubValuationSnapshot,
 )
+from app.models.club_social import ClubIdentityMetrics
+from app.models.competition_match import CompetitionMatch
 from app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
 from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus
+from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.models.wallet import LedgerSourceTag, LedgerUnit
+from app.ingestion.models import Competition as IngestionCompetition
+from app.ingestion.models import InternalLeague, Player
+from app.ownership_groups.service import OwnershipGroupService
 from app.services.club_valuation_service import ClubValuationBreakdown, ClubValuationService
 from app.story_feed_engine.service import StoryFeedService
 from app.wallets.service import LedgerPosting, WalletService
@@ -34,6 +42,7 @@ OWNER_LISTING_STATUSES = {"active", "under_offer"}
 ALLOWED_VISIBILITIES = {"public", "private", "invite_only"}
 ACTIVE_OFFER_STATUSES = {"pending", "accepted"}
 INQUIRY_OPEN_STATUSES = {"open", "responded"}
+INSTANT_SELL_METADATA_KEY = "instant_sell"
 
 
 class ClubSaleMarketError(ValueError):
@@ -79,6 +88,42 @@ class ClubSaleMarketService:
     @staticmethod
     def _new_public_id(prefix: str) -> str:
         return f"{prefix}_{generate_uuid().replace('-', '')[:24]}"
+
+    def _instant_sell_settings(self, listing: ClubSaleListing) -> dict[str, Any]:
+        metadata = dict(listing.metadata_json or {})
+        settings = metadata.get(INSTANT_SELL_METADATA_KEY)
+        if not isinstance(settings, dict):
+            settings = {}
+        enabled = bool(settings.get("enabled", False))
+        minimum_price = settings.get("minimum_price")
+        normalized_minimum = (
+            self._normalize_amount(minimum_price)
+            if minimum_price is not None
+            else None
+        )
+        return {
+            "enabled": enabled,
+            "minimum_price": normalized_minimum,
+        }
+
+    def _set_instant_sell_settings(
+        self,
+        listing: ClubSaleListing,
+        *,
+        enabled: bool,
+        minimum_price: Decimal | float | int | str | None,
+    ) -> None:
+        metadata = dict(listing.metadata_json or {})
+        normalized_minimum = (
+            self._normalize_amount(minimum_price)
+            if minimum_price is not None
+            else None
+        )
+        metadata[INSTANT_SELL_METADATA_KEY] = {
+            "enabled": bool(enabled),
+            "minimum_price": self._display_amount(normalized_minimum) if normalized_minimum is not None else None,
+        }
+        listing.metadata_json = metadata
 
     def _require_club(self, club_id: str) -> ClubProfile:
         club = self.session.get(ClubProfile, club_id)
@@ -171,14 +216,316 @@ class ClubSaleMarketService:
             "metadata_json": metadata_json,
         }
 
+    def _cash_balance_value(self, club: ClubProfile) -> Decimal:
+        club_account_total_minor = int(
+            self.session.scalar(
+                select(func.coalesce(func.sum(ClubFinanceAccount.balance_minor), 0)).where(
+                    ClubFinanceAccount.club_id == club.id,
+                    ClubFinanceAccount.is_active.is_(True),
+                )
+            )
+            or 0
+        )
+        if club_account_total_minor:
+            return self._normalize_amount(Decimal(club_account_total_minor) / Decimal("100"))
+        finance_profile = self.session.scalar(
+            select(ClubFinanceProfile).where(ClubFinanceProfile.user_id == club.owner_user_id)
+        )
+        return self._normalize_amount(getattr(finance_profile, "balance", Decimal("0.0000")))
+
+    def _club_identity_metrics(self, club_id: str) -> ClubIdentityMetrics | None:
+        return self.session.scalar(
+            select(ClubIdentityMetrics).where(ClubIdentityMetrics.club_id == club_id)
+        )
+
+    def _brand_strength_value(self, club_id: str) -> tuple[Decimal, dict[str, Any]]:
+        metrics = self._club_identity_metrics(club_id)
+        if metrics is None:
+            return Decimal("0.0000"), {
+                "reputation_score": 0,
+                "media_popularity_score": 0,
+                "sponsorship_potential_score": 0,
+            }
+        reputation_score = int(metrics.reputation_score or 0)
+        media_popularity_score = int(metrics.media_popularity_score or 0)
+        sponsorship_potential_score = int(metrics.sponsorship_potential_score or 0)
+        value = self._normalize_amount(
+            (Decimal(reputation_score) * Decimal("0.1200"))
+            + (Decimal(media_popularity_score) * Decimal("0.0850"))
+            + (Decimal(sponsorship_potential_score) * Decimal("0.1000"))
+        )
+        return value, {
+            "reputation_score": reputation_score,
+            "media_popularity_score": media_popularity_score,
+            "sponsorship_potential_score": sponsorship_potential_score,
+        }
+
+    def _fanbase_value(self, club_id: str) -> tuple[Decimal, int]:
+        metrics = self._club_identity_metrics(club_id)
+        fan_count = int(metrics.fan_count or 0) if metrics is not None else 0
+        return self._normalize_amount(Decimal(fan_count) / Decimal("2500")), fan_count
+
+    def _recent_performance_value(self, club_id: str) -> tuple[Decimal, dict[str, Any]]:
+        matches = list(
+            self.session.scalars(
+                select(CompetitionMatch)
+                .where(
+                    CompetitionMatch.status == "completed",
+                    (CompetitionMatch.home_club_id == club_id) | (CompetitionMatch.away_club_id == club_id),
+                )
+                .order_by(CompetitionMatch.completed_at.desc(), CompetitionMatch.updated_at.desc())
+                .limit(5)
+            ).all()
+        )
+        if not matches:
+            return Decimal("0.0000"), {"matches_considered": 0, "points": 0, "goal_difference": 0}
+        points = 0
+        goal_difference = 0
+        for match in matches:
+            is_home = match.home_club_id == club_id
+            goals_for = int(match.home_score if is_home else match.away_score)
+            goals_against = int(match.away_score if is_home else match.home_score)
+            goal_difference += goals_for - goals_against
+            if match.winner_club_id == club_id:
+                points += 3
+            elif match.winner_club_id is None or goals_for == goals_against:
+                points += 1
+        value = self._normalize_amount(
+            (Decimal(points) * Decimal("1.6000"))
+            + (Decimal(goal_difference) * Decimal("0.5500"))
+        )
+        return value, {
+            "matches_considered": len(matches),
+            "points": points,
+            "goal_difference": goal_difference,
+        }
+
+    def _market_components_payload(
+        self,
+        club: ClubProfile,
+        breakdown: ClubValuationBreakdown,
+    ) -> dict[str, Any]:
+        squad_value = self._normalize_amount(
+            breakdown.first_team_value_coin
+            + breakdown.reserve_squad_value_coin
+            + breakdown.u19_squad_value_coin
+            + breakdown.academy_value_coin
+        )
+        cash_balance = self._cash_balance_value(club)
+        brand_strength, brand_metadata = self._brand_strength_value(club.id)
+        fanbase_size, fan_count = self._fanbase_value(club.id)
+        recent_performance, performance_metadata = self._recent_performance_value(club.id)
+        return {
+            "squad_value": squad_value,
+            "cash_balance": cash_balance,
+            "brand_strength": brand_strength,
+            "fanbase_size": fanbase_size,
+            "recent_performance": recent_performance,
+            "metadata_json": {
+                "fan_count": fan_count,
+                **brand_metadata,
+                **performance_metadata,
+            },
+        }
+
+    def _market_valuation_amount(self, components: dict[str, Any]) -> Decimal:
+        return self._normalize_amount(
+            components["squad_value"]
+            + components["cash_balance"]
+            + components["brand_strength"]
+            + components["fanbase_size"]
+            + components["recent_performance"]
+        )
+
+    def _club_league_tier(self, club_id: str) -> int | None:
+        tier = self.session.scalar(
+            select(func.min(InternalLeague.rank))
+            .select_from(Player)
+            .join(InternalLeague, Player.internal_league_id == InternalLeague.id, isouter=True)
+            .where(Player.current_club_profile_id == club_id)
+        )
+        if tier is not None:
+            return int(tier)
+        domestic_level = self.session.scalar(
+            select(func.min(IngestionCompetition.domestic_level))
+            .select_from(Player)
+            .join(IngestionCompetition, Player.current_competition_id == IngestionCompetition.id, isouter=True)
+            .where(Player.current_club_profile_id == club_id)
+        )
+        return int(domestic_level) if domestic_level is not None else None
+
+    def _club_squad_strength(self, breakdown: ClubValuationBreakdown) -> int | None:
+        player_counts = dict(breakdown.metadata or {}).get("player_counts", {})
+        if not isinstance(player_counts, dict):
+            player_counts = {}
+        squad_count = sum(int(value or 0) for value in player_counts.values())
+        if squad_count <= 0:
+            return None
+        squad_value = (
+            Decimal(breakdown.first_team_value_coin)
+            + Decimal(breakdown.reserve_squad_value_coin)
+            + Decimal(breakdown.u19_squad_value_coin)
+            + Decimal(breakdown.academy_value_coin)
+        )
+        average_player_value = squad_value / Decimal(squad_count)
+        strength = 48 + int(min(50, average_player_value / Decimal("4.5")))
+        return max(1, min(98, strength))
+
+    def _buyer_interest_score(self, *, listing: ClubSaleListing, market_valuation: Decimal) -> int:
+        pending_offer_count = int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(ClubSaleOffer)
+                .where(
+                    ClubSaleOffer.club_id == listing.club_id,
+                    ClubSaleOffer.status == "pending",
+                )
+            )
+            or 0
+        )
+        inquiry_count = int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(ClubSaleInquiry)
+                .where(
+                    ClubSaleInquiry.club_id == listing.club_id,
+                    ClubSaleInquiry.status.in_(tuple(INQUIRY_OPEN_STATUSES)),
+                )
+            )
+            or 0
+        )
+        recent_similar_sales = [
+            transfer
+            for transfer in self.session.scalars(
+                select(ClubSaleTransfer).order_by(ClubSaleTransfer.created_at.desc()).limit(12)
+            ).all()
+            if market_valuation > Decimal("0.0000")
+            and abs(Decimal(transfer.executed_sale_price) - market_valuation) <= (market_valuation * Decimal("0.30"))
+        ]
+        price_ratio = Decimal("1.0000")
+        if market_valuation > Decimal("0.0000"):
+            price_ratio = self._normalize_amount(Decimal(listing.asking_price) / market_valuation)
+        score = (pending_offer_count * 24) + (inquiry_count * 11) + (len(recent_similar_sales) * 6)
+        if price_ratio <= Decimal("0.9500"):
+            score += 14
+        elif price_ratio <= Decimal("1.0500"):
+            score += 9
+        elif price_ratio >= Decimal("1.2000"):
+            score -= 12
+        return max(0, min(100, int(score)))
+
+    @staticmethod
+    def _demand_level(score: int) -> str:
+        if score >= 80:
+            return "surging"
+        if score >= 60:
+            return "high"
+        if score >= 35:
+            return "steady"
+        return "low"
+
+    def _recent_comparable_sales(
+        self,
+        *,
+        club: ClubProfile,
+        market_valuation: Decimal,
+        limit: int = 5,
+    ) -> list[dict[str, Any]]:
+        comparables: list[dict[str, Any]] = []
+        transfers = list(
+            self.session.scalars(
+                select(ClubSaleTransfer).order_by(ClubSaleTransfer.created_at.desc()).limit(20)
+            ).all()
+        )
+        for transfer in transfers:
+            comparable_club = self._require_club(transfer.club_id)
+            if comparable_club.id == club.id:
+                continue
+            if market_valuation > Decimal("0.0000"):
+                difference = abs(Decimal(transfer.executed_sale_price) - market_valuation)
+                if difference > (market_valuation * Decimal("0.35")):
+                    continue
+            comparables.append(
+                {
+                    "transfer_id": transfer.transfer_id,
+                    "club_id": comparable_club.id,
+                    "club_name": comparable_club.club_name,
+                    "executed_sale_price": self._normalize_amount(transfer.executed_sale_price),
+                    "created_at": transfer.created_at,
+                    "buyer_user_id": transfer.buyer_user_id,
+                    "seller_user_id": transfer.seller_user_id,
+                }
+            )
+            if len(comparables) >= limit:
+                break
+        return comparables
+
+    def _pricing_assistant_payload(self, listing: ClubSaleListing) -> dict[str, Any]:
+        club = self._require_club(listing.club_id)
+        breakdown = self.valuation_service.compute_visible_valuation(club_id=listing.club_id)
+        market_components = self._market_components_payload(club, breakdown)
+        market_valuation = self._market_valuation_amount(market_components)
+        buyer_interest_score = self._buyer_interest_score(listing=listing, market_valuation=market_valuation)
+        demand_level = self._demand_level(buyer_interest_score)
+        pricing_multiplier = {
+            "low": Decimal("0.9400"),
+            "steady": Decimal("1.0000"),
+            "high": Decimal("1.0800"),
+            "surging": Decimal("1.1500"),
+        }[demand_level]
+        recommended_price = self._normalize_amount(market_valuation * pricing_multiplier)
+        return {
+            "club_id": club.id,
+            "market_valuation": market_valuation,
+            "market_valuation_minor": self._coin_to_minor(market_valuation),
+            "recommended_price": recommended_price,
+            "recommended_price_min": self._normalize_amount(recommended_price * Decimal("0.9200")),
+            "recommended_price_max": self._normalize_amount(recommended_price * Decimal("1.0800")),
+            "demand_level": demand_level,
+            "buyer_interest_score": buyer_interest_score,
+            "recent_comparable_sales": self._recent_comparable_sales(
+                club=club,
+                market_valuation=market_valuation,
+            ),
+        }
+
+    def _notify_users(
+        self,
+        *,
+        user_ids: set[str],
+        topic: str,
+        template_key: str,
+        message: str,
+        resource_type: str,
+        resource_id: str,
+        metadata_json: dict[str, Any] | None = None,
+    ) -> None:
+        payload = dict(metadata_json or {})
+        for user_id in sorted({user_id for user_id in user_ids if user_id}):
+            self.session.add(
+                NotificationRecord(
+                    user_id=user_id,
+                    topic=topic,
+                    template_key=template_key,
+                    resource_type=resource_type,
+                    resource_id=resource_id,
+                    message=message[:255],
+                    metadata_json=payload,
+                )
+            )
+
     def _valuation_payload(self, club: ClubProfile, breakdown: ClubValuationBreakdown) -> dict[str, Any]:
         total = self._normalize_amount(breakdown.total_value_coin)
+        market_components = self._market_components_payload(club, breakdown)
+        market_valuation = self._market_valuation_amount(market_components)
         return {
             "club_id": club.id,
             "club_name": club.club_name,
             "currency": LedgerUnit.COIN.value,
             "system_valuation": total,
             "system_valuation_minor": self._coin_to_minor(total),
+            "market_valuation": market_valuation,
+            "market_valuation_minor": self._coin_to_minor(market_valuation),
             "breakdown": {
                 "first_team_value": self._normalize_amount(breakdown.first_team_value_coin),
                 "reserve_squad_value": self._normalize_amount(breakdown.reserve_squad_value_coin),
@@ -187,6 +534,14 @@ class ClubSaleMarketService:
                 "stadium_value": self._normalize_amount(breakdown.stadium_value_coin),
                 "paid_enhancements_value": self._normalize_amount(breakdown.paid_enhancements_value_coin),
                 "metadata_json": dict(breakdown.metadata or {}),
+            },
+            "market_components": {
+                "squad_value": market_components["squad_value"],
+                "cash_balance": market_components["cash_balance"],
+                "brand_strength": market_components["brand_strength"],
+                "fanbase_size": market_components["fanbase_size"],
+                "recent_performance": market_components["recent_performance"],
+                "metadata_json": dict(market_components["metadata_json"] or {}),
             },
             "last_refreshed_at": utcnow(),
         }
@@ -234,6 +589,11 @@ class ClubSaleMarketService:
 
     def _listing_summary_payload(self, listing: ClubSaleListing) -> dict[str, Any]:
         club = self._require_club(listing.club_id)
+        breakdown = self.valuation_service.compute_visible_valuation(club_id=listing.club_id)
+        market_components = self._market_components_payload(club, breakdown)
+        market_valuation = self._market_valuation_amount(market_components)
+        buyer_interest_score = self._buyer_interest_score(listing=listing, market_valuation=market_valuation)
+        instant_sell = self._instant_sell_settings(listing)
         return {
             "listing_id": listing.listing_id,
             "club_id": listing.club_id,
@@ -245,6 +605,15 @@ class ClubSaleMarketService:
             "asking_price": self._normalize_amount(listing.asking_price),
             "system_valuation": self._minor_to_coin(int(listing.system_valuation_minor or 0)),
             "system_valuation_minor": int(listing.system_valuation_minor or 0),
+            "market_valuation": market_valuation,
+            "market_valuation_minor": self._coin_to_minor(market_valuation),
+            "league_tier": self._club_league_tier(listing.club_id),
+            "squad_strength": self._club_squad_strength(breakdown),
+            "fanbase_size": int(market_components["metadata_json"].get("fan_count") or 0),
+            "demand_level": self._demand_level(buyer_interest_score),
+            "buyer_interest_score": buyer_interest_score,
+            "instant_sell_enabled": instant_sell["enabled"],
+            "instant_sell_minimum_price": instant_sell["minimum_price"],
             "valuation_last_refreshed_at": listing.valuation_refreshed_at,
             "created_at": listing.created_at,
             "updated_at": listing.updated_at,
@@ -252,9 +621,19 @@ class ClubSaleMarketService:
 
     def _listing_detail_payload(self, listing: ClubSaleListing) -> dict[str, Any]:
         payload = self._listing_summary_payload(listing)
+        breakdown = self.valuation_service.compute_visible_valuation(club_id=listing.club_id)
+        market_components = self._market_components_payload(self._require_club(listing.club_id), breakdown)
         payload.update(
             {
                 "valuation_breakdown": dict(listing.valuation_breakdown_json or {}),
+                "market_components": {
+                    "squad_value": market_components["squad_value"],
+                    "cash_balance": market_components["cash_balance"],
+                    "brand_strength": market_components["brand_strength"],
+                    "fanbase_size": market_components["fanbase_size"],
+                    "recent_performance": market_components["recent_performance"],
+                    "metadata_json": dict(market_components["metadata_json"] or {}),
+                },
                 "note": listing.note,
                 "metadata_json": dict(listing.metadata_json or {}),
             }
@@ -554,6 +933,69 @@ class ClubSaleMarketService:
                 status_to=offer.status,
             )
 
+    def _apply_offer_acceptance(
+        self,
+        *,
+        offer: ClubSaleOffer,
+        actor_user_id: str,
+        message: str | None,
+        metadata_json: dict[str, Any] | None = None,
+        audit_action: str = "offer_accepted",
+    ) -> None:
+        previous_status = offer.status
+        offer.status = "accepted"
+        offer.responded_by_user_id = actor_user_id
+        offer.responded_at = utcnow()
+        offer.accepted_at = offer.responded_at
+        offer.responded_message = message
+        offer.metadata_json = {
+            **(offer.metadata_json or {}),
+            **dict(metadata_json or {}),
+        }
+        listing = self.session.get(ClubSaleListing, offer.listing_id) if offer.listing_id is not None else None
+        if listing is None:
+            raise ClubSaleMarketError(
+                "Offer no longer points to an active club sale listing.",
+                reason="club_sale_transfer_path_invalid",
+            )
+        if listing.status == "active":
+            listing.status = "under_offer"
+        self._supersede_other_pending_offers(offer.club_id, keep_offer_id=offer.id, actor_user_id=actor_user_id)
+        self._log_audit(
+            club_id=offer.club_id,
+            action=audit_action,
+            actor_user_id=actor_user_id,
+            listing_id=offer.listing_id,
+            inquiry_id=offer.inquiry_id,
+            offer_id=offer.id,
+            status_from=previous_status,
+            status_to=offer.status,
+            payload={
+                "offer_price": str(offer.offered_price),
+                **dict(metadata_json or {}),
+            },
+        )
+
+    def _auto_accept_offer_if_instant_sell(
+        self,
+        *,
+        listing: ClubSaleListing,
+        offer: ClubSaleOffer,
+    ) -> None:
+        settings = self._instant_sell_settings(listing)
+        minimum_price = settings["minimum_price"] or Decimal("0.0000")
+        if not settings["enabled"] or offer.status != "pending":
+            return
+        if self._normalize_amount(offer.offered_price) < minimum_price:
+            return
+        self._apply_offer_acceptance(
+            offer=offer,
+            actor_user_id=listing.seller_user_id,
+            message="Offer auto-accepted by instant sell.",
+            metadata_json={"instant_sell": True},
+            audit_action="offer_auto_accepted",
+        )
+
     def _preserve_shareholders_after_transfer(self, club_id: str, *, new_owner_user_id: str, transfer_id: str) -> int:
         market = self.session.scalar(
             select(CreatorClubShareMarket).where(CreatorClubShareMarket.club_id == club_id)
@@ -651,40 +1093,97 @@ class ClubSaleMarketService:
             "calendar_event_id": calendar_event.id,
         }
 
+    def refresh_market_valuations(self, *, limit: int = 250) -> dict[str, Any]:
+        listings = list(
+            self.session.scalars(
+                select(ClubSaleListing)
+                .where(ClubSaleListing.status.in_(VISIBLE_LISTING_STATUSES))
+                .order_by(ClubSaleListing.updated_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        for listing in listings:
+            self._apply_listing_valuation_snapshot(
+                listing,
+                actor_user_id=None,
+                reason="ops_refresh",
+            )
+        self.session.flush()
+        return {"refreshed_count": len(listings), "listing_ids": [listing.listing_id for listing in listings]}
+
     def get_valuation(self, *, club_id: str) -> dict[str, Any]:
         club = self._require_club(club_id)
         breakdown = self.valuation_service.compute_visible_valuation(club_id=club_id)
         return self._valuation_payload(club, breakdown)
 
-    def list_public_listings(self, *, limit: int = 50, offset: int = 0) -> dict[str, Any]:
-        stmt = (
-            select(ClubSaleListing)
-            .where(
-                ClubSaleListing.visibility == "public",
-                ClubSaleListing.status.in_(tuple(VISIBLE_LISTING_STATUSES)),
-            )
-            .order_by(ClubSaleListing.updated_at.desc())
-        )
-        items = list(self.session.scalars(stmt.offset(offset).limit(limit)).all())
-        total = int(
-            self.session.scalar(
-                select(func.count())
-                .select_from(ClubSaleListing)
+    def list_public_listings(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        min_price: Decimal | None = None,
+        max_price: Decimal | None = None,
+        league_tier: int | None = None,
+        min_squad_strength: int | None = None,
+        max_squad_strength: int | None = None,
+        min_fanbase_size: int | None = None,
+        max_fanbase_size: int | None = None,
+    ) -> dict[str, Any]:
+        items = list(
+            self.session.scalars(
+                select(ClubSaleListing)
                 .where(
                     ClubSaleListing.visibility == "public",
                     ClubSaleListing.status.in_(tuple(VISIBLE_LISTING_STATUSES)),
                 )
-            )
-            or 0
+                .order_by(ClubSaleListing.updated_at.desc())
+            ).all()
         )
+        payloads = [self._listing_summary_payload(item) for item in items]
+        filtered: list[dict[str, Any]] = []
+        normalized_min_price = self._normalize_amount(min_price) if min_price is not None else None
+        normalized_max_price = self._normalize_amount(max_price) if max_price is not None else None
+        for payload in payloads:
+            if normalized_min_price is not None and payload["asking_price"] < normalized_min_price:
+                continue
+            if normalized_max_price is not None and payload["asking_price"] > normalized_max_price:
+                continue
+            if league_tier is not None and payload["league_tier"] != league_tier:
+                continue
+            squad_strength = payload["squad_strength"]
+            if min_squad_strength is not None and (squad_strength is None or squad_strength < min_squad_strength):
+                continue
+            if max_squad_strength is not None and (squad_strength is None or squad_strength > max_squad_strength):
+                continue
+            fanbase_size = int(payload["fanbase_size"] or 0)
+            if min_fanbase_size is not None and fanbase_size < min_fanbase_size:
+                continue
+            if max_fanbase_size is not None and fanbase_size > max_fanbase_size:
+                continue
+            filtered.append(payload)
+        total = len(filtered)
         return {
             "total": total,
-            "items": [self._listing_summary_payload(item) for item in items],
+            "items": filtered[offset : offset + limit],
         }
 
     def get_public_listing(self, *, club_id: str) -> dict[str, Any]:
         listing = self._require_public_listing(club_id)
         return self._listing_detail_payload(listing)
+
+    def get_sell_assistant(self, *, actor: User, club_id: str) -> dict[str, Any]:
+        self._require_owned_club(actor, club_id)
+        listing = self._active_listing_for_club(club_id)
+        if listing is not None:
+            return self._pricing_assistant_payload(listing)
+        preview_listing = ClubSaleListing(
+            club_id=club_id,
+            seller_user_id=actor.id,
+            asking_price=Decimal("0.0000"),
+            valuation_breakdown_json={},
+            metadata_json={},
+        )
+        return self._pricing_assistant_payload(preview_listing)
 
     def list_my_listings(self, *, actor: User) -> dict[str, Any]:
         items = list(
@@ -707,6 +1206,8 @@ class ClubSaleMarketService:
         asking_price: Decimal,
         visibility: str,
         note: str | None,
+        instant_sell_enabled: bool = False,
+        instant_sell_minimum_price: Decimal | None = None,
         metadata_json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         self._require_owned_club(actor, club_id)
@@ -725,6 +1226,11 @@ class ClubSaleMarketService:
             note=note,
             metadata_json=dict(metadata_json or {}),
             valuation_breakdown_json={},
+        )
+        self._set_instant_sell_settings(
+            listing,
+            enabled=instant_sell_enabled,
+            minimum_price=instant_sell_minimum_price,
         )
         self._apply_listing_valuation_snapshot(
             listing,
@@ -745,6 +1251,19 @@ class ClubSaleMarketService:
                 "system_valuation_minor": listing.system_valuation_minor,
             },
         )
+        self._notify_users(
+            user_ids={actor.id},
+            topic="club_marketplace",
+            template_key="CLUB_LISTED_FOR_SALE",
+            message=f"{self._require_club(club_id).club_name} is now listed for sale.",
+            resource_type="club_sale_listing",
+            resource_id=listing.id,
+            metadata_json={
+                "club_id": club_id,
+                "listing_id": listing.listing_id,
+                "asking_price": self._display_amount(listing.asking_price),
+            },
+        )
         self.session.flush()
         return self._listing_detail_payload(listing)
 
@@ -756,6 +1275,8 @@ class ClubSaleMarketService:
         asking_price: Decimal,
         visibility: str,
         note: str | None,
+        instant_sell_enabled: bool = False,
+        instant_sell_minimum_price: Decimal | None = None,
         metadata_json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         listing = self._require_owned_listing(actor, club_id)
@@ -770,6 +1291,11 @@ class ClubSaleMarketService:
         listing.visibility = self._normalize_visibility(visibility)
         listing.note = note
         listing.metadata_json = dict(metadata_json or {})
+        self._set_instant_sell_settings(
+            listing,
+            enabled=instant_sell_enabled,
+            minimum_price=instant_sell_minimum_price,
+        )
         self._apply_listing_valuation_snapshot(
             listing,
             actor_user_id=actor.id,
@@ -813,6 +1339,52 @@ class ClubSaleMarketService:
             status_from=previous_status,
             status_to=listing.status,
             payload={"reason": closure_reason},
+        )
+        self.session.flush()
+        return self._listing_detail_payload(listing)
+
+    def configure_instant_sell(
+        self,
+        *,
+        actor: User,
+        club_id: str,
+        enabled: bool,
+        minimum_price: Decimal | None,
+        auto_accept_best_offer: bool,
+    ) -> dict[str, Any]:
+        listing = self._require_owned_listing(actor, club_id)
+        self._set_instant_sell_settings(
+            listing,
+            enabled=enabled,
+            minimum_price=minimum_price,
+        )
+        accepted_offer_public_id: str | None = None
+        if enabled and auto_accept_best_offer:
+            best_offer = self.session.scalar(
+                select(ClubSaleOffer)
+                .where(
+                    ClubSaleOffer.club_id == club_id,
+                    ClubSaleOffer.status == "pending",
+                )
+                .order_by(ClubSaleOffer.offered_price.desc(), ClubSaleOffer.created_at.asc())
+            )
+            if best_offer is not None:
+                before_status = best_offer.status
+                self._auto_accept_offer_if_instant_sell(listing=listing, offer=best_offer)
+                if before_status != best_offer.status and best_offer.status == "accepted":
+                    accepted_offer_public_id = best_offer.offer_id
+        self._log_audit(
+            club_id=club_id,
+            action="instant_sell_updated",
+            actor_user_id=actor.id,
+            listing_id=listing.id,
+            status_from=listing.status,
+            status_to=listing.status,
+            payload={
+                "enabled": enabled,
+                "minimum_price": self._display_amount(minimum_price) if minimum_price is not None else None,
+                "accepted_offer_id": accepted_offer_public_id,
+            },
         )
         self.session.flush()
         return self._listing_detail_payload(listing)
@@ -1070,6 +1642,7 @@ class ClubSaleMarketService:
             status_to=offer.status,
             payload={"offer_price": str(offer.offered_price)},
         )
+        self._auto_accept_offer_if_instant_sell(listing=listing, offer=offer)
         self.session.flush()
         return self._offer_payload(offer)
 
@@ -1183,37 +1756,11 @@ class ClubSaleMarketService:
             )
         if actor.id == offer.seller_user_id:
             self._require_owned_club(actor, club_id)
-        previous_status = offer.status
-        offer.status = "accepted"
-        offer.responded_by_user_id = actor.id
-        offer.responded_at = utcnow()
-        offer.accepted_at = offer.responded_at
-        offer.responded_message = message
-        offer.metadata_json = {
-            **(offer.metadata_json or {}),
-            **dict(metadata_json or {}),
-        }
-
-        listing = self.session.get(ClubSaleListing, offer.listing_id) if offer.listing_id is not None else None
-        if listing is None:
-            raise ClubSaleMarketError(
-                "Offer no longer points to an active club sale listing.",
-                reason="club_sale_transfer_path_invalid",
-            )
-        if listing.status == "active":
-            listing.status = "under_offer"
-
-        self._supersede_other_pending_offers(club_id, keep_offer_id=offer.id, actor_user_id=actor.id)
-        self._log_audit(
-            club_id=club_id,
-            action="offer_accepted",
+        self._apply_offer_acceptance(
+            offer=offer,
             actor_user_id=actor.id,
-            listing_id=offer.listing_id,
-            inquiry_id=offer.inquiry_id,
-            offer_id=offer.id,
-            status_from=previous_status,
-            status_to=offer.status,
-            payload={"offer_price": str(offer.offered_price)},
+            message=message,
+            metadata_json=metadata_json,
         )
         self.session.flush()
         return self._offer_payload(offer)
@@ -1455,6 +2002,7 @@ class ClubSaleMarketService:
             "shareholder_count_preserved": shareholder_count_preserved,
             "shareholder_rights_preserved": shareholder_count_preserved > 0,
         }
+        OwnershipGroupService(self.session).detach_club(club_id=club_id)
         self._publish_transfer_surfaces(
             actor=actor,
             club=club,
@@ -1490,6 +2038,46 @@ class ClubSaleMarketService:
             transfer_id=transfer.id,
             status_from=offer_previous_status,
             status_to=offer.status,
+        )
+        stakeholder_user_ids = {
+            actor.id,
+            buyer.id,
+            *[
+                item.user_id
+                for item in self.session.scalars(
+                    select(CreatorClubShareHolding).where(CreatorClubShareHolding.club_id == club_id)
+                ).all()
+                if getattr(item, "user_id", None)
+            ],
+            *[
+                offer_row.buyer_user_id
+                for offer_row in self.session.scalars(
+                    select(ClubSaleOffer).where(ClubSaleOffer.club_id == club_id)
+                ).all()
+            ],
+            *[
+                inquiry_row.buyer_user_id
+                for inquiry_row in self.session.scalars(
+                    select(ClubSaleInquiry).where(ClubSaleInquiry.club_id == club_id)
+                ).all()
+            ],
+        }
+        self._notify_users(
+            user_ids=stakeholder_user_ids,
+            topic="club_marketplace",
+            template_key="CLUB_SOLD",
+            message=f"{club.club_name} ownership transfer has been completed.",
+            resource_type="club_sale_transfer",
+            resource_id=transfer.id,
+            metadata_json={
+                "club_id": club_id,
+                "listing_id": listing.listing_id,
+                "offer_id": offer.offer_id,
+                "transfer_id": transfer.transfer_id,
+                "seller_user_id": actor.id,
+                "buyer_user_id": buyer.id,
+                "executed_sale_price": self._display_amount(executed_sale_price),
+            },
         )
         self.session.flush()
         return self._transfer_payload(transfer)

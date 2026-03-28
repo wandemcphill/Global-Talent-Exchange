@@ -33,6 +33,7 @@ from app.market.service import (
     MarketValidationError,
 )
 from app.models.user import User
+from app.services.runtime_control_service import RuntimeControlService
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -51,7 +52,11 @@ def get_market_player_query_service(
     request: Request,
     session: Session = Depends(get_session),
 ) -> MarketPlayerQueryService:
-    return MarketPlayerQueryService(session=session, market_engine=get_market_engine(request))
+    return MarketPlayerQueryService(
+        session=session,
+        market_engine=get_market_engine(request),
+        runtime_controls=RuntimeControlService(request.app),
+    )
 
 
 def raise_market_http_exception(exc: MarketError) -> Never:

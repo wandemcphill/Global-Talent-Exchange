@@ -2266,6 +2266,8 @@ String _paymentModeLabel(GtePaymentMode mode) {
       return 'Manual';
     case GtePaymentMode.automatic:
       return 'Automatic';
+    case GtePaymentMode.hybrid:
+      return 'Hybrid';
   }
 }
 

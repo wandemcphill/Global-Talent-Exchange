@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -30,6 +31,7 @@ from app.market.router import (
 from app.market.service import MarketPlayerQueryService
 from app.models.base import Base
 from app.players.read_models import PlayerSummaryReadModel
+from app.services.runtime_control_service import RuntimeControlService
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
@@ -46,8 +48,16 @@ def session():
         yield db_session
 
 
-def _build_market_query_service(session) -> MarketPlayerQueryService:
-    return MarketPlayerQueryService(session=session, today=date(2026, 3, 11))
+def _build_market_query_service(
+    session,
+    *,
+    runtime_controls: RuntimeControlService | None = None,
+) -> MarketPlayerQueryService:
+    return MarketPlayerQueryService(
+        session=session,
+        today=date(2026, 3, 11),
+        runtime_controls=runtime_controls,
+    )
 
 
 def _seed_market_player_catalog(session) -> None:
@@ -687,6 +697,31 @@ def test_market_player_detail_returns_composed_market_view(session) -> None:
     assert payload.market_profile.holder_count == 14
     assert payload.value.current_value_credits == 220.0
     assert payload.trend.global_scouting_index == 84.0
+
+
+def test_manual_price_override_updates_market_views(session) -> None:
+    _seed_market_player_catalog(session)
+    app = FastAPI()
+    runtime_controls = RuntimeControlService(app)
+    runtime_controls.upsert_price_override(
+        asset_type="player",
+        asset_id="player-1",
+        override_price=Decimal("333.5000"),
+        currency="credits",
+        reason="manual operator intervention",
+        updated_by_user_id="admin-1",
+    )
+    service = _build_market_query_service(session, runtime_controls=runtime_controls)
+
+    list_payload = service.list_players(limit=10, sort="current_value")
+    detail_payload = get_market_player_detail("player-1", service=service)
+
+    player_row = next(item for item in list_payload.items if item.player_id == "player-1")
+    assert player_row.current_value_credits == 333.5
+    assert player_row.movement_pct == 66.75
+    assert detail_payload.value.current_value_credits == 333.5
+    assert detail_payload.value.published_card_value_credits == 333.5
+    assert detail_payload.value.movement_pct == 66.75
 
 
 def test_market_player_detail_not_found_returns_404(session) -> None:

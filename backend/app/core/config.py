@@ -44,6 +44,13 @@ def _get_int(environ: Mapping[str, str], name: str, default: int) -> int:
         return default
 
 
+def _get_csv(environ: Mapping[str, str], name: str) -> tuple[str, ...]:
+    value = environ.get(name)
+    if value is None:
+        return tuple()
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
 def normalize_database_url(database_url: str) -> str:
     normalized = database_url.strip()
     if not normalized:
@@ -450,6 +457,8 @@ class Settings:
     config_root: Path
     database_url: str
     redis_url: str | None
+    redis_event_channel: str
+    redis_realtime_channel: str
     auth_secret: str
     media_signing_secret: str
     crypto_deposit_enabled: bool
@@ -462,6 +471,17 @@ class Settings:
     football_data_base_url: str
     football_data_api_key: str | None
     value_snapshot_lookback_days: int
+    kafka_brokers: tuple[str, ...]
+    kafka_client_id: str
+    kafka_topic_prefix: str
+    kafka_queue_consumer_group: str
+    kafka_projection_consumer_group: str
+    outbox_relay_enabled: bool
+    outbox_relay_batch_size: int
+    outbox_relay_poll_interval_ms: int
+    kafka_api_queue_consumer_enabled: bool
+    kafka_simulation_consumer_enabled: bool
+    projection_workers_enabled: bool
     email: EmailConfig
     real_player_import: RealPlayerImportConfig
     player_universe_weighting: PlayerUniverseWeightingConfig
@@ -478,6 +498,10 @@ class Settings:
     @property
     def environment(self) -> str:
         return self.app_env
+
+    @property
+    def kafka_enabled(self) -> bool:
+        return bool(self.kafka_brokers)
 
 
 def _default_suspicion_thresholds_config() -> SuspicionThresholdsConfig:
@@ -1533,6 +1557,8 @@ def load_settings(
         config_root=resolved_config_root,
         database_url=resolve_database_url(resolved_environ),
         redis_url=resolved_environ.get("GTE_REDIS_URL"),
+        redis_event_channel=resolved_environ.get("GTE_REDIS_EVENT_CHANNEL", "gtex.events"),
+        redis_realtime_channel=resolved_environ.get("GTE_REDIS_REALTIME_CHANNEL", "gtex.realtime"),
         auth_secret=resolved_environ.get("GTE_AUTH_SECRET", "gte-dev-secret-change-me"),
         media_signing_secret=resolved_environ.get("GTE_MEDIA_SIGNING_SECRET", "gte-media-secret-change-me"),
         crypto_deposit_enabled=_get_bool(resolved_environ, "GTE_CRYPTO_DEPOSIT_ENABLED", False),
@@ -1553,6 +1579,17 @@ def load_settings(
         football_data_base_url=resolved_environ.get("FOOTBALL_DATA_BASE_URL", "https://api.football-data.org/v4"),
         football_data_api_key=resolved_environ.get("FOOTBALL_DATA_API_KEY"),
         value_snapshot_lookback_days=_get_int(resolved_environ, "GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS", 7),
+        kafka_brokers=_get_csv(resolved_environ, "GTE_KAFKA_BROKERS"),
+        kafka_client_id=resolved_environ.get("GTE_KAFKA_CLIENT_ID", "gtex-api"),
+        kafka_topic_prefix=resolved_environ.get("GTE_KAFKA_TOPIC_PREFIX", "gtex"),
+        kafka_queue_consumer_group=resolved_environ.get("GTE_KAFKA_QUEUE_CONSUMER_GROUP", "gtex-api-queue"),
+        kafka_projection_consumer_group=resolved_environ.get("GTE_KAFKA_PROJECTION_CONSUMER_GROUP", "gtex-projections"),
+        outbox_relay_enabled=_get_bool(resolved_environ, "GTE_OUTBOX_RELAY_ENABLED", True),
+        outbox_relay_batch_size=_get_int(resolved_environ, "GTE_OUTBOX_RELAY_BATCH_SIZE", 100),
+        outbox_relay_poll_interval_ms=_get_int(resolved_environ, "GTE_OUTBOX_RELAY_POLL_INTERVAL_MS", 1000),
+        kafka_api_queue_consumer_enabled=_get_bool(resolved_environ, "GTE_KAFKA_API_QUEUE_CONSUMER_ENABLED", True),
+        kafka_simulation_consumer_enabled=_get_bool(resolved_environ, "GTE_KAFKA_SIMULATION_CONSUMER_ENABLED", True),
+        projection_workers_enabled=_get_bool(resolved_environ, "GTE_PROJECTION_WORKERS_ENABLED", True),
         email=load_email_config(resolved_environ),
         real_player_import=load_real_player_import_config(
             resolved_environ,

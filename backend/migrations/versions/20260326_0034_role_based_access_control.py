@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("organization_id", sa.String(length=36), nullable=False),
         sa.Column("role", organization_role, nullable=False),
-        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("invited_by_user_id", sa.String(length=36), nullable=True),
         sa.ForeignKeyConstraint(["invited_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),

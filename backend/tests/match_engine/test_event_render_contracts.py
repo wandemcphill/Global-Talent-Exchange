@@ -78,3 +78,84 @@ def test_viewer_timeline_consumes_render_contract_for_camera_and_ball_states() -
     assert any(frame.camera_preset in {MatchViewerCameraPreset.BOX_ZOOM, MatchViewerCameraPreset.GOAL_CELEBRATION} for frame in goal_frames)
     assert any(frame.ball.state in {"shot", "cross", "lob"} for frame in goal_frames)
     assert any(frame.playback_rate <= 0.5 for frame in goal_frames)
+
+
+def test_render_contract_exposes_trajectory_spin_and_viewer_ball_height() -> None:
+    payload = _find_payload(
+        lambda replay: any(
+            event.event_type in {MatchEventType.GOAL, MatchEventType.MISSED_BIG_CHANCE, MatchEventType.GOALKEEPER_SAVE}
+            for event in replay.timeline.events
+        )
+    )
+    source_event = next(
+        event
+        for event in payload.timeline.events
+        if event.event_type in {MatchEventType.GOAL, MatchEventType.MISSED_BIG_CHANCE, MatchEventType.GOALKEEPER_SAVE}
+    )
+    render = source_event.metadata.get("render") or {}
+    ball = render.get("ball") or {}
+
+    assert isinstance(ball.get("trajectory"), list)
+    assert ball["trajectory"]
+    assert all({"x", "y", "z", "t"} <= set(point) for point in ball["trajectory"])
+    assert set(ball.get("spin", {})) == {"x", "y", "z"}
+    assert set(ball.get("velocity", {})) == {"x", "y", "z"}
+
+    view_state = MatchTimelineService().build_from_replay_payload(payload)
+    event_frames = [frame for frame in view_state.frames if frame.active_event_id == source_event.event_id]
+
+    assert event_frames
+    assert any(frame.ball.height >= 0.0 for frame in event_frames)
+    assert any(frame.ball.spin is not None for frame in event_frames)
+
+
+def test_render_sync_exposes_motion_commentary_crowd_and_spectator_layers() -> None:
+    payload = _find_payload(
+        lambda replay: any(
+            event.event_type in {MatchEventType.GOAL, MatchEventType.SHOT, MatchEventType.MISSED_BIG_CHANCE}
+            for event in replay.timeline.events
+        )
+    )
+
+    assert payload.scene_assembly is not None
+    assert payload.scene_assembly.motion_runtime == "onnx_runtime_blend_inference"
+    assert payload.scene_assembly.commentary_runtime == "llm_template_tts_stack"
+    assert payload.scene_assembly.crowd_reactivity == "event_weighted_pressure_feedback"
+    assert payload.scene_assembly.spectator_sync_mode == "deterministic_playback"
+
+    assert payload.broadcast_presentation is not None
+    assert payload.broadcast_presentation.tts_enabled is True
+    assert "lead" in payload.broadcast_presentation.commentator_roles
+    assert "en" in payload.broadcast_presentation.commentary_languages
+
+    assert payload.spectator_package is not None
+    assert payload.spectator_package.sync_strategy == "deterministic_playback"
+    assert payload.spectator_package.watch_party_enabled is True
+    assert payload.spectator_package.reactions_enabled is True
+    assert payload.spectator_package.chat_enabled is True
+
+    assert payload.render_sync is not None
+    event = next(item for item in payload.render_sync.events if item.experience is not None)
+    experience = event.experience
+
+    assert experience is not None
+    assert experience.motion is not None
+    assert experience.motion.model_key == "gtex_motion_blend_v1"
+    assert round(
+        experience.motion.run_weight + experience.motion.sprint_weight + experience.motion.shoot_weight,
+        3,
+    ) == 1.0
+    assert -1.0 <= experience.motion.direction.x <= 1.0
+    assert -1.0 <= experience.motion.direction.y <= 1.0
+
+    assert experience.commentary is not None
+    assert experience.commentary.line
+    assert experience.commentary.tts_ready is True
+
+    assert experience.crowd is not None
+    assert 0.0 <= experience.crowd.home_intensity <= 1.0
+    assert 0.0 <= experience.crowd.away_intensity <= 1.0
+
+    assert experience.spectator_sync is not None
+    assert experience.spectator_sync.room_id == f"match_{payload.match_id}"
+    assert experience.spectator_sync.sync_strategy == "deterministic_playback"

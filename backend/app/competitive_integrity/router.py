@@ -3,11 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_match_user, get_session
 from app.competitive_integrity.schemas import (
     CompetitiveMatchCreateRequest,
     CompetitiveMatchExecuteRequest,
     CompetitiveMatchExecutionView,
+    CompetitiveIntegrityValidationView,
     CompetitiveMatchView,
     CompetitiveNotificationView,
     FastGamePlayRequest,
@@ -27,6 +28,7 @@ from app.competitive_integrity.service import (
     CompetitiveIntegrityService,
     ManagerLockedError,
 )
+from app.competitive_integrity.validation_service import CompetitiveIntegrityValidationService
 from app.models.user import User
 
 router = APIRouter(tags=["competitive-integrity"])
@@ -54,7 +56,7 @@ def _raise_integrity_error(exc: Exception) -> None:
 @legacy_router.get("/managers", response_model=list[ManagerView])
 @api_router.get("/managers", response_model=list[ManagerView])
 def list_managers(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
 ) -> list[ManagerView]:
     return service.list_managers(actor=current_user)
@@ -63,7 +65,7 @@ def list_managers(
 @legacy_router.get("/managers/candidates", response_model=list[ManagerCandidateView])
 @api_router.get("/managers/candidates", response_model=list[ManagerCandidateView])
 def list_manager_candidates(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
 ) -> list[ManagerCandidateView]:
     return service.list_manager_candidates(actor=current_user)
@@ -73,7 +75,7 @@ def list_manager_candidates(
 @api_router.post("/managers", response_model=ManagerView, status_code=status.HTTP_201_CREATED)
 def upsert_manager(
     payload: ManagerCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> ManagerView:
@@ -90,7 +92,7 @@ def upsert_manager(
 def update_manager_instructions(
     manager_id: str,
     payload: ManagerUpdateInstructionsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> ManagerView:
@@ -106,7 +108,7 @@ def update_manager_instructions(
 @api_router.post("/matches", response_model=CompetitiveMatchView, status_code=status.HTTP_201_CREATED)
 def schedule_match(
     payload: CompetitiveMatchCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> CompetitiveMatchView:
@@ -122,7 +124,7 @@ def schedule_match(
 @api_router.get("/matches/{match_id}", response_model=CompetitiveMatchView)
 def get_match(
     match_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
 ) -> CompetitiveMatchView:
     try:
@@ -136,7 +138,7 @@ def get_match(
 def execute_match(
     match_id: str,
     payload: CompetitiveMatchExecuteRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> CompetitiveMatchExecutionView:
@@ -152,7 +154,7 @@ def execute_match(
 @api_router.post("/fast-game/runs", response_model=FastGameRunView, status_code=status.HTTP_201_CREATED)
 def start_fast_game_run(
     payload: FastGameRunStartRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> FastGameRunView:
@@ -168,7 +170,7 @@ def start_fast_game_run(
 @api_router.get("/fast-game/runs/{run_id}", response_model=FastGameRunView)
 def get_fast_game_run(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
 ) -> FastGameRunView:
     try:
@@ -182,7 +184,7 @@ def get_fast_game_run(
 def play_fast_game(
     run_id: str,
     payload: FastGamePlayRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> FastGameResultView:
@@ -198,7 +200,7 @@ def play_fast_game(
 @api_router.post("/notifications/events", response_model=CompetitiveNotificationView, status_code=status.HTTP_201_CREATED)
 def create_notification_event(
     payload: NotificationEventRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> CompetitiveNotificationView:
@@ -213,7 +215,7 @@ def create_notification_event(
 @notifications_router.get("", response_model=list[CompetitiveNotificationView])
 @api_notifications_router.get("", response_model=list[CompetitiveNotificationView])
 def list_notifications(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_match_user),
     service: CompetitiveIntegrityService = Depends(get_service),
 ) -> list[CompetitiveNotificationView]:
     return service.list_notifications(actor=current_user)
@@ -228,6 +230,19 @@ def run_workers_once(
     result = service.run_workers_once()
     session.commit()
     return result
+
+
+@admin_router.get("/matches/{match_id}/validation", response_model=CompetitiveIntegrityValidationView)
+def get_match_validation(
+    match_id: str,
+    _admin: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> CompetitiveIntegrityValidationView:
+    try:
+        payload = CompetitiveIntegrityValidationService(session).build_match_validation(match_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return CompetitiveIntegrityValidationView.model_validate(payload)
 
 
 router.include_router(legacy_router)

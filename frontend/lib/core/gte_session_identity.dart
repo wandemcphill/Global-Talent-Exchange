@@ -301,6 +301,16 @@ class GteSessionIdentity {
 
   static _ResolvedClub? _mergeClubCandidates(
     _ResolvedClub? primary,
+    _ResolvedClub? secondary, [
+    _ResolvedClub? tertiary,
+  ]) {
+    final _ResolvedClub? mergedPrimarySecondary =
+        _mergeTwoClubCandidates(primary, secondary);
+    return _mergeTwoClubCandidates(mergedPrimarySecondary, tertiary);
+  }
+
+  static _ResolvedClub? _mergeTwoClubCandidates(
+    _ResolvedClub? primary,
     _ResolvedClub? secondary,
   ) {
     if (primary == null) {

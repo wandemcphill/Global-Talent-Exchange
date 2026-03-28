@@ -40,7 +40,12 @@ router = APIRouter(prefix="/api/admin/god-mode", tags=["admin-god-mode"])
 
 def get_service(request: Request) -> AdminGodModeService:
     publisher = request.app.state.event_publisher if hasattr(request.app.state, "event_publisher") else None
-    return AdminGodModeService(wallet_service=WalletService(event_publisher=publisher))
+    return AdminGodModeService(
+        wallet_service=WalletService(
+            event_publisher=publisher,
+            cache_backend=getattr(request.app.state, "cache_backend", None),
+        )
+    )
 
 
 @router.get("/bootstrap", response_model=GodModeBootstrapView)

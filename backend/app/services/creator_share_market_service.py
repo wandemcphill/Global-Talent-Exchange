@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.club_finance.models import ClubFinanceProfile, ClubFinanceTransaction
+from app.models.club_finance_account import ClubFinanceAccount
 from app.models.club_profile import ClubProfile
 from app.models.club_sale_market import ClubSaleTransfer
+from app.models.club_social import ClubIdentityMetrics
+from app.models.competition_match import CompetitionMatch
 from app.models.creator_provisioning import CreatorSquad
 from app.models.creator_share_market import (
     CreatorClubShareDistribution,
@@ -21,6 +26,7 @@ from app.models.creator_share_market import (
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.risk_ops_engine.service import RiskOpsService
+from app.services.club_valuation_service import ClubValuationService
 from app.services.club_governance_policy import (
     default_governance_policy,
     fully_diluted_governance_shares,
@@ -32,6 +38,7 @@ from app.services.club_governance_policy import (
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+PERFORMANCE_MULTIPLIER = Decimal("2.5000")
 DEFAULT_CONTROL_KEY = "default"
 MATCH_VIDEO_REVENUE_SOURCE = "match_video"
 GIFTS_REVENUE_SOURCE = "gifts"
@@ -330,6 +337,260 @@ class CreatorClubShareMarketService:
             )
         )
 
+    def _get_or_create_finance_profile(self, *, user_id: str) -> ClubFinanceProfile:
+        profile = self.session.scalar(
+            select(ClubFinanceProfile).where(ClubFinanceProfile.user_id == user_id)
+        )
+        if profile is None:
+            profile = ClubFinanceProfile(user_id=user_id)
+            self.session.add(profile)
+            self.session.flush()
+        return profile
+
+    def _club_treasury_balance(self, club: ClubProfile) -> Decimal:
+        club_account_total_minor = int(
+            self.session.scalar(
+                select(func.coalesce(func.sum(ClubFinanceAccount.balance_minor), 0)).where(
+                    ClubFinanceAccount.club_id == club.id,
+                    ClubFinanceAccount.is_active.is_(True),
+                )
+            )
+            or 0
+        )
+        if club_account_total_minor:
+            return self._normalize_amount(Decimal(club_account_total_minor) / Decimal("100"))
+        finance_profile = self.session.scalar(
+            select(ClubFinanceProfile).where(ClubFinanceProfile.user_id == club.owner_user_id)
+        )
+        return self._normalize_amount(getattr(finance_profile, "balance", Decimal("0.0000")))
+
+    def _club_identity_metrics(self, club_id: str) -> ClubIdentityMetrics | None:
+        return self.session.scalar(
+            select(ClubIdentityMetrics).where(ClubIdentityMetrics.club_id == club_id)
+        )
+
+    def _recent_performance_snapshot(self, *, club_id: str, limit: int = 5) -> dict[str, object]:
+        completed_statuses = ("completed", "finished", "settled", "played")
+        matches = list(
+            self.session.scalars(
+                select(CompetitionMatch)
+                .where(
+                    or_(
+                        CompetitionMatch.home_club_id == club_id,
+                        CompetitionMatch.away_club_id == club_id,
+                    ),
+                    or_(
+                        CompetitionMatch.completed_at.is_not(None),
+                        CompetitionMatch.status.in_(completed_statuses),
+                    ),
+                )
+                .order_by(CompetitionMatch.completed_at.desc(), CompetitionMatch.updated_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        wins = 0
+        draws = 0
+        losses = 0
+        points = 0
+        goals_for = 0
+        goals_against = 0
+        for match in matches:
+            is_home = match.home_club_id == club_id
+            scored = int(match.home_score if is_home else match.away_score)
+            conceded = int(match.away_score if is_home else match.home_score)
+            goals_for += scored
+            goals_against += conceded
+            if scored > conceded:
+                wins += 1
+                points += 3
+            elif scored == conceded:
+                draws += 1
+                points += 1
+            else:
+                losses += 1
+        performance_score = self._normalize_amount(points)
+        performance_bonus = self._normalize_amount(
+            performance_score * PERFORMANCE_MULTIPLIER
+        )
+        return {
+            "wins": wins,
+            "draws": draws,
+            "losses": losses,
+            "points": points,
+            "goals_for": goals_for,
+            "goals_against": goals_against,
+            "score": performance_score,
+            "multiplier": PERFORMANCE_MULTIPLIER,
+            "bonus_coin": performance_bonus,
+            "sample_size": len(matches),
+        }
+
+    def _revenue_streams_snapshot(self, *, club: ClubProfile) -> dict[str, object]:
+        finance_profile = self.session.scalar(
+            select(ClubFinanceProfile).where(ClubFinanceProfile.user_id == club.owner_user_id)
+        )
+        metrics = self._club_identity_metrics(club.id)
+        metadata_json = dict(getattr(finance_profile, "metadata_json", {}) or {})
+        match_winnings_coin = self._normalize_amount(
+            getattr(finance_profile, "match_income", Decimal("0.0000"))
+        )
+        fan_growth_bonus_coin = self._normalize_amount(
+            metadata_json.get("fan_growth_bonus_coin") or Decimal("0.0000")
+        )
+        trading_fees_coin = self._normalize_amount(
+            getattr(finance_profile, "transfer_profit", Decimal("0.0000"))
+        )
+        sponsorship_pool_coin = self._normalize_amount(
+            getattr(finance_profile, "sponsorship_income", Decimal("0.0000"))
+        )
+        broadcast_rights_coin = self._normalize_amount(
+            getattr(finance_profile, "broadcast_income", Decimal("0.0000"))
+        )
+        total_coin = self._normalize_amount(
+            match_winnings_coin
+            + fan_growth_bonus_coin
+            + trading_fees_coin
+            + sponsorship_pool_coin
+            + broadcast_rights_coin
+        )
+        return {
+            "match_winnings_coin": match_winnings_coin,
+            "fan_growth_bonus_coin": fan_growth_bonus_coin,
+            "trading_fees_coin": trading_fees_coin,
+            "sponsorship_pool_coin": sponsorship_pool_coin,
+            "broadcast_rights_coin": broadcast_rights_coin,
+            "total_coin": total_coin,
+            "metadata_json": {
+                "fan_count": int(getattr(metrics, "fan_count", 0) or 0),
+                "support_momentum_score": int(
+                    getattr(metrics, "support_momentum_score", 0) or 0
+                ),
+            },
+        }
+
+    def _valuation_ticker_snapshot(
+        self,
+        *,
+        club: ClubProfile,
+        market: CreatorClubShareMarket,
+    ) -> dict[str, object]:
+        valuation_breakdown = ClubValuationService(self.session).compute_visible_valuation(
+            club_id=club.id
+        )
+        performance = self._recent_performance_snapshot(club_id=club.id)
+        metrics = self._club_identity_metrics(club.id)
+        treasury_balance_coin = self._club_treasury_balance(club)
+        player_market_value_coin = self._normalize_amount(
+            Decimal(str(valuation_breakdown.first_team_value_coin))
+            + Decimal(str(valuation_breakdown.reserve_squad_value_coin))
+            + Decimal(str(valuation_breakdown.u19_squad_value_coin))
+            + Decimal(str(valuation_breakdown.academy_value_coin))
+        )
+        infrastructure_value_coin = self._normalize_amount(
+            Decimal(str(valuation_breakdown.stadium_value_coin))
+            + Decimal(str(valuation_breakdown.paid_enhancements_value_coin))
+        )
+        recent_performance_score = self._normalize_amount(performance["score"])
+        recent_performance_multiplier = self._normalize_amount(performance["multiplier"])
+        recent_performance_bonus_coin = self._normalize_amount(performance["bonus_coin"])
+        total_valuation_coin = self._normalize_amount(
+            treasury_balance_coin
+            + player_market_value_coin
+            + infrastructure_value_coin
+            + recent_performance_bonus_coin
+        )
+        total_governance_shares = max(1, self._total_governance_shares(market))
+        implied_share_price_coin = self._normalize_amount(
+            total_valuation_coin / Decimal(total_governance_shares)
+        )
+        market_share_price_coin = self._normalize_amount(market.share_price_coin)
+        market_price_delta_coin = self._normalize_amount(
+            market_share_price_coin - implied_share_price_coin
+        )
+        market_price_delta_bps = 0
+        price_to_value_ratio = Decimal("0.0000")
+        if implied_share_price_coin > Decimal("0.0000"):
+            price_to_value_ratio = self._normalize_amount(
+                market_share_price_coin / implied_share_price_coin
+            )
+            market_price_delta_bps = int(
+                (
+                    (market_share_price_coin - implied_share_price_coin)
+                    / implied_share_price_coin
+                    * Decimal("10000")
+                ).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            )
+        return {
+            "total_valuation_coin": total_valuation_coin,
+            "treasury_balance_coin": treasury_balance_coin,
+            "player_market_value_coin": player_market_value_coin,
+            "infrastructure_value_coin": infrastructure_value_coin,
+            "recent_performance_score": recent_performance_score,
+            "recent_performance_multiplier": recent_performance_multiplier,
+            "recent_performance_bonus_coin": recent_performance_bonus_coin,
+            "implied_share_price_coin": implied_share_price_coin,
+            "market_share_price_coin": market_share_price_coin,
+            "market_price_delta_coin": market_price_delta_coin,
+            "market_price_delta_bps": market_price_delta_bps,
+            "price_to_value_ratio": price_to_value_ratio,
+            "fan_count": int(getattr(metrics, "fan_count", 0) or 0),
+            "wins_last_five": int(performance["wins"]),
+            "draws_last_five": int(performance["draws"]),
+            "losses_last_five": int(performance["losses"]),
+            "points_last_five": int(performance["points"]),
+            "last_refreshed_at": datetime.now(UTC),
+            "metadata_json": {
+                "first_team_value_coin": str(valuation_breakdown.first_team_value_coin),
+                "reserve_squad_value_coin": str(valuation_breakdown.reserve_squad_value_coin),
+                "u19_squad_value_coin": str(valuation_breakdown.u19_squad_value_coin),
+                "academy_value_coin": str(valuation_breakdown.academy_value_coin),
+                "stadium_value_coin": str(valuation_breakdown.stadium_value_coin),
+                "paid_enhancements_value_coin": str(
+                    valuation_breakdown.paid_enhancements_value_coin
+                ),
+                "goals_for_last_five": int(performance["goals_for"]),
+                "goals_against_last_five": int(performance["goals_against"]),
+                "match_sample_size": int(performance["sample_size"]),
+            },
+        }
+
+    def _credit_purchase_into_club_treasury(
+        self,
+        *,
+        club: ClubProfile,
+        purchase: CreatorClubSharePurchase,
+        amount_coin: Decimal,
+    ) -> None:
+        reference_key = f"creator-share-treasury:{purchase.id}"
+        existing = self.session.scalar(
+            select(ClubFinanceTransaction).where(
+                ClubFinanceTransaction.reference_key == reference_key
+            )
+        )
+        if existing is not None:
+            return
+        finance_profile = self._get_or_create_finance_profile(user_id=club.owner_user_id)
+        finance_profile.balance = self._normalize_amount(
+            Decimal(str(finance_profile.balance)) + amount_coin
+        )
+        self.session.add(
+            ClubFinanceTransaction(
+                finance_profile_id=finance_profile.id,
+                user_id=club.owner_user_id,
+                transaction_type="share_investment",
+                amount=self._normalize_amount(amount_coin),
+                reference_key=reference_key,
+                metadata_json={
+                    "club_id": club.id,
+                    "club_name": club.club_name,
+                    "purchase_id": purchase.id,
+                    "investor_user_id": purchase.user_id,
+                    "market_id": purchase.market_id,
+                },
+                created_at=purchase.created_at or datetime.now(UTC),
+            )
+        )
+
     def get_benefit_state(self, *, club_id: str, user_id: str) -> CreatorClubShareBenefitState:
         holding = self.get_holding(club_id=club_id, user_id=user_id)
         share_count = int(holding.share_count) if holding is not None else 0
@@ -509,7 +770,15 @@ class CreatorClubShareMarketService:
             "total_governance_shares": total_governance_shares,
             "anti_takeover_cap_share_count": anti_takeover_cap,
             "governance_eligible": holding.share_count >= int(governance_policy["proposal_share_threshold"]),
+            "credited_club_treasury_coin": str(total_price_coin),
         }
+        club = self.session.get(ClubProfile, club_id)
+        if club is not None:
+            self._credit_purchase_into_club_treasury(
+                club=club,
+                purchase=purchase,
+                amount_coin=total_price_coin,
+            )
 
         market.shares_sold = int(market.shares_sold) + share_count
         market.total_purchase_volume_coin = self._normalize_amount(
@@ -744,6 +1013,7 @@ class CreatorClubShareMarketService:
         *,
         viewer: User | None = None,
     ) -> dict[str, object]:
+        club = self.session.get(ClubProfile, market.club_id)
         viewer_holding = self.get_holding(club_id=market.club_id, user_id=viewer.id) if viewer is not None else None
         viewer_benefits = (
             self.get_benefit_state(club_id=market.club_id, user_id=viewer.id)
@@ -766,9 +1036,49 @@ class CreatorClubShareMarketService:
             share_count=int(market.creator_controlled_shares),
             total_share_count=self._total_governance_shares(market),
         )
+        club_name = club.club_name if club is not None else market.club_id
+        revenue_streams = (
+            self._revenue_streams_snapshot(club=club)
+            if club is not None
+            else {
+                "match_winnings_coin": Decimal("0.0000"),
+                "fan_growth_bonus_coin": Decimal("0.0000"),
+                "trading_fees_coin": Decimal("0.0000"),
+                "sponsorship_pool_coin": Decimal("0.0000"),
+                "broadcast_rights_coin": Decimal("0.0000"),
+                "total_coin": Decimal("0.0000"),
+                "metadata_json": {},
+            }
+        )
+        valuation_ticker = (
+            self._valuation_ticker_snapshot(club=club, market=market)
+            if club is not None
+            else {
+                "total_valuation_coin": Decimal("0.0000"),
+                "treasury_balance_coin": Decimal("0.0000"),
+                "player_market_value_coin": Decimal("0.0000"),
+                "infrastructure_value_coin": Decimal("0.0000"),
+                "recent_performance_score": Decimal("0.0000"),
+                "recent_performance_multiplier": Decimal("0.0000"),
+                "recent_performance_bonus_coin": Decimal("0.0000"),
+                "implied_share_price_coin": Decimal("0.0000"),
+                "market_share_price_coin": Decimal("0.0000"),
+                "market_price_delta_coin": Decimal("0.0000"),
+                "market_price_delta_bps": 0,
+                "price_to_value_ratio": Decimal("0.0000"),
+                "fan_count": 0,
+                "wins_last_five": 0,
+                "draws_last_five": 0,
+                "losses_last_five": 0,
+                "points_last_five": 0,
+                "last_refreshed_at": None,
+                "metadata_json": {},
+            }
+        )
         return {
             "id": market.id,
             "club_id": market.club_id,
+            "club_name": club_name,
             "creator_user_id": market.creator_user_id,
             "issued_by_user_id": market.issued_by_user_id,
             "status": market.status,
@@ -784,6 +1094,8 @@ class CreatorClubShareMarketService:
             "total_purchase_volume_coin": market.total_purchase_volume_coin,
             "total_revenue_distributed_coin": market.total_revenue_distributed_coin,
             "metadata_json": market.metadata_json or {},
+            "revenue_streams": revenue_streams,
+            "valuation_ticker": valuation_ticker,
             "governance_policy": governance_policy,
             "ownership_ledger": self._serialize_ownership_ledger(
                 market,

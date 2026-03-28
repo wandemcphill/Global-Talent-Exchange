@@ -56,25 +56,45 @@ router = APIRouter(prefix="/player-cards", tags=["player-cards"])
 
 def get_service(request: Request, session: Session = Depends(get_session)) -> PlayerCardMarketService:
     event_publisher = getattr(request.app.state, "event_publisher", None)
-    wallet_service = WalletService(event_publisher=event_publisher) if event_publisher else WalletService()
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+    wallet_service = (
+        WalletService(event_publisher=event_publisher, cache_backend=cache_backend)
+        if event_publisher
+        else WalletService(cache_backend=cache_backend)
+    )
     return PlayerCardMarketService(session=session, wallet_service=wallet_service, event_publisher=event_publisher or InMemoryEventPublisher())
 
 
 def get_loan_service(request: Request, session: Session = Depends(get_session)) -> CardLoanService:
     event_publisher = getattr(request.app.state, "event_publisher", None)
-    wallet_service = WalletService(event_publisher=event_publisher) if event_publisher else WalletService()
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+    wallet_service = (
+        WalletService(event_publisher=event_publisher, cache_backend=cache_backend)
+        if event_publisher
+        else WalletService(cache_backend=cache_backend)
+    )
     return CardLoanService(session=session, wallet_service=wallet_service)
 
 
 def get_rental_service(request: Request, session: Session = Depends(get_session)) -> StarterSquadRentalService:
     event_publisher = getattr(request.app.state, "event_publisher", None)
-    wallet_service = WalletService(event_publisher=event_publisher) if event_publisher else WalletService()
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+    wallet_service = (
+        WalletService(event_publisher=event_publisher, cache_backend=cache_backend)
+        if event_publisher
+        else WalletService(cache_backend=cache_backend)
+    )
     return StarterSquadRentalService(session=session, wallet_service=wallet_service)
 
 
 def get_marketplace_service(request: Request, session: Session = Depends(get_session)) -> PlayerCardMarketplaceService:
     event_publisher = getattr(request.app.state, "event_publisher", None)
-    wallet_service = WalletService(event_publisher=event_publisher) if event_publisher else WalletService()
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+    wallet_service = (
+        WalletService(event_publisher=event_publisher, cache_backend=cache_backend)
+        if event_publisher
+        else WalletService(cache_backend=cache_backend)
+    )
     return PlayerCardMarketplaceService(
         session=session,
         wallet_service=wallet_service,

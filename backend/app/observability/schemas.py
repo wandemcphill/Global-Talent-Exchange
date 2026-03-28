@@ -51,3 +51,55 @@ class AuditFeedItem(BaseModel):
     outcome: str
     detail: str
     metadata_summary: dict[str, Any]
+
+
+class AlertFeedItem(BaseModel):
+    alert_id: str
+    event_name: str
+    severity: str
+    alert_type: str
+    title: str
+    body: str
+    user_id: str | None
+    created_at: datetime
+    metadata: dict[str, Any]
+
+
+class AlertSnapshotView(BaseModel):
+    total_alerts: int
+    by_severity: dict[str, int]
+    by_type: dict[str, int]
+    recent_alerts: list[AlertFeedItem]
+
+
+class TransactionStreamDashboardView(BaseModel):
+    kafka_enabled: bool
+    outbox_relay_enabled: bool
+    topic_prefix: str
+    pending_outbox_events: int
+    processed_outbox_events: int
+    recent_transactions_24h: int
+    recent_transactions_by_reason: dict[str, int]
+    latest_transaction_at: datetime | None
+
+
+class RealtimeOperationsView(BaseModel):
+    total_events: int
+    channels: dict[str, int]
+    active_wallet_connections: int
+    tracked_wallet_streams: int
+    delivered_messages: int
+
+
+class FraudMonitoringView(BaseModel):
+    open_fraud_cases: int
+    high_severity_open_fraud_cases: int
+    critical_system_events: int
+    recent_alert_counts: dict[str, int]
+
+
+class MonitoringDashboardView(BaseModel):
+    transaction_stream: TransactionStreamDashboardView
+    realtime: RealtimeOperationsView
+    fraud: FraudMonitoringView
+    alerts: AlertSnapshotView

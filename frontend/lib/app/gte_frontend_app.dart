@@ -4,10 +4,10 @@ import '../core/gte_session_identity.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_models.dart';
 import '../features/app_routes/gte_app_route_registry.dart';
-import '../features/navigation/presentation/gte_navigation_shell_screen.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../screens/gte_login_screen.dart';
+import '../screens/gte_exchange_shell_screen.dart';
 import '../services/match_3d_monetization_service.dart';
 import '../theme/gte_theme_controller.dart';
 import '../theme/gte_theme_scope.dart';
@@ -118,7 +118,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
             debugShowCheckedModeBanner: false,
             title: 'Global Talent Exchange',
             theme: GteShellTheme.build(_themeController.activeTheme),
-            home: GteNavigationShellScreen.fromPath(
+            home: GteExchangeShellScreen.fromPath(
               controller: _controller,
               apiBaseUrl: _config.apiBaseUrl,
               backendMode: _config.backendMode,
@@ -130,7 +130,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
                 return MaterialPageRoute<void>(
                   settings: settings,
                   builder: (BuildContext context) =>
-                      GteNavigationShellScreen.fromPath(
+                      GteExchangeShellScreen.fromPath(
                     controller: _controller,
                     apiBaseUrl: _config.apiBaseUrl,
                     backendMode: _config.backendMode,

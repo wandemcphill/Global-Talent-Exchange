@@ -6,6 +6,8 @@ from threading import RLock
 from typing import Any, Literal, Protocol
 
 from pydantic import Field, model_validator
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
@@ -17,7 +19,9 @@ from app.config.competition_constants import (
     MATCH_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MIN_MINUTES,
 )
+from app.core.event_backbone import build_outbox_event, defer_event_publish_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher, utcnow
+from app.models.event_backbone import CompetitionQueueRecord
 
 SUPPORTED_MATCH_MOMENTS = (
     "goals",
@@ -236,3 +240,116 @@ class InMemoryQueuePublisher:
         if queue_name is None:
             return records
         return tuple(record for record in records if record.queue_name == queue_name)
+
+
+@dataclass(slots=True)
+class DurableQueuePublisher:
+    event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
+    session: Session | None = None
+    session_factory: sessionmaker[Session] | None = None
+    producer_name: str = "competition-engine"
+
+    def publish(self, job: CompetitionQueueJob) -> QueuedJobRecord:
+        if self.session is not None:
+            record, event = self._publish_with_session(self.session, job)
+            if event is not None:
+                defer_event_publish_until_commit(self.session, publisher=self.event_publisher, event=event)
+            return record
+        if self.session_factory is None:
+            raise RuntimeError("DurableQueuePublisher requires a session or session_factory.")
+
+        with self.session_factory() as session:
+            record, event = self._publish_with_session(session, job)
+            session.commit()
+        if event is not None:
+            self.event_publisher.publish(event)
+        return record
+
+    def list_published(self, queue_name: str | None = None) -> tuple[QueuedJobRecord, ...]:
+        if self.session is not None:
+            return self._list_published(self.session, queue_name=queue_name)
+        if self.session_factory is None:
+            return tuple()
+        with self.session_factory() as session:
+            return self._list_published(session, queue_name=queue_name)
+
+    def _publish_with_session(
+        self,
+        session: Session,
+        job: CompetitionQueueJob,
+    ) -> tuple[QueuedJobRecord, DomainEvent | None]:
+        dedupe_key = f"{job.queue_name}:{job.idempotency_key}"
+        existing = session.scalar(
+            select(CompetitionQueueRecord).where(
+                CompetitionQueueRecord.queue_name == job.queue_name,
+                CompetitionQueueRecord.idempotency_key == (job.idempotency_key or dedupe_key),
+            )
+        )
+        if existing is not None:
+            return _schema_record_from_model(existing), None
+
+        payload = job.model_dump(mode="json")
+        aggregate_id = _queue_aggregate_id(payload, fallback=job.idempotency_key or dedupe_key)
+        partition_key = _queue_partition_key(payload, fallback=aggregate_id)
+        record_model = CompetitionQueueRecord(
+            queue_name=job.queue_name,
+            job_name=job.job_name,
+            idempotency_key=job.idempotency_key or dedupe_key,
+            aggregate_id=aggregate_id,
+            partition_key=partition_key,
+            payload_json=payload,
+            metadata_json={"producer": self.producer_name},
+        )
+        session.add(record_model)
+        session.flush()
+
+        domain_event = DomainEvent(
+            name=f"competition_engine.queue.{record_model.queue_name}.queued",
+            payload={
+                "job_name": record_model.job_name,
+                "queue_name": record_model.queue_name,
+                "idempotency_key": record_model.idempotency_key,
+                "job_payload": record_model.payload_json,
+            },
+            aggregate_id=aggregate_id,
+            aggregate_type="competition_queue",
+            producer=self.producer_name,
+            partition_key=partition_key,
+            headers={"delivery_mode": "durable"},
+        )
+        session.add(build_outbox_event(domain_event=domain_event))
+        session.flush()
+        return _schema_record_from_model(record_model), domain_event
+
+    def _list_published(self, session: Session, *, queue_name: str | None = None) -> tuple[QueuedJobRecord, ...]:
+        stmt = select(CompetitionQueueRecord).order_by(CompetitionQueueRecord.published_at, CompetitionQueueRecord.id)
+        if queue_name is not None:
+            stmt = stmt.where(CompetitionQueueRecord.queue_name == queue_name)
+        records = session.scalars(stmt).all()
+        return tuple(_schema_record_from_model(record) for record in records)
+
+
+def _schema_record_from_model(record: CompetitionQueueRecord) -> QueuedJobRecord:
+    return QueuedJobRecord(
+        queue_name=record.queue_name,
+        job_name=record.job_name,
+        idempotency_key=record.idempotency_key,
+        payload=dict(record.payload_json or {}),
+        published_at=record.published_at,
+    )
+
+
+def _queue_aggregate_id(payload: dict[str, Any], *, fallback: str) -> str:
+    for key in ("fixture_id", "source_fixture_id", "resource_id", "competition_id"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return fallback
+
+
+def _queue_partition_key(payload: dict[str, Any], *, fallback: str) -> str:
+    for key in ("fixture_id", "source_fixture_id", "resource_id", "competition_id", "audience_key"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return fallback

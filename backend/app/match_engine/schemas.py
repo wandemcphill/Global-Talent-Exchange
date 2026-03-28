@@ -7,6 +7,13 @@ from pydantic import Field, model_validator
 
 from app.common.enums.match_status import MatchStatus
 from app.common.schemas.base import CommonSchema
+from app.football_universe.schemas import (
+    BroadcastSessionView,
+    ClubIdentityView,
+    FanReactionView,
+    FootballUniverseNotificationView,
+    MediaEventView,
+)
 from app.match_engine.simulation.models import (
     MatchCompetitionType,
     MatchEventType,
@@ -64,6 +71,7 @@ class MatchPlayerInput(CommonSchema):
     fatigue_load: int | None = Field(default=None, ge=0, le=100)
     injury_risk: int | None = Field(default=None, ge=0, le=100)
     leadership: int | None = Field(default=None, ge=1, le=100)
+    identity_fit_score: int | None = Field(default=None, ge=0, le=100)
 
 
 class TeamTacticalPlanInput(CommonSchema):
@@ -131,6 +139,10 @@ class MatchTeamIdentityInput(CommonSchema):
     away_kit: MatchKitIdentityInput | None = None
     third_kit: MatchKitIdentityInput | None = None
     goalkeeper_kit: MatchKitIdentityInput | None = None
+    philosophy: str | None = Field(default=None, min_length=3, max_length=32)
+    culture_score: int | None = Field(default=None, ge=0, le=100)
+    tactical_consistency: int | None = Field(default=None, ge=0, le=100)
+    brand_strength: int | None = Field(default=None, ge=0, le=100)
 
 
 class MatchClubContextInput(CommonSchema):
@@ -144,6 +156,11 @@ class MatchClubContextInput(CommonSchema):
     travel_load: int = Field(default=28, ge=0, le=100)
     rivalry_intensity: int = Field(default=0, ge=0, le=100)
     schedule_pressure: int = Field(default=34, ge=0, le=100)
+    expectation_level: int = Field(default=55, ge=0, le=100)
+    fan_pressure: int = Field(default=48, ge=0, le=100)
+    media_pressure: int = Field(default=45, ge=0, le=100)
+    culture_score: int = Field(default=55, ge=0, le=100)
+    brand_strength: int = Field(default=50, ge=0, le=100)
 
 
 class MatchTeamInput(CommonSchema):
@@ -341,6 +358,7 @@ class MatchEventView(CommonSchema):
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
     commentary: str
+    analyst_commentary: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -474,6 +492,9 @@ class MatchHalftimeAnalyticsView(CommonSchema):
     momentum_graph: list[MatchMomentumPointView] = Field(default_factory=list)
     cards_incidents: list[str] = Field(default_factory=list)
     tactical_suggestions: list[str] = Field(default_factory=list)
+    key_stats: list[str] = Field(default_factory=list)
+    tactical_insights: list[str] = Field(default_factory=list)
+    standout_players: list[MatchPlayerRatingView] = Field(default_factory=list)
 
 
 class MatchKeyMomentView(CommonSchema):
@@ -502,6 +523,11 @@ class MatchSpectatorPackageView(CommonSchema):
     can_pause: bool = False
     continuous_stream_available: bool = False
     key_moment_delivery: str = "event_triggered"
+    sync_strategy: str = "deterministic_playback"
+    watch_party_enabled: bool = True
+    reactions_enabled: bool = True
+    chat_enabled: bool = True
+    replay_sync_enabled: bool = True
 
 
 class MatchSceneAssemblyContractView(CommonSchema):
@@ -515,6 +541,10 @@ class MatchSceneAssemblyContractView(CommonSchema):
     camera_modes: list[str] = Field(default_factory=list)
     replay_buffer_events: int = Field(default=12, ge=4, le=64)
     special_moment_effects: bool = True
+    motion_runtime: str = "blend_tree"
+    commentary_runtime: str = "timeline_templates"
+    crowd_reactivity: str = "event_weighted"
+    spectator_sync_mode: str = "deterministic_playback"
 
 
 class MatchBroadcastPresentationView(CommonSchema):
@@ -525,6 +555,9 @@ class MatchBroadcastPresentationView(CommonSchema):
     atmosphere_profile: str = "standard"
     live_stream_transport: str = "websocket"
     async_match_mode: str = "summary_only"
+    tts_enabled: bool = True
+    commentary_languages: list[str] = Field(default_factory=lambda: ["en"])
+    commentator_roles: list[str] = Field(default_factory=lambda: ["lead", "analyst"])
 
 
 class MatchReplayDownloadContractView(CommonSchema):
@@ -543,6 +576,94 @@ class MatchPerformanceSyncView(CommonSchema):
     max_latency_ms: int = Field(default=320, ge=50, le=2000)
     checkpoint_interval_seconds: int = Field(default=15, ge=5, le=60)
     deterministic_seed: int = Field(ge=0)
+
+
+class MatchMotionDirectionView(CommonSchema):
+    x: float = Field(default=0.0, ge=-1.0, le=1.0)
+    y: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+
+class MatchMotionPredictionView(CommonSchema):
+    model_key: str = "gtex_motion_blend_v1"
+    run_weight: float = Field(default=0.0, ge=0.0, le=1.0)
+    sprint_weight: float = Field(default=0.0, ge=0.0, le=1.0)
+    shoot_weight: float = Field(default=0.0, ge=0.0, le=1.0)
+    direction: MatchMotionDirectionView = Field(default_factory=MatchMotionDirectionView)
+    pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    ball_distance: float | None = Field(default=None, ge=0.0)
+    nearest_defender_distance: float | None = Field(default=None, ge=0.0)
+    fatigue_load: float | None = Field(default=None, ge=0.0, le=1.0)
+    role_encoding: str | None = None
+
+
+class MatchCommentaryCueView(CommonSchema):
+    line: str = ""
+    tone: str = "tactical"
+    commentator: str = "lead"
+    language: str = "en"
+    intensity: float = Field(default=0.0, ge=0.0, le=1.0)
+    tts_ready: bool = False
+    banter_layer: bool = False
+    audio_channel: str = "main"
+
+
+class MatchCrowdStateView(CommonSchema):
+    profile: str = "standard"
+    home_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
+    away_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
+    dominant_side: str = "home"
+    chant_level: float = Field(default=0.5, ge=0.0, le=1.0)
+    hostility: float = Field(default=0.0, ge=0.0, le=1.0)
+    spike: bool = False
+
+
+class MatchSpectatorSyncView(CommonSchema):
+    room_id: str
+    sync_strategy: str = "deterministic_playback"
+    shared_clock_second: int = Field(default=0, ge=0)
+    tick: int = Field(default=0, ge=0)
+    max_latency_ms: int = Field(default=320, ge=50, le=2000)
+    checkpoint_interval_seconds: int = Field(default=15, ge=5, le=60)
+    pause_replay_enabled: bool = False
+    reactions_enabled: bool = True
+
+
+class MatchExperienceLayerView(CommonSchema):
+    motion: MatchMotionPredictionView | None = None
+    commentary: MatchCommentaryCueView | None = None
+    crowd: MatchCrowdStateView | None = None
+    spectator_sync: MatchSpectatorSyncView | None = None
+
+
+class MatchRenderPointView(CommonSchema):
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+
+
+class MatchRenderSyncEventView(CommonSchema):
+    match_id: str
+    event_id: str
+    tick: int = Field(ge=0)
+    minute: int = Field(ge=0, le=120)
+    presentation_second: int = Field(ge=0)
+    event_type: str
+    team: str | None = None
+    team_id: str | None = None
+    player_id: str | None = None
+    secondary_player_id: str | None = None
+    position: MatchRenderPointView
+    target_position: MatchRenderPointView
+    meta: dict[str, Any] = Field(default_factory=dict)
+    experience: MatchExperienceLayerView | None = None
+
+
+class MatchRenderSyncPayloadView(CommonSchema):
+    match_id: str
+    seed: int = Field(ge=0)
+    tick_rate_hz: int = Field(default=20, ge=1, le=60)
+    max_latency_ms: int = Field(default=320, ge=50, le=2000)
+    deterministic: bool = True
+    events: list[MatchRenderSyncEventView] = Field(default_factory=list)
 
 
 class MatchTacticalChangeLogView(CommonSchema):
@@ -624,6 +745,10 @@ class MatchFinalSummaryView(CommonSchema):
     turning_points: list[str] = Field(default_factory=list)
     key_matchups: list[str] = Field(default_factory=list)
     tactical_impact_notes: list[str] = Field(default_factory=list)
+    atmosphere_profile: str = "standard"
+    atmosphere_summary: str = ""
+    home_crowd_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
+    away_crowd_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
     status: MatchStatus
     competition_type: MatchCompetitionType
     stage: str
@@ -675,6 +800,76 @@ class MatchMediaAvailabilityView(CommonSchema):
     download_available: bool = False
 
 
+class MatchAnalyticsRatioView(CommonSchema):
+    home: float = Field(ge=0.0)
+    away: float = Field(ge=0.0)
+
+
+class MatchThirdControlView(CommonSchema):
+    defensive: int = Field(default=0, ge=0)
+    midfield: int = Field(default=0, ge=0)
+    attacking: int = Field(default=0, ge=0)
+
+
+class MatchPossessionZonesView(CommonSchema):
+    home: MatchThirdControlView
+    away: MatchThirdControlView
+
+
+class MatchShotMapItemView(CommonSchema):
+    event_id: str
+    minute: int = Field(ge=0, le=120)
+    team_id: str
+    team_name: str
+    player_id: str | None = None
+    player_name: str | None = None
+    x: float = Field(ge=0.0, le=100.0)
+    y: float = Field(ge=0.0, le=100.0)
+    xg: float = Field(default=0.0, ge=0.0)
+    goal: bool = False
+    on_target: bool = False
+    replay_angle: str | None = None
+
+
+class MatchEntityHeatmapView(CommonSchema):
+    entity_id: str
+    entity_name: str
+    team_id: str
+    team_name: str
+    zones: list[int] = Field(default_factory=list, min_length=9, max_length=9)
+
+
+class MatchXgTimelinePointView(CommonSchema):
+    minute: int = Field(ge=0, le=120)
+    home_xg: float = Field(default=0.0, ge=0.0)
+    away_xg: float = Field(default=0.0, ge=0.0)
+
+
+class MatchMomentumTimelinePointView(CommonSchema):
+    minute: int = Field(ge=0, le=120)
+    home_pressure: float = Field(default=0.0, ge=0.0)
+    away_pressure: float = Field(default=0.0, ge=0.0)
+
+
+class MatchPostMatchAnalyticsView(CommonSchema):
+    match_id: str
+    seed: int = Field(ge=0)
+    score: str
+    xg: MatchAnalyticsRatioView
+    shots: MatchAnalyticsRatioView
+    shots_on_target: MatchAnalyticsRatioView
+    possession: MatchAnalyticsRatioView
+    possession_zones: MatchPossessionZonesView
+    shot_map: list[MatchShotMapItemView] = Field(default_factory=list)
+    team_heatmaps: list[MatchEntityHeatmapView] = Field(default_factory=list)
+    player_heatmaps: list[MatchEntityHeatmapView] = Field(default_factory=list)
+    xg_timeline: list[MatchXgTimelinePointView] = Field(default_factory=list)
+    momentum_timeline: list[MatchMomentumTimelinePointView] = Field(default_factory=list)
+    tactical_changes: list[MatchTacticalChangeLogView] = Field(default_factory=list)
+    substitutions: list[MatchSubstitutionLogView] = Field(default_factory=list)
+    summary_line: str = ""
+
+
 class MatchLiveFeedView(CommonSchema):
     match_id: str
     home_team_name: str
@@ -723,6 +918,10 @@ class MatchReplayPayloadView(CommonSchema):
     highlight_runtime_seconds: int = Field(default=0, ge=0)
     highlight_access: MatchHighlightAccessView | None = None
     key_moments: list[MatchKeyMomentView] = Field(default_factory=list)
+    atmosphere_profile: str = "standard"
+    atmosphere_summary: str = ""
+    home_crowd_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
+    away_crowd_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
     manager_influence_notes: list[str] = Field(default_factory=list)
     injury_report: list[MatchInjuryReportView] = Field(default_factory=list)
     halftime_analytics: MatchHalftimeAnalyticsView | None = None
@@ -731,10 +930,17 @@ class MatchReplayPayloadView(CommonSchema):
     broadcast_presentation: MatchBroadcastPresentationView | None = None
     replay_download: MatchReplayDownloadContractView | None = None
     sync_contract: MatchPerformanceSyncView | None = None
+    render_sync: MatchRenderSyncPayloadView | None = None
     tactical_change_log: list[MatchTacticalChangeLogView] = Field(default_factory=list)
     substitution_log: list[MatchSubstitutionLogView] = Field(default_factory=list)
     critical_snapshots: list[MatchCriticalSnapshotView] = Field(default_factory=list)
+    post_match_analytics: MatchPostMatchAnalyticsView | None = None
     visual_identity: MatchVisualIdentityView | None = None
+    broadcast_session: BroadcastSessionView | None = None
+    fan_reactions: list[FanReactionView] = Field(default_factory=list)
+    club_identities: list[ClubIdentityView] = Field(default_factory=list)
+    media_events: list[MediaEventView] = Field(default_factory=list)
+    notifications: list[FootballUniverseNotificationView] = Field(default_factory=list)
     status: MatchStatus
     summary: MatchFinalSummaryView
     timeline: MatchEventTimelineView

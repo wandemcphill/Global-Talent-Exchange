@@ -5,12 +5,11 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/competition_rule_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 
 class CompetitionApi {
-  CompetitionApi({
-    required this.config,
-    required this.transport,
-  }) : _fixtureStore = _CompetitionFixtureStore.seed();
+  CompetitionApi({required this.config, required this.transport})
+    : _fixtureStore = _CompetitionFixtureStore.seed();
 
   CompetitionApi._({
     required this.config,
@@ -43,19 +42,13 @@ class CompetitionApi {
     );
   }
 
-  Future<CompetitionListResponse> fetchCompetitions({
-    String? userId,
-  }) {
-    return _withFallback<CompetitionListResponse>(
-      () async {
-        final Object? payload = await _sendBest(
-          'GET',
-          const <String>['/api/competitions'],
-        );
-        return CompetitionListResponse.fromJson(payload);
-      },
-      () async => _fixtureStore.list(userId: userId),
-    );
+  Future<CompetitionListResponse> fetchCompetitions({String? userId}) {
+    return _withFallback<CompetitionListResponse>(() async {
+      final Object? payload = await _sendBest('GET', const <String>[
+        '/api/competitions',
+      ]);
+      return CompetitionListResponse.fromJson(payload);
+    }, () async => _fixtureStore.list(userId: userId));
   }
 
   Future<CompetitionSummary> fetchCompetition(
@@ -88,30 +81,21 @@ class CompetitionApi {
     String competitionId, {
     String? userId,
   }) {
-    return _withFallback<CompetitionFinancialSummary>(
-      () async {
-        final Object? payload = await _sendBest(
-          'GET',
-          <String>['/api/competitions/$competitionId/financials'],
-        );
-        return CompetitionFinancialSummary.fromJson(payload);
-      },
-      () async => _fixtureStore.financials(competitionId),
-    );
+    return _withFallback<CompetitionFinancialSummary>(() async {
+      final Object? payload = await _sendBest('GET', <String>[
+        '/api/competitions/$competitionId/financials',
+      ]);
+      return CompetitionFinancialSummary.fromJson(payload);
+    }, () async => _fixtureStore.financials(competitionId));
   }
 
   Future<CompetitionSummary> createCompetition(CompetitionDraft draft) {
-    return _withFallback<CompetitionSummary>(
-      () async {
-        final Object? payload = await _sendBest(
-          'POST',
-          const <String>['/api/competitions'],
-          body: draft.toCreateRequestJson(),
-        );
-        return CompetitionSummary.fromJson(payload);
-      },
-      () async => _fixtureStore.create(draft),
-    );
+    return _withFallback<CompetitionSummary>(() async {
+      final Object? payload = await _sendBest('POST', const <String>[
+        '/api/competitions',
+      ], body: draft.toCreateRequestJson());
+      return CompetitionSummary.fromJson(payload);
+    }, () async => _fixtureStore.create(draft));
   }
 
   Future<CompetitionSummary> publishCompetition(
@@ -181,7 +165,8 @@ class CompetitionApi {
           body: <String, Object?>{
             'issued_by': issuedBy,
             'max_uses': maxUses,
-            if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
+            if (expiresAt != null)
+              'expires_at': expiresAt.toUtc().toIso8601String(),
             if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
           },
         );
@@ -233,12 +218,7 @@ class CompetitionApi {
     GteApiException? lastError;
     for (final String path in paths) {
       try {
-        return await _request(
-          method,
-          path,
-          query: query,
-          body: body,
-        );
+        return await _request(method, path, query: query, body: body);
       } on GteApiException catch (error) {
         lastError = error;
         if (error.statusCode == 404 || error.statusCode == 405) {
@@ -323,9 +303,8 @@ class _CompetitionRecord {
 }
 
 class _CompetitionFixtureStore {
-  _CompetitionFixtureStore({
-    required Map<String, _CompetitionRecord> records,
-  }) : _records = records;
+  _CompetitionFixtureStore({required Map<String, _CompetitionRecord> records})
+    : _records = records;
 
   final Map<String, _CompetitionRecord> _records;
   int _idSequence = 400;
@@ -341,7 +320,8 @@ class _CompetitionFixtureStore {
         invites: <CompetitionInviteView>[
           if (item.visibility == CompetitionVisibility.inviteOnly)
             CompetitionInviteView(
-              inviteCode: 'OPEN-${item.id.substring(item.id.length - 4).toUpperCase()}',
+              inviteCode:
+                  'OPEN-${item.id.substring(item.id.length - 4).toUpperCase()}',
               issuedBy: item.creatorId,
               createdAt: item.updatedAt,
               expiresAt: item.updatedAt.add(const Duration(days: 14)),
@@ -360,8 +340,9 @@ class _CompetitionFixtureStore {
         .map((_CompetitionRecord record) => _viewFor(record, userId: userId))
         .toList(growable: true)
       ..sort((CompetitionSummary left, CompetitionSummary right) {
-        final int participantCompare =
-            right.participantCount.compareTo(left.participantCount);
+        final int participantCompare = right.participantCount.compareTo(
+          left.participantCount,
+        );
         if (participantCompare != 0) {
           return participantCompare;
         }
@@ -404,6 +385,7 @@ class _CompetitionFixtureStore {
       prizePool: summary.prizePool,
       payoutStructure: summary.payoutStructure,
       currency: summary.currency,
+      dynamicPrizePool: summary.dynamicPrizePool,
     );
   }
 
@@ -437,6 +419,7 @@ class _CompetitionFixtureStore {
           )
           .toList(growable: false),
       rulesSummary: draft.rulesSummary,
+      matchType: MatchType.userHosted,
       joinEligibility: const CompetitionJoinEligibility(
         eligible: false,
         reason: 'competition_not_open',
@@ -461,9 +444,10 @@ class _CompetitionFixtureStore {
     final _CompetitionRecord record = _requireRecord(competitionId);
     record.summary = _recalculateFinancials(
       record.summary.copyWith(
-        status: openForJoin
-            ? CompetitionStatus.openForJoin
-            : CompetitionStatus.published,
+        status:
+            openForJoin
+                ? CompetitionStatus.openForJoin
+                : CompetitionStatus.published,
         updatedAt: DateTime.now().toUtc(),
       ),
     );
@@ -490,9 +474,10 @@ class _CompetitionFixtureStore {
     record.summary = _recalculateFinancials(
       record.summary.copyWith(
         participantCount: participantCount,
-        status: participantCount >= record.summary.capacity
-            ? CompetitionStatus.filled
-            : CompetitionStatus.openForJoin,
+        status:
+            participantCount >= record.summary.capacity
+                ? CompetitionStatus.filled
+                : CompetitionStatus.openForJoin,
         updatedAt: DateTime.now().toUtc(),
       ),
     );
@@ -511,7 +496,8 @@ class _CompetitionFixtureStore {
       inviteCode: _nextInviteCode(),
       issuedBy: issuedBy,
       createdAt: DateTime.now().toUtc(),
-      expiresAt: expiresAt ?? DateTime.now().toUtc().add(const Duration(days: 14)),
+      expiresAt:
+          expiresAt ?? DateTime.now().toUtc().add(const Duration(days: 14)),
       maxUses: maxUses,
       uses: 0,
       note: note,
@@ -570,7 +556,8 @@ class _CompetitionFixtureStore {
       );
     }
     if (summary.visibility == CompetitionVisibility.inviteOnly) {
-      final bool validInvite = inviteCode != null &&
+      final bool validInvite =
+          inviteCode != null &&
           record.invites.any(
             (CompetitionInviteView invite) =>
                 invite.inviteCode == inviteCode && invite.uses < invite.maxUses,
@@ -587,15 +574,31 @@ class _CompetitionFixtureStore {
   }
 
   CompetitionSummary _recalculateFinancials(CompetitionSummary summary) {
+    final CompetitionDynamicPrizePool? dynamicPrizePool =
+        summary.dynamicPrizePool;
+    if (dynamicPrizePool?.enabled == true) {
+      final double totalPool = dynamicPrizePool!.totalPool;
+      final List<CompetitionPayoutBreakdown> payouts = summary.payoutStructure
+          .map(
+            (CompetitionPayoutBreakdown payout) =>
+                payout.copyWith(amount: totalPool * payout.percent),
+          )
+          .toList(growable: false);
+      return summary.copyWith(
+        platformFeeAmount: 0,
+        hostFeeAmount: 0,
+        prizePool: totalPool,
+        payoutStructure: payouts,
+      );
+    }
     final double grossPool = summary.entryFee * summary.participantCount;
     final double platformFee = grossPool * summary.platformFeePct;
     final double hostFee = grossPool * summary.hostFeePct;
     final double prizePool = grossPool - platformFee - hostFee;
     final List<CompetitionPayoutBreakdown> payouts = summary.payoutStructure
         .map(
-          (CompetitionPayoutBreakdown payout) => payout.copyWith(
-            amount: prizePool * payout.percent,
-          ),
+          (CompetitionPayoutBreakdown payout) =>
+              payout.copyWith(amount: prizePool * payout.percent),
         )
         .toList(growable: false);
     return summary.copyWith(
@@ -637,10 +640,11 @@ String _errorMessage(Object? payload) {
   }
   if (payload is Map) {
     final Map<String, Object?> json = GteJson.map(payload);
-    final String? detail = GteJson.stringOrNull(
-      json,
-      <String>['detail', 'message', 'error'],
-    );
+    final String? detail = GteJson.stringOrNull(json, <String>[
+      'detail',
+      'message',
+      'error',
+    ]);
     if (detail != null) {
       return detail;
     }
@@ -673,6 +677,7 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
     ],
     rulesSummary:
         'Skill league standings use verified performance totals. Lineups lock 30 minutes before each scoring window. Result review stays open for 12 hours. Entry fees move into secure escrow until results settle.',
+    matchType: MatchType.userHosted,
     joinEligibility: CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: false,
     createdAt: DateTime.utc(2026, 3, 9, 20),
@@ -680,12 +685,12 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
   ),
   CompetitionSummary(
     id: 'ugc-102',
-    name: 'Coastal Creator Cup',
+    name: 'GTEX Spotlight Cup',
     format: CompetitionFormat.cup,
     visibility: CompetitionVisibility.public,
     status: CompetitionStatus.openForJoin,
-    creatorId: 'fixture-user',
-    creatorName: 'Fixture Trader',
+    creatorId: 'gtex-official',
+    creatorName: 'GTEX',
     participantCount: 24,
     capacity: 32,
     currency: 'credit',
@@ -694,13 +699,23 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
     hostFeePct: 0,
     platformFeeAmount: 0,
     hostFeeAmount: 0,
-    prizePool: 0,
+    prizePool: 42.8,
     payoutStructure: const <CompetitionPayoutBreakdown>[
-      CompetitionPayoutBreakdown(place: 1, percent: 1.0, amount: 0),
+      CompetitionPayoutBreakdown(place: 1, percent: 1.0, amount: 42.8),
     ],
     rulesSummary:
-        'Skill cup advancement follows verified head-to-head results. Entries lock before the first scoring window begins. Results are verified before the transparent payout settles.',
+        'GTEX promotional pools fund this platform-run cup. Entry is free, results are verified, and payouts follow the published rules instead of betting odds.',
+    matchType: MatchType.gtexHosted,
     joinEligibility: CompetitionJoinEligibility(eligible: true),
+    dynamicPrizePool: CompetitionDynamicPrizePool(
+      enabled: true,
+      baseFunding: 32.0,
+      activityBoost: 4.3,
+      jackpotRollover: 6.5,
+      totalPool: 42.8,
+      activeUsers5m: 43,
+      tradeVolume5m: 140.0,
+    ),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 3, 11, 18),
     updatedAt: DateTime.utc(2026, 3, 12, 0, 40),
@@ -729,6 +744,7 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
     ],
     rulesSummary:
         'Skill league standings use verified performance totals. Late entries remain available until the first scoring window closes. Result review stays open for 12 hours.',
+    matchType: MatchType.userHosted,
     joinEligibility: CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 3, 12, 4),
@@ -758,6 +774,7 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
     ],
     rulesSummary:
         'Skill cup advancement follows verified head-to-head results. Entries lock before the first scoring window begins. Ties trigger an extra playoff round under the published rules.',
+    matchType: MatchType.userHosted,
     joinEligibility: CompetitionJoinEligibility(
       eligible: false,
       reason: 'invite_required',
@@ -791,6 +808,7 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
     ],
     rulesSummary:
         'Skill league standings use verified performance totals. Entries lock before the first scoring window begins. Results are verified before the transparent payout settles.',
+    matchType: MatchType.userHosted,
     joinEligibility: CompetitionJoinEligibility(
       eligible: false,
       reason: 'competition_full',
@@ -801,12 +819,12 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
   ),
   CompetitionSummary(
     id: 'ugc-106',
-    name: 'Weekend Creator Cup',
+    name: 'Fast Cup Flash',
     format: CompetitionFormat.cup,
     visibility: CompetitionVisibility.public,
     status: CompetitionStatus.published,
-    creatorId: 'fixture-user',
-    creatorName: 'Fixture Trader',
+    creatorId: 'gtex-fastlane',
+    creatorName: 'GTEX Fast Lane',
     participantCount: 0,
     capacity: 8,
     currency: 'credit',
@@ -821,7 +839,8 @@ final List<CompetitionSummary> _seedCompetitions = <CompetitionSummary>[
       CompetitionPayoutBreakdown(place: 2, percent: 0.35, amount: 0),
     ],
     rulesSummary:
-        'Skill cup advancement follows verified head-to-head results. Entries lock before the first scoring window begins. Entry fees move into secure escrow until results settle.',
+        'Fast cup queue with instant wallet commitment. Entry fees clear before the slot is locked and payouts follow the published bracket.',
+    matchType: MatchType.fastMatch,
     joinEligibility: CompetitionJoinEligibility(
       eligible: false,
       reason: 'competition_not_open',

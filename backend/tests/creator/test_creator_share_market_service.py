@@ -4,12 +4,15 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
+from app.club_finance.models import ClubFinanceProfile, ClubFinanceTransaction
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
+from app.models.club_social import ClubIdentityMetrics
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorSquad
 from app.models.user import User
@@ -91,6 +94,19 @@ def test_creator_share_market_enforces_anti_takeover_cap_and_enriches_ledger(ses
             id="creator-squad",
             club_id="club-share",
             creator_profile_id="creator-profile",
+            first_team_json=[
+                {"current_gsi": 84, "potential_maximum": 91},
+                {"current_gsi": 79, "potential_maximum": 85},
+            ],
+            metadata_json={},
+        )
+    )
+    session.add(
+        ClubIdentityMetrics(
+            id="club-metrics",
+            club_id="club-share",
+            fan_count=1280,
+            support_momentum_score=77,
             metadata_json={},
         )
     )
@@ -114,6 +130,25 @@ def test_creator_share_market_enforces_anti_takeover_cap_and_enriches_ledger(ses
     assert serialized_market["ownership_ledger"]["recent_entries"][0]["entry_type"] == "share_purchase"
     assert serialized_market["ownership_ledger"]["recent_entries"][0]["entry_reference_id"] == purchase.id
     assert serialized_market["viewer_holding"]["share_count"] == 20
+    assert serialized_market["club_name"] == "Share Club FC"
+    assert serialized_market["revenue_streams"]["total_coin"] == Decimal("0.0000")
+    assert serialized_market["valuation_ticker"]["treasury_balance_coin"] == Decimal("100.0000")
+    assert serialized_market["valuation_ticker"]["player_market_value_coin"] > Decimal("0.0000")
+    assert serialized_market["valuation_ticker"]["fan_count"] == 1280
+
+    finance_profile = session.scalar(
+        select(ClubFinanceProfile).where(ClubFinanceProfile.user_id == owner.id)
+    )
+    treasury_credit = session.scalar(
+        select(ClubFinanceTransaction).where(
+            ClubFinanceTransaction.reference_key == f"creator-share-treasury:{purchase.id}"
+        )
+    )
+    assert finance_profile is not None
+    assert finance_profile.balance == Decimal("100.0000")
+    assert treasury_credit is not None
+    assert treasury_credit.transaction_type == "share_investment"
+    assert treasury_credit.amount == Decimal("100.0000")
 
     with pytest.raises(CreatorClubShareMarketError) as exc_info:
         service.purchase_shares(actor=fan, club_id="club-share", share_count=1)

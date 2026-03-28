@@ -19,7 +19,10 @@ from app.admin_godmode.router import router as admin_router
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.auth.service import AuthService
 from app.models.base import Base
-from app.models.user import UserRole
+from app.models.treasury import PaymentMode
+from app.models.user import KycStatus, UserRole
+from app.policies.service import PolicyService
+from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
 from app.wallets.router import router as wallet_router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -39,6 +42,7 @@ def admin_wallet_context(tmp_path: Path):
     admin_user = auth.register_user(
         session,
         email="admin-god@example.com",
+        region_code="NG",
         username="admingod",
         password="SuperSecret1",
         role=UserRole.ADMIN,
@@ -46,8 +50,31 @@ def admin_wallet_context(tmp_path: Path):
     trader = auth.register_user(
         session,
         email="wallet-user@example.com",
+        region_code="NG",
         username="walletuser",
         password="SuperSecret1",
+    )
+    policy_service = PolicyService(session)
+    policy_service.seed_defaults()
+    for document in policy_service.list_documents(mandatory_only=True):
+        version = policy_service.get_document(document.document_key)
+        policy_service.accept_document(
+            user_id=trader.id,
+            document_key=document.document_key,
+            version_label=version.version_label,
+            ip_address="127.0.0.1",
+            device_id="test-device",
+        )
+    trader.kyc_status = KycStatus.FULLY_VERIFIED
+    TreasuryService().create_user_bank_account(
+        session,
+        user=trader,
+        bank_name="Test Bank",
+        account_number="0123456789",
+        account_name="Wallet User",
+        bank_code="001",
+        currency_code="NGN",
+        set_active=True,
     )
     session.commit()
 
@@ -90,19 +117,37 @@ def _fund_user(session, current_user, *, amount: Decimal) -> None:
 
 def _fund_competition_rewards(session, current_user, *, amount: Decimal) -> None:
     wallet_service = WalletService()
-    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.CREDIT)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    promo_pool_account = wallet_service.ensure_promo_pool_account(session, LedgerUnit.COIN)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=promo_pool_account, amount=amount),
+            LedgerPosting(account=platform_account, amount=-amount),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="admin-godmode-promo-pool-topup",
+        description="Top up promo pool for withdrawal testing",
+        actor=current_user,
+    )
     wallet_service.append_transaction(
         session,
         postings=[
             LedgerPosting(account=user_account, amount=amount),
-            LedgerPosting(account=platform_account, amount=-amount),
+            LedgerPosting(account=promo_pool_account, amount=-amount),
         ],
         reason=LedgerEntryReason.COMPETITION_REWARD,
         reference="admin-godmode-competition-reward",
         description="Seed competition winnings for withdrawal testing",
         actor=current_user,
     )
+    session.commit()
+
+
+def _enable_automatic_deposits(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.AUTOMATIC
     session.commit()
 
 
@@ -153,7 +198,8 @@ def test_manual_bank_transfer_mode_blocks_gateway_deposit_endpoint(admin_wallet_
 
 
 def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_context) -> None:
-    client, _session, _admin_user, _trader = admin_wallet_context
+    client, session, _admin_user, _trader = admin_wallet_context
+    _enable_automatic_deposits(session)
 
     client.put(
         "/api/admin/god-mode/withdrawal-controls",
@@ -184,6 +230,8 @@ def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_con
 def test_competition_withdrawal_can_be_enabled_for_bank_transfer_review(admin_wallet_context) -> None:
     client, session, _admin_user, trader = admin_wallet_context
     _fund_competition_rewards(session, trader, amount=Decimal("100"))
+    bank_account = TreasuryService().ensure_user_bank_account(session, trader)
+    assert bank_account is not None
 
     client.put(
         "/api/admin/god-mode/withdrawal-controls",
@@ -200,15 +248,21 @@ def test_competition_withdrawal_can_be_enabled_for_bank_transfer_review(admin_wa
     response = client.post(
         "/api/wallets/withdrawals",
         json={
-            "amount": 20,
-            "unit": "credit",
+            "amount_coin": 20,
+            "bank_account_id": bank_account.id,
             "source_scope": "competition",
-            "destination_reference": "bank:0123456789",
         },
     )
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["status"] == "reviewing"
-    assert payload["processing_mode"] == "manual_bank_transfer"
+    assert payload["status"] == "pending_review"
+    assert payload["processor_mode"] == "manual_bank_transfer"
     assert payload["payout_channel"] == "bank_transfer"
+    assert payload["platform_positioning"] == GTEX_PLATFORM_POSITIONING
+    assert payload["legal_disclosures"] == [
+        "No guaranteed profit.",
+        "Prices are volatile.",
+        "Platform controls mechanics.",
+        "Rewards are promotional for GTEX competitions.",
+    ]

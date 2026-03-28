@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/shared/presentation/gte_feature_forms.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
@@ -34,8 +35,10 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
   late final GiftEconomyAdminController _controller;
 
   bool get _isAuthenticated => widget.accessToken?.trim().isNotEmpty == true;
-  bool get _isAdmin => <String>{'admin', 'super_admin'}
-      .contains((widget.currentUserRole ?? '').trim().toLowerCase());
+  bool get _isAdmin => <String>{
+    'admin',
+    'super_admin',
+  }.contains((widget.currentUserRole ?? '').trim().toLowerCase());
 
   @override
   void initState() {
@@ -164,8 +167,9 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
                             ),
                             GteMetricChip(
                               label: 'Revenue rules',
-                              value: _controller.revenueShareRules.length
-                                  .toString(),
+                              value:
+                                  _controller.revenueShareRules.length
+                                      .toString(),
                             ),
                             GteMetricChip(
                               label: 'Burn events',
@@ -202,8 +206,10 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
                   _SimpleListCard(
                     title: 'Gift catalog',
                     lines: _controller.catalog
-                        .map((GiftCatalogItem item) =>
-                            '${item.displayName} | ${item.tier} | ${item.fancoinPrice}')
+                        .map(
+                          (GiftCatalogItem item) =>
+                              '${item.displayName} | ${item.tier} | ${gteFormatFanCoin(item.fancoinPrice)}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingCatalog,
                     error: _controller.catalogError,
@@ -212,8 +218,10 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
                   _SimpleListCard(
                     title: 'Revenue share rules',
                     lines: _controller.revenueShareRules
-                        .map((RevenueShareRule item) =>
-                            '${item.title} | platform ${item.platformShareBps} bps | creator ${item.creatorShareBps} bps')
+                        .map(
+                          (RevenueShareRule item) =>
+                              '${item.title} | ${item.scope} | platform ${_formatBps(item.platformShareBps)} | creator ${_formatBps(item.creatorShareBps)} | recipient ${_formatBps(item.recipientShareBps ?? 0)} | burn ${_formatBps(item.burnBps)}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingRules,
                     error: _controller.rulesError,
@@ -222,8 +230,10 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
                   _SimpleListCard(
                     title: 'Burn events',
                     lines: _controller.burnEvents
-                        .map((EconomyBurnEvent item) =>
-                            '${item.sourceType} | ${item.amount} ${item.unit} | ${item.reason}')
+                        .map(
+                          (EconomyBurnEvent item) =>
+                              '${item.sourceType} | ${item.amount} ${item.unit} | ${item.reason}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingBurnEvents,
                     error: _controller.burnEventsError,
@@ -278,17 +288,32 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
       title: 'Upsert revenue rule',
       fields: const <GteFormFieldSpec>[
         GteFormFieldSpec(key: 'key', label: 'Rule key'),
+        GteFormFieldSpec(key: 'scope', label: 'Scope'),
         GteFormFieldSpec(key: 'title', label: 'Title'),
         GteFormFieldSpec(key: 'platform', label: 'Platform bps'),
         GteFormFieldSpec(key: 'creator', label: 'Creator bps'),
+        GteFormFieldSpec(key: 'recipient', label: 'Recipient bps'),
+        GteFormFieldSpec(key: 'burn', label: 'Burn bps'),
       ],
       onSubmit: (Map<String, String> values) async {
         final int? platform = int.tryParse(values['platform'] ?? '');
         final int? creator = int.tryParse(values['creator'] ?? '');
+        final int? recipient =
+            (values['recipient'] ?? '').trim().isEmpty
+                ? null
+                : int.tryParse(values['recipient'] ?? '');
+        final int? burn =
+            (values['burn'] ?? '').trim().isEmpty
+                ? 0
+                : int.tryParse(values['burn'] ?? '');
         if ((values['key'] ?? '').isEmpty ||
+            (values['scope'] ?? '').isEmpty ||
             (values['title'] ?? '').isEmpty ||
             platform == null ||
-            creator == null) {
+            creator == null ||
+            burn == null ||
+            ((values['recipient'] ?? '').trim().isNotEmpty &&
+                recipient == null)) {
           AppFeedback.showError(context, 'Enter valid revenue-rule values.');
           return false;
         }
@@ -296,10 +321,12 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
           () => _controller.upsertRevenueShareRule(
             RevenueShareRuleUpsertRequest(
               ruleKey: values['key']!,
-              scope: 'global',
+              scope: values['scope']!,
               title: values['title']!,
               platformShareBps: platform,
               creatorShareBps: creator,
+              recipientShareBps: recipient,
+              burnBps: burn,
             ),
           ),
           'Revenue rule saved.',
@@ -342,6 +369,10 @@ class _GiftEconomyAdminScreenState extends State<GiftEconomyAdminScreen> {
   }
 }
 
+String _formatBps(int bps) {
+  return '${(bps / 100).toStringAsFixed(bps % 100 == 0 ? 0 : 2)}%';
+}
+
 class _SimpleListCard extends StatelessWidget {
   const _SimpleListCard({
     required this.title,
@@ -379,7 +410,9 @@ class _SimpleListCard extends StatelessWidget {
           else if (lines.isEmpty)
             const Text('No records available.')
           else
-            ...lines.take(6).map(
+            ...lines
+                .take(6)
+                .map(
                   (String line) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(

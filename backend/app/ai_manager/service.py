@@ -371,45 +371,63 @@ class SquadPlanner:
 class MatchDecisionEngine:
     def evaluate(self, *, profile: AIManagerProfileView, payload: LiveMatchDecisionRequest) -> LiveDecisionResponse:
         goal_difference = payload.score_for - payload.score_against
+        xg_difference = payload.xg_for - payload.xg_against
+        average_fatigue = payload.average_fatigue if payload.average_fatigue is not None else 1.0 - payload.average_stamina
         attack_bias = _clamp01(0.40 + (profile.personality_profile.aggression * 0.22) + (profile.risk_tolerance * 0.20))
+        formation = STYLE_FORMATIONS[profile.tactical_style]["attacking"]
         tempo = TempoSetting.NORMAL
         line_height = LineHeight.MEDIUM
+        pressing = PressingIntensity.MEDIUM
         waste_time_behavior = False
         trigger_substitution = False
         substitution_reason: str | None = None
         directive = "hold_shape"
         rationale: list[str] = []
 
-        if goal_difference < 0 and payload.minute > 60:
-            attack_bias = _clamp01(attack_bias + 0.22)
+        if payload.minute >= 70 and (goal_difference < 0 or xg_difference <= -0.5):
+            attack_bias = _clamp01(attack_bias + 0.24)
+            formation = "3-4-3"
             tempo = TempoSetting.FAST
+            pressing = PressingIntensity.HIGH
             line_height = LineHeight.HIGH if payload.red_cards_for == 0 else LineHeight.MEDIUM
-            directive = "chase_goal"
-            rationale.append("Trailing after the 60th minute forces a more aggressive push for territory and tempo.")
+            directive = "go_all_out_attack"
+            rationale.append("Late scoreboard or xG deficit triggers an all-out attacking switch with a higher line and faster tempo.")
             if payload.substitutions_used < payload.maximum_substitutions:
                 trigger_substitution = True
                 substitution_reason = "Fresh attacking legs are needed while chasing the match."
         elif goal_difference > 0 and payload.minute > 75:
             attack_bias = _clamp01(attack_bias - 0.18)
+            formation = STYLE_FORMATIONS[profile.tactical_style]["defensive"]
             tempo = TempoSetting.SLOW
             line_height = LineHeight.LOW
+            pressing = PressingIntensity.LOW
             waste_time_behavior = True
             directive = "protect_lead"
             rationale.append("Leading late in the match shifts the plan toward control, slower tempo, and game management.")
 
+        if payload.possession_share < 0.40 and goal_difference <= 0:
+            pressing = PressingIntensity.HIGH
+            line_height = LineHeight.HIGH if payload.red_cards_for == 0 else line_height
+            attack_bias = _clamp01(attack_bias + 0.08)
+            directive = "increase_pressing" if directive == "hold_shape" else directive
+            rationale.append("Low possession share without a lead calls for a more aggressive press to recover territory.")
+
         if payload.red_cards_for > payload.red_cards_against:
             attack_bias = _clamp01(attack_bias - 0.12)
+            formation = STYLE_FORMATIONS[profile.tactical_style]["defensive"]
             line_height = LineHeight.LOW
+            pressing = PressingIntensity.LOW
             directive = "stabilize_shape" if directive == "hold_shape" else directive
             rationale.append("The club is down a player, so the defensive line drops to limit transition exposure.")
         elif payload.red_cards_against > payload.red_cards_for and goal_difference <= 0:
             attack_bias = _clamp01(attack_bias + 0.10)
             line_height = LineHeight.HIGH
+            pressing = PressingIntensity.HIGH
             rationale.append("The opponent is down a player, so the team can pin them deeper and sustain pressure.")
 
-        if payload.average_stamina <= 0.38 and payload.substitutions_used < payload.maximum_substitutions:
+        if (payload.average_stamina <= 0.70 or average_fatigue >= 0.30) and payload.substitutions_used < payload.maximum_substitutions:
             trigger_substitution = True
-            substitution_reason = substitution_reason or "Average stamina has fallen below the safe threshold."
+            substitution_reason = substitution_reason or "Fatigue has moved beyond the safe workload threshold."
             rationale.append("Fatigue has crossed the substitution threshold and risks late-match drop-off.")
 
         if payload.opponent_switched_shape and profile.personality_profile.adaptability >= 0.6:
@@ -421,9 +439,11 @@ class MatchDecisionEngine:
 
         return LiveDecisionResponse(
             directive=directive,
+            formation=formation,
             attack_bias=round(attack_bias, 2),
             tempo=tempo,
             line_height=line_height,
+            pressing=pressing,
             waste_time_behavior=waste_time_behavior,
             trigger_substitution=trigger_substitution,
             substitution_reason=substitution_reason,

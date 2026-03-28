@@ -47,7 +47,7 @@ router = APIRouter(prefix="/api/competitions", tags=["competitions"])
 router.include_router(creator_league_router)
 
 
-@router.post("", response_model=CompetitionSummaryView, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 def create_competition(
     payload: CompetitionCreateRequest,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
@@ -55,7 +55,7 @@ def create_competition(
     return _handle_competition_errors(lambda: orchestrator.create(payload))
 
 
-@router.patch("/{competition_id}", response_model=CompetitionSummaryView)
+@router.patch("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def update_competition(
     competition_id: str,
     payload: CompetitionUpdateRequest,
@@ -67,7 +67,7 @@ def update_competition(
     return result
 
 
-@router.post("/{competition_id}/publish", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/publish", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def publish_competition(
     competition_id: str,
     payload: CompetitionPublishRequest,
@@ -79,7 +79,7 @@ def publish_competition(
     return result
 
 
-@router.get("/{competition_id}", response_model=CompetitionSummaryView)
+@router.get("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def get_competition(
     competition_id: str,
     viewer_id: str | None = Query(default=None),
@@ -92,7 +92,7 @@ def get_competition(
     return result
 
 
-@router.get("", response_model=CompetitionListResponse)
+@router.get("", response_model=CompetitionListResponse, response_model_exclude_none=True)
 def list_competitions(
     public_only: bool = Query(default=False),
     format: CompetitionFormat | None = Query(default=None),
@@ -112,7 +112,7 @@ def list_competitions(
     )
 
 
-@router.post("/{competition_id}/join", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/join", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def join_competition(
     competition_id: str,
     payload: CompetitionJoinRequest,
@@ -131,7 +131,7 @@ def join_competition(
     return result
 
 
-@router.post("/{competition_id}/leave", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/leave", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def leave_competition(
     competition_id: str,
     payload: CompetitionLeaveRequest,
@@ -174,7 +174,7 @@ def list_competition_invites(
     return result
 
 
-@router.post("/{competition_id}/invites/accept", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/invites/accept", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def accept_competition_invite(
     competition_id: str,
     payload: CompetitionInviteAcceptRequest,
@@ -186,7 +186,7 @@ def accept_competition_invite(
     return result
 
 
-@router.get("/{competition_id}/summary", response_model=CompetitionSummaryView)
+@router.get("/{competition_id}/summary", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def get_competition_summary(
     competition_id: str,
     viewer_id: str | None = Query(default=None),
@@ -199,7 +199,7 @@ def get_competition_summary(
     return result
 
 
-@router.get("/{competition_id}/financials", response_model=CompetitionFinancialSummaryView)
+@router.get("/{competition_id}/financials", response_model=CompetitionFinancialSummaryView, response_model_exclude_none=True)
 def get_competition_financials(
     competition_id: str,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
@@ -244,7 +244,7 @@ def get_competition_standings(
     return result
 
 
-@router.post("/{competition_id}/seed", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/seed", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def seed_competition(
     competition_id: str,
     payload: CompetitionSeedRequest,
@@ -256,7 +256,7 @@ def seed_competition(
     return result
 
 
-@router.post("/{competition_id}/launch", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/launch", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def launch_competition(
     competition_id: str,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
@@ -267,7 +267,7 @@ def launch_competition(
     return result
 
 
-@router.post("/{competition_id}/advance", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/advance", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def advance_competition(
     competition_id: str,
     payload: CompetitionAdvanceRequest,
@@ -279,7 +279,7 @@ def advance_competition(
     return result
 
 
-@router.post("/{competition_id}/finalize", response_model=CompetitionSummaryView)
+@router.post("/{competition_id}/finalize", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def finalize_competition(
     competition_id: str,
     payload: CompetitionFinalizeRequest,

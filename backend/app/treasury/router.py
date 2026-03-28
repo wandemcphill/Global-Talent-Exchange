@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
 from app.models.dispute import Dispute, DisputeMessage
 from app.models.treasury import (
     DepositRequest,
@@ -56,13 +56,18 @@ api_router = APIRouter(prefix="/api", tags=["treasury"])
 
 def _service(request: Request | None) -> TreasuryService:
     wallet_service = None
-    if request is not None and hasattr(request.app.state, "event_publisher"):
-        wallet_service = WalletService(event_publisher=request.app.state.event_publisher)
+    if request is not None:
+        wallet_service = WalletService(
+            event_publisher=getattr(request.app.state, "event_publisher", None),
+            cache_backend=getattr(request.app.state, "cache_backend", None),
+        )
     return TreasuryService(wallet_service=wallet_service)
 
 
 def _require_permission(request: Request, actor: User, permission: str) -> None:
-    service = AdminGodModeService(wallet_service=WalletService())
+    service = AdminGodModeService(
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
+    )
     state = service._load_state(request.app)
     profile = service.resolve_profile(actor, state)
     service._assert_has_permission(profile, permission)
@@ -84,7 +89,7 @@ def get_kyc_profile(
 def submit_kyc_profile(
     payload: KycSubmitRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> KycProfileView:
     service = _service(request)
@@ -123,7 +128,7 @@ def list_user_bank_accounts(
 def create_user_bank_account(
     payload: UserBankAccountCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> UserBankAccountView:
     service = _service(request)
@@ -147,7 +152,7 @@ def update_user_bank_account(
     bank_account_id: str,
     payload: UserBankAccountUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> UserBankAccountView:
     service = _service(request)

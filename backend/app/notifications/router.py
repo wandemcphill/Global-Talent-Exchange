@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, FastAPI, Query, Request, status
 from sqlalchemy import select
@@ -79,8 +79,15 @@ def _map_records(request: Request, current_user: User, session: Session, limit: 
         )
         for item in live_items
     )
-    combined.sort(key=lambda item: item.created_at, reverse=True)
+    combined.sort(key=_notification_created_at_key, reverse=True)
     return combined[:limit]
+
+
+def _notification_created_at_key(item: NotificationView) -> datetime:
+    created_at = item.created_at
+    if created_at.tzinfo is None:
+        return created_at.replace(tzinfo=timezone.utc)
+    return created_at.astimezone(timezone.utc)
 
 
 @notifications_router.get("/me", response_model=list[NotificationView])

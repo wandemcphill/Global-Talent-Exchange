@@ -165,14 +165,18 @@ class WithdrawalEligibilityView(BaseModel):
     remaining_allowance: Decimal
     next_eligible_at: datetime | None
     kyc_status: KycStatus
+    kyc_tier: str = "unverified"
+    per_request_limit_fiat: Decimal | None = None
     requires_kyc: bool
     requires_bank_account: bool
     pending_withdrawals: Decimal = Decimal("0.0000")
     country_code: str = "GLOBAL"
     country_withdrawals_enabled: bool = True
-    missing_required_policies: list[str] = []
+    missing_required_policies: list[str] = Field(default_factory=list)
     policy_blocked: bool = False
     policy_block_reason: str | None = None
+    platform_positioning: str | None = None
+    legal_disclosures: list[str] = Field(default_factory=list)
 
 
 
@@ -213,6 +217,8 @@ class WithdrawalQuoteView(BaseModel):
     minimum_fee: Decimal
     eligibility: WithdrawalEligibilityView
     blocked_reason: str | None = None
+    platform_positioning: str | None = None
+    legal_disclosures: list[str] = Field(default_factory=list)
 
 
 class WithdrawalReceiptView(BaseModel):
@@ -224,6 +230,8 @@ class WithdrawalReceiptView(BaseModel):
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
     processor_mode: str = "manual_bank_transfer"
     payout_channel: str = "bank_transfer"
+    platform_positioning: str | None = None
+    legal_disclosures: list[str] = Field(default_factory=list)
 
 class WithdrawalRequestCreate(BaseModel):
     amount_coin: Decimal
@@ -264,6 +272,8 @@ class WithdrawalRequestView(BaseModel):
     net_amount: Decimal = Decimal("0.0000")
     processor_mode: str = "manual_bank_transfer"
     payout_channel: str = "bank_transfer"
+    platform_positioning: str | None = None
+    legal_disclosures: list[str] = Field(default_factory=list)
     notes: str | None
     created_at: datetime
     reviewed_at: datetime | None

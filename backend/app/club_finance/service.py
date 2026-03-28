@@ -159,6 +159,7 @@ class ClubFinanceService:
             net_delta = (
                 Decimal(profile.sponsorship_income)
                 + Decimal(profile.match_income)
+                + Decimal(profile.broadcast_income)
                 + Decimal(profile.transfer_profit)
                 - Decimal(profile.weekly_wages)
                 - Decimal(profile.expenses)
@@ -174,6 +175,7 @@ class ClubFinanceService:
                         "weekly_wages": str(profile.weekly_wages),
                         "sponsorship_income": str(profile.sponsorship_income),
                         "match_income": str(profile.match_income),
+                        "broadcast_income": str(profile.broadcast_income),
                         "transfer_profit": str(profile.transfer_profit),
                         "expenses": str(profile.expenses),
                     },
@@ -183,6 +185,7 @@ class ClubFinanceService:
             profile.balance = (Decimal(profile.balance) + net_delta).quantize(DECIMAL_QUANTUM)
             profile.sponsorship_income = Decimal("0.0000")
             profile.match_income = Decimal("0.0000")
+            profile.broadcast_income = Decimal("0.0000")
             profile.transfer_profit = Decimal("0.0000")
             profile.expenses = Decimal("0.0000")
             profile.last_weekly_cycle_on = reference_date
@@ -298,6 +301,25 @@ class ClubFinanceService:
             )
         )
         profile.balance = (Decimal(profile.balance) + normalized_amount).quantize(DECIMAL_QUANTUM)
+        self.session.flush()
+
+    def record_broadcast_distribution(
+        self,
+        *,
+        user_id: str,
+        amount: Decimal,
+        reference_key: str,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        normalized_amount = Decimal(amount).quantize(DECIMAL_QUANTUM)
+        self._record_finance_delta(
+            profile=self.get_or_create_profile(user_id=user_id),
+            amount=normalized_amount,
+            transaction_type="broadcast_income",
+            reference_key=reference_key,
+            metadata=dict(metadata or {}),
+            bucket="broadcast_income",
+        )
         self.session.flush()
 
     def _record_finance_delta(

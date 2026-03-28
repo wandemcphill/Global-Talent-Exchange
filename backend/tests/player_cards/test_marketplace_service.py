@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -15,7 +16,17 @@ from app.ingestion.models import Player
 from app.models.integrity import IntegrityIncident
 from app.models.base import Base
 from app.models.card_access import CardSwapExecution
-from app.models.player_cards import PlayerCard, PlayerCardHolding, PlayerCardListing, PlayerCardSale, PlayerCardTier
+from app.models.player_cards import (
+    PlayerCard,
+    PlayerCardHolding,
+    PlayerCardListing,
+    PlayerCardSale,
+    PlayerCardTier,
+    PlayerCardMomentum,
+    PlayerMarketValueSnapshot,
+    PlayerStatsSnapshot,
+)
+from app.models.real_world_football import PlayerDemandSignal, RealWorldFootballEvent, TrendingPlayerFlag
 from app.models.risk_ops import SystemEvent
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -126,6 +137,44 @@ def _create_card(session, *, card_id: str, player: Player, tier: PlayerCardTier,
     session.add(card)
     session.flush()
     return card
+
+
+def _create_stats_snapshot(
+    session,
+    *,
+    player_id: str,
+    stats_json: dict[str, object],
+) -> PlayerStatsSnapshot:
+    snapshot = PlayerStatsSnapshot(
+        player_id=player_id,
+        as_of=datetime.now(UTC),
+        source_type="match_engine",
+        stats_json=stats_json,
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
+
+
+def _create_real_world_event(session, *, player_id: str, event_id: str) -> RealWorldFootballEvent:
+    event = RealWorldFootballEvent(
+        id=event_id,
+        player_id=player_id,
+        event_type="match.spike",
+        source_type="manual",
+        source_label="test-suite",
+        dedupe_key=f"dedupe:{event_id}",
+        title="Market spike",
+        severity=1.0,
+        occurred_at=datetime.now(UTC),
+        approved_at=datetime.now(UTC),
+        metadata_json={},
+        raw_payload_json={},
+        normalized_payload_json={},
+    )
+    session.add(event)
+    session.flush()
+    return event
 
 
 def _seed_wallet(session, wallet: WalletService, user: User, *, amount: Decimal) -> None:
@@ -362,6 +411,97 @@ def test_marketplace_search_preserves_avatar_seed_and_latest_value(session) -> N
     assert item["listing_id"] == created["listing_id"]
     assert item["latest_value_credits"] == 44.0
     assert item["avatar"]["seed_token"] == "canonical-market-seed"
+
+
+def test_marketplace_search_applies_player_price_engine_signals(session) -> None:
+    seller = _create_user(session, user_id="engine-seller", email="engine-seller@example.com", username="engine-seller")
+    player = _create_player(session, player_id="engine-player", name="Engine Nine", position="forward", value_eur=4_000_000)
+    _create_summary(session, player=player, club_name="Green Pulse", rating=8.0, value_credits=40.0)
+    tier = _create_tier(session, tier_id="tier-engine", code="platinum")
+    card = _create_card(session, card_id="engine-card", player=player, tier=tier)
+    session.add(
+        PlayerCardHolding(
+            player_card_id=card.id,
+            owner_user_id=seller.id,
+            quantity_total=1,
+            quantity_reserved=0,
+            metadata_json={},
+        )
+    )
+    _create_stats_snapshot(
+        session,
+        player_id=player.id,
+        stats_json={
+            "goals": 2,
+            "assists": 1,
+            "rating": 8.0,
+            "mistakes": 1,
+        },
+    )
+    event = _create_real_world_event(session, player_id=player.id, event_id="event-engine")
+    session.add(
+        TrendingPlayerFlag(
+            player_id=player.id,
+            event_id=event.id,
+            flag_type="hot_streak",
+            flag_label="Trending",
+            trend_score=60.0,
+            priority=1,
+            status="active",
+            started_at=datetime.now(UTC) - timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=4),
+            source="test-suite",
+            metadata_json={},
+        )
+    )
+    session.add(
+        PlayerDemandSignal(
+            player_id=player.id,
+            event_id=event.id,
+            signal_type="fan_rush",
+            signal_label="Fan rush",
+            demand_score=8.0,
+            scouting_interest_delta=3.0,
+            recommendation_priority_delta=2.0,
+            market_buzz_score=12.0,
+            status="active",
+            started_at=datetime.now(UTC) - timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=4),
+            source="test-suite",
+            metadata_json={},
+        )
+    )
+    session.flush()
+
+    service = PlayerCardMarketplaceService(session=session, wallet_service=WalletService())
+    service.create_sale_listing(
+        actor=seller,
+        player_card_id=card.id,
+        quantity=1,
+        price_per_card_credits=Decimal("42.0000"),
+    )
+
+    payload = service.search_marketplace(listing_type="sale", limit=10, offset=0)
+
+    assert payload["total"] == 1
+    item = payload["items"][0]
+    assert item["market_price_credits"] == Decimal("44.0000")
+    assert item["price_change_credits"] == Decimal("4.0000")
+    assert item["price_change_percent"] == 10.0
+    assert item["price_direction"] == "up"
+    assert item["performance_score"] == pytest.approx(14.1)
+    assert item["available_shares"] == 1
+    assert item["buy_volume"] == 0
+    assert item["sell_volume"] == 1
+    assert item["liquidity_signal"] == "Low liquidity"
+    assert item["low_liquidity_warning"] is True
+    assert item["is_trending"] is True
+    assert item["trending_badge"] == "Trending"
+    assert item["hype_factor"] == pytest.approx(3.1)
+    assert item["change_capped"] is True
+    assert session.scalar(select(func.count(PlayerMarketValueSnapshot.id))) == 1
+    momentum = session.scalar(select(PlayerCardMomentum).where(PlayerCardMomentum.player_id == player.id))
+    assert momentum is None
 
 
 def test_swap_execution_transfers_holdings(session) -> None:

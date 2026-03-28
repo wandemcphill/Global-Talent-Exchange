@@ -347,6 +347,9 @@ def test_live_decision_chases_goal_and_triggers_substitution(client: TestClient,
             "minute": 72,
             "score_for": 0,
             "score_against": 1,
+            "xg_for": 0.6,
+            "xg_against": 1.4,
+            "possession_share": 0.37,
             "red_cards_for": 0,
             "red_cards_against": 0,
             "average_stamina": 0.34,
@@ -358,8 +361,10 @@ def test_live_decision_chases_goal_and_triggers_substitution(client: TestClient,
 
     assert response.status_code == 200
     body = response.json()
-    assert body["directive"] == "chase_goal"
+    assert body["directive"] == "go_all_out_attack"
+    assert body["formation"] == "3-4-3"
     assert body["tempo"] == "fast"
+    assert body["pressing"] == "high"
     assert body["trigger_substitution"] is True
     assert body["substitution_reason"] is not None
 

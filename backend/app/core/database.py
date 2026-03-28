@@ -25,6 +25,11 @@ MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "app.models",
+    "app.models.economy_governor",
+    "app.models.fx_pricing",
+    "app.models.player_token_market",
+    "app.models.event_backbone",
+    "app.models.projections",
     "app.club_finance.models",
     "app.club_identity.models.reputation",
     "app.fast_cups.repositories.database",

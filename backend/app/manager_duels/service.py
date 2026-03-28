@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.events import DomainEvent, EventPublisher
+from app.football_universe.service import FootballUniverseService
 from app.live_matches.highlights import SmartHighlightService
 from app.live_matches.schemas import LiveMatchSnapshotView, LiveMatchStateView, LiveMatchStreamEventView
 from app.live_matches.service import LiveMatchHub, ensure_live_match_hub
@@ -19,6 +20,7 @@ from app.match_engine.simulation.models import MatchCompetitionType
 from app.models.manager_duel import ManagerDuel, ManagerDuelProfile
 from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
 from app.models.user import User, UserRole
+from app.services.commentary_service import MatchCommentaryService
 
 
 def utcnow() -> datetime:
@@ -114,6 +116,17 @@ class ManagerDuelService:
                 away_selection=away_selection,
             )
             replay_payload = self.match_service.build_replay_payload(request)
+            commentary_service = MatchCommentaryService(session)
+            replay_payload = commentary_service.apply_to_replay_payload(
+                replay_payload,
+                request=request,
+            )
+            commentary_service.persist_replay_commentary(
+                duel.id,
+                replay_payload,
+                audience_user_ids=(home_user.id, away_user.id),
+            )
+            FootballUniverseService(session).persist_match_universe(request=request, replay_payload=replay_payload)
             highlights = self.highlight_service.persist_from_replay_payload(duel.id, replay_payload, session=session)
             duel.metadata_json = {
                 **(duel.metadata_json or {}),

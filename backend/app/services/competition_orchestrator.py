@@ -63,6 +63,7 @@ from app.schemas.competition_requests import (
 from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
     CompetitionFeesView,
+    DynamicPrizePoolView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
     CompetitionListResponse,
@@ -78,6 +79,7 @@ from app.services.competition_lifecycle_service import CompetitionLifecycleServi
 from app.services.competition_rules_engine import CompetitionRulesEngine
 from app.services.competition_validation_service import CompetitionValidationService
 from app.services.competition_visibility_service import CompetitionVisibilityService
+from app.services.dynamic_prize_pool_service import DynamicPrizePoolService
 
 _DEFAULT_RULES = (
     "Skill-based, player-versus-player contest with transparent entry fees, disclosed platform service fees, "
@@ -171,9 +173,14 @@ class CompetitionOrchestrator:
         if creation.ledger_entries:
             self.session.add_all(creation.ledger_entries)
 
-        pool_amount_minor = 0 if is_platform_competition else self._projected_reward_pool_minor(
-            competition=competition,
-            rule_set=rule_set,
+        dynamic_prize_pool = self._dynamic_prize_pool(competition, rule_set=rule_set)
+        pool_amount_minor = (
+            dynamic_prize_pool.total_pool_minor
+            if dynamic_prize_pool is not None
+            else self._projected_reward_pool_minor(
+                competition=competition,
+                rule_set=rule_set,
+            )
         )
         reward_pool = CompetitionRewardPool(
             competition_id=competition.id,
@@ -181,7 +188,14 @@ class CompetitionOrchestrator:
             currency=competition.currency,
             amount_minor=pool_amount_minor,
             status="planned",
-            metadata_json={},
+            metadata_json=(
+                DynamicPrizePoolService(self.session).apply_to_reward_pool(
+                    metadata_json={},
+                    snapshot=dynamic_prize_pool,
+                )
+                if dynamic_prize_pool is not None
+                else {}
+            ),
         )
         self.session.add(reward_pool)
         self.session.commit()
@@ -526,10 +540,13 @@ class CompetitionOrchestrator:
         if competition is None:
             return None
         participant_count = self._participant_count(competition.id)
+        rule_set = self._rule_set(competition.id)
         fees = self._fees_for(competition, participant_count=participant_count)
+        dynamic_prize_pool = self._dynamic_prize_pool(competition, rule_set=rule_set)
+        prize_pool = dynamic_prize_pool.total_pool if dynamic_prize_pool is not None else fees.prize_pool
         payout_structure = self._payout_breakdown(
             competition=competition,
-            prize_pool=fees.prize_pool,
+            prize_pool=prize_pool,
         )
         return CompetitionFinancialSummaryView(
             competition_id=competition.id,
@@ -540,8 +557,9 @@ class CompetitionOrchestrator:
             platform_fee_amount=fees.platform_fee_amount,
             host_fee_pct=fees.host_fee_pct,
             host_fee_amount=fees.host_fee_amount,
-            prize_pool=fees.prize_pool,
+            prize_pool=prize_pool,
             payout_structure=payout_structure,
+            dynamic_prize_pool=self._dynamic_prize_pool_view(dynamic_prize_pool),
             currency=competition.currency,
         )
 
@@ -803,7 +821,9 @@ class CompetitionOrchestrator:
         participant_count = self._participant_count(competition.id)
         rule_set = self._rule_set(competition.id)
         fees = self._fees_for(competition, participant_count=participant_count)
-        payout_structure = self._payout_breakdown(competition=competition, prize_pool=fees.prize_pool)
+        dynamic_prize_pool = self._dynamic_prize_pool(competition, rule_set=rule_set)
+        prize_pool = dynamic_prize_pool.total_pool if dynamic_prize_pool is not None else fees.prize_pool
+        payout_structure = self._payout_breakdown(competition=competition, prize_pool=prize_pool)
         metadata = self._summary_metadata(competition)
         context = self._summary_context(
             competition,
@@ -834,7 +854,7 @@ class CompetitionOrchestrator:
             host_fee_pct=fees.host_fee_pct,
             platform_fee_amount=fees.platform_fee_amount,
             host_fee_amount=fees.host_fee_amount,
-            prize_pool=fees.prize_pool,
+            prize_pool=prize_pool,
             payout_structure=payout_structure,
             rules_summary=competition.description or _DEFAULT_RULES,
             join_eligibility=JoinEligibilityView(
@@ -842,6 +862,7 @@ class CompetitionOrchestrator:
                 reason=join_decision.reason,
                 requires_invite=join_decision.requires_invite,
             ),
+            dynamic_prize_pool=self._dynamic_prize_pool_view(dynamic_prize_pool),
             beginner_friendly=metadata.get("beginner_friendly"),
             created_at=competition.created_at,
             updated_at=competition.updated_at,
@@ -856,6 +877,32 @@ class CompetitionOrchestrator:
             raise
         except ValidationError:
             return None
+
+    def _dynamic_prize_pool(
+        self,
+        competition: Competition,
+        *,
+        rule_set: CompetitionRuleSet,
+    ):
+        snapshot = DynamicPrizePoolService(self.session).snapshot(
+            competition=competition,
+            rule_set=rule_set,
+            exclude_competition_id=competition.id,
+        )
+        return snapshot if snapshot.enabled else None
+
+    def _dynamic_prize_pool_view(self, snapshot) -> DynamicPrizePoolView | None:
+        if snapshot is None:
+            return None
+        return DynamicPrizePoolView(
+            enabled=snapshot.enabled,
+            base_funding=snapshot.base_funding,
+            activity_boost=snapshot.activity_boost,
+            jackpot_rollover=snapshot.jackpot_rollover,
+            total_pool=snapshot.total_pool,
+            active_users_5min=snapshot.active_users_5min,
+            trade_volume_5min=snapshot.trade_volume_5min,
+        )
 
     def _payout_breakdown(
         self,
@@ -1173,7 +1220,13 @@ class CompetitionOrchestrator:
             if reward_pool is not None:
                 reward_pool.pool_type = "promo_pool"
                 if reward_pool.status in {"planned", "projected", "pending"}:
-                    reward_pool.amount_minor = 0
+                    snapshot = self._dynamic_prize_pool(competition, rule_set=rule_set)
+                    if snapshot is not None:
+                        reward_pool.amount_minor = snapshot.total_pool_minor
+                        reward_pool.metadata_json = DynamicPrizePoolService(self.session).apply_to_reward_pool(
+                            metadata_json=reward_pool.metadata_json,
+                            snapshot=snapshot,
+                        )
             return
         participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
         gross_pool = competition.entry_fee_minor * participant_count

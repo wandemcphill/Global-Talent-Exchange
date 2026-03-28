@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.common.enums.match_status import MatchStatus
 from app.config.competition_constants import MATCH_PRESENTATION_MAX_MINUTES, MATCH_PRESENTATION_MIN_MINUTES
 from app.match_engine.schemas import (
+    MatchClubContextInput,
     MatchKitIdentityInput,
     MatchSubstitutionRequestInput,
     MatchTacticalAdjustmentInput,
@@ -76,6 +77,50 @@ def test_replay_payload_contains_valid_key_moments_and_standard_duration() -> No
         assert event.clock_label
         if event.event_type in player_event_types:
             assert event.primary_player is not None
+
+
+def test_chance_events_include_player_decision_metadata() -> None:
+    service = MatchSimulationService()
+    payload = _find_payload(
+        service,
+        lambda seed: build_request(seed=seed),
+        lambda payload: any(event.event_type is MatchEventType.SHOT for event in payload.timeline.events),
+    )
+
+    shot_event = next(event for event in payload.timeline.events if event.event_type is MatchEventType.SHOT)
+
+    assert shot_event.metadata["decision_action"] in {"shoot", "pass", "dribble", "hold", "run_into_space"}
+    assert shot_event.metadata["decision_trace"]
+    assert {"selfishness", "risk_taking", "composure"} <= set(shot_event.metadata["personality"])
+    assert shot_event.metadata["ball_profile"]["spin"]
+
+
+def test_crowd_state_flows_into_summary_and_later_events() -> None:
+    service = MatchSimulationService()
+    payload = _find_payload(
+        service,
+        lambda seed: build_request(seed=seed),
+        lambda payload: any(
+            event.event_type is MatchEventType.GOAL
+            and event.team_id == payload.summary.home_stats.team_id
+            and event.minute <= 80
+            for event in payload.timeline.events
+        ),
+    )
+
+    kickoff = payload.timeline.events[0]
+    home_goal = next(
+        event
+        for event in payload.timeline.events
+        if event.event_type is MatchEventType.GOAL and event.team_id == payload.summary.home_stats.team_id and event.minute <= 80
+    )
+    later_events = [event for event in payload.timeline.events if event.sequence > home_goal.sequence]
+
+    assert 0.0 <= payload.summary.home_crowd_intensity <= 1.0
+    assert 0.0 <= payload.summary.away_crowd_intensity <= 1.0
+    assert payload.summary.atmosphere_profile
+    assert payload.summary.atmosphere_summary
+    assert any(float(event.metadata["crowd_home"]) > float(kickoff.metadata["crowd_home"]) for event in later_events)
 
 
 def test_cup_draws_go_straight_to_penalties_without_extra_time() -> None:
@@ -434,13 +479,95 @@ def test_halftime_analytics_and_spectator_package() -> None:
     assert 60 <= payload.halftime_analytics.duration_seconds <= 120
     assert payload.spectator_package is not None
     assert payload.spectator_package.can_pause is False
-    assert payload.spectator_package.continuous_stream_available is False
+    assert payload.spectator_package.continuous_stream_available is True
+    assert payload.spectator_package.key_moment_delivery == "tick_batch"
     assert payload.spectator_package.free_mode is MatchSpectatorMode.FREE_2D_COMMENTARY
     assert payload.spectator_package.paid_mode is MatchSpectatorMode.PAID_LIVE_KEY_MOMENT_VIDEO
     assert set(payload.spectator_package.modes) == {
         MatchSpectatorMode.FREE_2D_COMMENTARY,
         MatchSpectatorMode.PAID_LIVE_KEY_MOMENT_VIDEO,
     }
+
+
+def test_replay_payload_includes_broadcast_fan_identity_and_media_layers() -> None:
+    service = MatchSimulationService()
+    home_team = build_team("home", "North City", 82).model_copy(
+        update={
+            "identity": MatchTeamIdentityInput(
+                club_name="North City",
+                short_club_code="NCI",
+                philosophy="youth_development",
+                culture_score=78,
+                tactical_consistency=82,
+                brand_strength=74,
+            ),
+            "club_context": MatchClubContextInput(
+                expectation_level=79,
+                fan_pressure=76,
+                media_pressure=71,
+                rivalry_intensity=82,
+                culture_score=78,
+                brand_strength=74,
+            ),
+        }
+    )
+    away_team = build_team("away", "South Town", 78).model_copy(
+        update={
+            "identity": MatchTeamIdentityInput(
+                club_name="South Town",
+                short_club_code="STW",
+                philosophy="counter_attack",
+                culture_score=63,
+                tactical_consistency=66,
+                brand_strength=61,
+            ),
+            "club_context": MatchClubContextInput(
+                expectation_level=61,
+                fan_pressure=57,
+                media_pressure=54,
+                rivalry_intensity=82,
+                culture_score=63,
+                brand_strength=61,
+            ),
+        }
+    )
+
+    payload = service.build_replay_payload(build_request(seed=21, match_id="broadcast-package", home_team=home_team, away_team=away_team))
+
+    assert payload.broadcast_session is not None
+    assert {commentator.role for commentator in payload.broadcast_session.commentators} == {"play_by_play", "analyst"}
+    assert payload.broadcast_session.overlay_state.scoreboard.home_team_name == "North City"
+    assert payload.broadcast_session.overlay_state.scoreboard.away_team_name == "South Town"
+    assert payload.broadcast_session.overlay_state.player_highlight_card is not None
+    assert payload.broadcast_session.dual_commentary
+    assert len(payload.broadcast_session.dual_commentary) == len(payload.timeline.events)
+    assert all(line.analyst for line in payload.broadcast_session.dual_commentary[:5])
+    assert payload.broadcast_session.halftime_analysis is not None
+    assert payload.broadcast_session.halftime_analysis.key_stats
+    assert payload.broadcast_session.fulltime_wrap is not None
+    assert payload.broadcast_session.fulltime_wrap.player_of_the_match is not None
+
+    assert len(payload.fan_reactions) == 2
+    assert {reaction.club_id for reaction in payload.fan_reactions} == {"home", "away"}
+    assert any(reaction.events for reaction in payload.fan_reactions)
+    assert all(0.0 <= reaction.pressure_score <= 100.0 for reaction in payload.fan_reactions)
+
+    assert len(payload.club_identities) == 2
+    home_identity = next(identity for identity in payload.club_identities if identity.club_id == "home")
+    assert home_identity.philosophy == "youth_development"
+    assert home_identity.culture_score >= 70
+    assert home_identity.average_identity_fit > 0
+
+    assert payload.media_events
+    assert any(event.type == "headline" for event in payload.media_events)
+    assert any(event.type == "interview" for event in payload.media_events)
+    assert any(event.type == "transfer_news" for event in payload.media_events)
+
+    notification_types = {item.notification_type for item in payload.notifications}
+    assert "FAN_REACTION" in notification_types
+    assert "MEDIA_HEADLINE" in notification_types
+    assert "INTERVIEW_AVAILABLE" in notification_types
+    assert any(event.analyst_commentary for event in payload.timeline.events[:5])
 
 
 def test_highlight_profiles_and_access_rules() -> None:
@@ -502,3 +629,51 @@ def test_third_kit_resolves_clash() -> None:
 
     assert payload.visual_identity is not None
     assert payload.visual_identity.away_team.selected_kit.kit_type == "third"
+
+
+def test_replay_payload_exposes_deterministic_render_sync_contract() -> None:
+    service = MatchSimulationService()
+    payload = _find_payload(
+        service,
+        lambda seed: build_request(seed=seed),
+        lambda candidate: any(event.event_type is MatchEventType.GOAL for event in candidate.timeline.events),
+        seeds=range(1, 120),
+    )
+
+    assert payload.sync_contract is not None
+    assert payload.render_sync is not None
+    assert payload.render_sync.seed == payload.seed
+    assert payload.render_sync.tick_rate_hz == payload.sync_contract.tick_rate_hz
+    assert payload.render_sync.events
+
+    ticks = [event.tick for event in payload.render_sync.events]
+    assert ticks == sorted(ticks)
+    assert payload.render_sync.events[0].match_id == payload.match_id
+    assert any(event.team in {"home", "away"} for event in payload.render_sync.events)
+    assert any(event.event_type == MatchEventType.GOAL.value.upper() for event in payload.render_sync.events)
+    for event in payload.render_sync.events:
+        assert 0.0 <= event.position.x <= 100.0
+        assert 0.0 <= event.position.y <= 100.0
+        assert 0.0 <= event.target_position.x <= 100.0
+        assert 0.0 <= event.target_position.y <= 100.0
+
+
+def test_replay_payload_exposes_post_match_analytics_contract() -> None:
+    service = MatchSimulationService()
+    payload = _find_payload(
+        service,
+        lambda seed: build_request(seed=seed),
+        lambda candidate: bool(candidate.post_match_analytics and candidate.post_match_analytics.shot_map),
+        seeds=range(1, 120),
+    )
+
+    assert payload.post_match_analytics is not None
+    assert payload.post_match_analytics.match_id == payload.match_id
+    assert payload.post_match_analytics.score == f"{payload.summary.home_score}-{payload.summary.away_score}"
+    assert payload.post_match_analytics.xg.home == payload.summary.expected_goals_home
+    assert payload.post_match_analytics.xg.away == payload.summary.expected_goals_away
+    assert payload.post_match_analytics.team_heatmaps
+    assert len(payload.post_match_analytics.team_heatmaps[0].zones) == 9
+    assert len(payload.post_match_analytics.team_heatmaps[1].zones) == 9
+    assert payload.post_match_analytics.shot_map
+    assert payload.post_match_analytics.xg_timeline

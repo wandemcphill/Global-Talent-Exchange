@@ -1,11 +1,58 @@
+import '../data/gte_models.dart';
+
 String gteFormatCredits(double value) {
-  final bool wholeNumber = value == value.roundToDouble();
-  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} cr';
+  return gteFormatGtex(value);
+}
+
+String gteFormatGtex(double value) {
+  return '${_gteFormatNumber(value)} GTex';
+}
+
+String gteFormatFanCoin(double value) {
+  return '${_gteFormatNumber(value)} Fan Coin';
+}
+
+String gteLedgerUnitLabel(GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.credit:
+      return 'Fan Coin';
+    case GteLedgerUnit.coin:
+      return 'GTex Coin';
+    case GteLedgerUnit.unknown:
+      return 'Balance';
+  }
+}
+
+String gteFormatLedgerAmount(double value, GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.credit:
+      return gteFormatFanCoin(value);
+    case GteLedgerUnit.coin:
+      return gteFormatGtex(value);
+    case GteLedgerUnit.unknown:
+      return _gteFormatNumber(value);
+  }
+}
+
+String gteFormatCompetitionAmount(double value, String currency) {
+  switch (currency.trim().toLowerCase()) {
+    case 'fan_coin':
+    case 'fan-coin':
+    case 'fancoin':
+      return gteFormatFanCoin(value);
+    case 'credit':
+    case 'coin':
+    case 'gtex':
+    case 'gtex_coin':
+    case 'gtex-coin':
+      return gteFormatGtex(value);
+    default:
+      return '${_gteFormatNumber(value)} ${currency.toUpperCase()}';
+  }
 }
 
 String gteFormatFiat(double value, {String currency = 'NGN'}) {
-  final bool wholeNumber = value == value.roundToDouble();
-  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} $currency';
+  return '${_gteFormatNumber(value)} $currency';
 }
 
 String gteFormatNullableCredits(double? value) {
@@ -45,10 +92,11 @@ String gteFormatDate(DateTime? value) {
 }
 
 String gteFormatOrderStatus(String rawStatus) {
-  final String spaced =
-      rawStatus.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
-    return '${match.group(1)} ${match.group(2)}';
-  }).replaceAll('_', ' ');
+  final String spaced = rawStatus
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
+        return '${match.group(1)} ${match.group(2)}';
+      })
+      .replaceAll('_', ' ');
   return spaced.toUpperCase();
 }
 
@@ -74,4 +122,9 @@ String gteFormatRelativeTime(DateTime? value, {DateTime? now}) {
     return '${delta.inDays.abs()}d ago';
   }
   return gteFormatDateTime(value);
+}
+
+String _gteFormatNumber(double value) {
+  final bool wholeNumber = value == value.roundToDouble();
+  return value.toStringAsFixed(wholeNumber ? 0 : 2);
 }

@@ -33,8 +33,11 @@ api_router = APIRouter(prefix="/api/auth")
 def _build_auth_service(request: Request | None) -> AuthService:
     wallet_service = None
     email_service = None
-    if request is not None and hasattr(request.app.state, "event_publisher"):
-        wallet_service = WalletService(event_publisher=request.app.state.event_publisher)
+    if request is not None:
+        wallet_service = WalletService(
+            event_publisher=getattr(request.app.state, "event_publisher", None),
+            cache_backend=getattr(request.app.state, "cache_backend", None),
+        )
     if request is not None and hasattr(request.app.state, "email_service"):
         email_service = request.app.state.email_service
     return AuthService(wallet_service=wallet_service, email_service=email_service)

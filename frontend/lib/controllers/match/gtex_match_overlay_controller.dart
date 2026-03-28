@@ -11,9 +11,7 @@ import 'package:gte_frontend/models/match_view_state.dart';
 import 'gtex_match_mode_controller.dart';
 
 class GtexMatchOverlayController {
-  GtexMatchOverlayController({
-    this.controlsAutoHideSeconds = 4,
-  });
+  GtexMatchOverlayController({this.controlsAutoHideSeconds = 4});
 
   final double controlsAutoHideSeconds;
 
@@ -48,13 +46,14 @@ class GtexMatchOverlayController {
       modeController: modeController,
       viewerSeconds: viewerSeconds,
     );
-    final GtexBroadcastEvent? eventOverlay = varOverlay == null
-        ? _activeEventOverlay(
-            viewState: viewState,
-            modeController: modeController,
-            viewerSeconds: viewerSeconds,
-          )
-        : null;
+    final GtexBroadcastEvent? eventOverlay =
+        varOverlay == null
+            ? _activeEventOverlay(
+              viewState: viewState,
+              modeController: modeController,
+              viewerSeconds: viewerSeconds,
+            )
+            : null;
     final ({String? line, String? detail}) commentary = _commentaryState(
       viewState: viewState,
       modeController: modeController,
@@ -86,17 +85,18 @@ class GtexMatchOverlayController {
       commentary: commentary.line,
       commentaryDetail: commentary.detail,
       varOverlay: varOverlay,
-      socialReactions: spectatorMode
-          ? _socialReactions(
-              eventOverlay: eventOverlay,
-              varOverlay: varOverlay,
-              pseudo3dEnabled: pseudo3dEnabled,
-            )
-          : const <String>[],
+      socialReactions:
+          spectatorMode
+              ? _socialReactions(
+                eventOverlay: eventOverlay,
+                varOverlay: varOverlay,
+                pseudo3dEnabled: pseudo3dEnabled,
+              )
+              : const <String>[],
       showIntroOverlay: viewerSeconds <= 2.4 && !isFullTime,
       showFullTimeOverlay: isFullTime,
       showSocialRail: spectatorMode,
-      canGift: false,
+      canGift: spectatorMode,
     );
   }
 
@@ -121,8 +121,8 @@ class GtexMatchOverlayController {
       if (!_isReviewable(event)) {
         continue;
       }
-      final double eventViewerSeconds =
-          modeController.viewerSecondsForAuthoritative(event.timeSeconds);
+      final double eventViewerSeconds = modeController
+          .viewerSecondsForAuthoritative(event.timeSeconds);
       final double delta = viewerSeconds - eventViewerSeconds;
       if (delta >= -0.18 && delta < 0.72) {
         return GtexBroadcastEvent(
@@ -138,12 +138,14 @@ class GtexMatchOverlayController {
       if (delta >= 0.72 && delta < 1.55) {
         return GtexBroadcastEvent(
           id: 'var-decision-${event.id}',
-          type: event.isReviewDisallowed
-              ? GtexBroadcastEventType.varDisallowed
-              : GtexBroadcastEventType.varConfirmed,
-          title: event.isReviewDisallowed
-              ? 'Decision: disallowed'
-              : 'Decision: confirmed',
+          type:
+              event.isReviewDisallowed
+                  ? GtexBroadcastEventType.varDisallowed
+                  : GtexBroadcastEventType.varConfirmed,
+          title:
+              event.isReviewDisallowed
+                  ? 'Decision: disallowed'
+                  : 'Decision: confirmed',
           subtitle: _varDecisionSubtitle(event),
           teamId: event.teamId,
           startViewerSeconds: eventViewerSeconds + 0.72,
@@ -168,8 +170,8 @@ class GtexMatchOverlayController {
         return mapped;
       }
     }
-    final List<GtexBroadcastEvent> viewerOnlyBeats =
-        modeController.visibleViewerOnlyBeats(viewerSeconds);
+    final List<GtexBroadcastEvent> viewerOnlyBeats = modeController
+        .visibleViewerOnlyBeats(viewerSeconds);
     if (viewerOnlyBeats.isNotEmpty) {
       return viewerOnlyBeats.last;
     }
@@ -186,8 +188,7 @@ class GtexMatchOverlayController {
       MatchViewerEventType.miss ||
       MatchViewerEventType.attack ||
       MatchViewerEventType.setPiece ||
-      MatchViewerEventType.penalty =>
-        GtexBroadcastEventType.missedChance,
+      MatchViewerEventType.penalty => GtexBroadcastEventType.missedChance,
       MatchViewerEventType.yellowCard => GtexBroadcastEventType.yellowCard,
       MatchViewerEventType.redCard => GtexBroadcastEventType.redCard,
       MatchViewerEventType.offside => GtexBroadcastEventType.offside,
@@ -228,20 +229,14 @@ class GtexMatchOverlayController {
     required GtexBroadcastEvent? varOverlay,
   }) {
     if (varOverlay != null) {
-      return (
-        line: varOverlay.title,
-        detail: varOverlay.subtitle,
-      );
+      return (line: varOverlay.title, detail: varOverlay.subtitle);
     }
     if (eventOverlay != null) {
-      return (
-        line: eventOverlay.title,
-        detail: eventOverlay.subtitle,
-      );
+      return (line: eventOverlay.title, detail: eventOverlay.subtitle);
     }
     for (final MatchEvent event in viewState.events.reversed) {
-      final double eventViewerSeconds =
-          modeController.viewerSecondsForAuthoritative(event.timeSeconds);
+      final double eventViewerSeconds = modeController
+          .viewerSecondsForAuthoritative(event.timeSeconds);
       if ((viewerSeconds - eventViewerSeconds).abs() <= 1.2 &&
           event.commentary.trim().isNotEmpty) {
         return (
@@ -261,24 +256,24 @@ class GtexMatchOverlayController {
     final GtexBroadcastEvent? active = varOverlay ?? eventOverlay;
     if (active == null) {
       return pseudo3dEnabled
-          ? const <String>['LIVE', 'CAM+']
-          : const <String>['LIVE', 'CHAT'];
+          ? const <String>['LIVE', 'FIRE 2 FC', 'CAM+']
+          : const <String>['LIVE', 'FIRE 2 FC', 'CHAT'];
     }
     switch (active.type) {
       case GtexBroadcastEventType.goal:
-        return const <String>['HYPE', 'GOAL'];
+        return const <String>['FIRE 2 FC', 'APPLAUSE 5 FC', 'CROWN 20 FC'];
       case GtexBroadcastEventType.offside:
-        return const <String>['OOH', 'FLAG', 'CHAT'];
+        return const <String>['OOH', 'APPLAUSE 5 FC', 'CHAT'];
       case GtexBroadcastEventType.varChecking:
       case GtexBroadcastEventType.varConfirmed:
       case GtexBroadcastEventType.varDisallowed:
-        return const <String>['VAR', 'WAIT', 'CHAT'];
+        return const <String>['FIRE 2 FC', 'WAIT', 'CHAT'];
       case GtexBroadcastEventType.redCard:
-        return const <String>['DRAMA', 'CARD', 'CHAT'];
+        return const <String>['DRAMA', 'CROWN 20 FC', 'CHAT'];
       case GtexBroadcastEventType.missedChance:
-        return const <String>['CLOSE', 'OOH', 'CHAT'];
+        return const <String>['OOH', 'FIRE 2 FC', 'CHAT'];
       default:
-        return const <String>['LIVE', 'CHAT'];
+        return const <String>['LIVE', 'FIRE 2 FC', 'CHAT'];
     }
   }
 

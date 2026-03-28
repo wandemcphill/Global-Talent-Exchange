@@ -149,9 +149,13 @@ class LiveMatchDecisionRequest(CommonSchema):
     minute: int = Field(ge=0, le=130)
     score_for: int = Field(ge=0)
     score_against: int = Field(ge=0)
+    xg_for: float = Field(default=0.0, ge=0.0)
+    xg_against: float = Field(default=0.0, ge=0.0)
+    possession_share: float = Field(default=0.5, ge=0.0, le=1.0)
     red_cards_for: int = Field(default=0, ge=0, le=4)
     red_cards_against: int = Field(default=0, ge=0, le=4)
     average_stamina: float = Field(ge=0.0, le=1.0)
+    average_fatigue: float | None = Field(default=None, ge=0.0, le=1.0)
     opponent_switched_shape: bool = False
     substitutions_used: int = Field(default=0, ge=0, le=7)
     maximum_substitutions: int = Field(default=5, ge=1, le=7)
@@ -257,9 +261,11 @@ class AutopilotRunResponse(CommonSchema):
 
 class LiveDecisionResponse(CommonSchema):
     directive: str
+    formation: str
     attack_bias: float = Field(ge=0.0, le=1.0)
     tempo: TempoSetting
     line_height: LineHeight
+    pressing: PressingIntensity
     waste_time_behavior: bool
     trigger_substitution: bool
     substitution_reason: str | None = None

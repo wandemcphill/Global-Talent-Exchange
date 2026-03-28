@@ -32,6 +32,7 @@ class ClubFinanceProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     weekly_wages: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
     sponsorship_income: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
     match_income: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    broadcast_income: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
     transfer_profit: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
     expenses: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0")
     transfers_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")

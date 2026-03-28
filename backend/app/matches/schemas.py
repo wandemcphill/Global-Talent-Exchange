@@ -71,3 +71,27 @@ class MatchAnalysisView(CommonSchema):
     team: MatchEventTeam
     problems: list[str] = Field(default_factory=list)
     suggestions: list[str] = Field(default_factory=list)
+
+
+class CommentaryVoiceView(CommonSchema):
+    enabled: bool = False
+    status: str = "not_configured"
+    audio_url: str | None = None
+
+
+class CommentaryEventView(CommonSchema):
+    id: str
+    match_id: str
+    minute: int = Field(ge=0, le=130)
+    event_type: str
+    context: dict[str, Any] = Field(default_factory=dict)
+    generated_line: str
+    voice: CommentaryVoiceView | None = None
+
+
+class MatchCommentaryView(CommonSchema):
+    match_id: str
+    tone: str
+    language: str
+    voice_enabled: bool = False
+    events: list[CommentaryEventView] = Field(default_factory=list)

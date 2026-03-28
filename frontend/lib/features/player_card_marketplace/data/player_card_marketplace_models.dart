@@ -76,21 +76,17 @@ class PlayerCardMarketplaceQuery {
 }
 
 class PlayerCardPlayersQuery {
-  const PlayerCardPlayersQuery({
-    this.search,
-    this.limit = 20,
-    this.offset = 0,
-  });
+  const PlayerCardPlayersQuery({this.search, this.limit = 20, this.offset = 0});
 
   final String? search;
   final int limit;
   final int offset;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'search': search,
-        'limit': limit,
-        'offset': offset,
-      });
+    'search': search,
+    'limit': limit,
+    'offset': offset,
+  });
 }
 
 class PlayerCardListingsQuery {
@@ -107,11 +103,11 @@ class PlayerCardListingsQuery {
   final int limit;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'status_filter': status,
-        'player_id': playerId,
-        'tier_id': tierId,
-        'limit': limit,
-      });
+    'status_filter': status,
+    'player_id': playerId,
+    'tier_id': tierId,
+    'limit': limit,
+  });
 }
 
 class PlayerCardLoanSupportQuery {
@@ -130,27 +126,24 @@ class PlayerCardLoanSupportQuery {
   final int limit;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'position': position,
-        'tier_code': tierCode,
-        'max_cost': maxCost,
-        'max_duration_days': maxDurationDays,
-        'limit': limit,
-      });
+    'position': position,
+    'tier_code': tierCode,
+    'max_cost': maxCost,
+    'max_duration_days': maxDurationDays,
+    'limit': limit,
+  });
 }
 
 class PlayerCardLoanContractsQuery {
-  const PlayerCardLoanContractsQuery({
-    this.role,
-    this.statusFilter,
-  });
+  const PlayerCardLoanContractsQuery({this.role, this.statusFilter});
 
   final String? role;
   final String? statusFilter;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'role': role,
-        'status_filter': statusFilter,
-      });
+    'role': role,
+    'status_filter': statusFilter,
+  });
 }
 
 class PlayerCardMarketplaceSaleListingCreateRequest {
@@ -169,19 +162,16 @@ class PlayerCardMarketplaceSaleListingCreateRequest {
   final DateTime? expiresAt;
 
   JsonMap toJson() => <String, Object?>{
-        'player_card_id': playerCardId,
-        'quantity': quantity,
-        'price_per_card_credits': pricePerCardCredits,
-        'is_negotiable': isNegotiable,
-        if (expiresAt != null)
-          'expires_at': expiresAt!.toUtc().toIso8601String(),
-      };
+    'player_card_id': playerCardId,
+    'quantity': quantity,
+    'price_per_card_credits': pricePerCardCredits,
+    'is_negotiable': isNegotiable,
+    if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
+  };
 }
 
 class PlayerCardMarketplaceSalePurchaseRequest {
-  const PlayerCardMarketplaceSalePurchaseRequest({
-    this.quantity = 1,
-  });
+  const PlayerCardMarketplaceSalePurchaseRequest({this.quantity = 1});
 
   final int quantity;
 
@@ -208,15 +198,14 @@ class PlayerCardMarketplaceLoanListingCreateRequest {
   final DateTime? expiresAt;
 
   JsonMap toJson() => <String, Object?>{
-        'player_card_id': playerCardId,
-        'total_slots': totalSlots,
-        'duration_days': durationDays,
-        'loan_fee_credits': loanFeeCredits,
-        'usage_restrictions_json': usageRestrictions,
-        'terms_json': terms,
-        if (expiresAt != null)
-          'expires_at': expiresAt!.toUtc().toIso8601String(),
-      };
+    'player_card_id': playerCardId,
+    'total_slots': totalSlots,
+    'duration_days': durationDays,
+    'loan_fee_credits': loanFeeCredits,
+    'usage_restrictions_json': usageRestrictions,
+    'terms_json': terms,
+    if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
+  };
 }
 
 class PlayerCardMarketplaceLoanNegotiationCreateRequest {
@@ -233,11 +222,11 @@ class PlayerCardMarketplaceLoanNegotiationCreateRequest {
   final JsonMap requestedTerms;
 
   JsonMap toJson() => <String, Object?>{
-        'proposed_loan_fee_credits': proposedFeeCredits,
-        'proposed_duration_days': proposedDurationDays,
-        if (note != null) 'note': note,
-        'requested_terms_json': requestedTerms,
-      };
+    'proposed_loan_fee_credits': proposedFeeCredits,
+    'proposed_duration_days': proposedDurationDays,
+    if (note != null) 'note': note,
+    'requested_terms_json': requestedTerms,
+  };
 }
 
 class PlayerCardMarketplaceSwapListingCreateRequest {
@@ -256,14 +245,13 @@ class PlayerCardMarketplaceSwapListingCreateRequest {
   final DateTime? expiresAt;
 
   JsonMap toJson() => <String, Object?>{
-        'player_card_id': playerCardId,
-        if (requestedPlayerCardId != null)
-          'requested_player_card_id': requestedPlayerCardId,
-        'requested_filters_json': requestedFilters,
-        'is_negotiable': isNegotiable,
-        if (expiresAt != null)
-          'expires_at': expiresAt!.toUtc().toIso8601String(),
-      };
+    'player_card_id': playerCardId,
+    if (requestedPlayerCardId != null)
+      'requested_player_card_id': requestedPlayerCardId,
+    'requested_filters_json': requestedFilters,
+    'is_negotiable': isNegotiable,
+    if (expiresAt != null) 'expires_at': expiresAt!.toUtc().toIso8601String(),
+  };
 }
 
 class PlayerCardMarketplaceSwapExecuteRequest {
@@ -274,8 +262,8 @@ class PlayerCardMarketplaceSwapExecuteRequest {
   final String counterpartyPlayerCardId;
 
   JsonMap toJson() => <String, Object?>{
-        'counterparty_player_card_id': counterpartyPlayerCardId,
-      };
+    'counterparty_player_card_id': counterpartyPlayerCardId,
+  };
 }
 
 class PlayerCardWatchlistCreateRequest {
@@ -290,10 +278,10 @@ class PlayerCardWatchlistCreateRequest {
   final String? notes;
 
   JsonMap toJson() => <String, Object?>{
-        'player_id': playerId,
-        if (playerCardId != null) 'player_card_id': playerCardId,
-        if (notes != null && notes!.trim().isNotEmpty) 'notes': notes,
-      };
+    'player_id': playerId,
+    if (playerCardId != null) 'player_card_id': playerCardId,
+    if (notes != null && notes!.trim().isNotEmpty) 'notes': notes,
+  };
 }
 
 class PlayerCardMarketplaceListing {
@@ -330,27 +318,120 @@ class PlayerCardMarketplaceListing {
   bool get isCreatorLinked => boolValue(raw['is_creator_linked']);
   int? get quantity =>
       raw['quantity'] == null ? null : intValue(raw['quantity']);
-  int? get availableQuantity => raw['available_quantity'] == null
-      ? null
-      : intValue(raw['available_quantity']);
-  double? get salePriceCredits => raw['sale_price_credits'] == null
-      ? null
-      : numberValue(raw['sale_price_credits']);
-  double? get loanFeeCredits => raw['loan_fee_credits'] == null
-      ? null
-      : numberValue(raw['loan_fee_credits']);
-  int? get loanDurationDays => raw['loan_duration_days'] == null
-      ? null
-      : intValue(raw['loan_duration_days']);
+  int? get availableQuantity =>
+      raw['available_quantity'] == null
+          ? null
+          : intValue(raw['available_quantity']);
+  double? get salePriceCredits =>
+      raw['sale_price_credits'] == null
+          ? null
+          : numberValue(raw['sale_price_credits']);
+  double? get loanFeeCredits =>
+      raw['loan_fee_credits'] == null
+          ? null
+          : numberValue(raw['loan_fee_credits']);
+  int? get loanDurationDays =>
+      raw['loan_duration_days'] == null
+          ? null
+          : intValue(raw['loan_duration_days']);
   String? get requestedPlayerCardId =>
       stringOrNullValue(raw['requested_player_card_id']);
   String? get requestedPlayerId =>
       stringOrNullValue(raw['requested_player_id']);
-  JsonMap get requestedFilters => jsonMap(raw['requested_filters_json'],
-      fallback: const <String, Object?>{});
+  JsonMap get requestedFilters => jsonMap(
+    raw['requested_filters_json'],
+    fallback: const <String, Object?>{},
+  );
   DateTime? get createdAt => dateTimeValue(raw['created_at']);
   DateTime? get expiresAt => dateTimeValue(raw['expires_at']);
   double? get latestValueCredits => _officialValueCredits(raw);
+  double? get baseValueCredits =>
+      raw['base_value_credits'] == null
+          ? null
+          : numberValue(raw['base_value_credits']);
+  double? get anchorPriceCredits =>
+      raw['anchor_price_credits'] == null
+          ? null
+          : numberValue(raw['anchor_price_credits']);
+  double? get marketPriceCredits =>
+      raw['market_price_credits'] == null
+          ? null
+          : numberValue(raw['market_price_credits']);
+  double get priceChangeCredits =>
+      raw['price_change_credits'] == null
+          ? 0
+          : numberValue(raw['price_change_credits']);
+  double get priceChangePercent =>
+      raw['price_change_percent'] == null
+          ? 0
+          : numberValue(raw['price_change_percent']);
+  String get priceDirection =>
+      stringValue(raw['price_direction'], fallback: 'flat');
+  double get performanceScore =>
+      raw['performance_score'] == null
+          ? 0
+          : numberValue(raw['performance_score']);
+  double get demandPressure =>
+      raw['demand_pressure'] == null ? 0 : numberValue(raw['demand_pressure']);
+  double get scarcityFactor =>
+      raw['scarcity_factor'] == null ? 0 : numberValue(raw['scarcity_factor']);
+  double get hypeFactor =>
+      raw['hype_factor'] == null ? 0 : numberValue(raw['hype_factor']);
+  int get buyVolume =>
+      raw['buy_volume'] == null ? 0 : intValue(raw['buy_volume']);
+  int get sellVolume =>
+      raw['sell_volume'] == null ? 0 : intValue(raw['sell_volume']);
+  int get availableShares =>
+      raw['available_shares'] == null
+          ? (availableQuantity ?? quantity ?? 0)
+          : intValue(raw['available_shares']);
+  double get trendScore =>
+      raw['trend_score'] == null ? 0 : numberValue(raw['trend_score']);
+  double get marketBuzzScore =>
+      raw['market_buzz_score'] == null
+          ? 0
+          : numberValue(raw['market_buzz_score']);
+  bool get isTrending =>
+      raw['is_trending'] == null ? false : boolValue(raw['is_trending']);
+  String? get trendingBadge =>
+      stringOrNullValue(raw['trending_badge']) ??
+      (isTrending ? 'Trending' : null);
+  bool get lowLiquidityWarning =>
+      raw['low_liquidity_warning'] == null
+          ? availableShares <= 1
+          : boolValue(raw['low_liquidity_warning']);
+  bool get changeCapped =>
+      raw['change_capped'] == null ? false : boolValue(raw['change_capped']);
+  String? get liquiditySignalRaw => stringOrNullValue(
+    raw['liquidity_signal'] ??
+        raw['liquidity'] ??
+        raw['market_liquidity'] ??
+        raw['marketLiquidity'],
+  );
+
+  String get liquidityLabel {
+    final String? rawSignal = liquiditySignalRaw?.trim();
+    if (rawSignal != null && rawSignal.isNotEmpty) {
+      return rawSignal;
+    }
+    final int quantityValue = availableShares;
+    if (quantityValue >= 5) {
+      return 'High 🔥';
+    }
+    if (quantityValue >= 2) {
+      return 'Medium';
+    }
+    if (quantityValue == 1) {
+      return 'Low';
+    }
+    return status.toLowerCase() == 'open' ? 'Building' : 'Idle';
+  }
+
+  bool get hasHighLiquidity =>
+      liquidityLabel.toLowerCase().contains('high') ||
+      liquidityLabel.contains('🔥');
+  bool get hasPriceGain => priceDirection.toLowerCase() == 'up';
+  bool get hasPriceDrop => priceDirection.toLowerCase() == 'down';
 }
 
 class PlayerCardMarketplaceSearchResult {
@@ -362,10 +443,10 @@ class PlayerCardMarketplaceSearchResult {
   });
 
   const PlayerCardMarketplaceSearchResult.empty()
-      : total = 0,
-        limit = 20,
-        offset = 0,
-        items = const <PlayerCardMarketplaceListing>[];
+    : total = 0,
+      limit = 20,
+      offset = 0,
+      items = const <PlayerCardMarketplaceListing>[];
 
   final int total;
   final int limit;
@@ -373,8 +454,10 @@ class PlayerCardMarketplaceSearchResult {
   final List<PlayerCardMarketplaceListing> items;
 
   factory PlayerCardMarketplaceSearchResult.fromJson(Object? value) {
-    final JsonMap json =
-        jsonMap(value, label: 'player card marketplace result');
+    final JsonMap json = jsonMap(
+      value,
+      label: 'player card marketplace result',
+    );
     return PlayerCardMarketplaceSearchResult(
       total: intValue(json['total']),
       limit: intValue(json['limit'], fallback: 20),
@@ -440,8 +523,10 @@ class PlayerCardMarketplaceLoanListing {
   double get loanFeeCredits => numberValue(raw['loan_fee_credits']);
   String get currency => stringValue(raw['currency']);
   String get status => stringValue(raw['status']);
-  JsonMap get usageRestrictions => jsonMap(raw['usage_restrictions_json'],
-      fallback: const <String, Object?>{});
+  JsonMap get usageRestrictions => jsonMap(
+    raw['usage_restrictions_json'],
+    fallback: const <String, Object?>{},
+  );
   JsonMap get terms =>
       jsonMap(raw['terms_json'], fallback: const <String, Object?>{});
   DateTime? get expiresAt => dateTimeValue(raw['expires_at']);
@@ -517,10 +602,8 @@ class PlayerCardMarketplaceLoanContract {
   int get platformFeeBps => intValue(raw['platform_fee_bps']);
   bool get feeFloorApplied => boolValue(raw['fee_floor_applied']);
   String get contractStatus => stringValue(raw['status']);
-  JsonMap get usageSnapshot => jsonMap(
-        raw['usage_snapshot_json'],
-        fallback: const <String, Object?>{},
-      );
+  JsonMap get usageSnapshot =>
+      jsonMap(raw['usage_snapshot_json'], fallback: const <String, Object?>{});
   DateTime? get borrowedAt => dateTimeValue(raw['borrowed_at']);
   DateTime? get dueAt => dateTimeValue(raw['due_at']);
   DateTime? get returnedAt => dateTimeValue(raw['returned_at']);
@@ -530,12 +613,10 @@ class PlayerCardMarketplaceLoanContract {
 }
 
 class PlayerCardMarketplaceLoanContractList {
-  const PlayerCardMarketplaceLoanContractList({
-    required this.items,
-  });
+  const PlayerCardMarketplaceLoanContractList({required this.items});
 
   const PlayerCardMarketplaceLoanContractList.empty()
-      : items = const <PlayerCardMarketplaceLoanContract>[];
+    : items = const <PlayerCardMarketplaceLoanContract>[];
 
   final List<PlayerCardMarketplaceLoanContract> items;
 
@@ -582,8 +663,10 @@ class PlayerCardMarketplaceSwapListing {
       stringOrNullValue(raw['requested_player_card_id']);
   String? get requestedPlayerId =>
       stringOrNullValue(raw['requested_player_id']);
-  JsonMap get requestedFilters => jsonMap(raw['requested_filters_json'],
-      fallback: const <String, Object?>{});
+  JsonMap get requestedFilters => jsonMap(
+    raw['requested_filters_json'],
+    fallback: const <String, Object?>{},
+  );
   DateTime? get expiresAt => dateTimeValue(raw['expires_at']);
   DateTime? get createdAt => dateTimeValue(raw['created_at']);
 }
@@ -629,9 +712,10 @@ class PlayerCardPlayerSummary {
   String? get nationalityCode => stringOrNullValue(raw['nationality_code']);
   String? get currentClubName => stringOrNullValue(raw['current_club_name']);
   int get cardSupplyTotal => intValue(raw['card_supply_total']);
-  double? get latestValueCredits => raw['latest_value_credits'] == null
-      ? null
-      : numberValue(raw['latest_value_credits']);
+  double? get latestValueCredits =>
+      raw['latest_value_credits'] == null
+          ? null
+          : numberValue(raw['latest_value_credits']);
 }
 
 class PlayerCardPlayerDetail {
@@ -665,9 +749,10 @@ class PlayerCardPlayerDetail {
       jsonMapOrNull(raw['latest_market_snapshot']);
   List<JsonMap> get realWorldFlags =>
       jsonMapList(raw['real_world_flags'], label: 'player real world flags');
-  List<JsonMap> get realWorldFormModifiers =>
-      jsonMapList(raw['real_world_form_modifiers'],
-          label: 'player form modifiers');
+  List<JsonMap> get realWorldFormModifiers => jsonMapList(
+    raw['real_world_form_modifiers'],
+    label: 'player form modifiers',
+  );
   List<JsonMap> get demandSignals =>
       jsonMapList(raw['demand_signals'], label: 'player demand signals');
   double get recommendationPriorityDelta =>
@@ -681,9 +766,7 @@ class PlayerCardHolding {
   final JsonMap raw;
 
   factory PlayerCardHolding.fromJson(Object? value) {
-    return PlayerCardHolding._(
-      jsonMap(value, label: 'player card holding'),
-    );
+    return PlayerCardHolding._(jsonMap(value, label: 'player card holding'));
   }
 
   String get holdingId => stringValue(raw['holding_id']);
@@ -707,9 +790,7 @@ class PlayerCardListing {
   final JsonMap raw;
 
   factory PlayerCardListing.fromJson(Object? value) {
-    return PlayerCardListing._(
-      jsonMap(value, label: 'player card listing'),
-    );
+    return PlayerCardListing._(jsonMap(value, label: 'player card listing'));
   }
 
   String get listingId => stringValue(raw['listing_id']);

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -78,6 +78,58 @@ class DailyChallengeService:
         stmt = select(DailyChallengeClaim).where(DailyChallengeClaim.user_id == user.id, DailyChallengeClaim.claim_date == claim_day).order_by(DailyChallengeClaim.claimed_at.desc())
         return list(self.session.scalars(stmt).all())
 
+    def build_login_streak(self, *, user: User) -> dict[str, object]:
+        daily_login = self.session.scalar(
+            select(DailyChallenge).where(DailyChallenge.challenge_key == "daily-login")
+        )
+        if daily_login is None:
+            return {
+                "current_streak": 0,
+                "longest_streak": 0,
+                "today_claimed": False,
+                "next_bonus_amount": Decimal("0.0000"),
+            }
+        claimed_dates = sorted(
+            {
+                item.claim_date
+                for item in self.session.scalars(
+                    select(DailyChallengeClaim)
+                    .where(
+                        DailyChallengeClaim.user_id == user.id,
+                        DailyChallengeClaim.challenge_id == daily_login.id,
+                    )
+                    .order_by(DailyChallengeClaim.claim_date.desc())
+                ).all()
+            }
+        )
+        today = datetime.now(UTC).date()
+        claimed_lookup = set(claimed_dates)
+        today_claimed = today in claimed_lookup
+        cursor = today if today_claimed else today - timedelta(days=1)
+        current_streak = 0
+        while cursor in claimed_lookup:
+            current_streak += 1
+            cursor -= timedelta(days=1)
+
+        longest_streak = 0
+        running = 0
+        previous = None
+        for claim_date in claimed_dates:
+            if previous is not None and claim_date == previous + timedelta(days=1):
+                running += 1
+            else:
+                running = 1
+            longest_streak = max(longest_streak, running)
+            previous = claim_date
+
+        next_bonus_amount = min(Decimal(current_streak) * Decimal("5.0000"), Decimal("25.0000"))
+        return {
+            "current_streak": current_streak,
+            "longest_streak": longest_streak,
+            "today_claimed": today_claimed,
+            "next_bonus_amount": next_bonus_amount.quantize(Decimal("0.0001")),
+        }
+
     def claim(self, *, user: User, challenge_key: str) -> DailyChallengeClaim:
         if not self.feature_enabled():
             raise DailyChallengeError('Daily challenges are disabled by admin feature flag.')
@@ -90,12 +142,18 @@ class DailyChallengeService:
             raise DailyChallengeError('Daily challenge has already been claimed for today.')
 
         reward_service = RewardEngineService(self.session)
+        streak_snapshot = self.build_login_streak(user=user)
+        bonus_amount = Decimal("0.0000")
+        reward_amount = challenge.reward_amount
+        if challenge.challenge_key == "daily-login":
+            bonus_amount = Decimal(str(streak_snapshot["next_bonus_amount"]))
+            reward_amount = (Decimal(challenge.reward_amount) + bonus_amount).quantize(Decimal("0.0001"))
         settlement = reward_service.settle_reward(
             actor=user,
             user_id=user.id,
             competition_key=f'daily:{challenge.challenge_key}:{today.isoformat()}',
             title=challenge.title,
-            gross_amount=challenge.reward_amount,
+            gross_amount=reward_amount,
             reward_source='daily_challenge',
             note='Daily challenge reward',
         )
@@ -103,10 +161,14 @@ class DailyChallengeService:
             user_id=user.id,
             challenge_id=challenge.id,
             claim_date=today,
-            reward_amount=challenge.reward_amount,
+            reward_amount=reward_amount,
             reward_unit=challenge.reward_unit,
             reward_settlement_id=settlement.id,
-            metadata_json={'challenge_key': challenge.challenge_key},
+            metadata_json={
+                'challenge_key': challenge.challenge_key,
+                'streak_before_claim': streak_snapshot["current_streak"],
+                'bonus_amount': str(bonus_amount.quantize(Decimal("0.0001"))),
+            },
         )
         self.session.add(claim)
         try:

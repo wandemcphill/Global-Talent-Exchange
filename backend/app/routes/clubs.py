@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.club_sale_market.router import router as club_sale_market_router
 from app.club_identity.dynasty.api.router import router as dynasty_router
 from app.club_identity.reputation.router import router as reputation_router
 from app.club_identity.trophies.router import router as trophies_router
@@ -10,7 +9,6 @@ from app.segments.clubs.segment_clubs import router as clubs_router
 
 router = APIRouter()
 router.include_router(clubs_router)
-router.include_router(club_sale_market_router)
 router.include_router(reputation_router)
 router.include_router(dynasty_router)
 router.include_router(trophies_router)

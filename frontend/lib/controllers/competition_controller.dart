@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../core/app_feedback.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/competition_rule_models.dart';
 
 class CompetitionController extends ChangeNotifier {
@@ -9,13 +10,13 @@ class CompetitionController extends ChangeNotifier {
     required CompetitionApi api,
     required String currentUserId,
     String? currentUserName,
-  })  : _api = api,
-        _currentUserId = currentUserId,
-        _currentUserName = currentUserName,
-        draft = CompetitionDraft.initial(
-          creatorId: currentUserId,
-          creatorName: currentUserName,
-        );
+  }) : _api = api,
+       _currentUserId = currentUserId,
+       _currentUserName = currentUserName,
+       draft = CompetitionDraft.initial(
+         creatorId: currentUserId,
+         creatorName: currentUserName,
+       );
 
   final CompetitionApi _api;
   CompetitionDraft draft;
@@ -65,9 +66,10 @@ class CompetitionController extends ChangeNotifier {
         .toList(growable: false);
     return CompetitionSummary(
       id: draft.competitionId ?? 'preview',
-      name: draft.name.trim().isEmpty
-          ? 'Untitled creator competition'
-          : draft.name.trim(),
+      name:
+          draft.name.trim().isEmpty
+              ? 'Untitled creator competition'
+              : draft.name.trim(),
       format: draft.format,
       visibility: draft.visibility,
       status: CompetitionStatus.draft,
@@ -84,6 +86,7 @@ class CompetitionController extends ChangeNotifier {
       prizePool: draft.projectedPrizePool,
       payoutStructure: payouts,
       rulesSummary: draft.rulesSummary,
+      matchType: MatchType.userHosted,
       joinEligibility: const CompetitionJoinEligibility(
         eligible: false,
         reason: 'competition_not_open',
@@ -111,12 +114,14 @@ class CompetitionController extends ChangeNotifier {
 
   List<CompetitionSummary> get visibleCompetitions {
     final String query = searchQuery.trim().toLowerCase();
-    List<CompetitionSummary> filtered =
-        List<CompetitionSummary>.of(competitions);
+    List<CompetitionSummary> filtered = List<CompetitionSummary>.of(
+      competitions,
+    );
     if (section == CompetitionDiscoverySection.trending) {
       filtered.sort((CompetitionSummary left, CompetitionSummary right) {
-        final int participantCompare =
-            right.participantCount.compareTo(left.participantCount);
+        final int participantCompare = right.participantCount.compareTo(
+          left.participantCount,
+        );
         if (participantCompare != 0) {
           return participantCompare;
         }
@@ -136,9 +141,7 @@ class CompetitionController extends ChangeNotifier {
           .toList(growable: false);
     } else if (section == CompetitionDiscoverySection.creator) {
       filtered = filtered
-          .where(
-            (CompetitionSummary item) => item.creatorId == _currentUserId,
-          )
+          .where((CompetitionSummary item) => item.creatorId == _currentUserId)
           .toList(growable: false);
     } else if (section == CompetitionDiscoverySection.leagues) {
       filtered = filtered
@@ -152,15 +155,18 @@ class CompetitionController extends ChangeNotifier {
     if (query.isEmpty) {
       return filtered;
     }
-    return filtered.where((CompetitionSummary item) {
-      final String haystack = <String>[
-        item.name,
-        item.creatorLabel,
-        item.rulesSummary,
-        item.safeFormatLabel,
-      ].join(' ').toLowerCase();
-      return haystack.contains(query);
-    }).toList(growable: false);
+    return filtered
+        .where((CompetitionSummary item) {
+          final String haystack =
+              <String>[
+                item.name,
+                item.creatorLabel,
+                item.rulesSummary,
+                item.safeFormatLabel,
+              ].join(' ').toLowerCase();
+          return haystack.contains(query);
+        })
+        .toList(growable: false);
   }
 
   Future<void> bootstrap() {
@@ -197,10 +203,7 @@ class CompetitionController extends ChangeNotifier {
     return task;
   }
 
-  Future<void> openCompetition(
-    String competitionId, {
-    String? inviteCode,
-  }) {
+  Future<void> openCompetition(String competitionId, {String? inviteCode}) {
     if (_detailFuture != null && selectedCompetition?.id == competitionId) {
       return _detailFuture!;
     }
@@ -215,10 +218,7 @@ class CompetitionController extends ChangeNotifier {
             userId: _currentUserId,
             inviteCode: inviteCode,
           ),
-          _api.fetchFinancials(
-            competitionId,
-            userId: _currentUserId,
-          ),
+          _api.fetchFinancials(competitionId, userId: _currentUserId),
         ]);
         selectedCompetition = payload[0] as CompetitionSummary;
         selectedFinancials = payload[1] as CompetitionFinancialSummary;
@@ -251,20 +251,14 @@ class CompetitionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateCurrentUser({
-    required String userId,
-    String? userName,
-  }) {
+  void updateCurrentUser({required String userId, String? userName}) {
     if (_currentUserId == userId && _currentUserName == userName) {
       return;
     }
     _currentUserId = userId;
     _currentUserName = userName;
     if (draft.creatorId != userId || draft.creatorName != userName) {
-      draft = draft.copyWith(
-        creatorId: userId,
-        creatorName: userName,
-      );
+      draft = draft.copyWith(creatorId: userId, creatorName: userName);
     }
     _syncSelectedFromList();
     notifyListeners();
@@ -478,8 +472,9 @@ class CompetitionController extends ChangeNotifier {
     if (index == -1) {
       competitions = <CompetitionSummary>[next, ...competitions];
     } else {
-      final List<CompetitionSummary> updated =
-          List<CompetitionSummary>.of(competitions);
+      final List<CompetitionSummary> updated = List<CompetitionSummary>.of(
+        competitions,
+      );
       updated[index] = next;
       competitions = updated;
     }

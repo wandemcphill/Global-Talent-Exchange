@@ -98,6 +98,13 @@ DEFAULT_PAYMENT_RAILS: list[dict[str, Any]] = [
         "maintenance_message": None,
     },
     {
+        "provider": "korapay",
+        "deposits_enabled": True,
+        "withdrawals_enabled": True,
+        "is_live": True,
+        "maintenance_message": None,
+    },
+    {
         "provider": "flutterwave",
         "deposits_enabled": True,
         "withdrawals_enabled": True,

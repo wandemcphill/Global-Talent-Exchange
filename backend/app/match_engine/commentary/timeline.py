@@ -37,6 +37,7 @@ class MatchCommentaryTimelineGenerator:
                 home_score=event.home_score,
                 away_score=event.away_score,
                 commentary=self._commentary_for_event(event, result),
+                analyst_commentary=self._analyst_commentary_for_event(event, result),
                 metadata=event.metadata,
             )
             for index, event in enumerate(result.events)
@@ -179,7 +180,9 @@ class MatchCommentaryTimelineGenerator:
             return f"{event.primary_player_name} wastes a big opening{detail} for {event.team_name}."
         if event.event_type is MatchEventType.MISSED_BIG_CHANCE:
             detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} spurns a huge chance{detail} for {event.team_name}."
+            crowd = self._crowd_suffix(event, result, kind="chance")
+            suffix = f" {crowd}" if crowd else ""
+            return f"{event.primary_player_name} spurns a huge chance{detail} for {event.team_name}.{suffix}".strip()
         if event.event_type is MatchEventType.SAVE:
             detail = f" {family_phrase}" if family_phrase else ""
             return f"{event.primary_player_name} keeps out {event.secondary_player_name}{detail} with a sharp stop."
@@ -209,9 +212,13 @@ class MatchCommentaryTimelineGenerator:
                 )
             if event.metadata.get("assisted") and event.secondary_player_name is not None:
                 detail = f" {family_phrase}" if family_phrase else ""
-                return f"Goal for {event.team_name}. {event.primary_player_name} finishes{detail} after a setup from {event.secondary_player_name}."
+                crowd = self._crowd_suffix(event, result, kind="goal")
+                suffix = f" {crowd}" if crowd else ""
+                return f"Goal for {event.team_name}. {event.primary_player_name} finishes{detail} after a setup from {event.secondary_player_name}.{suffix}".strip()
             detail = f" {family_phrase}" if family_phrase else ""
-            return f"Goal for {event.team_name}. {event.primary_player_name} finds the net{detail}."
+            crowd = self._crowd_suffix(event, result, kind="goal")
+            suffix = f" {crowd}" if crowd else ""
+            return f"Goal for {event.team_name}. {event.primary_player_name} finds the net{detail}.{suffix}".strip()
         if event.event_type is MatchEventType.YELLOW_CARD:
             return f"{event.primary_player_name} goes into the book for {event.team_name}."
         if event.event_type is MatchEventType.TACTICAL_FOUL:
@@ -237,7 +244,9 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.PENALTY_AWARDED:
             return f"Penalty awarded to {event.team_name}."
         if event.event_type is MatchEventType.PENALTY_SCORED:
-            return f"{event.primary_player_name} scores the penalty for {event.team_name}."
+            crowd = self._crowd_suffix(event, result, kind="goal")
+            suffix = f" {crowd}" if crowd else ""
+            return f"{event.primary_player_name} scores the penalty for {event.team_name}.{suffix}".strip()
         if event.event_type is MatchEventType.PENALTY_MISSED:
             if event.secondary_player_name is not None:
                 return f"{event.primary_player_name} sees the penalty saved by {event.secondary_player_name}."
@@ -249,6 +258,27 @@ class MatchCommentaryTimelineGenerator:
                 return f"{event.primary_player_name} is denied in the shootout by {event.secondary_player_name}."
             return f"{event.primary_player_name} misses in the shootout for {event.team_name}."
         return f"{event.team_name or 'Match'} event."
+
+    def _analyst_commentary_for_event(self, event, result: SimulationResult) -> str:
+        if event.event_type is MatchEventType.KICKOFF:
+            return "The opening shape will matter here, especially in the central spaces."
+        if event.event_type is MatchEventType.HALFTIME:
+            return "The first-half patterns are clear now, and the next tactical switch will be decisive."
+        if event.event_type is MatchEventType.FULLTIME:
+            return "The result reflected who managed the key moments with more control."
+        if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.PENALTY_GOAL}:
+            return f"{event.team_name} attacked the moment decisively, and that is often what separates the better side."
+        if event.event_type in {MatchEventType.RED_CARD, MatchEventType.YELLOW_CARD, MatchEventType.TACTICAL_FOUL}:
+            return "Discipline is now shaping the match as much as quality on the ball."
+        if event.event_type in {MatchEventType.TACTICAL_CHANGE, MatchEventType.TACTICAL_SWING, MatchEventType.SUBSTITUTION_IMPACT}:
+            return "That phase tells you the coaches are trying to alter the rhythm rather than simply react to it."
+        if event.event_type in {MatchEventType.MISSED_BIG_CHANCE, MatchEventType.WOODWORK, MatchEventType.DOUBLE_SAVE}:
+            return "Those are the margins that swing momentum and fan pressure very quickly."
+        if event.event_type is MatchEventType.INJURY:
+            return "That injury forces a structural decision, not just a personnel change."
+        if event.event_type in {MatchEventType.POSSESSION_SWING, MatchEventType.DANGEROUS_ATTACK, MatchEventType.COUNTER_ATTACK}:
+            return "The spacing between the lines is changing, and the defending side has to read it faster."
+        return "The detail of the phase matters here: shape, pressure, and second actions are deciding it."
 
     def _family_phrase(self, value: object | None) -> str:
         if value is None:
@@ -266,3 +296,17 @@ class MatchCommentaryTimelineGenerator:
             "late_siege": "under late pressure",
             "defensive_error": "after a defensive error",
         }.get(key, "in a key moment")
+
+    def _crowd_suffix(self, event, result: SimulationResult, *, kind: str) -> str:
+        home_noise = float(event.metadata.get("crowd_home", 0.5) or 0.5)
+        away_noise = float(event.metadata.get("crowd_away", 0.5) or 0.5)
+        if kind == "goal":
+            if event.team_id == result.home_team_id and home_noise >= 0.66:
+                return "The stadium erupts."
+            if event.team_id == result.away_team_id and home_noise >= 0.64:
+                return "That silences the ground."
+            if event.team_id == result.away_team_id and away_noise >= 0.56:
+                return "The away end answers back."
+        if kind == "chance" and str(event.metadata.get("crowd_profile") or "") in {"charged", "fever_pitch"}:
+            return "You can hear the gasp around the ground."
+        return ""

@@ -40,10 +40,18 @@ class DailyChallengeListResponse(BaseModel):
     challenges: list[DailyChallengeView]
 
 
+class DailyLoginStreakView(BaseModel):
+    current_streak: int
+    longest_streak: int
+    today_claimed: bool
+    next_bonus_amount: Decimal
+
+
 class DailyChallengeMeResponse(BaseModel):
     feature_enabled: bool
     claims_today: list[DailyChallengeClaimView]
     available_challenge_keys: list[str]
+    login_streak: DailyLoginStreakView
 
 
 class DailyChallengeClaimResponse(BaseModel):

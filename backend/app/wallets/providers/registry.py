@@ -5,6 +5,8 @@ from app.wallets.providers.base import ProviderAdapter
 from app.wallets.providers.cards import CardsProviderAdapter
 from app.wallets.providers.crypto_fiat import CryptoFiatProviderAdapter
 from app.wallets.providers.google_pay import GooglePayProviderAdapter
+from app.wallets.providers.korapay import KoraPayProviderAdapter
+from app.wallets.providers.paystack import PaystackProviderAdapter
 from app.wallets.providers.regional_rails import RegionalRailsProviderAdapter
 
 
@@ -12,6 +14,8 @@ _REGISTRY: dict[str, ProviderAdapter] = {
     "cards": CardsProviderAdapter(),
     "apple_pay": ApplePayProviderAdapter(),
     "google_pay": GooglePayProviderAdapter(),
+    "korapay": KoraPayProviderAdapter(),
+    "paystack": PaystackProviderAdapter(),
     "regional_rails": RegionalRailsProviderAdapter(),
     "crypto_fiat": CryptoFiatProviderAdapter(),
 }

@@ -61,7 +61,7 @@ def upgrade() -> None:
         sa.Column("age", sa.Integer(), nullable=True),
         sa.Column("height_cm", sa.Integer(), nullable=True),
         sa.Column("dominant_foot", sa.String(length=16), nullable=True),
-        sa.Column("is_free_agent", sa.Boolean(), nullable=False, server_default="0"),
+        sa.Column("is_free_agent", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("current_club_name", sa.String(length=160), nullable=True),
         sa.Column("secondary_positions_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

@@ -8,6 +8,7 @@ import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/admin_engine_models.dart';
 import 'package:gte_frontend/models/policy_admin_models.dart';
+import 'package:gte_frontend/screens/admin/admin_financial_dashboard_screen.dart';
 import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/treasury_ops_screen.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
@@ -139,8 +140,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         ),
         body: FutureBuilder<_AdminCommandBundle>(
           future: _bundleFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<_AdminCommandBundle> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<_AdminCommandBundle> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -158,8 +161,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             final List<CountryFeaturePolicy> policies = bundle.policies;
             final List<AdminFeatureFlag> flags = bundle.featureFlags;
             final List<AdminFeatureFlag> sponsorshipFlags = flags
-                .where((AdminFeatureFlag flag) =>
-                    flag.featureKey.toLowerCase().contains('sponsor'))
+                .where(
+                  (AdminFeatureFlag flag) =>
+                      flag.featureKey.toLowerCase().contains('sponsor'),
+                )
                 .toList(growable: false);
             return RefreshIndicator(
               onRefresh: _refresh,
@@ -172,8 +177,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('GTEX command center',
-                            style: Theme.of(context).textTheme.headlineSmall),
+                        Text(
+                          'GTEX command center',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Admin controls are organized for fast policy changes, reward tuning, and compliance guardrails.',
@@ -185,14 +192,17 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                           runSpacing: 10,
                           children: <Widget>[
                             GteMetricChip(
-                                label: 'Reward rules',
-                                value: rewardRules.length.toString()),
+                              label: 'Reward rules',
+                              value: rewardRules.length.toString(),
+                            ),
                             GteMetricChip(
-                                label: 'Region policies',
-                                value: policies.length.toString()),
+                              label: 'Region policies',
+                              value: policies.length.toString(),
+                            ),
                             GteMetricChip(
-                                label: 'Feature flags',
-                                value: flags.length.toString()),
+                              label: 'Feature flags',
+                              value: flags.length.toString(),
+                            ),
                           ],
                         ),
                       ],
@@ -200,21 +210,24 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                   ),
                   const SizedBox(height: 18),
                   _AdminRoutePanel(
-                    onOpenCreatorLeagueFinance: () => _openRoute(
-                      const CreatorLeagueFinancialReportRouteData(),
-                    ),
-                    onOpenCreatorLeagueSettlements: () => _openRoute(
-                      const CreatorLeagueSettlementsRouteData(),
-                    ),
-                    onOpenCreatorShareControls: () => _openRoute(
-                      const CreatorShareMarketAdminControlRouteData(),
-                    ),
-                    onOpenCreatorStadiumControls: () => _openRoute(
-                      const CreatorStadiumAdminControlRouteData(),
-                    ),
-                    onOpenGiftStabilizer: () => _openRoute(
-                      const GiftStabilizerRouteData(),
-                    ),
+                    onOpenCreatorLeagueFinance:
+                        () => _openRoute(
+                          const CreatorLeagueFinancialReportRouteData(),
+                        ),
+                    onOpenCreatorLeagueSettlements:
+                        () => _openRoute(
+                          const CreatorLeagueSettlementsRouteData(),
+                        ),
+                    onOpenCreatorShareControls:
+                        () => _openRoute(
+                          const CreatorShareMarketAdminControlRouteData(),
+                        ),
+                    onOpenCreatorStadiumControls:
+                        () => _openRoute(
+                          const CreatorStadiumAdminControlRouteData(),
+                        ),
+                    onOpenGiftStabilizer:
+                        () => _openRoute(const GiftStabilizerRouteData()),
                   ),
                   const SizedBox(height: 18),
                   const GtexSectionHeader(
@@ -274,11 +287,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('Payment rails + withdrawals',
-                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          'Payment rails + withdrawals',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                         const SizedBox(height: 8),
                         Text(
-                          'Payment rail toggles and withdrawal controls live in God Mode and Treasury Ops.',
+                          'Payment rail toggles, financial monitoring, and withdrawal controls now span Control Tower, God Mode, and Treasury Ops.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 12),
@@ -286,10 +301,16 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                           spacing: 12,
                           runSpacing: 12,
                           children: <Widget>[
+                            FilledButton.icon(
+                              onPressed: () => _openFinancialDashboard(),
+                              icon: const Icon(Icons.monitor_heart_outlined),
+                              label: const Text('Control tower'),
+                            ),
                             FilledButton.tonalIcon(
                               onPressed: () => _openGodMode(),
                               icon: const Icon(
-                                  Icons.admin_panel_settings_outlined),
+                                Icons.admin_panel_settings_outlined,
+                              ),
                               label: const Text('Open God Mode'),
                             ),
                             OutlinedButton.icon(
@@ -307,12 +328,15 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('Policy documents',
-                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          'Policy documents',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                         const SizedBox(height: 8),
                         Text(
-                            'Document publishing and versioning require the admin policy endpoint to be wired.',
-                            style: Theme.of(context).textTheme.bodySmall),
+                          'Document publishing and versioning require the admin policy endpoint to be wired.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                         const SizedBox(height: 12),
                         FilledButton.tonalIcon(
                           onPressed: null,
@@ -327,8 +351,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('Highlight archive controls',
-                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          'Highlight archive controls',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Archive and retention controls require a highlight admin endpoint.',
@@ -342,9 +368,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                               children: <Widget>[
                                 const Icon(Icons.movie_outlined),
                                 const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(item.label),
-                                ),
+                                Expanded(child: Text(item.label)),
                                 OutlinedButton(
                                   onPressed: null,
                                   child: Text(item.actionLabel),
@@ -361,8 +385,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('Audit trail',
-                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          'Audit trail',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Audit trail feed requires /admin/audit-trail to be wired.',
@@ -377,8 +403,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text('Admin password',
-                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          'Admin password',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Change the bootstrap admin password immediately after first login.',
@@ -427,16 +455,21 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   }
 
   Future<void> _editRewardRule(AdminRewardRule rule) async {
-    final TextEditingController trading =
-        TextEditingController(text: rule.tradingFeeBps.toString());
-    final TextEditingController withdrawal =
-        TextEditingController(text: rule.withdrawalFeeBps.toString());
-    final TextEditingController competition =
-        TextEditingController(text: rule.competitionPlatformFeeBps.toString());
-    final TextEditingController gift =
-        TextEditingController(text: rule.giftPlatformRakeBps.toString());
+    final TextEditingController trading = TextEditingController(
+      text: rule.tradingFeeBps.toString(),
+    );
+    final TextEditingController withdrawal = TextEditingController(
+      text: rule.withdrawalFeeBps.toString(),
+    );
+    final TextEditingController competition = TextEditingController(
+      text: rule.competitionPlatformFeeBps.toString(),
+    );
+    final TextEditingController gift = TextEditingController(
+      text: rule.giftPlatformRakeBps.toString(),
+    );
     final TextEditingController minFee = TextEditingController(
-        text: rule.minimumWithdrawalFeeCredits.toStringAsFixed(0));
+      text: rule.minimumWithdrawalFeeCredits.toStringAsFixed(0),
+    );
 
     await showModalBottomSheet<void>(
       context: context,
@@ -452,42 +485,49 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           child: ListView(
             shrinkWrap: true,
             children: <Widget>[
-              Text('Edit reward rule',
-                  style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Edit reward rule',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: trading,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Trading fee (bps)'),
+                decoration: const InputDecoration(
+                  labelText: 'Trading fee (bps)',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: gift,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                    labelText: 'Gift platform rake (bps)'),
+                  labelText: 'Gift platform rake (bps)',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: withdrawal,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Withdrawal fee (bps)'),
+                decoration: const InputDecoration(
+                  labelText: 'Withdrawal fee (bps)',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: minFee,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Min withdrawal fee'),
+                decoration: const InputDecoration(
+                  labelText: 'Min withdrawal fee',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: competition,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Competition fee (bps)'),
+                decoration: const InputDecoration(
+                  labelText: 'Competition fee (bps)',
+                ),
               ),
               const SizedBox(height: 16),
               FilledButton(
@@ -503,9 +543,11 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                         int.tryParse(gift.text) ?? rule.giftPlatformRakeBps,
                     withdrawalFeeBps:
                         int.tryParse(withdrawal.text) ?? rule.withdrawalFeeBps,
-                    minimumWithdrawalFeeCredits: double.tryParse(minFee.text) ??
+                    minimumWithdrawalFeeCredits:
+                        double.tryParse(minFee.text) ??
                         rule.minimumWithdrawalFeeCredits,
-                    competitionPlatformFeeBps: int.tryParse(competition.text) ??
+                    competitionPlatformFeeBps:
+                        int.tryParse(competition.text) ??
                         rule.competitionPlatformFeeBps,
                     stabilityControls: rule.stabilityControls,
                     active: rule.active,
@@ -530,10 +572,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     bool gtexGifts = policy.gtexCompetitionGiftWithdrawalsEnabled;
     bool nationalRewards = policy.nationalRewardWithdrawalsEnabled;
     bool active = policy.active;
-    final TextEditingController bucket =
-        TextEditingController(text: policy.bucketType);
+    final TextEditingController bucket = TextEditingController(
+      text: policy.bucketType,
+    );
     final TextEditingController regionDays = TextEditingController(
-        text: policy.oneTimeRegionChangeAfterDays.toString());
+      text: policy.oneTimeRegionChangeAfterDays.toString(),
+    );
 
     await showModalBottomSheet<void>(
       context: context,
@@ -551,62 +595,69 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
               return ListView(
                 shrinkWrap: true,
                 children: <Widget>[
-                  Text('Edit ${policy.countryCode} policy',
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Edit ${policy.countryCode} policy',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: bucket,
-                    decoration:
-                        const InputDecoration(labelText: 'Policy bucket'),
+                    decoration: const InputDecoration(
+                      labelText: 'Policy bucket',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: regionDays,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                        labelText: 'Region change cooldown (days)'),
+                      labelText: 'Region change cooldown (days)',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   SwitchListTile(
                     value: active,
-                    onChanged: (bool value) =>
-                        setModalState(() => active = value),
+                    onChanged:
+                        (bool value) => setModalState(() => active = value),
                     title: const Text('Active'),
                   ),
                   SwitchListTile(
                     value: deposits,
-                    onChanged: (bool value) =>
-                        setModalState(() => deposits = value),
+                    onChanged:
+                        (bool value) => setModalState(() => deposits = value),
                     title: const Text('Deposits enabled'),
                   ),
                   SwitchListTile(
                     value: trading,
-                    onChanged: (bool value) =>
-                        setModalState(() => trading = value),
+                    onChanged:
+                        (bool value) => setModalState(() => trading = value),
                     title: const Text('Market trading enabled'),
                   ),
                   SwitchListTile(
                     value: rewardWithdrawals,
-                    onChanged: (bool value) =>
-                        setModalState(() => rewardWithdrawals = value),
+                    onChanged:
+                        (bool value) =>
+                            setModalState(() => rewardWithdrawals = value),
                     title: const Text('Platform reward withdrawals'),
                   ),
                   SwitchListTile(
                     value: giftWithdrawals,
-                    onChanged: (bool value) =>
-                        setModalState(() => giftWithdrawals = value),
+                    onChanged:
+                        (bool value) =>
+                            setModalState(() => giftWithdrawals = value),
                     title: const Text('User-hosted gift withdrawals'),
                   ),
                   SwitchListTile(
                     value: gtexGifts,
-                    onChanged: (bool value) =>
-                        setModalState(() => gtexGifts = value),
+                    onChanged:
+                        (bool value) => setModalState(() => gtexGifts = value),
                     title: const Text('GTEX gift withdrawals'),
                   ),
                   SwitchListTile(
                     value: nationalRewards,
-                    onChanged: (bool value) =>
-                        setModalState(() => nationalRewards = value),
+                    onChanged:
+                        (bool value) =>
+                            setModalState(() => nationalRewards = value),
                     title: const Text('National reward withdrawals'),
                   ),
                   const SizedBox(height: 12),
@@ -615,9 +666,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                       Navigator.of(context).pop();
                       await _policyApi.upsertCountryPolicy(
                         countryCode: policy.countryCode,
-                        bucketType: bucket.text.trim().isEmpty
-                            ? policy.bucketType
-                            : bucket.text.trim(),
+                        bucketType:
+                            bucket.text.trim().isEmpty
+                                ? policy.bucketType
+                                : bucket.text.trim(),
                         depositsEnabled: deposits,
                         marketTradingEnabled: trading,
                         platformRewardWithdrawalsEnabled: rewardWithdrawals,
@@ -626,7 +678,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                         nationalRewardWithdrawalsEnabled: nationalRewards,
                         oneTimeRegionChangeAfterDays:
                             int.tryParse(regionDays.text) ??
-                                policy.oneTimeRegionChangeAfterDays,
+                            policy.oneTimeRegionChangeAfterDays,
                         active: active,
                       );
                       await _refresh();
@@ -657,11 +709,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   Future<void> _openGodMode() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GodModeAdminScreen(
-          baseUrl: widget.baseUrl,
-          accessToken: widget.accessToken,
-          backendMode: widget.backendMode,
-        ),
+        builder:
+            (BuildContext context) => GodModeAdminScreen(
+              baseUrl: widget.baseUrl,
+              accessToken: widget.accessToken,
+              backendMode: widget.backendMode,
+            ),
       ),
     );
   }
@@ -669,11 +722,25 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   Future<void> _openTreasuryOps() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteTreasuryOpsScreen(
-          baseUrl: widget.baseUrl,
-          accessToken: widget.accessToken,
-          backendMode: widget.backendMode,
-        ),
+        builder:
+            (BuildContext context) => GteTreasuryOpsScreen(
+              baseUrl: widget.baseUrl,
+              accessToken: widget.accessToken,
+              backendMode: widget.backendMode,
+            ),
+      ),
+    );
+  }
+
+  Future<void> _openFinancialDashboard() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder:
+            (BuildContext context) => AdminFinancialDashboardScreen(
+              baseUrl: widget.baseUrl,
+              accessToken: widget.accessToken,
+              backendMode: widget.backendMode,
+            ),
       ),
     );
   }
@@ -714,10 +781,7 @@ class _AdminCommandBundle {
 }
 
 class _RewardRuleCard extends StatelessWidget {
-  const _RewardRuleCard({
-    required this.rule,
-    required this.onEdit,
-  });
+  const _RewardRuleCard({required this.rule, required this.onEdit});
 
   final AdminRewardRule rule;
   final VoidCallback onEdit;
@@ -733,8 +797,10 @@ class _RewardRuleCard extends StatelessWidget {
             Row(
               children: <Widget>[
                 Expanded(
-                  child: Text(rule.title,
-                      style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    rule.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 OutlinedButton(onPressed: onEdit, child: const Text('Edit')),
               ],
@@ -745,24 +811,31 @@ class _RewardRuleCard extends StatelessWidget {
               runSpacing: 10,
               children: <Widget>[
                 GteMetricChip(
-                    label: 'Trading fee', value: '${rule.tradingFeeBps} bps'),
+                  label: 'Trading fee',
+                  value: '${rule.tradingFeeBps} bps',
+                ),
                 GteMetricChip(
-                    label: 'Withdraw fee',
-                    value: '${rule.withdrawalFeeBps} bps'),
+                  label: 'Withdraw fee',
+                  value: '${rule.withdrawalFeeBps} bps',
+                ),
                 GteMetricChip(
-                    label: 'Competition fee',
-                    value: '${rule.competitionPlatformFeeBps} bps'),
+                  label: 'Competition fee',
+                  value: '${rule.competitionPlatformFeeBps} bps',
+                ),
                 GteMetricChip(
-                    label: 'Gift rake',
-                    value: '${rule.giftPlatformRakeBps} bps'),
+                  label: 'Gift rake',
+                  value: '${rule.giftPlatformRakeBps} bps',
+                ),
                 GteMetricChip(
-                    label: 'Fan entry cap',
-                    value:
-                        '${rule.stabilityControls.fanPrediction.dailyEntryCap}'),
+                  label: 'Fan entry cap',
+                  value:
+                      '${rule.stabilityControls.fanPrediction.dailyEntryCap}',
+                ),
                 GteMetricChip(
-                    label: 'Viewer purchase cap',
-                    value: rule.stabilityControls.creatorViewerPurchase.dailyCap
-                        .toStringAsFixed(0)),
+                  label: 'Viewer purchase cap',
+                  value: rule.stabilityControls.creatorViewerPurchase.dailyCap
+                      .toStringAsFixed(0),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -825,10 +898,7 @@ class _AdminRoutePanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            'Command routes',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text('Command routes', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
           Text(
             'Finance, creator-control, and stabilizer surfaces mount through deep links so admin navigation stays compact.',
@@ -873,10 +943,7 @@ class _AdminRoutePanel extends StatelessWidget {
 }
 
 class _PolicyCard extends StatelessWidget {
-  const _PolicyCard({
-    required this.policy,
-    required this.onEdit,
-  });
+  const _PolicyCard({required this.policy, required this.onEdit});
 
   final CountryFeaturePolicy policy;
   final VoidCallback onEdit;
@@ -906,17 +973,21 @@ class _PolicyCard extends StatelessWidget {
               runSpacing: 10,
               children: <Widget>[
                 GteMetricChip(
-                    label: 'Deposits',
-                    value: policy.depositsEnabled ? 'On' : 'Off'),
+                  label: 'Deposits',
+                  value: policy.depositsEnabled ? 'On' : 'Off',
+                ),
                 GteMetricChip(
-                    label: 'Trading',
-                    value: policy.marketTradingEnabled ? 'On' : 'Off'),
+                  label: 'Trading',
+                  value: policy.marketTradingEnabled ? 'On' : 'Off',
+                ),
                 GteMetricChip(
-                    label: 'Rewards',
-                    value:
-                        policy.platformRewardWithdrawalsEnabled ? 'On' : 'Off'),
+                  label: 'Rewards',
+                  value: policy.platformRewardWithdrawalsEnabled ? 'On' : 'Off',
+                ),
                 GteMetricChip(
-                    label: 'Active', value: policy.active ? 'Yes' : 'No'),
+                  label: 'Active',
+                  value: policy.active ? 'Yes' : 'No',
+                ),
               ],
             ),
           ],
@@ -927,10 +998,7 @@ class _PolicyCard extends StatelessWidget {
 }
 
 class _FeatureFlagTile extends StatelessWidget {
-  const _FeatureFlagTile({
-    required this.flag,
-    required this.onToggle,
-  });
+  const _FeatureFlagTile({required this.flag, required this.onToggle});
 
   final AdminFeatureFlag flag;
   final ValueChanged<bool> onToggle;

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.auth.service import AuthService
+from app.jobs.ops_jobs import OpsJobRunner
 from app.main import (
     INITIAL_ADMIN_DISPLAY_NAME,
     INITIAL_ADMIN_EMAIL,
@@ -58,3 +59,21 @@ def test_admin_audit_feed_lists_events(client, app_session_factory):
     assert response.status_code == 200, response.text
     payload = response.json()
     assert any(item["action"] == "policy.audit.test" for item in payload)
+
+
+def test_admin_football_universe_job_endpoints_run(client, monkeypatch) -> None:
+    headers = _admin_headers(client)
+    monkeypatch.setattr(OpsJobRunner, "run_fan_update_cycle", lambda _self: {"fan_bases_updated": 2})
+    monkeypatch.setattr(OpsJobRunner, "run_media_generation_cycle", lambda _self: {"media_events_generated": 3})
+    monkeypatch.setattr(OpsJobRunner, "run_identity_evolution_cycle", lambda _self: {"club_identities_evolved": 2})
+
+    fan_response = client.post("/admin/ops/fan-updates", headers=headers)
+    media_response = client.post("/admin/ops/media-generation", headers=headers)
+    identity_response = client.post("/admin/ops/identity-evolution", headers=headers)
+
+    assert fan_response.status_code == 200, fan_response.text
+    assert media_response.status_code == 200, media_response.text
+    assert identity_response.status_code == 200, identity_response.text
+    assert fan_response.json() == {"result": {"fan_bases_updated": 2}}
+    assert media_response.json() == {"result": {"media_events_generated": 3}}
+    assert identity_response.json() == {"result": {"club_identities_evolved": 2}}

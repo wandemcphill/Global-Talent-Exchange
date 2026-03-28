@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.admin_engine.service import AdminEngineService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.economy.economy_service import EconomyService
 from app.football_events_engine.service import RealWorldFootballEventService
 from app.ingestion.models import MarketSignal, Player
 from app.integrity_engine.service import IntegrityEngineService
@@ -303,29 +304,33 @@ class PlayerCardMarketService:
             raise PlayerCardValidationError("Seller account was not found.")
 
         gross = self._normalize_amount(Decimal(listing.price_per_card_credits) * Decimal(quantity))
-        fee_bps = self._active_trading_fee_bps()
-        fee = self._normalize_amount(gross * Decimal(fee_bps) / Decimal(10_000))
-        seller_net = self._normalize_amount(gross - fee)
         settlement_reference = f"player-card-sale:{listing.listing_id}:{self._new_id('settle')}"
         if self._settlement_exists(settlement_reference):
             raise PlayerCardMarketError("This sale has already been settled.")
-
-        buyer_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
-        seller_account = self.wallet_service.get_user_account(self.session, seller, LedgerUnit.CREDIT)
-        platform_account = self.wallet_service.ensure_platform_burn_account(self.session, LedgerUnit.CREDIT)
-        self.wallet_service.append_transaction(
-            self.session,
-            postings=[
-                LedgerPosting(account=buyer_account, amount=-gross, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
-                LedgerPosting(account=seller_account, amount=seller_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
-                LedgerPosting(account=platform_account, amount=fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
-            ],
-            reason=self.wallet_service.trade_settlement_reason,
+        settlement = EconomyService(self.session, wallet_service=self.wallet_service).settle_marketplace_transaction(
+            buyer=actor,
+            seller=seller,
+            gross_amount=gross,
+            unit=LedgerUnit.CREDIT,
             reference=settlement_reference,
-            description="Player card marketplace trade",
             external_reference=settlement_reference,
+            description="Player card marketplace trade",
+            buyer_source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
+            seller_source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
+            fee_source_tag=LedgerSourceTag.TRADING_FEE_BURN,
+            fee_bps=self._active_trading_fee_bps(),
+            burn_fee=True,
             actor=actor,
+            metadata={
+                "player_card_sale": {
+                    "listing_id": listing.listing_id,
+                    "player_card_id": card.id,
+                    "quantity": quantity,
+                }
+            },
         )
+        fee = settlement.fee_amount
+        seller_net = settlement.seller_net_amount
 
         seller_holding = self._get_holding(seller.id, card.id)
         seller_holding.quantity_reserved = max(seller_holding.quantity_reserved - quantity, 0)

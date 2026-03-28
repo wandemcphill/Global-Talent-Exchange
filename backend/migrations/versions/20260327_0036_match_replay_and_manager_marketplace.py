@@ -68,7 +68,7 @@ def upgrade() -> None:
         sa.Column("losses", sa.Integer(), server_default="0", nullable=False),
         sa.Column("reputation_score", sa.Integer(), server_default="0", nullable=False),
         sa.Column("hourly_fee", sa.Numeric(12, 2), server_default="0", nullable=False),
-        sa.Column("is_available", sa.Boolean(), server_default="1", nullable=False),
+        sa.Column("is_available", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("current_losing_streak", sa.Integer(), server_default="0", nullable=False),
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

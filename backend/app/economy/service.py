@@ -12,6 +12,7 @@ from app.economy.schemas import (
     GiftComboRuleUpsertRequest,
     RevenueShareRuleUpsertRequest,
 )
+from app.economy.governor_service import EconomyGovernorService
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule
 from app.models.gift_combo_rule import GiftComboRule
 from app.models.revenue_share_rule import RevenueShareRule
@@ -19,33 +20,33 @@ from app.models.user import User
 
 DEFAULT_GIFTS: tuple[dict[str, object], ...] = (
     {
-        "key": "cheer-burst",
-        "display_name": "Cheer Burst",
+        "key": "fire",
+        "display_name": "Fire",
         "tier": "standard",
-        "fancoin_price": Decimal("25.0000"),
-        "animation_key": "cheer_burst",
+        "fancoin_price": Decimal("2.0000"),
+        "animation_key": "fire_react",
         "sound_key": "crowd_pop",
-        "description": "Quick support pulse for a club, player, or creator stream.",
+        "description": "Fast Fan Coin reaction for live match moments and watch-party hype.",
         "active": True,
     },
     {
-        "key": "stadium-flare",
-        "display_name": "Stadium Flare",
+        "key": "applause",
+        "display_name": "Applause",
         "tier": "premium",
-        "fancoin_price": Decimal("150.0000"),
-        "animation_key": "stadium_flare",
-        "sound_key": "flare_whoosh",
-        "description": "Premium visual flare for big-match moments.",
+        "fancoin_price": Decimal("5.0000"),
+        "animation_key": "applause_wave",
+        "sound_key": "crowd_applause",
+        "description": "Mid-tier Fan Coin gift for stream-style support during key phases of play.",
         "active": True,
     },
     {
-        "key": "trophy-rain",
-        "display_name": "Trophy Rain",
+        "key": "crown",
+        "display_name": "Crown",
         "tier": "legendary",
-        "fancoin_price": Decimal("500.0000"),
-        "animation_key": "trophy_rain",
+        "fancoin_price": Decimal("20.0000"),
+        "animation_key": "crown_drop",
         "sound_key": "trophy_shimmer",
-        "description": "High-end celebration gift designed for finals and title-clinching nights.",
+        "description": "High-impact Fan Coin tribute for match winners, creators, and final whistle moments.",
         "active": True,
     },
 )
@@ -53,26 +54,58 @@ DEFAULT_GIFTS: tuple[dict[str, object], ...] = (
 DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
     {
         "service_key": "premium-video-view",
-        "title": "Premium Video View",
-        "description": "Unlock premium match highlight or 3-5 minute cinematic replay package.",
-        "price_coin": Decimal("2.5000"),
-        "price_fancoin_equivalent": Decimal("250.0000"),
+        "title": "Friendly 3D Match View",
+        "description": "Ticket a friendly 3D match viewing session for the Fan Coin watch layer.",
+        "price_coin": Decimal("0.0500"),
+        "price_fancoin_equivalent": Decimal("5.0000"),
+        "active": True,
+    },
+    {
+        "service_key": "ranked-match-view",
+        "title": "Ranked Match View",
+        "description": "Spectate a ranked 3D match with live reactions and gifting enabled.",
+        "price_coin": Decimal("0.1000"),
+        "price_fancoin_equivalent": Decimal("10.0000"),
+        "active": True,
+    },
+    {
+        "service_key": "tournament-match-view",
+        "title": "Tournament Match View",
+        "description": "Access a tournament-stage 3D match stream with premium watch-party energy.",
+        "price_coin": Decimal("0.2000"),
+        "price_fancoin_equivalent": Decimal("20.0000"),
         "active": True,
     },
     {
         "service_key": "highlight-download",
         "title": "Highlight Download",
-        "description": "Download a premium highlight clip or replay asset.",
-        "price_coin": Decimal("1.0000"),
-        "price_fancoin_equivalent": Decimal("100.0000"),
+        "description": "Download a short-form replay or highlight asset after a viewed match.",
+        "price_coin": Decimal("0.1000"),
+        "price_fancoin_equivalent": Decimal("10.0000"),
         "active": True,
     },
     {
         "service_key": "fast-match-entry",
         "title": "Fast Match Entry",
-        "description": "Quick-entry competitive matchmaking surface.",
+        "description": "Jump into the casual fast-match lane with either GTex or Fan Coin parity.",
+        "price_coin": Decimal("0.5000"),
+        "price_fancoin_equivalent": Decimal("50.0000"),
+        "active": True,
+    },
+    {
+        "service_key": "competitive-match-entry",
+        "title": "Competitive Match Entry",
+        "description": "Enter a serious ranked match with GTex-aligned stakes.",
         "price_coin": Decimal("1.0000"),
         "price_fancoin_equivalent": Decimal("100.0000"),
+        "active": True,
+    },
+    {
+        "service_key": "tournament-entry",
+        "title": "Tournament Entry",
+        "description": "Base GTex tournament buy-in for knockout and league events.",
+        "price_coin": Decimal("5.0000"),
+        "price_fancoin_equivalent": Decimal("500.0000"),
         "active": True,
     },
     {
@@ -96,6 +129,18 @@ DEFAULT_REVENUE_SHARE_RULES: tuple[dict[str, object], ...] = (
         "recipient_share_bps": None,
         "burn_bps": 0,
         "priority": 10,
+        "active": True,
+    },
+    {
+        "rule_key": "match-view-default",
+        "scope": "match_view",
+        "title": "Match View Revenue Split",
+        "description": "Default 50/30/20 split for ticketed match viewing once host and winner settlement is applied.",
+        "platform_share_bps": 5000,
+        "creator_share_bps": 3000,
+        "recipient_share_bps": 2000,
+        "burn_bps": 0,
+        "priority": 20,
         "active": True,
     },
     {
@@ -251,6 +296,8 @@ class EconomyConfigService:
                 if recipient_bps > remainder:
                     recipient_bps = max(0, remainder)
             rule_key = rule.rule_key
+
+        burn_bps = min(10_000, burn_bps + EconomyGovernorService(self.session).burn_bonus_bps())
 
         quant = Decimal("0.0001")
         platform_amount = (gross * Decimal(platform_bps) / Decimal(10_000)).quantize(quant)

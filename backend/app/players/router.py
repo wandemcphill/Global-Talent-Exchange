@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Never
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_optional_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
 from app.models.user import User
 from app.players.real_player_schemas import (
     PlayerMatchEventCreate,
@@ -31,6 +31,18 @@ from app.players.real_player_service import (
     RealPlayerUniverseValidationError,
 )
 from app.players.schemas import PlayerSummaryView
+from app.players.token_schemas import (
+    PlayerShareDividendRequest,
+    PlayerShareDividendView,
+    PlayerShareEventView,
+    PlayerShareHoldingView,
+    PlayerShareMarketIssueRequest,
+    PlayerShareMarketView,
+    PlayerSharePerformanceRequest,
+    PlayerSharePurchaseRequest,
+    PlayerSharePurchaseView,
+)
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.players.service import PlayerSummaryQueryService
 from app.regen_universe.expansion_service import (
     RegenUniverseExpansionError,
@@ -38,7 +50,9 @@ from app.regen_universe.expansion_service import (
     RegenUniverseExpansionService,
     RegenUniverseExpansionValidationError,
 )
+from app.schemas.avatar import PlayerAvatarRenderView
 from app.schemas.regen_universe_expansion import PlayerDNAView, PlayerRivalryView, PlayerStoryView
+from app.services.player_face_service import PlayerFaceError, PlayerFaceNotFoundError, PlayerFaceService
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -73,6 +87,32 @@ def raise_regen_universe_expansion_http_exception(exc: RegenUniverseExpansionErr
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
+def raise_player_face_http_exception(exc: PlayerFaceError) -> Never:
+    if isinstance(exc, PlayerFaceNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+def raise_player_token_market_http_exception(exc: PlayerTokenMarketError) -> Never:
+    if exc.reason in {"player_not_found", "market_not_found"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail) from exc
+    if exc.reason in {
+        "admin_required",
+        "total_shares_invalid",
+        "share_price_invalid",
+        "share_count_invalid",
+        "market_inactive",
+        "share_supply_insufficient",
+        "multiplier_invalid",
+        "dividend_invalid",
+        "no_shareholders",
+        "no_circulation",
+        "total_shares_below_circulation",
+    }:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+
+
 @router.get("/summaries/recent", response_model=list[PlayerSummaryView])
 def list_recent_player_summaries(
     limit: int = Query(default=20, ge=1, le=100),
@@ -91,6 +131,134 @@ def get_player_summary(
     if summary is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Player summary for {player_id} was not found")
     return summary
+
+
+@router.get("/{player_id}/shares/market", response_model=PlayerShareMarketView)
+def get_player_share_market(
+    player_id: str,
+    session: Session = Depends(get_session),
+) -> PlayerShareMarketView:
+    try:
+        market = PlayerTokenMarketService(session).get_market(player_id=player_id)
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    return PlayerShareMarketView.model_validate(market)
+
+
+@router.get("/{player_id}/shares/events", response_model=list[PlayerShareEventView])
+def list_player_share_events(
+    player_id: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[PlayerShareEventView]:
+    try:
+        events = PlayerTokenMarketService(session).list_events(player_id=player_id, limit=limit)
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    return [PlayerShareEventView.model_validate(item) for item in events]
+
+
+@router.get("/me/shares/holdings", response_model=list[PlayerShareHoldingView])
+def list_my_player_share_holdings(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[PlayerShareHoldingView]:
+    holdings = PlayerTokenMarketService(session).list_holdings(user_id=current_user.id)
+    return [PlayerShareHoldingView.model_validate(item) for item in holdings]
+
+
+@router.post("/{player_id}/shares/issue", response_model=PlayerShareMarketView)
+def issue_player_share_market(
+    player_id: str,
+    payload: PlayerShareMarketIssueRequest,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> PlayerShareMarketView:
+    service = PlayerTokenMarketService(session)
+    try:
+        market = service.issue_market(
+            actor=actor,
+            player_id=player_id,
+            total_shares=payload.total_shares,
+            share_price_coin=payload.share_price_coin,
+            status=payload.status,
+        )
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    session.commit()
+    session.refresh(market)
+    return PlayerShareMarketView.model_validate(market)
+
+
+@router.post("/{player_id}/shares/buy", response_model=PlayerSharePurchaseView, status_code=status.HTTP_201_CREATED)
+def buy_player_shares(
+    player_id: str,
+    payload: PlayerSharePurchaseRequest,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_user),
+) -> PlayerSharePurchaseView:
+    service = PlayerTokenMarketService(session)
+    try:
+        result = service.buy_shares(actor=actor, player_id=player_id, share_count=payload.share_count)
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    session.commit()
+    session.refresh(result["market"])
+    session.refresh(result["holding"])
+    return PlayerSharePurchaseView(
+        market=PlayerShareMarketView.model_validate(result["market"]),
+        holding=PlayerShareHoldingView.model_validate(result["holding"]),
+        transaction_id=result["transaction_id"],
+        gross_amount_coin=result["gross_amount_coin"],
+    )
+
+
+@router.post("/{player_id}/shares/performance", response_model=PlayerShareMarketView)
+def reprice_player_shares_from_performance(
+    player_id: str,
+    payload: PlayerSharePerformanceRequest,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> PlayerShareMarketView:
+    service = PlayerTokenMarketService(session)
+    try:
+        market = service.apply_performance_adjustment(
+            actor=actor,
+            player_id=player_id,
+            multiplier=payload.multiplier,
+            reason=payload.reason,
+        )
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    session.commit()
+    session.refresh(market)
+    return PlayerShareMarketView.model_validate(market)
+
+
+@router.post("/{player_id}/shares/dividends", response_model=PlayerShareDividendView)
+def distribute_player_share_dividends(
+    player_id: str,
+    payload: PlayerShareDividendRequest,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> PlayerShareDividendView:
+    service = PlayerTokenMarketService(session)
+    try:
+        result = service.distribute_dividend(
+            actor=actor,
+            player_id=player_id,
+            gross_amount_coin=payload.gross_amount_coin,
+            note=payload.note,
+        )
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    session.commit()
+    session.refresh(result["market"])
+    return PlayerShareDividendView(
+        market=PlayerShareMarketView.model_validate(result["market"]),
+        transaction_id=result["transaction_id"],
+        gross_amount_coin=result["gross_amount_coin"],
+    )
 
 
 @router.get("/{player_id}/story", response_model=PlayerStoryView)
@@ -130,6 +298,24 @@ def get_player_rivalries(
     except RegenUniverseExpansionError as exc:
         raise_regen_universe_expansion_http_exception(exc)
     return [PlayerRivalryView.model_validate(item) for item in payload]
+
+
+@router.get("/{player_id}/avatar", response_model=PlayerAvatarRenderView)
+def get_player_avatar(
+    player_id: str,
+    format: str = Query(default="json"),
+    session: Session = Depends(get_session),
+) -> PlayerAvatarRenderView | Response:
+    if format not in {"json", "svg", "static", "model"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported avatar format.")
+    try:
+        payload = PlayerFaceService(session).get_avatar_render(player_id, render_format=format)
+    except PlayerFaceError as exc:
+        raise_player_face_http_exception(exc)
+    session.commit()
+    if format == "svg":
+        return Response(content=payload.layered_svg or "", media_type="image/svg+xml")
+    return payload
 
 
 @router.post("/match", response_model=RealPlayerMatchResponseView)

@@ -8,8 +8,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.broadcast_rights.service import BroadcastRightsService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.economy.service import EconomyConfigService
+from app.models.broadcast_rights import ViewSession
 from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
@@ -96,6 +98,13 @@ class MediaEngineService:
                     },
                 )
             )
+        BroadcastRightsService(self.session).record_view_session(
+            actor=actor,
+            match_id=purchase.match_key,
+            competition_id=purchase.competition_key,
+            paid_amount=Decimal(purchase.price_coin),
+            source="premium_video",
+        )
         return purchase
 
     def list_purchases(self, *, actor: User) -> list[PremiumVideoPurchase]:
@@ -104,11 +113,35 @@ class MediaEngineService:
     def build_snapshot(self, *, match_key: str, competition_key: str | None = None, home_club_id: str | None = None, away_club_id: str | None = None) -> MatchRevenueSnapshot:
         view_count = int(self.session.scalar(select(func.count()).select_from(MatchView).where(MatchView.match_key == match_key)) or 0)
         premium_count = int(self.session.scalar(select(func.count()).select_from(PremiumVideoPurchase).where(PremiumVideoPurchase.match_key == match_key)) or 0)
-        premium_revenue = self.session.scalar(select(func.coalesce(func.sum(PremiumVideoPurchase.price_coin), 0)).where(PremiumVideoPurchase.match_key == match_key)) or Decimal('0.0000')
-        ad_revenue = Decimal(view_count) * Decimal('0.0100')
-        total = (Decimal(premium_revenue) + ad_revenue).quantize(Decimal('0.0001'))
-        home_share = (total * Decimal('0.8')).quantize(Decimal('0.0001'))
-        away_share = (total - home_share).quantize(Decimal('0.0001'))
+        viewing_revenue = Decimal(
+            self.session.scalar(
+                select(func.coalesce(func.sum(ViewSession.paid_amount), 0)).where(ViewSession.match_id == match_key)
+            )
+            or Decimal('0.0000')
+        ).quantize(Decimal('0.0001'))
+        broadcast_distribution = BroadcastRightsService(self.session).distribute_match_revenue(
+            match_id=match_key,
+            competition_id=competition_key,
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+        )
+        total = Decimal(broadcast_distribution["total_revenue"]).quantize(Decimal('0.0001'))
+        home_share = sum(
+            (
+                Decimal(str(item.get("amount", "0.0000")))
+                for item in broadcast_distribution["recipients"]
+                if item.get("recipient_type") == "club" and item.get("club_id") == home_club_id
+            ),
+            Decimal("0.0000"),
+        ).quantize(Decimal('0.0001'))
+        away_share = sum(
+            (
+                Decimal(str(item.get("amount", "0.0000")))
+                for item in broadcast_distribution["recipients"]
+                if item.get("recipient_type") == "club" and item.get("club_id") == away_club_id
+            ),
+            Decimal("0.0000"),
+        ).quantize(Decimal('0.0001'))
         snapshot = self.session.scalar(select(MatchRevenueSnapshot).where(MatchRevenueSnapshot.match_key == match_key))
         if snapshot is None:
             snapshot = MatchRevenueSnapshot(match_key=match_key.strip())
@@ -121,6 +154,12 @@ class MediaEngineService:
         snapshot.total_revenue_coin = total
         snapshot.home_club_share_coin = home_share
         snapshot.away_club_share_coin = away_share
-        snapshot.metadata_json = {'ad_revenue_coin': str(ad_revenue), 'revenue_split': {'home': '80%', 'away': '20%'}}
+        snapshot.metadata_json = {
+            'viewing_revenue_coin': str(viewing_revenue),
+            'rights_holder_share_coin': str(broadcast_distribution["rights_holder_share"]),
+            'platform_share_coin': str(broadcast_distribution["platform_share"]),
+            'participating_club_share_coin': str(broadcast_distribution["participating_club_share"]),
+            'recipients': broadcast_distribution["recipients"],
+        }
         self.session.flush()
         return snapshot

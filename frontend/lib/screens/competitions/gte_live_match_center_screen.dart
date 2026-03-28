@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
@@ -16,6 +18,7 @@ import 'package:gte_frontend/widgets/gte_metric_chip.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/competitions/competition_dynamic_prize_pool_card.dart';
 import 'package:gte_frontend/widgets/match/match_hud_avatar.dart';
 import 'package:gte_frontend/widgets/squad/squad_avatar_badge.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
@@ -26,10 +29,7 @@ import '../match/gtex_match_broadcast_screen.dart';
 import '../match/gtex_match_simulation_screen.dart';
 import '../match/gtex_match_viewer_screen.dart';
 
-enum _LiveViewMode {
-  commentary,
-  keyMoments,
-}
+enum _LiveViewMode { commentary, keyMoments }
 
 class GteLiveMatchCenterScreen extends StatefulWidget {
   const GteLiveMatchCenterScreen({
@@ -46,7 +46,7 @@ class GteLiveMatchCenterScreen extends StatefulWidget {
   final VoidCallback? onOpenLogin;
   final GteNavigationDependencies? navigationDependencies;
   final Future<LiveMatchSnapshot> Function(CompetitionSummary competition)?
-      snapshotLoader;
+  snapshotLoader;
 
   @override
   State<GteLiveMatchCenterScreen> createState() =>
@@ -55,6 +55,8 @@ class GteLiveMatchCenterScreen extends StatefulWidget {
 
 class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   late Future<LiveMatchSnapshot> _snapshotFuture;
+  late final Timer _countdownTicker;
+  late DateTime _countdownStartedAt;
   _LiveViewMode _viewMode = _LiveViewMode.commentary;
   final Map<String, bool> _tacticToggles = <String, bool>{
     'High press': true,
@@ -67,17 +69,28 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   void initState() {
     super.initState();
     _snapshotFuture = _loadSnapshot();
+    _countdownStartedAt = DateTime.now();
+    _countdownTicker = Timer.periodic(const Duration(seconds: 1), (
+      Timer timer,
+    ) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {});
+    });
   }
 
   void _reload() {
     setState(() {
       _snapshotFuture = _loadSnapshot();
+      _countdownStartedAt = DateTime.now();
     });
   }
 
   Future<LiveMatchSnapshot> _loadSnapshot() {
     final Future<LiveMatchSnapshot> Function(CompetitionSummary competition)
-        loader = widget.snapshotLoader ?? loadLiveMatchSnapshot;
+    loader = widget.snapshotLoader ?? loadLiveMatchSnapshot;
     return loader(widget.competition);
   }
 
@@ -97,9 +110,9 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   Future<void> _openHalftime() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteHalftimeAnalyticsScreen(
-          competition: widget.competition,
-        ),
+        builder:
+            (BuildContext context) =>
+                GteHalftimeAnalyticsScreen(competition: widget.competition),
       ),
     );
   }
@@ -107,46 +120,49 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   Future<void> _openHighlights() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteMatchHighlightsScreen(
-          competition: widget.competition,
-          isAuthenticated: widget.isAuthenticated,
-        ),
+        builder:
+            (BuildContext context) => GteMatchHighlightsScreen(
+              competition: widget.competition,
+              isAuthenticated: widget.isAuthenticated,
+            ),
       ),
     );
   }
 
-  Future<void> _openBroadcast(
-    LiveMatchSnapshot match,
-  ) async {
+  Future<void> _openBroadcast(LiveMatchSnapshot match) async {
     final Match3dUserEntitlement? entitlement =
         widget.navigationDependencies?.match3dEntitlement;
-    final String matchKey = match.matchId?.trim().isNotEmpty == true
-        ? match.matchId!.trim()
-        : widget.competition.id;
+    final String matchKey =
+        match.matchId?.trim().isNotEmpty == true
+            ? match.matchId!.trim()
+            : widget.competition.id;
     final bool competitionUpgrade =
         entitlement?.hasTournamentBoost(widget.competition.id) ?? false;
     final bool unlockedMatch = entitlement?.hasUnlockedMatch(matchKey) ?? false;
-    final GtexMatchViewType initialViewType = competitionUpgrade ||
-            unlockedMatch ||
-            (entitlement?.isPremiumUser ?? false)
-        ? GtexMatchViewType.pseudo3D
-        : GtexMatchViewType.twoD;
+    final GtexMatchViewType initialViewType =
+        competitionUpgrade ||
+                unlockedMatch ||
+                (entitlement?.isPremiumUser ?? false)
+            ? GtexMatchViewType.pseudo3D
+            : GtexMatchViewType.twoD;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GtexMatchBroadcastScreen(
-          competition: widget.competition,
-          competitionId: widget.competition.id,
-          matchId: matchKey,
-          fallbackSnapshot: match,
-          initialMode: GtexMatchRenderMode.standard,
-          viewType: initialViewType,
-          isPremiumUser: entitlement?.isPremiumUser ?? false,
-          spectatorMode: true,
-          auto3DEnabled: competitionUpgrade,
-          entitlement: entitlement,
-          competitionLabel: widget.competition.name,
-          onOpenHighlights: match.highlightsAvailable ? _openHighlights : null,
-        ),
+        builder:
+            (BuildContext context) => GtexMatchBroadcastScreen(
+              competition: widget.competition,
+              competitionId: widget.competition.id,
+              matchId: matchKey,
+              fallbackSnapshot: match,
+              initialMode: GtexMatchRenderMode.standard,
+              viewType: initialViewType,
+              isPremiumUser: entitlement?.isPremiumUser ?? false,
+              spectatorMode: true,
+              auto3DEnabled: competitionUpgrade,
+              entitlement: entitlement,
+              competitionLabel: widget.competition.name,
+              onOpenHighlights:
+                  match.highlightsAvailable ? _openHighlights : null,
+            ),
       ),
     );
   }
@@ -157,51 +173,88 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   }) async {
     final Match3dUserEntitlement? entitlement =
         widget.navigationDependencies?.match3dEntitlement;
-    final String matchKey = match.matchId?.trim().isNotEmpty == true
-        ? match.matchId!.trim()
-        : widget.competition.id;
+    final String matchKey =
+        match.matchId?.trim().isNotEmpty == true
+            ? match.matchId!.trim()
+            : widget.competition.id;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GtexMatchViewerScreen(
-          competition: widget.competition,
-          matchKey: matchKey,
-          fallbackSnapshot: match,
-          presentationMode: presentationMode,
-          isSpectator:
-              presentationMode == MatchViewerPresentationMode.broadcast,
-          renderMode: RenderMode.auto,
-          entitlement: entitlement,
-        ),
+        builder:
+            (BuildContext context) => GtexMatchViewerScreen(
+              competition: widget.competition,
+              matchKey: matchKey,
+              fallbackSnapshot: match,
+              presentationMode: presentationMode,
+              isSpectator:
+                  presentationMode == MatchViewerPresentationMode.broadcast,
+              renderMode: RenderMode.auto,
+              entitlement: entitlement,
+            ),
       ),
     );
   }
 
-  Future<void> _openSimulation(
-    LiveMatchSnapshot match,
-  ) async {
+  Future<void> _openSimulation(LiveMatchSnapshot match) async {
     final MatchSimulationImportance importance =
         widget.competition.capacity <= 2
             ? MatchSimulationImportance.finalMatch
             : MatchSimulationImportance.tournament;
     final MatchSimulationRequest request =
         MatchSimulationRequestFactory.fromLiveSnapshot(
-      match,
-      matchId: match.matchId?.trim().isNotEmpty == true
-          ? match.matchId!.trim()
-          : widget.competition.id,
-      importance: importance,
+          match,
+          matchId:
+              match.matchId?.trim().isNotEmpty == true
+                  ? match.matchId!.trim()
+                  : widget.competition.id,
+          importance: importance,
+        );
+    final MatchSimulationResult result = const MatchSimulationEngine().simulate(
+      request,
     );
-    final MatchSimulationResult result =
-        const MatchSimulationEngine().simulate(request);
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GtexMatchSimulationScreen(
-          result: result,
-          title: '${match.homeTeam} vs ${match.awayTeam}',
-          competitionLabel: widget.competition.name,
-        ),
+        builder:
+            (BuildContext context) => GtexMatchSimulationScreen(
+              result: result,
+              title: '${match.homeTeam} vs ${match.awayTeam}',
+              competitionLabel: widget.competition.name,
+            ),
       ),
     );
+  }
+
+  String? _jackpotCountdownLabel(LiveMatchSnapshot match) {
+    final CompetitionDynamicPrizePool? dynamicPrizePool =
+        widget.competition.dynamicPrizePool;
+    if (dynamicPrizePool?.enabled != true) {
+      return null;
+    }
+    if (match.isFinal) {
+      return 'Draw in: 00:00';
+    }
+    final int baseSeconds;
+    if (match.phase == LiveMatchPhase.preMatch) {
+      baseSeconds = 300;
+    } else if (match.phase == LiveMatchPhase.halftime) {
+      baseSeconds = 150;
+    } else {
+      final int clampedMinute = match.minute.clamp(0, 90);
+      baseSeconds = (((90 - clampedMinute) / 90) * 300).round();
+    }
+    final int elapsed =
+        DateTime.now().difference(_countdownStartedAt).inSeconds;
+    final int seconds = (baseSeconds - elapsed).clamp(0, 300);
+    final int minutesPart = seconds ~/ 60;
+    final int secondsPart = seconds % 60;
+    final String mm = minutesPart.toString().padLeft(2, '0');
+    final String ss = secondsPart.toString().padLeft(2, '0');
+    return 'Draw in: $mm:$ss';
+  }
+
+  @override
+  void dispose() {
+    _countdownTicker.cancel();
+    super.dispose();
   }
 
   @override
@@ -227,8 +280,10 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
         ),
         body: FutureBuilder<LiveMatchSnapshot>(
           future: _snapshotFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<LiveMatchSnapshot> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<LiveMatchSnapshot> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
                 padding: EdgeInsets.all(20),
@@ -258,10 +313,25 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
             }
 
             final LiveMatchSnapshot match = snapshot.data!;
+            final CompetitionDynamicPrizePool? dynamicPrizePool =
+                widget.competition.dynamicPrizePool;
+            final String? jackpotCountdown = _jackpotCountdownLabel(match);
             return ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
               children: <Widget>[
                 _LiveScoreboardCard(match: match),
+                if (dynamicPrizePool?.enabled == true) ...<Widget>[
+                  const SizedBox(height: 16),
+                  CompetitionDynamicPrizePoolCard(
+                    dynamicPrizePool: dynamicPrizePool!,
+                    currency: widget.competition.currency,
+                    title: 'Live jackpot pulse',
+                    subtitle:
+                        'This pool swells with platform activity and unresolved rollover rewards while the match is still alive.',
+                    countdownLabel: jackpotCountdown,
+                    accentColor: GteShellTheme.accentArena,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 GteSurfacePanel(
                   accentColor: GteShellTheme.accentArena,
@@ -323,11 +393,12 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                         ),
                         const SizedBox(width: 16),
                         FilledButton.icon(
-                          onPressed: () => _openReplayViewer(
-                            match,
-                            presentationMode:
-                                MatchViewerPresentationMode.replay,
-                          ),
+                          onPressed:
+                              () => _openReplayViewer(
+                                match,
+                                presentationMode:
+                                    MatchViewerPresentationMode.replay,
+                              ),
                           icon: const Icon(Icons.sports_soccer),
                           label: const Text('Open replay'),
                         ),
@@ -389,10 +460,11 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                           runSpacing: 12,
                           children: <Widget>[
                             FilledButton.tonalIcon(
-                              onPressed: match.matchId == null ||
-                                      match.matchId!.trim().isEmpty
-                                  ? null
-                                  : () => _openFeatureRoute(
+                              onPressed:
+                                  match.matchId == null ||
+                                          match.matchId!.trim().isEmpty
+                                      ? null
+                                      : () => _openFeatureRoute(
                                         FanPredictionMatchRouteData(
                                           matchId: match.matchId!.trim(),
                                         ),
@@ -401,10 +473,11 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                               label: const Text('Fan predictions'),
                             ),
                             FilledButton.tonalIcon(
-                              onPressed: match.matchId == null ||
-                                      match.matchId!.trim().isEmpty
-                                  ? null
-                                  : () => _openFeatureRoute(
+                              onPressed:
+                                  match.matchId == null ||
+                                          match.matchId!.trim().isEmpty
+                                      ? null
+                                      : () => _openFeatureRoute(
                                         CreatorStadiumMatchRouteData(
                                           matchId: match.matchId!.trim(),
                                         ),
@@ -413,11 +486,12 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
                               label: const Text('Stadium monetization'),
                             ),
                             FilledButton.tonalIcon(
-                              onPressed: () => _openFeatureRoute(
-                                WorldCompetitionContextRouteData(
-                                  competitionId: widget.competition.id,
-                                ),
-                              ),
+                              onPressed:
+                                  () => _openFeatureRoute(
+                                    WorldCompetitionContextRouteData(
+                                      competitionId: widget.competition.id,
+                                    ),
+                                  ),
                               icon: const Icon(Icons.public_outlined),
                               label: const Text('World context'),
                             ),
@@ -560,13 +634,14 @@ class _LiveScoreboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String status = match.isFinal
-        ? 'FINAL'
-        : match.isHalftime
+    final String status =
+        match.isFinal
+            ? 'FINAL'
+            : match.isHalftime
             ? 'HALFTIME'
             : match.isLive
-                ? 'LIVE ${match.minute}\''
-                : 'PRE-MATCH';
+            ? 'LIVE ${match.minute}\''
+            : 'PRE-MATCH';
     return GteSurfacePanel(
       accentColor: GteShellTheme.accentArena,
       emphasized: true,
@@ -596,13 +671,16 @@ class _LiveScoreboardCard extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   color: Colors.white.withValues(alpha: 0.06),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.14),
+                  ),
                 ),
                 child: Text(
                   '${match.homeScore} : ${match.awayScore}',
@@ -663,9 +741,9 @@ class _StatusChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: GteShellTheme.accentArena,
-              letterSpacing: 1.1,
-            ),
+          color: GteShellTheme.accentArena,
+          letterSpacing: 1.1,
+        ),
       ),
     );
   }
@@ -688,13 +766,14 @@ class _TeamScore extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = featuredPlayer == null
-        ? null
-        : AvatarMapper.fromLiveLineupPlayer(
-            featuredPlayer!,
-            teamName: team,
-            matchId: matchId,
-          );
+    final avatar =
+        featuredPlayer == null
+            ? null
+            : AvatarMapper.fromLiveLineupPlayer(
+              featuredPlayer!,
+              teamName: team,
+              matchId: matchId,
+            );
     return Column(
       crossAxisAlignment:
           alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -774,11 +853,15 @@ class _CommentaryPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(event.title,
-                            style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          event.title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
-                        Text(event.detail,
-                            style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          event.detail,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ],
                     ),
                   ),
@@ -886,11 +969,15 @@ class _KeyMomentPanel extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(clip.title,
-                            style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          clip.title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
-                        Text('${clip.minute}\' • ${clip.durationLabel}',
-                            style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          '${clip.minute}\' • ${clip.durationLabel}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ],
                     ),
                   ),
@@ -927,9 +1014,10 @@ class _MomentumStrip extends StatelessWidget {
                   height: 10 + (value.abs() * 12).toDouble(),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    color: value >= 0
-                        ? GteShellTheme.accentArena.withValues(alpha: 0.6)
-                        : GteShellTheme.accentWarm.withValues(alpha: 0.6),
+                    color:
+                        value >= 0
+                            ? GteShellTheme.accentArena.withValues(alpha: 0.6)
+                            : GteShellTheme.accentWarm.withValues(alpha: 0.6),
                   ),
                 ),
               ),
@@ -962,14 +1050,21 @@ class _MatchStatsView extends StatelessWidget {
           runSpacing: 10,
           children: <Widget>[
             GteMetricChip(
-                label: '${match.homeTeam} Poss', value: '$homePossession%'),
+              label: '${match.homeTeam} Poss',
+              value: '$homePossession%',
+            ),
             GteMetricChip(
-                label: '${match.awayTeam} Poss', value: '$awayPossession%'),
+              label: '${match.awayTeam} Poss',
+              value: '$awayPossession%',
+            ),
             GteMetricChip(
-                label: 'Shots',
-                value: '${3 + match.homeScore + match.awayScore}'),
+              label: 'Shots',
+              value: '${3 + match.homeScore + match.awayScore}',
+            ),
             GteMetricChip(
-                label: 'xG (est)', value: '${1.1 + match.homeScore * 0.4}'),
+              label: 'xG (est)',
+              value: '${1.1 + match.homeScore * 0.4}',
+            ),
             GteMetricChip(label: 'Pressing', value: 'Aggressive'),
           ],
         ),
@@ -1084,8 +1179,10 @@ class _LineupTile extends StatelessWidget {
         children: <Widget>[
           SizedBox(
             width: 32,
-            child: Text(player.position,
-                style: Theme.of(context).textTheme.bodySmall),
+            child: Text(
+              player.position,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
           SquadAvatarBadge(avatar: avatar, size: 32),
           const SizedBox(width: 10),
@@ -1095,8 +1192,10 @@ class _LineupTile extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
-          Text(player.rating.toStringAsFixed(1),
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            player.rating.toStringAsFixed(1),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
@@ -1123,16 +1222,20 @@ class _IncidentView extends StatelessWidget {
           if (match.cards.isNotEmpty) ...<Widget>[
             Text('Cards', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 6),
-            ...match.cards
-                .map((LiveMatchEvent event) => _IncidentTile(event: event)),
+            ...match.cards.map(
+              (LiveMatchEvent event) => _IncidentTile(event: event),
+            ),
             const SizedBox(height: 12),
           ],
           if (match.substitutions.isNotEmpty) ...<Widget>[
-            Text('Substitutions',
-                style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              'Substitutions',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 6),
-            ...match.substitutions
-                .map((LiveMatchEvent event) => _IncidentTile(event: event)),
+            ...match.substitutions.map(
+              (LiveMatchEvent event) => _IncidentTile(event: event),
+            ),
           ],
         ],
       ),
@@ -1151,17 +1254,23 @@ class _IncidentTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: <Widget>[
-          Text('${event.minute}\'',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            '${event.minute}\'',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(event.title,
-                    style: Theme.of(context).textTheme.bodyMedium),
-                Text(event.detail,
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  event.title,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                Text(
+                  event.detail,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),

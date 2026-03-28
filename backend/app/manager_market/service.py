@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from app.economy.economy_service import EconomyService
 from app.models.base import generate_uuid, utcnow
 from app.models.manager_market import (
     ManagerAuditLog,
@@ -27,7 +28,7 @@ from app.models.manager_market import (
 from app.admin_engine.service import AdminEngineService
 from app.models.user import User
 from app.models.wallet import LedgerSourceTag, LedgerUnit
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import WalletService
 
 from .schemas import (
     CompetitionAdminUpdateRequest,
@@ -245,27 +246,31 @@ class ManagerMarketService:
             raise ManagerMarketError("Seller account no longer exists.")
 
         gross = Decimal(listing.asking_price_credits)
-        fee_bps = self._active_trading_fee_bps(session)
-        fee = (gross * Decimal(fee_bps) / Decimal(10_000)).quantize(Decimal("0.0001"))
-        seller_net = gross - fee
         settlement_reference = f"manager-trade:{listing_id}"
         self._ensure_trade_not_already_settled(session, settlement_reference)
-
-        buyer_account = self.wallet_service.get_user_account(session, buyer, LedgerUnit.COIN)
-        seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.COIN)
-        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
-        self.wallet_service.append_transaction(
-            session,
-            postings=[
-                LedgerPosting(account=buyer_account, amount=-gross, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
-                LedgerPosting(account=seller_account, amount=seller_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
-                LedgerPosting(account=platform_account, amount=fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
-            ],
-            reason=self.wallet_service.trade_settlement_reason,
+        settlement = EconomyService(session=session, wallet_service=self.wallet_service).settle_marketplace_transaction(
+            buyer=buyer,
+            seller=seller,
+            gross_amount=gross,
+            unit=LedgerUnit.COIN,
             reference=settlement_reference,
             description="Manager marketplace trade settlement",
+            buyer_source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
+            seller_source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
+            fee_source_tag=LedgerSourceTag.TRADING_FEE_BURN,
+            fee_bps=self._active_trading_fee_bps(session),
+            burn_fee=False,
             actor=buyer,
+            metadata={
+                "manager_trade": {
+                    "listing_id": listing_id,
+                    "asset_id": asset.asset_id,
+                    "mode": "cash",
+                }
+            },
         )
+        fee = settlement.fee_amount
+        seller_net = settlement.seller_net_amount
 
         self._unassign_asset(session, seller.id, asset.asset_id)
         asset.status = "owned"
@@ -314,24 +319,29 @@ class ManagerMarketService:
         self._ensure_trade_not_already_settled(session, settlement_reference)
 
         if cash_adjustment_credits > 0:
-            buyer_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
-            seller_account = self.wallet_service.get_user_account(session, requested_owner, LedgerUnit.COIN)
-            platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
-            fee_bps = self._active_trading_fee_bps(session)
-            fee = (cash_adjustment_credits * Decimal(fee_bps) / Decimal(10_000)).quantize(Decimal("0.0001"))
-            seller_net = cash_adjustment_credits - fee
-            self.wallet_service.append_transaction(
-                session,
-                postings=[
-                    LedgerPosting(account=buyer_account, amount=-cash_adjustment_credits, source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE),
-                    LedgerPosting(account=seller_account, amount=seller_net, source_tag=LedgerSourceTag.PLAYER_CARD_SALE),
-                    LedgerPosting(account=platform_account, amount=fee, source_tag=LedgerSourceTag.TRADING_FEE_BURN),
-                ],
-                reason=self.wallet_service.trade_settlement_reason,
+            settlement = EconomyService(session=session, wallet_service=self.wallet_service).settle_marketplace_transaction(
+                buyer=user,
+                seller=requested_owner,
+                gross_amount=cash_adjustment_credits,
+                unit=LedgerUnit.COIN,
                 reference=settlement_reference,
                 description="Manager swap with cash adjustment",
+                buyer_source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
+                seller_source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
+                fee_source_tag=LedgerSourceTag.TRADING_FEE_BURN,
+                fee_bps=self._active_trading_fee_bps(session),
+                burn_fee=False,
                 actor=user,
+                metadata={
+                    "manager_trade": {
+                        "proposer_asset_id": proposer_asset_id,
+                        "requested_asset_id": requested_asset_id,
+                        "mode": "swap",
+                    }
+                },
             )
+            fee = settlement.fee_amount
+            seller_net = settlement.seller_net_amount
         else:
             fee = Decimal("0.0000")
             seller_net = Decimal("0.0000")

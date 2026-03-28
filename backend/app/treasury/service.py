@@ -40,6 +40,17 @@ DEFAULT_WHATSAPP = "+2347000000000"
 WITHDRAWAL_RISK_AMOUNT_THRESHOLD = Decimal("5000.0000")
 WITHDRAWAL_RISK_FREQUENCY_THRESHOLD = 3
 WITHDRAWAL_RISK_WINDOW_HOURS = 24
+GTEX_PLATFORM_POSITIONING = "GTex is a gaming platform using virtual currency for in-app competition and trading."
+GTEX_LEGAL_DISCLOSURES = (
+    "No guaranteed profit.",
+    "Prices are volatile.",
+    "Platform controls mechanics.",
+    "Rewards are promotional for GTEX competitions.",
+)
+KYC_LIMITS: dict[str, Decimal] = {
+    "basic": Decimal("50000.0000"),
+    "verified": Decimal("500000.0000"),
+}
 
 
 class TreasuryError(ValueError):
@@ -61,6 +72,8 @@ class WithdrawalEligibility:
     remaining_allowance: Decimal
     next_eligible_at: datetime | None
     kyc_status: KycStatus
+    kyc_tier: str
+    per_request_limit_fiat: Decimal | None
     requires_kyc: bool
     requires_bank_account: bool
     pending_withdrawals: Decimal
@@ -69,6 +82,8 @@ class WithdrawalEligibility:
     missing_required_policies: tuple[str, ...] = ()
     policy_blocked: bool = False
     policy_block_reason: str | None = None
+    platform_positioning: str = GTEX_PLATFORM_POSITIONING
+    legal_disclosures: tuple[str, ...] = GTEX_LEGAL_DISCLOSURES
 
 
 @dataclass(slots=True, frozen=True)
@@ -181,8 +196,8 @@ class TreasuryService:
     ) -> DepositRequest:
         self._assert_deposit_allowed(session, user)
         settings = self.ensure_settings(session)
-        if settings.deposit_mode != PaymentMode.MANUAL:
-            raise TreasuryConflictError("Deposits are currently routed through automatic rails.")
+        if settings.deposit_mode not in {PaymentMode.MANUAL, PaymentMode.HYBRID}:
+            raise TreasuryConflictError("Manual bank-transfer deposits are currently disabled.")
 
         quote = self.compute_deposit_quote(settings, amount=amount, input_unit=input_unit)
         self._enforce_deposit_limits(settings, quote.amount_coin)
@@ -285,12 +300,14 @@ class TreasuryService:
         if user is None:
             raise TreasuryError("Deposit request references missing user.")
         user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
-        platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+        treasury_account = self.wallet_service.ensure_treasury_account(session, LedgerUnit.COIN)
+        operations_account = self.wallet_service.ensure_operations_account(session, LedgerUnit.COIN)
         entries = self.wallet_service.append_transaction(
             session,
             postings=[
                 LedgerPosting(account=user_account, amount=request.amount_coin),
-                LedgerPosting(account=platform_account, amount=-request.amount_coin),
+                LedgerPosting(account=treasury_account, amount=request.amount_coin),
+                LedgerPosting(account=operations_account, amount=-(request.amount_coin * Decimal("2.0000"))),
             ],
             reason=LedgerEntryReason.DEPOSIT,
             source_tag=LedgerSourceTag.MARKET_TOPUP,
@@ -440,14 +457,55 @@ class TreasuryService:
             suffix = "" if len(missing) <= 3 else ", ..."
             raise TreasuryConflictError(f"Accept the latest required policies before requesting withdrawals: {names}{suffix}")
 
+    @staticmethod
+    def resolve_kyc_tier(kyc_status: KycStatus) -> str:
+        if kyc_status == KycStatus.PARTIAL_VERIFIED_NO_ID:
+            return "basic"
+        if kyc_status == KycStatus.FULLY_VERIFIED:
+            return "verified"
+        return "unverified"
+
+    @classmethod
+    def kyc_limit_for_status(cls, kyc_status: KycStatus) -> Decimal | None:
+        return KYC_LIMITS.get(cls.resolve_kyc_tier(kyc_status))
+
+    def legal_disclosures(self) -> tuple[str, ...]:
+        return GTEX_LEGAL_DISCLOSURES
+
+    @staticmethod
+    def platform_positioning() -> str:
+        return GTEX_PLATFORM_POSITIONING
+
+    def _coin_limit_from_fiat_limit(self, *, settings: TreasurySettings, fiat_limit: Decimal | None) -> Decimal | None:
+        if fiat_limit is None:
+            return None
+        rate_value = Decimal(settings.withdrawal_rate_value or 0)
+        if rate_value <= Decimal("0.0000"):
+            return None
+        if settings.withdrawal_rate_direction == RateDirection.FIAT_PER_COIN:
+            return (fiat_limit / rate_value).quantize(AMOUNT_QUANTUM)
+        return (fiat_limit * rate_value).quantize(AMOUNT_QUANTUM)
+
     def get_withdrawal_eligibility(self, session: Session, user: User) -> WithdrawalEligibility:
+        settings = self.ensure_settings(session)
         summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         available = Decimal(summary.available_balance)
         kyc_status = user.kyc_status
+        kyc_tier = self.resolve_kyc_tier(kyc_status)
+        per_request_limit_fiat = self.kyc_limit_for_status(kyc_status)
+        per_request_limit_coin = self._coin_limit_from_fiat_limit(
+            settings=settings,
+            fiat_limit=per_request_limit_fiat,
+        )
         country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(session, user)
         requires_kyc = kyc_status in {KycStatus.UNVERIFIED, KycStatus.PENDING, KycStatus.REJECTED}
         requires_bank = self.ensure_user_bank_account(session, user) is None
         pending_withdrawals = self._pending_withdrawal_amount(session, user)
+        policy_blocked = (not country_withdrawals_enabled) or bool(missing_required_policies)
+        policy_block_reason = (
+            f"Withdrawals are disabled for country policy {country_code}." if not country_withdrawals_enabled else
+            ("Accept the latest required policies before requesting withdrawals." if missing_required_policies else None)
+        )
         if requires_kyc:
             return WithdrawalEligibility(
                 available_balance=available,
@@ -455,70 +513,43 @@ class TreasuryService:
                 remaining_allowance=Decimal("0.0000"),
                 next_eligible_at=None,
                 kyc_status=kyc_status,
+                kyc_tier=kyc_tier,
+                per_request_limit_fiat=per_request_limit_fiat,
                 requires_kyc=True,
                 requires_bank_account=requires_bank,
                 pending_withdrawals=pending_withdrawals,
                 country_code=country_code,
                 country_withdrawals_enabled=country_withdrawals_enabled,
                 missing_required_policies=missing_required_policies,
-                policy_blocked=(not country_withdrawals_enabled) or bool(missing_required_policies),
-                policy_block_reason=(
-                    f"Withdrawals are disabled for country policy {country_code}." if not country_withdrawals_enabled else
-                    ("Accept the latest required policies before requesting withdrawals." if missing_required_policies else None)
-                ),
+                policy_blocked=policy_blocked,
+                policy_block_reason=policy_block_reason,
             )
-        if kyc_status == KycStatus.PARTIAL_VERIFIED_NO_ID:
-            window_start = utcnow() - timedelta(hours=24)
-            window_sum = self._withdrawal_window_sum(session, user, window_start)
-            allowance = (available * Decimal("0.30")).quantize(AMOUNT_QUANTUM)
-            remaining = allowance - window_sum
+
+        remaining = available
+        if per_request_limit_coin is not None:
+            remaining = self._normalize_amount(per_request_limit_coin - pending_withdrawals)
             if remaining < Decimal("0.0000"):
                 remaining = Decimal("0.0000")
-            withdrawable = min(available, remaining)
-            next_eligible_at = None
-            if withdrawable <= Decimal("0.0000"):
-                next_eligible_at = self._next_withdrawal_window_time(session, user, window_start)
-            if (not country_withdrawals_enabled) or missing_required_policies:
-                withdrawable = Decimal("0.0000")
-                remaining = Decimal("0.0000")
-                next_eligible_at = None
-            return WithdrawalEligibility(
-                available_balance=available,
-                withdrawable_now=withdrawable,
-                remaining_allowance=remaining,
-                next_eligible_at=next_eligible_at,
-                kyc_status=kyc_status,
-                requires_kyc=False,
-                requires_bank_account=requires_bank,
-                pending_withdrawals=pending_withdrawals,
-                country_code=country_code,
-                country_withdrawals_enabled=country_withdrawals_enabled,
-                missing_required_policies=missing_required_policies,
-                policy_blocked=(not country_withdrawals_enabled) or bool(missing_required_policies),
-                policy_block_reason=(
-                    f"Withdrawals are disabled for country policy {country_code}." if not country_withdrawals_enabled else
-                    ("Accept the latest required policies before requesting withdrawals." if missing_required_policies else None)
-                ),
-            )
-        withdrawable = available if country_withdrawals_enabled and not missing_required_policies else Decimal("0.0000")
-        remaining = available if country_withdrawals_enabled and not missing_required_policies else Decimal("0.0000")
+        withdrawable = min(available, remaining)
+        if policy_blocked:
+            withdrawable = Decimal("0.0000")
+            remaining = Decimal("0.0000")
         return WithdrawalEligibility(
             available_balance=available,
             withdrawable_now=withdrawable,
             remaining_allowance=remaining,
             next_eligible_at=None,
             kyc_status=kyc_status,
+            kyc_tier=kyc_tier,
+            per_request_limit_fiat=per_request_limit_fiat,
             requires_kyc=False,
             requires_bank_account=requires_bank,
             pending_withdrawals=pending_withdrawals,
             country_code=country_code,
             country_withdrawals_enabled=country_withdrawals_enabled,
             missing_required_policies=missing_required_policies,
-            policy_blocked=(not country_withdrawals_enabled) or bool(missing_required_policies),
-            policy_block_reason=(
-                f"Withdrawals are disabled for country policy {country_code}." if not country_withdrawals_enabled else
-                ("Accept the latest required policies before requesting withdrawals." if missing_required_policies else None)
-            ),
+            policy_blocked=policy_blocked,
+            policy_block_reason=policy_block_reason,
         )
 
     def create_withdrawal_request(
@@ -532,8 +563,9 @@ class TreasuryService:
         notes: str | None = None,
     ) -> TreasuryWithdrawalRequest:
         settings = self.ensure_settings(session)
-        if settings.withdrawal_mode != PaymentMode.MANUAL:
-            raise TreasuryConflictError("Withdrawals are currently routed through automatic rails.")
+        use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
+        processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
+        payout_channel = "bank_transfer" if use_manual_payout else "gateway"
 
         eligibility = self.get_withdrawal_eligibility(session, user)
         if eligibility.requires_kyc:
@@ -571,17 +603,19 @@ class TreasuryService:
                 actor=user,
                 notes=notes,
                 extra_meta={
-                    "processor_mode": "manual_bank_transfer",
-                    "payout_channel": "bank_transfer",
+                    "processor_mode": processor_mode,
+                    "payout_channel": payout_channel,
                     "source_scope": source_scope,
+                    "kyc_tier": eligibility.kyc_tier,
+                    "per_request_limit_fiat": str(eligibility.per_request_limit_fiat) if eligibility.per_request_limit_fiat is not None else None,
+                    "platform_positioning": eligibility.platform_positioning,
+                    "legal_disclosures": list(eligibility.legal_disclosures),
                 },
             )
         except InsufficientBalanceError as exc:
             raise TreasuryConflictError(str(exc)) from exc
 
         reference = self._generate_reference(session, prefix="WDL", model=TreasuryWithdrawalRequest)
-        processor_mode = "manual_bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "automatic_gateway"
-        payout_channel = "bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "gateway"
         withdrawal = TreasuryWithdrawalRequest(
             payout_request_id=result.payout_request.id,
             user_id=user.id,
@@ -607,7 +641,7 @@ class TreasuryService:
                 "currency_code": bank_account.currency_code,
             },
             kyc_status_snapshot=user.kyc_status.value,
-            kyc_tier_snapshot=user.kyc_status.value,
+            kyc_tier_snapshot=eligibility.kyc_tier,
             processor_mode=processor_mode,
             payout_channel=payout_channel,
             source_scope=source_scope,
@@ -1096,6 +1130,10 @@ class TreasuryService:
             raise TreasuryConflictError("Withdrawal amount is below the minimum.")
         if settings.max_withdrawal and amount_coin > Decimal(settings.max_withdrawal):
             raise TreasuryConflictError("Withdrawal amount exceeds the maximum.")
+
+    @staticmethod
+    def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
+        return Decimal(str(value or "0.0000")).quantize(AMOUNT_QUANTUM)
 
     def _compute_amounts(
         self,

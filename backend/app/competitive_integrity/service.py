@@ -29,6 +29,8 @@ from app.competitive_integrity.schemas import (
     NotificationEventRequest,
     WorkerRunResultView,
 )
+from app.economy.economy_service import EconomyService
+from app.football_universe.service import FootballUniverseService
 from app.match_engine.schemas import (
     MatchCompetitionContextInput,
     MatchReplayPayloadView,
@@ -55,7 +57,7 @@ from app.models.competitive_integrity import (
     Notification,
 )
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
 _REWARD_QUANTUM = Decimal("0.0001")
@@ -274,6 +276,7 @@ class CompetitiveIntegrityService:
         match.status = CompetitiveMatchStatus.IN_PROGRESS
         match.started_at = utcnow()
         replay = self.match_simulation_service.build_replay_payload(request)
+        FootballUniverseService(self.session).persist_match_universe(request=request, replay_payload=replay)
         match.status = CompetitiveMatchStatus.COMPLETED
         match.completed_at = utcnow()
         match.result_payload = replay.model_dump(mode="json")
@@ -645,20 +648,19 @@ class CompetitiveIntegrityService:
         amount = self._quantize(run.entry_fee_amount)
         if amount <= Decimal("0.0000"):
             return
-        user_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
-        self.wallet_service.append_transaction(
-            self.session,
-            postings=[
-                LedgerPosting(account=user_account, amount=-amount),
-                LedgerPosting(account=platform_account, amount=amount),
-            ],
-            reason=LedgerEntryReason.COMPETITION_ENTRY,
-            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
+        EconomyService(self.session, wallet_service=self.wallet_service).collect_match_entry(
+            user=actor,
+            payment_unit=LedgerUnit.COIN,
+            gross_amount=amount,
+            fee_bps=0,
+            treasury_account=self.wallet_service.ensure_treasury_account(self.session, LedgerUnit.COIN),
+            treasury_share_bps=2000,
             reference=f"fast-game-run:{run.id}:entry",
             external_reference=f"fast-game-run:{run.id}:entry",
             description="Fast game entry fee",
+            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
             actor=actor,
+            metadata={"fast_game_run_id": run.id},
         )
 
     def _credit_fast_game_reward(self, *, actor: User, run: FastGameRun, reward_amount: Decimal) -> None:
@@ -666,12 +668,12 @@ class CompetitiveIntegrityService:
         if amount <= Decimal("0.0000"):
             return
         user_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.COIN)
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
+        platform_account = self.wallet_service.ensure_promo_pool_account(self.session, LedgerUnit.COIN)
         self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=user_account, amount=amount),
-                LedgerPosting(account=platform_account, amount=-amount),
+                LedgerPosting(account=user_account, amount=amount, transaction_type=LedgerTransactionType.MATCH_REWARD),
+                LedgerPosting(account=platform_account, amount=-amount, transaction_type=LedgerTransactionType.MATCH_REWARD),
             ],
             reason=LedgerEntryReason.COMPETITION_REWARD,
             source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
@@ -679,6 +681,7 @@ class CompetitiveIntegrityService:
             external_reference=f"fast-game-run:{run.id}:reward",
             description="Fast game reward payout",
             actor=actor,
+            transaction_type=LedgerTransactionType.MATCH_REWARD,
         )
         run.reward_amount_paid = amount
         run.reward_paid_at = utcnow()

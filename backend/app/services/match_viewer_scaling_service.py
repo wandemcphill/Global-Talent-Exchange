@@ -503,8 +503,11 @@ class MatchViewerScalingService:
     ) -> MatchViewerBallFrameView:
         return MatchViewerBallFrameView(
             position=self._lerp_point(left.position, right.position, t),
+            height=round(left.height + ((right.height - left.height) * t), 3),
             owner_player_id=left.owner_player_id if t < 0.5 else right.owner_player_id,
             state=left.state if t < 0.5 else right.state,
+            spin=self._lerp_vector(left.spin, right.spin, t),
+            velocity=self._lerp_vector(left.velocity, right.velocity, t),
         )
 
     def _lerp_point(
@@ -516,6 +519,19 @@ class MatchViewerScalingService:
         return MatchViewerPointView(
             x=round(left.x + ((right.x - left.x) * t), 3),
             y=round(left.y + ((right.y - left.y) * t), 3),
+        )
+
+    def _lerp_vector(self, left, right, t: float):
+        if left is None and right is None:
+            return None
+        if left is None:
+            return right
+        if right is None:
+            return left
+        return left.__class__(
+            x=round(left.x + ((right.x - left.x) * t), 3),
+            y=round(left.y + ((right.y - left.y) * t), 3),
+            z=round(left.z + ((right.z - left.z) * t), 3),
         )
 
     def _normalize_frames(

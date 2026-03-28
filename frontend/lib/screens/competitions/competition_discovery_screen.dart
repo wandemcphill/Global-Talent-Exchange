@@ -4,6 +4,7 @@ import '../../controllers/competition_controller.dart';
 import '../../data/competition_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../models/competition_models.dart';
+import '../../models/match_type.dart';
 import '../../widgets/competitions/competition_status_badge.dart';
 import '../../widgets/competitions/competition_visibility_chip.dart';
 import '../../widgets/gte_metric_chip.dart';
@@ -55,10 +56,13 @@ class _CompetitionDiscoveryScreenState
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         CompetitionController(
           api: CompetitionApi.standard(
-              baseUrl: widget.baseUrl, mode: widget.backendMode),
+            baseUrl: widget.baseUrl,
+            mode: widget.backendMode,
+          ),
           currentUserId: widget.currentUserId,
           currentUserName: widget.currentUserName,
         );
@@ -73,7 +77,9 @@ class _CompetitionDiscoveryScreenState
     if (oldWidget.currentUserId != widget.currentUserId ||
         oldWidget.currentUserName != widget.currentUserName) {
       _controller.updateCurrentUser(
-          userId: widget.currentUserId, userName: widget.currentUserName);
+        userId: widget.currentUserId,
+        userName: widget.currentUserName,
+      );
       _controller.loadDiscovery();
     }
   }
@@ -94,8 +100,10 @@ class _CompetitionDiscoveryScreenState
     return AnimatedBuilder(
       animation: _controller,
       builder: (BuildContext context, Widget? child) {
-        final List<CompetitionSummary> featured =
-            _controller.visibleCompetitions.take(3).toList(growable: false);
+        final List<CompetitionSummary> featured = _controller
+            .visibleCompetitions
+            .take(3)
+            .toList(growable: false);
         return RefreshIndicator(
           onRefresh: _controller.loadDiscovery,
           child: ListView(
@@ -111,15 +119,19 @@ class _CompetitionDiscoveryScreenState
                 accent: GteShellTheme.accentArena,
                 chips: <Widget>[
                   GteMetricChip(
-                      label: 'Visible',
-                      value: _controller.visibleCompetitions.length.toString()),
+                    label: 'Visible',
+                    value: _controller.visibleCompetitions.length.toString(),
+                  ),
                   GteMetricChip(
                     label: 'Hosted by you',
-                    value: _controller.competitions
-                        .where((CompetitionSummary item) =>
-                            item.creatorId == _controller.currentUserId)
-                        .length
-                        .toString(),
+                    value:
+                        _controller.competitions
+                            .where(
+                              (CompetitionSummary item) =>
+                                  item.creatorId == _controller.currentUserId,
+                            )
+                            .length
+                            .toString(),
                   ),
                   GteMetricChip(
                     label: 'Arena pass',
@@ -147,11 +159,13 @@ class _CompetitionDiscoveryScreenState
                         hintText:
                             'Search creator competition, skill league, or skill cup',
                         prefixIcon: const Icon(Icons.search),
-                        suffixIcon: _searchController.text.trim().isEmpty
-                            ? null
-                            : IconButton(
-                                onPressed: _searchController.clear,
-                                icon: const Icon(Icons.close)),
+                        suffixIcon:
+                            _searchController.text.trim().isEmpty
+                                ? null
+                                : IconButton(
+                                  onPressed: _searchController.clear,
+                                  icon: const Icon(Icons.close),
+                                ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -195,10 +209,12 @@ class _CompetitionDiscoveryScreenState
                     itemBuilder: (BuildContext context, int index) {
                       final CompetitionSummary item = featured[index];
                       return SizedBox(
-                          width: 320,
-                          child: _FeaturedArenaCard(
-                              competition: item,
-                              onOpen: () => _openCompetition(item.id)));
+                        width: 320,
+                        child: _FeaturedArenaCard(
+                          competition: item,
+                          onOpen: () => _openCompetition(item.id),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -214,8 +230,9 @@ class _CompetitionDiscoveryScreenState
               ),
               const SizedBox(height: 14),
               _SectionPicker(
-                  current: _controller.section,
-                  onChanged: _controller.setSection),
+                current: _controller.section,
+                onChanged: _controller.setSection,
+              ),
               const SizedBox(height: 20),
               if (_controller.discoveryError != null &&
                   _controller.competitions.isNotEmpty)
@@ -245,13 +262,15 @@ class _CompetitionDiscoveryScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       GtexSectionBadge(
-                          label: 'BUILDING THE ARENA BOARD',
-                          color: GteShellTheme.accentArena),
+                        label: 'BUILDING THE ARENA BOARD',
+                        color: GteShellTheme.accentArena,
+                      ),
                       SizedBox(height: 14),
                       LinearProgressIndicator(),
                       SizedBox(height: 14),
                       Text(
-                          'Refreshing featured fixtures, creator competitions, and the latest join windows so the live match center opens with a crisp card stack.'),
+                        'Refreshing featured fixtures, creator competitions, and the latest join windows so the live match center opens with a crisp card stack.',
+                      ),
                     ],
                   ),
                 )
@@ -270,15 +289,17 @@ class _CompetitionDiscoveryScreenState
                   title: 'No competitions match this arena view',
                   message:
                       'Try a different section or clear the search to pull more creator competitions into the spotlight.',
-                  actionLabel: _searchController.text.trim().isEmpty
-                      ? 'Reset arena browse'
-                      : 'Clear search',
+                  actionLabel:
+                      _searchController.text.trim().isEmpty
+                          ? 'Reset arena browse'
+                          : 'Clear search',
                   onAction: () {
                     if (_searchController.text.trim().isNotEmpty) {
                       _searchController.clear();
                     }
-                    _controller
-                        .setSection(CompetitionDiscoverySection.trending);
+                    _controller.setSection(
+                      CompetitionDiscoverySection.trending,
+                    );
                   },
                   icon: Icons.search_off,
                 )
@@ -287,8 +308,9 @@ class _CompetitionDiscoveryScreenState
                   (CompetitionSummary item) => Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: _CompetitionDiscoveryCard(
-                        competition: item,
-                        onOpen: () => _openCompetition(item.id)),
+                      competition: item,
+                      onOpen: () => _openCompetition(item.id),
+                    ),
                   ),
                 ),
             ],
@@ -308,12 +330,13 @@ class _CompetitionDiscoveryScreenState
   Future<void> _openCompetition(String competitionId) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionDetailScreen(
-          controller: _controller,
-          competitionId: competitionId,
-          isAuthenticated: widget.isAuthenticated,
-          onOpenLogin: widget.onOpenLogin,
-        ),
+        builder:
+            (BuildContext context) => CompetitionDetailScreen(
+              controller: _controller,
+              competitionId: competitionId,
+              isAuthenticated: widget.isAuthenticated,
+              onOpenLogin: widget.onOpenLogin,
+            ),
       ),
     );
   }
@@ -322,14 +345,15 @@ class _CompetitionDiscoveryScreenState
     _controller.startNewDraft();
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionCreateScreen(
-          controller: _controller,
-          isAuthenticated: widget.isAuthenticated,
-          isCheckingHostEligibility: widget.isCheckingCreatorAccess,
-          hostEligible: widget.canHostCompetitions,
-          onOpenLogin: widget.onOpenLogin,
-          onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
-        ),
+        builder:
+            (BuildContext context) => CompetitionCreateScreen(
+              controller: _controller,
+              isAuthenticated: widget.isAuthenticated,
+              isCheckingHostEligibility: widget.isCheckingCreatorAccess,
+              hostEligible: widget.canHostCompetitions,
+              onOpenLogin: widget.onOpenLogin,
+              onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
+            ),
       ),
     );
   }
@@ -394,39 +418,55 @@ class _SectionPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     const List<MapEntry<CompetitionDiscoverySection, String>> sections =
         <MapEntry<CompetitionDiscoverySection, String>>[
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.trending, 'Trending'),
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.newest, 'New'),
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.freeToJoin, 'Free to join'),
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.paid, 'Paid competitions'),
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.creator, 'Creator competitions'),
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.leagues, 'Leagues'),
-      MapEntry<CompetitionDiscoverySection, String>(
-          CompetitionDiscoverySection.cups, 'Cups'),
-    ];
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.trending,
+            'Trending',
+          ),
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.newest,
+            'New',
+          ),
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.freeToJoin,
+            'Free to join',
+          ),
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.paid,
+            'Paid competitions',
+          ),
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.creator,
+            'Creator competitions',
+          ),
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.leagues,
+            'Leagues',
+          ),
+          MapEntry<CompetitionDiscoverySection, String>(
+            CompetitionDiscoverySection.cups,
+            'Cups',
+          ),
+        ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children:
-            sections.map((MapEntry<CompetitionDiscoverySection, String> item) {
-          final bool selected = current == item.key;
-          return Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: Material(
-              color: Colors.transparent,
-              child: ChoiceChip(
-                  selected: selected,
-                  label: Text(item.value),
-                  onSelected: (_) => onChanged(item.key)),
-            ),
-          );
-        }).toList(growable: false),
+        children: sections
+            .map((MapEntry<CompetitionDiscoverySection, String> item) {
+              final bool selected = current == item.key;
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Material(
+                  color: Colors.transparent,
+                  child: ChoiceChip(
+                    selected: selected,
+                    label: Text(item.value),
+                    onSelected: (_) => onChanged(item.key),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
@@ -458,21 +498,37 @@ class _FeaturedArenaCard extends StatelessWidget {
           const Spacer(),
           Text(competition.name, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
-          Text('${competition.safeFormatLabel} • ${competition.creatorLabel}',
-              style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            competition.hostSummary,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 14),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
               GteMetricChip(
-                  label: 'Entry',
-                  value: _formatAmount(
-                      competition.entryFee, competition.currency)),
+                label: 'Lane',
+                value: competition.matchType.entryStateLabel,
+                positive: competition.isGtexHosted,
+              ),
               GteMetricChip(
-                  label: 'Prize',
-                  value: _formatAmount(
-                      competition.prizePool, competition.currency)),
+                label: 'Entry',
+                value:
+                    competition.isFreeToJoin
+                        ? 'FREE ENTRY'
+                        : _formatAmount(
+                          competition.entryFee,
+                          competition.currency,
+                        ),
+              ),
+              GteMetricChip(
+                label: competition.hasDynamicPrizePool ? 'Jackpot' : 'Prize',
+                value: _formatAmount(
+                  competition.prizePool,
+                  competition.currency,
+                ),
+              ),
             ],
           ),
         ],
@@ -482,8 +538,10 @@ class _FeaturedArenaCard extends StatelessWidget {
 }
 
 class _CompetitionDiscoveryCard extends StatelessWidget {
-  const _CompetitionDiscoveryCard(
-      {required this.competition, required this.onOpen});
+  const _CompetitionDiscoveryCard({
+    required this.competition,
+    required this.onOpen,
+  });
 
   final CompetitionSummary competition;
   final VoidCallback onOpen;
@@ -503,12 +561,15 @@ class _CompetitionDiscoveryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(competition.name,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      competition.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 6),
                     Text(
-                        '${competition.safeFormatLabel} • Creator competition by ${competition.creatorLabel}',
-                        style: Theme.of(context).textTheme.bodyMedium),
+                      competition.hostSummary,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ],
                 ),
               ),
@@ -523,54 +584,97 @@ class _CompetitionDiscoveryCard extends StatelessWidget {
             children: <Widget>[
               CompetitionVisibilityChip(visibility: competition.visibility),
               Chip(
-                  label:
-                      Text('Arena state: ${_statusLabel(competition.status)}')),
+                label: Text('Arena state: ${_statusLabel(competition.status)}'),
+              ),
+              Chip(label: Text(competition.matchType.entryStateLabel)),
               Chip(
-                  label: Text(competition.joinEligibility.eligible
+                label: Text(
+                  competition.joinEligibility.eligible
                       ? 'Join window open'
-                      : 'Review eligibility')),
+                      : 'Review eligibility',
+                ),
+              ),
               if (competition.beginnerFriendly == true)
                 const Chip(label: Text('Beginner friendly')),
             ],
           ),
           const SizedBox(height: 16),
-          Text(competition.rulesSummary,
-              style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            competition.rulesSummary,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          GteSurfacePanel(
+            accentColor:
+                competition.isGtexHosted
+                    ? Colors.green
+                    : competition.isFastMatch
+                    ? GteShellTheme.accentWarm
+                    : GteShellTheme.accentCapital,
+            child: Text(
+              competition.economyNotice,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: <Widget>[
               Expanded(
-                  child: _QuickStat(
-                      label: 'Entry fee',
-                      value: _formatAmount(
-                          competition.entryFee, competition.currency))),
+                child: _QuickStat(
+                  label: 'Entry fee',
+                  value:
+                      competition.isFreeToJoin
+                          ? 'FREE ENTRY'
+                          : _formatAmount(
+                            competition.entryFee,
+                            competition.currency,
+                          ),
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _QuickStat(
-                      label: 'Prize pool',
-                      value: _formatAmount(
-                          competition.prizePool, competition.currency))),
+                child: _QuickStat(
+                  label:
+                      competition.hasDynamicPrizePool
+                          ? 'Jackpot'
+                          : 'Prize pool',
+                  value: _formatAmount(
+                    competition.prizePool,
+                    competition.currency,
+                  ),
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _QuickStat(
-                      label: 'Players',
-                      value:
-                          '${competition.participantCount}/${competition.capacity}')),
+                child: _QuickStat(
+                  label: 'Players',
+                  value:
+                      '${competition.participantCount}/${competition.capacity}',
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Row(
             children: <Widget>[
               FilledButton.tonalIcon(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('Open arena')),
-              const Spacer(),
-              Text(
+                onPressed: onOpen,
+                icon: const Icon(Icons.open_in_new),
+                label: Text(
                   competition.joinEligibility.eligible
-                      ? 'Open to join now'
+                      ? competition.entryButtonLabel
+                      : 'Review entry',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  competition.joinEligibility.eligible
+                      ? competition.economyNotice
                       : 'Review rules and eligibility',
-                  style: Theme.of(context).textTheme.bodyMedium),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
             ],
           ),
         ],
@@ -580,8 +684,10 @@ class _CompetitionDiscoveryCard extends StatelessWidget {
 
   String _statusLabel(CompetitionStatus value) {
     return value.name
-        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'),
-            (Match match) => '${match.group(1)} ${match.group(2)}')
+        .replaceAllMapped(
+          RegExp(r'([a-z])([A-Z])'),
+          (Match match) => '${match.group(1)} ${match.group(2)}',
+        )
         .replaceAll('_', ' ');
   }
 }
@@ -633,11 +739,12 @@ class _ArenaSignalTile extends StatelessWidget {
         children: <Widget>[
           Text(label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text(value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(color: GteShellTheme.accentArena)),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: GteShellTheme.accentArena),
+          ),
         ],
       ),
     );

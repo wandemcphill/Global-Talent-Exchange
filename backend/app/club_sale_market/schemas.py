@@ -19,13 +19,25 @@ class ClubSaleValuationBreakdownView(CommonSchema):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
+class ClubSaleMarketValuationComponentsView(CommonSchema):
+    squad_value: Decimal
+    cash_balance: Decimal
+    brand_strength: Decimal
+    fanbase_size: Decimal
+    recent_performance: Decimal
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
 class ClubSaleValuationView(CommonSchema):
     club_id: str
     club_name: str
     currency: str
     system_valuation: Decimal
     system_valuation_minor: int
+    market_valuation: Decimal
+    market_valuation_minor: int
     breakdown: ClubSaleValuationBreakdownView
+    market_components: ClubSaleMarketValuationComponentsView
     last_refreshed_at: datetime | None = None
 
 
@@ -33,6 +45,8 @@ class ClubSaleListingCreateRequest(CommonSchema):
     asking_price: Decimal = Field(gt=0)
     visibility: str = Field(default="public", min_length=3, max_length=24)
     note: str | None = Field(default=None, max_length=2_000)
+    instant_sell_enabled: bool = False
+    instant_sell_minimum_price: Decimal | None = Field(default=None, gt=0)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -40,6 +54,8 @@ class ClubSaleListingUpdateRequest(CommonSchema):
     asking_price: Decimal = Field(gt=0)
     visibility: str = Field(default="public", min_length=3, max_length=24)
     note: str | None = Field(default=None, max_length=2_000)
+    instant_sell_enabled: bool = False
+    instant_sell_minimum_price: Decimal | None = Field(default=None, gt=0)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -58,6 +74,15 @@ class ClubSaleListingSummaryView(CommonSchema):
     asking_price: Decimal
     system_valuation: Decimal
     system_valuation_minor: int
+    market_valuation: Decimal
+    market_valuation_minor: int
+    league_tier: int | None = None
+    squad_strength: int | None = None
+    fanbase_size: int = 0
+    demand_level: str = "steady"
+    buyer_interest_score: int = 0
+    instant_sell_enabled: bool = False
+    instant_sell_minimum_price: Decimal | None = None
     valuation_last_refreshed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
@@ -65,6 +90,7 @@ class ClubSaleListingSummaryView(CommonSchema):
 
 class ClubSaleListingDetailView(ClubSaleListingSummaryView):
     valuation_breakdown: ClubSaleValuationBreakdownView
+    market_components: ClubSaleMarketValuationComponentsView
     note: str | None = None
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
@@ -124,6 +150,12 @@ class ClubSaleOfferCounterRequest(CommonSchema):
 class ClubSaleOfferRespondRequest(CommonSchema):
     message: str | None = Field(default=None, max_length=4_000)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClubSaleInstantSellRequest(CommonSchema):
+    enabled: bool = True
+    minimum_price: Decimal | None = Field(default=None, gt=0)
+    auto_accept_best_offer: bool = True
 
 
 class ClubSaleOfferView(CommonSchema):
@@ -248,3 +280,25 @@ class ClubSaleHistoryView(CommonSchema):
     audit_events: list[ClubSaleAuditEventView] = Field(default_factory=list)
     ownership_history: ClubSaleOwnershipHistoryView
     dynasty_snapshot: ClubSaleDynastySnapshotView
+
+
+class ClubSaleComparableSaleView(CommonSchema):
+    transfer_id: str
+    club_id: str
+    club_name: str
+    executed_sale_price: Decimal
+    created_at: datetime
+    buyer_user_id: str
+    seller_user_id: str
+
+
+class ClubSalePricingAssistantView(CommonSchema):
+    club_id: str
+    market_valuation: Decimal
+    market_valuation_minor: int
+    recommended_price: Decimal
+    recommended_price_min: Decimal
+    recommended_price_max: Decimal
+    demand_level: str
+    buyer_interest_score: int
+    recent_comparable_sales: list[ClubSaleComparableSaleView] = Field(default_factory=list)

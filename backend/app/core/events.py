@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import RLock
 from typing import Any, Callable, Protocol
+from uuid import uuid4
+
+from app.core.event_backbone import make_json_safe
 
 EventSubscriber = Callable[["DomainEvent"], None]
 
@@ -16,7 +19,36 @@ def utcnow() -> datetime:
 class DomainEvent:
     name: str
     payload: dict[str, Any]
+    event_id: str = field(default_factory=lambda: str(uuid4()))
     occurred_at: datetime = field(default_factory=utcnow)
+    aggregate_id: str | None = None
+    aggregate_type: str | None = None
+    version: int = 1
+    producer: str | None = None
+    partition_key: str | None = None
+    headers: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def event_type(self) -> str:
+        return self.name
+
+    @property
+    def timestamp(self) -> datetime:
+        return self.occurred_at
+
+    def envelope(self) -> dict[str, Any]:
+        return {
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "aggregate_id": self.aggregate_id,
+            "aggregate_type": self.aggregate_type,
+            "version": self.version,
+            "timestamp": self.occurred_at,
+            "producer": self.producer or "gtex-app",
+            "partition_key": self.partition_key or self.aggregate_id,
+            "payload": make_json_safe(self.payload),
+            "headers": make_json_safe(self.headers),
+        }
 
 
 class EventPublisher(Protocol):

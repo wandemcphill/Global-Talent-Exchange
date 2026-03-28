@@ -23,6 +23,7 @@ class ClubFinanceView(CommonSchema):
     weekly_wages: Decimal
     sponsorship_income: Decimal
     match_income: Decimal
+    broadcast_income: Decimal
     transfer_profit: Decimal
     expenses: Decimal
     transfers_blocked: bool

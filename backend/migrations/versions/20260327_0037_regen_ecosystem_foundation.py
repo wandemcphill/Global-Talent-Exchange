@@ -46,7 +46,7 @@ def upgrade() -> None:
         sa.Column("region", sa.String(length=120), nullable=False),
         sa.Column("skill_rating", sa.Integer(), nullable=False, server_default=sa.text("50")),
         sa.Column("specialty", sa.String(length=48), nullable=False, server_default=sa.text("'youth'")),
-        sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.ForeignKeyConstraint(["club_id"], ["club_profiles.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["club_user_id"], ["users.id"], ondelete="CASCADE"),

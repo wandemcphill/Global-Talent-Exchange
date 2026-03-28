@@ -24,9 +24,7 @@ class CreatorClubShareMarketIssueRequest {
 }
 
 class CreatorClubSharePurchaseRequest {
-  const CreatorClubSharePurchaseRequest({
-    required this.shareCount,
-  });
+  const CreatorClubSharePurchaseRequest({required this.shareCount});
 
   final int shareCount;
 
@@ -96,8 +94,9 @@ class CreatorClubShareMarketControl {
       controlKey: stringValue(json['control_key']),
       maxSharesPerClub: intValue(json['max_shares_per_club']),
       maxSharesPerFan: intValue(json['max_shares_per_fan']),
-      shareholderRevenueShareBps:
-          intValue(json['shareholder_revenue_share_bps']),
+      shareholderRevenueShareBps: intValue(
+        json['shareholder_revenue_share_bps'],
+      ),
       issuanceEnabled: boolValue(json['issuance_enabled']),
       purchaseEnabled: boolValue(json['purchase_enabled']),
       maxPrimaryPurchaseValueCoin: numberValue(
@@ -107,9 +106,11 @@ class CreatorClubShareMarketControl {
         json['metadata_json'],
         fallback: const <String, Object?>{},
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt:
+          dateTimeValue(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
@@ -154,9 +155,11 @@ class CreatorClubShareHolding {
         json['metadata_json'],
         fallback: const <String, Object?>{},
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt:
+          dateTimeValue(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
@@ -186,8 +189,9 @@ class CreatorClubShareBenefit {
     return CreatorClubShareBenefit(
       shareholder: boolValue(json['shareholder']),
       shareCount: intValue(json['share_count']),
-      hasPriorityChatVisibility:
-          boolValue(json['has_priority_chat_visibility']),
+      hasPriorityChatVisibility: boolValue(
+        json['has_priority_chat_visibility'],
+      ),
       hasEarlyTicketAccess: boolValue(json['has_early_ticket_access']),
       hasCosmeticVotingRights: boolValue(json['has_cosmetic_voting_rights']),
       tournamentQualificationMethod: stringOrNullValue(
@@ -258,15 +262,18 @@ class CreatorClubOwnershipLedgerEntry {
   final JsonMap metadata;
 
   factory CreatorClubOwnershipLedgerEntry.fromJson(Object? value) {
-    final JsonMap json =
-        jsonMap(value, label: 'creator ownership ledger entry');
+    final JsonMap json = jsonMap(
+      value,
+      label: 'creator ownership ledger entry',
+    );
     return CreatorClubOwnershipLedgerEntry(
       entryType: stringValue(json['entry_type']),
       entryReferenceId: stringValue(json['entry_reference_id']),
       userId: stringOrNullValue(json['user_id']),
       shareDelta: intValue(json['share_delta']),
       ownershipBps: intValue(json['ownership_bps']),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       summary: stringValue(json['summary']),
       metadata: jsonMap(
@@ -314,10 +321,123 @@ class CreatorClubOwnershipLedger {
   }
 }
 
+class CreatorClubRevenueStreams {
+  const CreatorClubRevenueStreams({
+    required this.matchWinningsCoin,
+    required this.fanGrowthBonusCoin,
+    required this.tradingFeesCoin,
+    required this.sponsorshipPoolCoin,
+    required this.broadcastRightsCoin,
+    required this.totalCoin,
+    required this.metadata,
+  });
+
+  final double matchWinningsCoin;
+  final double fanGrowthBonusCoin;
+  final double tradingFeesCoin;
+  final double sponsorshipPoolCoin;
+  final double broadcastRightsCoin;
+  final double totalCoin;
+  final JsonMap metadata;
+
+  factory CreatorClubRevenueStreams.fromJson(Object? value) {
+    final JsonMap json = jsonMap(value, label: 'creator club revenue streams');
+    return CreatorClubRevenueStreams(
+      matchWinningsCoin: numberValue(json['match_winnings_coin']),
+      fanGrowthBonusCoin: numberValue(json['fan_growth_bonus_coin']),
+      tradingFeesCoin: numberValue(json['trading_fees_coin']),
+      sponsorshipPoolCoin: numberValue(json['sponsorship_pool_coin']),
+      broadcastRightsCoin: numberValue(json['broadcast_rights_coin']),
+      totalCoin: numberValue(json['total_coin']),
+      metadata: jsonMap(
+        json['metadata_json'],
+        fallback: const <String, Object?>{},
+      ),
+    );
+  }
+}
+
+class CreatorClubValuationTicker {
+  const CreatorClubValuationTicker({
+    required this.totalValuationCoin,
+    required this.treasuryBalanceCoin,
+    required this.playerMarketValueCoin,
+    required this.infrastructureValueCoin,
+    required this.recentPerformanceScore,
+    required this.recentPerformanceMultiplier,
+    required this.recentPerformanceBonusCoin,
+    required this.impliedSharePriceCoin,
+    required this.marketSharePriceCoin,
+    required this.marketPriceDeltaCoin,
+    required this.marketPriceDeltaBps,
+    required this.priceToValueRatio,
+    required this.fanCount,
+    required this.winsLastFive,
+    required this.drawsLastFive,
+    required this.lossesLastFive,
+    required this.pointsLastFive,
+    required this.lastRefreshedAt,
+    required this.metadata,
+  });
+
+  final double totalValuationCoin;
+  final double treasuryBalanceCoin;
+  final double playerMarketValueCoin;
+  final double infrastructureValueCoin;
+  final double recentPerformanceScore;
+  final double recentPerformanceMultiplier;
+  final double recentPerformanceBonusCoin;
+  final double impliedSharePriceCoin;
+  final double marketSharePriceCoin;
+  final double marketPriceDeltaCoin;
+  final int marketPriceDeltaBps;
+  final double priceToValueRatio;
+  final int fanCount;
+  final int winsLastFive;
+  final int drawsLastFive;
+  final int lossesLastFive;
+  final int pointsLastFive;
+  final DateTime? lastRefreshedAt;
+  final JsonMap metadata;
+
+  factory CreatorClubValuationTicker.fromJson(Object? value) {
+    final JsonMap json = jsonMap(value, label: 'creator club valuation ticker');
+    return CreatorClubValuationTicker(
+      totalValuationCoin: numberValue(json['total_valuation_coin']),
+      treasuryBalanceCoin: numberValue(json['treasury_balance_coin']),
+      playerMarketValueCoin: numberValue(json['player_market_value_coin']),
+      infrastructureValueCoin: numberValue(json['infrastructure_value_coin']),
+      recentPerformanceScore: numberValue(json['recent_performance_score']),
+      recentPerformanceMultiplier: numberValue(
+        json['recent_performance_multiplier'],
+      ),
+      recentPerformanceBonusCoin: numberValue(
+        json['recent_performance_bonus_coin'],
+      ),
+      impliedSharePriceCoin: numberValue(json['implied_share_price_coin']),
+      marketSharePriceCoin: numberValue(json['market_share_price_coin']),
+      marketPriceDeltaCoin: numberValue(json['market_price_delta_coin']),
+      marketPriceDeltaBps: intValue(json['market_price_delta_bps']),
+      priceToValueRatio: numberValue(json['price_to_value_ratio']),
+      fanCount: intValue(json['fan_count']),
+      winsLastFive: intValue(json['wins_last_five']),
+      drawsLastFive: intValue(json['draws_last_five']),
+      lossesLastFive: intValue(json['losses_last_five']),
+      pointsLastFive: intValue(json['points_last_five']),
+      lastRefreshedAt: dateTimeValue(json['last_refreshed_at']),
+      metadata: jsonMap(
+        json['metadata_json'],
+        fallback: const <String, Object?>{},
+      ),
+    );
+  }
+}
+
 class CreatorClubShareMarket {
   const CreatorClubShareMarket({
     required this.id,
     required this.clubId,
+    required this.clubName,
     required this.creatorUserId,
     required this.issuedByUserId,
     required this.status,
@@ -333,6 +453,8 @@ class CreatorClubShareMarket {
     required this.totalPurchaseVolumeCoin,
     required this.totalRevenueDistributedCoin,
     required this.metadata,
+    required this.revenueStreams,
+    required this.valuationTicker,
     required this.governancePolicy,
     required this.ownershipLedger,
     required this.createdAt,
@@ -343,6 +465,7 @@ class CreatorClubShareMarket {
 
   final String id;
   final String clubId;
+  final String clubName;
   final String creatorUserId;
   final String issuedByUserId;
   final String status;
@@ -358,6 +481,8 @@ class CreatorClubShareMarket {
   final double totalPurchaseVolumeCoin;
   final double totalRevenueDistributedCoin;
   final JsonMap metadata;
+  final CreatorClubRevenueStreams revenueStreams;
+  final CreatorClubValuationTicker valuationTicker;
   final CreatorClubGovernancePolicy governancePolicy;
   final CreatorClubOwnershipLedger ownershipLedger;
   final DateTime createdAt;
@@ -370,6 +495,7 @@ class CreatorClubShareMarket {
     return CreatorClubShareMarket(
       id: stringValue(json['id']),
       clubId: stringValue(json['club_id']),
+      clubName: stringValue(json['club_name']),
       creatorUserId: stringValue(json['creator_user_id']),
       issuedByUserId: stringValue(json['issued_by_user_id']),
       status: stringValue(json['status']),
@@ -392,19 +518,28 @@ class CreatorClubShareMarket {
         json['metadata_json'],
         fallback: const <String, Object?>{},
       ),
+      revenueStreams: CreatorClubRevenueStreams.fromJson(
+        json['revenue_streams'],
+      ),
+      valuationTicker: CreatorClubValuationTicker.fromJson(
+        json['valuation_ticker'],
+      ),
       governancePolicy: CreatorClubGovernancePolicy.fromJson(
         json['governance_policy'],
       ),
       ownershipLedger: CreatorClubOwnershipLedger.fromJson(
         json['ownership_ledger'],
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt:
+          dateTimeValue(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      viewerHolding: jsonMapOrNull(json['viewer_holding']) == null
-          ? null
-          : CreatorClubShareHolding.fromJson(json['viewer_holding']),
+      viewerHolding:
+          jsonMapOrNull(json['viewer_holding']) == null
+              ? null
+              : CreatorClubShareHolding.fromJson(json['viewer_holding']),
       viewerBenefits: CreatorClubShareBenefit.fromJson(json['viewer_benefits']),
     );
   }
@@ -455,9 +590,11 @@ class CreatorClubSharePurchase {
         json['metadata_json'],
         fallback: const <String, Object?>{},
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt:
+          dateTimeValue(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
@@ -508,9 +645,11 @@ class CreatorClubSharePayout {
         json['metadata_json'],
         fallback: const <String, Object?>{},
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt:
+          dateTimeValue(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
@@ -562,9 +701,9 @@ class CreatorClubShareDistribution {
   final List<CreatorClubSharePayout> payouts;
 
   double get totalPayoutCoin => payouts.fold<double>(
-        0,
-        (double sum, CreatorClubSharePayout payout) => sum + payout.payoutCoin,
-      );
+    0,
+    (double sum, CreatorClubSharePayout payout) => sum + payout.payoutCoin,
+  );
 
   factory CreatorClubShareDistribution.fromJson(Object? value) {
     final JsonMap json = jsonMap(value, label: 'creator share distribution');
@@ -591,9 +730,11 @@ class CreatorClubShareDistribution {
         json['metadata_json'],
         fallback: const <String, Object?>{},
       ),
-      createdAt: dateTimeValue(json['created_at']) ??
+      createdAt:
+          dateTimeValue(json['created_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: dateTimeValue(json['updated_at']) ??
+      updatedAt:
+          dateTimeValue(json['updated_at']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       payouts: parseList(
         json['payouts'],

@@ -3,16 +3,19 @@ description: Global Talent Exchange Flutter MVP scaffold
 publish_to: none
 
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ">=3.7.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  flutter_riverpod: ^3.3.1
+  go_router: ^14.8.1
   http: ^1.2.2
   file_picker: ^10.3.10
   shared_preferences: ^2.2.3
   url_launcher: ^6.3.0
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:
@@ -23,3 +26,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/
+    - assets/media/

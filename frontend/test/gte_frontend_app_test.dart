@@ -9,7 +9,7 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
-  testWidgets('frontend app renders the canonical home shell',
+  testWidgets('frontend app renders the GTEX command center shell',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
@@ -37,12 +37,13 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Global Talent Exchange'), findsOneWidget);
-    expect(find.text('Home'), findsWidgets);
-    expect(find.text('Expansion lanes'), findsOneWidget);
-    expect(find.text('No canonical club is selected'), findsNothing);
+    expect(find.text('Command Center'), findsOneWidget);
+    expect(find.text('Ibadan Lions FC'), findsOneWidget);
+    expect(find.text('Play Match'), findsOneWidget);
+    expect(find.text('Trending regens'), findsOneWidget);
   });
 }
 

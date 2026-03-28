@@ -1,15 +1,10 @@
 import 'package:gte_frontend/data/gte_models.dart';
 
-enum CompetitionFormat {
-  league,
-  cup,
-}
+import 'match_type.dart';
 
-enum CompetitionVisibility {
-  public,
-  private,
-  inviteOnly,
-}
+enum CompetitionFormat { league, cup }
+
+enum CompetitionVisibility { public, private, inviteOnly }
 
 enum CompetitionStatus {
   draft,
@@ -46,8 +41,10 @@ class CompetitionPayoutBreakdown {
   final double amount;
 
   factory CompetitionPayoutBreakdown.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'competition payout');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition payout',
+    );
     return CompetitionPayoutBreakdown(
       place: GteJson.integer(json, <String>['place'], fallback: 1),
       percent: GteJson.number(json, <String>['percent'], fallback: 0),
@@ -80,16 +77,17 @@ class CompetitionJoinEligibility {
   final bool requiresInvite;
 
   factory CompetitionJoinEligibility.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'competition join eligibility');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition join eligibility',
+    );
     return CompetitionJoinEligibility(
       eligible: GteJson.boolean(json, <String>['eligible'], fallback: false),
       reason: GteJson.stringOrNull(json, <String>['reason']),
-      requiresInvite: GteJson.boolean(
-        json,
-        <String>['requires_invite', 'requiresInvite'],
-        fallback: false,
-      ),
+      requiresInvite: GteJson.boolean(json, <String>[
+        'requires_invite',
+        'requiresInvite',
+      ], fallback: false),
     );
   }
 
@@ -102,6 +100,80 @@ class CompetitionJoinEligibility {
       eligible: eligible ?? this.eligible,
       reason: reason ?? this.reason,
       requiresInvite: requiresInvite ?? this.requiresInvite,
+    );
+  }
+}
+
+class CompetitionDynamicPrizePool {
+  const CompetitionDynamicPrizePool({
+    required this.enabled,
+    required this.baseFunding,
+    required this.activityBoost,
+    required this.jackpotRollover,
+    required this.totalPool,
+    required this.activeUsers5m,
+    required this.tradeVolume5m,
+  });
+
+  final bool enabled;
+  final double baseFunding;
+  final double activityBoost;
+  final double jackpotRollover;
+  final double totalPool;
+  final int activeUsers5m;
+  final double tradeVolume5m;
+
+  factory CompetitionDynamicPrizePool.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition dynamic prize pool',
+    );
+    return CompetitionDynamicPrizePool(
+      enabled: GteJson.boolean(json, <String>['enabled'], fallback: false),
+      baseFunding: GteJson.number(json, <String>[
+        'base_funding',
+        'baseFunding',
+      ], fallback: 0),
+      activityBoost: GteJson.number(json, <String>[
+        'activity_boost',
+        'activityBoost',
+      ], fallback: 0),
+      jackpotRollover: GteJson.number(json, <String>[
+        'jackpot_rollover',
+        'jackpotRollover',
+      ], fallback: 0),
+      totalPool: GteJson.number(json, <String>[
+        'total_pool',
+        'totalPool',
+      ], fallback: 0),
+      activeUsers5m: GteJson.integer(json, <String>[
+        'active_users_5min',
+        'activeUsers5m',
+      ], fallback: 0),
+      tradeVolume5m: GteJson.number(json, <String>[
+        'trade_volume_5min',
+        'tradeVolume5m',
+      ], fallback: 0),
+    );
+  }
+
+  CompetitionDynamicPrizePool copyWith({
+    bool? enabled,
+    double? baseFunding,
+    double? activityBoost,
+    double? jackpotRollover,
+    double? totalPool,
+    int? activeUsers5m,
+    double? tradeVolume5m,
+  }) {
+    return CompetitionDynamicPrizePool(
+      enabled: enabled ?? this.enabled,
+      baseFunding: baseFunding ?? this.baseFunding,
+      activityBoost: activityBoost ?? this.activityBoost,
+      jackpotRollover: jackpotRollover ?? this.jackpotRollover,
+      totalPool: totalPool ?? this.totalPool,
+      activeUsers5m: activeUsers5m ?? this.activeUsers5m,
+      tradeVolume5m: tradeVolume5m ?? this.tradeVolume5m,
     );
   }
 }
@@ -126,10 +198,12 @@ class CompetitionSummary {
     required this.prizePool,
     required this.payoutStructure,
     required this.rulesSummary,
+    required this.matchType,
     required this.joinEligibility,
     required this.beginnerFriendly,
     required this.createdAt,
     required this.updatedAt,
+    this.dynamicPrizePool,
   });
 
   final String id;
@@ -150,7 +224,9 @@ class CompetitionSummary {
   final double prizePool;
   final List<CompetitionPayoutBreakdown> payoutStructure;
   final String rulesSummary;
+  final MatchType matchType;
   final CompetitionJoinEligibility joinEligibility;
+  final CompetitionDynamicPrizePool? dynamicPrizePool;
   final bool? beginnerFriendly;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -167,15 +243,49 @@ class CompetitionSummary {
 
   double get fillRate => capacity <= 0 ? 0 : participantCount / capacity;
 
+  bool get isGtexHosted => matchType == MatchType.gtexHosted;
+
+  bool get isUserHosted => matchType == MatchType.userHosted;
+
+  bool get isFastMatch => matchType == MatchType.fastMatch;
+
+  bool get hasDynamicPrizePool => dynamicPrizePool?.enabled == true;
+
   String get safeFormatLabel =>
       format == CompetitionFormat.league ? 'Skill league' : 'Skill cup';
 
   String get creatorLabel =>
       creatorName?.trim().isNotEmpty == true ? creatorName!.trim() : 'Creator';
 
+  String get hostSummary {
+    switch (matchType) {
+      case MatchType.gtexHosted:
+        return '$safeFormatLabel - GTEX hosted';
+      case MatchType.userHosted:
+        return '$safeFormatLabel - Hosted by $creatorLabel';
+      case MatchType.fastMatch:
+        return '$safeFormatLabel - Fast match lane';
+    }
+  }
+
+  String get entryButtonLabel => matchType.actionLabel;
+
+  String get economyNotice {
+    switch (matchType) {
+      case MatchType.gtexHosted:
+        return 'GTEX competitions are free to join. Win real money on verified results.';
+      case MatchType.userHosted:
+        return 'User-hosted matches require entry fees. Review the published payout before you join.';
+      case MatchType.fastMatch:
+        return 'Fast Match is always paid. Your wallet is charged before the match slot locks.';
+    }
+  }
+
   factory CompetitionSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'competition summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition summary',
+    );
     final Map<String, Object?> financials = _mapOrEmpty(
       _firstValue(
         <Map<String, Object?>>[json],
@@ -277,19 +387,48 @@ class CompetitionSummary {
         <String>['rules_summary', 'rulesSummary'],
         fallback: 'Skill-based, creator competition with transparent payout.',
       ),
-      joinEligibility: eligibility.isEmpty
-          ? const CompetitionJoinEligibility(eligible: false)
-          : CompetitionJoinEligibility.fromJson(eligibility),
+      matchType: _matchTypeFromMaps(
+        <Map<String, Object?>>[json, financials],
+        creatorId: _stringFrom(
+          <Map<String, Object?>>[json],
+          <String>['creator_id', 'creatorId'],
+          fallback: 'community-host',
+        ),
+        creatorName: _stringOrNullFrom(
+          <Map<String, Object?>>[json],
+          <String>['creator_name', 'creatorName'],
+        ),
+        name: _stringFrom(<Map<String, Object?>>[json], <String>['name']),
+      ),
+      joinEligibility:
+          eligibility.isEmpty
+              ? const CompetitionJoinEligibility(eligible: false)
+              : CompetitionJoinEligibility.fromJson(eligibility),
+      dynamicPrizePool: _dynamicPrizePoolFromMaps(
+        <Map<String, Object?>>[json, financials],
+        prizePool: _doubleFrom(
+          <Map<String, Object?>>[json, financials],
+          <String>['prize_pool', 'prizePool'],
+          fallback: 0,
+        ),
+        entryFee: _doubleFrom(
+          <Map<String, Object?>>[json, financials],
+          <String>['entry_fee', 'entryFee'],
+          fallback: 0,
+        ),
+      ),
       beginnerFriendly: _boolOrNullFrom(
         <Map<String, Object?>>[json],
         <String>['beginner_friendly', 'beginnerFriendly'],
       ),
-      createdAt: _dateFrom(
+      createdAt:
+          _dateFrom(
             <Map<String, Object?>>[json],
             <String>['created_at', 'createdAt'],
           ) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt: _dateFrom(
+      updatedAt:
+          _dateFrom(
             <Map<String, Object?>>[json],
             <String>['updated_at', 'updatedAt'],
           ) ??
@@ -316,7 +455,9 @@ class CompetitionSummary {
     double? prizePool,
     List<CompetitionPayoutBreakdown>? payoutStructure,
     String? rulesSummary,
+    MatchType? matchType,
     CompetitionJoinEligibility? joinEligibility,
+    CompetitionDynamicPrizePool? dynamicPrizePool,
     bool? beginnerFriendly,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -340,7 +481,9 @@ class CompetitionSummary {
       prizePool: prizePool ?? this.prizePool,
       payoutStructure: payoutStructure ?? this.payoutStructure,
       rulesSummary: rulesSummary ?? this.rulesSummary,
+      matchType: matchType ?? this.matchType,
       joinEligibility: joinEligibility ?? this.joinEligibility,
+      dynamicPrizePool: dynamicPrizePool ?? this.dynamicPrizePool,
       beginnerFriendly: beginnerFriendly ?? this.beginnerFriendly,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -349,10 +492,7 @@ class CompetitionSummary {
 }
 
 class CompetitionListResponse {
-  const CompetitionListResponse({
-    required this.total,
-    required this.items,
-  });
+  const CompetitionListResponse({required this.total, required this.items});
 
   final int total;
   final List<CompetitionSummary> items;
@@ -364,15 +504,15 @@ class CompetitionListResponse {
           .toList(growable: false);
       return CompetitionListResponse(total: items.length, items: items);
     }
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'competition list');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition list',
+    );
     return CompetitionListResponse(
       total: GteJson.integer(json, <String>['total'], fallback: 0),
-      items: GteJson.typedList(
-        json,
-        <String>['items'],
-        CompetitionSummary.fromJson,
-      ),
+      items: GteJson.typedList(json, <String>[
+        'items',
+      ], CompetitionSummary.fromJson),
     );
   }
 }
@@ -397,8 +537,10 @@ class CompetitionInviteView {
   final String? note;
 
   factory CompetitionInviteView.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'competition invite');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition invite',
+    );
     return CompetitionInviteView(
       inviteCode: _stringFrom(
         <Map<String, Object?>>[json],
@@ -409,7 +551,8 @@ class CompetitionInviteView {
         <String>['issued_by', 'issuedBy'],
         fallback: 'community-host',
       ),
-      createdAt: _dateFrom(
+      createdAt:
+          _dateFrom(
             <Map<String, Object?>>[json],
             <String>['created_at', 'createdAt'],
           ) ??
@@ -444,6 +587,7 @@ class CompetitionFinancialSummary {
     required this.prizePool,
     required this.payoutStructure,
     required this.currency,
+    this.dynamicPrizePool,
   });
 
   final String competitionId;
@@ -455,10 +599,13 @@ class CompetitionFinancialSummary {
   final double prizePool;
   final List<CompetitionPayoutBreakdown> payoutStructure;
   final String currency;
+  final CompetitionDynamicPrizePool? dynamicPrizePool;
 
   factory CompetitionFinancialSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'competition financial summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'competition financial summary',
+    );
     return CompetitionFinancialSummary(
       competitionId: _stringFrom(
         <Map<String, Object?>>[json],
@@ -500,6 +647,19 @@ class CompetitionFinancialSummary {
           <String>['payout_structure', 'payoutStructure'],
         ),
       ),
+      dynamicPrizePool: _dynamicPrizePoolFromMaps(
+        <Map<String, Object?>>[json],
+        prizePool: _doubleFrom(
+          <Map<String, Object?>>[json],
+          <String>['prize_pool', 'prizePool'],
+          fallback: 0,
+        ),
+        entryFee: _doubleFrom(
+          <Map<String, Object?>>[json],
+          <String>['entry_fee', 'entryFee'],
+          fallback: 0,
+        ),
+      ),
       currency: _stringFrom(
         <Map<String, Object?>>[json],
         <String>['currency'],
@@ -518,6 +678,7 @@ class CompetitionFinancialSummary {
     double? prizePool,
     List<CompetitionPayoutBreakdown>? payoutStructure,
     String? currency,
+    CompetitionDynamicPrizePool? dynamicPrizePool,
   }) {
     return CompetitionFinancialSummary(
       competitionId: competitionId ?? this.competitionId,
@@ -529,6 +690,7 @@ class CompetitionFinancialSummary {
       prizePool: prizePool ?? this.prizePool,
       payoutStructure: payoutStructure ?? this.payoutStructure,
       currency: currency ?? this.currency,
+      dynamicPrizePool: dynamicPrizePool ?? this.dynamicPrizePool,
     );
   }
 }
@@ -578,10 +740,108 @@ CompetitionStatus _competitionStatusFromString(String value) {
   }
 }
 
-Object? _firstValue(
-  Iterable<Map<String, Object?>> sources,
-  List<String> keys,
-) {
+MatchType _matchTypeFromMaps(
+  Iterable<Map<String, Object?>> sources, {
+  required String creatorId,
+  required String? creatorName,
+  required String name,
+}) {
+  final String? rawType = _stringOrNullFrom(sources, <String>[
+    'match_type',
+    'matchType',
+    'competition_source',
+    'competitionSource',
+    'host_type',
+    'hostType',
+  ]);
+  if (rawType != null) {
+    return _matchTypeFromString(
+      rawType,
+      creatorId: creatorId,
+      creatorName: creatorName,
+      name: name,
+    );
+  }
+  return _matchTypeFromString(
+    '',
+    creatorId: creatorId,
+    creatorName: creatorName,
+    name: name,
+  );
+}
+
+CompetitionDynamicPrizePool? _dynamicPrizePoolFromMaps(
+  Iterable<Map<String, Object?>> sources, {
+  required double prizePool,
+  required double entryFee,
+}) {
+  final Object? value = _firstValue(sources, <String>[
+    'dynamic_prize_pool',
+    'dynamicPrizePool',
+  ]);
+  if (value != null) {
+    return CompetitionDynamicPrizePool.fromJson(value);
+  }
+  if (entryFee <= 0.0001 && prizePool > 0) {
+    return CompetitionDynamicPrizePool(
+      enabled: true,
+      baseFunding: prizePool,
+      activityBoost: 0,
+      jackpotRollover: 0,
+      totalPool: prizePool,
+      activeUsers5m: 0,
+      tradeVolume5m: 0,
+    );
+  }
+  return null;
+}
+
+MatchType _matchTypeFromString(
+  String value, {
+  required String creatorId,
+  required String? creatorName,
+  required String name,
+}) {
+  final String normalized = value.trim().toLowerCase();
+  if (<String>{
+    'gtex_hosted',
+    'gtexhosted',
+    'platform',
+    'platform_run',
+    'platformrun',
+    'official',
+  }.contains(normalized)) {
+    return MatchType.gtexHosted;
+  }
+  if (<String>{'fast_match', 'fastmatch', 'fast'}.contains(normalized)) {
+    return MatchType.fastMatch;
+  }
+  if (<String>{
+    'user_hosted',
+    'userhosted',
+    'creator',
+    'creator_hosted',
+    'creatorhosted',
+  }.contains(normalized)) {
+    return MatchType.userHosted;
+  }
+
+  final String creatorIdValue = creatorId.trim().toLowerCase();
+  final String creatorNameValue = creatorName?.trim().toLowerCase() ?? '';
+  final String nameValue = name.trim().toLowerCase();
+  if (nameValue.contains('fast match') || nameValue.contains('fast cup')) {
+    return MatchType.fastMatch;
+  }
+  if (creatorIdValue.startsWith('gtex') ||
+      creatorIdValue == 'platform' ||
+      creatorNameValue == 'gtex' ||
+      creatorNameValue.startsWith('gtex ')) {
+    return MatchType.gtexHosted;
+  }
+  return MatchType.userHosted;
+}
+
+Object? _firstValue(Iterable<Map<String, Object?>> sources, List<String> keys) {
   for (final Map<String, Object?> source in sources) {
     final Object? value = GteJson.value(source, keys);
     if (value != null) {
@@ -601,7 +861,9 @@ String _stringFrom(
     if (fallback != null) {
       return fallback;
     }
-    throw GteParsingException('Missing required string field: ${keys.join(' / ')}.');
+    throw GteParsingException(
+      'Missing required string field: ${keys.join(' / ')}.',
+    );
   }
   final String text = value.toString().trim();
   if (text.isEmpty) {
@@ -655,10 +917,7 @@ double _doubleFrom(
   return double.tryParse(value.toString()) ?? fallback;
 }
 
-DateTime? _dateFrom(
-  Iterable<Map<String, Object?>> sources,
-  List<String> keys,
-) {
+DateTime? _dateFrom(Iterable<Map<String, Object?>> sources, List<String> keys) {
   final Object? value = _firstValue(sources, keys);
   if (value == null) {
     return null;
@@ -706,9 +965,9 @@ List<CompetitionPayoutBreakdown> _payoutsFrom(Object? value) {
     return const <CompetitionPayoutBreakdown>[];
   }
   try {
-    return GteJson.list(value)
-        .map(CompetitionPayoutBreakdown.fromJson)
-        .toList(growable: false);
+    return GteJson.list(
+      value,
+    ).map(CompetitionPayoutBreakdown.fromJson).toList(growable: false);
   } on GteParsingException {
     return const <CompetitionPayoutBreakdown>[];
   }

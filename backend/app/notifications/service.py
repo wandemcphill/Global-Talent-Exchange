@@ -64,6 +64,13 @@ class NotificationCenter:
             user_id = payload.get("user_id")
             topic = "competition"
             return [self._build_notification(user_id if isinstance(user_id, str) else None, topic, event.name.replace(".", " "), payload, created_at)]
+        if event.name.startswith("transfer_market."):
+            notifications: list[Notification] = []
+            for key in ("user_id", "seller_user_id", "buyer_user_id", "previous_bidder_user_id", "highest_bidder_user_id"):
+                user_id = payload.get(key)
+                if isinstance(user_id, str):
+                    notifications.append(self._build_notification(user_id, "transfer_market", event.name.replace(".", " "), payload, created_at))
+            return notifications
         return []
 
     @staticmethod

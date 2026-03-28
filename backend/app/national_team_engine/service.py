@@ -11,6 +11,7 @@ from app.models.national_team import (
     NationalTeamManagerHistory,
     NationalTeamSquadMember,
 )
+from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.story_feed_engine.service import StoryFeedService
 
@@ -36,6 +37,18 @@ class NationalTeamEngineService:
             format_type=payload.format_type.strip().lower(),
             status=payload.status.strip().lower(),
             notes=payload.notes.strip() if payload.notes else None,
+            linked_competition_id=payload.linked_competition_id,
+            entry_opens_at=payload.entry_opens_at,
+            entry_closes_at=payload.entry_closes_at,
+            kickoff_at=payload.kickoff_at,
+            metadata_json={
+                "entry_mode": "rental_only",
+                "minimum_squad_size": 18,
+                "maximum_squad_size": 30,
+                "free_player_quota": 5,
+                "free_player_distribution": {"high": 1, "mid": 2, "low": 2},
+                **payload.metadata_json,
+            },
             created_by_user_id=actor.id,
         )
         self.session.add(competition)
@@ -110,6 +123,23 @@ class NationalTeamEngineService:
                 metadata_json={"competition_key": competition.key, "country_code": entry.country_code},
                 published_by_user_id=actor.id,
             )
+            if entry.manager_user_id:
+                self.session.add(
+                    NotificationRecord(
+                        user_id=entry.manager_user_id,
+                        topic="national_team",
+                        template_key="NATIONAL_TEAM_ENTRY_OPEN",
+                        resource_type="national_team_entry",
+                        resource_id=entry.id,
+                        competition_id=competition.id,
+                        message=f"{entry.country_name} entry is open in {competition.title}.",
+                        metadata_json={
+                            "competition_id": competition.id,
+                            "entry_id": entry.id,
+                            "country_code": entry.country_code,
+                        },
+                    )
+                )
         return entry
 
     def upsert_squad(self, *, entry_id: str, members: list, actor: User) -> NationalTeamEntry:
@@ -178,7 +208,11 @@ class NationalTeamEngineService:
         return self.session.scalar(
             select(NationalTeamEntry)
             .where(NationalTeamEntry.id == entry_id)
-            .options(selectinload(NationalTeamEntry.squad_members), selectinload(NationalTeamEntry.manager_history))
+            .options(
+                selectinload(NationalTeamEntry.competition),
+                selectinload(NationalTeamEntry.squad_members),
+                selectinload(NationalTeamEntry.manager_history),
+            )
         )
 
     def user_history(self, *, user: User) -> dict[str, list]:

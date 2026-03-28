@@ -106,6 +106,7 @@ class InternalPlayer:
     fatigue_load: int = 35
     injury_risk: int = 20
     leadership: int = 50
+    identity_fit_score: int = 68
 
     def shirt_name(self) -> str:
         if self.display_name:
@@ -511,6 +512,10 @@ class SimulationResult:
     tactical_impact_notes: tuple[str, ...]
     visual_identity: MatchVisualIdentityPayload
     shootout: PenaltyShootout | None = None
+    home_crowd_intensity: float = 0.5
+    away_crowd_intensity: float = 0.5
+    atmosphere_profile: str = "standard"
+    atmosphere_summary: str = ""
 
 
 @dataclass(slots=True)
@@ -544,6 +549,7 @@ class TeamRuntimeState:
     tactical_mismatch_edge: float = 0.0
     home_advantage_score: float = 0.0
     upset_potential: float = 0.0
+    crowd_intensity: float = 0.5
 
     def substitutions_remaining(self) -> int:
         return max(self.tactics.max_substitutions - self.substitutions_used, 0)

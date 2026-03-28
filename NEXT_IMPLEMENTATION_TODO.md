@@ -1,5 +1,9 @@
 # GTEX Next Implementation TODO
 
+## Expansion execution map
+- See `docs/EXPANSION_EXECUTION_WAR_MAP.md` for the repo-anchored backlog across infra, payments, economy, gameplay, AI, security, admin, and growth.
+- Default order: `Tranche 1` money safety and operator controls, `Tranche 2` live scale and integrity, `Tranche 3` gameplay and growth loops, `Tranche 4` economy governance and ML.
+
 ## Withdrawal rules to implement
 - Allow users to withdraw **e-game winnings and rewards** from the app wallet.
 - Apply a **10% platform fee** on every withdrawal.

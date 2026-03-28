@@ -10,6 +10,7 @@ import 'package:gte_frontend/screens/competitions/gte_halftime_analytics_screen.
 import 'package:gte_frontend/screens/competitions/gte_live_match_center_screen.dart';
 import 'package:gte_frontend/screens/competitions/gte_match_highlights_screen.dart';
 import 'package:gte_frontend/widgets/competitions/competition_financial_breakdown_card.dart';
+import 'package:gte_frontend/widgets/competitions/competition_dynamic_prize_pool_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_payout_card.dart';
 import 'package:gte_frontend/widgets/competitions/competition_status_badge.dart';
 import 'package:gte_frontend/widgets/competitions/competition_visibility_chip.dart';
@@ -52,9 +53,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Competition detail'),
-        ),
+        appBar: AppBar(title: const Text('Competition detail')),
         body: AnimatedBuilder(
           animation: widget.controller,
           builder: (BuildContext context, Widget? child) {
@@ -94,17 +93,21 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
               return const SizedBox.shrink();
             }
 
-            final String lockNotice = competition.isLockedForPaidEntryEdits
-                ? 'Paid entries have begun. Entry fee, platform service fee, host fee, and payout settings are now locked for participant safety.'
-                : competition.isFreeToJoin
+            final String lockNotice =
+                competition.isLockedForPaidEntryEdits
+                    ? 'Paid entries have begun. Entry fee, platform service fee, host fee, and payout settings are now locked for participant safety.'
+                    : competition.isFreeToJoin
                     ? 'This community competition is free to join, so no fee lock is required.'
                     : 'Once the first paid entry clears, fee settings lock to protect participants.';
-            final bool isGtexCompetition =
-                competition.creatorLabel.toLowerCase().contains('gtex');
+            final bool isGtexCompetition = competition.creatorLabel
+                .toLowerCase()
+                .contains('gtex');
+            final CompetitionDynamicPrizePool? dynamicPrizePool =
+                financials.dynamicPrizePool ?? competition.dynamicPrizePool;
 
             return RefreshIndicator(
-              onRefresh: () =>
-                  widget.controller.openCompetition(widget.competitionId),
+              onRefresh:
+                  () => widget.controller.openCompetition(widget.competitionId),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -124,9 +127,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                                 children: <Widget>[
                                   Text(
                                     competition.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall,
+                                    style:
+                                        Theme.of(
+                                          context,
+                                        ).textTheme.headlineSmall,
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
@@ -142,8 +146,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                         ),
                         const SizedBox(height: 16),
                         const GtexSectionBadge(
-                            label: 'MATCHDAY BRIEF',
-                            color: GteShellTheme.accentArena),
+                          label: 'MATCHDAY BRIEF',
+                          color: GteShellTheme.accentArena,
+                        ),
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 10,
@@ -186,9 +191,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                           runSpacing: 12,
                           children: <Widget>[
                             FilledButton.icon(
-                              onPressed: competition.joinEligibility.eligible
-                                  ? _openJoin
-                                  : null,
+                              onPressed:
+                                  competition.joinEligibility.eligible
+                                      ? _openJoin
+                                      : null,
                               icon: const Icon(Icons.group_add_outlined),
                               label: const Text('Join competition'),
                             ),
@@ -233,11 +239,12 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                             runSpacing: 12,
                             children: <Widget>[
                               FilledButton.tonalIcon(
-                                onPressed: () => _openFeatureRoute(
-                                  WorldCompetitionContextRouteData(
-                                    competitionId: competition.id,
-                                  ),
-                                ),
+                                onPressed:
+                                    () => _openFeatureRoute(
+                                      WorldCompetitionContextRouteData(
+                                        competitionId: competition.id,
+                                      ),
+                                    ),
                                 icon: const Icon(Icons.public_outlined),
                                 label: const Text('World context'),
                               ),
@@ -312,8 +319,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const Icon(Icons.verified_outlined,
-                            color: GteShellTheme.accentWarm),
+                        const Icon(
+                          Icons.verified_outlined,
+                          color: GteShellTheme.accentWarm,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -343,24 +352,37 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                         ),
                         const SizedBox(height: 12),
                         FilledButton.icon(
-                          onPressed: widget.isAuthenticated
-                              ? () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Fan support queued.'),
-                                    ),
-                                  );
-                                }
-                              : widget.onOpenLogin,
+                          onPressed:
+                              widget.isAuthenticated
+                                  ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Fan support queued.'),
+                                      ),
+                                    );
+                                  }
+                                  : widget.onOpenLogin,
                           icon: const Icon(Icons.card_giftcard_outlined),
-                          label: Text(widget.isAuthenticated
-                              ? 'Send FanCoin support'
-                              : 'Sign in to support'),
+                          label: Text(
+                            widget.isAuthenticated
+                                ? 'Send FanCoin support'
+                                : 'Sign in to support',
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
+                  if (dynamicPrizePool?.enabled == true) ...<Widget>[
+                    CompetitionDynamicPrizePoolCard(
+                      dynamicPrizePool: dynamicPrizePool!,
+                      currency: competition.currency,
+                      title: 'Matchday jackpot engine',
+                      subtitle:
+                          'Base funding, live activity, and rollover rewards keep this GTEX pool moving until the final whistle.',
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   const GtexSectionHeader(
                     eyebrow: 'ARENA ECONOMICS',
                     title:
@@ -380,6 +402,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                     hostFeeAmount: financials.hostFeeAmount,
                     prizePool: financials.prizePool,
                     currency: financials.currency,
+                    matchType: competition.matchType,
                     lockNotice: lockNotice,
                   ),
                   const SizedBox(height: 16),
@@ -443,9 +466,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
   Future<void> _openJoin() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionJoinScreen(
-          controller: widget.controller,
-        ),
+        builder:
+            (BuildContext context) =>
+                CompetitionJoinScreen(controller: widget.controller),
       ),
     );
   }
@@ -453,9 +476,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
   Future<void> _openShare() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CompetitionShareScreen(
-          controller: widget.controller,
-        ),
+        builder:
+            (BuildContext context) =>
+                CompetitionShareScreen(controller: widget.controller),
       ),
     );
   }
@@ -463,12 +486,13 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
   Future<void> _openLiveMatch(CompetitionSummary competition) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteLiveMatchCenterScreen(
-          competition: competition,
-          isAuthenticated: widget.isAuthenticated,
-          onOpenLogin: widget.onOpenLogin,
-          navigationDependencies: widget.navigationDependencies,
-        ),
+        builder:
+            (BuildContext context) => GteLiveMatchCenterScreen(
+              competition: competition,
+              isAuthenticated: widget.isAuthenticated,
+              onOpenLogin: widget.onOpenLogin,
+              navigationDependencies: widget.navigationDependencies,
+            ),
       ),
     );
   }
@@ -489,9 +513,9 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
   Future<void> _openHalftime(CompetitionSummary competition) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteHalftimeAnalyticsScreen(
-          competition: competition,
-        ),
+        builder:
+            (BuildContext context) =>
+                GteHalftimeAnalyticsScreen(competition: competition),
       ),
     );
   }
@@ -499,10 +523,11 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
   Future<void> _openHighlights(CompetitionSummary competition) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteMatchHighlightsScreen(
-          competition: competition,
-          isAuthenticated: widget.isAuthenticated,
-        ),
+        builder:
+            (BuildContext context) => GteMatchHighlightsScreen(
+              competition: competition,
+              isAuthenticated: widget.isAuthenticated,
+            ),
       ),
     );
   }

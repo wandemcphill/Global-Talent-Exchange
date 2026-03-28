@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api_v1.router import install_exception_handlers as install_api_v1_exception_handlers
 from app.auth.service import AuthService
 from app.models.user import UserRole
 
@@ -70,7 +71,18 @@ def create_app(
             yield
         finally:
             logger.info("app.shutdown.begin")
+            startup_thread = getattr(app.state, "deferred_startup_thread", None)
+            if startup_thread is not None and startup_thread.is_alive():
+                startup_thread.join(timeout=1)
             run_module_hooks(app, context, modules, phase="shutdown")
+            api_queue_consumer = getattr(app.state, "api_queue_consumer", None)
+            if api_queue_consumer is not None:
+                api_queue_consumer.stop()
+            outbox_relay = getattr(context, "outbox_relay", None)
+            if outbox_relay is not None:
+                outbox_relay.stop()
+            if hasattr(context.event_publisher, "close"):
+                context.event_publisher.close()
             logger.info("app.shutdown.complete")
 
     app = FastAPI(
@@ -78,6 +90,7 @@ def create_app(
         version=resolved_settings.app_version,
         lifespan=lifespan,
     )
+    install_api_v1_exception_handlers(app, context)
     app.dependency_overrides[auth_get_session] = context.database.get_session
     app.dependency_overrides[db_get_session] = context.database.get_session
     app.dependency_overrides[core_get_session] = context.database.get_session
@@ -114,7 +127,9 @@ def _bind_application_state(
     app.state.cache_backend = context.cache_backend
     app.state.event_publisher = context.event_publisher
     app.state.job_backend = context.job_backend
+    app.state.outbox_relay = context.outbox_relay
     app.state.notifications = context.notifications
+    app.state.alert_system = context.alert_system
     app.state.realtime = context.realtime
     app.state.market_engine = context.market_engine
     app.state.ingestion_pipeline = context.ingestion_pipeline

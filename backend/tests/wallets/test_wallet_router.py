@@ -1,34 +1,49 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from shutil import copyfile
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import pytest
 
 from app.auth.router import register_user
 from app.auth.schemas import RegisterRequest
-from app.models import Base
+from app.core.database import ensure_database_schema_current
 from app.models.treasury import PaymentMode
 from app.models.policy import CountryFeaturePolicy
 from app.models.user import User
 from app.treasury.service import TreasuryService
-from app.wallets.router import create_payment_event, list_wallet_accounts
-from app.wallets.schemas import PaymentEventCreate
+from app.wallets.router import create_payment_event, create_wallet_conversion, list_wallet_accounts, quote_wallet_conversion
+from app.wallets.schemas import PaymentEventCreate, WalletConversionQuoteRequest, WalletConversionRequest
+from app.wallets.service import LedgerPosting, WalletService
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+
+
+@pytest.fixture(scope="session")
+def migrated_wallet_router_db(tmp_path_factory):
+    db_path = tmp_path_factory.mktemp("wallet-router-db") / "template.db"
+    engine = create_engine(
+        f"sqlite+pysqlite:///{db_path.as_posix()}",
+        connect_args={"check_same_thread": False},
+    )
+    ensure_database_schema_current(engine)
+    engine.dispose()
+    return db_path
 
 
 @pytest.fixture()
-def session():
+def session(tmp_path, migrated_wallet_router_db):
+    db_path = tmp_path / "wallet-router.db"
+    copyfile(migrated_wallet_router_db, db_path)
     engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
+        f"sqlite+pysqlite:///{db_path.as_posix()}",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
         yield db_session
+    engine.dispose()
 
 
 def _register_and_load_user(session) -> User:
@@ -93,3 +108,52 @@ def test_create_payment_event_route_returns_pending_event(session) -> None:
     )
     assert payload.status.value == "pending"
     assert Decimal(payload.amount) == Decimal("50.0000")
+
+
+def test_quote_wallet_conversion_returns_fixed_rate_quote(session) -> None:
+    current_user = _register_and_load_user(session)
+
+    payload = quote_wallet_conversion(
+        WalletConversionQuoteRequest(amount=Decimal("1"), source_unit=LedgerUnit.COIN),
+        session=session,
+        current_user=current_user,
+    )
+
+    assert payload.source_amount == Decimal("1.0000")
+    assert payload.target_amount == Decimal("100.0000")
+    assert payload.target_unit == LedgerUnit.CREDIT
+
+
+def test_create_wallet_conversion_route_moves_balance(session) -> None:
+    current_user = _register_and_load_user(session)
+    wallet_service = WalletService()
+    user_coin_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    platform_coin_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_coin_account, amount=Decimal("2")),
+            LedgerPosting(account=platform_coin_account, amount=Decimal("-2")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-router-conversion",
+        actor=current_user,
+    )
+    session.commit()
+
+    payload = create_wallet_conversion(
+        WalletConversionRequest(
+            amount=Decimal("1"),
+            source_unit=LedgerUnit.COIN,
+            idempotency_key="router-convert-1-coin",
+        ),
+        session=session,
+        current_user=current_user,
+    )
+
+    user_credit_account = wallet_service.get_user_account(session, current_user, LedgerUnit.CREDIT)
+    assert payload.transaction_id
+    assert payload.source_amount == Decimal("1.0000")
+    assert payload.target_amount == Decimal("100.0000")
+    assert wallet_service.get_balance(session, user_coin_account) == Decimal("1.0000")
+    assert wallet_service.get_balance(session, user_credit_account) == Decimal("100.0000")

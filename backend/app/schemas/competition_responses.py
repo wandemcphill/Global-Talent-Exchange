@@ -32,6 +32,16 @@ class JoinEligibilityView(CommonSchema):
     requires_invite: bool = False
 
 
+class DynamicPrizePoolView(CommonSchema):
+    enabled: bool = False
+    base_funding: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    activity_boost: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    jackpot_rollover: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    total_pool: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    active_users_5min: int = Field(default=0, ge=0)
+    trade_volume_5min: Decimal = Field(default=Decimal("0.0000"), ge=0)
+
+
 class CompetitionSummaryView(CommonSchema):
     id: str
     name: str
@@ -52,6 +62,7 @@ class CompetitionSummaryView(CommonSchema):
     payout_structure: tuple[PayoutBreakdown, ...]
     rules_summary: str
     join_eligibility: JoinEligibilityView
+    dynamic_prize_pool: DynamicPrizePoolView | None = None
     beginner_friendly: bool | None = None
     created_at: datetime
     updated_at: datetime
@@ -88,4 +99,5 @@ class CompetitionFinancialSummaryView(CommonSchema):
     host_fee_amount: Decimal = Field(ge=0)
     prize_pool: Decimal = Field(ge=0)
     payout_structure: tuple[PayoutBreakdown, ...]
+    dynamic_prize_pool: DynamicPrizePoolView | None = None
     currency: str

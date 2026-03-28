@@ -564,12 +564,29 @@ def test_player_story_dna_and_rivalries_routes(app_client) -> None:
         "Tunde Breakout",
     }
 
+    avatar_response = client.get(f"/players/{wonderkid.id}/avatar")
+    assert avatar_response.status_code == 200, avatar_response.text
+    avatar_payload = avatar_response.json()
+    assert avatar_payload["player_id"] == wonderkid.id
+    assert avatar_payload["render_format"] == "json"
+    assert avatar_payload["face"]["region_preset"] == "west_african"
+    assert avatar_payload["face"]["facial_features"]["dna_archetype"] in {"playmaker", "poacher", "engine", "destroyer"}
+    assert avatar_payload["layered_svg"].startswith("<svg")
+    assert avatar_payload["static_image_data_uri"].startswith("data:image/svg+xml;base64,")
+
+    avatar_svg_response = client.get(f"/players/{wonderkid.id}/avatar", params={"format": "svg"})
+    assert avatar_svg_response.status_code == 200, avatar_svg_response.text
+    assert avatar_svg_response.headers["content-type"].startswith("image/svg+xml")
+    assert "<svg" in avatar_svg_response.text
+
     missing_story_response = client.get("/players/nonexistent/story")
     missing_dna_response = client.get("/players/nonexistent/dna")
     missing_rivalries_response = client.get("/players/nonexistent/rivalries")
+    missing_avatar_response = client.get("/players/nonexistent/avatar")
     assert missing_story_response.status_code == 404
     assert missing_dna_response.status_code == 404
     assert missing_rivalries_response.status_code == 404
+    assert missing_avatar_response.status_code == 404
 
     with app.state.session_factory() as session:
         story_row = session.scalar(select(PlayerStory).where(PlayerStory.player_id == wonderkid.id))

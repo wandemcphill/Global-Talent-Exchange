@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../../../core/app_feedback.dart';
 import '../../../data/gte_api_repository.dart';
@@ -43,8 +43,10 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
   late final TextEditingController _clubLookupController;
 
   bool get _hasAuth => widget.accessToken?.trim().isNotEmpty == true;
-  bool get _isAdmin => <String>{'admin', 'super_admin'}
-      .contains((widget.currentUserRole ?? '').trim().toLowerCase());
+  bool get _isAdmin => <String>{
+    'admin',
+    'super_admin',
+  }.contains((widget.currentUserRole ?? '').trim().toLowerCase());
 
   @override
   void initState() {
@@ -89,21 +91,23 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
             appBar: AppBar(
               title: Text(
                 widget.clubId == null
-                    ? 'Fan Share Market'
-                    : '${widget.clubName ?? widget.clubId} fan shares',
+                    ? 'Club Ownership Economy'
+                    : '${widget.clubName ?? widget.clubId} club shares',
               ),
               actions: <Widget>[
                 IconButton(
-                  onPressed: widget.clubId == null || !_hasAuth
-                      ? null
-                      : () => _load(widget.clubId!),
+                  onPressed:
+                      widget.clubId == null || !_hasAuth
+                          ? null
+                          : () => _load(widget.clubId!),
                   icon: const Icon(Icons.refresh),
                 ),
               ],
             ),
-            body: widget.clubId == null
-                ? _buildBrowseView(context)
-                : _buildClubView(context, widget.clubId!),
+            body:
+                widget.clubId == null
+                    ? _buildBrowseView(context)
+                    : _buildClubView(context, widget.clubId!),
           ),
         );
       },
@@ -115,11 +119,10 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
       children: <Widget>[
         GtexHeroBanner(
-          eyebrow: 'CREATOR SHARE MARKET',
-          title:
-              'Back creator clubs and own a piece of the rise.',
+          eyebrow: 'CLUB OWNERSHIP ECONOMY',
+          title: 'Own a slice of football institutions.',
           description:
-              'See share price, fan perks, and club control in one market view.',
+              'Track treasury-backed valuation, buy club shares, and collect dividends from club performance.',
           accent: const Color(0xFF79D8C3),
           chips: <Widget>[
             GteMetricChip(
@@ -159,10 +162,13 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               ),
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
-                onPressed: _hasAuth
-                    ? () =>
-                        _openClub(context, _clubLookupController.text.trim())
-                    : widget.onOpenLogin,
+                onPressed:
+                    _hasAuth
+                        ? () => _openClub(
+                          context,
+                          _clubLookupController.text.trim(),
+                        )
+                        : widget.onOpenLogin,
                 icon: const Icon(Icons.open_in_new),
                 label: Text(_hasAuth ? 'Open club' : 'Sign in to open'),
               ),
@@ -174,7 +180,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
           GteStatePanel(
             title: 'Sign in required',
             message:
-                'Sign in to see your holdings, perks, and buy access.',
+                'Sign in to see your holdings, dividend flow, and club investment access.',
             actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
             onAction: widget.onOpenLogin,
             icon: Icons.lock_outline,
@@ -183,7 +189,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
           const GteStatePanel(
             title: 'Choose a club',
             message:
-                'Open a creator club by id or jump into your current club share market.',
+                'Open a creator club by id or jump into your current club ownership page.',
             icon: Icons.account_balance_outlined,
           ),
       ],
@@ -197,7 +203,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
         child: GteStatePanel(
           title: 'Sign in required',
           message:
-              'Sign in to see holdings, perks, and buy shares.',
+              'Sign in to see holdings, valuation, and invest in club shares.',
           actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
           onAction: widget.onOpenLogin,
           icon: Icons.lock_outline,
@@ -209,14 +215,14 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     final CreatorClubShareHolding? holding = _controller.holding;
     final CreatorClubShareMarketControl? control = _controller.control;
     final bool canIssue = widget.currentClubId == clubId;
+    final String clubLabel = market?.clubName ?? widget.clubName ?? clubId;
 
     if (_controller.isLoadingMarket && market == null) {
       return const Padding(
         padding: EdgeInsets.all(20),
         child: GteStatePanel(
-          title: 'Loading share market',
-          message:
-              'Holdings, perks, and payout history are loading.',
+          title: 'Loading ownership economy',
+          message: 'Holdings, valuation, and dividend history are loading.',
           icon: Icons.candlestick_chart,
           isLoading: true,
         ),
@@ -227,7 +233,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
       return Padding(
         padding: const EdgeInsets.all(20),
         child: GteStatePanel(
-          title: 'Fan Share Market unavailable',
+          title: 'Club ownership view unavailable',
           message: _controller.marketError!,
           actionLabel: 'Retry',
           onAction: () => _load(clubId),
@@ -248,14 +254,14 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  widget.clubName ?? clubId,
+                  clubLabel,
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   market == null
-                      ? 'No fan shares are live for this club yet.'
-                      : 'See price, fan perks, club control, and payout history in one place.',
+                      ? 'No club shares are live for this club yet.'
+                      : 'Mini stock page for this club: live valuation, treasury, ownership, and dividend flow.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 14),
@@ -264,28 +270,59 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                   runSpacing: 10,
                   children: <Widget>[
                     GteMetricChip(
-                      label: 'Share price',
-                      value: market == null
-                          ? '--'
-                          : gteFormatCredits(market.sharePriceCoin),
+                      label: 'Live share',
+                      value:
+                          market == null
+                              ? '--'
+                              : gteFormatCredits(market.sharePriceCoin),
+                    ),
+                    GteMetricChip(
+                      label: 'Implied price',
+                      value:
+                          market == null
+                              ? '--'
+                              : gteFormatCredits(
+                                market.valuationTicker.impliedSharePriceCoin,
+                              ),
+                    ),
+                    GteMetricChip(
+                      label: 'Valuation',
+                      value:
+                          market == null
+                              ? '--'
+                              : gteFormatCredits(
+                                market.valuationTicker.totalValuationCoin,
+                              ),
                     ),
                     GteMetricChip(
                       label: 'Remaining',
-                      value: market == null
-                          ? '--'
-                          : market.sharesRemaining.toString(),
+                      value:
+                          market == null
+                              ? '--'
+                              : market.sharesRemaining.toString(),
                     ),
                     GteMetricChip(
-                      label: 'Club control',
-                      value: market == null
-                          ? '--'
-                          : '${market.creatorControlledShares} (${(market.creatorControlBps / 100).toStringAsFixed(1)}%)',
+                      label: 'Owner control',
+                      value:
+                          market == null
+                              ? '--'
+                              : '${market.creatorControlledShares} (${(market.creatorControlBps / 100).toStringAsFixed(1)}%)',
+                    ),
+                    GteMetricChip(
+                      label: 'Treasury',
+                      value:
+                          market == null
+                              ? '--'
+                              : gteFormatCredits(
+                                market.valuationTicker.treasuryBalanceCoin,
+                              ),
                     ),
                     GteMetricChip(
                       label: 'Shareholders',
-                      value: market == null
-                          ? '--'
-                          : market.shareholderCount.toString(),
+                      value:
+                          market == null
+                              ? '--'
+                              : market.shareholderCount.toString(),
                     ),
                   ],
                 ),
@@ -296,22 +333,23 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                   children: <Widget>[
                     if (market != null)
                       FilledButton.icon(
-                        onPressed: () =>
-                            _showPurchaseDialog(context, clubId, market),
+                        onPressed:
+                            () => _showPurchaseDialog(context, clubId, market),
                         icon: const Icon(Icons.shopping_cart_checkout_outlined),
-                        label: const Text('Buy shares'),
+                        label: const Text('Invest in club'),
                       ),
                     if (market == null && canIssue)
                       FilledButton.tonalIcon(
                         onPressed: () => _showIssueDialog(context, clubId),
                         icon: const Icon(Icons.add_chart_outlined),
-                        label: const Text('Open sale'),
+                        label: const Text('Launch club shares'),
                       ),
                     if (_isAdmin)
                       OutlinedButton.icon(
-                        onPressed: control == null
-                            ? () => _controller.loadControl()
-                            : () => _showControlDialog(context, control),
+                        onPressed:
+                            control == null
+                                ? () => _controller.loadControl()
+                                : () => _showControlDialog(context, control),
                         icon: const Icon(Icons.admin_panel_settings_outlined),
                         label: Text(
                           control == null
@@ -336,22 +374,28 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
           const SizedBox(height: 18),
           if (market == null)
             GteStatePanel(
-              title: canIssue
-                  ? 'No share sale yet'
-                  : 'No fan share sale live',
-              message: canIssue
-                  ? 'Open this club share sale to set price, supply, club control, and fan perks.'
-                  : 'This club has not opened fan shares yet.',
-              actionLabel: canIssue ? 'Open sale' : null,
+              title:
+                  canIssue
+                      ? 'No share market yet'
+                      : 'No club share market live',
+              message:
+                  canIssue
+                      ? 'Launch this club share market to set price, supply, treasury-backed ownership, and dividends.'
+                      : 'This club has not opened club shares yet.',
+              actionLabel: canIssue ? 'Launch club shares' : null,
               onAction:
                   canIssue ? () => _showIssueDialog(context, clubId) : null,
               icon: Icons.account_balance_outlined,
             )
           else ...<Widget>[
-            _MarketSnapshotSection(
+            _ValuationTickerSection(market: market),
+            const SizedBox(height: 18),
+            _RevenueStreamsSection(
               market: market,
-              holding: holding,
+              distributions: _controller.distributions,
             ),
+            const SizedBox(height: 18),
+            _MarketSnapshotSection(market: market, holding: holding),
             const SizedBox(height: 18),
             _GovernanceSection(market: market),
             const SizedBox(height: 18),
@@ -363,9 +407,10 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               control: control,
               isLoading: _controller.isLoadingControl,
               error: _controller.controlError,
-              onEdit: control == null
-                  ? null
-                  : () => _showControlDialog(context, control),
+              onEdit:
+                  control == null
+                      ? null
+                      : () => _showControlDialog(context, control),
               onRetry: _controller.loadControl,
             ),
           ],
@@ -376,10 +421,12 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
 
   Future<void> _showIssueDialog(BuildContext context, String clubId) async {
     final TextEditingController priceController = TextEditingController();
-    final TextEditingController maxSharesController =
-        TextEditingController(text: '1000');
-    final TextEditingController maxPerFanController =
-        TextEditingController(text: '25');
+    final TextEditingController maxSharesController = TextEditingController(
+      text: '1000',
+    );
+    final TextEditingController maxPerFanController = TextEditingController(
+      text: '25',
+    );
     final bool? submitted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -396,39 +443,45 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Open fan share sale',
+                'Launch club shares',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(labelText: 'Share price'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: maxSharesController,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Max shares issued'),
+                decoration: const InputDecoration(
+                  labelText: 'Max shares issued',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: maxPerFanController,
                 keyboardType: TextInputType.number,
-                decoration:
-                    const InputDecoration(labelText: 'Max shares per fan'),
+                decoration: const InputDecoration(
+                  labelText: 'Max shares per fan',
+                ),
               ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () async {
-                  final double? sharePrice =
-                      double.tryParse(priceController.text.trim());
-                  final int? maxShares =
-                      int.tryParse(maxSharesController.text.trim());
-                  final int? maxPerFan =
-                      int.tryParse(maxPerFanController.text.trim());
+                  final double? sharePrice = double.tryParse(
+                    priceController.text.trim(),
+                  );
+                  final int? maxShares = int.tryParse(
+                    maxSharesController.text.trim(),
+                  );
+                  final int? maxPerFan = int.tryParse(
+                    maxPerFanController.text.trim(),
+                  );
                   if (sharePrice == null ||
                       sharePrice <= 0 ||
                       maxShares == null ||
@@ -447,12 +500,12 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                       maxSharesPerFan: maxPerFan,
                     ),
                   );
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
                 },
-                child: const Text('Open sale'),
+                child: const Text('Launch club shares'),
               ),
             ],
           ),
@@ -462,8 +515,8 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     priceController.dispose();
     maxSharesController.dispose();
     maxPerFanController.dispose();
-    if (submitted == true && mounted) {
-      AppFeedback.showSuccess(context, 'Fan share sale is live.');
+    if (submitted == true && context.mounted) {
+      AppFeedback.showSuccess(context, 'Club share market is live.');
     }
   }
 
@@ -472,8 +525,9 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     String clubId,
     CreatorClubShareMarket market,
   ) async {
-    final TextEditingController shareCountController =
-        TextEditingController(text: '1');
+    final TextEditingController shareCountController = TextEditingController(
+      text: '1',
+    );
     final bool? submitted = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -490,7 +544,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Buy creator shares',
+                'Invest in club',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 10),
@@ -507,8 +561,9 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () async {
-                  final int? count =
-                      int.tryParse(shareCountController.text.trim());
+                  final int? count = int.tryParse(
+                    shareCountController.text.trim(),
+                  );
                   if (count == null || count <= 0) {
                     AppFeedback.showError(
                       context,
@@ -520,12 +575,12 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                     clubId,
                     CreatorClubSharePurchaseRequest(shareCount: count),
                   );
-                  if (!mounted || _controller.actionError != null) {
+                  if (!context.mounted || _controller.actionError != null) {
                     return;
                   }
                   Navigator.of(context).pop(true);
                 },
-                child: const Text('Purchase shares'),
+                child: const Text('Invest in club'),
               ),
             ],
           ),
@@ -533,8 +588,8 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
       },
     );
     shareCountController.dispose();
-    if (submitted == true && mounted) {
-      AppFeedback.showSuccess(context, 'Share order sent.');
+    if (submitted == true && context.mounted) {
+      AppFeedback.showSuccess(context, 'Club investment sent.');
     }
   }
 
@@ -568,8 +623,10 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
             20 + MediaQuery.of(context).viewInsets.bottom,
           ),
           child: StatefulBuilder(
-            builder: (BuildContext context,
-                void Function(void Function()) setModalState) {
+            builder: (
+              BuildContext context,
+              void Function(void Function()) setModalState,
+            ) {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -582,15 +639,17 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                   TextField(
                     controller: maxClubController,
                     keyboardType: TextInputType.number,
-                    decoration:
-                        const InputDecoration(labelText: 'Max shares per club'),
+                    decoration: const InputDecoration(
+                      labelText: 'Max shares per club',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: maxFanController,
                     keyboardType: TextInputType.number,
-                    decoration:
-                        const InputDecoration(labelText: 'Max shares per fan'),
+                    decoration: const InputDecoration(
+                      labelText: 'Max shares per fan',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -603,8 +662,9 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: maxPurchaseController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Max primary purchase value',
                     ),
@@ -628,14 +688,18 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: () async {
-                      final int? maxClub =
-                          int.tryParse(maxClubController.text.trim());
-                      final int? maxFan =
-                          int.tryParse(maxFanController.text.trim());
-                      final int? revenueShare =
-                          int.tryParse(revenueShareController.text.trim());
-                      final double? maxPurchase =
-                          double.tryParse(maxPurchaseController.text.trim());
+                      final int? maxClub = int.tryParse(
+                        maxClubController.text.trim(),
+                      );
+                      final int? maxFan = int.tryParse(
+                        maxFanController.text.trim(),
+                      );
+                      final int? revenueShare = int.tryParse(
+                        revenueShareController.text.trim(),
+                      );
+                      final double? maxPurchase = double.tryParse(
+                        maxPurchaseController.text.trim(),
+                      );
                       if (maxClub == null ||
                           maxFan == null ||
                           revenueShare == null ||
@@ -656,7 +720,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
                           maxPrimaryPurchaseValueCoin: maxPurchase,
                         ),
                       );
-                      if (!mounted || _controller.actionError != null) {
+                      if (!context.mounted || _controller.actionError != null) {
                         return;
                       }
                       Navigator.of(context).pop(true);
@@ -674,7 +738,7 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     maxFanController.dispose();
     revenueShareController.dispose();
     maxPurchaseController.dispose();
-    if (submitted == true && mounted) {
+    if (submitted == true && context.mounted) {
       AppFeedback.showSuccess(context, 'Share market control updated.');
     }
   }
@@ -686,39 +750,41 @@ class _CreatorShareMarketScreenState extends State<CreatorShareMarketScreen> {
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => CreatorShareMarketScreen(
-          clubId: clubId.trim(),
-          clubName:
-              widget.currentClubId == clubId.trim() ? widget.clubName : null,
-          baseUrl: widget.baseUrl,
-          backendMode: widget.backendMode,
-          accessToken: widget.accessToken,
-          currentClubId: widget.currentClubId,
-          currentUserRole: widget.currentUserRole,
-          onOpenLogin: widget.onOpenLogin,
-        ),
+        builder:
+            (BuildContext context) => CreatorShareMarketScreen(
+              clubId: clubId.trim(),
+              clubName:
+                  widget.currentClubId == clubId.trim()
+                      ? widget.clubName
+                      : null,
+              baseUrl: widget.baseUrl,
+              backendMode: widget.backendMode,
+              accessToken: widget.accessToken,
+              currentClubId: widget.currentClubId,
+              currentUserRole: widget.currentUserRole,
+              onOpenLogin: widget.onOpenLogin,
+            ),
       ),
     );
   }
 }
 
 class _MarketSnapshotSection extends StatelessWidget {
-  const _MarketSnapshotSection({
-    required this.market,
-    required this.holding,
-  });
+  const _MarketSnapshotSection({required this.market, required this.holding});
 
   final CreatorClubShareMarket market;
   final CreatorClubShareHolding? holding;
 
   @override
   Widget build(BuildContext context) {
+    final int ownershipBps =
+        (holding?.metadata['ownership_bps'] as num?)?.toInt() ?? 0;
     return GteSurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Holder snapshot',
+            'Investor snapshot',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
@@ -731,23 +797,172 @@ class _MarketSnapshotSection extends StatelessWidget {
                 value: holding == null ? '0' : holding!.shareCount.toString(),
               ),
               GteMetricChip(
-                label: 'Revenue distributed',
-                value: gteFormatCredits(market.totalRevenueDistributedCoin),
+                label: 'Total spent',
+                value:
+                    holding == null
+                        ? gteFormatCredits(0)
+                        : gteFormatCredits(holding!.totalSpentCoin),
               ),
               GteMetricChip(
-                label: 'Purchase volume',
-                value: gteFormatCredits(market.totalPurchaseVolumeCoin),
+                label: 'Dividends earned',
+                value:
+                    holding == null
+                        ? gteFormatCredits(0)
+                        : gteFormatCredits(holding!.revenueEarnedCoin),
               ),
               GteMetricChip(
                 label: 'Benefits',
                 value: market.viewerBenefits.shareholder ? 'ACTIVE' : 'NONE',
                 positive: market.viewerBenefits.shareholder,
               ),
+              GteMetricChip(
+                label: 'Ownership',
+                value:
+                    ownershipBps <= 0
+                        ? '0.0%'
+                        : '${(ownershipBps / 100).toStringAsFixed(1)}%',
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
-            'Priority chat visibility: ${market.viewerBenefits.hasPriorityChatVisibility ? 'enabled' : 'disabled'} â€¢ Early ticket access: ${market.viewerBenefits.hasEarlyTicketAccess ? 'enabled' : 'disabled'} â€¢ Cosmetic voting: ${market.viewerBenefits.hasCosmeticVotingRights ? 'enabled' : 'disabled'}',
+            'Priority chat: ${market.viewerBenefits.hasPriorityChatVisibility ? 'enabled' : 'disabled'} | Early ticket access: ${market.viewerBenefits.hasEarlyTicketAccess ? 'enabled' : 'disabled'} | Cosmetic voting: ${market.viewerBenefits.hasCosmeticVotingRights ? 'enabled' : 'disabled'}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ValuationTickerSection extends StatelessWidget {
+  const _ValuationTickerSection({required this.market});
+
+  final CreatorClubShareMarket market;
+
+  @override
+  Widget build(BuildContext context) {
+    final CreatorClubValuationTicker ticker = market.valuationTicker;
+    return GteSurfacePanel(
+      accentColor: const Color(0xFF79D8C3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Live valuation ticker',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              GteMetricChip(
+                label: 'Club valuation',
+                value: gteFormatCredits(ticker.totalValuationCoin),
+              ),
+              GteMetricChip(
+                label: 'Treasury',
+                value: gteFormatCredits(ticker.treasuryBalanceCoin),
+              ),
+              GteMetricChip(
+                label: 'Players',
+                value: gteFormatCredits(ticker.playerMarketValueCoin),
+              ),
+              GteMetricChip(
+                label: 'Infrastructure',
+                value: gteFormatCredits(ticker.infrastructureValueCoin),
+              ),
+              GteMetricChip(
+                label: 'Form bonus',
+                value: gteFormatCredits(ticker.recentPerformanceBonusCoin),
+              ),
+              GteMetricChip(
+                label: 'Price gap',
+                value: _formatSignedBps(ticker.marketPriceDeltaBps),
+                positive: ticker.marketPriceDeltaBps <= 0,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Valuation = treasury + player market value + infrastructure + recent form bonus.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Last five: ${ticker.winsLastFive}W ${ticker.drawsLastFive}D ${ticker.lossesLastFive}L | ${ticker.pointsLastFive} pts | Fans: ${ticker.fanCount} | Updated ${gteFormatRelativeTime(ticker.lastRefreshedAt)}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenueStreamsSection extends StatelessWidget {
+  const _RevenueStreamsSection({
+    required this.market,
+    required this.distributions,
+  });
+
+  final CreatorClubShareMarket market;
+  final List<CreatorClubShareDistribution> distributions;
+
+  @override
+  Widget build(BuildContext context) {
+    final CreatorClubRevenueStreams revenue = market.revenueStreams;
+    final CreatorClubShareDistribution? latestDistribution =
+        distributions.isEmpty ? null : distributions.first;
+    return GteSurfacePanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Revenue and dividends',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              GteMetricChip(
+                label: 'Match winnings',
+                value: gteFormatCredits(revenue.matchWinningsCoin),
+              ),
+              GteMetricChip(
+                label: 'Fan growth',
+                value: gteFormatCredits(revenue.fanGrowthBonusCoin),
+              ),
+              GteMetricChip(
+                label: 'Trading fees',
+                value: gteFormatCredits(revenue.tradingFeesCoin),
+              ),
+              GteMetricChip(
+                label: 'Sponsorships',
+                value: gteFormatCredits(revenue.sponsorshipPoolCoin),
+              ),
+              GteMetricChip(
+                label: 'Broadcast',
+                value: gteFormatCredits(revenue.broadcastRightsCoin),
+              ),
+              GteMetricChip(
+                label: 'Revenue total',
+                value: gteFormatCredits(revenue.totalCoin),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Shareholders receive ${(market.shareholderRevenueShareBps / 100).toStringAsFixed(1)}% of eligible club revenue.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            latestDistribution == null
+                ? 'No dividend payout has settled yet.'
+                : 'Latest payout: ${gteFormatCredits(latestDistribution.totalPayoutCoin)} from ${latestDistribution.sourceType} on ${gteFormatDateTime(latestDistribution.createdAt)}.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
@@ -757,9 +972,7 @@ class _MarketSnapshotSection extends StatelessWidget {
 }
 
 class _GovernanceSection extends StatelessWidget {
-  const _GovernanceSection({
-    required this.market,
-  });
+  const _GovernanceSection({required this.market});
 
   final CreatorClubShareMarket market;
 
@@ -803,13 +1016,15 @@ class _GovernanceSection extends StatelessWidget {
           if (market.ownershipLedger.recentEntries.isEmpty)
             const Text('No recent ledger movements yet.')
           else
-            ...market.ownershipLedger.recentEntries.take(5).map(
+            ...market.ownershipLedger.recentEntries
+                .take(5)
+                .map(
                   (CreatorClubOwnershipLedgerEntry entry) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.account_balance_outlined),
                     title: Text(entry.summary),
                     subtitle: Text(
-                      '${entry.entryType} â€¢ ${gteFormatDateTime(entry.createdAt)}',
+                      '${entry.entryType} | ${gteFormatDateTime(entry.createdAt)}',
                     ),
                     trailing: Text(
                       '${entry.shareDelta >= 0 ? '+' : ''}${entry.shareDelta}',
@@ -823,9 +1038,7 @@ class _GovernanceSection extends StatelessWidget {
 }
 
 class _DistributionSection extends StatelessWidget {
-  const _DistributionSection({
-    required this.distributions,
-  });
+  const _DistributionSection({required this.distributions});
 
   final List<CreatorClubShareDistribution> distributions;
 
@@ -836,20 +1049,22 @@ class _DistributionSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Revenue distributions',
+            'Dividend history',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 12),
           if (distributions.isEmpty)
             const Text('No distributions have settled yet.')
           else
-            ...distributions.take(5).map(
+            ...distributions
+                .take(5)
+                .map(
                   (CreatorClubShareDistribution distribution) => ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.payments_outlined),
                     title: Text(gteFormatCredits(distribution.totalPayoutCoin)),
                     subtitle: Text(
-                      'Funded by ${distribution.sourceType} â€¢ ${gteFormatDateTime(distribution.createdAt)}',
+                      'Funded by ${distribution.sourceType} | ${gteFormatDateTime(distribution.createdAt)}',
                     ),
                   ),
                 ),
@@ -857,6 +1072,12 @@ class _DistributionSection extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatSignedBps(int bps) {
+  final double percent = bps / 100;
+  final String sign = percent > 0 ? '+' : '';
+  return '$sign${percent.toStringAsFixed(1)}%';
 }
 
 class _AdminControlSection extends StatelessWidget {
@@ -945,4 +1166,3 @@ class _AdminControlSection extends StatelessWidget {
     );
   }
 }
-
