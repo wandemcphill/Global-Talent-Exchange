@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 
+import pytest
 from sqlalchemy import create_engine, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
