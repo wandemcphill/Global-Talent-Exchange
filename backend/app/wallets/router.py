@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pathlib import Path
 import json
@@ -57,6 +58,7 @@ from app.wallets.rail_service import WalletRailError, WalletRailConflictError, W
 from app.wallets.providers import get_provider_adapter
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskOpsService
+from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
 from app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
 from app.treasury.schemas import (
     DepositQuoteRequest,
@@ -122,6 +124,37 @@ def _require_payment_rails_permission(request: Request, actor: User) -> None:
     state = service._load_state(request.app)
     profile = service.resolve_profile(actor, state)
     service._assert_has_permission(profile, "manage_payment_rails")
+
+
+@contextmanager
+def _wallet_transaction_lock(
+    request: Request | None,
+    *,
+    user: User,
+    operation: str,
+    ttl_seconds: int = 90,
+):
+    if request is None:
+        yield
+        return
+    control_service = RuntimeControlService(request.app)
+    try:
+        control_service.acquire_wallet_transaction_lock(
+            user_id=user.id,
+            operation=operation,
+            ttl_seconds=ttl_seconds,
+            reason="wallet_transaction_in_flight",
+            updated_by_user_id=user.id,
+        )
+    except WalletTransactionLockConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Another wallet transaction is already in progress for this account. Retry in a moment.",
+        ) from exc
+    try:
+        yield
+    finally:
+        control_service.release_wallet_transaction_lock(user_id=user.id, operation=operation)
 
 
 
@@ -415,14 +448,15 @@ def create_wallet_conversion(
     request: Request = None,
 ) -> WalletConversionView:
     try:
-        result = EconomyGovernorService(session).convert_wallet_units(
-            user=current_user,
-            amount=payload.amount,
-            source_unit=payload.source_unit,
-            actor=current_user,
-            idempotency_key=payload.idempotency_key,
-        )
-        session.commit()
+        with _wallet_transaction_lock(request, user=current_user, operation="wallet_conversion"):
+            result = EconomyGovernorService(session).convert_wallet_units(
+                user=current_user,
+                amount=payload.amount,
+                source_unit=payload.source_unit,
+                actor=current_user,
+                idempotency_key=payload.idempotency_key,
+            )
+            session.commit()
     except LedgerError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -657,21 +691,22 @@ def create_purchase_order(
     settings, processor_mode, payout_channel = _require_gateway_deposit(request=request, session=session, user=current_user)
     rail_service = _build_wallet_rail_service(request, session)
     try:
-        order = rail_service.create_purchase_order(
-            user=current_user,
-            settings=settings,
-            amount=payload.amount,
-            input_unit=payload.input_unit,
-            provider_key=payload.provider_key,
-            source_scope=payload.source_scope.value,
-            unit=payload.unit,
-            processor_mode=processor_mode,
-            payout_channel=payout_channel,
-            provider_reference=payload.provider_reference,
-            notes=payload.notes,
-        )
-        session.commit()
-        session.refresh(order)
+        with _wallet_transaction_lock(request, user=current_user, operation="purchase_order_create"):
+            order = rail_service.create_purchase_order(
+                user=current_user,
+                settings=settings,
+                amount=payload.amount,
+                input_unit=payload.input_unit,
+                provider_key=payload.provider_key,
+                source_scope=payload.source_scope.value,
+                unit=payload.unit,
+                processor_mode=processor_mode,
+                payout_channel=payout_channel,
+                provider_reference=payload.provider_reference,
+                notes=payload.notes,
+            )
+            session.commit()
+            session.refresh(order)
     except WalletRailConflictError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -864,16 +899,17 @@ def create_withdrawal_request(
     if payload.source_scope == WithdrawalSourceScope.TRADE and not bool(controls.get("trade_withdrawals_enabled", True)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Trade withdrawals are currently disabled by platform policy.")
     try:
-        withdrawal = service.create_withdrawal_request(
-            session,
-            user=current_user,
-            amount_coin=payload.amount_coin,
-            bank_account_id=payload.bank_account_id,
-            source_scope=payload.source_scope.value,
-            notes=payload.notes,
-        )
-        session.commit()
-        session.refresh(withdrawal)
+        with _wallet_transaction_lock(request, user=current_user, operation="withdrawal_request"):
+            withdrawal = service.create_withdrawal_request(
+                session,
+                user=current_user,
+                amount_coin=payload.amount_coin,
+                bank_account_id=payload.bank_account_id,
+                source_scope=payload.source_scope.value,
+                notes=payload.notes,
+            )
+            session.commit()
+            session.refresh(withdrawal)
     except TreasuryConflictError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
@@ -1118,16 +1154,17 @@ def create_payment_event(
             detail="Automatic gateway deposits are disabled. Admin has selected manual bank transfer as the active funding rail.",
         )
     try:
-        payment_event = service.create_payment_event(
-            session,
-            user=current_user,
-            provider=payload.provider,
-            provider_reference=payload.provider_reference,
-            amount=payload.amount,
-            pack_code=payload.pack_code,
-        )
-        session.commit()
-        session.refresh(payment_event)
+        with _wallet_transaction_lock(request, user=current_user, operation="payment_event_create"):
+            payment_event = service.create_payment_event(
+                session,
+                user=current_user,
+                provider=payload.provider,
+                provider_reference=payload.provider_reference,
+                amount=payload.amount,
+                pack_code=payload.pack_code,
+            )
+            session.commit()
+            session.refresh(payment_event)
     except LedgerError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

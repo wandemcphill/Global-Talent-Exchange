@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gtex-shared-config
+data:
+  GTE_APP_ENV: production
+  GTE_APP_NAME: Global Talent Exchange API
+  GTE_APP_VERSION: 0.1.0
+  GTE_CONFIG_DIR: backend/config
+  GTE_RUN_MIGRATION_CHECK: "false"
+  GTE_INGESTION_PROVIDER: mock
+  GTE_PROVIDER_TIMEOUT_SECONDS: "20"
+  GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS: "7"
+  GTE_CRYPTO_DEPOSIT_ENABLED: "false"
+  GTE_CRYPTO_PROVIDER_KEY: crypto_fiat
+  GTE_MEDIA_STORAGE_ROOT: backend/storage
+  GTE_MEDIA_DOWNLOAD_BASE_URL: /media-engine/downloads
+  GTE_REDIS_EVENT_CHANNEL: gtex.events
+  GTE_REDIS_REALTIME_CHANNEL: gtex.realtime
+  GTE_KAFKA_BROKERS: redpanda.gtex.svc.cluster.local:9092
+  GTE_KAFKA_TOPIC_PREFIX: gtex
+  GTE_KAFKA_QUEUE_CONSUMER_GROUP: gtex-api-queue
+  GTE_KAFKA_PROJECTION_CONSUMER_GROUP: gtex-projections
+  GTE_OUTBOX_RELAY_BATCH_SIZE: "100"
+  GTE_OUTBOX_RELAY_POLL_INTERVAL_MS: "1000"
+

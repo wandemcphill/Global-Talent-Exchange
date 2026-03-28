@@ -15,6 +15,8 @@ from app.models import CountryFeaturePolicy, EconomyBurnEvent, LedgerEntryReason
 from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.treasury import PaymentMode
+from app.models.wallet import PaymentStatus
+from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import TreasuryService
 from app.wallets.rail_service import WalletRailService
 from app.wallets.service import LedgerPosting, WalletService
@@ -285,6 +287,85 @@ def test_paystack_webhook_settles_purchase_order(client, app_session_factory) ->
         refreshed = session.get(FancoinPurchaseOrder, order.id)
         assert refreshed is not None
         assert refreshed.status == PurchaseOrderStatus.SETTLED
+
+
+def test_wallet_protection_reports_active_wallet_transaction_locks(client, app_session_factory) -> None:
+    _prepare_admin(client, app_session_factory)
+    headers = _login_admin(client)
+    user_id, _user_headers = _create_user_auth_headers(
+        app_session_factory,
+        email="wallet-lock-user@example.com",
+        username="walletlockuser",
+    )
+    RuntimeControlService(client.app).acquire_wallet_transaction_lock(
+        user_id=user_id,
+        operation="withdrawal_request",
+        ttl_seconds=120,
+        updated_by_user_id=user_id,
+    )
+
+    response = client.get("/api/admin/finance/wallet-protection", headers=headers)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["active_wallet_transaction_lock_count"] == 1
+    assert payload["active_wallet_transaction_locks"][0]["user_id"] == user_id
+
+
+def test_reconciliation_summary_surfaces_missing_ledger_links(client, app_session_factory) -> None:
+    _prepare_admin(client, app_session_factory)
+    headers = _login_admin(client)
+    with app_session_factory() as session:
+        user = AuthService().register_user(
+            session,
+            email="reconciliation-user@example.com",
+            username="reconciliationuser",
+            password="SuperSecret1",
+        )
+        treasury = TreasuryService()
+        settings = treasury.ensure_settings(session)
+        settings.deposit_mode = PaymentMode.HYBRID
+        rail_service = WalletRailService(session)
+        order = rail_service.create_purchase_order(
+            user=user,
+            settings=settings,
+            amount=Decimal("9000.0000"),
+            input_unit="fiat",
+            provider_key="paystack",
+            source_scope="wallet",
+            unit=LedgerUnit.COIN,
+            processor_mode="automatic_gateway",
+            payout_channel="gateway",
+            provider_reference="ps_missing_ledger_ref",
+            notes="missing ledger settlement",
+        )
+        order.status = PurchaseOrderStatus.SETTLED
+        order.ledger_transaction_id = None
+
+        payment_event = WalletService().create_payment_event(
+            session,
+            user=user,
+            provider="paystack",
+            provider_reference="payevt_missing_ledger_ref",
+            amount=Decimal("50.0000"),
+        )
+        payment_event.status = PaymentStatus.VERIFIED
+        payment_event.ledger_transaction_id = None
+
+        deposit = treasury.create_deposit_request(session, user=user, amount=Decimal("10000.0000"), input_unit="fiat")
+        deposit.status = deposit.status.CONFIRMED
+        deposit.ledger_transaction_id = None
+        session.commit()
+
+    response = client.get("/api/admin/finance/reconciliation", headers=headers)
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["settled_purchase_orders_missing_ledger"] >= 1
+    assert payload["settled_payment_events_missing_ledger"] >= 1
+    assert payload["confirmed_deposits_missing_ledger"] >= 1
+    assert any(item["issue_type"] == "settled_purchase_order_missing_ledger" for item in payload["issues"])
+    assert any(item["issue_type"] == "verified_payment_event_missing_ledger" for item in payload["issues"])
 
 
 def test_manual_price_override_routes_support_create_list_and_delete(client, app_session_factory) -> None:

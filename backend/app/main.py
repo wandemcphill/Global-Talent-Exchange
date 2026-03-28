@@ -17,6 +17,7 @@ from app.core.config import Settings, get_settings
 from app.core.container import ApplicationContext, build_application_context
 from app.core.database import create_database_engine, create_session_factory, get_session as core_get_session
 from app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from app.core.rate_limit import RateLimitMiddleware
 from app.db import get_session as db_get_session
 from app.modules import DOMAIN_MODULES
 
@@ -90,6 +91,7 @@ def create_app(
         version=resolved_settings.app_version,
         lifespan=lifespan,
     )
+    app.add_middleware(RateLimitMiddleware)
     install_api_v1_exception_handlers(app, context)
     app.dependency_overrides[auth_get_session] = context.database.get_session
     app.dependency_overrides[db_get_session] = context.database.get_session

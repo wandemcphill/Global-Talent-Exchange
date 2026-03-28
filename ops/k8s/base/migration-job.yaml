@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gtex-db-migrate
+  namespace: gtex
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/your-org/gtex-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "alembic", "-c", "backend/migrations/alembic.ini", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: gtex-shared-config
+            - secretRef:
+                name: gtex-secrets
+          env:
+            - name: GTE_KAFKA_CLIENT_ID
+              value: gtex-db-migrate
+            - name: GTE_OUTBOX_RELAY_ENABLED
+              value: "false"
+            - name: GTE_KAFKA_API_QUEUE_CONSUMER_ENABLED
+              value: "false"
+            - name: GTE_KAFKA_SIMULATION_CONSUMER_ENABLED
+              value: "false"
+            - name: GTE_PROJECTION_WORKERS_ENABLED
+              value: "false"

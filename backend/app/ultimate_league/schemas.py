@@ -20,6 +20,9 @@ class UltimateLeagueCompetitorInput(CommonSchema):
     losses: int = Field(default=0, ge=0)
     region: str | None = Field(default=None, min_length=2, max_length=32)
     queue_entered_at: datetime | None = None
+    fatigue: float = Field(default=0.0, ge=0.0, le=1.0)
+    injury_status: str | None = Field(default=None, max_length=64)
+    tactical_preset_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class UltimateLeagueCompetitorView(CommonSchema):
@@ -36,6 +39,10 @@ class UltimateLeagueCompetitorView(CommonSchema):
     tier: LeagueTier
     region: str | None = None
     queue_entered_at: datetime | None = None
+    fatigue: float = Field(default=0.0, ge=0.0, le=1.0)
+    injury_status: str | None = None
+    availability_status: str
+    tactical_preset_id: str | None = None
 
 
 class UltimateLeagueTierView(CommonSchema):
@@ -158,6 +165,36 @@ class UltimateLeagueTournamentView(CommonSchema):
     rounds: list[UltimateLeagueTournamentRoundView]
 
 
+class TacticalPresetListingRequest(CommonSchema):
+    preset_id: str | None = Field(default=None, min_length=3, max_length=64)
+    seller_competitor_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=2, max_length=120)
+    formation: str = Field(min_length=2, max_length=32)
+    style: str = Field(min_length=2, max_length=64)
+    price_gtex: Decimal = Field(gt=Decimal("0"))
+    tags: list[str] = Field(default_factory=list)
+    fatigue_ceiling: float = Field(default=0.75, ge=0.0, le=1.0)
+    injury_cover_enabled: bool = False
+
+
+class TacticalPresetPurchaseRequest(CommonSchema):
+    buyer_competitor_id: str = Field(min_length=1, max_length=64)
+
+
+class TacticalPresetView(CommonSchema):
+    preset_id: str
+    seller_competitor_id: str
+    seller_display_name: str
+    title: str
+    formation: str
+    style: str
+    price_gtex: Decimal
+    tags: list[str] = Field(default_factory=list)
+    fatigue_ceiling: float = Field(ge=0.0, le=1.0)
+    injury_cover_enabled: bool
+    created_at: datetime
+
+
 class UltimateLeaguePayoutPreviewRequest(CommonSchema):
     placements: list[str] = Field(min_length=1)
     gross_pool_gtex: Decimal = Field(gt=Decimal("0"))
@@ -208,4 +245,7 @@ __all__ = [
     "UltimateLeagueTournamentRoundView",
     "UltimateLeagueTournamentSlotView",
     "UltimateLeagueTournamentView",
+    "TacticalPresetListingRequest",
+    "TacticalPresetPurchaseRequest",
+    "TacticalPresetView",
 ]

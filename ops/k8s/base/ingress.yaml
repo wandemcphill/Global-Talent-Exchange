@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gtex-api
+  labels:
+    app.kubernetes.io/name: gtex-api
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  tls:
+    - hosts:
+        - api.gtex.example.com
+      secretName: gtex-api-tls
+  rules:
+    - host: api.gtex.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gtex-api
+                port:
+                  number: 80
+

@@ -10,10 +10,14 @@ from app.ultimate_league.league_service import (
     LeagueStandingEntry,
     LeagueTierDefinition,
     LeagueTournamentPlan,
+    TacticalPresetListing,
     UltimateLeagueError,
 )
 from app.ultimate_league.runtime import UltimateLeagueNotFoundError, UltimateLeagueRuntime
 from app.ultimate_league.schemas import (
+    TacticalPresetListingRequest,
+    TacticalPresetPurchaseRequest,
+    TacticalPresetView,
     UltimateLeagueCompetitorInput,
     UltimateLeagueCompetitorView,
     UltimateLeagueMatchmakingRequest,
@@ -83,6 +87,9 @@ def upsert_competitor(
             losses=payload.losses,
             region=payload.region,
             queue_entered_at=payload.queue_entered_at,
+            fatigue=payload.fatigue,
+            injury_status=payload.injury_status,
+            tactical_preset_id=payload.tactical_preset_id,
         )
     )
     return _serialize_competitor(runtime, competitor)
@@ -248,6 +255,56 @@ def preview_payouts(
     )
 
 
+@legacy_router.get("/tactical-presets", response_model=list[TacticalPresetView])
+@api_router.get("/tactical-presets", response_model=list[TacticalPresetView])
+def list_tactical_presets(
+    runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+) -> list[TacticalPresetView]:
+    return [_serialize_tactical_preset(item) for item in runtime.list_tactical_presets()]
+
+
+@legacy_router.post("/tactical-presets", response_model=TacticalPresetView)
+@api_router.post("/tactical-presets", response_model=TacticalPresetView)
+def upsert_tactical_preset(
+    payload: TacticalPresetListingRequest,
+    runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+) -> TacticalPresetView:
+    try:
+        preset = runtime.upsert_tactical_preset(
+            preset_id=payload.preset_id,
+            seller_competitor_id=payload.seller_competitor_id,
+            title=payload.title,
+            formation=payload.formation,
+            style=payload.style,
+            price_gtex=payload.price_gtex,
+            tags=payload.tags,
+            fatigue_ceiling=payload.fatigue_ceiling,
+            injury_cover_enabled=payload.injury_cover_enabled,
+        )
+    except UltimateLeagueNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _serialize_tactical_preset(preset)
+
+
+@legacy_router.post("/tactical-presets/{preset_id}/purchase", response_model=TacticalPresetView)
+@api_router.post("/tactical-presets/{preset_id}/purchase", response_model=TacticalPresetView)
+def purchase_tactical_preset(
+    preset_id: str,
+    payload: TacticalPresetPurchaseRequest,
+    runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+) -> TacticalPresetView:
+    try:
+        preset = runtime.purchase_tactical_preset(
+            preset_id=preset_id,
+            buyer_competitor_id=payload.buyer_competitor_id,
+        )
+    except UltimateLeagueNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except UltimateLeagueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _serialize_tactical_preset(preset)
+
+
 def _serialize_competitor(runtime: UltimateLeagueRuntime, competitor: LeagueCompetitor) -> UltimateLeagueCompetitorView:
     return UltimateLeagueCompetitorView(
         competitor_id=competitor.competitor_id,
@@ -263,6 +320,10 @@ def _serialize_competitor(runtime: UltimateLeagueRuntime, competitor: LeagueComp
         tier=runtime.service.tier_for_rating(competitor.elo_rating).tier,
         region=competitor.region,
         queue_entered_at=competitor.queue_entered_at,
+        fatigue=competitor.fatigue,
+        injury_status=competitor.injury_status,
+        availability_status=competitor.availability_status,
+        tactical_preset_id=competitor.tactical_preset_id,
     )
 
 
@@ -336,6 +397,22 @@ def _serialize_slot(slot) -> UltimateLeagueTournamentSlotView | None:
         seed=slot.seed,
         source_match_id=slot.source_match_id,
         auto_advanced=slot.auto_advanced,
+    )
+
+
+def _serialize_tactical_preset(item: TacticalPresetListing) -> TacticalPresetView:
+    return TacticalPresetView(
+        preset_id=item.preset_id,
+        seller_competitor_id=item.seller_competitor_id,
+        seller_display_name=item.seller_display_name,
+        title=item.title,
+        formation=item.formation,
+        style=item.style,
+        price_gtex=item.price_gtex,
+        tags=list(item.tags),
+        fatigue_ceiling=item.fatigue_ceiling,
+        injury_cover_enabled=item.injury_cover_enabled,
+        created_at=item.created_at,
     )
 
 

@@ -21,6 +21,7 @@ from app.ingestion.models import Player
 from app.models.base import Base
 from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
+from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
 from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
@@ -288,6 +289,30 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
     }
     assert payment_payload["provider"] == "monnify"
     assert payment_payload["status"] == "pending"
+
+
+def test_payment_event_rejects_when_wallet_transaction_lock_exists(api_context) -> None:
+    client, session, current_user = api_context
+    _enable_automatic_deposits(session)
+    RuntimeControlService(client.app).acquire_wallet_transaction_lock(
+        user_id=current_user.id,
+        operation="payment_event_create",
+        ttl_seconds=120,
+        updated_by_user_id=current_user.id,
+    )
+
+    response = client.post(
+        "/api/wallets/payment-events",
+        json={
+            "provider": "monnify",
+            "provider_reference": "monnify-ref-locked",
+            "amount": "50.0000",
+            "pack_code": "starter-50",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "another wallet transaction is already in progress" in response.json()["detail"].lower()
 
 
 def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:

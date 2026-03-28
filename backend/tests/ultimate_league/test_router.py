@@ -122,3 +122,65 @@ def test_matchmaking_tournament_and_payout_preview(client: TestClient, prefix: s
         Decimal("700.0000"),
         Decimal("300.0000"),
     ]
+
+
+@pytest.mark.parametrize("prefix", ["/ultimate-league", "/api/ultimate-league"])
+def test_tactical_presets_and_competitor_availability_round_trip(client: TestClient, prefix: str) -> None:
+    _register(
+        client,
+        prefix,
+        _competitor("seller-1", "Seller One", 1510, wins=4, region="AF-WEST") | {"fatigue": 0.10},
+        _competitor("buyer-1", "Buyer One", 1490, wins=3, region="AF-WEST") | {"fatigue": 0.20},
+        _competitor("injured-1", "Injured One", 1480, wins=2, region="AF-WEST") | {"injury_status": "hamstring"},
+    )
+
+    ready_response = client.get(f"{prefix}/competitors/seller-1")
+    injured_response = client.get(f"{prefix}/competitors/injured-1")
+    assert ready_response.status_code == 200
+    assert injured_response.status_code == 200
+    assert ready_response.json()["availability_status"] == "ready"
+    assert injured_response.json()["availability_status"] == "injured"
+
+    preset_response = client.post(
+        f"{prefix}/tactical-presets",
+        json={
+            "seller_competitor_id": "seller-1",
+            "title": "Counter Press 4-3-3",
+            "formation": "4-3-3",
+            "style": "counter press",
+            "price_gtex": "15.0000",
+            "tags": ["press", "wide"],
+            "fatigue_ceiling": 0.70,
+            "injury_cover_enabled": True,
+        },
+    )
+    assert preset_response.status_code == 200, preset_response.text
+    preset = preset_response.json()
+    assert preset["seller_competitor_id"] == "seller-1"
+    assert preset["injury_cover_enabled"] is True
+
+    listing_response = client.get(f"{prefix}/tactical-presets")
+    assert listing_response.status_code == 200
+    assert any(item["preset_id"] == preset["preset_id"] for item in listing_response.json())
+
+    purchase_response = client.post(
+        f"{prefix}/tactical-presets/{preset['preset_id']}/purchase",
+        json={"buyer_competitor_id": "buyer-1"},
+    )
+    assert purchase_response.status_code == 200, purchase_response.text
+    assert purchase_response.json()["preset_id"] == preset["preset_id"]
+
+    result_response = client.post(
+        f"{prefix}/matches/result",
+        json={
+            "home_competitor_id": "seller-1",
+            "away_competitor_id": "buyer-1",
+            "home_score": 2,
+            "away_score": 1,
+            "importance": 2.5,
+        },
+    )
+    assert result_response.status_code == 200, result_response.text
+    body = result_response.json()
+    assert body["home"]["fatigue"] > 0.10
+    assert body["away"]["fatigue"] > 0.20

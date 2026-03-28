@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
+from decimal import Decimal
 from typing import Sequence
 from uuid import uuid4
 
@@ -9,6 +10,7 @@ from app.ultimate_league.league_service import (
     GTexPrizePayout,
     LeagueCompetitor,
     LeagueStandingEntry,
+    TacticalPresetListing,
     LeagueTier,
     LeagueTierDefinition,
     LeagueTournamentPlan,
@@ -27,6 +29,8 @@ class UltimateLeagueRuntime:
     service: UltimateLeagueService = field(default_factory=UltimateLeagueService)
     competitors: dict[str, LeagueCompetitor] = field(default_factory=dict)
     tournaments: dict[str, LeagueTournamentPlan] = field(default_factory=dict)
+    tactical_presets: dict[str, TacticalPresetListing] = field(default_factory=dict)
+    purchased_preset_ids_by_competitor: dict[str, set[str]] = field(default_factory=dict)
 
     def upsert_competitor(self, competitor: LeagueCompetitor) -> LeagueCompetitor:
         self.competitors[competitor.competitor_id] = competitor
@@ -138,6 +142,49 @@ class UltimateLeagueRuntime:
         if not competitor_ids:
             return tuple(self.competitors.values())
         return tuple(self.get_competitor(competitor_id) for competitor_id in competitor_ids)
+
+    def upsert_tactical_preset(
+        self,
+        *,
+        preset_id: str | None,
+        seller_competitor_id: str,
+        title: str,
+        formation: str,
+        style: str,
+        price_gtex: Decimal,
+        tags: Sequence[str] | None = None,
+        fatigue_ceiling: float = 0.75,
+        injury_cover_enabled: bool = False,
+    ) -> TacticalPresetListing:
+        seller = self.get_competitor(seller_competitor_id)
+        listing = TacticalPresetListing(
+            preset_id=preset_id or f"preset-{uuid4().hex[:12]}",
+            seller_competitor_id=seller_competitor_id,
+            seller_display_name=seller.display_name,
+            title=title.strip(),
+            formation=formation.strip(),
+            style=style.strip(),
+            price_gtex=Decimal(str(price_gtex)).quantize(Decimal("0.0001")),
+            tags=tuple(str(tag).strip().lower() for tag in (tags or ()) if str(tag).strip()),
+            fatigue_ceiling=float(fatigue_ceiling),
+            injury_cover_enabled=bool(injury_cover_enabled),
+        )
+        self.tactical_presets[listing.preset_id] = listing
+        return listing
+
+    def list_tactical_presets(self) -> tuple[TacticalPresetListing, ...]:
+        return tuple(sorted(self.tactical_presets.values(), key=lambda item: (item.price_gtex, item.title.lower())))
+
+    def purchase_tactical_preset(self, *, preset_id: str, buyer_competitor_id: str) -> TacticalPresetListing:
+        listing = self.tactical_presets.get(preset_id)
+        if listing is None:
+            raise UltimateLeagueNotFoundError(f"Tactical preset '{preset_id}' was not found.")
+        if listing.seller_competitor_id == buyer_competitor_id:
+            raise UltimateLeagueError("Competitors cannot purchase their own tactical preset.")
+        self.get_competitor(buyer_competitor_id)
+        purchases = self.purchased_preset_ids_by_competitor.setdefault(buyer_competitor_id, set())
+        purchases.add(preset_id)
+        return listing
 
 
 __all__ = [

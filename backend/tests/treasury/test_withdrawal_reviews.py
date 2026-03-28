@@ -12,6 +12,7 @@ from app.models import Base, CountryFeaturePolicy, KycStatus, LedgerEntryReason,
 from app.models.risk_ops import AmlCase, SystemEvent
 from app.models.treasury import RateDirection, TreasuryWithdrawalStatus
 from app.models.withdrawal_review import WithdrawalReview
+from app.models.wallet import PayoutRequest, PayoutStatus
 from app.treasury.service import TreasuryService
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -191,3 +192,106 @@ def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
         select(SystemEvent).where(SystemEvent.subject_id == withdrawal.id)
     )
     assert system_event is not None
+
+
+def test_withdrawal_batching_moves_approved_requests_to_processing(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="batching@example.com", username="batchinguser")
+    admin = _create_user(session, email="batch-admin@example.com", username="batchadmin")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _configure_withdrawal_settings(session)
+    _seed_balance(session, user=user, amount=Decimal("250.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Batch Bank",
+        account_number="1111111111",
+        account_name="Batch User",
+        bank_code="003",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal_one = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="batch-one",
+    )
+    withdrawal_two = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("15.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="batch-two",
+    )
+    session.commit()
+
+    treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal_one.id,
+        status=TreasuryWithdrawalStatus.APPROVED,
+        admin_notes="approved-one",
+    )
+    treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal_two.id,
+        status=TreasuryWithdrawalStatus.APPROVED,
+        admin_notes="approved-two",
+    )
+    session.commit()
+
+    batch = treasury.create_withdrawal_batch(
+        session,
+        actor=admin,
+        statuses=(TreasuryWithdrawalStatus.APPROVED,),
+        limit=10,
+        notes="first payout run",
+    )
+    session.commit()
+
+    assert batch["item_count"] == 2
+    assert set(batch["withdrawal_ids"]) == {withdrawal_one.id, withdrawal_two.id}
+
+    refreshed_one = session.get(type(withdrawal_one), withdrawal_one.id)
+    refreshed_two = session.get(type(withdrawal_two), withdrawal_two.id)
+    assert refreshed_one is not None
+    assert refreshed_two is not None
+    assert refreshed_one.status == TreasuryWithdrawalStatus.PROCESSING
+    assert refreshed_two.status == TreasuryWithdrawalStatus.PROCESSING
+
+    payout_one = session.get(PayoutRequest, refreshed_one.payout_request_id)
+    payout_two = session.get(PayoutRequest, refreshed_two.payout_request_id)
+    assert payout_one is not None
+    assert payout_two is not None
+    assert payout_one.status == PayoutStatus.PROCESSING
+    assert payout_two.status == PayoutStatus.PROCESSING
+
+    reviews = session.scalars(
+        select(WithdrawalReview)
+        .where(WithdrawalReview.withdrawal_request_id.in_([withdrawal_one.id, withdrawal_two.id]))
+        .order_by(WithdrawalReview.created_at.desc())
+    ).all()
+    assert len(reviews) >= 4
+    batched_reviews = [item for item in reviews if (item.metadata_json or {}).get("batch_id") == batch["batch_id"]]
+    assert len(batched_reviews) == 2
+
+    listed_batches = treasury.list_withdrawal_batches(session, limit=10)
+    listed = next(item for item in listed_batches if item["batch_id"] == batch["batch_id"])
+    assert listed["item_count"] == 2
+    assert listed["statuses"] == [TreasuryWithdrawalStatus.PROCESSING]
+    assert listed["notes"] == "first payout run"
+
+    audit = session.scalar(
+        select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == batch["batch_id"])
+    )
+    assert audit is not None

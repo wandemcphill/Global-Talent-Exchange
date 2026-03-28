@@ -770,8 +770,156 @@ class TreasuryService:
                 resource_type="withdrawal_request",
                 resource_id=request.id,
                 metadata={"reference": request.reference, "status": status.value},
-            )
+        )
         return request
+
+    def create_withdrawal_batch(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        statuses: tuple[TreasuryWithdrawalStatus, ...],
+        limit: int = 50,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
+        selected = session.scalars(
+            select(TreasuryWithdrawalRequest)
+            .where(TreasuryWithdrawalRequest.status.in_(statuses))
+            .order_by(TreasuryWithdrawalRequest.created_at.asc(), TreasuryWithdrawalRequest.id.asc())
+            .limit(limit)
+        ).all()
+        if not selected:
+            raise TreasuryConflictError("No withdrawals matched the requested batch filter.")
+
+        batch_id = f"WDBATCH-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
+        created_at = utcnow()
+        gross_amount = Decimal("0.0000")
+        fee_amount = Decimal("0.0000")
+        net_amount = Decimal("0.0000")
+        withdrawal_ids: list[str] = []
+
+        for index, request in enumerate(selected, start=1):
+            payout_request = session.get(PayoutRequest, request.payout_request_id)
+            if payout_request is None:
+                raise TreasuryError("Withdrawal request references missing payout request.")
+
+            previous = request.status
+            request.status = TreasuryWithdrawalStatus.PROCESSING
+            request.processed_at = created_at
+            request.reviewed_at = created_at
+            request.admin_user_id = actor.id
+            request.admin_notes = notes
+            payout_request.status = PayoutStatus.PROCESSING
+            session.add(
+                WithdrawalReview(
+                    withdrawal_request_id=request.id,
+                    payout_request_id=request.payout_request_id,
+                    reviewer_user_id=actor.id,
+                    status_from=previous.value,
+                    status_to=TreasuryWithdrawalStatus.PROCESSING.value,
+                    processor_mode=request.processor_mode,
+                    payout_channel=request.payout_channel,
+                    source_scope=request.source_scope,
+                    gross_amount=request.amount_coin,
+                    fee_amount=request.fee_amount,
+                    net_amount=request.net_amount,
+                    notes=notes,
+                    metadata_json={
+                        "batch_id": batch_id,
+                        "sequence": index,
+                        "batched_at": created_at.isoformat(),
+                        "batched_from_status": previous.value,
+                        "payout_status": payout_request.status.value,
+                    },
+                )
+            )
+            gross_amount += Decimal(request.amount_coin or 0)
+            fee_amount += Decimal(request.fee_amount or 0)
+            net_amount += Decimal(request.net_amount or 0)
+            withdrawal_ids.append(request.id)
+
+        session.flush()
+        self._audit(
+            session,
+            actor=actor,
+            event_type="treasury.withdrawal.batch.created",
+            resource_type="withdrawal_batch",
+            resource_id=batch_id,
+            summary=f"Created withdrawal batch {batch_id}.",
+            payload={
+                "batch_id": batch_id,
+                "statuses": [status.value for status in statuses],
+                "item_count": len(withdrawal_ids),
+                "withdrawal_ids": withdrawal_ids,
+                "gross_amount": str(gross_amount.quantize(AMOUNT_QUANTUM)),
+                "fee_amount": str(fee_amount.quantize(AMOUNT_QUANTUM)),
+                "net_amount": str(net_amount.quantize(AMOUNT_QUANTUM)),
+            },
+        )
+        return {
+            "batch_id": batch_id,
+            "created_at": created_at,
+            "actor_user_id": actor.id,
+            "item_count": len(withdrawal_ids),
+            "gross_amount": gross_amount.quantize(AMOUNT_QUANTUM),
+            "fee_amount": fee_amount.quantize(AMOUNT_QUANTUM),
+            "net_amount": net_amount.quantize(AMOUNT_QUANTUM),
+            "statuses": list(statuses),
+            "withdrawal_ids": withdrawal_ids,
+            "notes": notes,
+        }
+
+    def list_withdrawal_batches(self, session: Session, *, limit: int = 50) -> list[dict[str, Any]]:
+        reviews = session.scalars(
+            select(WithdrawalReview)
+            .order_by(WithdrawalReview.created_at.desc(), WithdrawalReview.id.desc())
+            .limit(max(limit * 20, limit))
+        ).all()
+        grouped: dict[str, dict[str, Any]] = {}
+        for review in reviews:
+            batch_id = str((review.metadata_json or {}).get("batch_id") or "").strip()
+            if not batch_id:
+                continue
+            item = grouped.get(batch_id)
+            if item is None:
+                item = {
+                    "batch_id": batch_id,
+                    "created_at": review.created_at,
+                    "actor_user_id": review.reviewer_user_id,
+                    "item_count": 0,
+                    "gross_amount": Decimal("0.0000"),
+                    "fee_amount": Decimal("0.0000"),
+                    "net_amount": Decimal("0.0000"),
+                    "statuses": set(),
+                    "withdrawal_ids": [],
+                    "notes": review.notes,
+                }
+                grouped[batch_id] = item
+            item["item_count"] += 1
+            item["gross_amount"] += Decimal(review.gross_amount or 0)
+            item["fee_amount"] += Decimal(review.fee_amount or 0)
+            item["net_amount"] += Decimal(review.net_amount or 0)
+            item["statuses"].add(TreasuryWithdrawalStatus(review.status_to))
+            item["withdrawal_ids"].append(review.withdrawal_request_id)
+
+        batches = sorted(grouped.values(), key=lambda item: item["created_at"], reverse=True)[:limit]
+        payload: list[dict[str, Any]] = []
+        for item in batches:
+            payload.append(
+                {
+                    "batch_id": item["batch_id"],
+                    "created_at": item["created_at"],
+                    "actor_user_id": item["actor_user_id"],
+                    "item_count": item["item_count"],
+                    "gross_amount": Decimal(item["gross_amount"]).quantize(AMOUNT_QUANTUM),
+                    "fee_amount": Decimal(item["fee_amount"]).quantize(AMOUNT_QUANTUM),
+                    "net_amount": Decimal(item["net_amount"]).quantize(AMOUNT_QUANTUM),
+                    "statuses": sorted(item["statuses"], key=lambda status: status.value),
+                    "withdrawal_ids": item["withdrawal_ids"],
+                    "notes": item["notes"],
+                }
+            )
+        return payload
 
     def get_or_create_kyc_profile(self, session: Session, user: User) -> KycProfile:
         profile = session.scalar(select(KycProfile).where(KycProfile.user_id == user.id))

@@ -41,11 +41,32 @@
 4. Start the FastAPI app with a production ASGI server.
 5. Attach Redis for jobs, cache, and event fan-out.
 
+## Render to Kubernetes
+
+Render remains the simplest production starting point for this repo because the backend is still a modular monolith with separate worker entrypoints. The Kubernetes-ready path is:
+
+1. Keep the API on Render while stabilizing contracts.
+2. Move `gtex-outbox-relay`, `gtex-simulation-worker`, and `gtex-projection-workers` onto Kubernetes first.
+3. Add HPA for API and worker pods.
+4. Add read replicas for query-heavy traffic.
+5. Extract payment, notification, wallet, and market boundaries only when scale or ownership justifies separate deployables.
+
+Canonical architecture doc:
+
+- `Docs/architecture/render-to-kubernetes-microservices.md`
+
+Starter Kubernetes manifests and container path:
+
+- `Dockerfile`
+- `ops/k8s/README.md`
+- `ops/k8s/base/`
+
 ## Frontend deploy flow
 - build Android APK / AAB
 - build iOS archive
 - build Windows and macOS desktop releases
 - verify policy pages, reporting flows, and store disclosure text before submission
+
 
 ## Production hardening
 - use PostgreSQL instead of SQLite

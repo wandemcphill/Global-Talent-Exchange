@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from enum import StrEnum
 from typing import ClassVar, Mapping, Sequence
@@ -62,6 +62,9 @@ class LeagueCompetitor:
     losses: int = 0
     region: str | None = None
     queue_entered_at: datetime | None = None
+    fatigue: float = 0.0
+    injury_status: str | None = None
+    tactical_preset_id: str | None = None
 
     @property
     def matches_played(self) -> int:
@@ -76,6 +79,21 @@ class LeagueCompetitor:
         if self.matches_played == 0:
             return 0.0
         return self.wins / self.matches_played
+
+    @property
+    def availability_status(self) -> str:
+        normalized_injury = (self.injury_status or "").strip().lower()
+        if normalized_injury not in {"", "fit", "available", "cleared"}:
+            return "injured"
+        if self.fatigue >= 0.85:
+            return "fatigued"
+        if self.fatigue >= 0.65:
+            return "limited"
+        return "ready"
+
+    @property
+    def ready_for_matchmaking(self) -> bool:
+        return self.availability_status in {"ready", "limited"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +120,21 @@ class GTexPrizePayout:
     unit: LedgerUnit = LedgerUnit.COIN
     source_tag: LedgerSourceTag = LedgerSourceTag.PLATFORM_COMPETITION_REWARD
     reason: LedgerEntryReason = LedgerEntryReason.COMPETITION_REWARD
+
+
+@dataclass(frozen=True, slots=True)
+class TacticalPresetListing:
+    preset_id: str
+    seller_competitor_id: str
+    seller_display_name: str
+    title: str
+    formation: str
+    style: str
+    price_gtex: Decimal
+    tags: tuple[str, ...] = ()
+    fatigue_ceiling: float = 0.75
+    injury_cover_enabled: bool = False
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +225,7 @@ class UltimateLeagueService:
                 queue_entered_at=competitor.queue_entered_at,
             )
             for competitor in competitors
+            if competitor.ready_for_matchmaking
         )
         return self.matchmaking_engine.build_pairs(queue, now=now, prefer_same_tier=prefer_same_tier)
 
@@ -213,14 +247,44 @@ class UltimateLeagueService:
         )
 
         if home_score == away_score:
-            updated_home = replace(home, elo_rating=update.home_new_rating, draws=home.draws + 1)
-            updated_away = replace(away, elo_rating=update.away_new_rating, draws=away.draws + 1)
+            updated_home = replace(
+                home,
+                elo_rating=update.home_new_rating,
+                draws=home.draws + 1,
+                fatigue=min(1.0, home.fatigue + self._fatigue_increment(importance)),
+            )
+            updated_away = replace(
+                away,
+                elo_rating=update.away_new_rating,
+                draws=away.draws + 1,
+                fatigue=min(1.0, away.fatigue + self._fatigue_increment(importance)),
+            )
         elif home_score > away_score:
-            updated_home = replace(home, elo_rating=update.home_new_rating, wins=home.wins + 1)
-            updated_away = replace(away, elo_rating=update.away_new_rating, losses=away.losses + 1)
+            updated_home = replace(
+                home,
+                elo_rating=update.home_new_rating,
+                wins=home.wins + 1,
+                fatigue=min(1.0, home.fatigue + self._fatigue_increment(importance)),
+            )
+            updated_away = replace(
+                away,
+                elo_rating=update.away_new_rating,
+                losses=away.losses + 1,
+                fatigue=min(1.0, away.fatigue + self._fatigue_increment(importance)),
+            )
         else:
-            updated_home = replace(home, elo_rating=update.home_new_rating, losses=home.losses + 1)
-            updated_away = replace(away, elo_rating=update.away_new_rating, wins=away.wins + 1)
+            updated_home = replace(
+                home,
+                elo_rating=update.home_new_rating,
+                losses=home.losses + 1,
+                fatigue=min(1.0, home.fatigue + self._fatigue_increment(importance)),
+            )
+            updated_away = replace(
+                away,
+                elo_rating=update.away_new_rating,
+                wins=away.wins + 1,
+                fatigue=min(1.0, away.fatigue + self._fatigue_increment(importance)),
+            )
         return updated_home, updated_away, update
 
     def schedule_tier_tournament(
@@ -237,7 +301,11 @@ class UltimateLeagueService:
     ) -> LeagueTournamentPlan:
         tier_enum = LeagueTier(tier)
         definition = self._tier_definition(tier_enum)
-        tier_competitors = [competitor for competitor in competitors if self.tier_for_rating(competitor.elo_rating).tier == tier_enum]
+        tier_competitors = [
+            competitor
+            for competitor in competitors
+            if self.tier_for_rating(competitor.elo_rating).tier == tier_enum and competitor.ready_for_matchmaking
+        ]
         if len(tier_competitors) < 2:
             raise UltimateLeagueError(f"At least two {definition.label} competitors are required to schedule a tournament.")
 
@@ -419,11 +487,16 @@ class UltimateLeagueService:
             raise UltimateLeagueError("Prize distribution percentages must sum to 1.0000 or 100.0000.")
         return normalized
 
+    @staticmethod
+    def _fatigue_increment(importance: float) -> float:
+        return max(0.03, min(0.18, 0.06 + (float(importance) * 0.02)))
+
 
 __all__ = [
     "GTexPrizePayout",
     "LeagueCompetitor",
     "LeagueStandingEntry",
+    "TacticalPresetListing",
     "LeagueTier",
     "LeagueTierDefinition",
     "LeagueTournamentPlan",

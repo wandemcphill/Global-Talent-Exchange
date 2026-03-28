@@ -395,3 +395,36 @@ def test_governor_enforces_treasury_buffer_and_dynamic_reward_scaling(session) -
     assert not governor.can_fund_match(amount=Decimal('7.0000'))
     assert governor.reward_multiplier() == Decimal('0.8000')
     assert governor.scale_reward_amount(amount=Decimal('10.0000')) == Decimal('6.6666')
+
+
+def test_governor_snapshot_surfaces_whale_decay_and_circuit_breaker_metrics(session) -> None:
+    wallet = WalletService()
+    whale = _create_user(session, user_id='whale-user', email='whale@example.com', username='whale-user')
+    minnow = _create_user(session, user_id='minnow-user', email='minnow@example.com', username='minnow-user')
+    _seed_balance(session, wallet, user=whale, unit=LedgerUnit.COIN, amount=Decimal('90.0000'))
+    _seed_balance(session, wallet, user=minnow, unit=LedgerUnit.COIN, amount=Decimal('10.0000'))
+
+    governor = EconomyGovernorService(session=session, wallet_service=wallet)
+
+    assert governor.whale_concentration() == Decimal('0.9000')
+
+    snapshot = governor.snapshot(
+        metrics={
+            'gtex_supply': Decimal('100.0000'),
+            'daily_burn': Decimal('10.0000'),
+            'daily_mint': Decimal('25.0000'),
+            'inflation_rate': Decimal('0.2600'),
+            'liquidity_pool_balance': Decimal('0.0000'),
+            'treasury_balance': Decimal('100.0000'),
+            'rewards_pool_balance': Decimal('30.0000'),
+            'treasury_reward_threshold': Decimal('20.0000'),
+        }
+    )
+
+    assert snapshot['metrics']['whale_concentration'] == '0.9000'
+    assert snapshot['metrics']['reward_decay_factor'] == '0.6600'
+    assert snapshot['metrics']['effective_burn_bonus_bps'] == '600'
+    assert snapshot['metrics']['circuit_breaker_active'] == '1.0000'
+    action_types = {item['type'] for item in snapshot['recommended_actions']}
+    assert 'activate_circuit_breaker' in action_types
+    assert 'apply_reward_decay' in action_types

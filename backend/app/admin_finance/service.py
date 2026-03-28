@@ -20,7 +20,7 @@ from app.models.player_cards import PlayerCardMomentum
 from app.models.risk_ops import SystemEvent, SystemEventSeverity
 from app.models.treasury import DepositRequest, DepositStatus, KycProfile, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
 from app.models.user import KycStatus, User
-from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit, PaymentEvent, PaymentStatus
 from app.services.payment_gateway_service import PaymentGatewayService
 from app.treasury.service import TreasuryService
 from app.wallets.providers.base import ProviderEventType
@@ -253,7 +253,12 @@ class AdminFinanceService:
             return self._verify_korapay_webhook(payload=payload, headers=normalized_headers)
         return False
 
-    def wallet_protection_summary(self, *, frozen_wallet_account_count: int = 0) -> dict[str, object]:
+    def wallet_protection_summary(
+        self,
+        *,
+        frozen_wallet_account_count: int = 0,
+        active_wallet_transaction_locks: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
         rows = self.session.execute(
             select(
                 FancoinPurchaseOrder.provider_key,
@@ -292,16 +297,134 @@ class AdminFinanceService:
             "banned_account_count": self.count_banned_accounts(),
             "pending_purchase_orders": self._count_pending_purchase_orders(),
             "pending_withdrawals": self._count_pending_withdrawals(),
+            "active_wallet_transaction_lock_count": len(active_wallet_transaction_locks or []),
             "payment_signature_verification_enabled": any(
                 bool(self._provider_secret(provider))
                 for provider in ("paystack", "korapay")
             ),
+            "active_wallet_transaction_locks": list(active_wallet_transaction_locks or []),
             "duplicate_deposit_candidates": duplicate_candidates,
         }
 
     def count_banned_accounts(self) -> int:
         count = self.session.scalar(select(func.count(User.id)).where(User.is_active.is_(False)))
         return int(count or 0)
+
+    def payment_reconciliation_summary(self, *, issue_limit: int = 25) -> dict[str, object]:
+        issues: list[dict[str, object]] = []
+        settled_purchase_order_rows = self.session.scalars(
+            select(FancoinPurchaseOrder)
+            .where(
+                FancoinPurchaseOrder.status == PurchaseOrderStatus.SETTLED,
+                FancoinPurchaseOrder.ledger_transaction_id.is_(None),
+            )
+            .order_by(FancoinPurchaseOrder.updated_at.desc(), FancoinPurchaseOrder.created_at.desc())
+            .limit(issue_limit)
+        ).all()
+        for item in settled_purchase_order_rows:
+            issues.append(
+                {
+                    "issue_type": "settled_purchase_order_missing_ledger",
+                    "resource_id": item.id,
+                    "reference": item.reference,
+                    "detail": "Purchase order is settled but has no linked ledger transaction.",
+                }
+            )
+
+        settled_payment_event_rows = self.session.scalars(
+            select(PaymentEvent)
+            .where(
+                PaymentEvent.status == PaymentStatus.VERIFIED,
+                PaymentEvent.ledger_transaction_id.is_(None),
+            )
+            .order_by(PaymentEvent.updated_at.desc(), PaymentEvent.created_at.desc())
+            .limit(issue_limit)
+        ).all()
+        for item in settled_payment_event_rows:
+            issues.append(
+                {
+                    "issue_type": "verified_payment_event_missing_ledger",
+                    "resource_id": item.id,
+                    "reference": item.provider_reference,
+                    "detail": "Payment event is verified but has no linked ledger transaction.",
+                }
+            )
+
+        confirmed_deposit_rows = self.session.scalars(
+            select(DepositRequest)
+            .where(
+                DepositRequest.status == DepositStatus.CONFIRMED,
+                DepositRequest.ledger_transaction_id.is_(None),
+            )
+            .order_by(DepositRequest.updated_at.desc(), DepositRequest.created_at.desc())
+            .limit(issue_limit)
+        ).all()
+        for item in confirmed_deposit_rows:
+            issues.append(
+                {
+                    "issue_type": "confirmed_deposit_missing_ledger",
+                    "resource_id": item.id,
+                    "reference": item.reference,
+                    "detail": "Deposit request is confirmed but has no linked ledger transaction.",
+                }
+            )
+
+        duplicate_reference_groups = self.session.execute(
+            select(
+                FancoinPurchaseOrder.provider_key,
+                FancoinPurchaseOrder.provider_reference,
+                func.count(FancoinPurchaseOrder.id),
+            )
+            .where(FancoinPurchaseOrder.provider_reference.is_not(None))
+            .group_by(FancoinPurchaseOrder.provider_key, FancoinPurchaseOrder.provider_reference)
+            .having(func.count(FancoinPurchaseOrder.id) > 1)
+            .order_by(func.count(FancoinPurchaseOrder.id).desc())
+            .limit(issue_limit)
+        ).all()
+        for provider_key, provider_reference, occurrence_count in duplicate_reference_groups:
+            issues.append(
+                {
+                    "issue_type": "duplicate_provider_reference",
+                    "resource_id": f"{provider_key}:{provider_reference}",
+                    "reference": str(provider_reference),
+                    "detail": f"Provider reference appears on {int(occurrence_count or 0)} purchase orders.",
+                }
+            )
+
+        return {
+            "generated_at": datetime.now(timezone.utc),
+            "pending_payment_events": int(
+                self.session.scalar(
+                    select(func.count()).select_from(PaymentEvent).where(PaymentEvent.status == PaymentStatus.PENDING)
+                ) or 0
+            ),
+            "settled_purchase_orders_missing_ledger": int(
+                self.session.scalar(
+                    select(func.count()).select_from(FancoinPurchaseOrder).where(
+                        FancoinPurchaseOrder.status == PurchaseOrderStatus.SETTLED,
+                        FancoinPurchaseOrder.ledger_transaction_id.is_(None),
+                    )
+                ) or 0
+            ),
+            "settled_payment_events_missing_ledger": int(
+                self.session.scalar(
+                    select(func.count()).select_from(PaymentEvent).where(
+                        PaymentEvent.status == PaymentStatus.VERIFIED,
+                        PaymentEvent.ledger_transaction_id.is_(None),
+                    )
+                ) or 0
+            ),
+            "confirmed_deposits_missing_ledger": int(
+                self.session.scalar(
+                    select(func.count()).select_from(DepositRequest).where(
+                        DepositRequest.status == DepositStatus.CONFIRMED,
+                        DepositRequest.ledger_transaction_id.is_(None),
+                    )
+                ) or 0
+            ),
+            "duplicate_provider_references": len(duplicate_reference_groups),
+            "issues": issues[:issue_limit],
+        }
 
     def governor_snapshot(self) -> dict[str, object]:
         return EconomyGovernorService(self.session).snapshot()

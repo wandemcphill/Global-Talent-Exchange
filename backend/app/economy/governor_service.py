@@ -3,14 +3,14 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.base import generate_uuid, utcnow
 from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.economy_governor import EconomyGovernorPolicy
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerBalanceProjection, LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.wallets.service import (
     LedgerPosting,
     WalletConversionQuote,
@@ -92,6 +92,7 @@ class EconomyGovernorService:
             "liquidity_pool_balance": self.liquidity_pool_balance(),
             "treasury_reward_threshold": self.treasury_reward_threshold(),
             "treasury_buffer_multiple": TREASURY_BUFFER_MULTIPLE,
+            "whale_concentration": self.whale_concentration(),
         }
 
     def evaluate(self, *, metrics: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -110,12 +111,20 @@ class EconomyGovernorService:
             actions.append({"type": "increase_burn_rate", "value": "0.0500"})
             actions.append({"type": "boost_conversion_incentive", "value": 250})
 
+        if normalized_metrics["whale_concentration"] >= Decimal("0.4500"):
+            actions.append({"type": "increase_burn_rate", "value": "0.0250"})
+            actions.append({"type": "activate_circuit_breaker", "value": "1"})
+
         if (
             normalized_metrics["treasury_balance"] > Decimal("0.0000")
             and normalized_metrics["treasury_balance"] < normalized_metrics["treasury_reward_threshold"]
             and not any(str(action.get("type") or "").strip().lower() == "reduce_rewards" for action in actions)
         ):
             actions.append({"type": "reduce_rewards", "value": "0.2000"})
+
+        reward_decay_factor = self.reward_decay_factor(metrics=normalized_metrics)
+        if reward_decay_factor < Decimal("1.0000"):
+            actions.append({"type": "apply_reward_decay", "value": str(Decimal("1.0000") - reward_decay_factor)})
 
         policy.last_metrics_json = self._metrics_payload(normalized_metrics)
         policy.last_actions_json = [dict(action) for action in actions]
@@ -218,10 +227,11 @@ class EconomyGovernorService:
         multiplier = self._amount(self.get_policy().reward_payout_multiplier)
         treasury_balance = self.treasury_balance(unit=unit)
         threshold = self.treasury_reward_threshold(unit=unit)
-        if treasury_balance <= Decimal("0.0000") or treasury_balance >= threshold:
-            return multiplier
-        dynamic_factor = self._bounded_multiplier(treasury_balance / threshold)
-        return self._bounded_multiplier(multiplier * dynamic_factor)
+        treasury_factor = Decimal("1.0000")
+        if treasury_balance > Decimal("0.0000") and treasury_balance < threshold:
+            treasury_factor = self._bounded_multiplier(treasury_balance / threshold)
+        reward_decay_factor = self.reward_decay_factor()
+        return self._bounded_multiplier(multiplier * treasury_factor * reward_decay_factor)
 
     def treasury_balance(self, *, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
         return self._non_negative_balance(self.wallet_service.ensure_treasury_account(self.session, unit))
@@ -262,6 +272,56 @@ class EconomyGovernorService:
 
     def burn_bonus_bps(self) -> int:
         return int(self.get_policy().burn_bonus_bps or 0)
+
+    def effective_burn_bonus_bps(self, *, metrics: dict[str, Any] | None = None) -> int:
+        normalized_metrics = self._normalize_metrics(metrics or self._policy_metrics_or_derived())
+        dynamic_bonus = 0
+        if normalized_metrics["inflation_rate"] >= Decimal("0.1500"):
+            dynamic_bonus += 250
+        if normalized_metrics["whale_concentration"] >= Decimal("0.4500"):
+            dynamic_bonus += 150
+        if self.market_circuit_breaker_active(metrics=normalized_metrics):
+            dynamic_bonus += 200
+        return max(0, min(5_000, int(self.get_policy().burn_bonus_bps or 0) + dynamic_bonus))
+
+    def whale_concentration(self, *, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
+        rows = self.session.execute(
+            select(LedgerBalanceProjection.owner_user_id, func.coalesce(func.sum(LedgerBalanceProjection.balance), 0))
+            .join(LedgerAccount, LedgerAccount.id == LedgerBalanceProjection.account_id)
+            .where(
+                LedgerBalanceProjection.unit == unit,
+                LedgerBalanceProjection.owner_user_id.is_not(None),
+                LedgerAccount.kind == LedgerAccountKind.USER,
+            )
+            .group_by(LedgerBalanceProjection.owner_user_id)
+        ).all()
+        balances = [self._amount(balance) for _user_id, balance in rows if self._amount(balance) > Decimal("0.0000")]
+        total = sum(balances, start=Decimal("0.0000"))
+        if total <= Decimal("0.0000"):
+            return Decimal("0.0000")
+        return self._amount(max(balances, default=Decimal("0.0000")) / total)
+
+    def market_circuit_breaker_active(self, *, metrics: dict[str, Any] | None = None) -> bool:
+        normalized_metrics = self._normalize_metrics(metrics or self._policy_metrics_or_derived())
+        return bool(
+            normalized_metrics["inflation_rate"] >= Decimal("0.2500")
+            or normalized_metrics["whale_concentration"] >= Decimal("0.4500")
+            or (
+                normalized_metrics["daily_mint"] > normalized_metrics["daily_burn"]
+                and normalized_metrics["liquidity_pool_balance"] <= Decimal("0.0000")
+            )
+        )
+
+    def reward_decay_factor(self, *, metrics: dict[str, Any] | None = None) -> Decimal:
+        normalized_metrics = self._normalize_metrics(metrics or self._policy_metrics_or_derived())
+        decay = Decimal("1.0000")
+        if normalized_metrics["inflation_rate"] > Decimal("0.1200"):
+            decay -= min(Decimal("0.2000"), normalized_metrics["inflation_rate"] - Decimal("0.1200"))
+        if normalized_metrics["whale_concentration"] >= Decimal("0.4500"):
+            decay -= Decimal("0.1000")
+        if self.market_circuit_breaker_active(metrics=normalized_metrics):
+            decay -= Decimal("0.1000")
+        return self._bounded_multiplier(max(Decimal("0.6500"), decay))
 
     def quote_conversion(self, *, source_unit: LedgerUnit, amount: Decimal) -> WalletConversionQuote:
         base_quote = self.wallet_service.quote_conversion(source_unit=source_unit, amount=amount)
@@ -338,6 +398,10 @@ class EconomyGovernorService:
         policy = self.get_policy()
         normalized_metrics = self._normalize_metrics(metrics or self.derive_metrics())
         recommended = self.evaluate(metrics=normalized_metrics)["actions"]
+        normalized_metrics["reward_decay_factor"] = self.reward_decay_factor(metrics=normalized_metrics)
+        normalized_metrics["whale_concentration"] = self.whale_concentration()
+        normalized_metrics["effective_burn_bonus_bps"] = Decimal(str(self.effective_burn_bonus_bps(metrics=normalized_metrics)))
+        normalized_metrics["circuit_breaker_active"] = Decimal("1.0000") if self.market_circuit_breaker_active(metrics=normalized_metrics) else Decimal("0.0000")
         return {
             "policy_key": policy.policy_key,
             "mode": policy.mode,
@@ -379,6 +443,7 @@ class EconomyGovernorService:
             "liquidity_pool_balance": self._amount(liquidity_pool_balance),
             "treasury_reward_threshold": self._amount(treasury_reward_threshold),
             "treasury_buffer_multiple": self._amount(treasury_buffer_multiple),
+            "whale_concentration": self._amount(metrics.get("whale_concentration", self.whale_concentration())),
         }
 
     @staticmethod
@@ -401,6 +466,12 @@ class EconomyGovernorService:
     def _non_negative_balance(self, account) -> Decimal:
         balance = self._amount(self.wallet_service.get_balance(self.session, account))
         return balance if balance > Decimal("0.0000") else Decimal("0.0000")
+
+    def _policy_metrics_or_derived(self) -> dict[str, Any]:
+        policy = self.get_policy()
+        if policy.last_metrics_json:
+            return dict(policy.last_metrics_json)
+        return self.derive_metrics()
 
 
 __all__ = ["EconomyGovernorError", "EconomyGovernorModeError", "EconomyGovernorService"]

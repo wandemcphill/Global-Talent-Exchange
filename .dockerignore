@@ -1,0 +1,14 @@
+*
+!backend/
+!backend/**
+
+backend/.pytest*
+backend/.tmp*
+backend/pytest-cache-files-*
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/**/*.sqlite
+backend/**/*.db
+

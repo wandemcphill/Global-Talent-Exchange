@@ -222,11 +222,39 @@ class DuplicateDepositCandidateView(BaseModel):
     order_ids: list[str] = Field(default_factory=list)
 
 
+class WalletTransactionLockView(BaseModel):
+    user_id: str
+    operation: str
+    reason: str | None = None
+    updated_by_user_id: str | None = None
+    updated_at: datetime
+    expires_at: datetime
+
+
 class WalletProtectionSummaryView(BaseModel):
     generated_at: datetime
     frozen_wallet_account_count: int
     banned_account_count: int
     pending_purchase_orders: int
     pending_withdrawals: int
+    active_wallet_transaction_lock_count: int = 0
     payment_signature_verification_enabled: bool
+    active_wallet_transaction_locks: list[WalletTransactionLockView] = Field(default_factory=list)
     duplicate_deposit_candidates: list[DuplicateDepositCandidateView] = Field(default_factory=list)
+
+
+class ReconciliationIssueView(BaseModel):
+    issue_type: str
+    resource_id: str
+    reference: str | None = None
+    detail: str
+
+
+class PaymentReconciliationSummaryView(BaseModel):
+    generated_at: datetime
+    pending_payment_events: int
+    settled_purchase_orders_missing_ledger: int
+    settled_payment_events_missing_ledger: int
+    confirmed_deposits_missing_ledger: int
+    duplicate_provider_references: int
+    issues: list[ReconciliationIssueView] = Field(default_factory=list)

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gtex-outbox-relay
+  labels:
+    app.kubernetes.io/name: gtex-outbox-relay
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gtex-outbox-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gtex-outbox-relay
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: outbox-relay
+          image: ghcr.io/your-org/gtex-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.backbone.outbox_relay_main"]
+          envFrom:
+            - configMapRef:
+                name: gtex-shared-config
+            - secretRef:
+                name: gtex-secrets
+          env:
+            - name: GTE_KAFKA_CLIENT_ID
+              value: gtex-outbox-relay
+            - name: GTE_OUTBOX_RELAY_ENABLED
+              value: "true"
+            - name: GTE_KAFKA_API_QUEUE_CONSUMER_ENABLED
+              value: "false"
+            - name: GTE_KAFKA_SIMULATION_CONSUMER_ENABLED
+              value: "false"
+            - name: GTE_PROJECTION_WORKERS_ENABLED
+              value: "false"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+

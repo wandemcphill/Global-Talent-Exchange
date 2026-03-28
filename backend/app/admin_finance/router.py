@@ -17,7 +17,9 @@ from app.admin_finance.schemas import (
     ManualPriceOverrideView,
     MatchKillSwitchUpsertRequest,
     MatchKillSwitchView,
+    PaymentReconciliationSummaryView,
     WalletProtectionSummaryView,
+    WalletTransactionLockView,
 )
 from app.admin_finance.service import AdminFinanceService
 from app.auth.dependencies import get_current_admin, get_session
@@ -283,15 +285,34 @@ def get_wallet_protection_summary(
     session: Session = Depends(get_session),
     _: User = Depends(get_current_admin),
 ) -> WalletProtectionSummaryView:
+    control_service = RuntimeControlService(request.app)
     frozen_wallet_accounts = sum(
         1
-        for item in RuntimeControlService(request.app).list_account_controls()
+        for item in control_service.list_account_controls()
         if item.freeze_wallet
     )
+    active_wallet_locks = [
+        WalletTransactionLockView.model_validate(item, from_attributes=True).model_dump(mode="json")
+        for item in control_service.list_wallet_transaction_locks()
+    ]
     payload = AdminFinanceService(session=session, settings=request.app.state.settings).wallet_protection_summary(
-        frozen_wallet_account_count=frozen_wallet_accounts
+        frozen_wallet_account_count=frozen_wallet_accounts,
+        active_wallet_transaction_locks=active_wallet_locks,
     )
     return WalletProtectionSummaryView.model_validate(payload)
+
+
+@router.get("/reconciliation", response_model=PaymentReconciliationSummaryView)
+def get_payment_reconciliation_summary(
+    request: Request,
+    issue_limit: int = Query(default=25, ge=5, le=100),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> PaymentReconciliationSummaryView:
+    payload = AdminFinanceService(session=session, settings=request.app.state.settings).payment_reconciliation_summary(
+        issue_limit=issue_limit,
+    )
+    return PaymentReconciliationSummaryView.model_validate(payload)
 
 
 @webhook_router.post("/paystack/webhook", response_model=AdminFinanceWebhookResultView)

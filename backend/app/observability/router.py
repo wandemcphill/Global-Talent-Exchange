@@ -9,21 +9,30 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_admin, get_session
+from app.core.rate_limit import ensure_api_rate_limiter
 from app.jobs.ops_jobs import OpsJobRunner
-from app.models.event_backbone import EventOutbox
+from app.live_matches.service import ensure_live_match_hub
+from app.models.event_backbone import CompetitionQueueRecord, EventOutbox
 from app.models.risk_ops import AuditLog, FraudCase, RiskCaseStatus, RiskSeverity, SystemEvent, SystemEventSeverity
+from app.models.treasury import TreasuryAuditEvent
 from app.models.wallet import LedgerEntry
 from app.models.base import utcnow
 from app.observability.schemas import (
     AlertFeedItem,
     AlertSnapshotView,
+    AuditRuntimeView,
     AuditFeedItem,
+    CacheRuntimeView,
     ConfigSnapshotView,
+    EventStreamingRuntimeView,
     FraudMonitoringView,
     MediaStorageSnapshot,
+    MatchWorkerAutoscalingView,
     MonitoringDashboardView,
     OpsJobResponse,
     PaymentMethodSnapshot,
+    PlatformInfraView,
+    RateLimitRuntimeView,
     RealtimeOperationsView,
     SponsorshipSnapshot,
     TransactionStreamDashboardView,
@@ -359,6 +368,100 @@ def get_monitoring_dashboard(
             recent_alert_counts=dict(alert_snapshot.by_type),
         ),
         alerts=alert_view,
+    )
+
+
+@admin_router.get("/platform-infra", response_model=PlatformInfraView)
+def get_platform_infra_dashboard(
+    request: Request,
+    _admin=Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PlatformInfraView:
+    settings = request.app.state.settings
+    limiter_snapshot = ensure_api_rate_limiter(request.app).snapshot()
+    live_hub = ensure_live_match_hub(request.app)
+    cache_backend = getattr(request.app.state, "cache_backend", None)
+
+    queue_rows = session.execute(
+        select(CompetitionQueueRecord.queue_name, func.count())
+        .group_by(CompetitionQueueRecord.queue_name)
+        .order_by(CompetitionQueueRecord.queue_name.asc())
+    ).all()
+    queue_depth_by_name = {str(queue_name): int(count or 0) for queue_name, count in queue_rows}
+    pending_outbox_events = session.scalar(
+        select(func.count()).select_from(EventOutbox).where(EventOutbox.status == "pending")
+    ) or 0
+    processed_outbox_events = session.scalar(
+        select(func.count()).select_from(EventOutbox).where(EventOutbox.status == "processed")
+    ) or 0
+
+    active_live_matches = len(getattr(live_hub, "_matches", {}))
+    queued_jobs = int(queue_depth_by_name.get("match_simulation", 0))
+    kafka_mode = bool(getattr(settings, "kafka_enabled", False))
+    desired_workers = 1 if not kafka_mode else max(1, (queued_jobs + active_live_matches + 3) // 4)
+    scale_out_recommended = kafka_mode and desired_workers > 1
+    if not kafka_mode:
+        autoscaling_reason = "Kafka queue mode is disabled, so match execution remains on the local worker."
+    elif scale_out_recommended:
+        autoscaling_reason = "Queue depth and live-match load exceed the single-worker baseline."
+    else:
+        autoscaling_reason = "Current queue depth fits inside the baseline worker capacity."
+
+    since = utcnow() - timedelta(hours=24)
+    top_actions_rows = session.execute(
+        select(AuditLog.action_key, func.count())
+        .where(AuditLog.created_at >= since)
+        .group_by(AuditLog.action_key)
+        .order_by(func.count().desc(), AuditLog.action_key.asc())
+        .limit(8)
+    ).all()
+
+    return PlatformInfraView(
+        cache=CacheRuntimeView(
+            enabled=bool(getattr(cache_backend, "enabled", False)),
+            healthy=bool(cache_backend.ping()) if cache_backend is not None and hasattr(cache_backend, "ping") else False,
+            live_matches_in_memory=active_live_matches,
+            halted_matches=len(getattr(live_hub, "_halted_matches", {})),
+            snapshot_ttl_seconds=int(getattr(live_hub, "snapshot_ttl_seconds", 0)),
+        ),
+        event_streaming=EventStreamingRuntimeView(
+            kafka_enabled=kafka_mode,
+            outbox_relay_enabled=bool(getattr(settings, "outbox_relay_enabled", False)),
+            topic_prefix=str(getattr(settings, "kafka_topic_prefix", "")),
+            pending_outbox_events=int(pending_outbox_events),
+            processed_outbox_events=int(processed_outbox_events),
+            durable_queue_records=sum(queue_depth_by_name.values()),
+            queue_depth_by_name=queue_depth_by_name,
+            api_queue_consumer_active=getattr(request.app.state, "api_queue_consumer", None) is not None,
+        ),
+        autoscaling=MatchWorkerAutoscalingView(
+            mode="kafka" if kafka_mode else "local",
+            queued_jobs=queued_jobs,
+            active_live_matches=active_live_matches,
+            desired_workers=desired_workers,
+            scale_out_recommended=scale_out_recommended,
+            reason=autoscaling_reason,
+        ),
+        rate_limiting=RateLimitRuntimeView(**limiter_snapshot),
+        audit=AuditRuntimeView(
+            audit_logs_24h=int(
+                session.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= since)) or 0
+            ),
+            treasury_audit_events_24h=int(
+                session.scalar(
+                    select(func.count()).select_from(TreasuryAuditEvent).where(TreasuryAuditEvent.created_at >= since)
+                ) or 0
+            ),
+            blocked_rate_limit_events_24h=int(
+                session.scalar(
+                    select(func.count()).select_from(AuditLog).where(
+                        AuditLog.created_at >= since,
+                        AuditLog.action_key == "api.rate_limited",
+                    )
+                ) or 0
+            ),
+            top_actions={str(action_key): int(count or 0) for action_key, count in top_actions_rows},
+        ),
     )
 
 

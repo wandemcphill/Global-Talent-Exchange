@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user, get_current_wallet_user, get_session
 from app.models.user import User
 from app.services.payment_gateway_service import PaymentGatewayError, PaymentGatewayService
+from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
 from app.integrations.payments.schemas import (
     PaymentMethodView,
     PaymentOrderCreateRequest,
@@ -83,6 +84,19 @@ def create_payment_order(
 ) -> PaymentOrderView:
     service = _service(request, session)
     try:
+        RuntimeControlService(request.app).acquire_wallet_transaction_lock(
+            user_id=user.id,
+            operation="payment_gateway_order_create",
+            ttl_seconds=90,
+            reason="wallet_transaction_in_flight",
+            updated_by_user_id=user.id,
+        )
+    except WalletTransactionLockConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Another wallet transaction is already in progress for this account. Retry in a moment.",
+        ) from exc
+    try:
         order = service.create_purchase_order(
             user=user,
             amount=payload.amount,
@@ -95,6 +109,11 @@ def create_payment_order(
         )
     except PaymentGatewayError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        RuntimeControlService(request.app).release_wallet_transaction_lock(
+            user_id=user.id,
+            operation="payment_gateway_order_create",
+        )
     session.commit()
     return PaymentOrderView(
         order_id=order.id,

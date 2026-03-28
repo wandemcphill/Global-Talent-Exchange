@@ -303,6 +303,27 @@ class WithdrawalReviewView(BaseModel):
     created_at: datetime
 
 
+class WithdrawalBatchCreateRequest(BaseModel):
+    statuses: list[TreasuryWithdrawalStatus] = Field(
+        default_factory=lambda: [TreasuryWithdrawalStatus.APPROVED]
+    )
+    limit: int = Field(default=50, ge=1, le=200)
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class WithdrawalBatchView(BaseModel):
+    batch_id: str
+    created_at: datetime
+    actor_user_id: str | None = None
+    item_count: int
+    gross_amount: Decimal
+    fee_amount: Decimal
+    net_amount: Decimal
+    statuses: list[TreasuryWithdrawalStatus] = Field(default_factory=list)
+    withdrawal_ids: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class KycProfileView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

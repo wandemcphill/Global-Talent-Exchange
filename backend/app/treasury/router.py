@@ -43,6 +43,8 @@ from app.treasury.schemas import (
     UserBankAccountCreate,
     UserBankAccountUpdate,
     UserBankAccountView,
+    WithdrawalBatchCreateRequest,
+    WithdrawalBatchView,
     WithdrawalReviewView,
     WithdrawalRequestView,
 )
@@ -698,6 +700,42 @@ def list_withdrawal_reviews(
         .order_by(WithdrawalReview.created_at.desc())
     ).all()
     return [WithdrawalReviewView.model_validate(item) for item in reviews]
+
+
+@admin_router.get("/withdrawal-batches", response_model=list[WithdrawalBatchView])
+def list_withdrawal_batches(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> list[WithdrawalBatchView]:
+    _require_permission(request, actor, "manage_treasury_withdrawals")
+    service = _service(request)
+    return [WithdrawalBatchView.model_validate(item) for item in service.list_withdrawal_batches(session, limit=limit)]
+
+
+@admin_router.post("/withdrawal-batches", response_model=WithdrawalBatchView)
+def create_withdrawal_batch(
+    request: Request,
+    payload: WithdrawalBatchCreateRequest,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> WithdrawalBatchView:
+    _require_permission(request, actor, "manage_treasury_withdrawals")
+    service = _service(request)
+    try:
+        batch = service.create_withdrawal_batch(
+            session,
+            actor=actor,
+            statuses=tuple(payload.statuses),
+            limit=payload.limit,
+            notes=payload.notes,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return WithdrawalBatchView.model_validate(batch)
 
 
 @admin_router.get("/kyc", response_model=AdminQueueView)

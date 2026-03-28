@@ -103,3 +103,54 @@ class MonitoringDashboardView(BaseModel):
     realtime: RealtimeOperationsView
     fraud: FraudMonitoringView
     alerts: AlertSnapshotView
+
+
+class CacheRuntimeView(BaseModel):
+    enabled: bool
+    healthy: bool
+    live_matches_in_memory: int
+    halted_matches: int
+    snapshot_ttl_seconds: int
+
+
+class EventStreamingRuntimeView(BaseModel):
+    kafka_enabled: bool
+    outbox_relay_enabled: bool
+    topic_prefix: str
+    pending_outbox_events: int
+    processed_outbox_events: int
+    durable_queue_records: int
+    queue_depth_by_name: dict[str, int]
+    api_queue_consumer_active: bool
+
+
+class MatchWorkerAutoscalingView(BaseModel):
+    mode: str
+    queued_jobs: int
+    active_live_matches: int
+    desired_workers: int
+    scale_out_recommended: bool
+    reason: str
+
+
+class RateLimitRuntimeView(BaseModel):
+    enabled: bool
+    rules: list[dict[str, int | str]]
+    active_bucket_count: int
+    active_buckets_by_scope: dict[str, int]
+    throttled_events: int
+
+
+class AuditRuntimeView(BaseModel):
+    audit_logs_24h: int
+    treasury_audit_events_24h: int
+    blocked_rate_limit_events_24h: int
+    top_actions: dict[str, int]
+
+
+class PlatformInfraView(BaseModel):
+    cache: CacheRuntimeView
+    event_streaming: EventStreamingRuntimeView
+    autoscaling: MatchWorkerAutoscalingView
+    rate_limiting: RateLimitRuntimeView
+    audit: AuditRuntimeView
