@@ -1,0 +1,40 @@
+{
+  "attempts": 0,
+  "completed_at": null,
+  "job_id": "highlight_5d3fff3cb0a07a340e1c",
+  "last_error": null,
+  "max_attempts": 1,
+  "payload": {
+    "duration_seconds": 14,
+    "end_second": 246,
+    "highlight_id": "evt-1",
+    "kind": "clip",
+    "match_id": "match-1",
+    "metadata": {
+      "away_score": 0,
+      "detected_events": [
+        "goal"
+      ],
+      "event_type": "goal",
+      "home_score": 1,
+      "minute": 4,
+      "player": "Striker",
+      "priority_score": 2.6,
+      "source_event_type": "goal",
+      "team": "Home FC"
+    },
+    "output_storage_key": "moments/live/match-1/evt-1.mp4",
+    "playback_speed": 1.0,
+    "source_clip_storage_keys": [],
+    "source_path": null,
+    "source_storage_key": null,
+    "start_second": 232,
+    "subtitle": "Home FC | Striker | 1-0",
+    "title": "Goal 4'"
+  },
+  "queue_name": "clip_builder_queue",
+  "queued_at": "2026-03-28T20:20:27.935933+00:00",
+  "result": {},
+  "status": "queued",
+  "updated_at": "2026-03-28T20:20:27.935933+00:00"
+}

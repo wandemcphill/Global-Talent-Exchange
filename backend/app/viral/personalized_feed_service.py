@@ -22,6 +22,7 @@ from app.core.database import (
     create_read_database_engine,
     create_read_session_factory,
     create_session_factory,
+    run_read_with_primary_fallback,
 )
 from app.feedback_engine.service import FeedbackEngine
 from app.models.analytics_event import AnalyticsEvent
@@ -418,15 +419,19 @@ class PersistentPersonalizedFeedStore:
             if cached:
                 return cached
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            records = list(
+        records = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="personalized_feed.top",
+            fn=lambda session: list(
                 session.scalars(
                     select(PersonalizedFeedCacheEntryRecord)
                     .where(PersonalizedFeedCacheEntryRecord.subject_key == user_id)
                     .order_by(PersonalizedFeedCacheEntryRecord.position.asc(), PersonalizedFeedCacheEntryRecord.clip_id.asc())
                     .limit(limit)
                 ).all()
-            )
+            ),
+        )
         entries = [
             PersonalizedFeedEnvelope(
                 clip_id=record.clip_id,
@@ -476,8 +481,11 @@ class PersistentPersonalizedFeedStore:
                 return cached
         cutoff = datetime.now(UTC) - timedelta(seconds=max(self.history_ttl_seconds, 1))
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            records = list(
+        records = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="personalized_feed.recent_history",
+            fn=lambda session: list(
                 session.scalars(
                     select(PersonalizedFeedHistoryEntryRecord)
                     .where(
@@ -487,7 +495,8 @@ class PersistentPersonalizedFeedStore:
                     .order_by(PersonalizedFeedHistoryEntryRecord.served_at.desc())
                     .limit(limit)
                 ).all()
-            )
+            ),
+        )
         history = [
             SeenClipHistory(
                 clip_id=record.clip_id,
@@ -533,15 +542,19 @@ class PersistentPersonalizedFeedStore:
                 return cached
         cutoff = datetime.now(UTC) - timedelta(seconds=max(self.history_ttl_seconds, 1))
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            rows = list(
+        rows = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="personalized_feed.seen_clip_ids",
+            fn=lambda session: list(
                 session.scalars(
                     select(PersonalizedFeedSeenClipRecord.clip_id).where(
                         PersonalizedFeedSeenClipRecord.user_id == user_id,
                         PersonalizedFeedSeenClipRecord.seen_at >= cutoff,
                     )
                 ).all()
-            )
+            ),
+        )
         resolved = {str(item) for item in rows}
         if resolved and self.redis_store is not None:
             self.redis_store.mark_seen(user_id, list(resolved))
@@ -1918,6 +1931,10 @@ def build_personalized_feed_store(
     resolved_read_session_factory = read_session_factory or create_read_session_factory(
         create_read_database_engine(resolved_settings.database_read_url)
     )
+    bind = resolved_session_factory.kw.get("bind") if hasattr(resolved_session_factory, "kw") else None
+    if bind is None or not _personalized_feed_tables_available(bind):
+        logger.warning("viral.personalized_feed.persistence_unavailable_falling_back_to_memory")
+        return InMemoryPersonalizedFeedStore()
     return PersistentPersonalizedFeedStore(
         session_factory=resolved_session_factory,
         read_session_factory=resolved_read_session_factory,
@@ -2045,6 +2062,21 @@ def _similarity_key_from_clip(
     anchor = team_key or creator_key or "unknown"
     tail = player_key or format_key or "default"
     return f"{event_key}:{anchor}:{tail}"
+
+
+def _personalized_feed_tables_available(bind: Any) -> bool:
+    try:
+        inspector = inspect(bind)
+        return all(
+            inspector.has_table(table_name)
+            for table_name in (
+                PersonalizedFeedCacheEntryRecord.__tablename__,
+                PersonalizedFeedHistoryEntryRecord.__tablename__,
+                PersonalizedFeedSeenClipRecord.__tablename__,
+            )
+        )
+    except Exception:
+        return False
 
 
 __all__ = [

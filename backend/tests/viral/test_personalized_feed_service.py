@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -16,6 +17,7 @@ from app.models.base import Base
 from app.models.creator_attention_earnings import ClipEarningsLog, CreatorWallet
 from app.models.follow import Follow
 from app.models.notification_record import NotificationRecord
+from app.models.scale_backbone import PersonalizedFeedCacheEntryRecord
 from app.models.user import User, UserRole
 from app.orchestrator.global_state import InMemoryGlobalFeedStateStore
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService
@@ -32,6 +34,7 @@ from app.viral.personalized_feed_service import (
     ClipAffinityCalculator,
     InMemoryPersonalizedFeedStore,
     PersonalizedFeedRankingService,
+    PersistentPersonalizedFeedStore,
 )
 from app.viral.session_tracker import ViralSessionTracker
 from app.viral.schemas import (
@@ -62,6 +65,11 @@ class _FakeCreatorEarningsCache:
 
     def record_delta(self, **payload) -> None:
         self.events.append(payload)
+
+
+class _FailingReadSessionFactory:
+    def __call__(self):
+        raise OperationalError("SELECT 1", {}, RuntimeError("replica unavailable"))
 
 
 def test_clip_affinity_calculator_scores_creator_and_format_preferences() -> None:
@@ -326,6 +334,41 @@ def test_personalized_feed_delivery_credits_creator_wallet_on_impression() -> No
 
     assert len(cache.events) == 1
     assert cache.events[0]["creator_user_id"] == "creator-wallet-1"
+
+
+def test_persistent_personalized_feed_store_falls_back_to_primary_when_replica_fails() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[PersonalizedFeedCacheEntryRecord.__table__],
+    )
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    with session_factory() as session:
+        session.add(
+            PersonalizedFeedCacheEntryRecord(
+                id="feed-cache-1",
+                subject_key="viewer-read-fallback",
+                clip_id="clip-fallback-1",
+                position=1,
+                score=91.0,
+                payload_json={"clip_id": "clip-fallback-1"},
+            )
+        )
+        session.commit()
+
+    store = PersistentPersonalizedFeedStore(
+        session_factory=session_factory,
+        read_session_factory=_FailingReadSessionFactory(),
+    )
+
+    entries = store.top("viewer-read-fallback", 5)
+
+    assert [entry.clip_id for entry in entries] == ["clip-fallback-1"]
 
 
 def test_personalized_feed_boosts_creators_trending_inside_follow_network() -> None:

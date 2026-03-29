@@ -78,37 +78,18 @@ class RemoteDebateLLMClient:
             "input": [
                 {
                     "role": "system",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": (
-                                "Simulate a heated football debate. "
-                                "Return 6 short lines only, one speaker per line in the format "
-                                "'Speaker: line'."
-                            ),
-                        }
-                    ],
+                    "content": [{"type": "input_text", "text": "Simulate a heated football debate. Return 6 short lines only in the format 'Speaker: line'."}],
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": json.dumps(prompt, ensure_ascii=True),
-                        }
-                    ],
+                    "content": [{"type": "input_text", "text": json.dumps(prompt, ensure_ascii=True)}],
                 },
             ],
             "temperature": 0.9,
             "max_output_tokens": 220,
         }
         try:
-            response = requests.post(
-                self.endpoint_url,
-                headers=headers,
-                json=body,
-                timeout=max(self.timeout_seconds, 1),
-            )
+            response = requests.post(self.endpoint_url, headers=headers, json=body, timeout=max(self.timeout_seconds, 1))
             response.raise_for_status()
         except Exception:
             return None
@@ -142,7 +123,7 @@ class DebateGenerator:
 
     def _parse_llm_output(self, value: str) -> list[DebateLine]:
         lines: list[DebateLine] = []
-        persona_by_name = {item["name"].lower(): item for item in PUNDITS}
+        persona_by_name = {str(item["name"]).lower(): item for item in PUNDITS}
         for raw_line in value.splitlines():
             line = raw_line.strip()
             if not line or ":" not in line:
@@ -153,11 +134,11 @@ class DebateGenerator:
                 continue
             lines.append(
                 DebateLine(
-                    speaker=persona["name"],
-                    style=persona["style"],
-                    stance=persona["stance"],
+                    speaker=str(persona["name"]),
+                    style=str(persona["style"]),
+                    stance=str(persona["stance"]),
                     line=body,
-                    emphasis="high" if persona["name"] == "Hype Merchant" else "medium",
+                    emphasis="high" if str(persona["style"]) in {"hot_take", "ex_player"} else "medium",
                 )
             )
         return lines[:6]
@@ -170,44 +151,10 @@ class DebateGenerator:
         xg_diff = abs(float(analysis.get("xg_diff") or 0.0))
         turning_point = analysis.get("turning_point") or "the late swing"
         return [
-            DebateLine(
-                speaker="Tactical Analyst",
-                style=PUNDITS[0]["style"],
-                stance=PUNDITS[0]["stance"],
-                line=f"The xG gap was {xg_diff:.2f}, and that explains why {winner} controlled the decisive phases.",
-            ),
-            DebateLine(
-                speaker="Ex-Pro",
-                style=PUNDITS[1]["style"],
-                stance=PUNDITS[1]["stance"],
-                line=f"I don’t want theory first, I want accountability. Somebody lost every duel when it mattered in that {score}.",
-                emphasis="high",
-            ),
-            DebateLine(
-                speaker="Hype Merchant",
-                style=PUNDITS[2]["style"],
-                stance=PUNDITS[2]["stance"],
-                line=f"{winner} just hijacked the timeline and {key_player} was the main character all night 🔥",
-                emphasis="high",
-            ),
-            DebateLine(
-                speaker="Tactical Analyst",
-                style=PUNDITS[0]["style"],
-                stance=PUNDITS[0]["stance"],
-                line=f"The turning point was {turning_point}. After that, the match state completely changed.",
-            ),
-            DebateLine(
-                speaker="Ex-Pro",
-                style=PUNDITS[1]["style"],
-                stance=PUNDITS[1]["stance"],
-                line=hot_takes[0] if hot_takes else "That result will leave a scar in the dressing room.",
-                emphasis="high",
-            ),
-            DebateLine(
-                speaker="Hype Merchant",
-                style=PUNDITS[2]["style"],
-                stance=PUNDITS[2]["stance"],
-                line=f"{key_player} dropped a {key_rating:.1f} and the internet is going to talk about nothing else.",
-                emphasis="high",
-            ),
+            DebateLine(speaker=str(PUNDITS[0]["name"]), style=str(PUNDITS[0]["style"]), stance=str(PUNDITS[0]["stance"]), line=f"The xG gap was {xg_diff:.2f}, and that explains why {winner} controlled the decisive phases."),
+            DebateLine(speaker=str(PUNDITS[1]["name"]), style=str(PUNDITS[1]["style"]), stance=str(PUNDITS[1]["stance"]), line=f"I do not want theory first, I want accountability. Somebody lost every duel when it mattered in that {score}.", emphasis="high"),
+            DebateLine(speaker=str(PUNDITS[2]["name"]), style=str(PUNDITS[2]["style"]), stance=str(PUNDITS[2]["stance"]), line=f"{winner} just hijacked the timeline and {key_player} was the main character all night.", emphasis="high"),
+            DebateLine(speaker=str(PUNDITS[0]["name"]), style=str(PUNDITS[0]["style"]), stance=str(PUNDITS[0]["stance"]), line=f"The turning point was {turning_point}. After that, the match state completely changed."),
+            DebateLine(speaker=str(PUNDITS[3]["name"]), style=str(PUNDITS[3]["style"]), stance=str(PUNDITS[3]["stance"]), line=hot_takes[0] if hot_takes else "That result will leave a scar in the dressing room.", emphasis="high"),
+            DebateLine(speaker=str(PUNDITS[1]["name"]), style=str(PUNDITS[1]["style"]), stance=str(PUNDITS[1]["stance"]), line=f"{key_player} dropped a {key_rating:.1f} and the internet is going to talk about nothing else.", emphasis="high"),
         ]

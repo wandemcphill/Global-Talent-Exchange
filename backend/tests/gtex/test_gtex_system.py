@@ -4,14 +4,19 @@ from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+from sqlalchemy import func, select
+
 from app.auth.service import AuthService
 from app.gtex import redis_keys
 from app.gtex.runtime import ensure_gtex_runtime
 from app.gtex.worker_runtime import AiBrainWorker, AiMatchmakerWorker, JackpotWorker, WorkerContext
+from app.global_memory.constants import MATCH_COMPLETED
+from app.global_memory.models import GlobalProjectionCheckpoint, UserDynasty
 from app.models.base import utcnow
 from app.models.gtex_economy import GtexCreatorTrade
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.models.wallet import LedgerTransaction
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -155,6 +160,11 @@ def test_ai_match_completion_updates_economy(client, app, app_session_factory):
     match_payload = match_response.json()
     assert match_payload["status"] == "completed"
     assert match_payload["jackpot_contribution"] == "5.0000"
+    assert match_payload["match_storyline"]
+    assert match_payload["key_moments"]
+    assert match_payload["player_highlights"]
+    assert isinstance(match_payload["rivalry"], dict)
+    assert isinstance(match_payload["match_context"], dict)
     leagues_response = client.get("/ai/leagues")
     assert leagues_response.status_code == 200
     assert leagues_response.json()["leagues"]
@@ -165,3 +175,85 @@ def test_ai_match_completion_updates_economy(client, app, app_session_factory):
         assert user_model is not None
         asset = runtime.creator_market.ensure_asset_for_user(session, user_model)
         assert asset.total_matches >= 1
+
+
+def test_match_completion_projection_is_idempotent(client, app, app_session_factory):
+    runtime = ensure_gtex_runtime(app)
+    home_user, home_headers = _register_user(app_session_factory, label="league-home")
+    away_user, away_headers = _register_user(app_session_factory, label="league-away")
+    _fund_user(app_session_factory, user_id=home_user.id, amount=Decimal("1000.0000"))
+    _fund_user(app_session_factory, user_id=away_user.id, amount=Decimal("1000.0000"))
+
+    home_request = client.post(
+        "/match/find",
+        headers=home_headers,
+        json={"league_id": "ranked", "entry_fee": "50.0000", "metadata": {"scenario": "idempotent_home"}},
+    )
+    assert home_request.status_code == 202, home_request.text
+    away_request = client.post(
+        "/match/find",
+        headers=away_headers,
+        json={"league_id": "ranked", "entry_fee": "50.0000", "metadata": {"scenario": "idempotent_away"}},
+    )
+    assert away_request.status_code == 202, away_request.text
+
+    matchmaker = AiMatchmakerWorker(context=_worker_context(app))
+    assert matchmaker.run_once() >= 1
+
+    with app_session_factory() as session:
+        from app.models.gtex_economy import GtexMatch, GtexMatchQueueEntry, GtexMatchStatus
+
+        queue_entry = session.get(GtexMatchQueueEntry, home_request.json()["queue_entry_id"])
+        assert queue_entry is not None
+        assert queue_entry.match_id is not None
+        match_id = queue_entry.match_id
+        match = session.get(GtexMatch, match_id)
+        assert match is not None
+        match.status = GtexMatchStatus.COMPLETED
+        match.started_at = match.started_at or utcnow()
+        match.completed_at = utcnow()
+        match.home_score = 2
+        match.away_score = 1
+        match.winner_participant_type = match.home_participant_type
+        match.winner_user_id = home_user.id
+        match.winner_ai_id = None
+        match.metadata_json = {"scenario": "idempotent_manual_settlement"}
+        transaction_count_before = session.scalar(select(func.count()).select_from(LedgerTransaction)) or 0
+        runtime.economy.settle_match_completion(session, match=match)
+        session.commit()
+
+    with app_session_factory() as session:
+        from app.models.gtex_economy import GtexMatch
+
+        stored_match = session.get(GtexMatch, match_id)
+        assert stored_match is not None
+        assert stored_match.metadata_json["economy_settled_at"]
+        checkpoint_count = session.scalar(
+            select(func.count()).select_from(GlobalProjectionCheckpoint).where(
+                GlobalProjectionCheckpoint.event_name == MATCH_COMPLETED,
+                GlobalProjectionCheckpoint.aggregate_id == stored_match.id,
+            )
+        )
+        transaction_count_after_first = session.scalar(select(func.count()).select_from(LedgerTransaction)) or 0
+        dynasty = session.scalar(select(UserDynasty).where(UserDynasty.user_id == home_user.id))
+        assert dynasty is not None
+        assert dynasty.earnings_minor > 0
+        assert checkpoint_count == 1
+
+        runtime.economy.settle_match_completion(session, match=stored_match)
+        session.commit()
+
+    with app_session_factory() as session:
+        final_checkpoint_count = session.scalar(
+            select(func.count()).select_from(GlobalProjectionCheckpoint).where(
+                GlobalProjectionCheckpoint.event_name == MATCH_COMPLETED,
+                GlobalProjectionCheckpoint.aggregate_id == match_id,
+            )
+        )
+        final_transaction_count = session.scalar(select(func.count()).select_from(LedgerTransaction)) or 0
+        dynasty = session.scalar(select(UserDynasty).where(UserDynasty.user_id == home_user.id))
+        assert dynasty is not None
+        assert dynasty.earnings_minor > 0
+        assert final_checkpoint_count == 1
+        assert final_transaction_count == transaction_count_after_first
+        assert final_transaction_count > transaction_count_before

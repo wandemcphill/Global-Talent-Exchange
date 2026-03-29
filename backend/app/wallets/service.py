@@ -444,6 +444,32 @@ class WalletService:
             allow_negative=False,
         )
 
+    def ensure_named_system_account(
+        self,
+        session: Session,
+        *,
+        code: str,
+        label: str,
+        unit: LedgerUnit,
+        allow_negative: bool = False,
+    ) -> LedgerAccount:
+        return self._ensure_system_account(
+            session,
+            code=code,
+            label=label,
+            unit=unit,
+            allow_negative=allow_negative,
+        )
+
+    def ensure_club_treasury_account(self, session: Session, club_id: str, unit: LedgerUnit = LedgerUnit.COIN) -> LedgerAccount:
+        return self._ensure_system_account(
+            session,
+            code=f"club:{club_id}:{unit.value}:treasury",
+            label=f"Club {club_id} {unit.value.capitalize()} Treasury",
+            unit=unit,
+            allow_negative=False,
+        )
+
     def ensure_rewards_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
         return self._ensure_system_account(
             session,
@@ -496,6 +522,15 @@ class WalletService:
             label=f"Platform {unit.value.capitalize()} Match Fee Revenue",
             unit=unit,
             allow_negative=False,
+        )
+
+    def ensure_betting_pool_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:
+        return self._ensure_system_account(
+            session,
+            code=f"platform:{unit.value}:betting_pool",
+            label=f"Platform {unit.value.capitalize()} Betting Pool",
+            unit=unit,
+            allow_negative=True,
         )
 
     def ensure_trade_fee_account(self, session: Session, unit: LedgerUnit) -> LedgerAccount:

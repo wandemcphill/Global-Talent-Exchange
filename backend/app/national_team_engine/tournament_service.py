@@ -32,6 +32,7 @@ from app.models.national_team_tournament import (
 from app.models.notification_record import NotificationRecord
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.integrity_engine.service import IntegrityEngineService
 from app.national_team_engine.competition_profiles import seeded_competition_definitions
 from app.players.read_models import PlayerSummaryReadModel
 from app.services.competition_lock_service import CompetitionLockError, CompetitionLockService
@@ -359,6 +360,45 @@ class NationalTeamTournamentService:
             * self._source_price_multiplier(source_bucket)
         ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
 
+    def _demand_multiplier(self, *, player_id: str) -> Decimal:
+        active_contracts = int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(RentalContract)
+                .where(
+                    RentalContract.player_id == player_id,
+                    RentalContract.status == RentalContractStatus.ACTIVE,
+                )
+            )
+            or 0
+        )
+        recent_contracts = int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(RentalContract)
+                .where(
+                    RentalContract.player_id == player_id,
+                    RentalContract.created_at >= (utcnow() - timedelta(days=14)),
+                )
+            )
+            or 0
+        )
+        multiplier = Decimal("1.0000")
+        multiplier += Decimal(active_contracts) * Decimal("0.1500")
+        multiplier += Decimal(max(recent_contracts - active_contracts, 0)) * Decimal("0.0500")
+        return min(multiplier, Decimal("1.7500")).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+
+    def _priced_pool_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        demand_multiplier = self._demand_multiplier(player_id=str(item["player_id"]))
+        base_loan_price = self._normalize_amount(item["loan_price_coin"])
+        priced = dict(item)
+        priced["demand_multiplier"] = demand_multiplier
+        priced["loan_price_coin"] = (base_loan_price * demand_multiplier).quantize(
+            AMOUNT_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
+        return priced
+
     def _country_tokens(
         self,
         *,
@@ -546,6 +586,7 @@ class NationalTeamTournamentService:
             "source_bucket": item["source_bucket"],
             "tradable": item["tradable"],
             "supply_mode": item["supply_mode"],
+            "demand_multiplier": item.get("demand_multiplier", Decimal("1.0000")),
         }
 
     def list_rental_players(
@@ -572,7 +613,10 @@ class NationalTeamTournamentService:
             positions=positions,
             tradable_only=tradable_only,
         )
-        catalog = self._national_pool(filters=filters, limit=max(limit + offset, 1000))
+        catalog = [
+            self._priced_pool_item(item)
+            for item in self._national_pool(filters=filters, limit=max(limit + offset, 1000))
+        ]
         items = catalog[offset : offset + limit]
         return {"total": len(catalog), "items": [self._pool_item_payload(item) for item in items]}
 
@@ -675,7 +719,7 @@ class NationalTeamTournamentService:
             positions=positions,
             tradable_only=tradable_only,
         )
-        pool = self._national_pool(filters=filters, limit=1500)
+        pool = [self._priced_pool_item(item) for item in self._national_pool(filters=filters, limit=1500)]
         selection = self._pick_slot_players(
             pool=pool,
             slots=AUTO_BUILD_FORMATIONS[formation],
@@ -990,6 +1034,59 @@ class NationalTeamTournamentService:
         self.session.flush()
         return member
 
+    def _flag_rental_abuse(
+        self,
+        *,
+        actor: User,
+        competition: NationalTeamCompetition,
+        item: dict[str, Any],
+        loan_price: Decimal,
+    ) -> None:
+        integrity = IntegrityEngineService(self.session)
+        recent_rentals = int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(RentalContract)
+                .where(
+                    RentalContract.user_id == actor.id,
+                    RentalContract.created_at >= (utcnow() - timedelta(minutes=15)),
+                )
+            )
+            or 0
+        )
+        if recent_rentals >= 5:
+            integrity.register_incident_once(
+                user_id=actor.id,
+                incident_type="rental_velocity_spike",
+                subject=f"velocity:{actor.id}:{competition.id}",
+                severity="high",
+                title="Rental velocity spike detected",
+                description="User rented an abnormal number of players in a short window.",
+                score_delta=Decimal("-8.00"),
+                metadata_json={
+                    "competition_id": competition.id,
+                    "recent_rentals": recent_rentals,
+                },
+            )
+
+        demand_multiplier = Decimal(str(item.get("demand_multiplier") or "1.0000"))
+        if str(item.get("source_bucket") or "") == SOURCE_BUCKET_PRESEEDED and demand_multiplier >= Decimal("1.3000"):
+            integrity.register_incident_once(
+                user_id=actor.id,
+                incident_type="preseeded_rental_pressure",
+                subject=f"player:{item['player_id']}",
+                severity="medium",
+                title="Preseeded rental pressure detected",
+                description="Repeated demand on an infinite-supply player crossed the rental abuse threshold.",
+                score_delta=Decimal("-4.00"),
+                metadata_json={
+                    "competition_id": competition.id,
+                    "player_id": item["player_id"],
+                    "loan_price_coin": str(loan_price),
+                    "demand_multiplier": str(demand_multiplier),
+                },
+            )
+
     def claim_free_players(self, *, entry_id: str, actor: User) -> dict[str, Any]:
         entry = self._require_managed_entry(entry_id, actor)
         competition = entry.competition
@@ -1010,10 +1107,13 @@ class NationalTeamTournamentService:
             raise NationalTeamTournamentError("Claiming free players would exceed the squad limit.", reason="squad_limit_reached")
 
         starter_slots = STARTER_PACK_SLOTS + tuple("MIDFIELDER" for _ in range(max(0, total_remaining - len(STARTER_PACK_SLOTS))))
-        pool = self._national_pool(
-            filters=self._normalize_pool_filters(country_code=entry.country_code),
-            limit=1000,
-        )
+        pool = [
+            self._priced_pool_item(item)
+            for item in self._national_pool(
+                filters=self._normalize_pool_filters(country_code=entry.country_code),
+                limit=1000,
+            )
+        ]
         selection = self._pick_slot_players(
             pool=pool,
             slots=starter_slots[:total_remaining],
@@ -1088,7 +1188,7 @@ class NationalTeamTournamentService:
             raise NationalTeamTournamentError("This player is already part of the rental squad.", reason="rental_contract_exists")
 
         player_catalog = {
-            item["player_id"]: item
+            item["player_id"]: self._priced_pool_item(item)
             for item in self._national_pool(
                 filters=self._normalize_pool_filters(country_code=entry.country_code),
                 limit=1000,
@@ -1118,6 +1218,7 @@ class NationalTeamTournamentService:
             description=f"National team rental for {item['player_name']} in {competition.title}",
             external_reference=f"national-rental:{competition.id}:{entry.id}:{player_id}",
             actor=actor,
+            idempotency_key=f"national-rental:{competition.id}:{entry.id}:{player_id}:{actor.id}",
         )
         contract = self._create_rental_contract(
             entry=entry,
@@ -1135,6 +1236,7 @@ class NationalTeamTournamentService:
         contract.metadata_json = {
             **dict(contract.metadata_json or {}),
             "base_value_coin": str(item["base_value_coin"]),
+            "demand_multiplier": str(item.get("demand_multiplier", Decimal("1.0000"))),
             "ledger_transaction_id": entries[0].transaction_id if entries else None,
         }
         self._create_rental_member(
@@ -1150,6 +1252,7 @@ class NationalTeamTournamentService:
             source_type="rental",
             assigned_slot=item["primary_position"],
         )
+        self._flag_rental_abuse(actor=actor, competition=competition, item=item, loan_price=loan_price)
         self._refresh_entry_squad_size(entry)
         return self._entry_detail_payload(entry)
 

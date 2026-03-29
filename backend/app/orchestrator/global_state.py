@@ -9,6 +9,7 @@ from threading import Lock
 from typing import Any, Protocol
 
 from redis.exceptions import RedisError
+from sqlalchemy import inspect
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -19,6 +20,7 @@ from app.core.database import (
     create_read_database_engine,
     create_read_session_factory,
     create_session_factory,
+    run_read_with_primary_fallback,
 )
 from app.models.scale_backbone import OrchestratorClipStateRecord, OrchestratorConfigRecord
 
@@ -463,11 +465,14 @@ class PersistentGlobalFeedStateStore:
             if cached is not None:
                 return cached
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            record = session.get(OrchestratorClipStateRecord, clip_id)
-            if record is None:
-                return None
-            state = self._state_from_record(record)
+        state = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="orchestrator.load_clip",
+            fn=lambda session: self._load_clip_from_session(session, clip_id=clip_id),
+        )
+        if state is None:
+            return None
         self._sync_cache(state)
         return state
 
@@ -509,11 +514,12 @@ class PersistentGlobalFeedStateStore:
 
     def list_clips(self, *, limit: int | None = None) -> list[ClipGlobalState]:
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            stmt = select(OrchestratorClipStateRecord).order_by(OrchestratorClipStateRecord.updated_at.desc())
-            if limit is not None:
-                stmt = stmt.limit(max(int(limit), 0))
-            records = list(session.scalars(stmt).all())
+        records = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="orchestrator.list_clips",
+            fn=lambda session: self._list_records(session, limit=limit),
+        )
         states = [self._state_from_record(record) for record in records]
         for state in states:
             self._sync_cache(state)
@@ -521,11 +527,12 @@ class PersistentGlobalFeedStateStore:
 
     def load_config(self) -> AttentionOrchestratorConfig:
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            record = session.get(OrchestratorConfigRecord, GLOBAL_CONFIG_KEY)
-            if record is None:
-                return AttentionOrchestratorConfig()
-            config = AttentionOrchestratorConfig.from_payload(record.payload_json)
+        config = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="orchestrator.load_config",
+            fn=lambda session: self._load_config_from_session(session),
+        )
         if self.cache_store is not None:
             self.cache_store.save_config(config)
         return config
@@ -585,6 +592,25 @@ class PersistentGlobalFeedStateStore:
         record.metadata_json = dict(state.metadata or {})
         record.updated_at = state.updated_at.astimezone(UTC)
 
+    def _load_clip_from_session(self, session: Session, *, clip_id: str) -> ClipGlobalState | None:
+        record = session.get(OrchestratorClipStateRecord, clip_id)
+        if record is None:
+            return None
+        return self._state_from_record(record)
+
+    def _list_records(self, session: Session, *, limit: int | None) -> list[OrchestratorClipStateRecord]:
+        stmt = select(OrchestratorClipStateRecord).order_by(OrchestratorClipStateRecord.updated_at.desc())
+        if limit is not None:
+            stmt = stmt.limit(max(int(limit), 0))
+        return list(session.scalars(stmt).all())
+
+    @staticmethod
+    def _load_config_from_session(session: Session) -> AttentionOrchestratorConfig:
+        record = session.get(OrchestratorConfigRecord, GLOBAL_CONFIG_KEY)
+        if record is None:
+            return AttentionOrchestratorConfig()
+        return AttentionOrchestratorConfig.from_payload(record.payload_json)
+
 
 def build_global_feed_state_store(
     *,
@@ -601,11 +627,29 @@ def build_global_feed_state_store(
         create_read_database_engine(resolved_settings.database_read_url)
     )
     resolved_backend = backend or build_cache_backend(settings=resolved_settings)
+    bind = resolved_session_factory.kw.get("bind") if hasattr(resolved_session_factory, "kw") else None
+    if bind is None or not _orchestrator_tables_available(bind):
+        logger.warning("orchestrator.global_state.persistence_unavailable_falling_back_to_memory")
+        return InMemoryGlobalFeedStateStore()
     return PersistentGlobalFeedStateStore(
         session_factory=resolved_session_factory,
         read_session_factory=resolved_read_session_factory,
         cache_store=CacheGlobalFeedStateStore(backend=resolved_backend),
     )
+
+
+def _orchestrator_tables_available(bind: Any) -> bool:
+    try:
+        inspector = inspect(bind)
+        return all(
+            inspector.has_table(table_name)
+            for table_name in (
+                OrchestratorClipStateRecord.__tablename__,
+                OrchestratorConfigRecord.__tablename__,
+            )
+        )
+    except Exception:
+        return False
 
 
 def _as_float(value: object, default: float) -> float:

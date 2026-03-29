@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.club_finance.service import ClubFinanceService
+from app.club_ownership.service import ClubOwnershipService
 from app.live_ops.service import LiveOpsService
 from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
@@ -44,6 +45,13 @@ class MatchEngagementService:
             away_score=away_score,
             home_user_id=home_user_id,
             away_user_id=away_user_id,
+        )
+        ClubOwnershipService(self.session).settle_match_result(
+            match_id=match_id,
+            home_club_id=home_club_id,
+            away_club_id=away_club_id,
+            home_score=home_score,
+            away_score=away_score,
         )
         LiveOpsService(self.session).record_match_xp(
             match_id=match_id,

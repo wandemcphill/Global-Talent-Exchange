@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
@@ -115,6 +117,7 @@ def _seed_context(app_session_factory: sessionmaker) -> dict[str, object]:
             current_club_profile_id=club.id,
             current_competition_id="comp-u17",
             full_name="Ayo Future",
+            date_of_birth=date(2008, 4, 11),
             normalized_position="ST",
             is_tradable=False,
         )
@@ -281,6 +284,25 @@ def test_rent_and_hall_of_fame_flow_updates_national_pool_and_dynasty(global_mem
     evolution_payload = history_response.json()["evolution"]
     assert evolution_payload["titles"] == 6
     assert evolution_payload["hall_of_fame"] is True
+    assert evolution_payload["scarcity_tier"] == "legendary"
+    assert "dynasty carrier" in evolution_payload["unique_traits"]
+    assert len(evolution_payload["unique_traits"]) == 3
+    assert evolution_payload["legacy_boost_score"] >= 0.2
+
+    history_by_path = client.get(f"/player-history/{seeded['player_id']}")
+    assert history_by_path.status_code == 200
+    history_payload = history_by_path.json()
+    assert history_payload["global_player_id"] == f"player:{seeded['player_id']}"
+    assert history_payload["titles"] == 6
+    assert history_payload["career_arc"]["age"] == 17
+    assert history_payload["career_arc"]["peak_age_range"] == [24, 29]
+
+    leaderboard_response = client.get("/dynasty/leaderboard")
+    assert leaderboard_response.status_code == 200
+    leaderboard = leaderboard_response.json()
+    assert leaderboard[0]["user_id"] == seeded["user_id"]
+    assert leaderboard[0]["total_titles"] == 6
+    assert leaderboard[0]["dynasty_label"] == "Established Dynasty"
 
     national_pool_response = client.get("/national-pool", params={"country_code": "NG"})
     assert national_pool_response.status_code == 200
@@ -289,6 +311,15 @@ def test_rent_and_hall_of_fame_flow_updates_national_pool_and_dynasty(global_mem
     assert regen_row["tradable"] is True
     assert regen_row["unique"] is True
     assert regen_row["hall_of_fame"] is True
+    assert regen_row["scarcity_tier"] == "legendary"
+
+    hall_of_fame_response = client.get("/hall-of-fame")
+    assert hall_of_fame_response.status_code == 200
+    hall_of_fame_payload = hall_of_fame_response.json()
+    assert hall_of_fame_payload[0]["player_id"] == seeded["player_id"]
+    assert hall_of_fame_payload[0]["global_player_id"] == f"player:{seeded['player_id']}"
+    assert hall_of_fame_payload[0]["scarcity_tier"] == "legendary"
+    assert hall_of_fame_payload[0]["immutable_record"] is True
 
     with app_session_factory() as session:
         hall_of_fame_entry = session.scalar(
@@ -296,4 +327,3 @@ def test_rent_and_hall_of_fame_flow_updates_national_pool_and_dynasty(global_mem
         )
         assert hall_of_fame_entry is not None
         assert hall_of_fame_entry.entry_category == "Legends"
-

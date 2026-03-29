@@ -26,6 +26,10 @@ from app.schemas.regen_universe import (
     RegenUniversePlayerShowcaseView,
 )
 from app.schemas.regen_universe_expansion import (
+    NationalRegenPreseedRequest,
+    NationalRegenSeedView,
+    RegenEvolutionResultView,
+    RegenGenerationTrackingView,
     RegenUniverseJobRunView,
     YouthTournamentCreateRequest,
     YouthTournamentView,
@@ -163,6 +167,32 @@ def get_youth_tournament(
     return YouthTournamentView.model_validate(payload)
 
 
+@router.get("/national-regens", response_model=list[NationalRegenSeedView])
+def list_national_regens(
+    country_code: str | None = Query(default=None),
+    seed_type: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=250),
+    session: Session = Depends(get_session),
+) -> list[NationalRegenSeedView]:
+    return [
+        NationalRegenSeedView.model_validate(item)
+        for item in RegenUniverseExpansionService(session).list_preseeded_national_regens(
+            country_code=country_code,
+            seed_type=seed_type,
+            limit=limit,
+        )
+    ]
+
+
+@router.get("/tracking", response_model=RegenGenerationTrackingView)
+def get_regen_tracking(
+    session: Session = Depends(get_session),
+) -> RegenGenerationTrackingView:
+    return RegenGenerationTrackingView.model_validate(
+        RegenUniverseExpansionService(session).build_regen_tracking()
+    )
+
+
 @admin_router.post("/seasons", response_model=RegenSeasonView)
 def create_regen_season(
     payload: RegenSeasonCreateRequest,
@@ -226,6 +256,41 @@ def create_youth_tournament(
         raise_regen_universe_expansion_http_exception(exc)
     session.commit()
     return YouthTournamentView.model_validate(service.get_youth_tournament(tournament.id))
+
+
+@admin_router.post("/national-regens/preseed", response_model=list[NationalRegenSeedView], status_code=status.HTTP_201_CREATED)
+def preseed_national_regens(
+    payload: NationalRegenPreseedRequest,
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> list[NationalRegenSeedView]:
+    service = RegenUniverseExpansionService(session)
+    try:
+        items = service.seed_preseeded_national_regens(
+            country_codes=payload.country_codes,
+            seeds_per_country=payload.seeds_per_country,
+            include_legendary_regens=payload.include_legendary_regens,
+            preseed_batch=payload.preseed_batch,
+        )
+    except RegenUniverseExpansionError as exc:
+        raise_regen_universe_expansion_http_exception(exc)
+    session.commit()
+    return [NationalRegenSeedView.model_validate(item) for item in items]
+
+
+@admin_router.post("/seasons/{season_id}/evolution", response_model=RegenEvolutionResultView)
+def apply_regen_evolution(
+    season_id: str,
+    _actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> RegenEvolutionResultView:
+    service = RegenUniverseExpansionService(session)
+    try:
+        payload = service.apply_evolution_cycle(season_id=season_id)
+    except RegenUniverseExpansionError as exc:
+        raise_regen_universe_expansion_http_exception(exc)
+    session.commit()
+    return RegenEvolutionResultView.model_validate(payload)
 
 
 @admin_router.post("/jobs/story-regeneration", response_model=RegenUniverseJobRunView)

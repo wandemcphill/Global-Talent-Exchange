@@ -10,6 +10,11 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.event_backbone import build_outbox_event, defer_event_publish_until_commit
+from app.core.events import DomainEvent, EventPublisher
+from app.core.global_ids import global_competition_id, global_match_id
+from app.global_memory.constants import COMPETITION_ADVANCED
+from app.global_memory.models import NationalTeamCountryRanking
 from app.ingestion.models import Country, Player
 from app.models.base import utcnow
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
@@ -27,6 +32,7 @@ class NationalCompetitionLifecycleError(ValueError):
 @dataclass(slots=True)
 class NationalCompetitionLifecycleService:
     session: Session
+    event_publisher: EventPublisher | None = None
 
     def submit_entry(self, *, competition_id: str, actor: User, payload) -> dict[str, Any]:
         competition = self._require_competition(competition_id)
@@ -236,6 +242,20 @@ class NationalCompetitionLifecycleService:
             **dict(competition.metadata_json or {}),
             "lifecycle_state": lifecycle_state,
         }
+        stage_matches = self._extract_matches_from_stage_result(stage=current_stage, result=result)
+        self._update_country_rankings(
+            competition=competition,
+            stage=current_stage,
+            matches=stage_matches,
+            champion_entry=entry_map.get(lifecycle_state.get("champion_entry_id")),
+        )
+        self._emit_competition_advanced_event(
+            competition=competition,
+            stage=current_stage,
+            next_stage=str(lifecycle_state.get("current_stage") or current_stage),
+            matches=stage_matches,
+            champion_entry=entry_map.get(lifecycle_state.get("champion_entry_id")),
+        )
         self.session.flush()
         return self.get_lifecycle_payload(competition_id=competition_id)
 
@@ -263,6 +283,32 @@ class NationalCompetitionLifecycleService:
             "stage_history": list(lifecycle_state.get("stage_history") or []),
             "stage_results": dict(lifecycle_state.get("stage_results") or {}),
         }
+
+    def list_country_rankings(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.session.scalars(
+            select(NationalTeamCountryRanking)
+            .order_by(
+                NationalTeamCountryRanking.elo_rating.desc(),
+                NationalTeamCountryRanking.titles.desc(),
+                NationalTeamCountryRanking.wins.desc(),
+                NationalTeamCountryRanking.country_name.asc(),
+            )
+            .limit(limit)
+        ).all()
+        return [
+            {
+                "country_code": item.country_code,
+                "country_name": item.country_name,
+                "elo_rating": round(float(item.elo_rating), 2),
+                "matches_played": item.matches_played,
+                "wins": item.wins,
+                "draws": item.draws,
+                "losses": item.losses,
+                "titles": item.titles,
+                "metadata_json": dict(item.metadata_json or {}),
+            }
+            for item in rows
+        ]
 
     def _require_competition(self, competition_id: str) -> NationalTeamCompetition:
         competition = self.session.scalar(
@@ -295,6 +341,13 @@ class NationalCompetitionLifecycleService:
             raise NationalCompetitionLifecycleError(
                 "Competition has already completed.",
                 reason="competition_completed",
+            )
+        lifecycle_state = dict((competition.metadata_json or {}).get("lifecycle_state") or {})
+        competition_status = str(competition.status or "").strip().lower()
+        if lifecycle_state or competition_status in {"locked", "live"}:
+            raise NationalCompetitionLifecycleError(
+                "Competition entries are locked once qualifiers have started.",
+                reason="entry_locked",
             )
 
     def _competition_profile(self, competition: NationalTeamCompetition) -> dict[str, Any]:
@@ -520,7 +573,12 @@ class NationalCompetitionLifecycleService:
         return (sum(ratings) / len(ratings)) + min(len(ratings), 23) * 0.12
 
     def _entry_strength(self, entry: NationalTeamCompetitionEntry) -> float:
-        return self._squad_strength(list(entry.squad_json or []))
+        base_strength = self._squad_strength(list(entry.squad_json or []))
+        ranking = self._country_ranking(entry.country_code, country_name=entry.country_name, create=False)
+        if ranking is None:
+            return base_strength
+        seeding_bonus = max(-4.0, min(6.0, (float(ranking.elo_rating) - 1500.0) / 80.0))
+        return base_strength + seeding_bonus
 
     @staticmethod
     def _clear_lifecycle_state(competition: NationalTeamCompetition) -> None:
@@ -1051,6 +1109,157 @@ class NationalCompetitionLifecycleService:
     def _stable_seed(*parts: str) -> int:
         digest = sha256("|".join(parts).encode("utf-8")).hexdigest()
         return int(digest[:16], 16)
+
+    def _country_ranking(
+        self,
+        country_code: str,
+        *,
+        country_name: str | None = None,
+        create: bool = True,
+    ) -> NationalTeamCountryRanking | None:
+        normalized = country_code.strip().upper()
+        if not normalized:
+            return None
+        ranking = self.session.scalar(
+            select(NationalTeamCountryRanking).where(NationalTeamCountryRanking.country_code == normalized)
+        )
+        if ranking is not None or not create:
+            return ranking
+        ranking = NationalTeamCountryRanking(
+            country_code=normalized,
+            country_name=(country_name or normalized).strip() or normalized,
+            elo_rating=1500.0,
+            metadata_json={},
+        )
+        self.session.add(ranking)
+        self.session.flush()
+        return ranking
+
+    def _update_country_rankings(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        stage: str,
+        matches: list[dict[str, Any]],
+        champion_entry: NationalTeamCompetitionEntry | None,
+    ) -> None:
+        k_factor = {"pre_qualifier": 16.0, "qualifier": 20.0, "tournament": 24.0}.get(stage, 20.0)
+        for match in matches:
+            if str(match.get("resolution") or "").endswith("_bye"):
+                continue
+            home_code = str(match.get("home_country_code") or "").strip().upper()
+            away_code = str(match.get("away_country_code") or "").strip().upper()
+            if not home_code or not away_code:
+                continue
+            home = self._country_ranking(home_code, country_name=str(match.get("home_country_name") or home_code))
+            away = self._country_ranking(away_code, country_name=str(match.get("away_country_name") or away_code))
+            if home is None or away is None:
+                continue
+
+            home_rating = float(home.elo_rating)
+            away_rating = float(away.elo_rating)
+            expected_home = 1.0 / (1.0 + 10.0 ** ((away_rating - home_rating) / 400.0))
+            expected_away = 1.0 - expected_home
+            home_score = int(match.get("home_score") or 0)
+            away_score = int(match.get("away_score") or 0)
+            if home_score > away_score:
+                actual_home, actual_away = 1.0, 0.0
+                home.wins += 1
+                away.losses += 1
+            elif away_score > home_score:
+                actual_home, actual_away = 0.0, 1.0
+                away.wins += 1
+                home.losses += 1
+            else:
+                actual_home = actual_away = 0.5
+                home.draws += 1
+                away.draws += 1
+            home.matches_played += 1
+            away.matches_played += 1
+            home.elo_rating = round(home_rating + k_factor * (actual_home - expected_home), 4)
+            away.elo_rating = round(away_rating + k_factor * (actual_away - expected_away), 4)
+            home.last_competition_id = competition.id
+            away.last_competition_id = competition.id
+            home.metadata_json = {**dict(home.metadata_json or {}), "last_stage": stage}
+            away.metadata_json = {**dict(away.metadata_json or {}), "last_stage": stage}
+
+        if champion_entry is not None and stage == "tournament":
+            champion = self._country_ranking(
+                champion_entry.country_code,
+                country_name=champion_entry.country_name,
+            )
+            if champion is not None:
+                champion.titles += 1
+                champion.last_competition_id = competition.id
+                champion.metadata_json = {
+                    **dict(champion.metadata_json or {}),
+                    "last_title_season": competition.season_label,
+                    "last_title_competition": competition.title,
+                }
+
+    def _extract_matches_from_stage_result(self, *, stage: str, result: dict[str, Any]) -> list[dict[str, Any]]:
+        matches: list[dict[str, Any]] = []
+        if stage == "pre_qualifier":
+            for country in list(result.get("countries") or []):
+                for round_payload in list(country.get("rounds") or []):
+                    matches.extend(dict(item) for item in list(round_payload.get("matches") or []))
+            return matches
+        for group in list(result.get("groups") or []):
+            matches.extend(dict(item) for item in list(group.get("matches") or []))
+        for round_payload in list(result.get("knockout_rounds") or []):
+            matches.extend(dict(item) for item in list(round_payload.get("matches") or []))
+        return matches
+
+    def _emit_competition_advanced_event(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        stage: str,
+        next_stage: str,
+        matches: list[dict[str, Any]],
+        champion_entry: NationalTeamCompetitionEntry | None,
+    ) -> None:
+        if self.event_publisher is None:
+            return
+        payload_matches = [
+            {
+                **dict(match),
+                "global_match_id": self._global_stage_match_id(competition.id, stage, match),
+            }
+            for match in matches
+        ]
+        event = DomainEvent(
+            name=COMPETITION_ADVANCED,
+            payload={
+                "competition_id": competition.id,
+                "global_competition_id": global_competition_id(competition.id),
+                "competition_title": competition.title,
+                "stage": stage,
+                "next_stage": next_stage,
+                "matches": payload_matches,
+                "champion_entry_id": champion_entry.id if champion_entry is not None else None,
+                "champion_country_code": champion_entry.country_code if champion_entry is not None else None,
+                "champion_country_name": champion_entry.country_name if champion_entry is not None else None,
+            },
+            aggregate_id=competition.id,
+            aggregate_type="national_team_competition",
+            producer="national_team_lifecycle",
+            partition_key=competition.id,
+        )
+        self.session.add(build_outbox_event(domain_event=event))
+        defer_event_publish_until_commit(self.session, publisher=self.event_publisher, event=event)
+
+    def _global_stage_match_id(self, competition_id: str, stage: str, match: dict[str, Any]) -> str:
+        key = ":".join(
+            [
+                competition_id,
+                stage,
+                str(match.get("stage") or ""),
+                str(match.get("home_entry_id") or ""),
+                str(match.get("away_entry_id") or ""),
+            ]
+        )
+        return global_match_id(key)
 
     @staticmethod
     def _append_stage_history(lifecycle_state: dict[str, Any], *, stage: str, summary: str) -> None:

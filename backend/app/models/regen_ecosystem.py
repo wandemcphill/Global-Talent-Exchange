@@ -180,9 +180,39 @@ class RegenAwardVote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class NationalRegenSeed(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "national_regen_seeds"
+    __table_args__ = (
+        UniqueConstraint("seed_key", name="uq_national_regen_seeds_seed_key"),
+        Index("ix_national_regen_seeds_country_code", "country_code"),
+        Index("ix_national_regen_seeds_seed_type", "seed_type"),
+        Index("ix_national_regen_seeds_rarity_tier", "rarity_tier"),
+        Index("ix_national_regen_seeds_status", "status"),
+    )
+
+    seed_key: Mapped[str] = mapped_column(String(96), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    country_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    country_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    confederation_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    seed_type: Mapped[str] = mapped_column(String(40), nullable=False, default="preseeded_national_pool", server_default="preseeded_national_pool")
+    generation_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    primary_position: Mapped[str] = mapped_column(String(40), nullable=False)
+    secondary_positions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    current_rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    potential_rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    growth_curve: Mapped[float] = mapped_column(Float, nullable=False, default=0.5, server_default="0.5")
+    personality_seed_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    rarity_tier: Mapped[str] = mapped_column(String(24), nullable=False, default="common", server_default="common")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="available", server_default="available")
+    preseed_batch: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
 __all__ = [
     "Agent",
     "CareerEvent",
+    "NationalRegenSeed",
     "RegenAttributeProfile",
     "RegenAwardVote",
     "RegenBloodlineLink",

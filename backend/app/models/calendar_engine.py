@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -61,3 +61,19 @@ class CompetitionLifecycleRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     launched_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class GlobalEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "global_events"
+    __table_args__ = (UniqueConstraint("event_key", name="uq_global_events_event_key"),)
+
+    event_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    event_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=50, server_default="50", index=True)
+    calendar_event_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("calendar_events.id", ondelete="SET NULL"), nullable=True, index=True)
+    match_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="scheduled", server_default="scheduled", index=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

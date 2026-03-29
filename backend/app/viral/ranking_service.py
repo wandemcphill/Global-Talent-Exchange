@@ -19,6 +19,7 @@ from app.core.database import (
     create_read_database_engine,
     create_read_session_factory,
     create_session_factory,
+    run_read_with_primary_fallback,
 )
 from app.core.trust_middleware import SharedTrustMiddleware
 from app.feedback_engine.service import FeedbackEngine
@@ -223,14 +224,18 @@ class PersistentViralLeaderboardStore:
             if cached:
                 return cached
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            records = list(
+        records = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="viral_leaderboard.top",
+            fn=lambda session: list(
                 session.scalars(
                     select(ViralLeaderboardEntryRecord)
                     .order_by(ViralLeaderboardEntryRecord.score.desc(), ViralLeaderboardEntryRecord.clip_id.asc())
                     .limit(limit)
                 ).all()
-            )
+            ),
+        )
         envelopes = [
             LeaderboardEnvelope(
                 clip_id=record.clip_id,
@@ -332,19 +337,29 @@ class RedisClipLiveMetricsStore:
 @dataclass(slots=True)
 class DatabaseClipLiveMetricsStore:
     read_session_factory: sessionmaker[Session]
+    primary_session_factory: sessionmaker[Session] | None = None
+
+    def __post_init__(self) -> None:
+        if self.primary_session_factory is None:
+            self.primary_session_factory = self.read_session_factory
 
     def get_snapshot(self, clip_id: str, *, now: datetime) -> ClipLiveMetricsSnapshot | None:
         lookback = now - timedelta(minutes=60)
         try:
-            with self.read_session_factory() as session:
-                events = list(
+            assert self.primary_session_factory is not None
+            events = run_read_with_primary_fallback(
+                read_session_factory=self.read_session_factory,
+                primary_session_factory=self.primary_session_factory,
+                operation_name="viral_metrics.snapshot",
+                fn=lambda session: list(
                     session.scalars(
                         select(AnalyticsEvent).where(
                             AnalyticsEvent.created_at >= lookback,
                             AnalyticsEvent.metadata_json["clip_id"].as_string() == clip_id,
                         )
                     ).all()
-                )
+                ),
+            )
         except Exception:
             return None
         if not events:
@@ -849,6 +864,7 @@ def build_viral_leaderboard_store(
 def build_clip_live_metrics_store(
     *,
     settings: Settings | None = None,
+    session_factory: sessionmaker[Session] | None = None,
     read_session_factory: sessionmaker[Session] | None = None,
 ) -> ClipLiveMetricsStore:
     resolved_settings = settings or get_settings()
@@ -859,7 +875,13 @@ def build_clip_live_metrics_store(
     resolved_read_session_factory = read_session_factory or create_read_session_factory(
         create_read_database_engine(resolved_settings.database_read_url)
     )
-    return DatabaseClipLiveMetricsStore(read_session_factory=resolved_read_session_factory)
+    resolved_session_factory = session_factory or create_session_factory(
+        create_database_engine(resolved_settings.database_url)
+    )
+    return DatabaseClipLiveMetricsStore(
+        read_session_factory=resolved_read_session_factory,
+        primary_session_factory=resolved_session_factory,
+    )
 
 
 def ensure_viral_leaderboard_store(app: FastAPI, *, settings: Settings | None = None) -> ViralLeaderboardStore:
@@ -893,6 +915,7 @@ def build_viral_ranking_service(*, app: FastAPI, session: Session) -> ViralRanki
         notification_service=build_follow_notification_service(app=app, session=session),
         metrics_store=build_clip_live_metrics_store(
             settings=settings,
+            session_factory=getattr(app.state, "session_factory", None),
             read_session_factory=getattr(app.state, "read_session_factory", None),
         ),
         trust_middleware=SharedTrustMiddleware(

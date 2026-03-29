@@ -12,7 +12,7 @@ import time
 from sqlalchemy import MetaData, create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import BACKEND_ROOT, PROJECT_ROOT, Settings, get_settings, normalize_database_url
@@ -124,11 +124,40 @@ def get_session() -> Iterator[Session]:
 
 
 def get_read_session() -> Iterator[Session]:
-    session = get_read_session_factory()()
+    read_session_factory = get_read_session_factory()
+    primary_session_factory = get_session_factory()
+    try:
+        session = read_session_factory()
+    except (OperationalError, DBAPIError) as exc:
+        logger.warning("database.read_replica_fallback operation=get_read_session error=%s", exc)
+        session = primary_session_factory()
     try:
         yield session
     finally:
         session.close()
+
+
+def run_read_with_primary_fallback(
+    *,
+    read_session_factory: sessionmaker[Session] | None,
+    primary_session_factory: sessionmaker[Session],
+    operation_name: str,
+    fn,
+):
+    if read_session_factory is None or read_session_factory is primary_session_factory:
+        with primary_session_factory() as session:
+            return fn(session)
+    try:
+        with read_session_factory() as session:
+            return fn(session)
+    except (OperationalError, DBAPIError) as exc:
+        logger.warning(
+            "database.read_replica_fallback operation=%s error=%s",
+            operation_name,
+            exc,
+        )
+    with primary_session_factory() as session:
+        return fn(session)
 
 
 def build_alembic_config(database_url: str | None = None) -> Config:
@@ -321,7 +350,11 @@ class DatabaseRuntime:
             session.close()
 
     def get_read_session(self) -> Iterator[Session]:
-        session = self.read_session_factory()
+        try:
+            session = self.read_session_factory()
+        except (OperationalError, DBAPIError) as exc:
+            logger.warning("database.read_replica_fallback operation=DatabaseRuntime.get_read_session error=%s", exc)
+            session = self.session_factory()
         try:
             yield session
         finally:

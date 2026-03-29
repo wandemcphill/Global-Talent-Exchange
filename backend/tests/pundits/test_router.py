@@ -35,6 +35,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
 
 
 def _insert_match(session_factory: sessionmaker[Session], replay_payload) -> None:
+    preview_request = build_request(seed=74, match_id=replay_payload.match_id)
     with session_factory() as session:
         session.add(
             CompetitionMatch(
@@ -42,9 +43,13 @@ def _insert_match(session_factory: sessionmaker[Session], replay_payload) -> Non
                 competition_id="competition-1",
                 round_id="round-1",
                 round_number=1,
+                stage="final",
                 home_club_id=replay_payload.summary.home_stats.team_id,
                 away_club_id=replay_payload.summary.away_stats.team_id,
-                metadata_json={"replay_payload": replay_payload.model_dump(mode="json")},
+                metadata_json={
+                    "preview_request": preview_request.model_dump(mode="json"),
+                    "replay_payload": replay_payload.model_dump(mode="json"),
+                },
             )
         )
         session.commit()
@@ -62,3 +67,23 @@ def test_pundits_router_returns_match_debate() -> None:
     body = response.json()
     assert body["headline"]
     assert body["lines"]
+
+
+def test_pundits_router_returns_show_endpoints() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=75, match_id="pundits-shows"))
+    _insert_match(session_factory, replay_payload)
+
+    with TestClient(app) as client:
+        pre_response = client.get(f"/shows/pre-match/{replay_payload.match_id}")
+        post_response = client.get(f"/shows/post-match/{replay_payload.match_id}")
+        debate_response = client.get("/shows/debate", params={"match_id": replay_payload.match_id})
+
+    assert pre_response.status_code == 200, pre_response.text
+    assert post_response.status_code == 200, post_response.text
+    assert debate_response.status_code == 200, debate_response.text
+    assert pre_response.json()["show_type"] == "pre_match"
+    assert pre_response.json()["prediction"]["predicted_score"]
+    assert post_response.json()["show_type"] == "post_match"
+    assert post_response.json()["player_ratings"]
+    assert debate_response.json()["show_type"] == "debate"

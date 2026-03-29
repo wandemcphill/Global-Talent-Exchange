@@ -116,3 +116,42 @@ class CalendarDashboardView(BaseModel):
     active_events: list[CalendarEventView]
     active_pause_status: PauseStatusView
     recent_lifecycle_runs: list[CompetitionLifecycleRunView]
+
+
+class GlobalEventNotificationView(BaseModel):
+    kind: str
+    message: str
+    send_at: datetime
+
+
+class GlobalEventEngagementView(BaseModel):
+    match_route: str | None = None
+    pre_match_show_route: str | None = None
+    post_match_show_route: str | None = None
+    betting_route: str | None = None
+
+
+class GlobalEventView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    event_key: str
+    event_name: str
+    start_time: datetime
+    end_time: datetime
+    event_type: str
+    priority: int
+    calendar_event_id: str | None
+    match_id: str | None
+    status: str
+    metadata_json: dict[str, Any]
+    notifications: list[GlobalEventNotificationView] = Field(default_factory=list)
+    engagement: GlobalEventEngagementView | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GlobalEventFeedView(BaseModel):
+    requested_for: date
+    window: str
+    events: list[GlobalEventView] = Field(default_factory=list)

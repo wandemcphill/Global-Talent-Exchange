@@ -50,7 +50,7 @@ def _default_feedback_state() -> dict[str, Any]:
 
 
 def _table_exists(session: Session, table_name: str) -> bool:
-    bind = session.get_bind()
+    bind = session.connection()
     if bind is None:
         return False
     return bool(inspect(bind).has_table(table_name))

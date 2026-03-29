@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from redis import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import inspect, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -223,12 +224,6 @@ class CreatorAttentionEarningsService:
         resolved_clip_id = str(clip_id or "").strip()
         if not resolved_clip_id or not self._supports_storage():
             return None
-        resolved_reference = (reference_key or self._build_reference_key(event_type=event_type)).strip()
-        existing = self.session.scalar(
-            select(ClipEarningsLog).where(ClipEarningsLog.reference_key == resolved_reference)
-        )
-        if existing is not None:
-            return existing
 
         clip_metadata = dict(getattr(clip, "metadata", {}) or {})
         event_metadata = dict(metadata or {})
@@ -239,6 +234,17 @@ class CreatorAttentionEarningsService:
             return None
         if viewer_user_id and viewer_user_id == creator_user_id:
             return None
+        resolved_reference = self._resolve_reference_key(
+            event_type=event_type,
+            clip_id=resolved_clip_id,
+            viewer_user_id=viewer_user_id,
+            reference_key=reference_key,
+        )
+        existing = self.session.scalar(
+            select(ClipEarningsLog).where(ClipEarningsLog.reference_key == resolved_reference)
+        )
+        if existing is not None:
+            return existing
 
         impression_delta = 1 if event_type is ClipEarningEventType.IMPRESSION else 0
         like_delta = 1 if event_type is ClipEarningEventType.LIKE else 0
@@ -253,45 +259,57 @@ class CreatorAttentionEarningsService:
             return None
 
         wallet = self._get_or_create_wallet(creator_user_id=creator_user_id)
-        wallet.total_impressions += impression_delta
-        wallet.total_likes += like_delta
-        wallet.total_shares += share_delta
-        wallet.total_earnings_credit = normalize_amount(
-            wallet.total_earnings_credit + earnings_delta_credit
-        )
-        wallet.available_balance_credit = normalize_amount(
-            wallet.available_balance_credit + earnings_delta_credit
-        )
         event_at = utcnow()
-        wallet.last_event_at = event_at
-        wallet.metadata_json = {
-            **dict(wallet.metadata_json or {}),
-            "last_clip_id": resolved_clip_id,
-            "last_event_type": event_type.value,
-            "last_feed_source": event_metadata.get("feed_source"),
-        }
+        log_savepoint = self.session.begin_nested()
+        try:
+            wallet.total_impressions += impression_delta
+            wallet.total_likes += like_delta
+            wallet.total_shares += share_delta
+            wallet.total_earnings_credit = normalize_amount(
+                wallet.total_earnings_credit + earnings_delta_credit
+            )
+            wallet.available_balance_credit = normalize_amount(
+                wallet.available_balance_credit + earnings_delta_credit
+            )
+            wallet.last_event_at = event_at
+            wallet.metadata_json = {
+                **dict(wallet.metadata_json or {}),
+                "last_clip_id": resolved_clip_id,
+                "last_event_type": event_type.value,
+                "last_feed_source": event_metadata.get("feed_source"),
+            }
 
-        log = ClipEarningsLog(
-            clip_id=resolved_clip_id,
-            creator_user_id=creator_user_id,
-            viewer_user_id=viewer_user_id,
-            event_type=event_type,
-            reference_key=resolved_reference,
-            impression_delta=impression_delta,
-            like_delta=like_delta,
-            share_delta=share_delta,
-            base_rate_credit=base_rate_credit,
-            engagement_bonus_credit=engagement_bonus_credit,
-            virality_bonus_credit=virality_bonus_credit,
-            earnings_delta_credit=earnings_delta_credit,
-            creator_wallet_balance_credit=wallet.available_balance_credit,
-            metadata_json={
-                **clip_metadata,
-                **event_metadata,
-            },
-        )
-        self.session.add(log)
-        self.session.flush()
+            log = ClipEarningsLog(
+                clip_id=resolved_clip_id,
+                creator_user_id=creator_user_id,
+                viewer_user_id=viewer_user_id,
+                event_type=event_type,
+                reference_key=resolved_reference,
+                impression_delta=impression_delta,
+                like_delta=like_delta,
+                share_delta=share_delta,
+                base_rate_credit=base_rate_credit,
+                engagement_bonus_credit=engagement_bonus_credit,
+                virality_bonus_credit=virality_bonus_credit,
+                earnings_delta_credit=earnings_delta_credit,
+                creator_wallet_balance_credit=wallet.available_balance_credit,
+                metadata_json={
+                    **clip_metadata,
+                    **event_metadata,
+                },
+            )
+            self.session.add(log)
+            self.session.flush()
+        except IntegrityError:
+            log_savepoint.rollback()
+            existing = self.session.scalar(
+                select(ClipEarningsLog).where(ClipEarningsLog.reference_key == resolved_reference)
+            )
+            if existing is not None:
+                return existing
+            raise
+        else:
+            log_savepoint.commit()
         self._defer_cache_update(
             creator_user_id=creator_user_id,
             clip_id=resolved_clip_id,
@@ -303,13 +321,21 @@ class CreatorAttentionEarningsService:
             event_type=event_type.value,
             event_at=event_at,
         )
+        self._defer_metrics_update(
+            event_type=event_type.value,
+            earnings_delta_credit=earnings_delta_credit,
+        )
         return log
 
     def _get_or_create_wallet(self, *, creator_user_id: str) -> CreatorWallet:
-        wallet = self.session.scalar(
-            select(CreatorWallet).where(CreatorWallet.creator_user_id == creator_user_id)
-        )
-        if wallet is None:
+        statement = select(CreatorWallet).where(CreatorWallet.creator_user_id == creator_user_id)
+        if self._supports_row_locks():
+            statement = statement.with_for_update()
+        wallet = self.session.scalar(statement)
+        if wallet is not None:
+            return wallet
+        savepoint = self.session.begin_nested()
+        try:
             wallet = CreatorWallet(
                 creator_user_id=creator_user_id,
                 total_impressions=0,
@@ -321,6 +347,14 @@ class CreatorAttentionEarningsService:
             )
             self.session.add(wallet)
             self.session.flush()
+        except IntegrityError:
+            savepoint.rollback()
+            wallet = self.session.scalar(statement)
+            if wallet is None:
+                raise
+        else:
+            savepoint.commit()
+        assert wallet is not None
         return wallet
 
     def _defer_cache_update(
@@ -359,6 +393,26 @@ class CreatorAttentionEarningsService:
                 wallet_balance_credit=wallet_balance_credit,
                 event_type=event_type,
                 event_at=event_at,
+            ),
+        )
+
+    def _defer_metrics_update(
+        self,
+        *,
+        event_type: str,
+        earnings_delta_credit: Decimal,
+    ) -> None:
+        metrics = self._metrics()
+        if metrics is None:
+            return
+        defer_session_callback_until_commit(
+            self.session,
+            callback=lambda metrics=metrics,
+            event_type=event_type,
+            earnings_delta_credit=earnings_delta_credit: metrics.record_creator_earnings(
+                event_type=event_type,
+                result="committed",
+                earnings_delta_credit=earnings_delta_credit,
             ),
         )
 
@@ -446,6 +500,15 @@ class CreatorAttentionEarningsService:
             self._creator_profiles_available = False
         return self._creator_profiles_available
 
+    def _supports_row_locks(self) -> bool:
+        bind = self.session.get_bind() if hasattr(self.session, "get_bind") else None
+        return bind is not None and bind.dialect.name != "sqlite"
+
+    def _metrics(self):
+        if self.app is None:
+            return None
+        return getattr(self.app.state, "metrics", None)
+
     @staticmethod
     def _event_type_from_name(name: str) -> ClipEarningEventType | None:
         normalized = str(name or "").strip().lower()
@@ -458,6 +521,21 @@ class CreatorAttentionEarningsService:
     @staticmethod
     def _build_reference_key(*, event_type: ClipEarningEventType) -> str:
         return f"creator-attention:{event_type.value}:{generate_uuid()}"
+
+    def _resolve_reference_key(
+        self,
+        *,
+        event_type: ClipEarningEventType,
+        clip_id: str,
+        viewer_user_id: str | None,
+        reference_key: str | None,
+    ) -> str:
+        if event_type in {ClipEarningEventType.LIKE, ClipEarningEventType.SHARE} and viewer_user_id:
+            return f"creator-attention:{event_type.value}:{clip_id}:{viewer_user_id}"
+        resolved = (reference_key or self._build_reference_key(event_type=event_type)).strip()
+        if resolved:
+            return resolved
+        return self._build_reference_key(event_type=event_type)
 
 
 def build_creator_attention_earnings_service(

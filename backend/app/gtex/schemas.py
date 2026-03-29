@@ -190,4 +190,9 @@ class AiMatchView(BaseModel):
     queued_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+    match_storyline: str | None = None
+    key_moments: list[str] = Field(default_factory=list)
+    player_highlights: list[dict[str, Any]] = Field(default_factory=list)
+    rivalry: dict[str, Any] = Field(default_factory=dict)
+    match_context: dict[str, Any] = Field(default_factory=dict)
     events: list[AiMatchEventView] = Field(default_factory=list)

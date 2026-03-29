@@ -8,8 +8,8 @@ from app.backbone.routing import OutboxTopicRouter
 from app.core.database import ensure_database_schema_current
 from app.core.event_backbone import build_outbox_event
 from app.core.events import DomainEvent, InMemoryEventPublisher
-from app.infrastructure.outbox import RedisKafkaOutboxPublisher
-from app.models.event_backbone import EventOutbox
+from app.infrastructure.outbox import RedisKafkaOutboxPublisher, flush_to_broker
+from app.models.event_backbone import EventDeadLetter, EventOutbox
 
 
 class FakeKafkaProducer:
@@ -36,6 +36,19 @@ class FakeKafkaProducer:
 
     def close(self) -> None:
         self.closed = True
+
+
+class FailingKafkaProducer(FakeKafkaProducer):
+    def send(
+        self,
+        *,
+        topic: str,
+        value: dict[str, object],
+        key: str | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        del topic, value, key, headers
+        raise RuntimeError("broker unavailable")
 
 
 def _build_session_factory(tmp_path):
@@ -124,5 +137,58 @@ def test_outbox_relay_routes_queue_events_to_kafka_topics(tmp_path) -> None:
         assert row.processed_at is not None
         assert row.relay_attempts == 1
         assert row.last_error is None
+
+    engine.dispose()
+
+
+def test_outbox_relay_dead_letters_failed_events_after_retry_budget(tmp_path) -> None:
+    engine, session_factory = _build_session_factory(tmp_path)
+
+    with session_factory() as session:
+        session.add(
+            build_outbox_event(
+                domain_event=DomainEvent(
+                    name="creator.earnings.recompute.requested",
+                    event_id="2cc17bf0-b851-4cab-bf1a-53fda77c9f8b",
+                    payload={"creator_user_id": "creator-1"},
+                    aggregate_id="creator-1",
+                    aggregate_type="creator_earnings",
+                    producer="creator-earnings",
+                    partition_key="creator-1",
+                )
+            )
+        )
+        session.commit()
+
+    publisher = RedisKafkaOutboxPublisher(
+        event_publisher=InMemoryEventPublisher(),
+        kafka_producer=FailingKafkaProducer(),
+        topic_router=OutboxTopicRouter(topic_prefix="gtex"),
+    )
+
+    delivered = flush_to_broker(
+        session_factory=session_factory,
+        publisher=publisher,
+        batch_size=10,
+        max_attempts=1,
+    )
+
+    assert delivered == 0
+    with session_factory() as session:
+        row = session.scalar(select(EventOutbox).where(EventOutbox.event_id == "2cc17bf0-b851-4cab-bf1a-53fda77c9f8b"))
+        dead_letter = session.scalar(
+            select(EventDeadLetter).where(
+                EventDeadLetter.consumer_name == "outbox-relay",
+                EventDeadLetter.event_id == "2cc17bf0-b851-4cab-bf1a-53fda77c9f8b",
+            )
+        )
+        assert row is not None
+        assert row.status == "dead_letter"
+        assert row.dead_lettered_at is not None
+        assert row.relay_attempts == 1
+        assert "broker unavailable" in str(row.last_error)
+        assert dead_letter is not None
+        assert dead_letter.attempts == 1
+        assert dead_letter.event_type == "creator.earnings.recompute.requested"
 
     engine.dispose()

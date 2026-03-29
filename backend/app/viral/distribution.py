@@ -19,6 +19,7 @@ from app.core.database import (
     create_read_database_engine,
     create_read_session_factory,
     create_session_factory,
+    run_read_with_primary_fallback,
 )
 from app.models.scale_backbone import ViralDispatchPoolEntryRecord
 
@@ -456,9 +457,12 @@ class PersistentViralDispatchPoolStore:
                 return cached
         blocked = excluded_clip_ids or set()
         assert self.read_session_factory is not None
-        with self.read_session_factory() as session:
-            now = datetime.now(UTC)
-            records = list(
+        now = datetime.now(UTC)
+        records = run_read_with_primary_fallback(
+            read_session_factory=self.read_session_factory,
+            primary_session_factory=self.session_factory,
+            operation_name="viral_distribution.top",
+            fn=lambda session: list(
                 session.scalars(
                     select(ViralDispatchPoolEntryRecord)
                     .where(
@@ -467,7 +471,8 @@ class PersistentViralDispatchPoolStore:
                     .order_by(ViralDispatchPoolEntryRecord.score.desc(), ViralDispatchPoolEntryRecord.created_at.desc())
                     .limit(max(limit * 2, limit))
                 ).all()
-            )
+            ),
+        )
         envelopes = [
             _build_viral_dispatch_envelope(
                 clip_id=record.clip_id,

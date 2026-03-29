@@ -54,8 +54,11 @@ _AWARD_IMPACT_SCORES = {
     "gtex_golden_boy": 12.5,
     "gtex_best_u21_player": 12.0,
     "gtex_continental_player": 14.0,
+    "gtex_best_midfielder": 11.75,
+    "gtex_best_defender": 11.5,
     "gtex_best_goalkeeper": 11.5,
     "gtex_top_scorer": 13.0,
+    "gtex_breakout_star": 10.5,
     "gtex_team_of_the_year": 10.0,
     "tournament_top_scorer": 14.0,
     "title_winner": 9.0,
@@ -67,8 +70,11 @@ _GTEX_AWARD_CATALOG = {
     "gtex_golden_boy": "GTEX Golden Boy",
     "gtex_best_u21_player": "GTEX Best U21 Player",
     "gtex_continental_player": "GTEX Continental Player of the Year",
+    "gtex_best_midfielder": "GTEX Best Midfielder",
+    "gtex_best_defender": "GTEX Best Defender",
     "gtex_best_goalkeeper": "GTEX Best Goalkeeper",
     "gtex_top_scorer": "GTEX Top Scorer",
+    "gtex_breakout_star": "GTEX Breakout Star",
     "gtex_team_of_the_year": "GTEX Team of the Year",
 }
 

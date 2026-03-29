@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import math
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
@@ -29,6 +29,7 @@ from app.models.wallet import (
     LedgerTransactionType,
     LedgerUnit,
 )
+from app.infrastructure.distributed_lock import DistributedLockService, build_distributed_lock_service
 from app.tournaments.schemas import TournamentCreateRequest, TournamentMatchResultRequest
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
@@ -53,16 +54,22 @@ class TournamentValidationError(TournamentError):
 class TournamentService:
     session: Session
     wallet_service: WalletService | None = None
+    lock_service: DistributedLockService | None = None
 
     def __post_init__(self) -> None:
         if self.wallet_service is None:
             self.wallet_service = WalletService()
+        if self.lock_service is None:
+            self.lock_service = build_distributed_lock_service()
 
     def list_tournaments(self) -> list[dict[str, object]]:
-        tournaments = self.session.scalars(select(Tournament).order_by(Tournament.created_at.desc())).all()
-        for tournament in tournaments:
-            self._sync_tournament(tournament)
-        return [self._build_view(tournament) for tournament in tournaments]
+        tournament_ids = self.session.scalars(
+            select(Tournament.id).order_by(Tournament.created_at.desc())
+        ).all()
+        views: list[dict[str, object]] = []
+        for tournament_id in tournament_ids:
+            views.append(self.get_tournament(tournament_id))
+        return views
 
     def create_tournament(self, payload: TournamentCreateRequest) -> dict[str, object]:
         tournament = Tournament(
@@ -83,46 +90,57 @@ class TournamentService:
 
     def get_tournament(self, tournament_id: str) -> dict[str, object]:
         tournament = self._get_tournament(tournament_id)
-        self._sync_tournament(tournament)
+        if tournament.status == TournamentStatus.ACTIVE.value:
+            with self._state_lock(tournament.id) as acquired:
+                if not acquired:
+                    raise TournamentValidationError("Tournament state is busy. Retry shortly.", reason="operation_busy")
+                tournament = self._get_tournament(tournament_id, for_update=True)
+                self._sync_tournament(tournament)
+        self._synchronize_prize_pool(tournament)
         return self._build_view(tournament)
 
     def join_tournament(self, tournament_id: str, *, user_id: str) -> dict[str, object]:
-        tournament = self._get_tournament(tournament_id)
-        if tournament.status != TournamentStatus.REGISTRATION.value:
-            existing = self._get_player(tournament.id, user_id)
-            if existing is not None:
+        with self._join_lock(tournament_id) as acquired:
+            if not acquired:
+                raise TournamentValidationError("Tournament join is already processing.", reason="operation_busy")
+            tournament = self._get_tournament(tournament_id, for_update=True)
+            if tournament.status != TournamentStatus.REGISTRATION.value:
+                existing = self._get_player(tournament.id, user_id)
+                if existing is not None:
+                    self._synchronize_prize_pool(tournament)
+                    return self._build_view(tournament)
+                raise TournamentValidationError("Tournament registration is closed.", reason="registration_closed")
+
+            user = self.session.get(User, user_id)
+            if user is None:
+                raise TournamentValidationError("User not found.", reason="user_not_found")
+
+            existing_player = self._get_player(tournament.id, user_id)
+            if existing_player is not None:
+                self._synchronize_prize_pool(tournament)
                 return self._build_view(tournament)
-            raise TournamentValidationError("Tournament registration is closed.", reason="registration_closed")
 
-        user = self.session.get(User, user_id)
-        if user is None:
-            raise TournamentValidationError("User not found.", reason="user_not_found")
+            players = self._list_players(tournament.id)
+            if len(players) >= tournament.max_players:
+                raise TournamentValidationError("Tournament is already full.", reason="tournament_full")
 
-        existing_player = self._get_player(tournament.id, user_id)
-        if existing_player is not None:
+            entry_transaction_id = self._charge_entry_fee(tournament=tournament, user=user)
+            player = TournamentPlayer(
+                tournament_id=tournament.id,
+                user_id=user.id,
+                bracket_slot=len(players) + 1,
+                status=TournamentPlayerStatus.REGISTERED.value,
+                entry_transaction_id=entry_transaction_id,
+            )
+            self.session.add(player)
+            self.session.flush()
+            self._synchronize_prize_pool(tournament)
+
+            if len(players) + 1 >= tournament.max_players:
+                self._start_tournament(tournament)
+                self._sync_tournament(tournament)
+
             return self._build_view(tournament)
-
-        players = self._list_players(tournament.id)
-        if len(players) >= tournament.max_players:
-            raise TournamentValidationError("Tournament is already full.", reason="tournament_full")
-
-        entry_transaction_id = self._charge_entry_fee(tournament=tournament, user=user)
-        player = TournamentPlayer(
-            tournament_id=tournament.id,
-            user_id=user.id,
-            bracket_slot=len(players) + 1,
-            status=TournamentPlayerStatus.REGISTERED.value,
-            entry_transaction_id=entry_transaction_id,
-        )
-        self.session.add(player)
-        tournament.prize_pool += tournament.entry_fee
-        self.session.flush()
-
-        if len(players) + 1 >= tournament.max_players:
-            self._start_tournament(tournament)
-            self._sync_tournament(tournament)
-
-        return self._build_view(tournament)
 
     def record_match_result(
         self,
@@ -130,46 +148,55 @@ class TournamentService:
         match_id: str,
         payload: TournamentMatchResultRequest,
     ) -> dict[str, object]:
-        tournament = self._get_tournament(tournament_id)
-        self._sync_tournament(tournament)
-        if tournament.status != TournamentStatus.ACTIVE.value:
-            raise TournamentValidationError("Tournament is not active.", reason="tournament_not_active")
+        with self._state_lock(tournament_id) as acquired:
+            if not acquired:
+                raise TournamentValidationError("Tournament state is busy. Retry shortly.", reason="operation_busy")
+            tournament = self._get_tournament(tournament_id, for_update=True)
+            self._sync_tournament(tournament)
+            if tournament.status != TournamentStatus.ACTIVE.value:
+                raise TournamentValidationError("Tournament is not active.", reason="tournament_not_active")
 
-        match = self.session.scalar(
-            select(TournamentMatch).where(
-                TournamentMatch.id == match_id,
-                TournamentMatch.tournament_id == tournament.id,
+            match = self.session.scalar(
+                select(TournamentMatch).where(
+                    TournamentMatch.id == match_id,
+                    TournamentMatch.tournament_id == tournament.id,
+                )
             )
-        )
-        if match is None:
-            raise TournamentValidationError("Match not found.", reason="match_not_found")
-        if match.round_number != tournament.current_round:
-            raise TournamentValidationError("Only the current round can be reported.", reason="round_locked")
-        if match.status == TournamentMatchStatus.COMPLETED.value:
+            if match is None:
+                raise TournamentValidationError("Match not found.", reason="match_not_found")
+            if match.round_number != tournament.current_round:
+                raise TournamentValidationError("Only the current round can be reported.", reason="round_locked")
+            if match.status == TournamentMatchStatus.COMPLETED.value:
+                self._synchronize_prize_pool(tournament)
+                return self._build_view(tournament)
+
+            participants = {match.player_one_user_id, match.player_two_user_id}
+            if payload.winner_user_id not in participants:
+                raise TournamentValidationError("Winner must be part of the match.", reason="invalid_winner")
+
+            self._complete_match(
+                match,
+                winner_user_id=payload.winner_user_id,
+                resolution="result",
+                player_one_score=payload.player_one_score,
+                player_two_score=payload.player_two_score,
+            )
+            self._sync_tournament(tournament)
+            self._synchronize_prize_pool(tournament)
             return self._build_view(tournament)
 
-        participants = {match.player_one_user_id, match.player_two_user_id}
-        if payload.winner_user_id not in participants:
-            raise TournamentValidationError("Winner must be part of the match.", reason="invalid_winner")
-
-        self._complete_match(
-            match,
-            winner_user_id=payload.winner_user_id,
-            resolution="result",
-            player_one_score=payload.player_one_score,
-            player_two_score=payload.player_two_score,
-        )
-        self._sync_tournament(tournament)
-        return self._build_view(tournament)
-
     def advance_tournament(self, tournament_id: str) -> dict[str, object]:
-        tournament = self._get_tournament(tournament_id)
-        before = (tournament.status, tournament.current_round, tournament.completed_at)
-        self._sync_tournament(tournament, fail_if_not_ready=True)
-        after = (tournament.status, tournament.current_round, tournament.completed_at)
-        if before == after:
-            raise TournamentValidationError("Tournament round is not ready to advance.", reason="round_not_ready")
-        return self._build_view(tournament)
+        with self._state_lock(tournament_id) as acquired:
+            if not acquired:
+                raise TournamentValidationError("Tournament state is busy. Retry shortly.", reason="operation_busy")
+            tournament = self._get_tournament(tournament_id, for_update=True)
+            before = (tournament.status, tournament.current_round, tournament.completed_at)
+            self._sync_tournament(tournament, fail_if_not_ready=True)
+            after = (tournament.status, tournament.current_round, tournament.completed_at)
+            if before == after:
+                raise TournamentValidationError("Tournament round is not ready to advance.", reason="round_not_ready")
+            self._synchronize_prize_pool(tournament)
+            return self._build_view(tournament)
 
     def generate_bracket(self, players: list[str]) -> list[tuple[str | None, str | None]]:
         bracket_size = self._next_power_of_two(len(players))
@@ -184,8 +211,14 @@ class TournamentService:
             winners.append(None)
         return [(winners[index], winners[index + 1]) for index in range(0, len(winners), 2)]
 
-    def _get_tournament(self, tournament_id: str) -> Tournament:
-        tournament = self.session.get(Tournament, tournament_id)
+    def _get_tournament(self, tournament_id: str, *, for_update: bool = False) -> Tournament:
+        if for_update:
+            statement = select(Tournament).where(Tournament.id == tournament_id)
+            if self._supports_row_locks():
+                statement = statement.with_for_update()
+            tournament = self.session.scalar(statement)
+        else:
+            tournament = self.session.get(Tournament, tournament_id)
         if tournament is None:
             raise TournamentNotFoundError()
         return tournament
@@ -272,6 +305,20 @@ class TournamentService:
         except InsufficientBalanceError as exc:
             raise TournamentValidationError("Insufficient wallet balance for tournament entry.", reason="insufficient_balance") from exc
         return entries[0].transaction_id if entries else None
+
+    def _synchronize_prize_pool(self, tournament: Tournament) -> None:
+        if tournament.entry_fee <= 0:
+            tournament.prize_pool = 0
+            return
+        paid_entries = self.session.scalar(
+            select(func.count())
+            .select_from(TournamentPlayer)
+            .where(
+                TournamentPlayer.tournament_id == tournament.id,
+                TournamentPlayer.entry_transaction_id.is_not(None),
+            )
+        )
+        tournament.prize_pool = int(paid_entries or 0) * int(tournament.entry_fee)
 
     def _ensure_tournament_pool_account(self, tournament: Tournament) -> LedgerAccount:
         code = f"tournament:{tournament.id}:pool:credit"
@@ -464,6 +511,18 @@ class TournamentService:
             winner = self._get_player(tournament.id, winner_user_id)
             if winner is not None:
                 winner.status = TournamentPlayerStatus.WINNER.value
+
+    def _supports_row_locks(self) -> bool:
+        bind = self.session.get_bind()
+        return bind is not None and bind.dialect.name != "sqlite"
+
+    def _join_lock(self, tournament_id: str):
+        assert self.lock_service is not None
+        return self.lock_service.tournament_join_lock(tournament_id)
+
+    def _state_lock(self, tournament_id: str):
+        assert self.lock_service is not None
+        return self.lock_service.tournament_state_lock(tournament_id)
 
     @staticmethod
     def _as_utc(value: datetime) -> datetime:

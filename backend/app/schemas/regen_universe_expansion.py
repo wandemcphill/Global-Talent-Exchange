@@ -164,11 +164,68 @@ class RegenUniverseJobRunView(CommonSchema):
     result: dict[str, Any] | None = None
 
 
+class NationalRegenSeedView(CommonSchema):
+    id: str
+    seed_key: str
+    display_name: str
+    country_code: str
+    country_name: str
+    confederation_code: str | None = None
+    seed_type: str
+    generation_index: int = 1
+    primary_position: str
+    secondary_positions: list[str] = Field(default_factory=list)
+    current_rating: int
+    potential_rating: int
+    growth_curve: float = 0.5
+    personality_seed: dict[str, Any] = Field(default_factory=dict)
+    rarity_tier: str
+    status: str
+    preseed_batch: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalRegenPreseedRequest(CommonSchema):
+    country_codes: list[str] = Field(default_factory=list, max_length=64)
+    seeds_per_country: int = Field(default=10, ge=4, le=22)
+    include_legendary_regens: bool = True
+    preseed_batch: str = Field(default="system_start", min_length=3, max_length=64)
+
+
+class RegenGenerationTrackingEntryView(CommonSchema):
+    bucket: str
+    count: int = 0
+    peak_rating: int = 0
+    achievements: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RegenGenerationTrackingView(CommonSchema):
+    total_seeded_players: int = 0
+    seed_types: list[RegenGenerationTrackingEntryView] = Field(default_factory=list)
+    rarity_breakdown: list[RegenGenerationTrackingEntryView] = Field(default_factory=list)
+    country_distribution: list[RegenGenerationTrackingEntryView] = Field(default_factory=list)
+    global_peak_rating: int = 0
+    tracked_achievements: list[str] = Field(default_factory=list)
+
+
+class RegenEvolutionResultView(CommonSchema):
+    season_id: str
+    updated_count: int = 0
+    boosted_players: list[str] = Field(default_factory=list)
+    rivalry_shifted_players: list[str] = Field(default_factory=list)
+
+
 __all__ = [
+    "NationalRegenPreseedRequest",
+    "NationalRegenSeedView",
     "PlayerDNAView",
     "PlayerDNATraitsView",
     "PlayerRivalryView",
     "PlayerStoryView",
+    "RegenEvolutionResultView",
+    "RegenGenerationTrackingEntryView",
+    "RegenGenerationTrackingView",
     "RegenUniverseJobRunView",
     "RivalryPlayerView",
     "StoryChapterView",

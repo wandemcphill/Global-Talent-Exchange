@@ -203,6 +203,43 @@ class GTexMetrics:
             buckets=WORKER_DURATION_BUCKETS,
             registry=self.registry,
         )
+        self.feed_refresh_total = Counter(
+            "gtex_feed_refresh_total",
+            "Feed refresh requests handled by feed name and outcome.",
+            ("feed_name", "result"),
+            registry=self.registry,
+        )
+        self.feed_refresh_duration_seconds = Histogram(
+            "gtex_feed_refresh_duration_seconds",
+            "Feed refresh latency in seconds.",
+            ("feed_name", "result"),
+            buckets=WORKER_DURATION_BUCKETS,
+            registry=self.registry,
+        )
+        self.creator_earnings_events_total = Counter(
+            "gtex_creator_earnings_events_total",
+            "Committed creator earnings events by type and outcome.",
+            ("event_type", "result"),
+            registry=self.registry,
+        )
+        self.creator_earnings_credit_total = Counter(
+            "gtex_creator_earnings_credit_total",
+            "Committed creator earnings credit throughput by event type.",
+            ("event_type",),
+            registry=self.registry,
+        )
+        self.dead_letters_total = Counter(
+            "gtex_dead_letters_total",
+            "Dead-lettered event count by consumer and event type.",
+            ("consumer_name", "event_type"),
+            registry=self.registry,
+        )
+        self.outbox_relay_total = Counter(
+            "gtex_outbox_relay_total",
+            "Outbox relay publish outcomes.",
+            ("result",),
+            registry=self.registry,
+        )
         self.total_deposits_amount = Gauge(
             "gtex_total_deposits_amount",
             "Lifetime confirmed deposits tracked by the control tower.",
@@ -331,6 +368,28 @@ class GTexMetrics:
     def record_worker_job(self, *, job_name: str, result: str, duration_seconds: float) -> None:
         self.worker_jobs_total.labels(job_name, result).inc()
         self.worker_job_duration_seconds.labels(job_name, result).observe(duration_seconds)
+
+    def record_feed_refresh(self, *, feed_name: str, result: str, duration_seconds: float) -> None:
+        self.feed_refresh_total.labels(feed_name, result).inc()
+        self.feed_refresh_duration_seconds.labels(feed_name, result).observe(max(float(duration_seconds), 0.0))
+
+    def record_creator_earnings(
+        self,
+        *,
+        event_type: str,
+        result: str,
+        earnings_delta_credit: Decimal | float,
+    ) -> None:
+        self.creator_earnings_events_total.labels(event_type, result).inc()
+        credit_value = float(_parse_decimal(earnings_delta_credit))
+        if credit_value > 0:
+            self.creator_earnings_credit_total.labels(event_type).inc(credit_value)
+
+    def record_dead_letter(self, *, consumer_name: str, event_type: str) -> None:
+        self.dead_letters_total.labels(consumer_name, event_type).inc()
+
+    def record_outbox_relay(self, *, result: str) -> None:
+        self.outbox_relay_total.labels(result).inc()
 
     def record_queue_delay(self, *, competition_type: str, delay_seconds: float) -> None:
         normalized_delay = max(0.0, float(delay_seconds))

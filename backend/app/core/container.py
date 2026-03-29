@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.backbone.outbox_relay import OutboxRelayService
     from app.core.cache import CacheBackend
     from app.core.events import EventPublisher
+    from app.global_memory.projections import GlobalMemoryProjectionService
     from app.core.jobs import InlineJobBackend
     from app.ingestion.pipeline import NormalizedMatchEventPipeline
     from app.jobs import IngestionJobRunner
@@ -77,6 +78,7 @@ class Container:
         self.notifications: NotificationCenter | None = None
         self.alert_system: AlertSystem | None = None
         self.realtime: RealtimeHub | None = None
+        self.global_memory_projector: GlobalMemoryProjectionService | None = None
         self.market_engine: MarketEngine | None = None
         self.ingestion_pipeline: NormalizedMatchEventPipeline | None = None
         self.value_engine_bridge: IngestionValueEngineBridge | None = None
@@ -102,6 +104,7 @@ class Container:
         from app.core.jobs import InlineJobBackend
         from app.ingestion.pipeline import NormalizedMatchEventPipeline
         from app.infrastructure.outbox import RedisKafkaOutboxPublisher
+        from app.global_memory.projections import GlobalMemoryProjectionService
         from app.jobs import IngestionJobRunner
         from app.market.projections import MarketSummaryProjector
         from app.market.repositories import InMemoryMarketRepository
@@ -140,11 +143,13 @@ class Container:
             session_factory=self.database.session_factory,
             event_publisher=event_publisher,
         )
+        self.global_memory_projector = GlobalMemoryProjectionService(self.database.session_factory)
         event_publisher.subscribe(self.notifications.handle_event)
         event_publisher.subscribe(self.alert_system.handle_event)
         event_publisher.subscribe(self.metrics.handle_event)
         event_publisher.subscribe(self.realtime.handle_event)
         event_publisher.subscribe(fraud_detection.handle_event)
+        event_publisher.subscribe(self.global_memory_projector.handle_event)
 
         self.outbox_relay = None
         if self.settings.outbox_relay_enabled and (self.settings.kafka_enabled or self.settings.redis_url):

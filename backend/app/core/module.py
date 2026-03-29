@@ -57,11 +57,14 @@ class DomainModule:
 def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> None:
     seen_module_names: set[str] = set()
     registered_routes = _route_fingerprints(app.routes)
+    loaded_module_names: set[str] = set(getattr(app.state, "loaded_domain_module_names", set()))
 
     for module in modules:
         if module.name in seen_module_names:
             raise ValueError(f"Duplicate domain module name detected: {module.name}")
         seen_module_names.add(module.name)
+        if module.name in loaded_module_names:
+            continue
 
         router = module.load_router()
         if router is None:
@@ -78,6 +81,9 @@ def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> No
 
         app.include_router(router)
         registered_routes.update(module_routes)
+        loaded_module_names.add(module.name)
+
+    app.state.loaded_domain_module_names = loaded_module_names
 
 
 def run_module_hooks(

@@ -7,10 +7,11 @@ from itertools import combinations
 from random import Random
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.ingestion.models import Competition, Match, Player, PlayerMatchStat
+from app.core.config import get_settings
+from app.ingestion.models import Competition, Country, Match, Player, PlayerMatchStat
 from app.match_engine.schemas import (
     MatchClubContextInput,
     MatchCompetitionContextInput,
@@ -30,6 +31,7 @@ from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_rivalry import PlayerRivalry
 from app.models.player_story import PlayerStory
 from app.models.regen import RegenLegacyRecord, RegenProfile
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.youth_tournament import YouthTournament
 from app.regen_universe.dna import (
     chemistry_fit_score,
@@ -39,7 +41,8 @@ from app.regen_universe.dna import (
     match_attribute_adjustments,
     normalize_dna_profile,
 )
-from app.regen_universe.models import RegenAwardWinner
+from app.regen_universe.models import RegenAwardWinner, RegenPerformanceRecord, RegenSeason
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -48,6 +51,10 @@ def _utcnow() -> datetime:
 
 
 def _clamp_int(value: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(maximum, value))
+
+
+def _clamp_float(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
 
 
@@ -1299,6 +1306,331 @@ class RegenUniverseExpansionService:
             player = self.session.get(Player, row["player_id"])
             if player is not None:
                 self._notify_player_owners(player, template_key="YOUTH_TOURNAMENT_STAR", topic="youth_tournament", message=f"{player.full_name} earned {row['award']} at {tournament.name}.", resource_type="youth_tournament", resource_id=tournament.id, metadata={"player_id": player.id, "award": row["award"], "tournament_id": tournament.id})
+
+    def seed_preseeded_national_regens(
+        self,
+        *,
+        country_codes: list[str] | None = None,
+        seeds_per_country: int = 10,
+        include_legendary_regens: bool = True,
+        preseed_batch: str = "system_start",
+    ) -> list[dict[str, Any]]:
+        if seeds_per_country < 4:
+            raise RegenUniverseExpansionValidationError("preseed_requires_four_or_more_slots")
+        normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
+        stmt = select(Country).where(Country.is_enabled_for_universe.is_(True)).order_by(Country.name.asc(), Country.id.asc())
+        countries = [
+            country
+            for country in self.session.scalars(stmt).all()
+            if not normalized_codes
+            or (country.alpha2_code or "").upper() in normalized_codes
+            or (country.alpha3_code or "").upper() in normalized_codes
+            or (country.fifa_code or "").upper() in normalized_codes
+        ]
+        if not countries:
+            raise RegenUniverseExpansionValidationError("preseed_countries_not_found")
+        batch = preseed_batch.strip() or "system_start"
+        generation_engine = RegenGenerationEngine(get_settings())
+        created: list[dict[str, Any]] = []
+        position_cycle = ("GK", "CB", "RB", "LB", "DM", "CM", "AM", "RW", "LW", "ST")
+        secondary_map = {
+            "GK": [],
+            "CB": ["RB", "LB"],
+            "RB": ["CB", "RW"],
+            "LB": ["CB", "LW"],
+            "DM": ["CB", "CM"],
+            "CM": ["DM", "AM"],
+            "AM": ["CM", "RW"],
+            "RW": ["AM", "ST"],
+            "LW": ["AM", "ST"],
+            "ST": ["AM", "RW"],
+        }
+        for country_index, country in enumerate(countries):
+            country_code = str(country.alpha2_code or country.fifa_code or country.alpha3_code or country.id).upper()
+            existing_count = int(
+                self.session.scalar(
+                    select(func.count())
+                    .where(
+                        NationalRegenSeed.country_code == country_code,
+                        NationalRegenSeed.preseed_batch == batch,
+                        NationalRegenSeed.seed_type == "preseeded_national_pool",
+                    )
+                )
+                or 0
+            )
+            used_names = {
+                seed.display_name.casefold()
+                for seed in self.session.scalars(
+                    select(NationalRegenSeed).where(NationalRegenSeed.country_code == country_code)
+                ).all()
+            }
+            context = RegenClubContext(
+                country_code=country_code,
+                region_name=country.name,
+                city_name=country.name,
+                youth_coaching=68.0,
+                training_level=66.0,
+                academy_level=70.0,
+                academy_investment=64.0,
+                first_team_gsi=65.0,
+                club_reputation=62.0,
+                competition_quality=65.0,
+                manager_youth_development=67.0,
+                urbanicity="urban",
+            )
+            rng = Random(f"{batch}:{country_code}:{seeds_per_country}")
+            for slot_index in range(existing_count, seeds_per_country):
+                primary_position = position_cycle[slot_index % len(position_cycle)]
+                rarity_tier = self._seed_rarity_for_slot(
+                    country_index=country_index,
+                    slot_index=slot_index,
+                    include_legendary_regens=include_legendary_regens,
+                )
+                rarity_bonus = {"common": 0, "rare": 3, "elite": 6, "legendary": 10}.get(rarity_tier, 0)
+                regen_view = generation_engine._build_regen(
+                    club_id=f"national-pool-{country_code.lower()}",
+                    generation_source="national_pool",
+                    club_context=context,
+                    age=17 + (slot_index % 4),
+                    used_names=used_names,
+                    rng=rng,
+                    current_gsi_override=68 + (slot_index % 5) + rarity_bonus,
+                )
+                current_rating = _clamp_int((regen_view.current_rating or regen_view.current_gsi) + rarity_bonus, 62, 92)
+                potential_rating = _clamp_int(max(regen_view.potential or current_rating + 6, current_rating + 5) + rarity_bonus, 74, 99)
+                seed_key = f"{batch}:{country_code}:{slot_index + 1}:{primary_position}"
+                if self.session.scalar(select(NationalRegenSeed).where(NationalRegenSeed.seed_key == seed_key)) is not None:
+                    continue
+                seed = NationalRegenSeed(
+                    seed_key=seed_key,
+                    display_name=regen_view.display_name,
+                    country_code=country_code,
+                    country_name=country.name,
+                    confederation_code=country.confederation_code,
+                    seed_type="preseeded_national_pool" if rarity_tier != "legendary" else "legendary_regen",
+                    generation_index=1,
+                    primary_position=primary_position,
+                    secondary_positions_json=list(secondary_map.get(primary_position, [])),
+                    current_rating=current_rating,
+                    potential_rating=potential_rating,
+                    growth_curve=round(_clamp_float(float(regen_view.growth_curve) + (rarity_bonus / 100.0), 0.25, 1.0), 4),
+                    personality_seed_json={
+                        "temperament": regen_view.personality.temperament,
+                        "ambition": regen_view.personality.ambition,
+                        "resilience": regen_view.personality.resilience,
+                        "work_rate": regen_view.personality.work_rate,
+                        "media_appetite": regen_view.personality.media_appetite,
+                        "story_seed": regen_view.story_seed.model_dump(mode="json") if regen_view.story_seed is not None else {},
+                    },
+                    rarity_tier=rarity_tier,
+                    status="available",
+                    preseed_batch=batch,
+                    metadata_json={
+                        "nationality": country_code,
+                        "country_name": country.name,
+                        "source_generation": "preseeded_system_start",
+                        "position_slot": slot_index + 1,
+                        "rarity_weight": rarity_bonus,
+                    },
+                )
+                self.session.add(seed)
+                self.session.flush()
+                used_names.add(regen_view.display_name.casefold())
+                created.append(self._national_seed_view(seed))
+        return created
+
+    def list_preseeded_national_regens(
+        self,
+        *,
+        country_code: str | None = None,
+        seed_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        stmt = select(NationalRegenSeed).order_by(
+            NationalRegenSeed.country_name.asc(),
+            NationalRegenSeed.rarity_tier.desc(),
+            NationalRegenSeed.potential_rating.desc(),
+            NationalRegenSeed.display_name.asc(),
+        )
+        if country_code:
+            stmt = stmt.where(NationalRegenSeed.country_code == country_code.strip().upper())
+        if seed_type:
+            stmt = stmt.where(NationalRegenSeed.seed_type == seed_type.strip().lower())
+        return [self._national_seed_view(item) for item in self.session.scalars(stmt.limit(limit)).all()]
+
+    def build_regen_tracking(self) -> dict[str, Any]:
+        seeds = list(self.session.scalars(select(NationalRegenSeed)).all())
+        profiles = list(self.session.scalars(select(RegenProfile)).all())
+        award_winners = list(self.session.scalars(select(RegenAwardWinner)).all())
+        legacy_records = list(self.session.scalars(select(RegenLegacyRecord)).all())
+
+        achievements = {
+            winner.metadata_json.get("award_name")
+            for winner in award_winners
+            if isinstance(winner.metadata_json, dict) and winner.metadata_json.get("award_name")
+        }
+        achievements.update(
+            legacy.narrative_summary
+            for legacy in legacy_records
+            if legacy.narrative_summary
+        )
+
+        by_seed_type: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "peak_rating": 0, "achievements": set()})
+        by_rarity: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "peak_rating": 0, "achievements": set()})
+        by_country: dict[str, dict[str, Any]] = defaultdict(lambda: {"count": 0, "peak_rating": 0, "achievements": set(), "metadata": {}})
+
+        for seed in seeds:
+            peak_rating = max(seed.current_rating, seed.potential_rating, int(seed.metadata_json.get("peak_rating", 0)))
+            by_seed_type[seed.seed_type]["count"] += 1
+            by_seed_type[seed.seed_type]["peak_rating"] = max(by_seed_type[seed.seed_type]["peak_rating"], peak_rating)
+            by_rarity[seed.rarity_tier]["count"] += 1
+            by_rarity[seed.rarity_tier]["peak_rating"] = max(by_rarity[seed.rarity_tier]["peak_rating"], peak_rating)
+            by_country[seed.country_name]["count"] += 1
+            by_country[seed.country_name]["peak_rating"] = max(by_country[seed.country_name]["peak_rating"], peak_rating)
+            by_country[seed.country_name]["metadata"] = {"country_code": seed.country_code}
+
+        for profile in profiles:
+            source = profile.generation_source or "academy"
+            peak_rating = max(profile.current_gsi, int((profile.potential_range_json or {}).get("maximum", profile.current_gsi)))
+            by_seed_type[source]["count"] += 1
+            by_seed_type[source]["peak_rating"] = max(by_seed_type[source]["peak_rating"], peak_rating)
+
+        return {
+            "total_seeded_players": len(seeds),
+            "seed_types": [
+                {
+                    "bucket": bucket,
+                    "count": item["count"],
+                    "peak_rating": item["peak_rating"],
+                    "achievements": sorted(str(entry) for entry in item["achievements"] if entry),
+                    "metadata": {},
+                }
+                for bucket, item in sorted(by_seed_type.items())
+            ],
+            "rarity_breakdown": [
+                {
+                    "bucket": bucket,
+                    "count": item["count"],
+                    "peak_rating": item["peak_rating"],
+                    "achievements": sorted(str(entry) for entry in item["achievements"] if entry),
+                    "metadata": {},
+                }
+                for bucket, item in sorted(by_rarity.items())
+            ],
+            "country_distribution": [
+                {
+                    "bucket": bucket,
+                    "count": item["count"],
+                    "peak_rating": item["peak_rating"],
+                    "achievements": [],
+                    "metadata": dict(item["metadata"]),
+                }
+                for bucket, item in sorted(by_country.items(), key=lambda row: (-row[1]["count"], row[0]))
+            ],
+            "global_peak_rating": max([0, *[item["peak_rating"] for item in by_seed_type.values()], *[item["peak_rating"] for item in by_rarity.values()]]),
+            "tracked_achievements": sorted(str(entry) for entry in achievements if entry),
+        }
+
+    def apply_evolution_cycle(self, *, season_id: str) -> dict[str, Any]:
+        season = self.session.get(RegenSeason, season_id)
+        if season is None:
+            raise RegenUniverseExpansionNotFoundError("regen_universe_season_not_found")
+        performance_records = list(
+            self.session.scalars(select(RegenPerformanceRecord).where(RegenPerformanceRecord.season_id == season_id)).all()
+        )
+        awards_by_player: dict[str, list[RegenAwardWinner]] = defaultdict(list)
+        for winner in self.session.scalars(select(RegenAwardWinner).where(RegenAwardWinner.season_id == season_id)).all():
+            awards_by_player[winner.player_id].append(winner)
+        rivalry_scores: dict[str, float] = defaultdict(float)
+        for rivalry in self.session.scalars(select(PlayerRivalry)).all():
+            rivalry_scores[rivalry.player_a_id] = max(rivalry_scores[rivalry.player_a_id], float(rivalry.intensity_score))
+            rivalry_scores[rivalry.player_b_id] = max(rivalry_scores[rivalry.player_b_id], float(rivalry.intensity_score))
+
+        updated_count = 0
+        boosted_players: list[str] = []
+        rivalry_shifted_players: list[str] = []
+        for record in performance_records:
+            profile = self._get_regen_profile(record.player_id)
+            if profile is None:
+                continue
+            metadata = dict(profile.metadata_json or {})
+            personality_seed = dict(metadata.get("personality_seed") or {})
+            current_growth = float(metadata.get("growth_curve", 0.5))
+            performance_boost = min(record.overall_score / 600.0, 0.12)
+            awards_boost = min(len(awards_by_player.get(record.player_id, [])) * 0.035, 0.12)
+            next_growth = round(_clamp_float(current_growth + performance_boost + awards_boost, 0.2, 1.0), 4)
+            if next_growth > current_growth:
+                boosted_players.append(record.player_id)
+            rivalry_score = rivalry_scores.get(record.player_id, 0.0)
+            if rivalry_score > 0:
+                personality_seed["temperament"] = _clamp_int(int(personality_seed.get("temperament", 50)) + round(rivalry_score / 18), 15, 99)
+                personality_seed["media_appetite"] = _clamp_int(int(personality_seed.get("media_appetite", 50)) + round(rivalry_score / 22), 15, 99)
+                rivalry_shifted_players.append(record.player_id)
+            personality_seed["ambition"] = _clamp_int(int(personality_seed.get("ambition", 60)) + len(awards_by_player.get(record.player_id, [])) * 4, 20, 99)
+            personality_seed["consistency"] = _clamp_int(int(record.consistency_score * 100), 20, 99)
+            rarity_tier = str(metadata.get("rarity_tier", "common"))
+            if len(awards_by_player.get(record.player_id, [])) >= 2 and rarity_tier in {"common", "rare"}:
+                rarity_tier = "elite"
+            metadata.update(
+                {
+                    "growth_curve": next_growth,
+                    "rarity_tier": rarity_tier,
+                    "personality_seed": personality_seed,
+                    "evolution_history": [
+                        *list(metadata.get("evolution_history") or []),
+                        {
+                            "season_id": season_id,
+                            "season_number": season.season_number,
+                            "overall_score": round(record.overall_score, 4),
+                            "awards": len(awards_by_player.get(record.player_id, [])),
+                            "rivalry_score": round(rivalry_score, 4),
+                        },
+                    ][-8:],
+                }
+            )
+            if awards_by_player.get(record.player_id):
+                max_potential = int((profile.potential_range_json or {}).get("maximum", profile.current_gsi))
+                profile.potential_range_json = {
+                    "minimum": int((profile.potential_range_json or {}).get("minimum", profile.current_gsi)),
+                    "maximum": _clamp_int(max_potential + min(len(awards_by_player[record.player_id]), 2), profile.current_gsi, 99),
+                }
+            profile.metadata_json = metadata
+            updated_count += 1
+        self.session.flush()
+        return {
+            "season_id": season_id,
+            "updated_count": updated_count,
+            "boosted_players": boosted_players,
+            "rivalry_shifted_players": rivalry_shifted_players,
+        }
+
+    def _seed_rarity_for_slot(self, *, country_index: int, slot_index: int, include_legendary_regens: bool) -> str:
+        if include_legendary_regens and slot_index == 0 and country_index % 8 == 0:
+            return "legendary"
+        pattern = ("elite", "rare", "common", "rare", "common", "elite", "rare", "common", "rare", "common")
+        return pattern[slot_index % len(pattern)]
+
+    def _national_seed_view(self, seed: NationalRegenSeed) -> dict[str, Any]:
+        return {
+            "id": seed.id,
+            "seed_key": seed.seed_key,
+            "display_name": seed.display_name,
+            "country_code": seed.country_code,
+            "country_name": seed.country_name,
+            "confederation_code": seed.confederation_code,
+            "seed_type": seed.seed_type,
+            "generation_index": seed.generation_index,
+            "primary_position": seed.primary_position,
+            "secondary_positions": list(seed.secondary_positions_json or []),
+            "current_rating": seed.current_rating,
+            "potential_rating": seed.potential_rating,
+            "growth_curve": seed.growth_curve,
+            "personality_seed": dict(seed.personality_seed_json or {}),
+            "rarity_tier": seed.rarity_tier,
+            "status": seed.status,
+            "preseed_batch": seed.preseed_batch,
+            "metadata": dict(seed.metadata_json or {}),
+        }
 
     def _notify_player_owners(self, player: Player, *, template_key: str, topic: str, message: str, resource_type: str, resource_id: str, metadata: dict[str, Any]) -> None:
         if not player.current_club_profile_id:

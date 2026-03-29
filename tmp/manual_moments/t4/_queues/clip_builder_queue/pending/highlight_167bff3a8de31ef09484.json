@@ -1,0 +1,40 @@
+{
+  "attempts": 0,
+  "completed_at": null,
+  "job_id": "highlight_167bff3a8de31ef09484",
+  "last_error": null,
+  "max_attempts": 1,
+  "payload": {
+    "duration_seconds": 14,
+    "end_second": 726,
+    "highlight_id": "evt-goal",
+    "kind": "clip",
+    "match_id": "match-viral",
+    "metadata": {
+      "away_score": 0,
+      "detected_events": [
+        "goal"
+      ],
+      "event_type": "goal",
+      "home_score": 1,
+      "minute": 12,
+      "player": "Finisher",
+      "priority_score": 1.3,
+      "source_event_type": "goal",
+      "team": "Burst FC"
+    },
+    "output_storage_key": "moments/live/match-viral/evt-goal.mp4",
+    "playback_speed": 1.0,
+    "source_clip_storage_keys": [],
+    "source_path": null,
+    "source_storage_key": null,
+    "start_second": 712,
+    "subtitle": "Burst FC | Finisher | 1-0",
+    "title": "Goal 12'"
+  },
+  "queue_name": "clip_builder_queue",
+  "queued_at": "2026-03-28T20:20:29.311897+00:00",
+  "result": {},
+  "status": "queued",
+  "updated_at": "2026-03-28T20:20:29.311897+00:00"
+}

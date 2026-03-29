@@ -80,6 +80,7 @@ class NationalTeamEngineService:
         competition = self.session.get(NationalTeamCompetition, competition_id)
         if competition is None:
             raise NationalTeamEngineError("National team competition was not found.")
+        self._ensure_entries_mutable(competition)
         country_code = payload.country_code.strip().upper()
         entry = self.session.scalar(
             select(NationalTeamEntry).where(
@@ -219,3 +220,10 @@ class NationalTeamEngineService:
         managed_entries = list(self.session.scalars(select(NationalTeamEntry).where(NationalTeamEntry.manager_user_id == user.id).order_by(NationalTeamEntry.updated_at.desc())).all())
         squad_memberships = list(self.session.scalars(select(NationalTeamSquadMember).where(NationalTeamSquadMember.user_id == user.id).order_by(NationalTeamSquadMember.updated_at.desc())).all())
         return {"managed_entries": managed_entries, "squad_memberships": squad_memberships}
+
+    @staticmethod
+    def _ensure_entries_mutable(competition: NationalTeamCompetition) -> None:
+        lifecycle_state = dict((competition.metadata_json or {}).get("lifecycle_state") or {})
+        competition_status = str(competition.status or "").strip().lower()
+        if competition.completed_at is not None or lifecycle_state or competition_status in {"locked", "live"}:
+            raise NationalTeamEngineError("Competition entries are locked for this competition.")

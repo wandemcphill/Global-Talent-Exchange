@@ -32,6 +32,7 @@ _EVENT_WEIGHT = 8.0
 _TAG_WEIGHT = 2.0
 _SCORE_CLAMP = 4.0
 _SESSION_TTL_SECONDS = 60 * 60
+_REFRESH_IN_FLIGHT_TTL_SECONDS = 5 * 60
 _SESSION_KEY_PATTERN = "session:{session_id}"
 _LEGACY_SESSION_STATE_KEY_PATTERN = "session:{session_id}:state"
 _LEGACY_SESSION_AFFINITY_VECTOR_KEY_PATTERN = "session:{session_id}:affinity_vector"
@@ -76,6 +77,8 @@ class SessionState:
     refresh_after_clips: int = _FEED_REFRESH_MIN
     clips_since_refresh: int = 0
     refresh_count: int = 0
+    refresh_in_flight: bool = False
+    refresh_requested_at: datetime | None = None
     content_affinity: dict[str, float] = field(default_factory=dict)
     format_affinity: dict[str, float] = field(default_factory=dict)
     team_affinity: dict[str, float] = field(default_factory=dict)
@@ -93,6 +96,7 @@ class SessionSnapshot:
     refresh_after_clips: int
     clips_until_refresh: int
     pending_refresh: bool
+    refresh_in_flight: bool
     content_affinity: dict[str, float]
     format_affinity: dict[str, float]
     team_affinity: dict[str, float]
@@ -124,6 +128,61 @@ class ViralSessionTracker:
         with self._lock:
             state = self._state_for(normalized_session_id)
             return self._state_view(state)
+
+    def should_request_refresh(self, *, session_id: str) -> bool:
+        normalized_session_id = session_id.strip()
+        if not normalized_session_id:
+            return False
+        with self._lock:
+            state = self._state_for(normalized_session_id)
+            self._normalize_refresh_state(state)
+            return not state.refresh_in_flight and state.clips_since_refresh >= state.refresh_after_clips
+
+    def mark_refresh_requested(self, *, session_id: str) -> bool:
+        normalized_session_id = session_id.strip()
+        if not normalized_session_id:
+            return False
+        with self._lock:
+            state = self._state_for(normalized_session_id)
+            self._normalize_refresh_state(state)
+            if state.refresh_in_flight or state.clips_since_refresh < state.refresh_after_clips:
+                return False
+            now = datetime.now(UTC)
+            state.refresh_in_flight = True
+            state.refresh_requested_at = now
+            state.last_updated_at = now
+            self._persist_state(state)
+            return True
+
+    def mark_refresh_completed(self, *, session_id: str) -> bool:
+        normalized_session_id = session_id.strip()
+        if not normalized_session_id:
+            return False
+        with self._lock:
+            state = self._state_for(normalized_session_id)
+            self._normalize_refresh_state(state)
+            now = datetime.now(UTC)
+            if state.refresh_in_flight or state.clips_since_refresh >= state.refresh_after_clips or state.refresh_count == 0:
+                state.refresh_count += 1
+                state.clips_since_refresh = 0
+                state.refresh_after_clips = _refresh_window(normalized_session_id, state.refresh_count)
+            state.refresh_in_flight = False
+            state.refresh_requested_at = None
+            state.last_updated_at = now
+            self._persist_state(state)
+            return True
+
+    def mark_refresh_failed(self, *, session_id: str) -> bool:
+        normalized_session_id = session_id.strip()
+        if not normalized_session_id:
+            return False
+        with self._lock:
+            state = self._state_for(normalized_session_id)
+            state.refresh_in_flight = False
+            state.refresh_requested_at = None
+            state.last_updated_at = datetime.now(UTC)
+            self._persist_state(state)
+            return True
 
     def get_affinity(self, *, session_id: str, clip: ViralClipView | object | None = None) -> float:
         normalized_session_id = session_id.strip()
@@ -179,6 +238,8 @@ class ViralSessionTracker:
                 state.refresh_count += 1
                 state.clips_since_refresh = 0
                 state.refresh_after_clips = _refresh_window(normalized_session_id, state.refresh_count)
+                state.refresh_in_flight = False
+                state.refresh_requested_at = None
             snapshot = self._snapshot(state)
             state.last_updated_at = datetime.now(UTC)
             self._persist_state(state)
@@ -327,11 +388,13 @@ class ViralSessionTracker:
         return round(boost, 2)
 
     def _snapshot(self, state: SessionState) -> SessionSnapshot:
+        self._normalize_refresh_state(state)
         return SessionSnapshot(
             session_id=state.session_id,
             refresh_after_clips=state.refresh_after_clips,
             clips_until_refresh=max(state.refresh_after_clips - state.clips_since_refresh, 0),
-            pending_refresh=state.clips_since_refresh >= state.refresh_after_clips,
+            pending_refresh=state.clips_since_refresh >= state.refresh_after_clips and not state.refresh_in_flight,
+            refresh_in_flight=state.refresh_in_flight,
             content_affinity=dict(state.content_affinity),
             format_affinity=dict(state.format_affinity),
             team_affinity=dict(state.team_affinity),
@@ -377,6 +440,12 @@ class ViralSessionTracker:
             "refresh_after_clips": state.refresh_after_clips,
             "clips_since_refresh": state.clips_since_refresh,
             "refresh_count": state.refresh_count,
+            "refresh_in_flight": state.refresh_in_flight,
+            "refresh_requested_at": (
+                state.refresh_requested_at.astimezone(UTC).isoformat()
+                if state.refresh_requested_at is not None
+                else None
+            ),
             "skip_counts": dict(state.skip_counts),
             "clip_profiles": {
                 clip_id: {
@@ -481,6 +550,8 @@ class ViralSessionTracker:
             ),
             clips_since_refresh=int(parsed_state.get("clips_since_refresh", 0) or 0),
             refresh_count=int(parsed_state.get("refresh_count", 0) or 0),
+            refresh_in_flight=bool(parsed_state.get("refresh_in_flight", False)),
+            refresh_requested_at=_optional_timestamp(parsed_state.get("refresh_requested_at")),
             content_affinity=_coerce_score_map(
                 parsed_affinity.get("content_types", parsed_affinity.get("content_affinity"))
             ),
@@ -507,8 +578,19 @@ class ViralSessionTracker:
                     session_id=session_id,
                     refresh_after_clips=_refresh_window(session_id, 0),
                 )
+            self._normalize_refresh_state(state)
             self._state[session_id] = state
         return state
+
+    @staticmethod
+    def _normalize_refresh_state(state: SessionState) -> None:
+        if not state.refresh_in_flight or state.refresh_requested_at is None:
+            return
+        requested_at = _resolve_timestamp(state.refresh_requested_at)
+        if (datetime.now(UTC) - requested_at).total_seconds() < _REFRESH_IN_FLIGHT_TTL_SECONDS:
+            return
+        state.refresh_in_flight = False
+        state.refresh_requested_at = None
 
 
 def ensure_viral_session_tracker(app: FastAPI) -> ViralSessionTracker:
@@ -582,6 +664,15 @@ def _normalized_affinity_score(raw_boost: float, *, snapshot: SessionSnapshot) -
     if not _has_affinity_signal(snapshot):
         return 1.0
     return round(max(0.0, min(1.0, 1.0 / (1.0 + exp(-raw_boost / 12.0)))), 6)
+
+
+def _optional_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return _resolve_timestamp(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        return None
 
 
 def _coerce_score_map(value: object) -> dict[str, float]:

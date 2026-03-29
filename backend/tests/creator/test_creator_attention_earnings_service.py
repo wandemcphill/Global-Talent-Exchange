@@ -118,3 +118,78 @@ def test_creator_attention_earnings_updates_wallet_and_defers_cache_until_commit
     assert sum(int(event["impression_delta"]) for event in cache.events) == 1
     assert sum(int(event["like_delta"]) for event in cache.events) == 1
     assert sum(int(event["share_delta"]) for event in cache.events) == 1
+
+
+def test_creator_attention_earnings_dedupes_like_and_share_per_viewer() -> None:
+    session_factory = _build_session_factory()
+
+    with session_factory() as session:
+        creator = User(
+            id="creator-earnings-2",
+            email="creator-earnings-2@example.com",
+            username="creator_earnings_2",
+            password_hash="hashed",
+            role=UserRole.USER,
+        )
+        viewer = User(
+            id="viewer-earnings-2",
+            email="viewer-earnings-2@example.com",
+            username="viewer_earnings_2",
+            password_hash="hashed",
+            role=UserRole.USER,
+        )
+        session.add_all([creator, viewer])
+        session.commit()
+
+    with session_factory() as session:
+        service = CreatorAttentionEarningsService(session=session, cache=_FakeCache())
+        first_like = service.track_engagement_event(
+            name="clip.like",
+            clip_id="clip-earn-2",
+            viewer_user_id="viewer-earnings-2",
+            metadata={"creator_id": "creator-earnings-2"},
+            reference_key="clip-event:first-like",
+        )
+        second_like = service.track_engagement_event(
+            name="clip.like",
+            clip_id="clip-earn-2",
+            viewer_user_id="viewer-earnings-2",
+            metadata={"creator_id": "creator-earnings-2"},
+            reference_key="clip-event:second-like",
+        )
+        first_share = service.track_engagement_event(
+            name="clip.share",
+            clip_id="clip-earn-2",
+            viewer_user_id="viewer-earnings-2",
+            metadata={"creator_id": "creator-earnings-2"},
+            reference_key="clip-event:first-share",
+        )
+        second_share = service.track_engagement_event(
+            name="clip.share",
+            clip_id="clip-earn-2",
+            viewer_user_id="viewer-earnings-2",
+            metadata={"creator_id": "creator-earnings-2"},
+            reference_key="clip-event:second-share",
+        )
+        session.commit()
+
+        wallet = session.scalar(
+            select(CreatorWallet).where(CreatorWallet.creator_user_id == "creator-earnings-2")
+        )
+        logs = list(
+            session.scalars(
+                select(ClipEarningsLog).where(ClipEarningsLog.creator_user_id == "creator-earnings-2")
+            ).all()
+        )
+
+    assert first_like is not None
+    assert second_like is not None
+    assert first_like.id == second_like.id
+    assert first_share is not None
+    assert second_share is not None
+    assert first_share.id == second_share.id
+    assert wallet is not None
+    assert wallet.total_likes == 1
+    assert wallet.total_shares == 1
+    assert wallet.total_earnings_credit == Decimal("0.0350")
+    assert len(logs) == 2

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
@@ -14,6 +14,7 @@ from app.national_team_engine.schemas import (
     NationalTeamCompetitionLifecycleResponse,
     NationalTeamCompetitionPresentationResponse,
     NationalTeamCompetitionResponse,
+    NationalTeamCountryRankingResponse,
     NationalTeamEntryDetailResponse,
     NationalTeamEntryResponse,
     NationalTeamEntryUpsertRequest,
@@ -52,8 +53,11 @@ def _tournament_service(session: Session = Depends(get_session)) -> NationalTeam
     return NationalTeamTournamentService(session)
 
 
-def _lifecycle_service(session: Session = Depends(get_session)) -> NationalCompetitionLifecycleService:
-    return NationalCompetitionLifecycleService(session)
+def _lifecycle_service(request: Request, session: Session = Depends(get_session)) -> NationalCompetitionLifecycleService:
+    return NationalCompetitionLifecycleService(
+        session,
+        event_publisher=getattr(request.app.state, "event_publisher", None),
+    )
 
 
 def _entry_detail(payload: dict) -> NationalTeamEntryDetailResponse:
@@ -70,6 +74,8 @@ def _raise_engine_http(exc: NationalTeamEngineError) -> None:
     detail = str(exc)
     if "not found" in detail.lower():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from exc
+    if "locked" in detail.lower():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
 
 
@@ -126,6 +132,14 @@ def get_competition(competition_id: str, service: NationalTeamEngineService = De
     if competition is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="National team competition was not found.")
     return NationalTeamCompetitionResponse.model_validate(competition, from_attributes=True)
+
+
+@router.get("/rankings", response_model=list[NationalTeamCountryRankingResponse])
+def list_country_rankings(
+    limit: int = Query(default=50, ge=1, le=200),
+    service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
+):
+    return [NationalTeamCountryRankingResponse.model_validate(item) for item in service.list_country_rankings(limit=limit)]
 
 
 @router.get("/competitions/{competition_id}/lifecycle", response_model=NationalTeamCompetitionLifecycleResponse)

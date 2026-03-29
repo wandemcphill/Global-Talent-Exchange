@@ -34,74 +34,102 @@ class AwardSelection:
 
 DEFAULT_AWARD_DEFINITIONS: tuple[AwardDefinition, ...] = (
     AwardDefinition(
-        code="WORLD_PLAYER",
-        name="GTEX World Player of the Year",
+        code="BALLON_DOR",
+        name="GTEX Ballon d'Or",
         description="Best regen performer across the full GTEX season based on deterministic prestige ranking.",
-        category="seasonal",
+        category="individual",
         ranking_category="overall",
         eligibility_rules={"ranking_category": "overall"},
         sort_order=10,
-        metadata={},
+        metadata={
+            "equivalent_name": "Ballon d'Or",
+            "market_award_code": "gtex_best_player",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
         code="GOLDEN_BOY",
         name="GTEX Golden Boy",
         description="Best U21 regen performer with elite seasonal impact and minutes.",
-        category="seasonal",
+        category="individual",
         ranking_category="overall",
         eligibility_rules={"max_age": 21, "min_appearances": 8},
         sort_order=20,
-        metadata={},
+        metadata={
+            "equivalent_name": "Golden Boy",
+            "market_award_code": "gtex_golden_boy",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
-        code="TOP_SCORER",
-        name="GTEX Top Scorer",
+        code="GOLDEN_BOOT",
+        name="GTEX Golden Boot",
         description="Top regen goalscorer after weighting output, minutes, and competition context.",
-        category="seasonal",
+        category="individual",
         ranking_category="forward",
         eligibility_rules={"min_appearances": 5},
         sort_order=30,
-        metadata={},
+        metadata={
+            "equivalent_name": "Golden Boot",
+            "market_award_code": "gtex_top_scorer",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
-        code="PLAYMAKER",
-        name="GTEX Playmaker of the Year",
-        description="Most influential regen creator judged by assists, ratings, and sustained impact.",
-        category="seasonal",
-        ranking_category="overall",
-        eligibility_rules={"min_appearances": 5},
+        code="BEST_MIDFIELDER",
+        name="GTEX Best Midfielder",
+        description="Most influential regen midfielder judged by creation, control, ratings, and sustained impact.",
+        category="individual",
+        ranking_category="midfielder",
+        eligibility_rules={"position_groups": ["midfielder"], "min_appearances": 5},
         sort_order=40,
-        metadata={},
+        metadata={
+            "equivalent_name": "Best Midfielder",
+            "market_award_code": "gtex_best_midfielder",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
-        code="DEFENDER",
-        name="GTEX Defender of the Year",
+        code="BEST_DEFENDER",
+        name="GTEX Best Defender",
         description="Top defensive regen measured by clean sheets, reliability, ratings, and winning impact.",
-        category="seasonal",
+        category="individual",
         ranking_category="defender",
         eligibility_rules={"position_groups": ["defender"], "min_appearances": 5},
         sort_order=50,
-        metadata={},
+        metadata={
+            "equivalent_name": "Best Defender",
+            "market_award_code": "gtex_best_defender",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
-        code="GOALKEEPER",
-        name="GTEX Goalkeeper of the Year",
+        code="BEST_GOALKEEPER",
+        name="GTEX Best Goalkeeper",
         description="Top regen goalkeeper based on shot-stopping, clean sheets, ratings, and consistency.",
-        category="seasonal",
+        category="individual",
         ranking_category="goalkeeper",
         eligibility_rules={"position_groups": ["goalkeeper"], "min_appearances": 5},
         sort_order=60,
-        metadata={},
+        metadata={
+            "equivalent_name": "Best Goalkeeper",
+            "market_award_code": "gtex_best_goalkeeper",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
         code="BREAKOUT_STAR",
         name="GTEX Breakout Star",
         description="Most improved regen compared with the previous GTEX season or, for debut seasons, a controlled baseline.",
-        category="seasonal",
+        category="individual",
         ranking_category="overall",
         eligibility_rules={"min_appearances": 8, "requires_improvement": True},
         sort_order=70,
-        metadata={},
+        metadata={
+            "equivalent_name": "Breakout Star",
+            "market_award_code": "gtex_breakout_star",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
     AwardDefinition(
         code="TEAM_OF_THE_YEAR",
@@ -111,7 +139,11 @@ DEFAULT_AWARD_DEFINITIONS: tuple[AwardDefinition, ...] = (
         ranking_category=None,
         eligibility_rules={"formation": {"goalkeeper": 1, "defender": 4, "midfielder": 3, "forward": 3}},
         sort_order=80,
-        metadata={},
+        metadata={
+            "equivalent_name": "Team of the Year",
+            "market_award_code": "gtex_team_of_the_year",
+            "shortlist_sizes": [30, 10, 3],
+        },
     ),
 )
 
@@ -129,7 +161,7 @@ class AwardsEngine:
         records_by_player = {record.player_id: record for record in performances}
         selections: list[AwardSelection] = []
         for definition in sorted(definitions, key=lambda item: item.sort_order):
-            if definition.code == "WORLD_PLAYER":
+            if definition.code == "BALLON_DOR":
                 winner = self._from_ranking(definition, rankings.get("overall", []), records_by_player)
                 if winner is not None:
                     selections.append(winner)
@@ -141,7 +173,7 @@ class AwardsEngine:
                 )
                 if winner is not None:
                     selections.append(winner)
-            elif definition.code == "TOP_SCORER":
+            elif definition.code == "GOLDEN_BOOT":
                 winner = self._select_best(
                     definition,
                     candidates=self._eligible(performances, definition.eligibility_rules),
@@ -149,19 +181,19 @@ class AwardsEngine:
                 )
                 if winner is not None:
                     selections.append(winner)
-            elif definition.code == "PLAYMAKER":
+            elif definition.code == "BEST_MIDFIELDER":
                 winner = self._select_best(
                     definition,
                     candidates=self._eligible(performances, definition.eligibility_rules),
-                    score_getter=lambda item: item.playmaker_score,
+                    score_getter=lambda item: item.midfielder_score,
                 )
                 if winner is not None:
                     selections.append(winner)
-            elif definition.code == "DEFENDER":
+            elif definition.code == "BEST_DEFENDER":
                 winner = self._from_ranking(definition, rankings.get("defender", []), records_by_player)
                 if winner is not None:
                     selections.append(winner)
-            elif definition.code == "GOALKEEPER":
+            elif definition.code == "BEST_GOALKEEPER":
                 winner = self._from_ranking(definition, rankings.get("goalkeeper", []), records_by_player)
                 if winner is not None:
                     selections.append(winner)

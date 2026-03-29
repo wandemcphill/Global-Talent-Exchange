@@ -31,6 +31,7 @@ def _raise_http(exc: TournamentError) -> None:
     if isinstance(exc, TournamentValidationError):
         conflict_reasons = {
             "insufficient_balance",
+            "operation_busy",
             "registration_closed",
             "round_locked",
             "round_not_ready",

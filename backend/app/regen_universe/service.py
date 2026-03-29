@@ -7,7 +7,16 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.ingestion.models import Competition, InternalLeague, Match, Player, PlayerMatchStat, PlayerSeasonStat, Season as IngestionSeason
+from app.ingestion.models import (
+    Competition,
+    InternalLeague,
+    Match,
+    Player,
+    PlayerMatchStat,
+    PlayerSeasonStat,
+    Season as IngestionSeason,
+    TeamStanding,
+)
 from app.models.regen import RegenDiscoveryBadge, RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
 from app.regen_universe.awards_engine import AwardDefinition, AwardsEngine, DEFAULT_AWARD_DEFINITIONS
 from app.regen_universe.models import (
@@ -19,11 +28,20 @@ from app.regen_universe.models import (
     RegenSeason,
 )
 from app.regen_universe.ranking_engine import PerformanceInput, RankingEngine
-from app.services.regen_market_service import RegenMarketService
+from app.services.regen_market_service import RegenAwardEvent, RegenMarketService
 
 
 class RegenUniverseError(ValueError):
     pass
+
+
+_LEGACY_AWARD_CODE_MAP = {
+    "WORLD_PLAYER": "BALLON_DOR",
+    "TOP_SCORER": "GOLDEN_BOOT",
+    "PLAYMAKER": "BEST_MIDFIELDER",
+    "DEFENDER": "BEST_DEFENDER",
+    "GOALKEEPER": "BEST_GOALKEEPER",
+}
 
 
 @dataclass(slots=True)
@@ -52,6 +70,8 @@ class _AggregateBucket:
     full_minutes_matches: int = 0
     start_matches: int = 0
     has_season_stats: bool = False
+    trophy_points: float = 0.0
+    big_match_impact: float = 0.0
     source_ingestion_season_ids: set[str] = field(default_factory=set)
 
 
@@ -111,12 +131,29 @@ class RegenUniverseService:
     awards_engine: AwardsEngine = field(default_factory=AwardsEngine)
 
     def seed_defaults(self) -> None:
-        existing_codes = {
-            code
-            for code in self.session.scalars(select(RegenAward.code))
+        existing_awards = {
+            award.code: award
+            for award in self.session.scalars(select(RegenAward))
         }
+        for legacy_code, next_code in _LEGACY_AWARD_CODE_MAP.items():
+            legacy = existing_awards.get(legacy_code)
+            replacement = existing_awards.get(next_code)
+            if legacy is None or replacement is not None:
+                continue
+            legacy.code = next_code
+            existing_awards[next_code] = legacy
+            existing_awards.pop(legacy_code, None)
         for definition in DEFAULT_AWARD_DEFINITIONS:
-            if definition.code in existing_codes:
+            existing = existing_awards.get(definition.code)
+            if existing is not None:
+                existing.name = definition.name
+                existing.description = definition.description
+                existing.category = definition.category
+                existing.ranking_category = definition.ranking_category
+                existing.eligibility_rules_json = dict(definition.eligibility_rules)
+                existing.is_regen_only = True
+                existing.sort_order = definition.sort_order
+                existing.metadata_json = dict(definition.metadata)
                 continue
             self.session.add(
                 RegenAward(
@@ -261,6 +298,13 @@ class RegenUniverseService:
             performances=computed_performances,
             rankings=rankings,
         )
+        regen_by_player = {
+            profile.player_id: profile
+            for profile in self.session.scalars(
+                select(RegenProfile).where(RegenProfile.player_id.in_([item.player_id for item in award_selections]))
+            ).all()
+        } if award_selections else {}
+        market_service = RegenMarketService(self.session)
         story_candidate_ids: set[str] = set()
         for selection in award_selections:
             award = award_lookup[selection.award_code]
@@ -278,16 +322,31 @@ class RegenUniverseService:
                     metadata_json=dict(selection.metadata),
                 )
             )
+            regen = regen_by_player.get(selection.player_id)
+            if regen is not None:
+                market_service.record_award(
+                    regen.id,
+                    RegenAwardEvent(
+                        award_code=self._market_award_code(award),
+                        award_name=award.name,
+                        award_category=award.category,
+                        season_label=str(season.season_number),
+                        rank=selection.rank,
+                        fan_demand_score=2.0 if selection.rank == 1 else 1.0 if selection.rank is not None and selection.rank <= 3 else 0.4,
+                        narrative_significance=3.0 if selection.rank == 1 else 1.5,
+                    ),
+                    club_id=regen.generated_for_club_id,
+                )
 
         season.is_active = False
         season.closed_at = _utcnow()
         if close_date is not None:
             season.end_date = close_date
         self.session.flush()
-        if story_candidate_ids:
-            from app.regen_universe.expansion_service import RegenUniverseExpansionService
+        from app.regen_universe.expansion_service import RegenUniverseExpansionService
 
-            story_service = RegenUniverseExpansionService(self.session)
+        story_service = RegenUniverseExpansionService(self.session)
+        if story_candidate_ids:
             for player_id in story_candidate_ids:
                 story_service.refresh_story(
                     player_id,
@@ -295,6 +354,7 @@ class RegenUniverseService:
                     notify=False,
                     publish=True,
                 )
+        story_service.apply_evolution_cycle(season_id=season.id)
 
         next_season_id: str | None = None
         if start_next_season:
@@ -703,6 +763,16 @@ class RegenUniverseService:
                     select(RegenPerformanceRecord).where(RegenPerformanceRecord.season_id == previous_season.id)
                 )
             }
+        title_lookup: set[tuple[str, str]] = set()
+        standings_stmt = select(TeamStanding).where(
+            TeamStanding.position == 1,
+            TeamStanding.standing_type == "total",
+        )
+        if source_season_ids:
+            standings_stmt = standings_stmt.where(TeamStanding.season_id.in_(source_season_ids))
+        for standing in self.session.scalars(standings_stmt):
+            if standing.club_id and standing.season_id:
+                title_lookup.add((standing.club_id, standing.season_id))
         buckets = {
             player.id: _AggregateBucket(
                 player_id=player.id,
@@ -742,6 +812,8 @@ class RegenUniverseService:
             importance = _competition_importance(competition, internal_league)
             bucket.competition_total += importance * weight
             bucket.competition_weight += weight
+            if stat.club_id and stat.season_id and (stat.club_id, stat.season_id) in title_lookup:
+                bucket.trophy_points += 1.35 if competition is not None and competition.is_major else 1.0
             if stat.season_id:
                 bucket.source_ingestion_season_ids.add(stat.season_id)
 
@@ -770,6 +842,7 @@ class RegenUniverseService:
             bucket = buckets.get(stat.player_id)
             if bucket is None:
                 continue
+            importance = _competition_importance(competition, internal_league)
             bucket.match_count += 1
             bucket.start_matches += 1 if (stat.starts or 0) > 0 else 0
             bucket.full_minutes_matches += 1 if (stat.minutes or 0) >= 75 else 0
@@ -780,6 +853,17 @@ class RegenUniverseService:
                 bucket.high_rating_matches += 1 if stat.rating >= 7.0 else 0
             if match.winner_club_id is not None and stat.club_id == match.winner_club_id:
                 bucket.matches_won += 1
+                stage = (match.stage or "").strip().lower()
+                stage_multiplier = 1.0
+                if "final" in stage:
+                    stage_multiplier = 1.8
+                    bucket.trophy_points += 1.5 if competition is not None and competition.is_major else 1.0
+                elif "semi" in stage:
+                    stage_multiplier = 1.45
+                elif "quarter" in stage or "knockout" in stage:
+                    stage_multiplier = 1.25
+                rating_bonus = max((stat.rating or 6.8) - 6.0, 0.35)
+                bucket.big_match_impact += stage_multiplier * importance * rating_bonus
             if not bucket.has_season_stats:
                 bucket.appearances += max(stat.appearances or 1, 0)
                 bucket.starts += max(stat.starts or 0, 0)
@@ -791,7 +875,6 @@ class RegenUniverseService:
                 if stat.rating is not None:
                     bucket.season_rating_total += stat.rating
                     bucket.season_rating_weight += 1
-                importance = _competition_importance(competition, internal_league)
                 weight = max(stat.minutes or 0, stat.appearances or 0, 1)
                 bucket.competition_total += importance * weight
                 bucket.competition_weight += weight
@@ -835,6 +918,8 @@ class RegenUniverseService:
                     metadata={
                         "source_ingestion_season_ids": sorted(bucket.source_ingestion_season_ids),
                         "match_count": bucket.match_count,
+                        "trophy_points": round(bucket.trophy_points, 4),
+                        "big_match_impact": round(bucket.big_match_impact, 4),
                     },
                 )
             )
@@ -988,6 +1073,13 @@ class RegenUniverseService:
             "eligibility_rules_json": dict(award.eligibility_rules_json),
             "is_regen_only": award.is_regen_only,
         }
+
+    def _market_award_code(self, award: RegenAward) -> str:
+        metadata = dict(award.metadata_json or {})
+        market_award_code = metadata.get("market_award_code")
+        if isinstance(market_award_code, str) and market_award_code.strip():
+            return market_award_code.strip()
+        return award.code.lower()
 
     def _award_winner_payload(self, winner: RegenAwardWinner) -> dict[str, object]:
         return {

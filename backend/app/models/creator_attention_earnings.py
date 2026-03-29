@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -115,3 +115,13 @@ __all__ = [
     "ClipEarningsLog",
     "CreatorWallet",
 ]
+
+
+@event.listens_for(ClipEarningsLog, "before_update", propagate=True)
+def _prevent_clip_earnings_log_update(mapper, connection, target) -> None:  # noqa: ARG001
+    raise ValueError("clip_earnings_log is append-only and cannot be updated.")
+
+
+@event.listens_for(ClipEarningsLog, "before_delete", propagate=True)
+def _prevent_clip_earnings_log_delete(mapper, connection, target) -> None:  # noqa: ARG001
+    raise ValueError("clip_earnings_log is append-only and cannot be deleted.")

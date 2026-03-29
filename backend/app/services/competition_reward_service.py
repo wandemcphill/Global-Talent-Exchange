@@ -50,6 +50,8 @@ class CompetitionRewardService:
         remainder = total_pool - distributed
         if rewards and remainder > 0:
             rewards[0].amount_minor += remainder
+        if sum(int(item.amount_minor or 0) for item in rewards) > int(total_pool):
+            raise ValueError("Competition reward distribution exceeds the reward pool.")
         return rewards
 
 

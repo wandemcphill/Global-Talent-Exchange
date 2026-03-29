@@ -15,6 +15,7 @@ from app.models.event_backbone import EventOutbox
 
 _POST_COMMIT_EVENTS_KEY = "gtex.post_commit_events"
 _POST_COMMIT_CALLBACKS_KEY = "gtex.post_commit_callbacks"
+_SESSION_PENDING_KEY = "gtex.session_pending"
 _LISTENER_LOCK = Lock()
 _LISTENERS_REGISTERED = False
 
@@ -76,14 +77,22 @@ def build_outbox_event(*, domain_event: Any) -> EventOutbox:
 
 def defer_event_publish_until_commit(session: Session, *, publisher: Any, event: Any) -> None:
     _ensure_session_hooks_registered()
-    pending = session.info.setdefault(_POST_COMMIT_EVENTS_KEY, [])
-    pending.append((publisher, event))
+    transaction = _current_transaction(session)
+    if transaction is None:
+        publisher.publish(event)
+        return
+    pending = session.info.setdefault(_POST_COMMIT_EVENTS_KEY, {})
+    pending.setdefault(transaction, []).append((publisher, event))
 
 
 def defer_session_callback_until_commit(session: Session, *, callback: Callable[[], None]) -> None:
     _ensure_session_hooks_registered()
-    pending = session.info.setdefault(_POST_COMMIT_CALLBACKS_KEY, [])
-    pending.append(callback)
+    transaction = _current_transaction(session)
+    if transaction is None:
+        callback()
+        return
+    pending = session.info.setdefault(_POST_COMMIT_CALLBACKS_KEY, {})
+    pending.setdefault(transaction, []).append(callback)
 
 
 def _coerce_datetime(value: Any) -> datetime:
@@ -109,25 +118,62 @@ def _ensure_session_hooks_registered() -> None:
 
         @sqlalchemy_event.listens_for(Session, "after_commit")
         def _publish_deferred_events(session: Session) -> None:
-            pending = session.info.pop(_POST_COMMIT_EVENTS_KEY, [])
-            for publisher, event in pending:
-                publisher.publish(event)
-            callbacks = session.info.pop(_POST_COMMIT_CALLBACKS_KEY, [])
-            for callback in callbacks:
-                callback()
+            transaction = _current_transaction(session)
+            if transaction is None:
+                _flush_pending(session, transaction=_SESSION_PENDING_KEY)
+                return
+            if session.in_nested_transaction():
+                _promote_pending(session, transaction=transaction)
+                return
+            _flush_pending(session, transaction=transaction)
 
-        @sqlalchemy_event.listens_for(Session, "after_rollback")
-        def _clear_deferred_events_on_rollback(session: Session) -> None:
-            session.info.pop(_POST_COMMIT_EVENTS_KEY, None)
-            session.info.pop(_POST_COMMIT_CALLBACKS_KEY, None)
-
-        @sqlalchemy_event.listens_for(Session, "after_soft_rollback")
-        def _clear_deferred_events_on_soft_rollback(session: Session, previous_transaction: Any) -> None:
-            del previous_transaction
-            session.info.pop(_POST_COMMIT_EVENTS_KEY, None)
-            session.info.pop(_POST_COMMIT_CALLBACKS_KEY, None)
+        @sqlalchemy_event.listens_for(Session, "after_transaction_end")
+        def _clear_deferred_state(session: Session, transaction: Any) -> None:
+            if transaction is None:
+                return
+            _discard_pending(session, transaction=transaction)
+            if transaction.parent is None:
+                _discard_pending(session, transaction=_SESSION_PENDING_KEY)
 
         _LISTENERS_REGISTERED = True
+
+
+def _current_transaction(session: Session) -> Any:
+    return session.get_nested_transaction() or session.get_transaction() or _SESSION_PENDING_KEY
+
+
+def _flush_pending(session: Session, *, transaction: Any) -> None:
+    pending_events = session.info.setdefault(_POST_COMMIT_EVENTS_KEY, {})
+    pending_callbacks = session.info.setdefault(_POST_COMMIT_CALLBACKS_KEY, {})
+    for publisher, event in pending_events.pop(transaction, []):
+        publisher.publish(event)
+    for callback in pending_callbacks.pop(transaction, []):
+        callback()
+
+
+def _promote_pending(session: Session, *, transaction: Any) -> None:
+    parent = getattr(transaction, "parent", None) or _SESSION_PENDING_KEY
+    pending_events = session.info.setdefault(_POST_COMMIT_EVENTS_KEY, {})
+    pending_callbacks = session.info.setdefault(_POST_COMMIT_CALLBACKS_KEY, {})
+    child_events = pending_events.pop(transaction, [])
+    if child_events:
+        pending_events.setdefault(parent, []).extend(child_events)
+    child_callbacks = pending_callbacks.pop(transaction, [])
+    if child_callbacks:
+        pending_callbacks.setdefault(parent, []).extend(child_callbacks)
+
+
+def _discard_pending(session: Session, *, transaction: Any) -> None:
+    pending_events = session.info.get(_POST_COMMIT_EVENTS_KEY)
+    if isinstance(pending_events, dict):
+        pending_events.pop(transaction, None)
+        if not pending_events:
+            session.info.pop(_POST_COMMIT_EVENTS_KEY, None)
+    pending_callbacks = session.info.get(_POST_COMMIT_CALLBACKS_KEY)
+    if isinstance(pending_callbacks, dict):
+        pending_callbacks.pop(transaction, None)
+        if not pending_callbacks:
+            session.info.pop(_POST_COMMIT_CALLBACKS_KEY, None)
 
 
 __all__ = [

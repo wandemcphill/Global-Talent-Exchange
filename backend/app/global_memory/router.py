@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_session
@@ -8,6 +8,8 @@ from app.global_memory.schemas import (
     CompetitionEntryResultView,
     CompetitionEnterRequest,
     CompetitionListItemView,
+    DynastyLeaderboardEntryView,
+    HallOfFamePlayerView,
     NationalPoolPlayerView,
     PlayerHistoryResponseView,
     PlayerRentRequest,
@@ -19,8 +21,8 @@ from app.global_memory.service import GlobalMemoryError, GlobalMemoryNotFoundErr
 router = APIRouter(tags=["global-memory"])
 
 
-def _service(session: Session = Depends(get_session)) -> GlobalMemoryService:
-    return GlobalMemoryService(session)
+def _service(request: Request, session: Session = Depends(get_session)) -> GlobalMemoryService:
+    return GlobalMemoryService(session, event_publisher=getattr(request.app.state, "event_publisher", None))
 
 
 def _raise_http(exc: GlobalMemoryError) -> None:
@@ -87,6 +89,18 @@ def get_player_history(
     raise AssertionError("unreachable")
 
 
+@router.get("/player-history/{player_id}", response_model=PlayerHistoryResponseView)
+def get_player_history_by_path(
+    player_id: str,
+    service: GlobalMemoryService = Depends(_service),
+) -> PlayerHistoryResponseView:
+    try:
+        return service.get_player_history(player_id)
+    except GlobalMemoryError as exc:
+        _raise_http(exc)
+    raise AssertionError("unreachable")
+
+
 @router.get("/dynasty", response_model=UserDynastyView)
 def get_dynasty(
     user_id: str = Query(...),
@@ -98,3 +112,18 @@ def get_dynasty(
         _raise_http(exc)
     raise AssertionError("unreachable")
 
+
+@router.get("/dynasty/leaderboard", response_model=tuple[DynastyLeaderboardEntryView, ...])
+def get_dynasty_leaderboard(
+    limit: int = Query(default=50, ge=1, le=200),
+    service: GlobalMemoryService = Depends(_service),
+) -> tuple[DynastyLeaderboardEntryView, ...]:
+    return service.list_dynasty_leaderboard(limit=limit)
+
+
+@router.get("/hall-of-fame", response_model=tuple[HallOfFamePlayerView, ...])
+def get_hall_of_fame(
+    limit: int = Query(default=50, ge=1, le=200),
+    service: GlobalMemoryService = Depends(_service),
+) -> tuple[HallOfFamePlayerView, ...]:
+    return service.list_hall_of_fame(limit=limit)

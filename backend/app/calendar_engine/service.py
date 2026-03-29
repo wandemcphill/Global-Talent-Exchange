@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 import math
 
-from sqlalchemy import or_, select
+from sqlalchemy import inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ from app.common.enums.competition_type import CompetitionType
 from app.common.schemas.competition import CompetitionScheduleRequest
 from app.competition_engine.scheduler import CompetitionScheduler
 from app.hosted_competition_engine.service import HostedCompetitionService
-from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
+from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun, GlobalEvent
 from app.models.hosted_competition import UserHostedCompetition
 from app.models.national_team import NationalTeamCompetition
 from app.models.user import User
@@ -28,7 +28,15 @@ class CalendarEngineError(ValueError):
 class CalendarEngineService:
     session: Session
 
+    def _table_exists(self, table_name: str) -> bool:
+        try:
+            return bool(inspect(self.session.connection()).has_table(table_name))
+        except Exception:
+            return False
+
     def seed_defaults(self) -> None:
+        if not self._table_exists(CalendarSeason.__tablename__):
+            return
         existing = self.session.scalar(select(CalendarSeason).where(CalendarSeason.season_key == "gtex-2026"))
         if existing is None:
             self.session.add(
@@ -43,6 +51,8 @@ class CalendarEngineService:
                 )
             )
         self.session.flush()
+        if self._table_exists(GlobalEvent.__tablename__):
+            self.ensure_global_event_rhythm()
 
     def list_seasons(self, *, active_only: bool = False) -> list[CalendarSeason]:
         stmt = select(CalendarSeason)
@@ -416,6 +426,157 @@ class CalendarEngineService:
             "active_events": self.list_events(active_only=True, as_of=today),
             "active_pause_status": self.current_pause_status(as_of=today),
             "recent_lifecycle_runs": self.list_lifecycle_runs(limit=20),
+        }
+
+    def ensure_global_event_rhythm(self, *, anchor: datetime | None = None, horizon_days: int = 7) -> None:
+        if not self._table_exists(GlobalEvent.__tablename__):
+            return
+        from app.models.competition_match import CompetitionMatch
+
+        anchor = anchor or datetime.now(timezone.utc)
+        day_cursor = anchor.date()
+        end_day = day_cursor + timedelta(days=max(horizon_days, 1))
+        matches = list(
+            self.session.scalars(
+                select(CompetitionMatch)
+                .where(
+                    or_(
+                        CompetitionMatch.scheduled_at.is_not(None),
+                        CompetitionMatch.match_date.is_not(None),
+                    )
+                )
+                .order_by(CompetitionMatch.scheduled_at.asc(), CompetitionMatch.match_date.asc(), CompetitionMatch.stage.desc())
+            ).all()
+        )
+
+        while day_cursor <= end_day:
+            day_matches = [item for item in matches if (item.scheduled_at.date() if item.scheduled_at is not None else item.match_date) == day_cursor]
+            featured_match = day_matches[0] if day_matches else None
+            start_dt = featured_match.scheduled_at if featured_match is not None and featured_match.scheduled_at is not None else datetime.combine(day_cursor, time(hour=18, minute=0), tzinfo=timezone.utc)
+            self._upsert_global_event(
+                event_key=f"match-of-the-day:{day_cursor.isoformat()}",
+                event_name="Match of the Day",
+                start_time=start_dt,
+                end_time=start_dt + timedelta(hours=2),
+                event_type="match_of_the_day",
+                priority=95 if featured_match is not None and str(featured_match.stage).lower() == "final" else 78,
+                match_id=featured_match.id if featured_match is not None else None,
+                metadata_json={"daily_label": "Match of the Day"},
+            )
+            clash_start = datetime.combine(day_cursor, time(hour=21, minute=0), tzinfo=timezone.utc)
+            self._upsert_global_event(
+                event_key=f"ai-clash-hour:{day_cursor.isoformat()}",
+                event_name="AI Clash Hour",
+                start_time=clash_start,
+                end_time=clash_start + timedelta(hours=1),
+                event_type="ai_clash_hour",
+                priority=65,
+                match_id=None,
+                metadata_json={"daily_label": "AI Clash Hour"},
+            )
+            day_cursor += timedelta(days=1)
+
+        finals = [item for item in matches if str(item.stage).lower() == "final" and item.scheduled_at is not None]
+        if finals:
+            final_match = sorted(finals, key=lambda item: item.scheduled_at)[0]
+            self._upsert_global_event(
+                event_key=f"final-of-the-week:{final_match.scheduled_at.date().isoformat()}",
+                event_name="Final of the Week",
+                start_time=final_match.scheduled_at,
+                end_time=final_match.scheduled_at + timedelta(hours=2),
+                event_type="final_of_the_week",
+                priority=100,
+                match_id=final_match.id,
+                metadata_json={"daily_label": "Final of the Week"},
+            )
+        self.session.flush()
+
+    def list_global_events(self, *, start: datetime, end: datetime) -> list[GlobalEvent]:
+        self.ensure_global_event_rhythm(anchor=start, horizon_days=max((end.date() - start.date()).days, 1))
+        stmt = (
+            select(GlobalEvent)
+            .where(GlobalEvent.start_time >= start, GlobalEvent.start_time <= end)
+            .order_by(GlobalEvent.start_time.asc(), GlobalEvent.priority.desc())
+        )
+        return list(self.session.scalars(stmt).all())
+
+    def events_today_feed(self) -> dict[str, object]:
+        now = datetime.now(timezone.utc)
+        start = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+        end = datetime.combine(now.date(), time.max, tzinfo=timezone.utc)
+        return {"requested_for": now.date(), "window": "today", "events": [self._serialize_global_event(item, now=now) for item in self.list_global_events(start=start, end=end)]}
+
+    def upcoming_events_feed(self, *, days: int = 7) -> dict[str, object]:
+        now = datetime.now(timezone.utc)
+        end = now + timedelta(days=max(days, 1))
+        return {"requested_for": now.date(), "window": "upcoming", "events": [self._serialize_global_event(item, now=now) for item in self.list_global_events(start=now, end=end)]}
+
+    def _upsert_global_event(
+        self,
+        *,
+        event_key: str,
+        event_name: str,
+        start_time: datetime,
+        end_time: datetime,
+        event_type: str,
+        priority: int,
+        match_id: str | None,
+        metadata_json: dict[str, object],
+    ) -> GlobalEvent:
+        event = self.session.scalar(select(GlobalEvent).where(GlobalEvent.event_key == event_key))
+        if event is None:
+            event = GlobalEvent(
+                event_key=event_key,
+                event_name=event_name,
+                start_time=start_time,
+                end_time=end_time,
+                event_type=event_type,
+                priority=priority,
+                match_id=match_id,
+                status="scheduled",
+                metadata_json=dict(metadata_json),
+            )
+            self.session.add(event)
+        else:
+            event.event_name = event_name
+            event.start_time = start_time
+            event.end_time = end_time
+            event.event_type = event_type
+            event.priority = priority
+            event.match_id = match_id
+            event.metadata_json = {**dict(event.metadata_json or {}), **dict(metadata_json)}
+        return event
+
+    def _serialize_global_event(self, event: GlobalEvent, *, now: datetime) -> dict[str, object]:
+        notifications = []
+        start_time = event.start_time if event.start_time.tzinfo is not None else event.start_time.replace(tzinfo=timezone.utc)
+        end_time = event.end_time if event.end_time.tzinfo is not None else event.end_time.replace(tzinfo=timezone.utc)
+        lead = start_time - timedelta(minutes=30)
+        if lead >= now:
+            kind = "big_event" if event.priority >= 90 else "upcoming_match"
+            notifications.append({"kind": kind, "message": f"{event.event_name} starts at {start_time.isoformat()}.", "send_at": lead})
+        engagement = {
+            "match_route": f"/matches/{event.match_id}" if event.match_id else None,
+            "pre_match_show_route": f"/shows/pre-match/{event.match_id}" if event.match_id else None,
+            "post_match_show_route": f"/shows/post-match/{event.match_id}" if event.match_id else None,
+            "betting_route": f"/bets/odds/{event.match_id}" if event.match_id else None,
+        }
+        return {
+            "id": event.id,
+            "event_key": event.event_key,
+            "event_name": event.event_name,
+            "start_time": start_time,
+            "end_time": end_time,
+            "event_type": event.event_type,
+            "priority": event.priority,
+            "calendar_event_id": event.calendar_event_id,
+            "match_id": event.match_id,
+            "status": event.status,
+            "metadata_json": dict(event.metadata_json or {}),
+            "notifications": notifications,
+            "engagement": engagement,
+            "created_at": event.created_at,
+            "updated_at": event.updated_at,
         }
 
     @staticmethod

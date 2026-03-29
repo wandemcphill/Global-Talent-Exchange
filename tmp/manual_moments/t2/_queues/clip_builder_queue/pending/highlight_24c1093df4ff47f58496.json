@@ -1,0 +1,41 @@
+{
+  "attempts": 0,
+  "completed_at": null,
+  "job_id": "highlight_24c1093df4ff47f58496",
+  "last_error": null,
+  "max_attempts": 1,
+  "payload": {
+    "duration_seconds": 14,
+    "end_second": 5346,
+    "highlight_id": "evt-88",
+    "kind": "clip",
+    "match_id": "match-2",
+    "metadata": {
+      "away_score": 1,
+      "detected_events": [
+        "goal",
+        "last_minute_win"
+      ],
+      "event_type": "goal",
+      "home_score": 0,
+      "minute": 89,
+      "player": "Closer",
+      "priority_score": 1.8,
+      "source_event_type": "goal",
+      "team": "Away FC"
+    },
+    "output_storage_key": "moments/live/match-2/evt-88.mp4",
+    "playback_speed": 0.85,
+    "source_clip_storage_keys": [],
+    "source_path": null,
+    "source_storage_key": null,
+    "start_second": 5332,
+    "subtitle": "Away FC | Closer | 0-1",
+    "title": "Last-minute win swing 89'"
+  },
+  "queue_name": "clip_builder_queue",
+  "queued_at": "2026-03-28T20:20:29.238636+00:00",
+  "result": {},
+  "status": "queued",
+  "updated_at": "2026-03-28T20:20:29.238636+00:00"
+}

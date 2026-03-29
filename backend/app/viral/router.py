@@ -16,6 +16,7 @@ from app.auth.dependencies import (
 )
 from app.backbone.scale_events import enqueue_feed_cache_refresh
 from app.core.config import get_settings
+from app.core.event_backbone import defer_session_callback_until_commit
 from app.db import get_session
 from app.infinite_league.service import InfiniteLeagueRuntime, ensure_infinite_league_runtime
 from app.models.analytics_event import AnalyticsEvent
@@ -309,8 +310,9 @@ async def ingest_clip_events(
                 metadata=metadata,
                 reference_key=f"clip-event:{event.event_id}",
             )
-    ensure_viral_session_tracker(request.app).observe_many(weighted_events)
-    if identity.user_id:
+    session_tracker = ensure_viral_session_tracker(request.app)
+    session_tracker.observe_many(weighted_events)
+    if identity.user_id and session_tracker.should_request_refresh(session_id=identity.session_id):
         enqueue_feed_cache_refresh(
             session=session,
             user_id=identity.user_id,
@@ -318,6 +320,12 @@ async def ingest_clip_events(
             limit=20,
             reason="clip_event_ingestion",
             producer="viral-router",
+        )
+        defer_session_callback_until_commit(
+            session,
+            callback=lambda tracker=session_tracker, resolved_session_id=identity.session_id: tracker.mark_refresh_requested(
+                session_id=resolved_session_id
+            ),
         )
     session.commit()
     return ClipEventIngestionAccepted(

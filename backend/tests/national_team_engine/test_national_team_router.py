@@ -66,6 +66,19 @@ def _create_entry(
     return response.json()
 
 
+def _competition_squad(prefix: str) -> list[dict[str, object]]:
+    positions = ("GK", "CB", "CM")
+    return [
+        {
+            "player_name": f"{prefix} Player {index}",
+            "age": 24 + index,
+            "overall_rating": 68 + index,
+            "position": position,
+        }
+        for index, position in enumerate(positions, start=1)
+    ]
+
+
 def _seed_national_pool(
     app_session_factory,
     *,
@@ -357,6 +370,7 @@ def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(cl
     assert Decimal(str(real_player["loan_price_coin"])) == Decimal("80.0000")
     assert Decimal(str(preseeded_player["loan_price_coin"])) == Decimal("42.0000")
     assert Decimal(str(club_player["loan_price_coin"])) == Decimal("67.5000")
+    assert all(Decimal(str(item["demand_multiplier"])) == Decimal("1.0000") for item in players_by_id.values())
 
 
 def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad(client, demo_seed, app_session_factory) -> None:
@@ -403,6 +417,15 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     rented_member = next(item for item in rented_entry["rental_squad_members"] if item["player_id"] == player_ids["home-st"])
     assert rented_member["metadata_json"]["source_bucket"] == "real"
     assert rented_member["metadata_json"]["supply_mode"] == "infinite"
+
+    repriced_pool = client.get(
+        f"/national-team-engine/competitions/{competition['id']}/rental-pool",
+        params={"country_code": home_code},
+    )
+    assert repriced_pool.status_code == 200, repriced_pool.text
+    repriced_player = next(item for item in repriced_pool.json()["items"] if item["player_id"] == player_ids["home-st"])
+    assert Decimal(str(repriced_player["demand_multiplier"])) >= Decimal("1.1500")
+    assert Decimal(str(repriced_player["loan_price_coin"])) > Decimal("80.0000")
 
     auto_build_response = client.post(
         f"/national-team-engine/competitions/{competition['id']}/auto-build-squad",
@@ -460,3 +483,101 @@ def test_claim_free_players_grants_starter_pack_shape_from_national_pool(client,
     assert "ST" in positions
     assert any(slot == "WINGER" for slot in assigned_slots)
     assert assigned_slots.count("MIDFIELDER") == 2
+
+
+def test_qualifier_lock_blocks_new_entries_and_updates_country_rankings(client, demo_seed) -> None:
+    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+    primary_headers = _login(client, email=demo_seed.demo_users[0].email, password=demo_seed.demo_users[0].password)
+    secondary_headers = _login(client, email=demo_seed.demo_users[1].email, password=demo_seed.demo_users[1].password)
+    third_user = demo_seed.demo_users[2]
+    third_headers = _login(client, email=third_user.email, password=third_user.password)
+
+    competition_response = client.post(
+        "/admin/national-team-engine/competitions",
+        headers=admin_headers,
+        json={
+            "key": f"ranking-lock-{uuid4().hex[:8]}",
+            "title": "GTEX World Cup Ranking Lock",
+            "season_label": "2030",
+            "region_type": "global",
+            "age_band": "senior",
+            "format_type": "cup",
+            "status": "published",
+            "metadata_json": {
+                "minimum_squad_size": 3,
+                "maximum_squad_size": 5,
+                "tournament_slots": 2,
+            },
+        },
+    )
+    assert competition_response.status_code == 200, competition_response.text
+    competition = competition_response.json()
+
+    first_entry = client.post(
+        f"/national-team-engine/competitions/{competition['id']}/entries",
+        headers=primary_headers,
+        json={
+            "country_code": "NG",
+            "country_name": "Nigeria",
+            "squad": _competition_squad("Nigeria"),
+        },
+    )
+    assert first_entry.status_code == 200, first_entry.text
+
+    second_entry = client.post(
+        f"/national-team-engine/competitions/{competition['id']}/entries",
+        headers=secondary_headers,
+        json={
+            "country_code": "GH",
+            "country_name": "Ghana",
+            "squad": _competition_squad("Ghana"),
+        },
+    )
+    assert second_entry.status_code == 200, second_entry.text
+
+    lock_response = client.post(
+        f"/admin/national-team-engine/competitions/{competition['id']}/entries/lock",
+        headers=admin_headers,
+    )
+    assert lock_response.status_code == 200, lock_response.text
+    assert lock_response.json()["current_stage"] == "tournament"
+
+    locked_user_response = client.post(
+        f"/national-team-engine/competitions/{competition['id']}/entries",
+        headers=third_headers,
+        json={
+            "country_code": "SN",
+            "country_name": "Senegal",
+            "squad": _competition_squad("Senegal"),
+        },
+    )
+    assert locked_user_response.status_code == 409, locked_user_response.text
+    assert locked_user_response.json()["detail"] == "entry_locked"
+
+    locked_admin_response = client.post(
+        f"/admin/national-team-engine/competitions/{competition['id']}/entries",
+        headers=admin_headers,
+        json={
+            "country_code": "CI",
+            "country_name": "Cote d'Ivoire",
+            "manager_user_id": third_user.user_id,
+            "metadata_json": {"seed": 3},
+        },
+    )
+    assert locked_admin_response.status_code == 409, locked_admin_response.text
+    assert "locked" in locked_admin_response.json()["detail"].lower()
+
+    advance_response = client.post(
+        f"/admin/national-team-engine/competitions/{competition['id']}/lifecycle/advance",
+        headers=admin_headers,
+    )
+    assert advance_response.status_code == 200, advance_response.text
+    assert advance_response.json()["current_stage"] == "completed"
+
+    rankings_response = client.get("/national-team-engine/rankings")
+    assert rankings_response.status_code == 200, rankings_response.text
+    rankings_by_country = {item["country_code"]: item for item in rankings_response.json()}
+    assert {"NG", "GH"}.issubset(rankings_by_country)
+    assert rankings_by_country["NG"]["matches_played"] >= 1
+    assert rankings_by_country["GH"]["matches_played"] >= 1
+    assert rankings_by_country["NG"]["elo_rating"] != 1500.0 or rankings_by_country["GH"]["elo_rating"] != 1500.0

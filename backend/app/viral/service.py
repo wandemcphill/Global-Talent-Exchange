@@ -58,7 +58,7 @@ class ViralFeedError(ValueError):
 
 def _table_exists(session: Session, table_name: str) -> bool:
     try:
-        return bool(inspect(session.get_bind()).has_table(table_name))
+        return bool(inspect(session.connection()).has_table(table_name))
     except Exception:
         return False
 

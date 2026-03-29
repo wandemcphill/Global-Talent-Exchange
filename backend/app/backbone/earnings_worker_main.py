@@ -24,6 +24,9 @@ def main() -> None:
         session_factory=database.session_factory,
         read_session_factory=database.read_session_factory,
     )
+    if settings.observability_metrics_enabled:
+        app.state.metrics.start_http_server(settings.observability_metrics_port)
+    app.state.metrics.refresh_from_database()
     consumer = KafkaJsonConsumer(
         brokers=settings.kafka_brokers,
         group_id=f"{settings.kafka_client_id}-earnings-workers",
@@ -37,6 +40,8 @@ def main() -> None:
         consumer=consumer,
         session_factory=database.session_factory,
         handler=creator_earnings_handler(),
+        consumer_name="creator-earnings-worker",
+        metrics=app.state.metrics,
     )
     runtime.start()
     try:

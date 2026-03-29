@@ -128,6 +128,7 @@ class NationalTeamRentalPlayerView(BaseModel):
     source_bucket: str
     tradable: bool = True
     supply_mode: str = "infinite"
+    demand_multiplier: Decimal = Field(default=Decimal("1.0000"))
 
 
 class NationalTeamRentalPlayerCollectionResponse(BaseModel):
@@ -339,6 +340,18 @@ class NationalTeamCompetitionLifecycleResponse(BaseModel):
     schedule_plan: list[dict[str, Any]] = Field(default_factory=list)
     stage_history: list[dict[str, Any]] = Field(default_factory=list)
     stage_results: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalTeamCountryRankingResponse(BaseModel):
+    country_code: str
+    country_name: str
+    elo_rating: float
+    matches_played: int
+    wins: int
+    draws: int
+    losses: int
+    titles: int
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
 NationalTeamEntryDetailResponse.model_rebuild()

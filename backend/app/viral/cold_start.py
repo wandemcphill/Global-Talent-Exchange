@@ -34,7 +34,7 @@ _RAW_AFFINITY_EVENT_NAMES = frozenset(
 
 
 def _table_exists(session: Session, table_name: str) -> bool:
-    bind = session.get_bind()
+    bind = session.connection()
     if bind is None:
         return False
     return bool(inspect(bind).has_table(table_name))

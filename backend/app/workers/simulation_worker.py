@@ -108,6 +108,12 @@ def _legacy_match_simulation(payload: dict[str, Any]) -> dict[str, Any]:
         "away": {**away, "score": away_score},
         "winner_side": winner_side,
         "winner": winner,
+        "match_storyline": f"{home['name']} and {away['name']} played a simulated legacy fixture.",
+        "key_moments": [
+            f"Opening exchange set the tone for {home['name']} vs {away['name']}.",
+            f"The score settled at {home_score}-{away_score}.",
+        ],
+        "player_highlights": [],
         "injuries": [],
         "discipline": {
             "cards": [],
@@ -375,6 +381,13 @@ def _full_match_simulation(payload: dict[str, Any], replay_payload) -> dict[str,
             if summary.winner_team_id and summary.winner_team_name
             else None
         ),
+        "match_storyline": (
+            f"{summary.winner_team_name} took control of {summary.stage or 'the tie'}."
+            if summary.winner_team_name
+            else f"{summary.home_stats.team_name} and {summary.away_stats.team_name} cancelled each other out."
+        ),
+        "key_moments": list(summary.key_highlights),
+        "player_highlights": performance["players"][:5],
         "decided_by_penalties": summary.decided_by_penalties,
         "highlights": list(summary.key_highlights),
         "injuries": injuries,

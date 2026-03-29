@@ -13,6 +13,8 @@ from app.calendar_engine.schemas import (
     CalendarSeasonCreateRequest,
     CalendarSeasonView,
     CompetitionLifecycleRunView,
+    GlobalEventFeedView,
+    GlobalEventView,
     HostedCompetitionLaunchRequest,
     NationalCompetitionLaunchRequest,
     PauseStatusView,
@@ -20,11 +22,12 @@ from app.calendar_engine.schemas import (
 from app.calendar_engine.service import CalendarEngineError, CalendarEngineService
 from app.models.user import User
 
-router = APIRouter(prefix="/calendar-engine", tags=["calendar-engine"])
+router = APIRouter(tags=["calendar-engine"])
+calendar_router = APIRouter(prefix="/calendar-engine", tags=["calendar-engine"])
 admin_router = APIRouter(prefix="/admin/calendar-engine", tags=["calendar-engine-admin"])
 
 
-@router.get("/dashboard", response_model=CalendarDashboardView)
+@calendar_router.get("/dashboard", response_model=CalendarDashboardView)
 def get_dashboard(session: Session = Depends(get_session)) -> CalendarDashboardView:
     service = CalendarEngineService(session)
     payload = service.dashboard()
@@ -36,12 +39,35 @@ def get_dashboard(session: Session = Depends(get_session)) -> CalendarDashboardV
     )
 
 
-@router.get("/seasons", response_model=list[CalendarSeasonView])
+@router.get("/events/today", response_model=GlobalEventFeedView)
+def get_events_today(session: Session = Depends(get_session)) -> GlobalEventFeedView:
+    payload = CalendarEngineService(session).events_today_feed()
+    return GlobalEventFeedView(
+        requested_for=payload["requested_for"],
+        window=payload["window"],
+        events=[GlobalEventView.model_validate(item) for item in payload["events"]],
+    )
+
+
+@router.get("/events/upcoming", response_model=GlobalEventFeedView)
+def get_events_upcoming(
+    days: int = Query(default=7, ge=1, le=30),
+    session: Session = Depends(get_session),
+) -> GlobalEventFeedView:
+    payload = CalendarEngineService(session).upcoming_events_feed(days=days)
+    return GlobalEventFeedView(
+        requested_for=payload["requested_for"],
+        window=payload["window"],
+        events=[GlobalEventView.model_validate(item) for item in payload["events"]],
+    )
+
+
+@calendar_router.get("/seasons", response_model=list[CalendarSeasonView])
 def list_seasons(active_only: bool = Query(default=False), session: Session = Depends(get_session)) -> list[CalendarSeasonView]:
     return [CalendarSeasonView.model_validate(item, from_attributes=True) for item in CalendarEngineService(session).list_seasons(active_only=active_only)]
 
 
-@router.get("/events", response_model=list[CalendarEventView])
+@calendar_router.get("/events", response_model=list[CalendarEventView])
 def list_events(
     active_only: bool = Query(default=False),
     as_of: date | None = Query(default=None),
@@ -66,14 +92,17 @@ def list_events(
     ]
 
 
-@router.get("/pause-status", response_model=PauseStatusView)
+@calendar_router.get("/pause-status", response_model=PauseStatusView)
 def get_pause_status(as_of: date | None = Query(default=None), session: Session = Depends(get_session)) -> PauseStatusView:
     return PauseStatusView.model_validate(CalendarEngineService(session).current_pause_status(as_of=as_of))
 
 
-@router.get("/lifecycle-runs", response_model=list[CompetitionLifecycleRunView])
+@calendar_router.get("/lifecycle-runs", response_model=list[CompetitionLifecycleRunView])
 def list_lifecycle_runs(session: Session = Depends(get_session)) -> list[CompetitionLifecycleRunView]:
     return [CompetitionLifecycleRunView.model_validate(item, from_attributes=True) for item in CalendarEngineService(session).list_lifecycle_runs()]
+
+
+router.include_router(calendar_router)
 
 
 @admin_router.post("/seasons", response_model=CalendarSeasonView)

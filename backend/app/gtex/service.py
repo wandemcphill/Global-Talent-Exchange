@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.event_backbone import build_outbox_event, defer_event_publish_until_commit, defer_session_callback_until_commit
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.core.global_ids import global_match_id
 from app.gtex.config import AMOUNT_QUANTUM, GtexSettings
 from app.gtex import redis_keys
 from app.gtex.store import InMemoryStateStore, RedisStateStore
@@ -1066,6 +1067,15 @@ class UnifiedEconomyService(GtexBaseService):
         self.creator_market_service = creator_market_service
 
     def settle_match_completion(self, session: Session, *, match: GtexMatch) -> GtexMatch:
+        metadata = dict(match.metadata_json or {})
+        settlement_key = f"gtex-match-settlement:{match.id}"
+        if metadata.get("economy_settled_at"):
+            return match
+        match.metadata_json = {
+            **metadata,
+            "settlement_idempotency_key": settlement_key,
+            "global_match_id": global_match_id(match.id),
+        }
         human_users = [
             user
             for user in (
@@ -1132,9 +1142,10 @@ class UnifiedEconomyService(GtexBaseService):
                 reason=LedgerEntryReason.TRADE_SETTLEMENT,
                 source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
                 transaction_type=LedgerTransactionType.MATCH_REWARD,
-                reference=f"gtex-match-settlement:{match.id}",
+                reference=settlement_key,
                 description="GTEX AI league match settlement",
                 actor=human_winner if human_winner is not None else (human_users[0] if human_users else None),
+                idempotency_key=settlement_key,
             )
         for user in human_users:
             self.jackpot_service.record_contribution(
@@ -1158,11 +1169,16 @@ class UnifiedEconomyService(GtexBaseService):
             )
         self._update_match_standings(session, match=match)
         self._emit_risk_flags(session, match=match)
+        match.metadata_json = {
+            **dict(match.metadata_json or {}),
+            "economy_settled_at": utcnow().isoformat(),
+        }
         self._stage_event(
             session,
             name="MATCH_COMPLETED",
             payload={
                 "match_id": match.id,
+                "global_match_id": global_match_id(match.id),
                 "league_id": match.league_id,
                 "home_score": match.home_score,
                 "away_score": match.away_score,
@@ -1638,13 +1654,33 @@ class AiLeagueService(GtexBaseService):
             return match
         home = self._resolve_participant(session, match=match, side="home")
         away = self._resolve_participant(session, match=match, side="away")
+        prior_metadata = dict(match.metadata_json or {})
+        home_fatigue = float(prior_metadata.get("home_fatigue", 0.0) or 0.0)
+        away_fatigue = float(prior_metadata.get("away_fatigue", 0.0) or 0.0)
+        home_strength = max(1.0, float(home.strength) - (home_fatigue * 2.0))
+        away_strength = max(1.0, float(away.strength) - (away_fatigue * 2.0))
+        rivalry_meetings = int(
+            session.scalar(
+                select(func.count())
+                .select_from(GtexMatch)
+                .where(
+                    GtexMatch.id != match.id,
+                    GtexMatch.completed_at.is_not(None),
+                    or_(
+                        (GtexMatch.home_user_id == match.home_user_id) & (GtexMatch.away_user_id == match.away_user_id),
+                        (GtexMatch.home_user_id == match.away_user_id) & (GtexMatch.away_user_id == match.home_user_id),
+                    ),
+                )
+            )
+            or 0
+        )
         match.status = GtexMatchStatus.RUNNING
         match.started_at = match.started_at or utcnow()
         home_score = 0
         away_score = 0
         generated_events: list[GtexMatchEvent] = []
         for index in range(1, self.settings.ai_simulation_event_count + 1):
-            actor = home if self._random.random() < float(home.strength / (home.strength + away.strength)) else away
+            actor = home if self._random.random() < float(home_strength / (home_strength + away_strength)) else away
             event_type = self._pick_event_type(actor=actor)
             if event_type == "goal":
                 if actor.subject_key == home.subject_key:
@@ -1678,12 +1714,47 @@ class AiLeagueService(GtexBaseService):
             match.winner_participant_type = None
             match.winner_user_id = None
             match.winner_ai_id = None
+        key_moments = [
+            f"{event.details_json.get('actor')} triggered {event.event_type} at beat {event.event_index}."
+            for event in generated_events[: min(5, len(generated_events))]
+        ]
+        player_highlights = [
+            {
+                "actor_key": event.actor_key,
+                "actor": event.details_json.get("actor"),
+                "event_type": event.event_type,
+                "event_index": event.event_index,
+            }
+            for event in generated_events
+            if event.event_type in {"goal", "chance", "save"}
+        ][:6]
+        rivalry_level = "fierce" if rivalry_meetings >= 5 else "heated" if rivalry_meetings >= 2 else "fresh"
+        winner_label = home.label if home_score > away_score else away.label if away_score > home_score else "Neither side"
+        storyline = (
+            f"{winner_label} emerged from a {rivalry_level} duel after {len(generated_events)} simulated phases."
+            if winner_label != "Neither side"
+            else f"A {rivalry_level} duel finished level after {len(generated_events)} simulated phases."
+        )
         match.metadata_json = {
-            **(match.metadata_json or {}),
-            "home_strength": str(home.strength),
-            "away_strength": str(away.strength),
+            **prior_metadata,
+            "home_strength": str(home_strength),
+            "away_strength": str(away_strength),
             "home_label": home.label,
             "away_label": away.label,
+            "home_fatigue": round(home_fatigue + 0.35, 2),
+            "away_fatigue": round(away_fatigue + 0.35, 2),
+            "match_context": {
+                "home_fatigue": home_fatigue,
+                "away_fatigue": away_fatigue,
+                "prior_meetings": rivalry_meetings,
+                "injury_context": dict(prior_metadata.get("injury_context") or {}),
+            },
+            "rivalry": {"meetings": rivalry_meetings, "level": rivalry_level},
+            "narrative_output": {
+                "match_storyline": storyline,
+                "key_moments": key_moments,
+                "player_highlights": player_highlights,
+            },
         }
         self.economy_service.settle_match_completion(session, match=match)
         return match
@@ -1717,8 +1788,13 @@ class AiLeagueService(GtexBaseService):
             "winner_ai_id": match.winner_ai_id,
             "queued_at": match.queued_at,
             "started_at": match.started_at,
-            "completed_at": match.completed_at,
-            "events": [
+              "completed_at": match.completed_at,
+              "match_storyline": (match.metadata_json or {}).get("narrative_output", {}).get("match_storyline"),
+              "key_moments": list((match.metadata_json or {}).get("narrative_output", {}).get("key_moments") or []),
+              "player_highlights": list((match.metadata_json or {}).get("narrative_output", {}).get("player_highlights") or []),
+              "rivalry": dict((match.metadata_json or {}).get("rivalry") or {}),
+              "match_context": dict((match.metadata_json or {}).get("match_context") or {}),
+              "events": [
                 {
                     "event_index": event.event_index,
                     "phase": event.phase,
