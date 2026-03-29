@@ -11,6 +11,7 @@ import '../../features/transfer_market/live_market_provider.dart';
 import '../../features/world/live_world_provider.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
+import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 
@@ -30,6 +31,7 @@ class HomeScreen extends ConsumerWidget {
       worldAggregateProvider,
     );
     final AsyncValue<LiveTasksData> tasksValue = ref.watch(liveTasksProvider);
+    final bool authenticated = ref.watch(isAuthenticatedProvider);
     final bool blocked = <AsyncValue<Object?>>[
       profileValue,
       competitionsValue,
@@ -66,6 +68,10 @@ class HomeScreen extends ConsumerWidget {
                   child: const Text('Competitions'),
                 ),
                 FilledButton(
+                  onPressed: () => context.push(AppRoutes.streamerEngine),
+                  child: const Text('Streamer Engine'),
+                ),
+                FilledButton(
                   onPressed: () => context.go(AppRoutes.world),
                   child: const Text('World'),
                 ),
@@ -77,6 +83,11 @@ class HomeScreen extends ConsumerWidget {
                   onPressed: () => context.push(AppRoutes.clips),
                   child: const Text('Clips'),
                 ),
+                if (!authenticated)
+                  OutlinedButton(
+                    onPressed: () => context.push(AppRoutes.profileLogin),
+                    child: const Text('Sign in'),
+                  ),
               ],
             ),
           ),

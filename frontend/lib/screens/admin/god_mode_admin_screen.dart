@@ -50,18 +50,21 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
       TextEditingController();
   final TextEditingController _liquidityQuantityController =
       TextEditingController(text: '1');
-  final TextEditingController _liquidityPriceController =
-      TextEditingController(text: '100');
+  final TextEditingController _liquidityPriceController = TextEditingController(
+    text: '100',
+  );
   final TextEditingController _liquidityReasonController =
       TextEditingController(text: 'Desk rebalancing');
   String _liquidityAction = 'buy_from_user';
 
-  final TextEditingController _treasuryAmountController =
-      TextEditingController(text: '10');
+  final TextEditingController _treasuryAmountController = TextEditingController(
+    text: '10',
+  );
   final TextEditingController _treasuryDestinationController =
       TextEditingController();
-  final TextEditingController _treasuryReasonController =
-      TextEditingController(text: 'Treasury sweep');
+  final TextEditingController _treasuryReasonController = TextEditingController(
+    text: 'Treasury sweep',
+  );
   String _treasuryUnit = 'credit';
 
   final TextEditingController _paymentRailReasonController =
@@ -189,9 +192,11 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
     if (bootstrap == null) {
       return const <WithdrawalItem>[];
     }
-    return bootstrap.withdrawals.where((WithdrawalItem item) {
-      return _withdrawalFilter == 'all' || item.status == _withdrawalFilter;
-    }).toList(growable: false);
+    return bootstrap.withdrawals
+        .where((WithdrawalItem item) {
+          return _withdrawalFilter == 'all' || item.status == _withdrawalFilter;
+        })
+        .toList(growable: false);
   }
 
   List<AuditEvent> get _visibleAuditEvents {
@@ -200,15 +205,17 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
       return const <AuditEvent>[];
     }
     final String term = _auditSearchController.text.trim().toLowerCase();
-    return bootstrap.auditEvents.where((AuditEvent event) {
-      if (term.isEmpty) {
-        return true;
-      }
-      final String haystack =
-          '\${event.summary} \${event.eventType} \${event.payload}'
-              .toLowerCase();
-      return haystack.contains(term);
-    }).toList(growable: false);
+    return bootstrap.auditEvents
+        .where((AuditEvent event) {
+          if (term.isEmpty) {
+            return true;
+          }
+          final String haystack =
+              '\${event.summary} \${event.eventType} \${event.payload}'
+                  .toLowerCase();
+          return haystack.contains(term);
+        })
+        .toList(growable: false);
   }
 
   @override
@@ -240,15 +247,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
             children: <Widget>[
               const Icon(Icons.warning_amber_rounded, size: 40),
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-              ),
+              Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _load,
-                child: const Text('Retry'),
-              ),
+              FilledButton(onPressed: _load, child: const Text('Retry')),
             ],
           ),
         ),
@@ -291,11 +292,12 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                 onPressed: () {
                   Navigator.of(context).push<void>(
                     MaterialPageRoute<void>(
-                      builder: (BuildContext context) => GteTreasuryOpsScreen(
-                        baseUrl: widget.baseUrl,
-                        accessToken: widget.accessToken,
-                        backendMode: widget.backendMode,
-                      ),
+                      builder:
+                          (BuildContext context) => GteTreasuryOpsScreen(
+                            baseUrl: widget.baseUrl,
+                            accessToken: widget.accessToken,
+                            backendMode: widget.backendMode,
+                          ),
                     ),
                   );
                 },
@@ -313,14 +315,15 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const Text(
-                'Change the seeded admin password after first login. The initial bootstrap credentials are only meant to get God Mode through the front door.',
+                'Change the current admin password when your environment bootstraps an operator account. This screen does not assume any production hardcoded password.',
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _currentPasswordController,
                 obscureText: true,
-                decoration:
-                    const InputDecoration(labelText: 'Current password'),
+                decoration: const InputDecoration(
+                  labelText: 'Current password',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -332,8 +335,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               TextField(
                 controller: _confirmPasswordController,
                 obscureText: true,
-                decoration:
-                    const InputDecoration(labelText: 'Confirm new password'),
+                decoration: const InputDecoration(
+                  labelText: 'Confirm new password',
+                ),
               ),
               const SizedBox(height: 12),
               FilledButton.tonal(
@@ -376,25 +380,33 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                 runSpacing: 8,
                 children: <Widget>[
                   _MetricChip(
-                      label: 'Queued withdrawals',
-                      value:
-                          bootstrap.withdrawalSummary.queuedAmount.toString()),
+                    label: 'Queued withdrawals',
+                    value: bootstrap.withdrawalSummary.queuedAmount.toString(),
+                  ),
                   _MetricChip(
-                      label: 'Immediate withdrawal eligible',
-                      value: bootstrap.withdrawalSummary.immediateEligibleAmount
-                          .toString()),
+                    label: 'Immediate withdrawal eligible',
+                    value:
+                        bootstrap.withdrawalSummary.immediateEligibleAmount
+                            .toString(),
+                  ),
                   _MetricChip(
-                      label: 'Manager trade fee revenue',
-                      value: bootstrap
-                          .treasuryDashboard.managerTradeFeeRevenueCredits
-                          .toString()),
+                    label: 'Manager trade fee revenue',
+                    value:
+                        bootstrap
+                            .treasuryDashboard
+                            .managerTradeFeeRevenueCredits
+                            .toString(),
+                  ),
                   _MetricChip(
-                      label: 'Open manager listings',
-                      value: bootstrap.treasuryDashboard.openManagerListingCount
-                          .toString()),
+                    label: 'Open manager listings',
+                    value:
+                        bootstrap.treasuryDashboard.openManagerListingCount
+                            .toString(),
+                  ),
                   _MetricChip(
-                      label: 'Live rails',
-                      value: bootstrap.paymentRailHealth.liveCount.toString()),
+                    label: 'Live rails',
+                    value: bootstrap.paymentRailHealth.liveCount.toString(),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -434,7 +446,8 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               const SizedBox(height: 8),
               if (bootstrap.treasury.liquidityInventory.isEmpty)
                 const Text(
-                    'No platform position inventory has been created yet.')
+                  'No platform position inventory has been created yet.',
+                )
               else
                 ...bootstrap.treasury.liquidityInventory.map(
                   (LiquidityInventoryItem item) => ListTile(
@@ -474,8 +487,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _liquidityUserController,
-                decoration:
-                    const InputDecoration(labelText: 'Counterparty user id'),
+                decoration: const InputDecoration(
+                  labelText: 'Counterparty user id',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -488,8 +502,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                   Expanded(
                     child: TextField(
                       controller: _liquidityQuantityController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(labelText: 'Quantity'),
                     ),
                   ),
@@ -497,10 +512,12 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                   Expanded(
                     child: TextField(
                       controller: _liquidityPriceController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                          labelText: 'Bounded unit price'),
+                        labelText: 'Bounded unit price',
+                      ),
                     ),
                   ),
                 ],
@@ -540,8 +557,10 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               const SizedBox(height: 8),
               _numberField(_withdrawalFeeController, 'Withdrawal fee (bps)'),
               const SizedBox(height: 8),
-              _numberField(_minimumWithdrawalFeeController,
-                  'Minimum withdrawal fee (credits)'),
+              _numberField(
+                _minimumWithdrawalFeeController,
+                'Minimum withdrawal fee (credits)',
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _commissionReasonController,
@@ -562,65 +581,78 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const Text(
-                  'Adjust the withdrawal fee policy, decide whether e-game winnings can leave the platform, choose between automatic gateway processing and manual bank transfer operations, and tune the admin prize-pool lift.'),
+                'Adjust the withdrawal fee policy, decide whether e-game winnings can leave the platform, choose between automatic gateway processing and manual bank transfer operations, and tune the admin prize-pool lift.',
+              ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _processorMode,
-                decoration:
-                    const InputDecoration(labelText: 'Payment processor mode'),
+                decoration: const InputDecoration(
+                  labelText: 'Payment processor mode',
+                ),
                 items: const <DropdownMenuItem<String>>[
                   DropdownMenuItem(
-                      value: 'automatic_gateway',
-                      child: Text('Automatic gateway processor')),
+                    value: 'automatic_gateway',
+                    child: Text('Automatic gateway processor'),
+                  ),
                   DropdownMenuItem(
-                      value: 'manual_bank_transfer',
-                      child: Text('Manual bank transfer')),
+                    value: 'manual_bank_transfer',
+                    child: Text('Manual bank transfer'),
+                  ),
                 ],
-                onChanged: _isSaving
-                    ? null
-                    : (String? value) => setState(
-                        () => _processorMode = value ?? 'manual_bank_transfer'),
+                onChanged:
+                    _isSaving
+                        ? null
+                        : (String? value) => setState(
+                          () =>
+                              _processorMode = value ?? 'manual_bank_transfer',
+                        ),
               ),
               const SizedBox(height: 8),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Allow trade withdrawals'),
                 subtitle: const Text(
-                    'Toggle whether trade profits can be withdrawn out of the app.'),
+                  'Toggle whether trade profits can be withdrawn out of the app.',
+                ),
                 value: _tradeWithdrawalsEnabled,
-                onChanged: _isSaving
-                    ? null
-                    : (bool value) =>
-                        setState(() => _tradeWithdrawalsEnabled = value),
+                onChanged:
+                    _isSaving
+                        ? null
+                        : (bool value) =>
+                            setState(() => _tradeWithdrawalsEnabled = value),
               ),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Allow e-game winnings withdrawals'),
                 subtitle: const Text(
-                    'Off keeps the fallback model: winnings remain tradable in-app but cannot be withdrawn directly.'),
+                  'Off keeps the fallback model: winnings remain tradable in-app but cannot be withdrawn directly.',
+                ),
                 value: _egameWithdrawalsEnabled,
-                onChanged: _isSaving
-                    ? null
-                    : (bool value) =>
-                        setState(() => _egameWithdrawalsEnabled = value),
+                onChanged:
+                    _isSaving
+                        ? null
+                        : (bool value) =>
+                            setState(() => _egameWithdrawalsEnabled = value),
               ),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Receive deposits by bank transfer'),
                 value: _depositsViaBankTransfer,
-                onChanged: _isSaving
-                    ? null
-                    : (bool value) =>
-                        setState(() => _depositsViaBankTransfer = value),
+                onChanged:
+                    _isSaving
+                        ? null
+                        : (bool value) =>
+                            setState(() => _depositsViaBankTransfer = value),
               ),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Pay out withdrawals by bank transfer'),
                 value: _payoutsViaBankTransfer,
-                onChanged: _isSaving
-                    ? null
-                    : (bool value) =>
-                        setState(() => _payoutsViaBankTransfer = value),
+                onChanged:
+                    _isSaving
+                        ? null
+                        : (bool value) =>
+                            setState(() => _payoutsViaBankTransfer = value),
               ),
               const SizedBox(height: 8),
               Container(
@@ -629,26 +661,32 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
                 ),
                 child: const Text(
-                    'Manual bank transfer keeps payouts in review until ops confirms the bank movement. Automatic gateway mode can move supported withdrawal requests straight into processing.'),
+                  'Manual bank transfer keeps payouts in review until ops confirms the bank movement. Automatic gateway mode can move supported withdrawal requests straight into processing.',
+                ),
               ),
               const SizedBox(height: 8),
-              _numberField(_competitionPoolTopupController,
-                  'Competition pool top-up (%)'),
+              _numberField(
+                _competitionPoolTopupController,
+                'Competition pool top-up (%)',
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _competitionControlReasonController,
                 decoration: const InputDecoration(
-                    labelText: 'Reason for competition pool update'),
+                  labelText: 'Reason for competition pool update',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _withdrawalControlReasonController,
                 decoration: const InputDecoration(
-                    labelText: 'Reason for withdrawal toggle update'),
+                  labelText: 'Reason for withdrawal toggle update',
+                ),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -675,12 +713,16 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                  'Live ${bootstrap.paymentRailHealth.liveCount} • Deposits ${bootstrap.paymentRailHealth.depositsEnabledCount} • Withdrawals ${bootstrap.paymentRailHealth.withdrawalsEnabledCount}'),
+                'Live ${bootstrap.paymentRailHealth.liveCount} • Deposits ${bootstrap.paymentRailHealth.depositsEnabledCount} • Withdrawals ${bootstrap.paymentRailHealth.withdrawalsEnabledCount}',
+              ),
               if (bootstrap
-                  .paymentRailHealth.pausedProviders.isNotEmpty) ...<Widget>[
+                  .paymentRailHealth
+                  .pausedProviders
+                  .isNotEmpty) ...<Widget>[
                 const SizedBox(height: 8),
                 Text(
-                    'Paused rails: ${bootstrap.paymentRailHealth.pausedProviders.join(', ')}'),
+                  'Paused rails: ${bootstrap.paymentRailHealth.pausedProviders.join(', ')}',
+                ),
               ],
               const SizedBox(height: 12),
               ...bootstrap.paymentRails.map(
@@ -694,25 +736,27 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                         Row(
                           children: <Widget>[
                             Expanded(
-                                child: Text(rail.provider,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall)),
+                              child: Text(
+                                rail.provider,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
                             Switch.adaptive(
                               value: rail.isLive,
-                              onChanged: _isSaving
-                                  ? null
-                                  : (bool value) {
-                                      setState(() {
-                                        rail.isLive = value;
-                                        if (!value) {
-                                          rail.depositsEnabled = false;
-                                          rail.withdrawalsEnabled = false;
-                                          rail.maintenanceMessage =
-                                              'Temporarily paused by admin.';
-                                        }
-                                      });
-                                    },
+                              onChanged:
+                                  _isSaving
+                                      ? null
+                                      : (bool value) {
+                                        setState(() {
+                                          rail.isLive = value;
+                                          if (!value) {
+                                            rail.depositsEnabled = false;
+                                            rail.withdrawalsEnabled = false;
+                                            rail.maintenanceMessage =
+                                                'Temporarily paused by admin.';
+                                          }
+                                        });
+                                      },
                             ),
                           ],
                         ),
@@ -721,24 +765,32 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Deposits enabled'),
-                          onChanged: _isSaving || !rail.isLive
-                              ? null
-                              : (bool? value) => setState(
-                                  () => rail.depositsEnabled = value ?? false),
+                          onChanged:
+                              _isSaving || !rail.isLive
+                                  ? null
+                                  : (bool? value) => setState(
+                                    () => rail.depositsEnabled = value ?? false,
+                                  ),
                         ),
                         CheckboxListTile(
                           value: rail.withdrawalsEnabled,
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Withdrawals enabled'),
-                          onChanged: _isSaving || !rail.isLive
-                              ? null
-                              : (bool? value) => setState(() =>
-                                  rail.withdrawalsEnabled = value ?? false),
+                          onChanged:
+                              _isSaving || !rail.isLive
+                                  ? null
+                                  : (bool? value) => setState(
+                                    () =>
+                                        rail.withdrawalsEnabled =
+                                            value ?? false,
+                                  ),
                         ),
-                        Text(rail.maintenanceMessage?.isNotEmpty == true
-                            ? rail.maintenanceMessage!
-                            : 'No maintenance message.'),
+                        Text(
+                          rail.maintenanceMessage?.isNotEmpty == true
+                              ? rail.maintenanceMessage!
+                              : 'No maintenance message.',
+                        ),
                       ],
                     ),
                   ),
@@ -747,7 +799,8 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               TextField(
                 controller: _paymentRailReasonController,
                 decoration: const InputDecoration(
-                    labelText: 'Audit reason for rail changes'),
+                  labelText: 'Audit reason for rail changes',
+                ),
               ),
               const SizedBox(height: 12),
               FilledButton.tonal(
@@ -768,47 +821,62 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                 runSpacing: 8,
                 children: <Widget>[
                   _MetricChip(
-                      label: 'Requested',
-                      value: bootstrap.withdrawalSummary.requestedCount
-                          .toString()),
+                    label: 'Requested',
+                    value:
+                        bootstrap.withdrawalSummary.requestedCount.toString(),
+                  ),
                   _MetricChip(
-                      label: 'Reviewing',
-                      value: bootstrap.withdrawalSummary.reviewingCount
-                          .toString()),
+                    label: 'Reviewing',
+                    value:
+                        bootstrap.withdrawalSummary.reviewingCount.toString(),
+                  ),
                   _MetricChip(
-                      label: 'Held',
-                      value: bootstrap.withdrawalSummary.heldCount.toString()),
+                    label: 'Held',
+                    value: bootstrap.withdrawalSummary.heldCount.toString(),
+                  ),
                   _MetricChip(
-                      label: 'Processing',
-                      value: bootstrap.withdrawalSummary.processingCount
-                          .toString()),
+                    label: 'Processing',
+                    value:
+                        bootstrap.withdrawalSummary.processingCount.toString(),
+                  ),
                   _MetricChip(
-                      label: 'Completed',
-                      value: bootstrap.withdrawalSummary.completedCount
-                          .toString()),
+                    label: 'Completed',
+                    value:
+                        bootstrap.withdrawalSummary.completedCount.toString(),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _withdrawalFilter,
-                decoration:
-                    const InputDecoration(labelText: 'Filter by status'),
+                decoration: const InputDecoration(
+                  labelText: 'Filter by status',
+                ),
                 items: const <DropdownMenuItem<String>>[
                   DropdownMenuItem(value: 'all', child: Text('All')),
                   DropdownMenuItem(
-                      value: 'requested', child: Text('Requested')),
+                    value: 'requested',
+                    child: Text('Requested'),
+                  ),
                   DropdownMenuItem(
-                      value: 'reviewing', child: Text('Reviewing')),
+                    value: 'reviewing',
+                    child: Text('Reviewing'),
+                  ),
                   DropdownMenuItem(value: 'held', child: Text('Held')),
                   DropdownMenuItem(
-                      value: 'processing', child: Text('Processing')),
+                    value: 'processing',
+                    child: Text('Processing'),
+                  ),
                   DropdownMenuItem(
-                      value: 'completed', child: Text('Completed')),
+                    value: 'completed',
+                    child: Text('Completed'),
+                  ),
                   DropdownMenuItem(value: 'rejected', child: Text('Rejected')),
                   DropdownMenuItem(value: 'failed', child: Text('Failed')),
                 ],
-                onChanged: (String? value) =>
-                    setState(() => _withdrawalFilter = value ?? 'all'),
+                onChanged:
+                    (String? value) =>
+                        setState(() => _withdrawalFilter = value ?? 'all'),
               ),
               const SizedBox(height: 12),
               if (_visibleWithdrawals.isEmpty)
@@ -831,45 +899,59 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                              'Status: ${item.status} • Source: ${item.sourceScope}'),
+                            'Status: ${item.status} • Source: ${item.sourceScope}',
+                          ),
                           Text('Destination: ${item.destinationReference}'),
                           Text(
-                              'Fee: ${item.feeAmount} • Total debit: ${item.totalDebit}'),
+                            'Fee: ${item.feeAmount} • Total debit: ${item.totalDebit}',
+                          ),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             children: <Widget>[
                               OutlinedButton(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () =>
-                                        _updateWithdrawal(item, 'reviewing'),
+                                onPressed:
+                                    _isSaving
+                                        ? null
+                                        : () => _updateWithdrawal(
+                                          item,
+                                          'reviewing',
+                                        ),
                                 child: const Text('Review'),
                               ),
                               OutlinedButton(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () => _updateWithdrawal(item, 'held'),
+                                onPressed:
+                                    _isSaving
+                                        ? null
+                                        : () => _updateWithdrawal(item, 'held'),
                                 child: const Text('Hold'),
                               ),
                               OutlinedButton(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () =>
-                                        _updateWithdrawal(item, 'processing'),
+                                onPressed:
+                                    _isSaving
+                                        ? null
+                                        : () => _updateWithdrawal(
+                                          item,
+                                          'processing',
+                                        ),
                                 child: const Text('Process'),
                               ),
                               FilledButton.tonal(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () =>
-                                        _updateWithdrawal(item, 'completed'),
+                                onPressed:
+                                    _isSaving
+                                        ? null
+                                        : () => _updateWithdrawal(
+                                          item,
+                                          'completed',
+                                        ),
                                 child: const Text('Complete'),
                               ),
                               TextButton(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () => _updateWithdrawal(item, 'rejected'),
+                                onPressed:
+                                    _isSaving
+                                        ? null
+                                        : () =>
+                                            _updateWithdrawal(item, 'rejected'),
                                 child: const Text('Reject'),
                               ),
                             ],
@@ -907,8 +989,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _treasuryDestinationController,
-                decoration:
-                    const InputDecoration(labelText: 'Destination reference'),
+                decoration: const InputDecoration(
+                  labelText: 'Destination reference',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -944,8 +1027,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _auditSearchController,
-                decoration:
-                    const InputDecoration(labelText: 'Search audit stream'),
+                decoration: const InputDecoration(
+                  labelText: 'Search audit stream',
+                ),
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
@@ -983,7 +1067,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
         _confirmPasswordController.text.trim().isEmpty ||
         _currentPasswordController.text.trim().isEmpty) {
       AppFeedback.showError(
-          context, 'Enter current, new, and confirmation passwords.');
+        context,
+        'Enter current, new, and confirmation passwords.',
+      );
       return;
     }
     await _runSavingAction(() async {
@@ -1005,8 +1091,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
         sellCommissionBps: int.parse(_sellCommissionController.text.trim()),
         instantSellFeeBps: int.parse(_instantSellFeeController.text.trim()),
         withdrawalFeeBps: int.parse(_withdrawalFeeController.text.trim()),
-        minimumWithdrawalFeeCredits:
-            double.parse(_minimumWithdrawalFeeController.text.trim()),
+        minimumWithdrawalFeeCredits: double.parse(
+          _minimumWithdrawalFeeController.text.trim(),
+        ),
         reason: _commissionReasonController.text.trim(),
       );
       await _load();
@@ -1030,8 +1117,9 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
   Future<void> _saveCompetitionControls() async {
     await _runSavingAction(() async {
       await _api.updateCompetitionControls(
-        prizePoolTopupPct:
-            double.parse(_competitionPoolTopupController.text.trim()),
+        prizePoolTopupPct: double.parse(
+          _competitionPoolTopupController.text.trim(),
+        ),
         reason: _competitionControlReasonController.text.trim(),
       );
       await _load();
@@ -1044,8 +1132,10 @@ class _GodModeAdminScreenState extends State<GodModeAdminScreen> {
       return;
     }
     await _runSavingAction(() async {
-      await _api.updatePaymentRails(bootstrap.paymentRails,
-          reason: _paymentRailReasonController.text.trim());
+      await _api.updatePaymentRails(
+        bootstrap.paymentRails,
+        reason: _paymentRailReasonController.text.trim(),
+      );
       await _load();
     });
   }
@@ -1164,10 +1254,7 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _AdminHeroChip extends StatelessWidget {
-  const _AdminHeroChip({
-    required this.label,
-    required this.value,
-  });
+  const _AdminHeroChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1188,16 +1275,16 @@ class _AdminHeroChip extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Colors.white70,
-                  letterSpacing: 0.6,
-                ),
+              color: Colors.white70,
+              letterSpacing: 0.6,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             value,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -1228,15 +1315,17 @@ class GodModeAdminApi {
   }) async {
     final http.Client client = http.Client();
     try {
-      final http.Request request = http.Request(method, _uri(path))
-        ..headers['Accept'] = 'application/json'
-        ..headers['Authorization'] = 'Bearer $accessToken';
+      final http.Request request =
+          http.Request(method, _uri(path))
+            ..headers['Accept'] = 'application/json'
+            ..headers['Authorization'] = 'Bearer $accessToken';
       if (body != null) {
         request.headers['Content-Type'] = 'application/json';
         request.body = jsonEncode(body);
       }
-      final http.StreamedResponse response =
-          await client.send(request).timeout(const Duration(seconds: 8));
+      final http.StreamedResponse response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 8));
       final String text = await response.stream.bytesToString();
       final Object? decoded =
           text.trim().isEmpty ? <String, Object?>{} : jsonDecode(text);
@@ -1252,19 +1341,24 @@ class GodModeAdminApi {
     }
   }
 
-  Future<List<Object?>> _requestList(String method, String path,
-      {Object? body}) async {
+  Future<List<Object?>> _requestList(
+    String method,
+    String path, {
+    Object? body,
+  }) async {
     final http.Client client = http.Client();
     try {
-      final http.Request request = http.Request(method, _uri(path))
-        ..headers['Accept'] = 'application/json'
-        ..headers['Authorization'] = 'Bearer $accessToken';
+      final http.Request request =
+          http.Request(method, _uri(path))
+            ..headers['Accept'] = 'application/json'
+            ..headers['Authorization'] = 'Bearer $accessToken';
       if (body != null) {
         request.headers['Content-Type'] = 'application/json';
         request.body = jsonEncode(body);
       }
-      final http.StreamedResponse response =
-          await client.send(request).timeout(const Duration(seconds: 8));
+      final http.StreamedResponse response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 8));
       final String text = await response.stream.bytesToString();
       final Object? decoded =
           text.trim().isEmpty ? <Object?>[] : jsonDecode(text);
@@ -1293,11 +1387,15 @@ class GodModeAdminApi {
     required String newPassword,
     required String confirmNewPassword,
   }) async {
-    await _request('POST', '/api/auth/change-password', body: <String, Object?>{
-      'current_password': currentPassword,
-      'new_password': newPassword,
-      'confirm_new_password': confirmNewPassword,
-    });
+    await _request(
+      'POST',
+      '/api/auth/change-password',
+      body: <String, Object?>{
+        'current_password': currentPassword,
+        'new_password': newPassword,
+        'confirm_new_password': confirmNewPassword,
+      },
+    );
   }
 
   Future<void> updateCommissions({
@@ -1308,26 +1406,34 @@ class GodModeAdminApi {
     required double minimumWithdrawalFeeCredits,
     required String reason,
   }) async {
-    await _request('PUT', '/api/admin/god-mode/commissions',
-        body: <String, Object?>{
-          'buy_commission_bps': buyCommissionBps,
-          'sell_commission_bps': sellCommissionBps,
-          'instant_sell_fee_bps': instantSellFeeBps,
-          'withdrawal_fee_bps': withdrawalFeeBps,
-          'minimum_withdrawal_fee_credits': minimumWithdrawalFeeCredits,
-          'reason': reason,
-        });
+    await _request(
+      'PUT',
+      '/api/admin/god-mode/commissions',
+      body: <String, Object?>{
+        'buy_commission_bps': buyCommissionBps,
+        'sell_commission_bps': sellCommissionBps,
+        'instant_sell_fee_bps': instantSellFeeBps,
+        'withdrawal_fee_bps': withdrawalFeeBps,
+        'minimum_withdrawal_fee_credits': minimumWithdrawalFeeCredits,
+        'reason': reason,
+      },
+    );
   }
 
-  Future<void> updatePaymentRails(List<PaymentRail> rails,
-      {required String reason}) async {
-    await _request('PUT', '/api/admin/god-mode/payment-rails',
-        body: <String, Object?>{
-          'reason': reason,
-          'rails': rails
-              .map((PaymentRail rail) => rail.toJson())
-              .toList(growable: false),
-        });
+  Future<void> updatePaymentRails(
+    List<PaymentRail> rails, {
+    required String reason,
+  }) async {
+    await _request(
+      'PUT',
+      '/api/admin/god-mode/payment-rails',
+      body: <String, Object?>{
+        'reason': reason,
+        'rails': rails
+            .map((PaymentRail rail) => rail.toJson())
+            .toList(growable: false),
+      },
+    );
   }
 
   Future<void> updateWithdrawalControls({
@@ -1338,26 +1444,32 @@ class GodModeAdminApi {
     required bool payoutsViaBankTransfer,
     required String reason,
   }) async {
-    await _request('PUT', '/api/admin/god-mode/withdrawal-controls',
-        body: <String, Object?>{
-          'egame_withdrawals_enabled': egameWithdrawalsEnabled,
-          'trade_withdrawals_enabled': tradeWithdrawalsEnabled,
-          'processor_mode': processorMode,
-          'deposits_via_bank_transfer': depositsViaBankTransfer,
-          'payouts_via_bank_transfer': payoutsViaBankTransfer,
-          'reason': reason,
-        });
+    await _request(
+      'PUT',
+      '/api/admin/god-mode/withdrawal-controls',
+      body: <String, Object?>{
+        'egame_withdrawals_enabled': egameWithdrawalsEnabled,
+        'trade_withdrawals_enabled': tradeWithdrawalsEnabled,
+        'processor_mode': processorMode,
+        'deposits_via_bank_transfer': depositsViaBankTransfer,
+        'payouts_via_bank_transfer': payoutsViaBankTransfer,
+        'reason': reason,
+      },
+    );
   }
 
   Future<void> updateCompetitionControls({
     required double prizePoolTopupPct,
     required String reason,
   }) async {
-    await _request('PUT', '/api/admin/god-mode/competition-controls',
-        body: <String, Object?>{
-          'prize_pool_topup_pct': prizePoolTopupPct,
-          'reason': reason,
-        });
+    await _request(
+      'PUT',
+      '/api/admin/god-mode/competition-controls',
+      body: <String, Object?>{
+        'prize_pool_topup_pct': prizePoolTopupPct,
+        'reason': reason,
+      },
+    );
   }
 
   Future<void> executeLiquidityIntervention({
@@ -1369,16 +1481,19 @@ class GodModeAdminApi {
     required String reason,
     required String confirmationText,
   }) async {
-    await _request('POST', '/api/admin/god-mode/liquidity/interventions',
-        body: <String, Object?>{
-          'action': action,
-          'user_id': userId,
-          'player_id': playerId,
-          'quantity': quantity,
-          'unit_price_credits': unitPriceCredits,
-          'reason': reason,
-          'confirmation_text': confirmationText,
-        });
+    await _request(
+      'POST',
+      '/api/admin/god-mode/liquidity/interventions',
+      body: <String, Object?>{
+        'action': action,
+        'user_id': userId,
+        'player_id': playerId,
+        'quantity': quantity,
+        'unit_price_credits': unitPriceCredits,
+        'reason': reason,
+        'confirmation_text': confirmationText,
+      },
+    );
   }
 
   Future<void> updateWithdrawal({
@@ -1386,8 +1501,11 @@ class GodModeAdminApi {
     required String status,
     String? notes,
   }) async {
-    await _request('PATCH', '/api/admin/god-mode/withdrawals/$payoutRequestId',
-        body: <String, Object?>{'status': status, 'notes': notes});
+    await _request(
+      'PATCH',
+      '/api/admin/god-mode/withdrawals/$payoutRequestId',
+      body: <String, Object?>{'status': status, 'notes': notes},
+    );
   }
 
   Future<void> createTreasuryWithdrawal({
@@ -1397,14 +1515,17 @@ class GodModeAdminApi {
     required String reason,
     required String confirmationText,
   }) async {
-    await _request('POST', '/api/admin/god-mode/treasury/withdrawals',
-        body: <String, Object?>{
-          'unit': unit,
-          'amount': amount,
-          'destination_reference': destinationReference,
-          'reason': reason,
-          'confirmation_text': confirmationText,
-        });
+    await _request(
+      'POST',
+      '/api/admin/god-mode/treasury/withdrawals',
+      body: <String, Object?>{
+        'unit': unit,
+        'amount': amount,
+        'destination_reference': destinationReference,
+        'reason': reason,
+        'confirmation_text': confirmationText,
+      },
+    );
   }
 
   String _decodeError(Object? decoded) {
@@ -1454,20 +1575,25 @@ class GodModeBootstrap {
       paymentRails: _list(json['payment_rails'])
           .map((Object? value) => PaymentRail.fromJson(_map(value)))
           .toList(growable: true),
-      withdrawalControls:
-          WithdrawalControls.fromJson(_map(json['withdrawal_controls'])),
-      competitionControls:
-          CompetitionControls.fromJson(_map(json['competition_controls'])),
+      withdrawalControls: WithdrawalControls.fromJson(
+        _map(json['withdrawal_controls']),
+      ),
+      competitionControls: CompetitionControls.fromJson(
+        _map(json['competition_controls']),
+      ),
       treasury: TreasurySummary.fromJson(_map(json['treasury'])),
       withdrawals: _list(json['withdrawals'])
           .map((Object? value) => WithdrawalItem.fromJson(_map(value)))
           .toList(growable: false),
-      withdrawalSummary:
-          WithdrawalSummary.fromJson(_map(json['withdrawal_summary'])),
-      paymentRailHealth:
-          PaymentRailHealth.fromJson(_map(json['payment_rail_health'])),
-      treasuryDashboard:
-          TreasuryDashboard.fromJson(_map(json['treasury_dashboard'])),
+      withdrawalSummary: WithdrawalSummary.fromJson(
+        _map(json['withdrawal_summary']),
+      ),
+      paymentRailHealth: PaymentRailHealth.fromJson(
+        _map(json['payment_rail_health']),
+      ),
+      treasuryDashboard: TreasuryDashboard.fromJson(
+        _map(json['treasury_dashboard']),
+      ),
       highRiskActions: _list(json['high_risk_actions'])
           .map((Object? value) => HighRiskAction.fromJson(_map(value)))
           .toList(growable: false),
@@ -1485,11 +1611,11 @@ class GodModeProfile {
   final List<String> permissions;
 
   factory GodModeProfile.fromJson(Map<String, Object?> json) => GodModeProfile(
-        roleName: (json['role_name'] ?? 'god_mode').toString(),
-        permissions: _list(json['permissions'])
-            .map((Object? value) => value.toString())
-            .toList(growable: false),
-      );
+    roleName: (json['role_name'] ?? 'scoped_admin').toString(),
+    permissions: _list(
+      json['permissions'],
+    ).map((Object? value) => value.toString()).toList(growable: false),
+  );
 }
 
 class CommissionSettings {
@@ -1513,8 +1639,9 @@ class CommissionSettings {
         sellCommissionBps: (json['sell_commission_bps'] ?? 0) as int,
         instantSellFeeBps: (json['instant_sell_fee_bps'] ?? 0) as int,
         withdrawalFeeBps: (json['withdrawal_fee_bps'] ?? 0) as int,
-        minimumWithdrawalFeeCredits:
-            _num(json['minimum_withdrawal_fee_credits']),
+        minimumWithdrawalFeeCredits: _num(
+          json['minimum_withdrawal_fee_credits'],
+        ),
       );
 }
 
@@ -1534,20 +1661,20 @@ class PaymentRail {
   String? maintenanceMessage;
 
   factory PaymentRail.fromJson(Map<String, Object?> json) => PaymentRail(
-        provider: (json['provider'] ?? '').toString(),
-        depositsEnabled: json['deposits_enabled'] as bool? ?? true,
-        withdrawalsEnabled: json['withdrawals_enabled'] as bool? ?? true,
-        isLive: json['is_live'] as bool? ?? true,
-        maintenanceMessage: json['maintenance_message'] as String?,
-      );
+    provider: (json['provider'] ?? '').toString(),
+    depositsEnabled: json['deposits_enabled'] as bool? ?? true,
+    withdrawalsEnabled: json['withdrawals_enabled'] as bool? ?? true,
+    isLive: json['is_live'] as bool? ?? true,
+    maintenanceMessage: json['maintenance_message'] as String?,
+  );
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'provider': provider,
-        'deposits_enabled': depositsEnabled,
-        'withdrawals_enabled': withdrawalsEnabled,
-        'is_live': isLive,
-        'maintenance_message': maintenanceMessage,
-      };
+    'provider': provider,
+    'deposits_enabled': depositsEnabled,
+    'withdrawals_enabled': withdrawalsEnabled,
+    'is_live': isLive,
+    'maintenance_message': maintenanceMessage,
+  };
 }
 
 class WithdrawalControls {
@@ -1565,19 +1692,18 @@ class WithdrawalControls {
   final bool depositsViaBankTransfer;
   final bool payoutsViaBankTransfer;
 
-  factory WithdrawalControls.fromJson(Map<String, Object?> json) =>
-      WithdrawalControls(
-        egameWithdrawalsEnabled:
-            json['egame_withdrawals_enabled'] as bool? ?? false,
-        tradeWithdrawalsEnabled:
-            json['trade_withdrawals_enabled'] as bool? ?? true,
-        processorMode:
-            (json['processor_mode'] ?? 'manual_bank_transfer').toString(),
-        depositsViaBankTransfer:
-            json['deposits_via_bank_transfer'] as bool? ?? true,
-        payoutsViaBankTransfer:
-            json['payouts_via_bank_transfer'] as bool? ?? true,
-      );
+  factory WithdrawalControls.fromJson(
+    Map<String, Object?> json,
+  ) => WithdrawalControls(
+    egameWithdrawalsEnabled:
+        json['egame_withdrawals_enabled'] as bool? ?? false,
+    tradeWithdrawalsEnabled: json['trade_withdrawals_enabled'] as bool? ?? true,
+    processorMode:
+        (json['processor_mode'] ?? 'manual_bank_transfer').toString(),
+    depositsViaBankTransfer:
+        json['deposits_via_bank_transfer'] as bool? ?? true,
+    payoutsViaBankTransfer: json['payouts_via_bank_transfer'] as bool? ?? true,
+  );
 }
 
 class CompetitionControls {
@@ -1641,9 +1767,9 @@ class PaymentRailHealth {
         depositsEnabledCount: (json['deposits_enabled_count'] ?? 0) as int,
         withdrawalsEnabledCount:
             (json['withdrawals_enabled_count'] ?? 0) as int,
-        pausedProviders: _list(json['paused_providers'])
-            .map((Object? value) => value.toString())
-            .toList(growable: false),
+        pausedProviders: _list(
+          json['paused_providers'],
+        ).map((Object? value) => value.toString()).toList(growable: false),
       );
 }
 
@@ -1662,17 +1788,17 @@ class TreasuryDashboard {
   final int openManagerListingCount;
   final int settledManagerTradeCount;
 
-  factory TreasuryDashboard.fromJson(Map<String, Object?> json) =>
-      TreasuryDashboard(
-        platformCreditBalance: _num(json['platform_credit_balance']),
-        platformCoinBalance: _num(json['platform_coin_balance']),
-        managerTradeFeeRevenueCredits:
-            _num(json['manager_trade_fee_revenue_credits']),
-        openManagerListingCount:
-            (json['open_manager_listing_count'] ?? 0) as int,
-        settledManagerTradeCount:
-            (json['settled_manager_trade_count'] ?? 0) as int,
-      );
+  factory TreasuryDashboard.fromJson(
+    Map<String, Object?> json,
+  ) => TreasuryDashboard(
+    platformCreditBalance: _num(json['platform_credit_balance']),
+    platformCoinBalance: _num(json['platform_coin_balance']),
+    managerTradeFeeRevenueCredits: _num(
+      json['manager_trade_fee_revenue_credits'],
+    ),
+    openManagerListingCount: (json['open_manager_listing_count'] ?? 0) as int,
+    settledManagerTradeCount: (json['settled_manager_trade_count'] ?? 0) as int,
+  );
 }
 
 class HighRiskAction {
@@ -1687,17 +1813,14 @@ class HighRiskAction {
   final String integrityNote;
 
   factory HighRiskAction.fromJson(Map<String, Object?> json) => HighRiskAction(
-        label: (json['label'] ?? '').toString(),
-        requiredPermission: (json['required_permission'] ?? '').toString(),
-        integrityNote: (json['integrity_note'] ?? '').toString(),
-      );
+    label: (json['label'] ?? '').toString(),
+    requiredPermission: (json['required_permission'] ?? '').toString(),
+    integrityNote: (json['integrity_note'] ?? '').toString(),
+  );
 }
 
 class TreasurySummary {
-  TreasurySummary({
-    required this.balances,
-    required this.liquidityInventory,
-  });
+  TreasurySummary({required this.balances, required this.liquidityInventory});
 
   final List<TreasuryBalance> balances;
   final List<LiquidityInventoryItem> liquidityInventory;
@@ -1709,7 +1832,8 @@ class TreasurySummary {
             .toList(growable: false),
         liquidityInventory: _list(json['liquidity_inventory'])
             .map(
-                (Object? value) => LiquidityInventoryItem.fromJson(_map(value)))
+              (Object? value) => LiquidityInventoryItem.fromJson(_map(value)),
+            )
             .toList(growable: false),
       );
 }
@@ -1775,17 +1899,17 @@ class WithdrawalItem {
   final String destinationReference;
 
   factory WithdrawalItem.fromJson(Map<String, Object?> json) => WithdrawalItem(
-        payoutRequestId: (json['payout_request_id'] ?? '').toString(),
-        userId: (json['user_id'] ?? '').toString(),
-        username: json['username'] as String?,
-        amount: _num(json['amount']),
-        feeAmount: _num(json['fee_amount']),
-        totalDebit: _num(json['total_debit']),
-        sourceScope: (json['source_scope'] ?? 'trade').toString(),
-        unit: (json['unit'] ?? '').toString(),
-        status: (json['status'] ?? '').toString(),
-        destinationReference: (json['destination_reference'] ?? '').toString(),
-      );
+    payoutRequestId: (json['payout_request_id'] ?? '').toString(),
+    userId: (json['user_id'] ?? '').toString(),
+    username: json['username'] as String?,
+    amount: _num(json['amount']),
+    feeAmount: _num(json['fee_amount']),
+    totalDebit: _num(json['total_debit']),
+    sourceScope: (json['source_scope'] ?? 'trade').toString(),
+    unit: (json['unit'] ?? '').toString(),
+    status: (json['status'] ?? '').toString(),
+    destinationReference: (json['destination_reference'] ?? '').toString(),
+  );
 }
 
 class AuditEvent {
@@ -1802,11 +1926,11 @@ class AuditEvent {
   final Map<String, Object?> payload;
 
   factory AuditEvent.fromJson(Map<String, Object?> json) => AuditEvent(
-        eventType: (json['event_type'] ?? '').toString(),
-        summary: (json['summary'] ?? '').toString(),
-        createdAt: (json['created_at'] ?? '').toString(),
-        payload: _auditPayload(json),
-      );
+    eventType: (json['event_type'] ?? '').toString(),
+    summary: (json['summary'] ?? '').toString(),
+    createdAt: (json['created_at'] ?? '').toString(),
+    payload: _auditPayload(json),
+  );
 }
 
 Map<String, Object?> _auditPayload(Map<String, Object?> json) {
@@ -1830,8 +1954,9 @@ Map<String, Object?> _map(Object? value) {
     return value;
   }
   if (value is Map) {
-    return value
-        .map((Object? key, Object? item) => MapEntry(key.toString(), item));
+    return value.map(
+      (Object? key, Object? item) => MapEntry(key.toString(), item),
+    );
   }
   return <String, Object?>{};
 }

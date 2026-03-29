@@ -3,60 +3,121 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/core/theme/app_theme.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/features/match/live_match_overview_provider.dart';
 import 'package:gte_frontend/features/match/match_screen.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
+import 'package:gte_frontend/shared/models/data_source_status.dart';
+import 'package:gte_frontend/shared/providers/auth_provider.dart';
+import 'package:gte_frontend/shared/widgets/data_source_badge.dart';
 
 void main() {
-  testWidgets(
-    'match screen renders broadcast layers and draggable stats panel',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1440, 1200);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: AppTheme.dark(),
-            home: const Scaffold(body: MatchScreen()),
+  testWidgets('match screen renders live broadcast-home matches honestly', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          initialAuthSessionProvider.overrideWithValue(
+            const AuthSession(
+              userId: 'user-1',
+              accessToken: 'token-1',
+              sessionId: 'session-1',
+              role: 'admin',
+            ),
           ),
+          liveMatchOverviewRepositoryProvider.overrideWithValue(
+            const _FakeLiveMatchOverviewRepository(
+              overview: LiveMatchOverview(
+                entries: <LiveMatchOverviewEntry>[
+                  LiveMatchOverviewEntry(
+                    matchKey: 'live-match-001',
+                    title: 'Derby Live',
+                    subtitle: 'Main event from the featured channel.',
+                    channelLabel: 'GTEX Prime',
+                    isFeatured: true,
+                    isLive: true,
+                  ),
+                ],
+                generatedAt: null,
+                sourcePath: '/api/broadcast/home',
+              ),
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const Scaffold(body: MatchScreen()),
         ),
-      );
+      ),
+    );
 
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('match-broadcast-placeholder')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('match-score-overlay')), findsOneWidget);
-      expect(find.byKey(const Key('match-push-overlay')), findsOneWidget);
-      expect(find.byKey(const Key('match-commentary-bar')), findsOneWidget);
-      expect(find.byKey(const Key('match-stats-panel')), findsOneWidget);
-      expect(find.text('BUILD'), findsWidgets);
-      expect(find.text('Live Win %'), findsOneWidget);
+    expect(find.text('Derby Live'), findsOneWidget);
+    expect(find.text('GTEX Prime'), findsOneWidget);
+    expect(find.text('Open 2D'), findsOneWidget);
+    expect(find.text('Open Broadcast+'), findsOneWidget);
+    expect(find.text('Open 3D'), findsOneWidget);
+    expect(find.text('Open spectate probe'), findsOneWidget);
+  });
 
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pumpAndSettle();
+  testWidgets('match screen shows blocked state with no fake live fallback', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          initialAuthSessionProvider.overrideWithValue(
+            const AuthSession(
+              userId: 'user-1',
+              accessToken: 'token-1',
+              sessionId: 'session-1',
+              role: 'admin',
+            ),
+          ),
+          liveMatchOverviewRepositoryProvider.overrideWithValue(
+            const _FakeLiveMatchOverviewRepository(
+              error: GteApiException(
+                type: GteApiErrorType.unavailable,
+                message: 'Broadcast home is unavailable.',
+              ),
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const Scaffold(body: MatchScreen()),
+        ),
+      ),
+    );
 
-      expect(find.text('LIVE'), findsWidgets);
+    await tester.pumpAndSettle();
 
-      await tester.drag(
-        find.byKey(const Key('match-stats-handle')),
-        const Offset(0, -220),
-      );
-      await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is DataSourceBadge &&
+            widget.status == DataSourceStatus.blocked,
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Open spectate probe'), findsOneWidget);
+    expect(find.text('Derby Live'), findsNothing);
+  });
+}
 
-      expect(find.text('Match Stats'), findsOneWidget);
-      expect(find.text('Market Pulse'), findsOneWidget);
-      expect(find.text('Event Tape'), findsOneWidget);
-      expect(find.text('Push Signal'), findsOneWidget);
-      expect(find.text('Other Live Windows'), findsOneWidget);
+class _FakeLiveMatchOverviewRepository implements LiveMatchOverviewRepository {
+  const _FakeLiveMatchOverviewRepository({this.overview, this.error});
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
+  final LiveMatchOverview? overview;
+  final Object? error;
+
+  @override
+  Future<LiveMatchOverview> loadOverview() async {
+    if (error != null) {
+      throw error!;
+    }
+    return overview!;
+  }
 }

@@ -22,7 +22,7 @@ class AdminAssignmentView(BaseModel):
 class AdminRoleCatalogView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    default_admin_role: str = "god_mode"
+    default_admin_role: str = "scoped_admin"
     available_roles: dict[str, list[str]] = Field(default_factory=dict)
     assignments: list[AdminAssignmentView] = Field(default_factory=list)
 
@@ -30,7 +30,7 @@ class AdminRoleCatalogView(BaseModel):
 class AdminRoleCatalogUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    default_admin_role: str = "god_mode"
+    default_admin_role: str = "scoped_admin"
     available_roles: dict[str, list[str]] = Field(default_factory=dict)
     assignments: list[AdminAssignmentView] = Field(default_factory=list)
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../features/shared/data/gte_feature_support.dart';
+import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
@@ -33,6 +35,12 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
   Widget build(BuildContext context) {
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     final bool isAdmin = ref.watch(isAdminProvider);
+    final bool isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final bool isDelegatedAdmin = ref.watch(isDelegatedAdminProvider);
+    final bool canAccessGodMode = ref.watch(canAccessGodModeProvider);
+    final String? godModeBlockedReason = ref.watch(
+      godModeBlockedReasonProvider,
+    );
     final AsyncValue<AdminImportOverviewData>? overview =
         authenticated && isAdmin
             ? ref.watch(adminImportOverviewProvider)
@@ -67,6 +75,28 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
+                  Wrap(
+                    spacing: spacingSM,
+                    runSpacing: spacingSM,
+                    children: <Widget>[
+                      Chip(
+                        label: Text(
+                          isSuperAdmin
+                              ? 'SUPER_ADMIN'
+                              : isDelegatedAdmin
+                              ? 'DELEGATED_ADMIN'
+                              : 'ADMIN',
+                        ),
+                      ),
+                      if (!canAccessGodMode)
+                        Chip(
+                          label: Text(
+                            'God Mode ${godModeBlockedReason ?? 'blocked'}',
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: spacingMD),
                   TextField(
                     controller: _providerController,
                     decoration: const InputDecoration(
@@ -87,6 +117,15 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                         onPressed: _busy ? null : _triggerImport,
                         child: const Text('Trigger import'),
                       ),
+                      if (canAccessGodMode)
+                        OutlinedButton(
+                          onPressed:
+                              _busy
+                                  ? null
+                                  : () =>
+                                      context.push(AppRoutes.profileGodMode),
+                          child: const Text('Open God Mode'),
+                        ),
                       OutlinedButton(
                         onPressed: _busy ? null : _resumeSelectedBatch,
                         child: const Text('Resume selected batch'),
@@ -101,6 +140,12 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
               ),
             ),
           ),
+          if (!canAccessGodMode)
+            _BlockedCard(
+              title: 'God Mode is blocked',
+              message: godModeBlockedReason ?? 'missing session claims',
+            ),
+          if (!canAccessGodMode) const SizedBox(height: spacingMD),
           overview!.when(
             data:
                 (AdminImportOverviewData value) => Column(

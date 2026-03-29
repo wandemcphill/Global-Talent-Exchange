@@ -15,6 +15,11 @@ DEFAULT_TEST_DATABASE_URL = (
 )
 
 os.environ.setdefault("GTE_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_ENABLED", "1")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_EMAIL", "vidvimedialtd@gmail.com")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_PASSWORD", "NewPass1234!")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_USERNAME", "vidvimedialtd")
+os.environ.setdefault("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME", "GTEX God Mode Admin")
 
 
 @pytest.fixture(scope="module")

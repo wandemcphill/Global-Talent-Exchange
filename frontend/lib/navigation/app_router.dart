@@ -7,11 +7,17 @@ import '../core/actions/event_service.dart';
 import '../core/theme/app_motion.dart';
 import '../features/competitions/live_competitions_hub_screen.dart';
 import '../features/competitions/live_competitions_provider.dart';
+import '../features/competitions/streamer_tournament_engine_route_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/match/match_3d_route_screen.dart';
+import '../features/match/match_broadcast_screen.dart';
+import '../features/match/match_native_3d_blocked_screen.dart';
 import '../features/match/match_screen.dart';
 import '../features/match/match_simulate_screen.dart';
 import '../features/match/match_spectate_screen.dart';
+import '../features/match/match_viewer_route_screen.dart';
 import '../features/profile/profile_admin_screen.dart';
+import '../features/profile/profile_god_mode_screen.dart';
 import '../features/profile/profile_login_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/profile_signup_screen.dart';
@@ -170,12 +176,30 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                 ),
       ),
       GoRoute(
+        path: AppRoutes.profileGodMode,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const ProfileGodModeScreen(),
+                ),
+      ),
+      GoRoute(
         path: AppRoutes.competitions,
         pageBuilder:
             (BuildContext context, GoRouterState state) =>
                 AppMotion.slidePage<void>(
                   state: state,
                   child: const LiveCompetitionsHubScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.streamerEngine,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const StreamerTournamentEngineRouteScreen(),
                 ),
       ),
       GoRoute(
@@ -203,6 +227,45 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             ),
           );
         },
+      ),
+      GoRoute(
+        path: AppRoutes.matchesViewer,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String matchKey = state.pathParameters['matchKey'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: MatchViewerRouteScreen(matchKey: matchKey),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.matchesBroadcast,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String matchKey = state.pathParameters['matchKey'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: MatchBroadcastScreen(matchKey: matchKey),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.matchesThreeD,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String matchKey = state.pathParameters['matchKey'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: Match3dRouteScreen(matchKey: matchKey),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.matchesNativeThreeD,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const MatchNative3dBlockedScreen(),
+                ),
       ),
       GoRoute(
         path: AppRoutes.matchesSpectate,

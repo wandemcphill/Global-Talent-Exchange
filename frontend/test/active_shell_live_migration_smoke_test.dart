@@ -184,7 +184,7 @@ void main() {
     expect(find.text('West Africa Federation'), findsOneWidget);
   });
 
-  testWidgets('matches hub separates spectate and simulate', (
+  testWidgets('matches hub separates live viewer variants and simulation', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -193,7 +193,21 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Spectate'), findsOneWidget);
+    expect(find.text('2D Viewer'), findsOneWidget);
+    expect(find.text('Broadcast+'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Open Flutter 3D'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Open Flutter 3D'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Simulate'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Simulate'), findsOneWidget);
   });
 

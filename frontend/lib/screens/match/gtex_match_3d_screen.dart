@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
+import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
 
@@ -12,12 +13,20 @@ class GtexMatch3dScreen extends StatelessWidget {
     required this.matchKey,
     this.fallbackSnapshot,
     this.preferFallback = false,
+    this.viewStateLoader,
+    this.continuationLoader,
+    this.entitlement = const Match3dUserEntitlement(),
+    this.engineBridge,
   });
 
   final CompetitionSummary competition;
   final String matchKey;
   final LiveMatchSnapshot? fallbackSnapshot;
   final bool preferFallback;
+  final MatchViewStateLoader? viewStateLoader;
+  final MatchViewContinuationLoader? continuationLoader;
+  final Match3dUserEntitlement entitlement;
+  final Match3DBridge? engineBridge;
 
   @override
   Widget build(BuildContext context) {
@@ -28,8 +37,11 @@ class GtexMatch3dScreen extends StatelessWidget {
       preferFallback: preferFallback,
       presentationMode: MatchViewerPresentationMode.replay,
       renderMode: RenderMode.threeD,
-      entitlement: const Match3dUserEntitlement.proManager(),
+      viewStateLoader: viewStateLoader,
+      continuationLoader: continuationLoader,
+      entitlement: entitlement,
       titleOverride: '3D Match Viewer',
+      engineBridge: engineBridge,
     );
   }
 }

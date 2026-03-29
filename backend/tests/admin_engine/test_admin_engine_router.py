@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
+from app.admin_engine.service import AdminEngineService
+from app.auth.service import AuthService
+from app.models.user import UserRole
+
 
 def _login(client, *, email: str, password: str) -> dict[str, str]:
     response = client.post("/auth/login", json={"email": email, "password": password})
@@ -8,7 +14,30 @@ def _login(client, *, email: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_bootstrap_contains_seeded_defaults(client) -> None:
+@pytest.fixture()
+def admin_headers(client, app_session_factory) -> dict[str, str]:
+    with app_session_factory() as session:
+        AuthService().ensure_admin_user(
+            session,
+            email="admin-engine@example.com",
+            password="SuperSecret1",
+            username="admin_engine",
+            display_name="Admin Engine",
+            role=UserRole.SUPER_ADMIN,
+        )
+        session.commit()
+    return _login(client, email="admin-engine@example.com", password="SuperSecret1")
+
+
+@pytest.fixture()
+def admin_engine_defaults(app_session_factory) -> None:
+    with app_session_factory() as session:
+        service = AdminEngineService(session)
+        service.seed_defaults()
+        session.commit()
+
+
+def test_bootstrap_contains_seeded_defaults(client, admin_engine_defaults) -> None:
     response = client.get("/admin-engine/bootstrap")
     assert response.status_code == 200, response.text
     payload = response.json()
@@ -17,12 +46,14 @@ def test_bootstrap_contains_seeded_defaults(client) -> None:
     assert any(item["rule_key"] == "platform-economy-defaults" for item in payload["active_reward_rules"])
 
 
-def test_admin_can_upsert_feature_flag_and_reward_rule(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
-
+def test_admin_can_upsert_feature_flag_and_reward_rule(
+    client,
+    admin_headers,
+    admin_engine_defaults,
+) -> None:
     feature_response = client.post(
         "/admin/admin-engine/feature-flags",
-        headers=headers,
+        headers=admin_headers,
         json={
             "feature_key": "gift-engine",
             "title": "Gift Engine",
@@ -36,7 +67,7 @@ def test_admin_can_upsert_feature_flag_and_reward_rule(client) -> None:
 
     reward_response = client.post(
         "/admin/admin-engine/reward-rules",
-        headers=headers,
+        headers=admin_headers,
         json={
             "rule_key": "creator-campaign-rules",
             "title": "Creator Campaign Rules",
@@ -66,11 +97,14 @@ def test_admin_can_upsert_feature_flag_and_reward_rule(client) -> None:
     assert reward_response.json()["stability_controls"]["creator_match_gift"]["max_amount"] == "80.0000"
 
 
-def test_admin_schedule_preview_pauses_league_on_world_cup_date(client) -> None:
-    headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
+def test_admin_schedule_preview_pauses_league_on_world_cup_date(
+    client,
+    admin_headers,
+    admin_engine_defaults,
+) -> None:
     response = client.post(
         "/admin/admin-engine/schedule-preview",
-        headers=headers,
+        headers=admin_headers,
         json={
             "requests": [
                 {

@@ -6,9 +6,11 @@ import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/auth_session.dart';
+import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/live_clients_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
+import '../../shared/widgets/data_source_badge.dart';
 
 class ProfileSignupScreen extends ConsumerStatefulWidget {
   const ProfileSignupScreen({super.key});
@@ -42,6 +44,7 @@ class _ProfileSignupScreenState extends ConsumerState<ProfileSignupScreen> {
       title: 'Create Account',
       subtitle:
           'Account creation uses the live auth flow and writes the active-shell session payload directly to the secure session store.',
+      trailing: const DataSourceBadge(status: DataSourceStatus.live),
       children: <Widget>[
         Card(
           child: Padding(

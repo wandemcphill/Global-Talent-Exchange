@@ -14,11 +14,26 @@ class AppRoutes {
   static const String profileLogin = '/profile/login';
   static const String profileSignup = '/profile/signup';
   static const String profileAdmin = '/profile/admin';
+  static const String profileGodMode = '/profile/admin/god-mode';
   static const String competitions = '/competitions';
   static const String competitionsFamily = '/competitions/:family';
   static const String competitionsDetail = '/competitions/:family/:id';
+  static const String streamerEngine = '/competitions/streamer/engine';
+  static const String matchesViewer = '/matches/viewer/:matchKey';
+  static const String matchesBroadcast = '/matches/broadcast/:matchKey';
+  static const String matchesThreeD = '/matches/3d/:matchKey';
+  static const String matchesNativeThreeD = '/matches/native-3d';
   static const String matchesSpectate = '/matches/spectate';
   static const String matchesSimulate = '/matches/simulate';
+
+  static String matchesViewerLocation(String matchKey) =>
+      '/matches/viewer/$matchKey';
+
+  static String matchesBroadcastLocation(String matchKey) =>
+      '/matches/broadcast/$matchKey';
+
+  static String matchesThreeDLocation(String matchKey) =>
+      '/matches/3d/$matchKey';
 }
 
 class AppDestination {

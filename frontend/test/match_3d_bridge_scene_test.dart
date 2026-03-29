@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_3d_scene_graph.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
@@ -110,6 +111,7 @@ CompetitionSummary _buildCompetition({required String id}) {
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: '3D bridge validation fixture',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),
@@ -138,6 +140,9 @@ class _FakeMatch3dBridgeBackend implements Match3dBridgeBackend {
 
   @override
   Stream<dynamic> get events => _controller.stream;
+
+  @override
+  Future<bool> isAvailable() async => true;
 
   @override
   Future<void> handleEvent(Map<String, dynamic> event) async {

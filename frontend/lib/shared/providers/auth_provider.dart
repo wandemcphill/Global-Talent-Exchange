@@ -75,6 +75,34 @@ final Provider<bool> isAdminProvider = Provider<bool>(
   (Ref ref) => ref.watch(authProvider)?.isAdmin ?? false,
 );
 
+final Provider<bool> isSuperAdminProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.isSuperAdmin ?? false,
+);
+
+final Provider<bool> isDelegatedAdminProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.isDelegatedAdmin ?? false,
+);
+
+final Provider<bool> canAccessGodModeProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.canAccessGodMode ?? false,
+);
+
+final Provider<String?> godModeBlockedReasonProvider = Provider<String?>((
+  Ref ref,
+) {
+  final AuthSession? session = ref.watch(authProvider);
+  if (session == null || !session.isAuthenticated) {
+    return 'admin required';
+  }
+  if (!session.isAdmin) {
+    return 'admin required';
+  }
+  if (session.accessToken.trim().isEmpty) {
+    return 'missing session claims';
+  }
+  return null;
+});
+
 final Provider<ClubContext?> clubContextProvider = Provider<ClubContext?>((
   Ref ref,
 ) {
@@ -85,6 +113,16 @@ final Provider<ClubContext?> clubContextProvider = Provider<ClubContext?>((
   }
   return ClubContext(id: clubId, name: session?.clubName);
 });
+
+final Provider<FederationContext?> federationContextProvider =
+    Provider<FederationContext?>((Ref ref) {
+      final AuthSession? session = ref.watch(authProvider);
+      final String? federationId = session?.federationId?.trim();
+      if (federationId == null || federationId.isEmpty) {
+        return null;
+      }
+      return FederationContext(id: federationId, name: session?.federationName);
+    });
 
 final Provider<GteAppConfig> appConfigProvider = Provider<GteAppConfig>(
   (Ref ref) => GteAppConfig.fromEnvironment(),

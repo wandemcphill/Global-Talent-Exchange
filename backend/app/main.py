@@ -18,10 +18,6 @@ from app.core.container import (
 from app.core.module import DomainModule, run_module_hooks
 from app.modules import DOMAIN_MODULES
 
-INITIAL_ADMIN_EMAIL = "vidvimedialtd@gmail.com"
-INITIAL_ADMIN_PASSWORD = "NewPass1234!"
-INITIAL_ADMIN_USERNAME = "vidvimedialtd"
-INITIAL_ADMIN_DISPLAY_NAME = "GTEX God Mode Admin"
 logger = logging.getLogger(__name__)
 _ASGI_APP: FastAPI | None = None
 
@@ -219,7 +215,7 @@ def _run_deferred_startup(
         module_loader_lock = getattr(app.state, "module_loader_lock", None)
         if module_loader_lock is None:
             logger.info("app.startup.initial_admin.begin")
-            _ensure_initial_admin(context.database.session_factory)
+            _ensure_initial_admin(context.settings, context.database.session_factory)
             logger.info("app.startup.initial_admin.complete")
             logger.info("app.startup.module_hooks.begin")
             run_module_hooks(app, context, modules, phase="startup")
@@ -227,7 +223,7 @@ def _run_deferred_startup(
         else:
             with module_loader_lock:
                 logger.info("app.startup.initial_admin.begin")
-                _ensure_initial_admin(context.database.session_factory)
+                _ensure_initial_admin(context.settings, context.database.session_factory)
                 logger.info("app.startup.initial_admin.complete")
                 logger.info("app.startup.module_hooks.begin")
                 run_module_hooks(app, context, modules, phase="startup")
@@ -237,18 +233,33 @@ def _run_deferred_startup(
         logger.exception("app.startup.bootstrap_failed")
 
 
-def _ensure_initial_admin(session_factory: sessionmaker[Session]) -> None:
+def _ensure_initial_admin(
+    settings: Settings,
+    session_factory: sessionmaker[Session],
+) -> None:
     from app.auth.service import AuthService
     from app.models.user import UserRole
 
+    if not settings.bootstrap_admin_enabled:
+        logger.info("app.startup.initial_admin.skipped reason=disabled")
+        return
+    if not settings.bootstrap_admin_email or not settings.bootstrap_admin_password or not settings.bootstrap_admin_username:
+        logger.warning(
+            "app.startup.initial_admin.skipped reason=incomplete_config enabled=%s",
+            settings.bootstrap_admin_enabled,
+        )
+        return
     with session_factory() as session:
         service = AuthService()
         service.ensure_admin_user(
             session,
-            email=INITIAL_ADMIN_EMAIL,
-            password=INITIAL_ADMIN_PASSWORD,
-            username=INITIAL_ADMIN_USERNAME,
-            display_name=INITIAL_ADMIN_DISPLAY_NAME,
+            email=settings.bootstrap_admin_email,
+            password=settings.bootstrap_admin_password,
+            username=settings.bootstrap_admin_username,
+            display_name=(
+                settings.bootstrap_admin_display_name
+                or settings.bootstrap_admin_username
+            ),
             role=UserRole.SUPER_ADMIN,
         )
         session.commit()

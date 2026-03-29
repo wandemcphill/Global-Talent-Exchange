@@ -51,9 +51,11 @@ from .schemas import (
 
 ADMIN_GODMODE_FILE = "admin_god_mode.json"
 AUDIT_LOG_FILE = "admin_god_mode.audit.jsonl"
+GOD_MODE_ROLE_NAME = "god_mode"
+SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
-    "god_mode": [
+    GOD_MODE_ROLE_NAME: [
         "manage_admin_roles",
         "manage_commissions",
         "manage_payment_rails",
@@ -80,6 +82,7 @@ DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
         "manage_withdrawals",
         "view_audit_log",
     ],
+    SCOPED_ADMIN_ROLE_NAME: [],
 }
 
 DEFAULT_PAYMENT_RAILS: list[dict[str, Any]] = [
@@ -197,7 +200,7 @@ class AdminGodModeService:
         state = self._load_state(app)
         profile = self.resolve_profile(actor, state)
         self._assert_has_permission(profile, "manage_admin_roles")
-        state["roles"] = payload.model_dump(mode="json")
+        state["roles"] = self._normalize_roles_block(payload.model_dump(mode="json"))
         self._save_state(app, state)
         self._append_audit(
             app,
@@ -763,22 +766,44 @@ class AdminGodModeService:
         return items
 
     def resolve_profile(self, actor: User, state: dict[str, Any]) -> GodModeProfileView:
-        roles_block = state["roles"]
+        roles_block = self._normalize_roles_block(state.get("roles") or {})
         available_roles = dict(roles_block.get("available_roles") or DEFAULT_ROLE_PERMISSIONS)
+        if actor.role.value == "super_admin":
+            permissions = sorted(set(available_roles.get(GOD_MODE_ROLE_NAME, [])))
+            return GodModeProfileView(
+                subject_key=actor.id,
+                role_name=GOD_MODE_ROLE_NAME,
+                permissions=permissions,
+                can_directly_set_price=False,
+                can_edit_results=False,
+            )
+
         assignments = roles_block.get("assignments") or []
-        subject_options = (actor.id, actor.email.lower(), actor.username.lower())
-        role_name = roles_block.get("default_admin_role") or "god_mode"
+        subject_keys = {
+            option.lower()
+            for option in (actor.id, actor.email, actor.username)
+            if isinstance(option, str) and option.strip()
+        }
+        role_name = str(
+            roles_block.get("default_admin_role") or SCOPED_ADMIN_ROLE_NAME,
+        )
+        if role_name not in available_roles:
+            role_name = SCOPED_ADMIN_ROLE_NAME
         permissions = list(available_roles.get(role_name, []))
         for assignment in assignments:
-            if not assignment.get("is_enabled", True):
-                continue
             subject_key = str(assignment.get("subject_key") or "").strip().lower()
-            if subject_key and subject_key in {option.lower() for option in subject_options if isinstance(option, str)}:
-                role_name = str(assignment.get("role_name") or role_name)
-                permissions = list(available_roles.get(role_name, []))
-                permissions.extend(str(item) for item in assignment.get("permissions") or [])
+            if not subject_key or subject_key not in subject_keys:
+                continue
+            role_name = str(assignment.get("role_name") or SCOPED_ADMIN_ROLE_NAME)
+            if role_name not in available_roles:
+                role_name = SCOPED_ADMIN_ROLE_NAME
+            if not assignment.get("is_enabled", True):
+                permissions = []
                 break
-        permissions = sorted(set(permissions))
+            permissions = list(available_roles.get(role_name, []))
+            permissions.extend(str(item) for item in assignment.get("permissions") or [])
+            break
+        permissions = sorted({permission for permission in permissions if permission})
         return GodModeProfileView(
             subject_key=actor.id,
             role_name=role_name,
@@ -826,7 +851,11 @@ class AdminGodModeService:
             state = self._default_state()
             self._save_state(app, state)
             return state
-        return json.loads(path.read_text(encoding="utf-8"))
+        state = json.loads(path.read_text(encoding="utf-8"))
+        normalized = self._normalize_state(state)
+        if normalized != state:
+            self._save_state(app, normalized)
+        return normalized
 
     def _save_state(self, app: FastAPI, state: dict[str, Any]) -> None:
         path = self._state_path(app)
@@ -836,7 +865,7 @@ class AdminGodModeService:
     def _default_state(self) -> dict[str, Any]:
         return {
             "roles": {
-                "default_admin_role": "god_mode",
+                "default_admin_role": SCOPED_ADMIN_ROLE_NAME,
                 "available_roles": DEFAULT_ROLE_PERMISSIONS,
                 "assignments": [],
             },
@@ -846,6 +875,58 @@ class AdminGodModeService:
             "competition_controls": DEFAULT_COMPETITION_CONTROLS,
             "liquidity_interventions": [],
             "treasury_withdrawals": [],
+        }
+
+    def _normalize_state(self, state: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(state)
+        normalized["roles"] = self._normalize_roles_block(state.get("roles") or {})
+        return normalized
+
+    def _normalize_roles_block(self, roles_block: dict[str, Any]) -> dict[str, Any]:
+        available_roles = {
+            role_name: list(permissions)
+            for role_name, permissions in DEFAULT_ROLE_PERMISSIONS.items()
+        }
+        for role_name, permissions in dict(roles_block.get("available_roles") or {}).items():
+            available_roles[str(role_name)] = [str(item) for item in permissions or []]
+        available_roles.setdefault(SCOPED_ADMIN_ROLE_NAME, [])
+        default_admin_role = str(
+            roles_block.get("default_admin_role") or SCOPED_ADMIN_ROLE_NAME,
+        ).strip()
+        if not default_admin_role or default_admin_role == GOD_MODE_ROLE_NAME:
+            default_admin_role = SCOPED_ADMIN_ROLE_NAME
+        if default_admin_role not in available_roles:
+            default_admin_role = SCOPED_ADMIN_ROLE_NAME
+        assignments: list[dict[str, Any]] = []
+        for assignment in roles_block.get("assignments") or []:
+            if not isinstance(assignment, dict):
+                continue
+            role_name = str(
+                assignment.get("role_name") or SCOPED_ADMIN_ROLE_NAME,
+            ).strip() or SCOPED_ADMIN_ROLE_NAME
+            if role_name not in available_roles:
+                role_name = SCOPED_ADMIN_ROLE_NAME
+            assignments.append(
+                {
+                    "subject_key": str(assignment.get("subject_key") or "").strip(),
+                    "role_name": role_name,
+                    "permissions": [
+                        str(item).strip()
+                        for item in assignment.get("permissions") or []
+                        if str(item).strip()
+                    ],
+                    "is_enabled": bool(assignment.get("is_enabled", True)),
+                    **(
+                        {"notes": str(assignment.get("notes"))}
+                        if assignment.get("notes") is not None
+                        else {}
+                    ),
+                }
+            )
+        return {
+            "default_admin_role": default_admin_role,
+            "available_roles": available_roles,
+            "assignments": assignments,
         }
 
     def _append_audit(

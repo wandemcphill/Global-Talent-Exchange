@@ -6,9 +6,11 @@ import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/auth_session.dart';
+import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/live_clients_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
+import '../../shared/widgets/data_source_badge.dart';
 
 class ProfileLoginScreen extends ConsumerStatefulWidget {
   const ProfileLoginScreen({super.key});
@@ -37,6 +39,7 @@ class _ProfileLoginScreenState extends ConsumerState<ProfileLoginScreen> {
       title: 'Sign In',
       subtitle:
           'This screen uses the live auth client and persists the richer active-shell session context.',
+      trailing: const DataSourceBadge(status: DataSourceStatus.live),
       children: <Widget>[
         Card(
           child: Padding(

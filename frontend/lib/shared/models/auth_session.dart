@@ -9,6 +9,8 @@ class AuthSession {
     this.displayName,
     this.clubId,
     this.clubName,
+    this.federationId,
+    this.federationName,
     this.rawJson = const <String, Object?>{},
   });
 
@@ -21,19 +23,46 @@ class AuthSession {
   final String? displayName;
   final String? clubId;
   final String? clubName;
+  final String? federationId;
+  final String? federationName;
   final Map<String, Object?> rawJson;
 
   bool get isAuthenticated => accessToken.trim().isNotEmpty;
 
-  bool get isAdmin {
-    final String normalizedRole = role.trim().toLowerCase();
-    if (<String>{'admin', 'super_admin'}.contains(normalizedRole)) {
-      return true;
+  String get normalizedRole => role.trim().toLowerCase();
+
+  Set<String> get normalizedPermissions =>
+      permissions
+          .map((String value) => value.trim().toLowerCase())
+          .where((String value) => value.isNotEmpty)
+          .toSet();
+
+  bool get isSuperAdmin =>
+      normalizedRole == 'super_admin' || normalizedRole == 'god_mode';
+
+  bool get isDelegatedAdmin =>
+      normalizedRole == 'admin' || normalizedRole == 'scoped_admin';
+
+  bool get isAdmin => isSuperAdmin || isDelegatedAdmin;
+
+  bool hasPermission(String permission) {
+    final String normalized = permission.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
     }
-    return permissions.any(
-      (String value) => value.trim().toLowerCase().contains('admin'),
-    );
+    return normalizedPermissions.contains(normalized);
   }
+
+  bool hasAnyPermission(Iterable<String> values) {
+    for (final String value in values) {
+      if (hasPermission(value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool get canAccessGodMode => isAuthenticated && isAdmin;
 
   String get resolvedUserName {
     final String? display = displayName?.trim();
@@ -62,6 +91,7 @@ class AuthSession {
       if (user.isNotEmpty) 'user': user,
     };
     final _ResolvedClub? club = _resolveClub(mergedRaw, user);
+    final _ResolvedFederation? federation = _resolveFederation(mergedRaw, user);
     return AuthSession(
       userId:
           _firstString(mergedRaw, const <String>['user_id', 'userId', 'id']) ??
@@ -101,6 +131,8 @@ class AuthSession {
           ]),
       clubId: club?.id,
       clubName: club?.displayName,
+      federationId: federation?.id,
+      federationName: federation?.displayName,
       rawJson: Map<String, Object?>.unmodifiable(mergedRaw),
     );
   }
@@ -132,6 +164,8 @@ class AuthSession {
     String? displayName,
     String? clubId,
     String? clubName,
+    String? federationId,
+    String? federationName,
     Map<String, Object?>? rawJson,
   }) {
     return AuthSession(
@@ -144,6 +178,8 @@ class AuthSession {
       displayName: displayName ?? this.displayName,
       clubId: clubId ?? this.clubId,
       clubName: clubName ?? this.clubName,
+      federationId: federationId ?? this.federationId,
+      federationName: federationName ?? this.federationName,
       rawJson: rawJson ?? this.rawJson,
     );
   }
@@ -159,6 +195,8 @@ class AuthSession {
       if (displayName != null) 'display_name': displayName,
       if (clubId != null) 'club_id': clubId,
       if (clubName != null) 'club_name': clubName,
+      if (federationId != null) 'federation_id': federationId,
+      if (federationName != null) 'federation_name': federationName,
       'raw_json': rawJson,
     };
   }
@@ -166,6 +204,13 @@ class AuthSession {
 
 class ClubContext {
   const ClubContext({required this.id, this.name});
+
+  final String id;
+  final String? name;
+}
+
+class FederationContext {
+  const FederationContext({required this.id, this.name});
 
   final String id;
   final String? name;
@@ -265,6 +310,47 @@ _ResolvedClub? _clubFromActiveOrganization(Map<String, Object?> source) {
   );
 }
 
+_ResolvedFederation? _resolveFederation(
+  Map<String, Object?> source,
+  Map<String, Object?> user,
+) {
+  final List<Map<String, Object?>> sources = <Map<String, Object?>>[
+    source,
+    if (user.isNotEmpty) user,
+  ];
+  for (final Map<String, Object?> current in sources) {
+    final _ResolvedFederation? candidate = _mergeFederationCandidates(
+      _federationFromFields(
+        current,
+        idKeys: const <String>[
+          'federation_id',
+          'federationId',
+          'current_federation_id',
+        ],
+        nameKeys: const <String>[
+          'federation_name',
+          'federationName',
+          'current_federation_name',
+        ],
+        slugKeys: const <String>[
+          'federation_slug',
+          'federationSlug',
+          'current_federation_slug',
+        ],
+      ),
+      _federationFromObject(current['federation']),
+      _federationFromObject(
+        current['current_federation'] ?? current['currentFederation'],
+      ),
+      _federationFromActiveOrganization(current),
+    );
+    if (candidate != null) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 _ResolvedClub? _clubFromMemberships(Map<String, Object?> source) {
   for (final String key in const <String>[
     'memberships',
@@ -324,6 +410,47 @@ _ResolvedClub? _clubFromFields(
   );
 }
 
+_ResolvedFederation? _federationFromActiveOrganization(
+  Map<String, Object?> source,
+) {
+  final String? type = _firstString(source, const <String>[
+    'active_organization_type',
+    'activeOrganizationType',
+  ]);
+  if (type != null && type.toLowerCase() != 'federation') {
+    return null;
+  }
+  return _federationFromFields(
+    source,
+    idKeys: const <String>['active_organization_id', 'activeOrganizationId'],
+    nameKeys: const <String>[
+      'active_organization_name',
+      'activeOrganizationName',
+    ],
+    slugKeys: const <String>[
+      'active_organization_slug',
+      'activeOrganizationSlug',
+    ],
+  );
+}
+
+_ResolvedFederation? _federationFromFields(
+  Map<String, Object?> source, {
+  required List<String> idKeys,
+  required List<String> nameKeys,
+  required List<String> slugKeys,
+}) {
+  final String? id = _firstString(source, idKeys);
+  if (id == null) {
+    return null;
+  }
+  return _ResolvedFederation(
+    id: id,
+    name: _firstString(source, nameKeys),
+    slug: _firstString(source, slugKeys),
+  );
+}
+
 _ResolvedClub? _clubFromObject(Object? value) {
   final Map<String, Object?>? source = _mapValue(value);
   if (source == null) {
@@ -334,6 +461,24 @@ _ResolvedClub? _clubFromObject(Object? value) {
     idKeys: const <String>['id', 'club_id', 'clubId'],
     nameKeys: const <String>['name', 'club_name', 'clubName', 'display_name'],
     slugKeys: const <String>['slug', 'club_slug', 'clubSlug'],
+  );
+}
+
+_ResolvedFederation? _federationFromObject(Object? value) {
+  final Map<String, Object?>? source = _mapValue(value);
+  if (source == null) {
+    return null;
+  }
+  return _federationFromFields(
+    source,
+    idKeys: const <String>['id', 'federation_id', 'federationId'],
+    nameKeys: const <String>[
+      'name',
+      'federation_name',
+      'federationName',
+      'display_name',
+    ],
+    slugKeys: const <String>['slug', 'federation_slug', 'federationSlug'],
   );
 }
 
@@ -353,6 +498,18 @@ _ResolvedClub? _mergeClubCandidates(
   );
 }
 
+_ResolvedFederation? _mergeFederationCandidates(
+  _ResolvedFederation? first,
+  _ResolvedFederation? second, [
+  _ResolvedFederation? third,
+  _ResolvedFederation? fourth,
+]) {
+  return _mergeTwoFederations(
+    _mergeTwoFederations(_mergeTwoFederations(first, second), third),
+    fourth,
+  );
+}
+
 _ResolvedClub? _mergeTwoClubs(_ResolvedClub? first, _ResolvedClub? second) {
   if (first == null) {
     return second;
@@ -367,8 +524,45 @@ _ResolvedClub? _mergeTwoClubs(_ResolvedClub? first, _ResolvedClub? second) {
   );
 }
 
+_ResolvedFederation? _mergeTwoFederations(
+  _ResolvedFederation? first,
+  _ResolvedFederation? second,
+) {
+  if (first == null) {
+    return second;
+  }
+  if (second == null || second.id != first.id) {
+    return first;
+  }
+  return _ResolvedFederation(
+    id: first.id,
+    name: first.name ?? second.name,
+    slug: first.slug ?? second.slug,
+  );
+}
+
 class _ResolvedClub {
   const _ResolvedClub({required this.id, this.name, this.slug});
+
+  final String id;
+  final String? name;
+  final String? slug;
+
+  String? get displayName {
+    final String? trimmedName = name?.trim();
+    if (trimmedName != null && trimmedName.isNotEmpty) {
+      return trimmedName;
+    }
+    final String? trimmedSlug = slug?.trim();
+    if (trimmedSlug != null && trimmedSlug.isNotEmpty) {
+      return trimmedSlug;
+    }
+    return null;
+  }
+}
+
+class _ResolvedFederation {
+  const _ResolvedFederation({required this.id, this.name, this.slug});
 
   final String id;
   final String? name;

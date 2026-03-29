@@ -39,7 +39,7 @@ class _MatchSimulateScreenState extends State<MatchSimulateScreen> {
       title: 'Simulate',
       subtitle:
           'Simulation stays separate from live spectating. This route launches the existing simulation engine without pretending it is a backend feed.',
-      trailing: const DataSourceBadge(status: DataSourceStatus.blocked),
+      trailing: const DataSourceBadge(status: DataSourceStatus.demo),
       children: <Widget>[
         Card(
           child: Padding(

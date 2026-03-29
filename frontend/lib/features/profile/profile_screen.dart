@@ -102,6 +102,7 @@ class _AuthenticatedProfile extends ConsumerWidget {
     final String role = ref.watch(currentUserRoleProvider);
     final List<String> permissions = ref.watch(currentUserPermissionsProvider);
     final bool isAdmin = ref.watch(isAdminProvider);
+    final federation = ref.watch(federationContextProvider);
 
     return Column(
       children: <Widget>[
@@ -130,6 +131,12 @@ class _AuthenticatedProfile extends ConsumerWidget {
                       Chip(
                         label: Text(
                           'Club: ${profile.club!['name'] ?? profile.club!['id']}',
+                        ),
+                      ),
+                    if (federation != null)
+                      Chip(
+                        label: Text(
+                          'Federation: ${federation.name ?? federation.id}',
                         ),
                       ),
                   ],

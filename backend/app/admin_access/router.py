@@ -8,7 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.admin_godmode.service import ADMIN_GODMODE_FILE, DEFAULT_ROLE_PERMISSIONS
+from app.admin_godmode.service import (
+    ADMIN_GODMODE_FILE,
+    DEFAULT_ROLE_PERMISSIONS,
+    GOD_MODE_ROLE_NAME,
+    SCOPED_ADMIN_ROLE_NAME,
+)
 from app.auth.dependencies import get_current_super_admin, get_session
 from app.auth.service import AuthService, AuthError, DuplicateUserError
 from app.models.user import User, UserRole
@@ -113,11 +118,28 @@ def _state_path(request: Request) -> Path:
 def _load_state(request: Request) -> dict[str, Any]:
     path = _state_path(request)
     if not path.exists():
-        state = {"roles": {"default_admin_role": "god_mode", "available_roles": DEFAULT_ROLE_PERMISSIONS, "assignments": []}}
+        state = {
+            "roles": {
+                "default_admin_role": SCOPED_ADMIN_ROLE_NAME,
+                "available_roles": DEFAULT_ROLE_PERMISSIONS,
+                "assignments": [],
+            }
+        }
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state, indent=2), encoding="utf-8")
         return state
-    return json.loads(path.read_text(encoding="utf-8"))
+    state = json.loads(path.read_text(encoding="utf-8"))
+    roles = state.setdefault("roles", {})
+    roles.setdefault("default_admin_role", SCOPED_ADMIN_ROLE_NAME)
+    roles.setdefault("available_roles", DEFAULT_ROLE_PERMISSIONS)
+    roles.setdefault("assignments", [])
+    if roles.get("default_admin_role") == GOD_MODE_ROLE_NAME:
+        roles["default_admin_role"] = SCOPED_ADMIN_ROLE_NAME
+    available_roles = dict(roles.get("available_roles") or {})
+    if SCOPED_ADMIN_ROLE_NAME not in available_roles:
+        available_roles[SCOPED_ADMIN_ROLE_NAME] = []
+        roles["available_roles"] = available_roles
+    return state
 
 
 def _save_state(request: Request, state: dict[str, Any]) -> None:
@@ -129,4 +151,11 @@ def _save_state(request: Request, state: dict[str, Any]) -> None:
 def _upsert_assignment(state: dict[str, Any], admin: User, permissions: list[str], is_enabled: bool) -> None:
     assignments = state.setdefault("roles", {}).setdefault("assignments", [])
     assignments[:] = [item for item in assignments if str(item.get("subject_key", "")).lower() not in {admin.email.lower(), admin.id.lower(), admin.username.lower()}]
-    assignments.append({"subject_key": admin.email.lower(), "role_name": "god_mode", "permissions": permissions, "is_enabled": is_enabled})
+    assignments.append(
+        {
+            "subject_key": admin.email.lower(),
+            "role_name": GOD_MODE_ROLE_NAME if admin.role == UserRole.SUPER_ADMIN else SCOPED_ADMIN_ROLE_NAME,
+            "permissions": permissions,
+            "is_enabled": is_enabled,
+        }
+    )

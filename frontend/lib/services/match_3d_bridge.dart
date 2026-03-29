@@ -7,6 +7,8 @@ abstract interface class Match3dBridgeBackend {
 
   Stream<dynamic> get events;
 
+  Future<bool> isAvailable();
+
   Future<void> handleEvent(Map<String, dynamic> event);
 }
 
@@ -18,6 +20,18 @@ class PlatformMatch3dBridgeBackend implements Match3dBridgeBackend {
 
   @override
   Stream<dynamic> get events => _events.receiveBroadcastStream();
+
+  @override
+  Future<bool> isAvailable() async {
+    try {
+      await _channel.invokeMethod<Object?>('ping');
+      return true;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
 
   @override
   Future<void> handleEvent(Map<String, dynamic> event) async {
@@ -36,6 +50,8 @@ class Match3DBridge {
   final Match3dBridgeBackend _backend;
 
   Stream<dynamic> get events => _backend.events;
+
+  Future<bool> isNativeAvailable() => _backend.isAvailable();
 
   Future<void> sendEvent(Map<String, dynamic> event) async {
     await _backend.handleEvent(event);

@@ -9,6 +9,7 @@ import '../../data/hosted_competition_api.dart';
 import '../../features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import '../../models/competition_models.dart';
 import '../../models/hosted_competition_models.dart';
+import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/live_clients_provider.dart';
@@ -144,13 +145,26 @@ class _FamilyOverview extends StatelessWidget {
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                       const SizedBox(height: spacingMD),
-                      FilledButton.icon(
-                        onPressed:
-                            () => context.push(
-                              '/competitions/${card.family.pathSegment}',
+                      Wrap(
+                        spacing: spacingSM,
+                        runSpacing: spacingSM,
+                        children: <Widget>[
+                          FilledButton.icon(
+                            onPressed:
+                                () => context.push(
+                                  '/competitions/${card.family.pathSegment}',
+                                ),
+                            icon: const Icon(Icons.open_in_new_rounded),
+                            label: const Text('Open family'),
+                          ),
+                          if (card.family == CompetitionFamilyRoute.streamer)
+                            OutlinedButton.icon(
+                              onPressed:
+                                  () => context.push(AppRoutes.streamerEngine),
+                              icon: const Icon(Icons.live_tv_rounded),
+                              label: const Text('Open full engine'),
                             ),
-                        icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('Open family'),
+                        ],
                       ),
                     ],
                   ),

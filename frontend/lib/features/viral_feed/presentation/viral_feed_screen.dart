@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/actions/action_pipeline.dart' as feed_actions;
@@ -8,6 +9,7 @@ import '../../../core/app_feedback.dart';
 import '../../../core/optimistic_ui_handler.dart';
 import '../../../core/state_sync_system.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/models/data_source_status.dart';
 import '../../../services/frontend_audit_hooks.dart';
 import '../../../services/reliability/reliable_event_queue.dart';
 import '../data/viral_feed_models.dart';
@@ -17,6 +19,7 @@ class ViralFeedScreen extends StatefulWidget {
   const ViralFeedScreen({
     super.key,
     this.currentUserId,
+    this.routeStatus = DataSourceStatus.live,
     ViralFeedRepository? repository,
     feed_actions.ClipActionDispatcher? actionDispatcher,
     ReliableEventQueue? eventQueue,
@@ -25,6 +28,7 @@ class ViralFeedScreen extends StatefulWidget {
        _eventQueue = eventQueue;
 
   final String? currentUserId;
+  final DataSourceStatus routeStatus;
   final ViralFeedRepository? _repository;
   final feed_actions.ClipActionDispatcher? _actionDispatcher;
   final ReliableEventQueue? _eventQueue;
@@ -111,13 +115,13 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
   Widget build(BuildContext context) {
     final ViralFeedDeck? deck = _deck;
     if (_isBootstrapping) {
-      return const Scaffold(
+      return _buildScaffold(
         backgroundColor: AppColors.background,
-        body: _LoadingState(),
+        body: const _LoadingState(),
       );
     }
     if (_loadError != null && deck == null) {
-      return Scaffold(
+      return _buildScaffold(
         backgroundColor: AppColors.background,
         body: _ErrorState(
           message: AppFeedback.messageFor(_loadError!),
@@ -126,13 +130,13 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
       );
     }
     if (deck == null || deck.clips.isEmpty) {
-      return Scaffold(
+      return _buildScaffold(
         backgroundColor: AppColors.background,
         body: _EmptyState(onRetry: _handleRetry),
       );
     }
 
-    return Scaffold(
+    return _buildScaffold(
       backgroundColor: AppColors.background,
       body: PageView.builder(
         key: const Key('viral-feed-page-view'),
@@ -160,6 +164,28 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
             onShare: () => _handleShare(clip),
           );
         },
+      ),
+    );
+  }
+
+  Scaffold _buildScaffold({
+    required Color backgroundColor,
+    required Widget body,
+  }) {
+    if (!kDebugMode) {
+      return Scaffold(backgroundColor: backgroundColor, body: body);
+    }
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      body: Stack(
+        children: <Widget>[
+          body,
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 12,
+            right: 12,
+            child: _RouteStatusBadge(status: widget.routeStatus),
+          ),
+        ],
       ),
     );
   }
@@ -647,6 +673,37 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
       }
       _pageController.jumpToPage(pageIndex);
     });
+  }
+}
+
+class _RouteStatusBadge extends StatelessWidget {
+  const _RouteStatusBadge({required this.status});
+
+  final DataSourceStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = switch (status) {
+      DataSourceStatus.live => Colors.lightGreenAccent,
+      DataSourceStatus.blocked => Colors.redAccent,
+      DataSourceStatus.demo => Colors.amberAccent,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        status.label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
   }
 }
 

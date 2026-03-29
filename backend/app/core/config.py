@@ -73,6 +73,26 @@ class SettingsSource(BaseSettings):
         default=True,
         validation_alias=AliasChoices("RUN_STARTUP_SEEDING", "GTE_RUN_STARTUP_SEEDING"),
     )
+    bootstrap_admin_enabled: bool = Field(
+        default=False,
+        validation_alias="GTE_BOOTSTRAP_ADMIN_ENABLED",
+    )
+    bootstrap_admin_email: str | None = Field(
+        default=None,
+        validation_alias="GTE_BOOTSTRAP_ADMIN_EMAIL",
+    )
+    bootstrap_admin_password: str | None = Field(
+        default=None,
+        validation_alias="GTE_BOOTSTRAP_ADMIN_PASSWORD",
+    )
+    bootstrap_admin_username: str | None = Field(
+        default=None,
+        validation_alias="GTE_BOOTSTRAP_ADMIN_USERNAME",
+    )
+    bootstrap_admin_display_name: str | None = Field(
+        default=None,
+        validation_alias="GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME",
+    )
     default_ingestion_provider: str = Field(default="mock", validation_alias="GTE_INGESTION_PROVIDER")
     real_player_mapping_auto_create_missing_entities: bool = Field(
         default=False,
@@ -655,6 +675,11 @@ class Settings:
     crypto_provider_key: str
     run_migration_check: bool
     run_startup_seeding: bool
+    bootstrap_admin_enabled: bool
+    bootstrap_admin_email: str | None
+    bootstrap_admin_password: str | None
+    bootstrap_admin_username: str | None
+    bootstrap_admin_display_name: str | None
     default_ingestion_provider: str
     real_player_mapping_auto_create_missing_entities: bool
     provider_timeout_seconds: int
@@ -1801,6 +1826,11 @@ def load_settings(
         crypto_provider_key=source.crypto_provider_key,
         run_migration_check=source.run_migration_check,
         run_startup_seeding=source.run_startup_seeding,
+        bootstrap_admin_enabled=source.bootstrap_admin_enabled,
+        bootstrap_admin_email=_normalized_optional_setting(source.bootstrap_admin_email),
+        bootstrap_admin_password=_normalized_optional_setting(source.bootstrap_admin_password),
+        bootstrap_admin_username=_normalized_optional_setting(source.bootstrap_admin_username),
+        bootstrap_admin_display_name=_normalized_optional_setting(source.bootstrap_admin_display_name),
         default_ingestion_provider=source.default_ingestion_provider,
         real_player_mapping_auto_create_missing_entities=source.real_player_mapping_auto_create_missing_entities,
         provider_timeout_seconds=source.provider_timeout_seconds,
