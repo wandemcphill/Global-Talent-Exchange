@@ -24,6 +24,7 @@ from app.models.manager_duel import ManagerDuel
 from app.models.user import User
 from app.replay_archive.service import ensure_replay_archive
 from app.services.device_fingerprint_service import DeviceFingerprintService
+from app.ticketing.service import TicketingError, TicketingService
 
 router = APIRouter(tags=["live-matches"])
 legacy_router = APIRouter(prefix="/matches", tags=["live-matches"])
@@ -93,11 +94,58 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         premium_features=dict(payload.get("premium_features") or {}),
         sponsored_overlays=list(payload.get("sponsored_overlays") or []),
         stadium_ads=list(payload.get("stadium_ads") or []),
-        channel_context={},
-        sync_strategy="deterministic_playback",
-        watch_party_enabled=True,
-        reactions_enabled=True,
+        channel_context=dict(payload.get("channel_context") or {}),
+        sync_strategy=str(payload.get("sync_strategy") or "deterministic_playback"),
+        watch_party_enabled=bool(payload.get("watch_party_enabled", True)),
+        reactions_enabled=bool(payload.get("reactions_enabled", True)),
     )
+
+
+def _merge_session_access(base: dict[str, object] | None, overlay: dict[str, object] | None) -> dict[str, object] | None:
+    if base is None and overlay is None:
+        return None
+    merged = dict(base or {})
+    if overlay is None:
+        return merged
+    premium_features = dict(merged.get("premium_features") or {})
+    premium_features.update(dict(overlay.get("premium_features") or {}))
+    if premium_features:
+        merged["premium_features"] = premium_features
+    channel_context = dict(merged.get("channel_context") or {})
+    channel_context.update(dict(overlay.get("channel_context") or {}))
+    if channel_context:
+        merged["channel_context"] = channel_context
+    for key in ("sponsored_overlays", "stadium_ads"):
+        base_items = list(merged.get(key) or [])
+        base_items.extend(list(overlay.get(key) or []))
+        if base_items:
+            merged[key] = base_items
+    for key in ("access_source", "rights_owner_id", "viewing_fee_coin", "sync_strategy", "watch_party_enabled", "reactions_enabled"):
+        if key in overlay and overlay.get(key) is not None:
+            merged[key] = overlay[key]
+    return merged
+
+
+def _resolve_attendee_access(
+    request: Request,
+    *,
+    session,
+    match_id: str,
+    user_id: str,
+) -> dict[str, object] | None:
+    if session is not None:
+        try:
+            return TicketingService(session, app=request.app).resolve_attendee_access(
+                match_id=match_id,
+                user_id=user_id,
+                consume=True,
+            )
+        except TicketingError:
+            return None
+    runtime = getattr(request.app.state, "ticketing_runtime", None)
+    if runtime is None:
+        return None
+    return runtime.resolve_attendee_access_for_user_id(match_id=match_id, user_id=user_id, consume=True)
 
 
 def _commentary_payload(events) -> list[dict[str, object]]:
@@ -203,12 +251,30 @@ def join_spectate(
             except LiveMatchError as exc:
                 session.rollback()
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+            access_payload = _merge_session_access(
+                access_payload,
+                _resolve_attendee_access(
+                    request,
+                    session=session,
+                    match_id=match_id,
+                    user_id=current_user.id,
+                ),
+            )
             session.commit()
             return _build_session_view(match_id, spectator_session, access_payload)
     try:
         spectator_session = hub.join_spectate(match_id, current_user.id)
     except LiveMatchError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    access_payload = _merge_session_access(
+        access_payload,
+        _resolve_attendee_access(
+            request,
+            session=None,
+            match_id=match_id,
+            user_id=current_user.id,
+        ),
+    )
     return _build_session_view(match_id, spectator_session, access_payload)
 
 

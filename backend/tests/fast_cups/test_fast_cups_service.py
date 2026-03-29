@@ -8,10 +8,60 @@ from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
 from app.fast_cups.models.domain import (
     ClubCompetitionWindow,
+    FastCup,
     FastCupDivision,
+    FastCupNotFoundError,
     FastCupStateError,
     FastCupValidationError,
 )
+from app.fast_cups.services.creation import RecurringFastCupCreationService
+
+
+class RecordingFastCupRepository:
+    def __init__(self) -> None:
+        self._cups: dict[str, FastCup] = {}
+        self.save_calls = 0
+        self.save_many_calls = 0
+        self.saved_batch_sizes: list[int] = []
+
+    def save(self, cup: FastCup) -> FastCup:
+        self.save_calls += 1
+        self._cups[cup.cup_id] = cup
+        return cup
+
+    def save_many(self, cups: tuple[FastCup, ...] | list[FastCup]) -> tuple[FastCup, ...]:
+        self.save_many_calls += 1
+        self.saved_batch_sizes.append(len(cups))
+        for cup in cups:
+            self._cups[cup.cup_id] = cup
+        return tuple(cups)
+
+    def get(self, cup_id: str) -> FastCup:
+        try:
+            return self._cups[cup_id]
+        except KeyError as exc:
+            raise FastCupNotFoundError(f"Fast cup '{cup_id}' was not found") from exc
+
+    def exists(self, cup_id: str) -> bool:
+        return cup_id in self._cups
+
+    def list_all(self) -> tuple[FastCup, ...]:
+        return tuple(self._cups.values())
+
+    def list_upcoming(
+        self,
+        *,
+        now: datetime,
+        division: FastCupDivision | None = None,
+        size: int | None = None,
+    ) -> tuple[FastCup, ...]:
+        return tuple(
+            cup
+            for cup in sorted(self._cups.values(), key=lambda item: (item.slot.kickoff_at, item.division.value, item.size))
+            if cup.slot.kickoff_at >= now
+            and (division is None or cup.division is division)
+            and (size is None or cup.size == size)
+        )
 
 
 def test_recurring_creation_runs_every_15_minutes(ecosystem, base_now) -> None:
@@ -27,6 +77,20 @@ def test_recurring_creation_runs_every_15_minutes(ecosystem, base_now) -> None:
 
     repeated = ecosystem.list_upcoming_cups(now=base_now, horizon_intervals=3)
     assert len(repeated) == len(cups)
+
+
+def test_recurring_creation_batches_missing_cups(base_now) -> None:
+    repository = RecordingFastCupRepository()
+    service = RecurringFastCupCreationService(repository)
+
+    created = service.ensure_upcoming_cups(now=base_now, horizon_intervals=2)
+    repeated = service.ensure_upcoming_cups(now=base_now, horizon_intervals=2)
+
+    assert len(created) == 16
+    assert len(repeated) == 16
+    assert repository.save_calls == 0
+    assert repository.save_many_calls == 1
+    assert repository.saved_batch_sizes == [16]
 
 
 def test_bracket_generation_pairs_top_seed_with_bottom_seed(ecosystem, base_now, select_cup, fill_cup) -> None:

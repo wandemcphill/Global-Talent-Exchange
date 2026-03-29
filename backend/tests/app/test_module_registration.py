@@ -59,6 +59,7 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
         "ownership_groups",
         "real_world_hub",
         "real_world_hub_admin",
+        "gtex_universe",
         "federations",
         "federations_admin",
     }.issubset(registered_modules)
@@ -104,7 +105,12 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/admin/ownership-groups/reputation-cycle" in openapi_paths
     assert "/real-world/providers" in openapi_paths
     assert "/real-world/hybrid-players" in openapi_paths
+    assert "/real-world/events" in openapi_paths
     assert "/admin/real-world/providers" in openapi_paths
+    assert "/career/create" in openapi_paths
+    assert "/career/retire" in openapi_paths
+    assert "/career/{user_id}" in openapi_paths
+    assert "/sync/update" in openapi_paths
     assert "/federations" in openapi_paths
     assert "/federations/rankings" in openapi_paths
     assert "/federations/{federation_id}/governance" in openapi_paths
@@ -179,6 +185,10 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
         fan_updates_response = client.post("/admin/ops/fan-updates")
         media_generation_response = client.post("/admin/ops/media-generation")
         identity_evolution_response = client.post("/admin/ops/identity-evolution")
+        real_world_events_response = client.get("/real-world/events")
+        career_get_response = client.get("/career/nonexistent")
+        career_retire_response = client.post("/career/retire", json={})
+        sync_update_response = client.post("/sync/update", json={})
         regen_universe_response = client.get("/regen-universe/awards")
         regen_rising_stars_response = client.get("/regen-universe/rising-stars")
         regen_bloodlines_response = client.get("/regen-universe/bloodlines")
@@ -225,6 +235,10 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert fan_updates_response.status_code == 401
     assert media_generation_response.status_code == 401
     assert identity_evolution_response.status_code == 401
+    assert real_world_events_response.status_code == 200
+    assert career_get_response.status_code == 404
+    assert career_retire_response.status_code == 401
+    assert sync_update_response.status_code == 401
     assert regen_universe_response.status_code == 200
     assert regen_rising_stars_response.status_code == 200
     assert regen_bloodlines_response.status_code == 200

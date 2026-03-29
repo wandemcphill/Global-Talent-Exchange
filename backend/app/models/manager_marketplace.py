@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, Enum, Float, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -20,20 +20,69 @@ class ManagerContractStatus(StrEnum):
     ENDED = "ended"
 
 
+class ManagerPersonalityTacticalStyle(StrEnum):
+    ATTACKING = "attacking"
+    DEFENSIVE = "defensive"
+    BALANCED = "balanced"
+
+
+class ManagerDisciplineStyle(StrEnum):
+    STRICT = "strict"
+    BALANCED = "balanced"
+    EMPOWERING = "empowering"
+
+
 class ManagerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "manager_profiles"
     __table_args__ = (
         UniqueConstraint("manager_id", name="uq_manager_profiles_manager_id"),
+        UniqueConstraint("gtex_ai_id", name="uq_manager_profiles_gtex_ai_id"),
     )
 
-    manager_id: Mapped[str] = mapped_column(
+    manager_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    gtex_ai_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("gtex_ai_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     preferred_style: Mapped[str] = mapped_column(String(64), nullable=False, default="balanced", server_default="balanced")
+    tactical_style: Mapped[ManagerPersonalityTacticalStyle] = mapped_column(
+        Enum(ManagerPersonalityTacticalStyle, name="manager_personality_tactical_style", native_enum=False),
+        nullable=False,
+        default=ManagerPersonalityTacticalStyle.BALANCED,
+        server_default=ManagerPersonalityTacticalStyle.BALANCED.value,
+    )
+    risk_tolerance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5, server_default="0.5")
+    adaptability: Mapped[float] = mapped_column(Float, nullable=False, default=0.5, server_default="0.5")
+    ego_level: Mapped[float] = mapped_column(Float, nullable=False, default=0.5, server_default="0.5")
+    youth_preference: Mapped[float] = mapped_column(Float, nullable=False, default=0.5, server_default="0.5")
+    discipline_style: Mapped[ManagerDisciplineStyle] = mapped_column(
+        Enum(ManagerDisciplineStyle, name="manager_discipline_style", native_enum=False),
+        nullable=False,
+        default=ManagerDisciplineStyle.BALANCED,
+        server_default=ManagerDisciplineStyle.BALANCED.value,
+    )
+    formation_preferences_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    substitution_logic: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="balanced_rotation",
+        server_default="balanced_rotation",
+    )
+    tempo_control: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default="balanced",
+        server_default="balanced",
+    )
     control_mode: Mapped[ManagerControlMode] = mapped_column(
         Enum(ManagerControlMode, name="manager_control_mode", native_enum=False),
         nullable=False,
@@ -80,5 +129,7 @@ __all__ = [
     "ManagerContract",
     "ManagerContractStatus",
     "ManagerControlMode",
+    "ManagerDisciplineStyle",
+    "ManagerPersonalityTacticalStyle",
     "ManagerProfile",
 ]

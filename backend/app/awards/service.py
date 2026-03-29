@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Club, Match, TeamStanding
+from app.models.fan_experience import FanExperienceTicket, FanProfile
 from app.models.manager_marketplace import ManagerProfile
 from app.models.national_team import NationalTeamCompetition, NationalTeamEntry
+from app.models.regen_ecosystem import RegenAwardVote
 from app.models.user import User
 from app.regen_universe.models import RegenAward, RegenAwardWinner, RegenPerformanceRecord, RegenSeason
 
@@ -50,6 +53,11 @@ _CATEGORY_DEFINITIONS: tuple[AwardCategoryDefinition, ...] = (
     AwardCategoryDefinition("BEST_MANAGER", "GTEX Best Manager", "Best Manager", "manager", "manager"),
     AwardCategoryDefinition("TEAM_OF_THE_YEAR", "GTEX Team of the Year", "Team of the Year", "team_selection", "player", source_award_code="TEAM_OF_THE_YEAR"),
 )
+
+CEREMONY_GENERAL_CAPACITY = 2400
+CEREMONY_VIP_CAPACITY = 180
+CEREMONY_TICKET_PRICE = Decimal("14.0000")
+CEREMONY_VIP_TICKET_PRICE = Decimal("32.0000")
 
 
 class AwardsCultureService:
@@ -162,6 +170,15 @@ class AwardsCultureService:
                     "winners": crowned,
                 }
             )
+        season_event_key = self._ceremony_event_key(season.id)
+        tickets_sold, vip_tickets_sold = self._ceremony_ticket_counts(season_event_key)
+        live_vote_snapshot = self._live_vote_snapshot(season.id)
+        legend_attendees = self._ceremony_legend_attendees(season_event_key)
+        total_vote_count = sum(
+            int(item.get("vote_count") or 0)
+            for items in live_vote_snapshot.values()
+            for item in items
+        )
         return {
             "season_id": season.id,
             "season_number": season.season_number,
@@ -178,8 +195,94 @@ class AwardsCultureService:
                 "segments_ready": len(segments),
                 "winner_count": sum(len(item.get("winners") or []) for item in winners),
             },
+            "season_event_key": season_event_key,
+            "ceremony_flow": ["Nominees", "Top 3", "Live Reveal", "Winner", "Reaction Explosion"],
+            "ticketed_access": True,
+            "tv_mode_only": True,
+            "general_seat_capacity": CEREMONY_GENERAL_CAPACITY,
+            "vip_seat_capacity": CEREMONY_VIP_CAPACITY,
+            "tickets_sold": tickets_sold,
+            "vip_tickets_sold": vip_tickets_sold,
+            "ticket_price_coin": CEREMONY_TICKET_PRICE,
+            "vip_ticket_price_coin": CEREMONY_VIP_TICKET_PRICE,
+            "discount_bps": 0,
+            "exclusive_commentary_lines": [
+                "TV Mode unlocks the live reveal lane with isolated podium audio.",
+                "Priority viewers hear the shortlist tension before the envelope opens.",
+            ],
+            "live_vote_enabled": True,
+            "live_vote_note": "Live voting shapes the room and the reveal order, but the final award result remains deterministic.",
+            "live_vote_snapshot": live_vote_snapshot,
+            "reaction_explosion": {
+                "magnitude": (
+                    "iconic"
+                    if legend_attendees >= 5 or vip_tickets_sold >= 20 or total_vote_count >= 10
+                    else "rising"
+                ),
+                "legend_attendees": legend_attendees,
+                "vip_tickets_sold": vip_tickets_sold,
+                "vote_volume": total_vote_count,
+            },
+            "current_user_access": None,
             "generated_at": _utcnow(),
         }
+
+    @staticmethod
+    def _ceremony_event_key(season_id: str) -> str:
+        return f"ceremony:{season_id}"
+
+    def _ceremony_ticket_counts(self, event_key: str) -> tuple[int, int]:
+        rows = list(
+            self.session.scalars(
+                select(FanExperienceTicket).where(
+                    FanExperienceTicket.event_key == event_key,
+                    FanExperienceTicket.status.in_(("purchased", "attended")),
+                )
+            ).all()
+        )
+        sold = len(rows)
+        vip_sold = sum(1 for row in rows if row.ticket_tier in {"vip", "vip-seat"})
+        return sold, vip_sold
+
+    def _ceremony_legend_attendees(self, event_key: str) -> int:
+        return int(
+            self.session.scalar(
+                select(func.count())
+                .select_from(FanExperienceTicket)
+                .join(FanProfile, FanProfile.id == FanExperienceTicket.fan_profile_id, isouter=True)
+                .where(
+                    FanExperienceTicket.event_key == event_key,
+                    FanExperienceTicket.status.in_(("purchased", "attended")),
+                    FanProfile.fan_tier == "Legend",
+                )
+            )
+            or 0
+        )
+
+    def _live_vote_snapshot(self, season_id: str) -> dict[str, list[dict[str, Any]]]:
+        awards = {award.id: award for award in self.session.scalars(select(RegenAward)).all()}
+        rows = self.session.execute(
+            select(
+                RegenAwardVote.award_id,
+                RegenAwardVote.player_id,
+                func.count(RegenAwardVote.id).label("vote_count"),
+            )
+            .where(RegenAwardVote.season_id == season_id)
+            .group_by(RegenAwardVote.award_id, RegenAwardVote.player_id)
+            .order_by(func.count(RegenAwardVote.id).desc(), RegenAwardVote.player_id.asc())
+        ).all()
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for award_id, player_id, vote_count in rows:
+            award = awards.get(award_id)
+            if award is None:
+                continue
+            grouped.setdefault(award.code, []).append(
+                {
+                    "player_id": player_id,
+                    "vote_count": int(vote_count or 0),
+                }
+            )
+        return {code: items[:3] for code, items in grouped.items()}
 
     def _categories(self, award_code: str | None) -> list[AwardCategoryDefinition]:
         items = list(_CATEGORY_DEFINITIONS)

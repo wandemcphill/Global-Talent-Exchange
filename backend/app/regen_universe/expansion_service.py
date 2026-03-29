@@ -42,7 +42,7 @@ from app.regen_universe.dna import (
     normalize_dna_profile,
 )
 from app.regen_universe.models import RegenAwardWinner, RegenPerformanceRecord, RegenSeason
-from app.services.regen_service import RegenClubContext, RegenGenerationEngine
+from app.services.regen_service import RegenClubContext, RegenGenerationEngine, _NAMING_PROFILES
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -1347,6 +1347,10 @@ class RegenUniverseExpansionService:
         }
         for country_index, country in enumerate(countries):
             country_code = str(country.alpha2_code or country.fifa_code or country.alpha3_code or country.id).upper()
+            country_profile = _NAMING_PROFILES.get(
+                country_code,
+                _NAMING_PROFILES[get_settings().regen_generation.default_country_code],
+            )
             existing_count = int(
                 self.session.scalar(
                     select(func.count())
@@ -1366,8 +1370,8 @@ class RegenUniverseExpansionService:
             }
             context = RegenClubContext(
                 country_code=country_code,
-                region_name=country.name,
-                city_name=country.name,
+                region_name=country_profile.default_region,
+                city_name=country_profile.default_city,
                 youth_coaching=68.0,
                 training_level=66.0,
                 academy_level=70.0,

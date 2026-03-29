@@ -29,19 +29,28 @@ class RecurringFastCupCreationService:
         sizes: tuple[int, ...] = SUPPORTED_FAST_CUP_SIZES,
     ) -> tuple[FastCup, ...]:
         normalized_now = _normalize_timestamp(now)
-        created: list[FastCup] = []
         next_boundary = _next_registration_boundary(normalized_now)
+        scheduled_cup_ids: list[str] = []
+        scheduled_cups: dict[str, FastCup] = {}
 
         for interval_index in range(horizon_intervals):
             kickoff_at = next_boundary + timedelta(minutes=FAST_CUP_REGISTRATION_INTERVAL_MINUTES * interval_index)
             for division in (FastCupDivision.SENIOR, FastCupDivision.ACADEMY):
                 for size in sizes:
                     cup_id = _cup_id(division=division, size=size, kickoff_at=kickoff_at)
-                    if self.repository.exists(cup_id):
-                        created.append(self.repository.get(cup_id))
-                        continue
-                    created.append(self.repository.save(self._build_cup(division=division, size=size, kickoff_at=kickoff_at)))
-        return tuple(created)
+                    scheduled_cup_ids.append(cup_id)
+                    scheduled_cups[cup_id] = self._build_cup(division=division, size=size, kickoff_at=kickoff_at)
+
+        existing_by_id = {
+            cup.cup_id: cup
+            for cup in self.repository.list_upcoming(now=next_boundary)
+            if cup.cup_id in scheduled_cups
+        }
+        missing_cups = [scheduled_cups[cup_id] for cup_id in scheduled_cup_ids if cup_id not in existing_by_id]
+        persisted_missing = self.repository.save_many(missing_cups) if missing_cups else ()
+        persisted_missing_by_id = {cup.cup_id: cup for cup in persisted_missing}
+
+        return tuple(existing_by_id.get(cup_id) or persisted_missing_by_id[cup_id] for cup_id in scheduled_cup_ids)
 
     def _build_cup(self, *, division: FastCupDivision, size: int, kickoff_at: datetime) -> FastCup:
         registration_delta = timedelta(minutes=FAST_CUP_REGISTRATION_INTERVAL_MINUTES)

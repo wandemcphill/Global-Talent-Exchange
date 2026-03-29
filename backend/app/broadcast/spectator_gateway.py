@@ -246,6 +246,25 @@ async def _handle_spectator_client_message(
         reaction = str(message.get("reaction") or "").strip()
         if not reaction:
             return
+        payload = {"connection_id": client.connection_id}
+        app = client.websocket.scope.get("app")
+        ticketing_runtime = getattr(getattr(app, "state", None), "ticketing_runtime", None) if app is not None else None
+        if ticketing_runtime is not None and client.user_id:
+            ticket_reaction = ticketing_runtime.record_reaction(
+                match_id=match_id,
+                user_id=client.user_id,
+                reaction_type=reaction,
+                source="websocket",
+            )
+            if ticket_reaction is not None:
+                payload.update(
+                    {
+                        "seat_tier": ticket_reaction["attendee_access"]["seat_tier"],
+                        "crowd_delta": ticket_reaction["crowd_delta"],
+                        "influence_multiplier": ticket_reaction["influence_multiplier"],
+                        "stadium_badge": ticket_reaction["attendee_access"]["badge"],
+                    }
+                )
         await runtime.match_room_manager.publish(
             match_id,
             SpectatorEvent(
@@ -254,7 +273,7 @@ async def _handle_spectator_client_message(
                 user_id=client.user_id,
                 display_name=client.display_name,
                 reaction=reaction[:8],
-                payload={"connection_id": client.connection_id},
+                payload=payload,
             ),
             delay_seconds=0,
         )

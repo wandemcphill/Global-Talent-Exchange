@@ -62,7 +62,13 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("competition_standing_projections")
     assert inspector.has_table("player_stats_projections")
     assert inspector.has_table("manager_profiles")
+    assert inspector.has_table("manager_match_history")
+    assert inspector.has_table("manager_vs_manager_history")
     assert inspector.has_table("manager_contracts")
+    assert inspector.has_table("career_players")
+    assert inspector.has_table("career_training_sessions")
+    assert inspector.has_table("career_decisions")
+    assert inspector.has_table("career_legacy_records")
     assert inspector.has_table("fast_cup_records")
     assert inspector.has_table("card_loan_listings")
     assert inspector.has_table("card_loan_contracts")
@@ -103,6 +109,8 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("real_world_competitions")
     assert inspector.has_table("real_world_clubs")
     assert inspector.has_table("real_players")
+    assert inspector.has_table("real_world_entity_mappings")
+    assert inspector.has_table("real_world_events")
     assert inspector.has_table("reality_mode_settings")
     assert inspector.has_table("real_data_sync_jobs")
     assert inspector.has_table("federations")
@@ -129,6 +137,13 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("fan_prediction_submissions")
     assert inspector.has_table("fan_prediction_token_ledger")
     assert inspector.has_table("fan_prediction_reward_grants")
+    assert inspector.has_table("fan_tribes")
+    assert inspector.has_table("gtex_match_chat_rooms")
+    assert inspector.has_table("gtex_match_chat_messages")
+    assert inspector.has_table("narrative_conflicts")
+    assert inspector.has_table("market_shock_events")
+    assert inspector.has_table("mega_events")
+    assert inspector.has_table("legacy_snapshots")
     assert inspector.has_table("fan_war_profiles")
     assert inspector.has_table("fan_war_points")
     assert inspector.has_table("country_creator_assignments")
@@ -232,6 +247,110 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
 
     player_card_listing_columns = {column["name"] for column in inspector.get_columns("player_card_listings")}
     assert "is_negotiable" in player_card_listing_columns
+
+    manager_profile_columns = {column["name"] for column in inspector.get_columns("manager_profiles")}
+    assert {
+        "gtex_ai_id",
+        "name",
+        "tactical_style",
+        "risk_tolerance",
+        "adaptability",
+        "ego_level",
+        "youth_preference",
+        "discipline_style",
+        "formation_preferences_json",
+        "substitution_logic",
+        "tempo_control",
+    } <= manager_profile_columns
+
+    fan_tribe_columns = {column["name"] for column in inspector.get_columns("fan_tribes")}
+    assert {"club_id", "members", "rivalry_targets", "power_score", "metadata_json"} <= fan_tribe_columns
+
+    gtex_chat_room_columns = {column["name"] for column in inspector.get_columns("gtex_match_chat_rooms")}
+    assert {
+        "match_id",
+        "room_key",
+        "room_title",
+        "message_count",
+        "emoji_burst_score",
+        "moment_spike_score",
+        "metadata_json",
+    } <= gtex_chat_room_columns
+
+    gtex_chat_message_columns = {column["name"] for column in inspector.get_columns("gtex_match_chat_messages")}
+    assert {
+        "room_id",
+        "match_id",
+        "user_id",
+        "fan_profile_id",
+        "fan_tribe_id",
+        "message",
+        "emoji",
+        "intensity",
+        "sentiment",
+        "spike_score",
+        "metadata_json",
+    } <= gtex_chat_message_columns
+
+    narrative_conflict_columns = {column["name"] for column in inspector.get_columns("narrative_conflicts")}
+    assert {
+        "match_id",
+        "club_id",
+        "player_id",
+        "manager_profile_id",
+        "conflict_type",
+        "headline",
+        "status",
+        "severity",
+        "impact_score",
+        "triggers_json",
+        "impact_json",
+        "metadata_json",
+    } <= narrative_conflict_columns
+
+    market_shock_columns = {column["name"] for column in inspector.get_columns("market_shock_events")}
+    assert {
+        "match_id",
+        "club_id",
+        "player_id",
+        "shock_type",
+        "headline",
+        "status",
+        "magnitude",
+        "player_price_delta_bps",
+        "fan_sentiment_delta",
+        "betting_odds_delta_bps",
+        "impact_json",
+        "metadata_json",
+    } <= market_shock_columns
+
+    mega_event_columns = {column["name"] for column in inspector.get_columns("mega_events")}
+    assert {
+        "event_key",
+        "match_id",
+        "event_type",
+        "title",
+        "status",
+        "limited_tickets",
+        "exclusive_commentary",
+        "global_broadcast",
+        "hype_score",
+        "metadata_json",
+    } <= mega_event_columns
+
+    legacy_snapshot_columns = {column["name"] for column in inspector.get_columns("legacy_snapshots")}
+    assert {
+        "category",
+        "entity_type",
+        "entity_id",
+        "entity_name",
+        "match_id",
+        "season_key",
+        "headline",
+        "score",
+        "rank_position",
+        "metadata_json",
+    } <= legacy_snapshot_columns
 
     loan_listing_columns = {column["name"] for column in inspector.get_columns("card_loan_listings")}
     assert {"is_negotiable", "borrower_rights_json", "lender_restrictions_json"} <= loan_listing_columns

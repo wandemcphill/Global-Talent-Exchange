@@ -19,7 +19,10 @@ class InMemoryFastCupRepository(FastCupRepository):
             return self._cups[cup.cup_id]
 
     def save_many(self, cups: tuple[FastCup, ...] | list[FastCup]) -> tuple[FastCup, ...]:
-        return tuple(self.save(cup) for cup in cups)
+        with self._lock:
+            for cup in cups:
+                self._cups[cup.cup_id] = replace(cup)
+            return tuple(replace(self._cups[cup.cup_id]) for cup in cups)
 
     def get(self, cup_id: str) -> FastCup:
         with self._lock:

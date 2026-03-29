@@ -43,6 +43,29 @@ def _as_utc(value: datetime | None) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _merge_session_access(base: dict[str, Any], overlay: dict[str, Any] | None) -> dict[str, Any]:
+    merged = dict(base)
+    if overlay is None:
+        return merged
+    premium_features = dict(merged.get("premium_features") or {})
+    premium_features.update(dict(overlay.get("premium_features") or {}))
+    if premium_features:
+        merged["premium_features"] = premium_features
+    channel_context = dict(merged.get("channel_context") or {})
+    channel_context.update(dict(overlay.get("channel_context") or {}))
+    if channel_context:
+        merged["channel_context"] = channel_context
+    for key in ("sponsored_overlays", "stadium_ads"):
+        values = list(merged.get(key) or [])
+        values.extend(list(overlay.get(key) or []))
+        if values:
+            merged[key] = values
+    for key in ("access_source", "rights_owner_id", "viewing_fee_coin", "sync_strategy", "watch_party_enabled", "reactions_enabled"):
+        if key in overlay and overlay.get(key) is not None:
+            merged[key] = overlay[key]
+    return merged
+
+
 class BroadcastNetworkError(ValueError):
     pass
 
@@ -516,6 +539,33 @@ class BroadcastNetworkRuntime:
         if state is None:
             return None
         spectator_session = hub.join_spectate(match_id, user_id)
+        access_payload = {
+            "access_source": "infinite_league" if channel_type == "ai" else "broadcast_network",
+            "viewing_fee_coin": 0,
+            "premium_features": {
+                "generated_commentary": True,
+                "instant_replay": True,
+                "dual_commentary": True,
+            },
+            "channel_context": {
+                "channel_id": channel_id,
+                "channel_type": channel_type,
+                "auto_switch_enabled": True,
+            },
+            "sync_strategy": state.spectator_sync.sync_strategy if state.spectator_sync is not None else "deterministic_playback",
+            "watch_party_enabled": True,
+            "reactions_enabled": True,
+        }
+        ticketing_runtime = getattr(self.app.state, "ticketing_runtime", None)
+        if ticketing_runtime is not None:
+            access_payload = _merge_session_access(
+                access_payload,
+                ticketing_runtime.resolve_attendee_access_for_user_id(
+                    match_id=match_id,
+                    user_id=user_id,
+                    consume=True,
+                ),
+            )
         return SpectatorSessionView(
             id=spectator_session.id,
             match_id=match_id,
@@ -535,13 +585,16 @@ class BroadcastNetworkRuntime:
                 LiveMatchSpeedModeView(key="fast", label="Fast", target_duration_seconds=30),
                 LiveMatchSpeedModeView(key="turbo", label="Turbo", target_duration_seconds=10),
             ],
-            access_source="infinite_league" if channel_type == "ai" else "broadcast_network",
-            viewing_fee_coin=0,
-            premium_features={"generated_commentary": True, "instant_replay": True, "dual_commentary": True},
-            channel_context={"channel_id": channel_id, "channel_type": channel_type, "auto_switch_enabled": True},
-            sync_strategy=state.spectator_sync.sync_strategy if state.spectator_sync is not None else "deterministic_playback",
-            watch_party_enabled=True,
-            reactions_enabled=True,
+            access_source=access_payload.get("access_source"),
+            rights_owner_id=access_payload.get("rights_owner_id"),
+            viewing_fee_coin=access_payload.get("viewing_fee_coin") or 0,
+            premium_features=dict(access_payload.get("premium_features") or {}),
+            sponsored_overlays=list(access_payload.get("sponsored_overlays") or []),
+            stadium_ads=list(access_payload.get("stadium_ads") or []),
+            channel_context=dict(access_payload.get("channel_context") or {}),
+            sync_strategy=str(access_payload.get("sync_strategy") or "deterministic_playback"),
+            watch_party_enabled=bool(access_payload.get("watch_party_enabled", True)),
+            reactions_enabled=bool(access_payload.get("reactions_enabled", True)),
         )
 
     def _create_watch_session(self, *, user_id: str, channel_id: str, current_match_id: str | None) -> BroadcastWatchSession:

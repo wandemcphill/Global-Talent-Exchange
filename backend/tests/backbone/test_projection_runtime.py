@@ -6,7 +6,9 @@ from sqlalchemy.orm import sessionmaker
 from app.backbone.kafka import KafkaMessage
 from app.backbone.projection_runtime import ProjectionWorkerService
 from app.core.database import ensure_database_schema_current
+from app.models.news_article import NewsArticle
 from app.models.notification_record import NotificationRecord
+from app.models.prestige_rating import PrestigeRating
 from app.models.projections import CompetitionStandingProjection, PlayerStatsProjection, ProjectionEventReceipt
 from app.models.story_feed import StoryFeedItem
 
@@ -142,12 +144,20 @@ def test_projection_worker_materializes_match_completed_events_once(tmp_path) ->
         assert player_rows[1].wins == 1
 
         receipts = list(session.scalars(select(ProjectionEventReceipt)).all())
-        assert len(receipts) == 3
+        assert len(receipts) == 4
+        assert any(receipt.projection_name == "legend_layer_projection" for receipt in receipts)
 
         stories = list(session.scalars(select(StoryFeedItem)).all())
-        assert len(stories) == 1
-        assert stories[0].story_type == "match_completed"
-        assert stories[0].subject_id == "fixture-500"
+        assert len(stories) >= 2
+        assert any(item.story_type == "match_completed" and item.subject_id == "fixture-500" for item in stories)
+        assert any(item.story_type == "news_article" for item in stories)
+
+        articles = list(session.scalars(select(NewsArticle)).all())
+        assert len(articles) >= 1
+        assert articles[0].related_match_id == "fixture-500"
+
+        prestige_rows = list(session.scalars(select(PrestigeRating)).all())
+        assert len(prestige_rows) >= 4
 
         notifications = list(session.scalars(select(NotificationRecord).order_by(NotificationRecord.user_id.asc())).all())
         assert len(notifications) == 2

@@ -10,6 +10,7 @@ from app.core.container import ApplicationContext
 from app.gtex.config import GtexSettings, load_gtex_settings
 from app.gtex.service import AiLeagueService, CreatorMarketService, JackpotService, UnifiedEconomyService
 from app.gtex.store import build_state_store
+from app.gtex_universe.service import GtexUniverseService
 from app.wallets.service import WalletService
 
 
@@ -22,6 +23,7 @@ class GtexRuntime:
     creator_market: CreatorMarketService
     economy: UnifiedEconomyService
     ai_leagues: AiLeagueService
+    universe: GtexUniverseService
 
     def shutdown(self) -> None:
         self.state_store.close()
@@ -71,6 +73,17 @@ def build_gtex_runtime(
         event_publisher=event_publisher,
         realtime_channel=realtime_channel,
     )
+    universe = GtexUniverseService(
+        settings=gtex_settings,
+        wallet_service=wallet_service,
+        state_store=state_store,
+        creator_market_service=creator_market,
+        economy_service=economy,
+        ai_leagues=ai_leagues,
+        event_publisher=event_publisher,
+        realtime_channel=realtime_channel,
+    )
+    ai_leagues.simulation_bridge = universe
     return GtexRuntime(
         settings=gtex_settings,
         state_store=state_store,
@@ -79,12 +92,16 @@ def build_gtex_runtime(
         creator_market=creator_market,
         economy=economy,
         ai_leagues=ai_leagues,
+        universe=universe,
     )
 
 
 def ensure_gtex_runtime(app: FastAPI) -> GtexRuntime:
     runtime = getattr(app.state, "gtex_runtime", None)
     if runtime is None:
+        from app.modules import ensure_modules_loaded
+
+        ensure_modules_loaded(app)
         runtime = build_gtex_runtime(
             app_settings=getattr(app.state, "settings", None),
             session_factory=getattr(app.state, "session_factory", None),
@@ -124,4 +141,5 @@ def _seed_runtime(app: FastAPI, runtime: GtexRuntime) -> None:
     with session_factory() as session:
         runtime.jackpot.ensure_open_round(session)
         runtime.ai_leagues.seed_defaults(session)
+        runtime.universe.seed_defaults(session)
         session.commit()

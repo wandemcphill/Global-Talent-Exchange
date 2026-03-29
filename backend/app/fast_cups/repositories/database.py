@@ -45,24 +45,41 @@ class DatabaseFastCupRepository(FastCupRepository):
         self._session_factory = session_factory
 
     def save(self, cup: FastCup) -> FastCup:
-        payload = _serialize_value(cup)
-        if not isinstance(payload, dict):
-            raise TypeError("Fast cup payload serialization must produce a mapping.")
+        return self.save_many((cup,))[0]
+
+    def save_many(self, cups: tuple[FastCup, ...] | list[FastCup]) -> tuple[FastCup, ...]:
+        if not cups:
+            return ()
+
+        payloads_by_id: dict[str, dict[str, object]] = {}
+        for cup in cups:
+            payload = _serialize_value(cup)
+            if not isinstance(payload, dict):
+                raise TypeError("Fast cup payload serialization must produce a mapping.")
+            payloads_by_id[cup.cup_id] = payload
+
+        cup_ids = tuple(payloads_by_id)
         with self._session_factory() as session:
-            existing = session.scalar(select(FastCupRecord).where(FastCupRecord.cup_id == cup.cup_id))
-            if existing is None:
-                session.add(
-                    FastCupRecord(
-                        cup_id=cup.cup_id,
-                        division=cup.division.value,
-                        size=cup.size,
-                        kickoff_at=_normalize_datetime(cup.slot.kickoff_at),
-                        buy_in=cup.buy_in,
-                        currency=cup.currency,
-                        payload_json=payload,
+            existing_rows = {
+                row.cup_id: row
+                for row in session.scalars(select(FastCupRecord).where(FastCupRecord.cup_id.in_(cup_ids))).all()
+            }
+            for cup in cups:
+                payload = payloads_by_id[cup.cup_id]
+                existing = existing_rows.get(cup.cup_id)
+                if existing is None:
+                    session.add(
+                        FastCupRecord(
+                            cup_id=cup.cup_id,
+                            division=cup.division.value,
+                            size=cup.size,
+                            kickoff_at=_normalize_datetime(cup.slot.kickoff_at),
+                            buy_in=cup.buy_in,
+                            currency=cup.currency,
+                            payload_json=payload,
+                        )
                     )
-                )
-            else:
+                    continue
                 existing.division = cup.division.value
                 existing.size = cup.size
                 existing.kickoff_at = _normalize_datetime(cup.slot.kickoff_at)
@@ -70,10 +87,7 @@ class DatabaseFastCupRepository(FastCupRepository):
                 existing.currency = cup.currency
                 existing.payload_json = payload
             session.commit()
-        return _deserialize_fast_cup(payload)
-
-    def save_many(self, cups: tuple[FastCup, ...] | list[FastCup]) -> tuple[FastCup, ...]:
-        return tuple(self.save(cup) for cup in cups)
+        return tuple(_deserialize_fast_cup(payloads_by_id[cup.cup_id]) for cup in cups)
 
     def get(self, cup_id: str) -> FastCup:
         with self._session_factory() as session:

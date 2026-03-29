@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from threading import Lock
+from threading import RLock
 from time import perf_counter
 
 from fastapi import APIRouter, FastAPI
@@ -52,7 +52,7 @@ def register_modules(app: FastAPI, modules: tuple[DomainModule, ...] | None = No
     app.state.module_load_seconds = duration_seconds
     app.state.module_hydration_seconds = 0.0
     app.state.modules_hydrated = False
-    app.state.module_loader_lock = getattr(app.state, "module_loader_lock", Lock())
+    app.state.module_loader_lock = getattr(app.state, "module_loader_lock", RLock())
     if not getattr(app.state, "module_loader_middleware_added", False):
         app.add_middleware(LazyModuleMiddleware)
         app.state.module_loader_middleware_added = True
@@ -68,7 +68,7 @@ def register_modules(app: FastAPI, modules: tuple[DomainModule, ...] | None = No
 def ensure_modules_loaded(app: FastAPI) -> None:
     if getattr(app.state, "modules_hydrated", False):
         return
-    lock: Lock = app.state.module_loader_lock
+    lock = app.state.module_loader_lock
     with lock:
         if getattr(app.state, "modules_hydrated", False):
             return
@@ -314,6 +314,25 @@ def _seed_regen_universe_defaults(app, context) -> None:
     _run_startup_seed(context, seed_name="regen_universe_defaults", seed_action=_seed)
 
 
+def _seed_regen_universe_preseeded_national_pool(app, context) -> None:
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.regen_universe.expansion_service import (
+                RegenUniverseExpansionService,
+                RegenUniverseExpansionValidationError,
+            )
+
+            service = RegenUniverseExpansionService(session)
+            try:
+                service.seed_preseeded_national_regens(preseed_batch="system_start")
+            except RegenUniverseExpansionValidationError as exc:
+                if str(exc) != "preseed_countries_not_found":
+                    raise
+            session.commit()
+
+    _run_startup_seed(context, seed_name="regen_universe_preseeded_national_pool", seed_action=_seed)
+
+
 DOMAIN_MODULES = (
     _module("health"),
     _module("observability", router_path="app.observability.router:router"),
@@ -364,6 +383,7 @@ DOMAIN_MODULES = (
     _module("national_team_engine_admin", router_path="app.national_team_engine.router:admin_router"),
     _module("story_feed_engine", router_path="app.story_feed_engine.router:router"),
     _module("story_feed_engine_admin", router_path="app.story_feed_engine.router:admin_router"),
+    _module("legend_layer", router_path="app.legend_layer.router:router"),
     _module(
         "viral",
         router_path="app.viral.router:router",
@@ -488,12 +508,17 @@ DOMAIN_MODULES = (
     _module("public_analytics", router_path="app.analytics.router:public_router"),
     _module("players", router_path="app.players.router:router"),
     _module("global_memory", router_path="app.global_memory.router:router"),
+    _module("awards", router_path="app.awards.router:router", with_api_alias=True),
+    _module("platform_experience", router_path="app.platform_experience.router:router"),
     _module("regen_ecosystem", router_path="app.regen_ecosystem.router:router", with_api_alias=True),
     _module(
         "regen_universe",
         router_path="app.regen_universe.router:router",
         with_api_alias=True,
-        on_startup=(_seed_regen_universe_defaults,),
+        on_startup=(
+            _seed_regen_universe_defaults,
+            _seed_regen_universe_preseeded_national_pool,
+        ),
     ),
     _module("regen_universe_admin", router_path="app.regen_universe.router:admin_router"),
     _module("player_lifecycle", router_path="app.routes.player_lifecycle:router"),
@@ -542,6 +567,12 @@ DOMAIN_MODULES = (
         on_startup=(_seed_commentary_defaults,),
     ),
     _module("live_matches", router_path="app.live_matches.router:router"),
+    _module(
+        "ticketing",
+        router_path="app.ticketing.router:router",
+        with_api_alias=True,
+        on_startup=("app.ticketing.runtime:bind_ticketing_runtime",),
+    ),
     _module(
         "infinite_league",
         router_path="app.infinite_league.router:router",
@@ -592,6 +623,7 @@ DOMAIN_MODULES = (
         on_startup=("app.gtex.runtime:bind_gtex_runtime",),
         on_shutdown=("app.gtex.runtime:shutdown_gtex_runtime",),
     ),
+    _module("gtex_universe", router_path="app.gtex_universe.router:router"),
     _module("realtime", router_path="app.realtime.router:router"),
     _module("users", router_path="app.users.router:router"),
 )

@@ -10,6 +10,7 @@ from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
 from app.club_identity.jerseys.service import ClubIdentityService
 from app.club_identity.models.jersey_models import JerseyVariant
 from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.player_personality import PlayerPersonality
 from app.models.club_profile import ClubProfile
 from app.common.enums.competition_type import CompetitionType
 from app.competition_engine.queue_contracts import MatchSimulationJob
@@ -203,6 +204,13 @@ class SyntheticSquadFactory:
             club_id=team_id,
             squad=starters + bench,
         )
+        squad_player_ids = [player.id for player, _ in starters + bench]
+        personality_by_player_id = {
+            item.player_id: item
+            for item in lifecycle_service.session.scalars(
+                select(PlayerPersonality).where(PlayerPersonality.player_id.in_(squad_player_ids))
+            ).all()
+        }
         return MatchTeamInput(
             team_id=team_id,
             team_name=team_name,
@@ -222,6 +230,7 @@ class SyntheticSquadFactory:
                     assigned_role=role,
                     base_overall=resolved_overall,
                     dynamics_snapshot=dynamics_snapshot,
+                    personality=personality_by_player_id.get(player.id),
                 )
                 for player, role in starters
             ],
@@ -231,6 +240,7 @@ class SyntheticSquadFactory:
                     assigned_role=role,
                     base_overall=max(45, resolved_overall - 3),
                     dynamics_snapshot=dynamics_snapshot,
+                    personality=personality_by_player_id.get(player.id),
                 )
                 for player, role in bench
             ],
@@ -521,14 +531,33 @@ class SyntheticSquadFactory:
         assigned_role: PlayerRole,
         base_overall: int,
         dynamics_snapshot: TeamDynamicsSnapshot | None = None,
+        personality: PlayerPersonality | None = None,
     ) -> MatchPlayerInput:
+        personality_confidence = int(personality.confidence) if personality is not None else 50
+        personality_clutch = int(personality.clutch_factor) if personality is not None else 50
+        personality_consistency = int(personality.consistency) if personality is not None else 50
+        personality_aggression = int(personality.aggression) if personality is not None else 50
         overall = self._estimate_player_overall(player, base_overall=base_overall)
-        discipline = self._clamp(70)
-        fitness = self._clamp(78)
+        overall = self._clamp(overall + max(-2, min(3, (personality_confidence - 50) // 12)))
+        discipline = self._clamp(70 - max(0, min(8, (personality_aggression - 55) // 5)))
+        fitness = self._clamp(78 + max(0, min(5, (personality_consistency - 50) // 8)))
         recent_form = self._managed_recent_form(player)
         morale_value = int(round((dynamics_snapshot.morale_by_player.get(player.id, player.morale) if dynamics_snapshot is not None else player.morale) or player.morale))
-        morale = self._clamp(morale_value)
-        motivation = self._clamp(int(round(58 + ((morale - 50) * 0.45) + ((recent_form - 55) * 0.25))))
+        morale = self._clamp(morale_value + max(-6, min(8, (personality_confidence - 50) // 4)))
+        motivation = self._clamp(
+            int(
+                round(
+                    58
+                    + ((morale - 50) * 0.45)
+                    + ((recent_form - 55) * 0.25)
+                    + ((personality_confidence - 50) * 0.20)
+                    + ((personality_clutch - 50) * 0.15)
+                )
+            )
+        )
+        consistency_bonus = max(-4, min(6, (personality_consistency - 50) // 6))
+        clutch_bonus = max(-4, min(8, (personality_clutch - 50) // 5))
+        big_match_bonus = max(-3, min(6, ((personality_clutch - 50) + (personality_confidence - 50)) // 10))
         if assigned_role is PlayerRole.GOALKEEPER:
             return MatchPlayerInput(
                 player_id=player.id,
@@ -552,9 +581,9 @@ class SyntheticSquadFactory:
                 aerial_ability=self._clamp(overall + 7),
                 technique=self._clamp(overall - 2),
                 stamina_curve=self._clamp(fitness - 6),
-                consistency=self._clamp(overall + 2),
-                clutch_factor=self._clamp(overall + 2),
-                big_match_temperament=self._clamp(overall + 1),
+                consistency=self._clamp(overall + 2 + consistency_bonus),
+                clutch_factor=self._clamp(overall + 2 + clutch_bonus),
+                big_match_temperament=self._clamp(overall + 1 + big_match_bonus),
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
@@ -585,9 +614,9 @@ class SyntheticSquadFactory:
                 aerial_ability=self._clamp(overall + 5),
                 technique=self._clamp(overall - 1),
                 stamina_curve=self._clamp(fitness - 2),
-                consistency=self._clamp(overall + 2),
-                clutch_factor=self._clamp(overall - 2),
-                big_match_temperament=self._clamp(overall + 1),
+                consistency=self._clamp(overall + 2 + consistency_bonus),
+                clutch_factor=self._clamp(overall - 2 + clutch_bonus),
+                big_match_temperament=self._clamp(overall + 1 + big_match_bonus),
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
@@ -618,9 +647,9 @@ class SyntheticSquadFactory:
                 aerial_ability=self._clamp(overall - 6),
                 technique=self._clamp(overall + 7),
                 stamina_curve=self._clamp(fitness),
-                consistency=self._clamp(overall + 4),
-                clutch_factor=self._clamp(overall + 1),
-                big_match_temperament=self._clamp(overall + 2),
+                consistency=self._clamp(overall + 4 + consistency_bonus),
+                clutch_factor=self._clamp(overall + 1 + clutch_bonus),
+                big_match_temperament=self._clamp(overall + 2 + big_match_bonus),
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
@@ -650,9 +679,9 @@ class SyntheticSquadFactory:
             aerial_ability=self._clamp(overall - 2),
             technique=self._clamp(overall + 3),
             stamina_curve=self._clamp(fitness - 3),
-            consistency=self._clamp(overall + 2),
-            clutch_factor=self._clamp(overall + 7),
-            big_match_temperament=self._clamp(overall + 5),
+            consistency=self._clamp(overall + 2 + consistency_bonus),
+            clutch_factor=self._clamp(overall + 7 + clutch_bonus),
+            big_match_temperament=self._clamp(overall + 5 + big_match_bonus),
             recent_form=recent_form,
             morale=morale,
             motivation=motivation,

@@ -6,27 +6,56 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, configure_mappers, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.ingestion.models import Competition, Club, InternalLeague, Match, Player, PlayerMatchStat, PlayerSeasonStat, Season as IngestionSeason
+from app.ingestion.models import (
+    Competition,
+    Club,
+    Country,
+    InternalLeague,
+    Match,
+    Player,
+    PlayerMatchStat,
+    PlayerSeasonStat,
+    Season as IngestionSeason,
+    TeamStanding,
+)
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
+from app.models.player_contract import PlayerContract
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_rivalry import PlayerRivalry
+from app.models.player_story import PlayerStory
 from app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardSale, PlayerCardTier
 from app.models.regen import (
+    RegenAward as MarketRegenAward,
     RegenDemandSignal,
     RegenDiscoveryBadge,
     RegenLegacyRecord,
     RegenLineageProfile,
     RegenMarketActivity,
+    RegenOnboardingFlag,
     RegenOriginMetadata,
     RegenPersonalityProfile,
     RegenProfile,
+    RegenRecommendationItem,
     RegenRelationshipTag,
     RegenScoutReport,
     RegenTransferFeeRule,
+    RegenTwinsGroup,
     RegenValueSnapshot,
 )
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
+from app.models.story_feed import StoryFeedItem
 from app.players.read_models import PlayerSummaryReadModel
-from app.regen_universe.models import RegenAward, RegenAwardWinner, RegenHallOfFame, RegenPerformanceRecord, RegenRankingSnapshot, RegenSeason
+from app.regen_universe.models import (
+    RegenAward,
+    RegenAwardWinner,
+    RegenHallOfFame,
+    RegenPerformanceRecord,
+    RegenRankingSnapshot,
+    RegenSeason,
+)
 from app.regen_universe.service import RegenUniverseService
 
 
@@ -42,12 +71,19 @@ def build_regen_universe_session() -> Session:
         tables=[
             User.__table__,
             ClubProfile.__table__,
+            Country.__table__,
             InternalLeague.__table__,
             Competition.__table__,
             IngestionSeason.__table__,
             Club.__table__,
             Match.__table__,
+            TeamStanding.__table__,
             Player.__table__,
+            PlayerContract.__table__,
+            PlayerCareerEntry.__table__,
+            PlayerLifecycleEvent.__table__,
+            PlayerRivalry.__table__,
+            PlayerStory.__table__,
             PlayerCardTier.__table__,
             PlayerCard.__table__,
             PlayerCardListing.__table__,
@@ -58,13 +94,19 @@ def build_regen_universe_session() -> Session:
             RegenLineageProfile.__table__,
             RegenRelationshipTag.__table__,
             RegenDiscoveryBadge.__table__,
+            MarketRegenAward.__table__,
             RegenLegacyRecord.__table__,
+            RegenOnboardingFlag.__table__,
+            RegenRecommendationItem.__table__,
             RegenTransferFeeRule.__table__,
+            RegenTwinsGroup.__table__,
             RegenValueSnapshot.__table__,
             RegenMarketActivity.__table__,
             RegenDemandSignal.__table__,
             RegenScoutReport.__table__,
+            NationalRegenSeed.__table__,
             PlayerSummaryReadModel.__table__,
+            StoryFeedItem.__table__,
             PlayerSeasonStat.__table__,
             PlayerMatchStat.__table__,
             RegenSeason.__table__,
@@ -88,6 +130,19 @@ def seed_two_season_universe(session: Session) -> dict[str, object]:
         full_name="Owner User",
     )
     session.add(owner)
+    country = Country(
+        id="country-ng",
+        source_provider="test",
+        provider_external_id="country-ng",
+        name="Nigeria",
+        alpha2_code="NG",
+        alpha3_code="NGA",
+        fifa_code="NGA",
+        confederation_code="CAF",
+        market_region="africa",
+        is_enabled_for_universe=True,
+    )
+    session.add(country)
     club_profile = ClubProfile(
         id="club-profile-1",
         owner_user_id=owner.id,
@@ -122,12 +177,25 @@ def seed_two_season_universe(session: Session) -> dict[str, object]:
         id="competition-premier",
         source_provider="test",
         provider_external_id="competition-premier",
+        country_id=country.id,
         internal_league_id=league.id,
         name="Prestige Premier League",
         slug="prestige-premier-league",
         code="PPL",
         is_major=False,
         competition_strength=82.0,
+    )
+    prestige_club = Club(
+        id="club-prestige",
+        source_provider="test",
+        provider_external_id="club-prestige",
+        country_id=country.id,
+        current_competition_id=competition.id,
+        internal_league_id=league.id,
+        name="Prestige United",
+        slug="prestige-united",
+        short_name="PUN",
+        code="PUN",
     )
     ingestion_season_one = IngestionSeason(
         id="ingestion-season-1",
@@ -149,7 +217,7 @@ def seed_two_season_universe(session: Session) -> dict[str, object]:
         end_date=date(2027, 5, 31),
         is_current=True,
     )
-    session.add_all([league, competition, ingestion_season_one, ingestion_season_two])
+    session.add_all([league, competition, prestige_club, ingestion_season_one, ingestion_season_two])
 
     players = {
         "veteran": _create_regen_player(
@@ -254,6 +322,26 @@ def seed_two_season_universe(session: Session) -> dict[str, object]:
             provider_external_id=f"{players[label].id}-season-2",
             **stats,
         )
+    session.add(
+        TeamStanding(
+            id="standing-prestige-title",
+            source_provider="test",
+            provider_external_id="standing-prestige-title",
+            competition_id=competition.id,
+            season_id=ingestion_season_two.id,
+            club_id=prestige_club.id,
+            standing_type="total",
+            position=1,
+            played=38,
+            won=28,
+            drawn=6,
+            lost=4,
+            goals_for=88,
+            goals_against=31,
+            goal_difference=57,
+            points=90,
+        )
+    )
     session.flush()
 
     service = RegenUniverseService(session)
@@ -271,6 +359,8 @@ def seed_two_season_universe(session: Session) -> dict[str, object]:
         "ingestion_season_two": ingestion_season_two,
         "club_profile": club_profile,
         "competition": competition,
+        "country": country,
+        "club": prestige_club,
     }
 
 

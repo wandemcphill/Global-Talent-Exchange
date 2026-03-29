@@ -43,6 +43,7 @@ def build_worker_context() -> WorkerContext:
     with database.session_factory() as session:
         runtime.jackpot.ensure_open_round(session)
         runtime.ai_leagues.seed_defaults(session)
+        runtime.universe.seed_defaults(session)
         session.commit()
     return WorkerContext(database=database, runtime=runtime, event_publisher=event_publisher)
 

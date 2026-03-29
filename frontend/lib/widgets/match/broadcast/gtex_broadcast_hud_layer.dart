@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match/gtex_broadcast_hud_state.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/models/platform/gtex_platform_experience.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_commentary_overlay.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_event_overlay.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_fulltime_overlay.dart';
@@ -15,6 +16,7 @@ class GtexBroadcastHudLayer extends StatelessWidget {
     super.key,
     required this.viewState,
     required this.hudState,
+    required this.platformMode,
     required this.matchTitle,
     required this.competitionLabel,
     required this.onTogglePause,
@@ -26,6 +28,7 @@ class GtexBroadcastHudLayer extends StatelessWidget {
 
   final MatchViewState viewState;
   final GtexBroadcastHudState hudState;
+  final GtexPlatformMode platformMode;
   final String matchTitle;
   final String competitionLabel;
   final VoidCallback onTogglePause;
@@ -36,32 +39,32 @@ class GtexBroadcastHudLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool tvMode = platformMode == GtexPlatformMode.tv;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        GtexScoreboardOverlay(
-          viewState: viewState,
-          hudState: hudState,
-        ),
+        GtexScoreboardOverlay(viewState: viewState, hudState: hudState),
         GtexEventOverlay(event: hudState.eventOverlay),
         GtexCommentaryOverlay(
           commentary: hudState.commentary,
           detail: hudState.commentaryDetail,
         ),
-        GtexSocialReactionsRail(
-          visible: hudState.showSocialRail,
-          reactions: hudState.socialReactions,
-          showGiftAction: hudState.canGift,
-          onGiftTap: onGiftTap,
-        ),
-        GtexHiddenControlsOverlay(
-          visible: hudState.controlsVisible,
-          isPaused: hudState.isPaused,
-          speedLabel: hudState.speedLabel,
-          onTogglePause: onTogglePause,
-          onCycleSpeed: onCycleSpeed,
-          onReplay: onReplay,
-        ),
+        if (!tvMode)
+          GtexSocialReactionsRail(
+            visible: hudState.showSocialRail,
+            reactions: hudState.socialReactions,
+            showGiftAction: hudState.canGift,
+            onGiftTap: onGiftTap,
+          ),
+        if (!tvMode)
+          GtexHiddenControlsOverlay(
+            visible: hudState.controlsVisible,
+            isPaused: hudState.isPaused,
+            speedLabel: hudState.speedLabel,
+            onTogglePause: onTogglePause,
+            onCycleSpeed: onCycleSpeed,
+            onReplay: onReplay,
+          ),
         GtexMatchIntroOverlay(
           visible: hudState.showIntroOverlay,
           competitionLabel: competitionLabel,

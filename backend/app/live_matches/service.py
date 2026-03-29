@@ -49,6 +49,7 @@ class LiveMatchError(ValueError):
 
 BatchCallback = Callable[[str, list[LiveMatchStreamEventView], LiveMatchSnapshotView], None]
 CompleteCallback = Callable[[str], None]
+AttendanceOverlayProvider = Callable[[str, MatchCrowdStateView | None], MatchCrowdStateView | None]
 
 
 @dataclass(slots=True)
@@ -95,6 +96,7 @@ class LiveMatchHub:
     commentary_engine: LiveCommentaryEngine = field(default_factory=LiveCommentaryEngine)
     stadium_service: StadiumImmersionService = field(default_factory=StadiumImmersionService)
     event_publisher: EventPublisher | None = None
+    attendance_overlay_provider: AttendanceOverlayProvider | None = None
     _matches: dict[str, _LiveMatchRuntime] = field(default_factory=dict)
     _halted_matches: dict[str, dict[str, object]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
@@ -851,6 +853,9 @@ class LiveMatchHub:
         return None
 
     def _build_state_view(self, runtime: _LiveMatchRuntime) -> LiveMatchStateView:
+        crowd_state = _runtime_crowd_state(runtime)
+        if self.attendance_overlay_provider is not None:
+            crowd_state = self.attendance_overlay_provider(runtime.match_id, crowd_state)
         return LiveMatchStateView(
             match_id=runtime.match_id,
             channel=runtime.channel,
@@ -859,7 +864,7 @@ class LiveMatchHub:
             spectator_count=len(runtime.spectator_user_ids),
             event_count=len(runtime.published_events),
             snapshot=runtime.last_snapshot,
-            crowd_state=_runtime_crowd_state(runtime),
+            crowd_state=crowd_state,
             spectator_sync=_runtime_spectator_sync(runtime),
         )
 
@@ -1005,6 +1010,7 @@ def ensure_live_match_hub(app: FastAPI, *, step_interval_seconds: float | None =
     hub.cache_backend = getattr(app.state, "cache_backend", hub.cache_backend)
     hub._hot_cache = HotPathCache(hub.cache_backend)
     hub.event_publisher = getattr(app.state, "event_publisher", hub.event_publisher)
+    hub.attendance_overlay_provider = getattr(app.state, "stadium_ticket_crowd_overlay_provider", hub.attendance_overlay_provider)
     hub.stadium_service.session_factory = getattr(app.state, "session_factory", hub.session_factory)
     hub.commentary_engine.configure(
         settings=getattr(app.state, "settings", None),

@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.legend_layer.service import LegendLayerService
 from app.backbone.kafka import KafkaJsonConsumer
 from app.models.notification_record import NotificationRecord
 from app.models.projections import CompetitionStandingProjection, PlayerStatsProjection, ProjectionEventReceipt
@@ -234,6 +235,21 @@ class MatchFeedProjectionHandler:
 
 
 @dataclass(slots=True)
+class LegendLayerProjectionHandler:
+    projection_name: str = "legend_layer_projection"
+
+    def apply(self, session: Session, *, envelope: dict[str, Any]) -> None:
+        event_id = str(envelope.get("event_id"))
+        if _already_processed(session, projection_name=self.projection_name, event_id=event_id):
+            return
+        if str(envelope.get("event_type") or "") != "match.completed":
+            return
+        payload = _event_payload(envelope)
+        LegendLayerService(session=session).process_match_completed(payload, event_id=event_id)
+        _mark_processed(session, projection_name=self.projection_name, envelope=envelope)
+
+
+@dataclass(slots=True)
 class ProjectionWorkerService:
     session_factory: sessionmaker[Session]
     consumer: KafkaJsonConsumer
@@ -243,6 +259,7 @@ class ProjectionWorkerService:
             StandingsProjectionHandler(),
             PlayerStatsProjectionHandler(),
             MatchFeedProjectionHandler(),
+            LegendLayerProjectionHandler(),
         )
     )
     _stop_event: ThreadEvent = field(default_factory=ThreadEvent)
@@ -346,6 +363,7 @@ def _message_carrier(message) -> dict[str, str]:
 
 
 __all__ = [
+    "LegendLayerProjectionHandler",
     "MatchFeedProjectionHandler",
     "PlayerStatsProjectionHandler",
     "ProjectionWorkerService",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from hashlib import sha256
 import math
 import random
 from typing import Any
@@ -1393,6 +1394,7 @@ class AiLeagueService(GtexBaseService):
         )
         self.creator_market_service = creator_market_service
         self.economy_service = economy_service
+        self.simulation_bridge: Any | None = None
 
     def seed_defaults(self, session: Session) -> None:
         if session.scalar(select(GtexLeague.id).limit(1)) is None:
@@ -1655,10 +1657,38 @@ class AiLeagueService(GtexBaseService):
         home = self._resolve_participant(session, match=match, side="home")
         away = self._resolve_participant(session, match=match, side="away")
         prior_metadata = dict(match.metadata_json or {})
+        simulation_context: dict[str, Any] = {}
+        if self.simulation_bridge is not None and hasattr(self.simulation_bridge, "prepare_match_context"):
+            simulation_context = dict(
+                self.simulation_bridge.prepare_match_context(
+                    session,
+                    match=match,
+                    home=home,
+                    away=away,
+                )
+                or {}
+            )
         home_fatigue = float(prior_metadata.get("home_fatigue", 0.0) or 0.0)
         away_fatigue = float(prior_metadata.get("away_fatigue", 0.0) or 0.0)
-        home_strength = max(1.0, float(home.strength) - (home_fatigue * 2.0))
-        away_strength = max(1.0, float(away.strength) - (away_fatigue * 2.0))
+        home_strength = max(1.0, float(home.strength) - (home_fatigue * 2.0)) * float(
+            simulation_context.get("home_strength_multiplier") or 1.0
+        )
+        away_strength = max(1.0, float(away.strength) - (away_fatigue * 2.0)) * float(
+            simulation_context.get("away_strength_multiplier") or 1.0
+        )
+        seed_material = "|".join(
+            item
+            for item in (
+                match.id,
+                str(match.home_user_id or ""),
+                str(match.home_ai_id or ""),
+                str(match.away_user_id or ""),
+                str(match.away_ai_id or ""),
+                str(simulation_context.get("seed_material") or ""),
+            )
+            if item
+        )
+        rng = random.Random(int(sha256(seed_material.encode("utf-8")).hexdigest()[:16], 16))
         rivalry_meetings = int(
             session.scalar(
                 select(func.count())
@@ -1679,9 +1709,15 @@ class AiLeagueService(GtexBaseService):
         home_score = 0
         away_score = 0
         generated_events: list[GtexMatchEvent] = []
-        for index in range(1, self.settings.ai_simulation_event_count + 1):
-            actor = home if self._random.random() < float(home_strength / (home_strength + away_strength)) else away
-            event_type = self._pick_event_type(actor=actor)
+        event_count = max(3, self.settings.ai_simulation_event_count + int(simulation_context.get("intensity_bonus_events") or 0))
+        aggression_overrides = dict(simulation_context.get("aggression_overrides") or {})
+        for index in range(1, event_count + 1):
+            actor = home if rng.random() < float(home_strength / (home_strength + away_strength)) else away
+            event_type = self._pick_event_type(
+                actor=actor,
+                rng=rng,
+                aggression_bonus=float(aggression_overrides.get(actor.subject_key) or 0.0),
+            )
             if event_type == "goal":
                 if actor.subject_key == home.subject_key:
                     home_score += 1
@@ -1691,7 +1727,7 @@ class AiLeagueService(GtexBaseService):
                 GtexMatchEvent(
                     match_id=match.id,
                     event_index=index,
-                    phase="regulation" if index < self.settings.ai_simulation_event_count else "full_time",
+                    phase="regulation" if index < event_count else "full_time",
                     actor_key=actor.subject_key,
                     event_type=event_type,
                     details_json={"home_score": home_score, "away_score": away_score, "actor": actor.label},
@@ -1735,7 +1771,7 @@ class AiLeagueService(GtexBaseService):
             if winner_label != "Neither side"
             else f"A {rivalry_level} duel finished level after {len(generated_events)} simulated phases."
         )
-        match.metadata_json = {
+        base_metadata = {
             **prior_metadata,
             "home_strength": str(home_strength),
             "away_strength": str(away_strength),
@@ -1748,6 +1784,8 @@ class AiLeagueService(GtexBaseService):
                 "away_fatigue": away_fatigue,
                 "prior_meetings": rivalry_meetings,
                 "injury_context": dict(prior_metadata.get("injury_context") or {}),
+                "home_strength_multiplier": float(simulation_context.get("home_strength_multiplier") or 1.0),
+                "away_strength_multiplier": float(simulation_context.get("away_strength_multiplier") or 1.0),
             },
             "rivalry": {"meetings": rivalry_meetings, "level": rivalry_level},
             "narrative_output": {
@@ -1756,6 +1794,37 @@ class AiLeagueService(GtexBaseService):
                 "player_highlights": player_highlights,
             },
         }
+        bridge_metadata: dict[str, Any] = {}
+        if self.simulation_bridge is not None and hasattr(self.simulation_bridge, "finalize_match_context"):
+            bridge_metadata = dict(
+                self.simulation_bridge.finalize_match_context(
+                    session,
+                    match=match,
+                    home=home,
+                    away=away,
+                    context=simulation_context,
+                )
+                or {}
+            )
+        if bridge_metadata:
+            match.metadata_json = {
+                **base_metadata,
+                **bridge_metadata,
+                "match_context": {
+                    **dict(base_metadata.get("match_context") or {}),
+                    **dict(bridge_metadata.get("match_context") or {}),
+                },
+                "rivalry": {
+                    **dict(base_metadata.get("rivalry") or {}),
+                    **dict(bridge_metadata.get("rivalry") or {}),
+                },
+                "narrative_output": {
+                    **dict(base_metadata.get("narrative_output") or {}),
+                    **dict(bridge_metadata.get("narrative_output") or {}),
+                },
+            }
+        else:
+            match.metadata_json = base_metadata
         self.economy_service.settle_match_completion(session, match=match)
         return match
 
@@ -1788,13 +1857,22 @@ class AiLeagueService(GtexBaseService):
             "winner_ai_id": match.winner_ai_id,
             "queued_at": match.queued_at,
             "started_at": match.started_at,
-              "completed_at": match.completed_at,
-              "match_storyline": (match.metadata_json or {}).get("narrative_output", {}).get("match_storyline"),
-              "key_moments": list((match.metadata_json or {}).get("narrative_output", {}).get("key_moments") or []),
-              "player_highlights": list((match.metadata_json or {}).get("narrative_output", {}).get("player_highlights") or []),
-              "rivalry": dict((match.metadata_json or {}).get("rivalry") or {}),
-              "match_context": dict((match.metadata_json or {}).get("match_context") or {}),
-              "events": [
+            "completed_at": match.completed_at,
+            "match_storyline": (match.metadata_json or {}).get("narrative_output", {}).get("match_storyline"),
+            "key_moments": list((match.metadata_json or {}).get("narrative_output", {}).get("key_moments") or []),
+            "player_highlights": list((match.metadata_json or {}).get("narrative_output", {}).get("player_highlights") or []),
+            "rivalry": dict((match.metadata_json or {}).get("rivalry") or {}),
+            "match_context": dict((match.metadata_json or {}).get("match_context") or {}),
+            "home_manager": dict((match.metadata_json or {}).get("home_manager") or {}),
+            "away_manager": dict((match.metadata_json or {}).get("away_manager") or {}),
+            "commentary": list((match.metadata_json or {}).get("commentary") or []),
+            "broadcast_package": dict((match.metadata_json or {}).get("broadcast_package") or {}),
+            "news_article": dict((match.metadata_json or {}).get("news_article") or {}),
+            "career_summary": dict((match.metadata_json or {}).get("career_summary") or {}),
+            "fan_experience": dict((match.metadata_json or {}).get("fan_experience") or {}),
+            "social_warfare": dict((match.metadata_json or {}).get("social_warfare") or {}),
+            "real_world_sync": dict((match.metadata_json or {}).get("real_world_sync") or {}),
+            "events": [
                 {
                     "event_index": event.event_index,
                     "phase": event.phase,
@@ -1894,9 +1972,16 @@ class AiLeagueService(GtexBaseService):
             subject_key=self._subject_key(user=user, ai=ai),
         )
 
-    def _pick_event_type(self, *, actor: SimulatedParticipant) -> str:
+    def _pick_event_type(
+        self,
+        *,
+        actor: SimulatedParticipant,
+        rng: random.Random | None = None,
+        aggression_bonus: float = 0.0,
+    ) -> str:
         aggression = float(actor.ai.aggression) if actor.ai is not None else 0.55
-        roll = self._random.random()
+        aggression = max(0.05, min(0.95, aggression + aggression_bonus))
+        roll = (rng or self._random).random()
         if roll < 0.12 + (aggression * 0.20):
             return "goal"
         if roll < 0.35:

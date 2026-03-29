@@ -105,6 +105,8 @@ from app.models.broadcast_rights import (
     ViewSession,
 )
 from app.models.broadcast_watch_session import BroadcastWatchSession
+from app.models.platform_experience_state import PlatformExperienceState
+from app.models.ticketing import StadiumEvent, StadiumTicket, TicketReaction, TicketWaitlist
 from app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
 from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
@@ -122,6 +124,20 @@ from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.highlight_event import HighlightEvent
 from app.models.commentary_event import CommentaryEvent
 from app.models.commentator_profile import CommentaryProfileSelection, CommentatorProfile
+from app.models.gtex_universe import (
+    CareerDecision,
+    CareerDecisionType,
+    CareerLegacyRecord,
+    CareerPlayer,
+    CareerPlayerStatus,
+    CareerTrainingSession,
+    ManagerMatchHistory,
+    ManagerVsManagerHistory,
+    RealWorldEntityMapping,
+    RealWorldEvent,
+    RealWorldEventStatus,
+    RealWorldMappingType,
+)
 from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerControlMode, ManagerProfile
 from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
 from app.models.competition_participant import CompetitionParticipant
@@ -227,11 +243,25 @@ from app.models.economy_config import GiftCatalogItem, ServicePricingRule
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from app.models.fan_experience import (
+    FanExperienceTicket,
+    FanProfile,
+    FanReaction,
+    FanTribe,
+    LegacySnapshot,
+    MarketShockEvent,
+    MatchChatMessage,
+    MatchChatRoom,
+    MegaEvent,
+    NarrativeConflict,
+)
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_combo_rule import GiftComboRule
 from app.models.gift_transaction import GiftTransaction, GiftTransactionStatus
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.player_rivalry import PlayerRivalry
+from app.models.player_fan_reaction import PlayerFanReaction
+from app.models.player_interview import PlayerInterview
 from app.models.player_story import PlayerStory
 from app.models.player_face import PlayerFace
 from app.models.player_career_entry import PlayerCareerEntry
@@ -241,6 +271,8 @@ from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, P
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_personality import PlayerPersonality
+from app.models.prestige_rating import PrestigeRating
+from app.models.news_article import NewsArticle
 from app.models.real_world_hub import (
     RealClub,
     RealCompetition,
@@ -639,6 +671,7 @@ __all__ = [
     "BroadcastRightsAuction",
     "BroadcastRightsBid",
     "BroadcastWatchSession",
+    "PlatformExperienceState",
     "ClubIdentity",
     "ClubPhilosophy",
     "FanBase",
@@ -663,10 +696,18 @@ __all__ = [
     "CommentaryEvent",
     "CommentatorProfile",
     "CommentaryProfileSelection",
+    "CareerDecision",
+    "CareerDecisionType",
+    "CareerLegacyRecord",
+    "CareerPlayer",
+    "CareerPlayerStatus",
+    "CareerTrainingSession",
     "ManagerContract",
     "ManagerContractStatus",
     "ManagerControlMode",
+    "ManagerMatchHistory",
     "ManagerProfile",
+    "ManagerVsManagerHistory",
     "MatchEvent",
     "MatchEventTeam",
     "MatchEventType",
@@ -751,10 +792,20 @@ __all__ = [
     "CreatorTacticalAdviceStatus",
     "CreatorTacticalAdviceType",
     "CompetitionWatchlist",
+    "FanExperienceTicket",
+    "FanProfile",
+    "FanReaction",
+    "FanTribe",
+    "LegacySnapshot",
     "LiveThread",
     "LiveThreadMessage",
     "LiveThreadStatus",
+    "MarketShockEvent",
     "MessageVisibility",
+    "MatchChatMessage",
+    "MatchChatRoom",
+    "MegaEvent",
+    "NarrativeConflict",
     "PrivateMessage",
     "PrivateMessageParticipant",
     "PrivateMessageThread",
@@ -791,6 +842,8 @@ __all__ = [
     "MarketTopupStatus",
     "WithdrawalReview",
     "PlayerRivalry",
+    "PlayerFanReaction",
+    "PlayerInterview",
     "PlayerStory",
     "PlayerFace",
     "PlayerCareerEntry",
@@ -803,6 +856,8 @@ __all__ = [
     "PlayerInjuryCase",
     "PlayerLifecycleEvent",
     "PlayerPersonality",
+    "PrestigeRating",
+    "NewsArticle",
     "PlayerAlias",
     "PlayerMoniker",
     "PlayerCard",
@@ -1053,6 +1108,10 @@ __all__ = [
     "MatchControllerType",
     "MatchControlSide",
     "Notification",
+    "StadiumEvent",
+    "StadiumTicket",
+    "TicketReaction",
+    "TicketWaitlist",
 ]
 
 

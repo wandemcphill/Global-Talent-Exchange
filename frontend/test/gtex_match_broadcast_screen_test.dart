@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/controllers/platform/gtex_platform_experience_controller.dart';
 import 'package:gte_frontend/models/match/gtex_match_render_mode.dart';
 import 'package:gte_frontend/models/match/gtex_match_view_type.dart';
+import 'package:gte_frontend/models/platform/gtex_platform_experience.dart';
 import 'package:gte_frontend/screens/match/gtex_match_broadcast_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_event_overlay.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_hidden_controls_overlay.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_mode_selector_button.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_tv_mode_shell.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_web_mode_sidebar.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
 import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_match_canvas.dart';
 
@@ -319,18 +323,18 @@ void main() {
                   onPressed: () {
                     Navigator.of(context).push<void>(
                       MaterialPageRoute<void>(
-                        builder: (BuildContext context) =>
-                            GtexMatchBroadcastScreen(
-                          matchId: 'broadcast-screen',
-                          initialMode: GtexMatchRenderMode.quick,
-                          viewType: GtexMatchViewType.twoD,
-                          isPremiumUser: false,
-                          spectatorMode: true,
-                          auto3DEnabled: false,
-                          competitionLabel: 'GTEX Cup',
-                          viewStateLoader: () async =>
-                              buildBroadcastTestViewState(),
-                        ),
+                        builder:
+                            (BuildContext context) => GtexMatchBroadcastScreen(
+                              matchId: 'broadcast-screen',
+                              initialMode: GtexMatchRenderMode.quick,
+                              viewType: GtexMatchViewType.twoD,
+                              isPremiumUser: false,
+                              spectatorMode: true,
+                              auto3DEnabled: false,
+                              competitionLabel: 'GTEX Cup',
+                              viewStateLoader:
+                                  () async => buildBroadcastTestViewState(),
+                            ),
                       ),
                     );
                   },
@@ -384,13 +388,95 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('tv mode removes the app bar and shows the live channel shell', (
+    WidgetTester tester,
+  ) async {
+    final GtexPlatformExperienceController platformController =
+        GtexPlatformExperienceController(
+          mode: GtexPlatformMode.tv,
+          channels: const <GtexTvChannel>[
+            GtexTvChannel(
+              channelId: 'live',
+              name: 'Live',
+              headline: 'Lagos Stars vs Abuja City',
+              subheadline: 'Main feed',
+              matchId: 'broadcast-screen',
+              viewerCount: 1200,
+            ),
+          ],
+        );
+
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          platformMode: GtexPlatformMode.tv,
+          platformController: platformController,
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.byKey(GtexTvModeShell.shellKey), findsOneWidget);
+    expect(find.text('What\'s Live Now'), findsOneWidget);
+  });
+
+  testWidgets('web mode shows the multi-match and trading sidebar', (
+    WidgetTester tester,
+  ) async {
+    final GtexPlatformExperienceController platformController =
+        GtexPlatformExperienceController(
+          mode: GtexPlatformMode.web,
+          channels: const <GtexTvChannel>[
+            GtexTvChannel(
+              channelId: 'trending',
+              name: 'Trending',
+              headline: 'GTEX Match Desk',
+              subheadline: 'Secondary feed',
+              viewerCount: 680,
+            ),
+          ],
+        );
+
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          auto3DEnabled: false,
+          competitionLabel: 'GTEX Cup',
+          platformMode: GtexPlatformMode.web,
+          platformController: platformController,
+          viewStateLoader: () async => buildBroadcastTestViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byKey(GtexWebModeSidebar.sidebarKey), findsOneWidget);
+    expect(find.text('Trading Desk'), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
 }
 
 Widget _host({required Widget child}) {
-  return MaterialApp(
-    theme: GteShellTheme.build(),
-    home: child,
-  );
+  return MaterialApp(theme: GteShellTheme.build(), home: child);
 }
 
 Future<void> _pumpUntilVisible(

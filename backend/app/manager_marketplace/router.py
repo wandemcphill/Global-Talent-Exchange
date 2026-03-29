@@ -10,6 +10,7 @@ from .schemas import (
     ManagerCardView,
     ManagerHireRequest,
     ManagerHireResponse,
+    ManagerHistoryEntryView,
     ManagerLeaderboardEntryView,
     ManagerProfileView,
     ManagerReleaseResponse,
@@ -31,6 +32,18 @@ def list_managers(service: ManagerMarketplaceService = Depends(get_service)) -> 
 @router.get("/leaderboard", response_model=list[ManagerLeaderboardEntryView])
 def get_manager_leaderboard(service: ManagerMarketplaceService = Depends(get_service)) -> list[ManagerLeaderboardEntryView]:
     return service.leaderboard()
+
+
+@router.get("/{manager_id}/history", response_model=list[ManagerHistoryEntryView])
+def get_manager_history(
+    manager_id: str,
+    limit: int = 20,
+    service: ManagerMarketplaceService = Depends(get_service),
+) -> list[ManagerHistoryEntryView]:
+    try:
+        return service.history(manager_id, limit=limit)
+    except ManagerMarketplaceError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.get("/{manager_id}", response_model=ManagerProfileView)

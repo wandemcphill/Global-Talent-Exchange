@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import Field
@@ -87,6 +88,23 @@ class AwardsCeremonyView(CommonSchema):
     market_reactions: list[str] = Field(default_factory=list)
     segments: list[AwardsCeremonySegmentView] = Field(default_factory=list)
     validation: dict[str, Any] = Field(default_factory=dict)
+    season_event_key: str | None = None
+    ceremony_flow: list[str] = Field(default_factory=list)
+    ticketed_access: bool = False
+    tv_mode_only: bool = True
+    general_seat_capacity: int = 0
+    vip_seat_capacity: int = 0
+    tickets_sold: int = 0
+    vip_tickets_sold: int = 0
+    ticket_price_coin: Decimal | None = None
+    vip_ticket_price_coin: Decimal | None = None
+    discount_bps: int = 0
+    exclusive_commentary_lines: list[str] = Field(default_factory=list)
+    live_vote_enabled: bool = False
+    live_vote_note: str | None = None
+    live_vote_snapshot: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    reaction_explosion: dict[str, Any] = Field(default_factory=dict)
+    current_user_access: dict[str, Any] | None = None
     generated_at: datetime
 
 

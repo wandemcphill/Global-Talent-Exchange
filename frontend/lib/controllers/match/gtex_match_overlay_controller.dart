@@ -96,7 +96,7 @@ class GtexMatchOverlayController {
       showIntroOverlay: viewerSeconds <= 2.4 && !isFullTime,
       showFullTimeOverlay: isFullTime,
       showSocialRail: spectatorMode,
-      canGift: spectatorMode,
+      canGift: false,
     );
   }
 

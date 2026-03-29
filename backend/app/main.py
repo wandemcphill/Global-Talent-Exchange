@@ -216,12 +216,22 @@ def _run_deferred_startup(
 ) -> None:
     try:
         logger.info("app.startup.bootstrap.begin")
-        logger.info("app.startup.initial_admin.begin")
-        _ensure_initial_admin(context.database.session_factory)
-        logger.info("app.startup.initial_admin.complete")
-        logger.info("app.startup.module_hooks.begin")
-        run_module_hooks(app, context, modules, phase="startup")
-        logger.info("app.startup.module_hooks.complete")
+        module_loader_lock = getattr(app.state, "module_loader_lock", None)
+        if module_loader_lock is None:
+            logger.info("app.startup.initial_admin.begin")
+            _ensure_initial_admin(context.database.session_factory)
+            logger.info("app.startup.initial_admin.complete")
+            logger.info("app.startup.module_hooks.begin")
+            run_module_hooks(app, context, modules, phase="startup")
+            logger.info("app.startup.module_hooks.complete")
+        else:
+            with module_loader_lock:
+                logger.info("app.startup.initial_admin.begin")
+                _ensure_initial_admin(context.database.session_factory)
+                logger.info("app.startup.initial_admin.complete")
+                logger.info("app.startup.module_hooks.begin")
+                run_module_hooks(app, context, modules, phase="startup")
+                logger.info("app.startup.module_hooks.complete")
         logger.info("app.startup.bootstrap_complete")
     except Exception:
         logger.exception("app.startup.bootstrap_failed")

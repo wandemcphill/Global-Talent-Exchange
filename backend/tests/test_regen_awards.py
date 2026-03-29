@@ -5,6 +5,7 @@ from datetime import date
 from sqlalchemy import select
 
 from app.ingestion.models import Player, PlayerSeasonStat
+from app.models.regen import RegenAward as MarketRegenAward, RegenProfile
 from app.regen_universe.models import RegenSeason
 from app.regen_universe.service import RegenUniverseService
 from tests.regen_universe_support import build_regen_universe_session, seed_two_season_universe
@@ -32,17 +33,25 @@ def test_regen_awards_compute_for_sample_season_with_regen_only_players() -> Non
         second_close = service.close_season(second_season.id, start_next_season=False)
         awards = service.list_awards(season_id=second_season.id)
         awards_by_code = {item["award"]["code"]: item["winners"] for item in awards}
+        market_awards = list(session.scalars(select(MarketRegenAward)).all())
+        veteran_profile = session.scalar(select(RegenProfile).where(RegenProfile.player_id == players["veteran"].id))
 
         assert second_close["performance_records_created"] == len(players)
         assert second_close["award_winners_created"] >= 8
-        assert awards_by_code["WORLD_PLAYER"][0]["player_id"] == players["veteran"].id
+        assert awards_by_code["BALLON_DOR"][0]["player_id"] == players["veteran"].id
         assert awards_by_code["GOLDEN_BOY"][0]["player_id"] == players["wonderkid"].id
-        assert awards_by_code["TOP_SCORER"][0]["player_id"] == players["veteran"].id
-        assert awards_by_code["PLAYMAKER"][0]["player_id"] == players["playmaker"].id
-        assert awards_by_code["DEFENDER"][0]["player_id"] == players["defender"].id
-        assert awards_by_code["GOALKEEPER"][0]["player_id"] == players["keeper"].id
+        assert awards_by_code["GOLDEN_BOOT"][0]["player_id"] == players["veteran"].id
+        assert awards_by_code["BEST_MIDFIELDER"][0]["player_id"] == players["playmaker"].id
+        assert awards_by_code["BEST_DEFENDER"][0]["player_id"] == players["defender"].id
+        assert awards_by_code["BEST_GOALKEEPER"][0]["player_id"] == players["keeper"].id
         assert awards_by_code["BREAKOUT_STAR"][0]["player_id"] == players["breakout"].id
         assert len(awards_by_code["TEAM_OF_THE_YEAR"]) >= 6
+        assert {"gtex_best_player", "gtex_golden_boy", "gtex_top_scorer"} <= {
+            award.award_code for award in market_awards
+        }
+        assert veteran_profile is not None
+        assert float(veteran_profile.metadata_json["growth_curve"]) >= 0.5
+        assert veteran_profile.metadata_json["evolution_history"]
     finally:
         session.close()
 

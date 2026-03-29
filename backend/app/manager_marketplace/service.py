@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.common.enums.match_status import MatchStatus
 from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
+from app.models.gtex_universe import ManagerMatchHistory, ManagerVsManagerHistory
 from app.models.manager_marketplace import (
     ManagerContract,
     ManagerContractStatus,
@@ -22,6 +23,7 @@ from app.replay_archive.persistence import ReplayArchiveRecordRow
 from .schemas import (
     ManagerCardView,
     ManagerContractView,
+    ManagerHistoryEntryView,
     ManagerHireResponse,
     ManagerLeaderboardEntryView,
     ManagerProfileView,
@@ -38,7 +40,13 @@ class ManagerMarketplaceService:
     session: Session
 
     def list_managers(self, *, available_only: bool = True) -> list[ManagerCardView]:
-        profiles = list(self.session.scalars(select(ManagerProfile).order_by(ManagerProfile.updated_at.desc())).all())
+        profiles = list(
+            self.session.scalars(
+                select(ManagerProfile)
+                .where(ManagerProfile.gtex_ai_id.is_(None))
+                .order_by(ManagerProfile.updated_at.desc())
+            ).all()
+        )
         cards = [self._card_view(profile) for profile in profiles]
         if available_only:
             cards = [card for card in cards if card.availability]
@@ -46,6 +54,51 @@ class ManagerMarketplaceService:
 
     def get_manager(self, profile_id: str) -> ManagerProfileView:
         return self._profile_view(self._profile(profile_id))
+
+    def history(self, profile_id: str, *, limit: int = 20) -> list[ManagerHistoryEntryView]:
+        profile = self._profile(profile_id)
+        rows = self.session.scalars(
+            select(ManagerMatchHistory)
+            .where(ManagerMatchHistory.manager_profile_id == profile.id)
+            .order_by(ManagerMatchHistory.created_at.desc())
+            .limit(limit)
+        ).all()
+        items: list[ManagerHistoryEntryView] = []
+        for row in rows:
+            opponent = self.session.get(ManagerProfile, row.opponent_manager_profile_id) if row.opponent_manager_profile_id else None
+            rivalry_payload = dict(row.metadata_json.get("rivalry") or {}) if row.metadata_json else {}
+            if not rivalry_payload and opponent is not None:
+                manager_a_id, manager_b_id = sorted((profile.id, opponent.id))
+                rivalry = self.session.scalar(
+                    select(ManagerVsManagerHistory).where(
+                        ManagerVsManagerHistory.manager_a_id == manager_a_id,
+                        ManagerVsManagerHistory.manager_b_id == manager_b_id,
+                    )
+                )
+                if rivalry is not None:
+                    rivalry_payload = {
+                        "meetings": rivalry.meetings,
+                        "rivalry_score": float(rivalry.rivalry_score),
+                        "narrative_tag": rivalry.narrative_tag,
+                    }
+            items.append(
+                ManagerHistoryEntryView(
+                    id=row.id,
+                    source_match_id=row.source_match_id,
+                    source_match_type=row.source_match_type,
+                    team_side=row.team_side,
+                    result=row.result,
+                    intensity_score=float(row.intensity_score),
+                    rivalry_score=float(row.rivalry_score),
+                    opponent_manager_id=opponent.id if opponent is not None else None,
+                    opponent_name=self._manager_name(opponent) if opponent is not None else None,
+                    tactical_snapshot=dict(row.tactical_snapshot_json or {}),
+                    narrative_summary=row.narrative_summary,
+                    rivalry=rivalry_payload or None,
+                    metadata_json=dict(row.metadata_json or {}),
+                )
+            )
+        return items
 
     def hire_manager(self, actor: User, profile_id: str, *, end_date=None) -> ManagerHireResponse:
         club = self._club_for_user(actor)
@@ -93,7 +146,7 @@ class ManagerMarketplaceService:
         return ManagerReleaseResponse(profile=self._profile_view(profile), contract=self._contract_view(contract))
 
     def leaderboard(self) -> list[ManagerLeaderboardEntryView]:
-        profiles = list(self.session.scalars(select(ManagerProfile)).all())
+        profiles = list(self.session.scalars(select(ManagerProfile).where(ManagerProfile.gtex_ai_id.is_(None))).all())
         ordered = sorted(
             profiles,
             key=lambda item: (
@@ -213,6 +266,8 @@ class ManagerMarketplaceService:
         return profile
 
     def _manager_user(self, profile: ManagerProfile) -> User:
+        if profile.manager_id is None:
+            raise ManagerMarketplaceError("System AI manager personas cannot be hired through the marketplace.")
         user = self.session.get(User, profile.manager_id)
         if user is None or not user.is_active:
             raise ManagerMarketplaceError("Manager account is unavailable.")
@@ -261,12 +316,14 @@ class ManagerMarketplaceService:
         )
 
     def _profile_view(self, profile: ManagerProfile) -> ManagerProfileView:
-        contract = self.session.scalar(
-            select(ManagerContract).where(
-                ManagerContract.manager_id == profile.manager_id,
-                ManagerContract.status == ManagerContractStatus.ACTIVE,
+        contract = None
+        if profile.manager_id is not None:
+            contract = self.session.scalar(
+                select(ManagerContract).where(
+                    ManagerContract.manager_id == profile.manager_id,
+                    ManagerContract.status == ManagerContractStatus.ACTIVE,
+                )
             )
-        )
         card = self._card_view(profile)
         return ManagerProfileView(
             **card.model_dump(),
@@ -276,6 +333,16 @@ class ManagerMarketplaceService:
             losses=profile.losses,
             reputation_score=profile.reputation_score,
             control_mode=profile.control_mode,
+            gtex_ai_id=profile.gtex_ai_id,
+            tactical_style=profile.tactical_style.value,
+            risk_tolerance=float(profile.risk_tolerance),
+            adaptability=float(profile.adaptability),
+            ego_level=float(profile.ego_level),
+            youth_preference=float(profile.youth_preference),
+            discipline_style=profile.discipline_style.value,
+            formation_preferences=list(profile.formation_preferences_json or []),
+            substitution_logic=profile.substitution_logic,
+            tempo_control=profile.tempo_control,
             active_contract=self._contract_view(contract) if contract is not None else None,
         )
 
@@ -284,6 +351,8 @@ class ManagerMarketplaceService:
         return ManagerContractView.model_validate(contract, from_attributes=True)
 
     def _availability(self, profile: ManagerProfile) -> bool:
+        if profile.gtex_ai_id is not None or profile.manager_id is None:
+            return False
         active_contract = self.session.scalar(
             select(ManagerContract).where(
                 ManagerContract.manager_id == profile.manager_id,
@@ -293,6 +362,10 @@ class ManagerMarketplaceService:
         return bool(profile.is_available and active_contract is None)
 
     def _manager_name(self, profile: ManagerProfile) -> str:
+        if profile.name:
+            return profile.name
+        if profile.manager_id is None:
+            return f"Manager {profile.id[:8]}"
         return self._display_name(self._manager_user(profile))
 
     @staticmethod
