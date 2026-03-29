@@ -53,7 +53,9 @@ class LiveMatchSpeedModeView(CommonSchema):
 class LiveMatchStreamEventView(CommonSchema):
     match_id: str | None = None
     event_id: str | None = None
+    source_event_id: str | None = None
     sequence: int | None = Field(default=None, ge=1)
+    sequence_id: int | None = Field(default=None, ge=1)
     tick: int | None = Field(default=None, ge=0)
     minute: int = Field(ge=0, le=120)
     event_type: str
@@ -70,7 +72,9 @@ class LiveMatchStreamEventView(CommonSchema):
     away_score: int | None = Field(default=None, ge=0)
     clock_label: str | None = None
     presentation_second: int | None = Field(default=None, ge=0)
+    importance_score: float = Field(default=0.0, ge=0.0)
     highlight_eligible: bool = False
+    audio_stem_channels: list[str] = Field(default_factory=lambda: ["commentary", "crowd", "stadium_fx"])
     position: LiveMatchRenderPointView | None = None
     target_position: LiveMatchRenderPointView | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
@@ -111,6 +115,7 @@ class SpectatorSessionView(CommonSchema):
     channel: str
     websocket_path: str
     commentary_websocket_path: str | None = None
+    audio_stem_websocket_path: str | None = None
     presence_channel: str | None = None
     presence_websocket_path: str | None = None
     tts_websocket_path: str | None = None
@@ -122,12 +127,15 @@ class SpectatorSessionView(CommonSchema):
     premium_features: dict[str, bool] = Field(default_factory=dict)
     sponsored_overlays: list[dict[str, Any]] = Field(default_factory=list)
     stadium_ads: list[dict[str, Any]] = Field(default_factory=list)
+    channel_context: dict[str, Any] = Field(default_factory=dict)
     sync_strategy: str = "deterministic_playback"
     watch_party_enabled: bool = True
     reactions_enabled: bool = True
 
 
 class LiveCommentaryStreamEventView(CommonSchema):
+    source_event_id: str | None = None
+    sequence_id: int | None = Field(default=None, ge=1)
     minute: int = Field(ge=0, le=120)
     event_type: str
     line: str
@@ -141,6 +149,9 @@ class MatchHighlightSummaryView(CommonSchema):
     minute: int = Field(ge=0, le=120)
     type: str
     description: str
+    source_event_id: str | None = None
+    sequence_id: int | None = Field(default=None, ge=1)
+    importance_score: float = Field(default=0.0, ge=0.0)
 
 
 class MatchHighlightResponseView(CommonSchema):

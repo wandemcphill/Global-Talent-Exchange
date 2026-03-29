@@ -254,6 +254,18 @@ def _seed_engagement_defaults(app, context) -> None:
     _run_startup_seed(context, seed_name="engagement_defaults", seed_action=_seed)
 
 
+def _seed_commentary_defaults(app, context) -> None:
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.commentary.service import CommentaryService
+
+            service = CommentaryService(session)
+            service.seed_defaults()
+            session.commit()
+
+    _run_startup_seed(context, seed_name="commentary_defaults", seed_action=_seed)
+
+
 def _seed_admin_engine_defaults(app, context) -> None:
     def _seed() -> None:
         with context.database.session_factory() as session:
@@ -366,6 +378,7 @@ DOMAIN_MODULES = (
         on_shutdown=("app.agents.agent_manager:shutdown_creator_agent_manager",),
     ),
     _module("pundits", router_path="app.pundits.router:router"),
+    _module("betting", router_path="app.betting.router:router"),
     _module("integrity_engine", router_path="app.integrity_engine.router:router"),
     _module("integrity_engine_admin", router_path="app.integrity_engine.router:admin_router"),
     _module("auth", router_path="app.auth.router:router"),
@@ -384,6 +397,7 @@ DOMAIN_MODULES = (
     _module("broadcast_rights_admin", router_path="app.broadcast_rights.router:admin_router"),
     _module("club_infra", router_path="app.club_infra_engine.router:router"),
     _module("club_infra_admin", router_path="app.club_infra_engine.router:admin_router"),
+    _module("club_ownership", router_path="app.club_ownership.router:router"),
     _module("player_import", router_path="app.player_import_engine.router:router"),
     _module("community_engine", router_path="app.community_engine.router:router"),
     _module(
@@ -491,6 +505,12 @@ DOMAIN_MODULES = (
         on_startup=(_seed_football_event_defaults,),
     ),
     _module("football_events_admin", router_path="app.football_events_engine.router:admin_router"),
+    _module(
+        "broadcast_network",
+        router_path="app.broadcast_network.router:router",
+        on_startup=("app.broadcast_network.service:bind_broadcast_network_runtime",),
+        on_shutdown=("app.broadcast_network.service:shutdown_broadcast_network_runtime",),
+    ),
     _module("football_universe", router_path="app.football_universe.router:router", with_api_alias=True),
     _module("clubs", router_path="app.clubs.router:router"),
     _module("canonical_clubs", router_path="app.routes.clubs:router"),
@@ -516,6 +536,11 @@ DOMAIN_MODULES = (
     _module("academy", router_path="app.academy.api.router:router", with_api_alias=True),
     _module("world_super_cup", router_path="app.world_super_cup.api.router:router", with_api_alias=True),
     _module("fast_cups", router_path="app.fast_cups.api.router:router", with_api_alias=True),
+    _module(
+        "commentary",
+        router_path="app.commentary.router:router",
+        on_startup=(_seed_commentary_defaults,),
+    ),
     _module("live_matches", router_path="app.live_matches.router:router"),
     _module(
         "infinite_league",

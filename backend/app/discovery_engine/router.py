@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.broadcast_network.service import ensure_broadcast_network_runtime
 from app.discovery_engine.schemas import DiscoveryHomeView, DiscoveryItemView, FeaturedRailUpsertRequest, FeaturedRailView, SavedSearchCreate, SavedSearchView
 from app.discovery_engine.service import DiscoveryEngineError, DiscoveryEngineService
 from app.models.user import User
@@ -16,6 +17,7 @@ def get_service(request: Request, session: Session = Depends(get_session)) -> Di
     return DiscoveryEngineService(
         session,
         cache_backend=getattr(request.app.state, "cache_backend", None),
+        broadcast_runtime=ensure_broadcast_network_runtime(request.app),
     )
 
 
@@ -31,6 +33,8 @@ def get_home(current_user: User = Depends(get_current_user), service: DiscoveryE
         featured_items=[DiscoveryItemView.model_validate(item) for item in data["featured_items"]],
         recommended_items=[DiscoveryItemView.model_validate(item) for item in data["recommended_items"]],
         live_now_items=[DiscoveryItemView.model_validate(item) for item in data["live_now_items"]],
+        broadcast_items=[DiscoveryItemView.model_validate(item) for item in data["broadcast_items"]],
+        match_of_the_moment=None if data["match_of_the_moment"] is None else DiscoveryItemView.model_validate(data["match_of_the_moment"]),
         saved_searches=[SavedSearchView.model_validate(item) for item in data["saved_searches"]],
     )
 

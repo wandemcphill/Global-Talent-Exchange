@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.cache import HotPathCache
 from app.core.cache import CacheBackend, NullCacheBackend
+from app.core.events import DomainEvent, EventPublisher
+from app.broadcast_network.stadium_service import StadiumImmersionProfile, StadiumImmersionService
 from app.live_matches.schemas import (
     LiveMatchPossessionEstimateView,
     LiveMatchMarketPulseView,
@@ -65,6 +67,7 @@ class _LiveMatchRuntime:
     base_home_possession: int
     base_away_possession: int
     atmosphere_profile: str
+    stadium_profile: StadiumImmersionProfile
     sync_strategy: str
     checkpoint_interval_seconds: int
     max_latency_ms: int
@@ -90,6 +93,8 @@ class LiveMatchHub:
     step_interval_seconds: float = 0.25
     snapshot_ttl_seconds: int = 600
     commentary_engine: LiveCommentaryEngine = field(default_factory=LiveCommentaryEngine)
+    stadium_service: StadiumImmersionService = field(default_factory=StadiumImmersionService)
+    event_publisher: EventPublisher | None = None
     _matches: dict[str, _LiveMatchRuntime] = field(default_factory=dict)
     _halted_matches: dict[str, dict[str, object]] = field(default_factory=dict)
     _lock: RLock = field(default_factory=RLock)
@@ -98,6 +103,7 @@ class LiveMatchHub:
     def __post_init__(self) -> None:
         self._hot_cache = HotPathCache(self.cache_backend)
         self.commentary_engine.configure(cache_backend=self.cache_backend)
+        self.stadium_service.session_factory = self.session_factory
 
     def start_stream(
         self,
@@ -112,7 +118,13 @@ class LiveMatchHub:
         if self.is_match_halted(match_id):
             raise LiveMatchError("Match is currently halted by the admin kill switch.")
         self.commentary_engine.reset_match(match_id)
-        event_batches = self._build_batches(replay_payload)
+        self.stadium_service.session_factory = self.session_factory
+        stadium_profile = self.stadium_service.resolve(
+            home_team_id=replay_payload.summary.home_stats.team_id,
+            away_team_id=replay_payload.summary.away_stats.team_id,
+            atmosphere_profile=replay_payload.atmosphere_profile or "standard",
+        )
+        event_batches = self._build_batches(replay_payload, stadium_profile=stadium_profile)
         runtime = _LiveMatchRuntime(
             match_id=match_id,
             channel=f"match:{match_id}:events",
@@ -123,6 +135,7 @@ class LiveMatchHub:
             base_home_possession=replay_payload.summary.home_stats.possession,
             base_away_possession=replay_payload.summary.away_stats.possession,
             atmosphere_profile=replay_payload.atmosphere_profile or "standard",
+            stadium_profile=stadium_profile,
             sync_strategy=(replay_payload.spectator_package.sync_strategy if replay_payload.spectator_package is not None else "deterministic_playback"),
             checkpoint_interval_seconds=(replay_payload.sync_contract.checkpoint_interval_seconds if replay_payload.sync_contract is not None else 15),
             max_latency_ms=(replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320),
@@ -173,7 +186,13 @@ class LiveMatchHub:
             if existing is not None and existing.live:
                 return
         self.commentary_engine.reset_match(match_id)
-        event_batches = self._build_event_batches(events)
+        self.stadium_service.session_factory = self.session_factory
+        stadium_profile = self.stadium_service.resolve(
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
+            atmosphere_profile=atmosphere_profile,
+        )
+        event_batches = self._build_event_batches(events, stadium_profile=stadium_profile)
         runtime = _LiveMatchRuntime(
             match_id=match_id,
             channel=f"match:{match_id}:events",
@@ -184,6 +203,7 @@ class LiveMatchHub:
             base_home_possession=base_home_possession,
             base_away_possession=base_away_possession,
             atmosphere_profile=atmosphere_profile,
+            stadium_profile=stadium_profile,
             sync_strategy=sync_strategy,
             checkpoint_interval_seconds=checkpoint_interval_seconds,
             max_latency_ms=max_latency_ms,
@@ -380,6 +400,7 @@ class LiveMatchHub:
                 channel,
                 {"kind": "events", "payload": [event.model_dump(mode="json") for event in next_batch.events]},
             )
+            self._publish_domain_events(match_id, next_batch.events)
             self._publish_channel(channel, {"kind": "snapshot", "payload": snapshot.model_dump(mode="json")})
             if batch_callback is not None and next_batch.events:
                 batch_callback(match_id, next_batch.events, snapshot)
@@ -410,7 +431,17 @@ class LiveMatchHub:
             consumed = next_consumed
         return None
 
-    def _build_batches(self, replay_payload: MatchReplayPayloadView) -> list[_LiveBatch]:
+    def _build_batches(
+        self,
+        replay_payload: MatchReplayPayloadView,
+        *,
+        stadium_profile: StadiumImmersionProfile | None = None,
+    ) -> list[_LiveBatch]:
+        resolved_stadium_profile = stadium_profile or self.stadium_service.resolve(
+            home_team_id=replay_payload.summary.home_stats.team_id,
+            away_team_id=replay_payload.summary.away_stats.team_id,
+            atmosphere_profile=replay_payload.atmosphere_profile or "standard",
+        )
         tick_rate_hz = replay_payload.sync_contract.tick_rate_hz if replay_payload.sync_contract is not None else 20
         max_latency_ms = replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320
         checkpoint_interval_seconds = (
@@ -428,6 +459,7 @@ class LiveMatchHub:
                     away_team_name=replay_payload.summary.away_stats.team_name,
                     tick_rate_hz=tick_rate_hz,
                     atmosphere_profile=replay_payload.atmosphere_profile or "standard",
+                    stadium_profile=resolved_stadium_profile,
                     max_latency_ms=max_latency_ms,
                     checkpoint_interval_seconds=checkpoint_interval_seconds,
                 )
@@ -435,7 +467,7 @@ class LiveMatchHub:
             )
             if event is not None
         ]
-        return self._build_event_batches(mapped_events)
+        return self._build_event_batches(mapped_events, stadium_profile=resolved_stadium_profile)
 
     def _resolve_step_interval(self, *, batch_count: int, target_runtime_seconds: float | None) -> float:
         if batch_count <= 0:
@@ -444,19 +476,64 @@ class LiveMatchHub:
             return max(self.step_interval_seconds, 0.01)
         return max(float(target_runtime_seconds) / float(batch_count), 0.01)
 
-    def _build_event_batches(self, events: Sequence[LiveMatchStreamEventView]) -> list[_LiveBatch]:
+    def _build_event_batches(
+        self,
+        events: Sequence[LiveMatchStreamEventView],
+        *,
+        stadium_profile: StadiumImmersionProfile | None = None,
+    ) -> list[_LiveBatch]:
         batches: list[_LiveBatch] = []
         current: list[LiveMatchStreamEventView] = []
         last_minute: int | None = None
-        for event in events:
+        for index, event in enumerate(events, start=1):
+            normalized_event = self._normalize_stream_event(
+                event,
+                index=index,
+                stadium_profile=stadium_profile,
+            )
             if current and (len(current) >= 3 or (last_minute is not None and abs(event.minute - last_minute) > 2)):
                 batches.append(_LiveBatch(events=list(current)))
                 current.clear()
-            current.append(event)
-            last_minute = event.minute
+            current.append(normalized_event)
+            last_minute = normalized_event.minute
         if current:
             batches.append(_LiveBatch(events=list(current)))
         return batches
+
+    def _normalize_stream_event(
+        self,
+        event: LiveMatchStreamEventView,
+        *,
+        index: int,
+        stadium_profile: StadiumImmersionProfile | None,
+    ) -> LiveMatchStreamEventView:
+        source_event_id = event.source_event_id or event.event_id or f"{event.match_id or 'match'}:source:{index}"
+        sequence_id = int(event.sequence_id or event.sequence or index)
+        importance_score = float(event.importance_score or event.meta.get("importance", 0.0) or 0.0)
+        audio_stem_channels = list(event.audio_stem_channels or ["commentary", "crowd", "stadium_fx"])
+        experience = event.experience
+        if stadium_profile is not None and experience is not None and experience.crowd is not None:
+            crowd = experience.crowd.model_copy(
+                update={
+                    "stadium_theme": experience.crowd.stadium_theme or stadium_profile.stadium_theme,
+                    "stadium_name": experience.crowd.stadium_name or stadium_profile.stadium_name,
+                    "region_personality": experience.crowd.region_personality or stadium_profile.region_personality,
+                    "crowd_personality": experience.crowd.crowd_personality or stadium_profile.crowd_personality,
+                    "crowd_bias": experience.crowd.crowd_bias or experience.crowd.dominant_side,
+                    "crowd_intensity": experience.crowd.crowd_intensity or experience.crowd.chant_level,
+                }
+            )
+            experience = experience.model_copy(update={"crowd": crowd})
+        return event.model_copy(
+            update={
+                "source_event_id": source_event_id,
+                "sequence": sequence_id,
+                "sequence_id": sequence_id,
+                "importance_score": importance_score,
+                "audio_stem_channels": audio_stem_channels,
+                "experience": experience,
+            }
+        )
 
     def _build_initial_snapshot(
         self,
@@ -519,6 +596,7 @@ class LiveMatchHub:
         away_team_name: str,
         tick_rate_hz: int,
         atmosphere_profile: str,
+        stadium_profile: StadiumImmersionProfile,
         max_latency_ms: int,
         checkpoint_interval_seconds: int,
     ) -> LiveMatchStreamEventView | None:
@@ -578,6 +656,8 @@ class LiveMatchHub:
             "commentary_tier": generated_commentary.tier,
             "commentary_provider": generated_commentary.provider,
             "commentary_context": generated_commentary.context,
+            "source_event_id": raw_event.event_id,
+            "sequence_id": raw_event.sequence,
         }
         meta = {
             "render_type": render.get("type"),
@@ -596,6 +676,8 @@ class LiveMatchHub:
             "presentation_second": raw_event.presentation_second,
             "commentary_tier": generated_commentary.tier,
             "commentary_provider": generated_commentary.provider,
+            "source_event_id": raw_event.event_id,
+            "sequence_id": raw_event.sequence,
         }
         if meta["ball_speed"] > 0:
             meta["shot_power"] = round(meta["ball_speed"], 2)
@@ -607,7 +689,9 @@ class LiveMatchHub:
         return LiveMatchStreamEventView(
             match_id=match_id,
             event_id=raw_event.event_id,
+            source_event_id=raw_event.event_id,
             sequence=raw_event.sequence,
+            sequence_id=raw_event.sequence,
             tick=max(0, int(round(raw_event.presentation_second * tick_rate_hz))),
             minute=raw_event.minute,
             event_type=mapped_type,
@@ -624,11 +708,13 @@ class LiveMatchHub:
             away_score=raw_event.away_score,
             clock_label=raw_event.clock_label,
             presentation_second=raw_event.presentation_second,
+            importance_score=float(meta["importance"] or 0.0),
             highlight_eligible=bool(
                 replay.get("eligible", False)
                 or mapped_type == "goal"
                 or raw_event.event_type is MatchEventType.RED_CARD
             ),
+            audio_stem_channels=["commentary", "crowd", "stadium_fx"],
             position=position,
             target_position=target_position,
             meta=meta,
@@ -639,6 +725,8 @@ class LiveMatchHub:
                 tick=max(0, int(round(raw_event.presentation_second * tick_rate_hz))),
                 meta=meta,
                 profile=atmosphere_profile,
+                stadium_profile=stadium_profile,
+                team_side=team_side,
                 max_latency_ms=max_latency_ms,
                 checkpoint_interval_seconds=checkpoint_interval_seconds,
                 generated_commentary=generated_commentary,
@@ -789,6 +877,47 @@ class LiveMatchHub:
             return
         self._hot_cache.publish_match_channel(channel, dict(payload))
 
+    def _publish_domain_events(self, match_id: str, events: Sequence[LiveMatchStreamEventView]) -> None:
+        if self.event_publisher is None:
+            return
+        for event in events:
+            payload = {
+                "match_id": match_id,
+                "event_id": event.event_id,
+                "source_event_id": event.source_event_id or event.event_id,
+                "sequence": event.sequence,
+                "sequence_id": event.sequence_id or event.sequence,
+                "event_type": event.event_type,
+                "source_event_type": event.source_event_type or event.event_type,
+                "minute": event.minute,
+                "clock": event.clock_label,
+                "team_id": event.team_id,
+                "team": event.team,
+                "team_side": event.team_side,
+                "player_id": event.player_id,
+                "player": event.player,
+                "secondary_player_id": event.secondary_player_id,
+                "secondary_player": event.secondary_player,
+                "home_score": event.home_score,
+                "away_score": event.away_score,
+                "presentation_second": event.presentation_second,
+                "tick": event.tick,
+                "importance_score": event.importance_score,
+                "highlight_eligible": event.highlight_eligible,
+                "audio_stem_channels": list(event.audio_stem_channels),
+                "metadata": event.metadata,
+            }
+            self.event_publisher.publish(
+                DomainEvent(
+                    name="match.events",
+                    payload=payload,
+                    aggregate_id=match_id,
+                    aggregate_type="match",
+                    partition_key=match_id,
+                    producer="live-match-hub",
+                )
+            )
+
 
 def _build_win_probability(
     *,
@@ -875,6 +1004,8 @@ def ensure_live_match_hub(app: FastAPI, *, step_interval_seconds: float | None =
     hub.session_factory = getattr(app.state, "session_factory", hub.session_factory)
     hub.cache_backend = getattr(app.state, "cache_backend", hub.cache_backend)
     hub._hot_cache = HotPathCache(hub.cache_backend)
+    hub.event_publisher = getattr(app.state, "event_publisher", hub.event_publisher)
+    hub.stadium_service.session_factory = getattr(app.state, "session_factory", hub.session_factory)
     hub.commentary_engine.configure(
         settings=getattr(app.state, "settings", None),
         cache_backend=hub.cache_backend,
@@ -891,6 +1022,8 @@ def _live_experience_layer(
     tick: int,
     meta: dict[str, object],
     profile: str,
+    stadium_profile: StadiumImmersionProfile,
+    team_side: str | None,
     max_latency_ms: int,
     checkpoint_interval_seconds: int,
     generated_commentary: GeneratedCommentary | None,
@@ -906,12 +1039,31 @@ def _live_experience_layer(
     home = _clamp_float(float(raw_event.metadata.get("crowd_home", 0.5) or 0.5), 0.0, 1.0)
     away = _clamp_float(float(raw_event.metadata.get("crowd_away", 0.5) or 0.5), 0.0, 1.0)
     top_moment = raw_event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.MISSED_BIG_CHANCE, MatchEventType.RED_CARD}
+    rivalry_intensity = _clamp_float(
+        _float_value(raw_event.metadata.get("rivalry_intensity"), default=0.0)
+        or (0.85 if str(profile).strip().lower() in {"derby", "fever", "volatile"} else 0.35),
+        0.0,
+        1.0,
+    )
+    raw_event_type = str(getattr(raw_event.event_type, "value", raw_event.event_type) or "").strip().lower()
+    crowd_state = StadiumImmersionService().event_crowd_state(
+        profile=stadium_profile,
+        base_home=home,
+        base_away=away,
+        raw_event_type=raw_event_type,
+        rivalry_intensity=rivalry_intensity,
+        scoring_side=team_side,
+    )
 
     commentary_line = generated_commentary.line if generated_commentary is not None else raw_event.commentary
     commentary_tone = generated_commentary.tone if generated_commentary is not None else "hype" if top_moment else "tactical"
     commentary_commentator = generated_commentary.commentator if generated_commentary is not None else "lead" if top_moment else "analyst"
     commentary_intensity = generated_commentary.intensity if generated_commentary is not None else round(_clamp_float(((int(meta.get("importance", 1) or 1) - 1) / 4.0) + (0.25 if top_moment else 0.0), 0.18, 1.0), 3)
     commentary_audio_channel = generated_commentary.audio_channel if generated_commentary is not None else "headline" if top_moment else "match_bed"
+    speaker_role = "lead" if commentary_commentator in {"lead", "main", "play_by_play"} else "analyst"
+    voice_profile = "play_by_play" if speaker_role == "lead" else "analyst"
+    speech_rate = round(_clamp_float(0.92 + (commentary_intensity * 0.38), 0.85, 1.3), 3)
+    interrupt_priority = 95 if raw_event_type in {"goal", "penalty_goal", "penalty_scored"} else 82 if raw_event_type in {"red_card", "card"} else 68 if top_moment else 36
 
     return MatchExperienceLayerView(
         motion=MatchMotionPredictionView(
@@ -933,20 +1085,36 @@ def _live_experience_layer(
             line=commentary_line,
             tone=commentary_tone,
             commentator=commentary_commentator,
+            speaker_role=speaker_role,
             language="en",
             intensity=commentary_intensity,
             tts_ready=bool(str(commentary_line).strip()),
             banter_layer=raw_event.secondary_player is not None and top_moment,
             audio_channel=commentary_audio_channel,
+            voice_profile=voice_profile,
+            voice_id=f"gtex-{voice_profile}",
+            accent=stadium_profile.region_personality,
+            energy_level=commentary_intensity,
+            speech_rate=speech_rate,
+            interrupt_priority=interrupt_priority,
+            stem_routing=["commentary"] if not top_moment else ["commentary", "stadium_fx"],
         ),
         crowd=MatchCrowdStateView(
             profile=profile,
-            home_intensity=round(home, 3),
-            away_intensity=round(away, 3),
-            dominant_side="home" if home >= away else "away",
-            chant_level=round(max(home, away), 3),
-            hostility=round(_clamp_float(abs(home - away) + (0.12 if top_moment else 0.0), 0.0, 1.0), 3),
-            spike=top_moment,
+            home_intensity=float(crowd_state["home_intensity"]),
+            away_intensity=float(crowd_state["away_intensity"]),
+            dominant_side=str(crowd_state["dominant_side"]),
+            chant_level=float(crowd_state["chant_level"]),
+            hostility=float(crowd_state["hostility"]),
+            spike=bool(crowd_state["spike"]),
+            crowd_intensity=float(crowd_state["crowd_intensity"]),
+            crowd_bias=str(crowd_state["crowd_bias"]),
+            crowd_mood=str(crowd_state["crowd_mood"]),
+            stadium_theme=str(crowd_state["stadium_theme"]),
+            stadium_name=str(crowd_state["stadium_name"]),
+            region_personality=str(crowd_state["region_personality"]),
+            crowd_personality=str(crowd_state["crowd_personality"]),
+            stadium_fx=str(crowd_state["stadium_fx"]),
         ),
         spectator_sync=MatchSpectatorSyncView(
             room_id=f"match_{match_id}",

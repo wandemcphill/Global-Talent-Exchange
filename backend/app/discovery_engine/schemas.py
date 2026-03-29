@@ -64,4 +64,6 @@ class DiscoveryHomeView(BaseModel):
     featured_items: list[DiscoveryItemView]
     recommended_items: list[DiscoveryItemView]
     live_now_items: list[DiscoveryItemView]
+    broadcast_items: list[DiscoveryItemView] = Field(default_factory=list)
+    match_of_the_moment: DiscoveryItemView | None = None
     saved_searches: list[SavedSearchView]

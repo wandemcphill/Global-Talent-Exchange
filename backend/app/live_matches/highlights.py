@@ -13,6 +13,8 @@ from app.models.highlight_event import HighlightEvent
 
 @dataclass(frozen=True, slots=True)
 class _HighlightSourceEvent:
+    source_event_id: str | None
+    sequence_id: int | None
     minute: int
     event_type: str
     team_name: str | None
@@ -20,6 +22,7 @@ class _HighlightSourceEvent:
     description: str | None
     home_score: int
     away_score: int
+    importance_score: float = 0.0
 
 
 class SmartHighlightService:
@@ -43,6 +46,9 @@ class SmartHighlightService:
                 minute=row.minute,
                 type=row.type,
                 description=row.description,
+                source_event_id=str((row.metadata_json or {}).get("source_event_id") or "") or None,
+                sequence_id=int((row.metadata_json or {}).get("sequence_id") or 0) or None,
+                importance_score=float(row.importance_score or 0.0),
             )
             for row in rows
         ]
@@ -56,6 +62,8 @@ class SmartHighlightService:
     ) -> list[MatchHighlightSummaryView]:
         source_events = [
             _HighlightSourceEvent(
+                source_event_id=getattr(event, "event_id", None),
+                sequence_id=getattr(event, "sequence", None),
                 minute=event.minute,
                 event_type=event.event_type.value,
                 team_name=event.team_name,
@@ -63,6 +71,7 @@ class SmartHighlightService:
                 description=event.commentary,
                 home_score=event.home_score,
                 away_score=event.away_score,
+                importance_score=float(event.metadata.get("importance", 0.0) or 0.0),
             )
             for event in replay_payload.timeline.events
         ]
@@ -83,6 +92,8 @@ class SmartHighlightService:
                 continue
             source_events.append(
                 _HighlightSourceEvent(
+                    source_event_id=getattr(item, "source_event_id", None) or getattr(item, "event_id", None),
+                    sequence_id=int(getattr(item, "sequence_id", 0) or getattr(item, "sequence", 0) or 0) or None,
                     minute=minute,
                     event_type=event_type,
                     team_name=getattr(item, "club_name", None),
@@ -90,6 +101,7 @@ class SmartHighlightService:
                     description=getattr(item, "description", None),
                     home_score=int(getattr(item, "home_score", 0) or 0),
                     away_score=int(getattr(item, "away_score", 0) or 0),
+                    importance_score=float(getattr(item, "importance_score", 0.0) or 0.0),
                 )
             )
         return self._replace_highlights(match_id, source_events, session=session)
@@ -113,6 +125,9 @@ class SmartHighlightService:
                 minute=minute,
                 type=highlight_type,
                 description=description,
+                source_event_id=str(_metadata.get("source_event_id") or "") or None,
+                sequence_id=int(_metadata.get("sequence_id") or 0) or None,
+                importance_score=float(_importance),
             )
             for minute, highlight_type, _importance, description, _metadata in highlights
         ]
@@ -143,7 +158,17 @@ class SmartHighlightService:
         detected: list[tuple[int, str, float, str, dict[str, object]]] = []
         previous_home = 0
         previous_away = 0
+        seen_keys: set[str] = set()
         for event in source_events:
+            dedupe_key = str(
+                event.source_event_id
+                or (f"seq:{event.sequence_id}" if event.sequence_id is not None else f"{event.minute}:{event.event_type}:{event.team_name or ''}")
+            )
+            if dedupe_key in seen_keys:
+                previous_home = event.home_score
+                previous_away = event.away_score
+                continue
+            seen_keys.add(dedupe_key)
             normalized = event.event_type.lower()
             if normalized in {"goal", "penalty_goal", "penalty_scored", "goals", "penalties"}:
                 scored_side = None
@@ -151,7 +176,7 @@ class SmartHighlightService:
                     scored_side = "home"
                 elif event.away_score > previous_away:
                     scored_side = "away"
-                importance = 1.0
+                importance = max(1.0, float(event.importance_score or 0.0))
                 highlight_type = "goal"
                 if event.minute > 85:
                     importance += 2.0
@@ -168,7 +193,12 @@ class SmartHighlightService:
                         highlight_type,
                         importance,
                         self._goal_description(event, highlight_type=highlight_type),
-                        {"team_name": event.team_name, "player_name": event.player_name},
+                        {
+                            "team_name": event.team_name,
+                            "player_name": event.player_name,
+                            "source_event_id": event.source_event_id,
+                            "sequence_id": event.sequence_id,
+                        },
                     )
                 )
             elif normalized in {"red_card", "red_cards"}:
@@ -176,9 +206,14 @@ class SmartHighlightService:
                     (
                         event.minute,
                         "red_card",
-                        1.5,
+                        max(1.5, float(event.importance_score or 0.0)),
                         self._red_card_description(event),
-                        {"team_name": event.team_name, "player_name": event.player_name},
+                        {
+                            "team_name": event.team_name,
+                            "player_name": event.player_name,
+                            "source_event_id": event.source_event_id,
+                            "sequence_id": event.sequence_id,
+                        },
                     )
                 )
             elif normalized in {
@@ -193,9 +228,14 @@ class SmartHighlightService:
                     (
                         event.minute,
                         "big_chance",
-                        0.9,
+                        max(0.9, float(event.importance_score or 0.0)),
                         self._big_chance_description(event),
-                        {"team_name": event.team_name, "player_name": event.player_name},
+                        {
+                            "team_name": event.team_name,
+                            "player_name": event.player_name,
+                            "source_event_id": event.source_event_id,
+                            "sequence_id": event.sequence_id,
+                        },
                     )
                 )
             previous_home = event.home_score

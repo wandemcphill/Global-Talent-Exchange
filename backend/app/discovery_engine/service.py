@@ -30,12 +30,14 @@ class DiscoveryEngineError(ValueError):
 class DiscoveryEngineService:
     session: Session
     cache_backend: CacheBackend | None = None
+    broadcast_runtime: Any | None = None
 
     def seed_defaults(self) -> None:
         defaults = (
             {"rail_key": "featured_stories", "title": "Featured Stories", "rail_type": "story", "audience": "public", "query_hint": "world", "subtitle": "Big matches, giant killers, and rivalry sparks.", "display_order": 10, "metadata_json": {"icon": "newspaper"}},
             {"rail_key": "live_community", "title": "Live Community", "rail_type": "community", "audience": "public", "query_hint": "cup", "subtitle": "Threads buzzing around live and upcoming competitions.", "display_order": 20, "metadata_json": {"icon": "messages"}},
             {"rail_key": "prospect_radar", "title": "Prospect Radar", "rail_type": "prospect", "audience": "public", "query_hint": "academy", "subtitle": "Youth prospects and pipeline standouts worth watching.", "display_order": 30, "metadata_json": {"icon": "star"}},
+            {"rail_key": "broadcast_now", "title": "Broadcast Now", "rail_type": "broadcast", "audience": "public", "query_hint": "live", "subtitle": "Network channels, auto-switched fixtures, and the Match of the Moment.", "display_order": 15, "metadata_json": {"icon": "tv"}},
         )
         for item in defaults:
             existing = self.session.scalar(select(FeaturedRail).where(FeaturedRail.rail_key == item["rail_key"]))
@@ -124,6 +126,8 @@ class DiscoveryEngineService:
         featured_rails = self.list_featured_rails(active_only=True)
         featured_items = self.search(actor=actor, query="cup", entity_scope="all", limit=8)
         live_now_items = self._live_match_items(limit=8)
+        broadcast_items: list[dict[str, Any]] = []
+        match_of_the_moment: dict[str, Any] | None = None
         if not live_now_items:
             live_now_items = [
                 {"item_type": "live_thread", "item_id": item.id, "title": item.title, "subtitle": item.competition_key or "community", "score": 1.0, "metadata": item.metadata_json}
@@ -144,11 +148,49 @@ class DiscoveryEngineService:
             deduped.append(item)
         if not deduped:
             deduped = self.search(actor=actor, query="world", entity_scope="all", limit=8)
+        if self.broadcast_runtime is not None:
+            broadcast_home = self.broadcast_runtime.home()
+            for channel in broadcast_home.channels:
+                broadcast_items.append(
+                    {
+                        "item_type": "broadcast_channel",
+                        "item_id": channel.channel_id,
+                        "title": channel.name,
+                        "subtitle": channel.description or (channel.current_program.subtitle if channel.current_program is not None else ""),
+                        "rail_key": "broadcast_now",
+                        "score": float(channel.current_program.score if channel.current_program is not None else 0.0),
+                        "metadata": {
+                            "channel_id": channel.channel_id,
+                            "channel_type": channel.channel_type,
+                            "viewer_count": channel.viewer_count,
+                            "featured_match_id": channel.featured_match_id,
+                            "watch_route": f"/broadcast/{channel.channel_id}",
+                        },
+                    }
+                )
+            if broadcast_home.match_of_the_moment is not None:
+                match_of_the_moment = {
+                    "item_type": "broadcast_match",
+                    "item_id": str(broadcast_home.match_of_the_moment.match_id or broadcast_home.match_of_the_moment.slot_id),
+                    "title": broadcast_home.match_of_the_moment.title,
+                    "subtitle": broadcast_home.match_of_the_moment.subtitle,
+                    "rail_key": "broadcast_now",
+                    "score": float(broadcast_home.match_of_the_moment.score),
+                    "metadata": {
+                        "channel_id": broadcast_home.match_of_the_moment.channel_id,
+                        "match_id": broadcast_home.match_of_the_moment.match_id,
+                        "watch_route": broadcast_home.match_of_the_moment.watch_route,
+                        "replay_route": broadcast_home.match_of_the_moment.replay_route,
+                        "program_type": broadcast_home.match_of_the_moment.program_type,
+                    },
+                }
         return {
             "featured_rails": featured_rails,
             "featured_items": featured_items,
             "recommended_items": deduped[:10],
             "live_now_items": live_now_items,
+            "broadcast_items": broadcast_items[:8],
+            "match_of_the_moment": match_of_the_moment,
             "saved_searches": self.list_saved_searches(actor=actor),
         }
 

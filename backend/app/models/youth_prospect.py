@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum, ForeignKey, Integer, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.common.enums.player_pathway_stage import PlayerPathwayStage
 from app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
@@ -55,6 +55,16 @@ class YouthProspect(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     assignment: Mapped["ScoutAssignment | None"] = relationship(back_populates="prospects")
     reports: Mapped[list["YouthProspectReport"]] = relationship(back_populates="prospect")
+    player_name = synonym("display_name")
+    country_code = synonym("nationality_code")
+
+    @property
+    def position_group(self) -> str:
+        return self.primary_position
+
+    @property
+    def potential_band(self) -> str:
+        return str(self.rating_band)
 
 
 __all__ = ["YouthProspect"]

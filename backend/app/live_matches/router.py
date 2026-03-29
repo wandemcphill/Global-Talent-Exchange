@@ -5,7 +5,10 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 
 from app.auth.dependencies import get_current_match_user, get_current_social_user, get_current_user
+from app.broadcast_network.commentary_service import CommentaryOrchestratorService
 from app.broadcast_rights.service import BroadcastRightsError, BroadcastRightsService
+from app.commentary.schemas import CommentaryStreamResponse
+from app.commentary.service import CommentaryService
 from app.live_matches.highlights import SmartHighlightService
 from app.live_matches.schemas import (
     MatchHighlightResponseView,
@@ -25,6 +28,8 @@ from app.services.device_fingerprint_service import DeviceFingerprintService
 router = APIRouter(tags=["live-matches"])
 legacy_router = APIRouter(prefix="/matches", tags=["live-matches"])
 api_router = APIRouter(prefix="/api/matches", tags=["live-matches"])
+match_router = APIRouter(prefix="/match", tags=["live-matches"])
+api_match_router = APIRouter(prefix="/api/match", tags=["live-matches"])
 
 
 def _generated_match_access_payload() -> dict[str, object]:
@@ -72,6 +77,7 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         channel=f"match:{match_id}:events",
         websocket_path=f"/api/matches/{match_id}/stream?session_id={item.id}",
         commentary_websocket_path=f"/api/matches/{match_id}/commentary/stream?session_id={item.id}",
+        audio_stem_websocket_path=f"/api/matches/{match_id}/audio/stems/stream?session_id={item.id}",
         presence_channel=f"match:{match_id}:events",
         presence_websocket_path=f"/ws/spectate/{match_id}",
         tts_websocket_path="/tts/live?voice=default",
@@ -87,6 +93,7 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         premium_features=dict(payload.get("premium_features") or {}),
         sponsored_overlays=list(payload.get("sponsored_overlays") or []),
         stadium_ads=list(payload.get("stadium_ads") or []),
+        channel_context={},
         sync_strategy="deterministic_playback",
         watch_party_enabled=True,
         reactions_enabled=True,
@@ -101,6 +108,8 @@ def _commentary_payload(events) -> list[dict[str, object]]:
             continue
         payload.append(
             {
+                "source_event_id": event.source_event_id,
+                "sequence_id": event.sequence_id or event.sequence,
                 "minute": event.minute,
                 "event_type": str(event.source_event_type or event.metadata.get("raw_event_type") or event.event_type),
                 "line": line,
@@ -111,6 +120,47 @@ def _commentary_payload(events) -> list[dict[str, object]]:
             }
         )
     return payload
+
+
+def _commentary_snapshot_payload(app, hub, *, match_id: str, user_id: str, status: str) -> dict[str, object]:
+    session_factory = getattr(app.state, "session_factory", None)
+    if session_factory is None:
+        return {"match_id": match_id, "status": status}
+    with session_factory() as session:
+        selection = CommentaryService(session, cache_backend=hub.cache_backend).resolve_selection_view(
+            user_id=user_id,
+            match_id=match_id,
+        )
+        return {
+            "match_id": match_id,
+            "status": status,
+            "selection": selection.model_dump(mode="json"),
+        }
+
+
+def _commentary_response(
+    app,
+    hub,
+    *,
+    match_id: str,
+    user_id: str,
+    status: str,
+    events,
+    cursor: int,
+    include_audio: bool = False,
+) -> CommentaryStreamResponse | None:
+    session_factory = getattr(app.state, "session_factory", None)
+    if session_factory is None:
+        return None
+    with session_factory() as session:
+        return CommentaryService(session, cache_backend=hub.cache_backend).render_stream(
+            match_id=match_id,
+            status=status,
+            user_id=user_id,
+            events=list(events),
+            cursor=cursor,
+            include_audio=include_audio,
+        )
 
 
 @legacy_router.post("/{match_id}/spectate", response_model=SpectatorSessionView)
@@ -222,6 +272,46 @@ def get_match_highlight_share_package(
     )
 
 
+@legacy_router.get("/{match_id}/commentary/stream", response_model=CommentaryStreamResponse)
+@api_router.get("/{match_id}/commentary/stream", response_model=CommentaryStreamResponse)
+@match_router.get("/{match_id}/commentary/stream", response_model=CommentaryStreamResponse)
+@api_match_router.get("/{match_id}/commentary/stream", response_model=CommentaryStreamResponse)
+def get_match_commentary_stream(
+    match_id: str,
+    request: Request,
+    session_id: str,
+    include_audio: bool = Query(default=False),
+    cursor: int = Query(default=0, ge=0),
+    _: User = Depends(get_current_match_user),
+) -> CommentaryStreamResponse:
+    hub = ensure_live_match_hub(request.app)
+    try:
+        spectator_session = hub.validate_session(match_id, session_id)
+    except LiveMatchError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    state = hub.get_state(match_id)
+    if state is None and _bootstrap_infinite_league_stream(request.app, hub, match_id):
+        state = hub.get_state(match_id)
+    if state is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match stream was not found.")
+
+    events, next_cursor = hub.get_events_since(match_id, cursor)
+    response = _commentary_response(
+        request.app,
+        hub,
+        match_id=match_id,
+        user_id=spectator_session.user_id,
+        status=state.snapshot.status,
+        events=events,
+        cursor=next_cursor,
+        include_audio=include_audio,
+    )
+    if response is not None:
+        return response
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Commentary service is unavailable.")
+
+
 @legacy_router.websocket("/{match_id}/stream")
 @api_router.websocket("/{match_id}/stream")
 async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> None:
@@ -284,7 +374,7 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
     app = websocket.scope["app"]
     hub = ensure_live_match_hub(app)
     try:
-        hub.validate_session(match_id, session_id)
+        spectator_session = hub.validate_session(match_id, session_id)
     except LiveMatchError:
         await websocket.close(code=4404)
         return
@@ -302,10 +392,13 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
         {
             "channel": state.channel,
             "kind": "commentary_snapshot",
-            "payload": {
-                "match_id": match_id,
-                "status": state.snapshot.status,
-            },
+            "payload": _commentary_snapshot_payload(
+                app,
+                hub,
+                match_id=match_id,
+                user_id=spectator_session.user_id,
+                status=state.snapshot.status,
+            ),
         }
     )
     try:
@@ -317,20 +410,83 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
                 {
                     "channel": state.channel,
                     "kind": "commentary_snapshot",
-                    "payload": {
-                        "match_id": match_id,
-                        "status": state.snapshot.status,
-                    },
+                    "payload": _commentary_snapshot_payload(
+                        app,
+                        hub,
+                        match_id=match_id,
+                        user_id=spectator_session.user_id,
+                        status=state.snapshot.status,
+                    ),
                 }
             )
             events, cursor = hub.get_events_since(match_id, cursor)
-            commentary = _commentary_payload(events)
+            response = _commentary_response(
+                app,
+                hub,
+                match_id=match_id,
+                user_id=spectator_session.user_id,
+                status=state.snapshot.status,
+                events=events,
+                cursor=cursor,
+                include_audio=False,
+            )
+            commentary = response.events if response is not None else []
             if commentary:
                 await websocket.send_json(
                     {
                         "channel": state.channel,
                         "kind": "commentary",
-                        "payload": commentary,
+                        "payload": [item.model_dump(mode="json") for item in commentary],
+                    }
+                )
+            if not state.is_live and cursor >= state.event_count:
+                break
+            await asyncio.sleep(0.25)
+    except WebSocketDisconnect:
+        return
+    await websocket.close()
+
+
+@legacy_router.websocket("/{match_id}/audio/stems/stream")
+@api_router.websocket("/{match_id}/audio/stems/stream")
+async def stream_match_audio_stems(match_id: str, websocket: WebSocket, session_id: str) -> None:
+    app = websocket.scope["app"]
+    hub = ensure_live_match_hub(app)
+    try:
+        hub.validate_session(match_id, session_id)
+    except LiveMatchError:
+        await websocket.close(code=4404)
+        return
+
+    state = hub.get_state(match_id)
+    if state is None and _bootstrap_infinite_league_stream(app, hub, match_id):
+        state = hub.get_state(match_id)
+    if state is None:
+        await websocket.close(code=4404)
+        return
+
+    orchestrator = CommentaryOrchestratorService()
+    await websocket.accept()
+    cursor = 0
+    await websocket.send_json(
+        {
+            "channel": state.channel,
+            "kind": "audio_manifest_update",
+            "payload": orchestrator.build_manifest(match_id=match_id).model_dump(mode="json"),
+        }
+    )
+    try:
+        while True:
+            state = hub.get_state(match_id)
+            if state is None:
+                break
+            events, cursor = hub.get_events_since(match_id, cursor)
+            if events:
+                await websocket.send_json(
+                    {
+                        "channel": state.channel,
+                        "kind": "audio_stems",
+                        "payload": [item.model_dump(mode="json") for item in orchestrator.build_frames(events)],
                     }
                 )
             if not state.is_live and cursor >= state.event_count:
@@ -343,5 +499,7 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
 
 router.include_router(legacy_router)
 router.include_router(api_router)
+router.include_router(match_router)
+router.include_router(api_match_router)
 
 __all__ = ["router"]

@@ -602,11 +602,19 @@ class MatchCommentaryCueView(CommonSchema):
     line: str = ""
     tone: str = "tactical"
     commentator: str = "lead"
+    speaker_role: str = "lead"
     language: str = "en"
     intensity: float = Field(default=0.0, ge=0.0, le=1.0)
     tts_ready: bool = False
     banter_layer: bool = False
     audio_channel: str = "main"
+    voice_profile: str | None = None
+    voice_id: str | None = None
+    accent: str | None = None
+    energy_level: float = Field(default=0.5, ge=0.0, le=1.0)
+    speech_rate: float = Field(default=1.0, ge=0.5, le=2.0)
+    interrupt_priority: int = Field(default=0, ge=0, le=100)
+    stem_routing: list[str] = Field(default_factory=lambda: ["commentary"])
 
 
 class MatchCrowdStateView(CommonSchema):
@@ -617,6 +625,14 @@ class MatchCrowdStateView(CommonSchema):
     chant_level: float = Field(default=0.5, ge=0.0, le=1.0)
     hostility: float = Field(default=0.0, ge=0.0, le=1.0)
     spike: bool = False
+    crowd_intensity: float = Field(default=0.5, ge=0.0, le=1.0)
+    crowd_bias: str = "home"
+    crowd_mood: str = "tense"
+    stadium_theme: str | None = None
+    stadium_name: str | None = None
+    region_personality: str | None = None
+    crowd_personality: str | None = None
+    stadium_fx: str | None = None
 
 
 class MatchSpectatorSyncView(CommonSchema):

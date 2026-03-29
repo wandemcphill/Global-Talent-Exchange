@@ -163,6 +163,53 @@ def test_moments_engine_detects_last_minute_win(tmp_path) -> None:
     assert moment.boost.final_score == 1.8
 
 
+def test_moments_engine_dedupes_by_source_event_id_and_sequence_id(tmp_path) -> None:
+    engine, _publisher, _leaderboard, _session_factory = _build_engine(tmp_path)
+
+    engine.handle_event(
+        DomainEvent(
+            name="match.events",
+            payload={
+                "match_id": "match-dedupe",
+                "event_id": "evt-a",
+                "source_event_id": "evt-source",
+                "sequence_id": 4,
+                "event_type": "goal",
+                "source_event_type": "goal",
+                "minute": 12,
+                "team": "Dedupe FC",
+                "player": "Finisher",
+                "home_score": 1,
+                "away_score": 0,
+                "metadata": {},
+            },
+        )
+    )
+    engine.handle_event(
+        DomainEvent(
+            name="match.events",
+            payload={
+                "match_id": "match-dedupe",
+                "event_id": "evt-b",
+                "source_event_id": "evt-source",
+                "sequence_id": 4,
+                "event_type": "goal",
+                "source_event_type": "goal",
+                "minute": 12,
+                "team": "Dedupe FC",
+                "player": "Finisher",
+                "home_score": 1,
+                "away_score": 0,
+                "metadata": {},
+            },
+        )
+    )
+
+    response = engine.live(limit=5, match_id="match-dedupe")
+
+    assert response.total == 1
+
+
 def test_moments_engine_seeds_priority_cache_for_live_feed_injection(tmp_path) -> None:
     engine, _publisher, _leaderboard, _session_factory = _build_engine(tmp_path)
 

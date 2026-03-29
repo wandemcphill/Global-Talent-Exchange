@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import logging
 from threading import RLock
 from typing import Any
 from uuid import uuid4
@@ -37,6 +38,8 @@ from app.viral.schemas import (
 )
 from app.viral.variant_manager import ViralClipVariantManager
 
+logger = logging.getLogger(__name__)
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -61,6 +64,7 @@ class _MatchMomentState:
 class _NormalizedMatchEvent:
     match_id: str
     source_event_id: str
+    sequence_id: int | None
     event_type: str
     source_event_type: str
     minute: int
@@ -101,7 +105,8 @@ class MomentsEngine:
         except Exception:
             return
         with self._lock:
-            source_key = f"{normalized.match_id}:{normalized.source_event_id}"
+            dedupe_id = normalized.source_event_id or (f"seq:{normalized.sequence_id}" if normalized.sequence_id is not None else event.event_id)
+            source_key = f"{normalized.match_id}:{dedupe_id}"
             if source_key in self._seen_source_events:
                 return
             match_state = self._match_state.setdefault(normalized.match_id, _MatchMomentState())
@@ -473,12 +478,13 @@ class MomentsEngine:
         match_id = str(payload.get("match_id") or event.aggregate_id or "").strip()
         if not match_id:
             raise ValueError("match.events payload is missing match_id")
-        source_event_id = str(payload.get("event_id") or event.event_id).strip()
+        source_event_id = str(payload.get("source_event_id") or payload.get("event_id") or event.event_id).strip()
         source_event_type = str(payload.get("source_event_type") or payload.get("event_type") or "generic").strip().lower()
         event_type = MomentsEngine._moment_event_type(source_event_type)
         return _NormalizedMatchEvent(
             match_id=match_id,
             source_event_id=source_event_id or event.event_id,
+            sequence_id=int(payload.get("sequence_id") or payload.get("sequence") or 0) or None,
             event_type=event_type,
             source_event_type=source_event_type,
             minute=max(0, int(payload.get("minute") or 0)),

@@ -1,5 +1,6 @@
 import app.ingestion.models  # noqa: F401
 import app.agents.models  # noqa: F401
+import app.global_memory.models  # noqa: F401
 import app.models.scale_backbone  # noqa: F401
 
 from app.models.academy_graduation_event import AcademyGraduationEvent
@@ -29,7 +30,8 @@ from app.models.agent_marketplace import (
 )
 from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
 from app.models.attachment import Attachment
-from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun
+from app.models.betting import BetAuditLog, BetIntegrityAlert, BetTicket, BettingProfile
+from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun, GlobalEvent
 from app.models.base import Base
 from app.models.card_access import (
     CardLoanContract,
@@ -102,6 +104,7 @@ from app.models.broadcast_rights import (
     BroadcastRightsBid,
     ViewSession,
 )
+from app.models.broadcast_watch_session import BroadcastWatchSession
 from app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
 from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
@@ -423,6 +426,7 @@ from app.models.regen import (
 from app.models.regen_ecosystem import (
     Agent,
     CareerEvent,
+    NationalRegenSeed,
     RegenAttributeProfile,
     RegenAwardVote,
     RegenBloodlineLink,
@@ -573,9 +577,14 @@ __all__ = [
     "AdminFeatureFlag",
     "AdminRewardRule",
     "Attachment",
+    "BetAuditLog",
+    "BetIntegrityAlert",
+    "BetTicket",
+    "BettingProfile",
     "CalendarEvent",
     "CalendarSeason",
     "CompetitionLifecycleRun",
+    "GlobalEvent",
     "Base",
     "CardLoanContract",
     "CardLoanListing",
@@ -629,6 +638,7 @@ __all__ = [
     "BroadcastRight",
     "BroadcastRightsAuction",
     "BroadcastRightsBid",
+    "BroadcastWatchSession",
     "ClubIdentity",
     "ClubPhilosophy",
     "FanBase",
@@ -911,6 +921,7 @@ __all__ = [
     "TransferHeadlineMediaRecord",
     "Agent",
     "CareerEvent",
+    "NationalRegenSeed",
     "RegenAttributeProfile",
     "RegenAwardVote",
     "RegenBloodlineLink",

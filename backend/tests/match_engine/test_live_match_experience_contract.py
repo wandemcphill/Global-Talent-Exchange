@@ -34,14 +34,27 @@ def test_live_match_hub_projects_experience_layers_into_events_and_state() -> No
     assert event.experience.motion.model_key == "gtex_motion_blend_v1"
     assert event.experience.commentary is not None
     assert event.experience.commentary.tts_ready is True
+    assert event.experience.commentary.voice_profile in {"play_by_play", "analyst"}
+    assert event.experience.commentary.speaker_role in {"lead", "analyst"}
+    assert event.experience.commentary.interrupt_priority >= 0
+    assert "commentary" in event.experience.commentary.stem_routing
     assert event.metadata["description"]
     assert event.metadata["commentary_tier"] in {"rule", "template", "llm"}
     assert event.metadata["commentary_provider"] in {"local-template", "local-dramatic", "remote-llm"}
     assert isinstance(event.metadata["commentary_context"], dict)
     assert event.experience.commentary.line == event.metadata["description"]
     assert event.experience.crowd is not None
+    assert event.experience.crowd.stadium_theme
+    assert event.experience.crowd.stadium_name
+    assert event.experience.crowd.region_personality
+    assert event.experience.crowd.crowd_mood in {"tense", "hype", "angry", "celebratory"}
+    assert event.experience.crowd.crowd_intensity >= 0.0
     assert event.experience.spectator_sync is not None
     assert event.experience.spectator_sync.room_id == f"match_{replay_payload.match_id}"
+    assert event.source_event_id
+    assert event.sequence_id is not None
+    assert event.importance_score >= 0.0
+    assert event.audio_stem_channels == ["commentary", "crowd", "stadium_fx"]
 
     major = next(
         (
@@ -73,6 +86,8 @@ def test_live_match_hub_projects_experience_layers_into_events_and_state() -> No
     assert state.event_count > 0
     assert state.crowd_state is not None
     assert state.crowd_state.profile
+    assert state.crowd_state.stadium_theme
+    assert state.crowd_state.crowd_bias in {"home", "away"}
     assert state.spectator_sync is not None
     assert state.spectator_sync.sync_strategy == "deterministic_playback"
     assert state.snapshot.win_probability is not None

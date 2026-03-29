@@ -168,6 +168,7 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("broadcast_access_grants")
     assert inspector.has_table("view_sessions")
     assert inspector.has_table("broadcast_revenue_distributions")
+    assert inspector.has_table("broadcast_watch_sessions")
     assert inspector.has_table("ownership_groups")
     assert inspector.has_table("ownership_group_clubs")
     assert inspector.has_table("ownership_group_budget_movements")
@@ -557,6 +558,24 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
         "processed_at",
         "metadata_json",
     } <= broadcast_distribution_columns
+
+    broadcast_watch_session_columns = {
+        column["name"] for column in inspector.get_columns("broadcast_watch_sessions")
+    }
+    assert {
+        "user_id",
+        "channel_id",
+        "current_match_id",
+        "status",
+        "started_at",
+        "last_seen_at",
+        "ended_at",
+        "watched_seconds",
+        "switch_count",
+        "reward_xp",
+        "rewarded_at",
+        "metadata_json",
+    } <= broadcast_watch_session_columns
 
     ownership_group_columns = {column["name"] for column in inspector.get_columns("ownership_groups")}
     assert {
