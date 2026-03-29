@@ -46,6 +46,10 @@ _SEEN_EVENTS = {
     ClipEventType.VIEW,
     ClipEventType.WATCH_TIME,
     ClipEventType.COMPLETE,
+    ClipEventType.LOOP,
+    ClipEventType.SHARE,
+    ClipEventType.COMMENT,
+    ClipEventType.LIKE,
     ClipEventType.SCROLL,
 }
 

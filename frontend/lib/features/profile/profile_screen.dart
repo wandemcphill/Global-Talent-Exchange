@@ -11,7 +11,7 @@ import '../../core/widgets/app_hover_lift.dart';
 import '../../core/widgets/app_press_scale.dart';
 import '../../core/widgets/gtex_surface_card.dart';
 import '../../services/reliability/reliable_event_queue.dart';
-import '../../shared/models/auth_session.dart';
+import '../../shared/models/auth_presentation.dart';
 import '../../shared/models/club.dart';
 import '../../shared/models/live_match.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -33,7 +33,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AuthSession auth = ref.watch(authProvider);
+    final AuthPresentation auth = ref.watch(authPresentationProvider);
     final Club club = ref.watch(clubProvider);
     final List<LiveMatch> liveMatches = ref.watch(matchProvider);
     final TransferMarketState marketState = ref.watch(transferProvider);
@@ -183,7 +183,7 @@ class _ProfileHeaderCard extends StatelessWidget {
     required this.onFollowToggle,
   });
 
-  final AuthSession auth;
+  final AuthPresentation auth;
   final Club club;
   final int followers;
   final int liveMatches;

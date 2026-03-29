@@ -20,11 +20,15 @@ DEFAULT_NEW_CREATOR_BOOST = 0.15
 _RAW_AFFINITY_EVENT_NAMES = frozenset(
     {
         ClipEventType.VIEW.topic_name,
+        ClipEventType.COMPLETE.topic_name,
         ClipEventType.LIKE.topic_name,
         ClipEventType.SHARE.topic_name,
+        ClipEventType.SCROLL.topic_name,
         "clip_view",
+        "clip_complete",
         "clip_like",
         "clip_share",
+        "clip_scroll",
     }
 )
 

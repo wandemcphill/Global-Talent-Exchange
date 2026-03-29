@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC
 import json
 import logging
 from queue import Empty, Queue
@@ -10,8 +11,16 @@ from threading import Lock, Thread
 import time
 from typing import Any
 
+from fastapi import FastAPI
 from app.backbone.kafka import KafkaBackboneUnavailable
 from app.core.config import Settings
+from app.core.events import DomainEvent, EventPublisher
+from app.viral.distribution import (
+    InMemoryViralDispatchPoolStore,
+    ViralDispatchPoolStore,
+    ensure_viral_dispatch_pool_store,
+    inject_into_distribution_pool,
+)
 from app.viral.ingestion_schemas import CLIP_EVENT_TOPICS, ClipEvent
 
 logger = logging.getLogger(__name__)
@@ -242,3 +251,112 @@ class ClipEventKafkaProducer:
             event.kafka_topic,
             exc,
         )
+
+
+@dataclass(slots=True)
+class ViralDispatchRuntime:
+    pool_store: ViralDispatchPoolStore
+    _subscription_enabled: bool = False
+    _closed: bool = False
+
+    def ensure_event_subscription(self, event_publisher: EventPublisher | None) -> None:
+        if self._subscription_enabled or self._closed or event_publisher is None:
+            return
+        event_publisher.subscribe(self.handle_event)
+        self._subscription_enabled = True
+
+    def stop(self) -> None:
+        self._closed = True
+
+    def handle_event(self, event: DomainEvent) -> None:
+        if self._closed or event.name != "viral.clip.dispatch.requested":
+            return
+        payload = dict(event.payload or {})
+        clip_id = _dispatch_clip_id(payload)
+        if clip_id is None:
+            logger.warning("viral.dispatch.ignored_missing_clip_id event_id=%s", event.event_id)
+            return
+        initial_score = _dispatch_initial_score(payload)
+        normalized_payload = _normalize_dispatch_payload(
+            event=event,
+            clip_id=clip_id,
+            payload=payload,
+            initial_score=initial_score,
+        )
+        try:
+            inject_into_distribution_pool(
+                clip_id=clip_id,
+                score=initial_score,
+                payload=normalized_payload,
+                store=self.pool_store,
+            )
+        except Exception:
+            logger.exception("viral.dispatch.pool_injection_failed clip_id=%s", clip_id)
+
+
+def ensure_viral_dispatch_runtime(app: FastAPI) -> ViralDispatchRuntime:
+    runtime = getattr(app.state, "viral_dispatch_runtime", None)
+    if isinstance(runtime, ViralDispatchRuntime):
+        event_publisher = getattr(app.state, "event_publisher", None)
+        runtime.ensure_event_subscription(event_publisher)
+        return runtime
+    runtime = ViralDispatchRuntime(
+        pool_store=ensure_viral_dispatch_pool_store(app, settings=getattr(app.state, "settings", None))
+    )
+    app.state.viral_dispatch_runtime = runtime
+    runtime.ensure_event_subscription(getattr(app.state, "event_publisher", None))
+    return runtime
+
+
+def shutdown_viral_dispatch_runtime(app: FastAPI) -> None:
+    runtime = getattr(app.state, "viral_dispatch_runtime", None)
+    if isinstance(runtime, ViralDispatchRuntime):
+        runtime.stop()
+    app.state.viral_dispatch_runtime = None
+    pool_store = getattr(app.state, "viral_dispatch_pool_store", None)
+    if isinstance(pool_store, InMemoryViralDispatchPoolStore):
+        pool_store.clear()
+    app.state.viral_dispatch_pool_store = None
+
+
+def _dispatch_clip_id(payload: dict[str, Any]) -> str | None:
+    candidate = payload.get("clip_id") or payload.get("base_clip_id") or payload.get("moment_id")
+    if candidate is None:
+        return None
+    normalized = str(candidate).strip()
+    return normalized or None
+
+
+def _dispatch_initial_score(payload: dict[str, Any]) -> float:
+    for key in ("priority_score", "initial_score", "ranking_score", "trending_score"):
+        if key not in payload:
+            continue
+        try:
+            return max(float(payload.get(key) or 0.0), 0.0)
+        except (TypeError, ValueError):
+            continue
+    return 1.0
+
+
+def _normalize_dispatch_payload(
+    *,
+    event: DomainEvent,
+    clip_id: str,
+    payload: dict[str, Any],
+    initial_score: float,
+) -> dict[str, Any]:
+    normalized = dict(payload)
+    metadata = dict(normalized.get("metadata") or {})
+    metadata.setdefault("dispatch_event_id", event.event_id)
+    metadata.setdefault("dispatch_event_name", event.name)
+    metadata.setdefault("dispatch_occurred_at", event.occurred_at.astimezone(UTC).isoformat())
+    if event.producer is not None:
+        metadata.setdefault("dispatch_producer", event.producer)
+    if event.aggregate_id is not None:
+        metadata.setdefault("aggregate_id", event.aggregate_id)
+    if event.aggregate_type is not None:
+        metadata.setdefault("aggregate_type", event.aggregate_type)
+    normalized["clip_id"] = clip_id
+    normalized["metadata"] = metadata
+    normalized.setdefault("initial_score", round(float(initial_score), 6))
+    return normalized

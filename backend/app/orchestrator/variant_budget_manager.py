@@ -10,6 +10,8 @@ from app.models.clip_variant import ClipVariant
 from app.orchestrator.global_state import AttentionOrchestratorConfig, ClipGlobalState
 from app.viral.variant_manager import parse_base_clip_id
 
+EXPLORATION_FLOOR = 0.2
+
 
 @dataclass(frozen=True, slots=True)
 class VariantBudgetSplit:
@@ -47,17 +49,27 @@ class VariantBudgetManager:
         locked = winner is not None
         leader_score = self._normalized_variant_score(float(leader.viral_score or 0.0))
         exposure_feedback = self._global_exposure_feedback(state)
-        winner_share = 1.0 if locked else min(
-            max(float(self.config.winner_share) + (leader_score * 0.12) + exposure_feedback, 0.0),
-            1.0,
-        )
-        exploration_share = 0.0 if locked else min(max(float(self.config.exploration_share), 0.0), 1.0)
-        residual_share = max(0.0, 1.0 - winner_share)
-        if not locked and exploration_share > 0.0 and residual_share > 0.0:
-            residual_share = min(residual_share, exploration_share)
-
         non_leaders = [variant for variant in variants if variant.variant_id != leader.variant_id]
-        exploration_unit = (residual_share / len(non_leaders)) if non_leaders else 0.0
+        if locked:
+            winner_share = 1.0
+            exploration_unit = 0.0
+        elif not non_leaders:
+            winner_share = 1.0
+            exploration_unit = 0.0
+        else:
+            desired_winner_share = min(
+                max(float(self.config.winner_share) + (leader_score * 0.12) + exposure_feedback, 0.0),
+                1.0,
+            )
+            exploration_share = min(max(float(self.config.exploration_share), 0.0), 1.0)
+            floor_per_variant = float(EXPLORATION_FLOOR)
+            if floor_per_variant * len(non_leaders) > 1.0:
+                floor_per_variant = 1.0 / len(non_leaders)
+            reserved_floor = floor_per_variant * len(non_leaders)
+            minimum_exploration_share = max(exploration_share, reserved_floor)
+            winner_share = min(desired_winner_share, max(0.0, 1.0 - minimum_exploration_share))
+            remaining_exploration = max(0.0, 1.0 - winner_share)
+            exploration_unit = remaining_exploration / len(non_leaders)
 
         splits: list[VariantBudgetSplit] = []
         for variant in variants:

@@ -1,13 +1,27 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.auth.dependencies import get_current_user, get_session
+from app.auth.security import create_access_token
 from app.auth.service import AuthService
 from app.models.creator_profile import CreatorProfile
 from app.models.follow import Follow
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user import User
+from app.users.router import get_follow_graph_service, router as users_router
+
+
+def _identity_headers(*, token: str, user_id: str, session_id: str, device_id: str = "device-test-1") -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-User-Id": user_id,
+        "X-Session-Id": session_id,
+        "X-Device-Id": device_id,
+    }
 
 
 def _create_user_headers(app_session_factory, *, email: str, username: str) -> dict[str, str]:
@@ -22,9 +36,10 @@ def _create_user_headers(app_session_factory, *, email: str, username: str) -> d
             )
         else:
             user = session.get(User, existing.id)
-        token, _ = AuthService().issue_access_token(user, session=session)
+        session_id = f"session-{username}"
+        token = create_access_token(user.id, claims={"sid": session_id})
         session.commit()
-        return {"Authorization": f"Bearer {token}"}
+        return _identity_headers(token=token, user_id=user.id, session_id=session_id)
 
 
 def test_user_affinity_profile_defaults(client, app_session_factory) -> None:
@@ -145,6 +160,36 @@ def test_clip_events_update_user_affinity_profile(client, app_session_factory) -
     assert payload["affinity"]["score"] > 0.87
 
 
+def test_follow_route_rejects_missing_identity_context(app_session_factory, client) -> None:
+    app = FastAPI()
+    app.include_router(users_router)
+    current_user = User(
+        id="follow-missing-current",
+        email="follow-missing-current@example.com",
+        username="followmissingcurrent",
+        password_hash="hashed",
+    )
+
+    class _UnreachableFollowService:
+        def follow(self, *, actor, following_id):
+            raise AssertionError("follow service should not run without identity")
+
+    app.dependency_overrides[get_current_user] = lambda: current_user
+    app.dependency_overrides[get_session] = lambda: None
+    app.dependency_overrides[get_follow_graph_service] = lambda: _UnreachableFollowService()
+
+    authorization = f"Bearer {create_access_token(current_user.id, claims={'sid': 'session-missing'})}"
+
+    with TestClient(app) as test_client:
+        response = test_client.post(
+            "/follow/follow-missing-target",
+            headers={"Authorization": authorization},
+        )
+
+    assert response.status_code == 401, response.text
+    assert response.json()["detail"] == "Missing identity context"
+
+
 def test_follow_routes_and_suggestions_surface_social_graph(app_session_factory, client) -> None:
     current_user_id, headers = _create_user(app_session_factory, email="follow-current@example.com", username="followcurrent")
     target_user_id, _target_headers = _create_user(app_session_factory, email="follow-target@example.com", username="followtarget")
@@ -241,6 +286,7 @@ def _create_user(app_session_factory, *, email: str, username: str) -> tuple[str
             )
         else:
             user = session.get(User, existing.id)
-        token, _ = AuthService().issue_access_token(user, session=session)
+        session_id = f"session-{username}"
+        token = create_access_token(user.id, claims={"sid": session_id})
         session.commit()
-        return user.id, {"Authorization": f"Bearer {token}"}
+        return user.id, _identity_headers(token=token, user_id=user.id, session_id=session_id)

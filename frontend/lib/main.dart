@@ -3,10 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'navigation/app_router.dart';
+import 'shared/auth/auth_identity_store.dart';
+import 'shared/models/auth_session.dart';
+import 'shared/providers/auth_provider.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: GtexApp()));
+  final SecureAuthSessionStore authSessionStore = SecureAuthSessionStore();
+  final SecureDeviceIdentityStore deviceIdentityStore =
+      SecureDeviceIdentityStore();
+  final AuthSession? authSession = await authSessionStore.readSession();
+  final String deviceId = await ensureDeviceId(deviceIdentityStore);
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(authSessionStore),
+        deviceIdentityStoreProvider.overrideWithValue(deviceIdentityStore),
+        authProvider.overrideWithValue(authSession),
+        deviceIdProvider.overrideWithValue(deviceId),
+      ],
+      child: const GtexApp(),
+    ),
+  );
 }
 
 class GtexApp extends ConsumerWidget {

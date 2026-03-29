@@ -5,8 +5,11 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../data/gte_authed_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_http_transport.dart';
+import '../../shared/auth/auth_identity_store.dart';
+import '../../shared/models/auth_session.dart';
 
 class TrackEventRequest {
   const TrackEventRequest({
@@ -19,6 +22,7 @@ class TrackEventRequest {
     this.country,
     this.referrer,
     this.contentType,
+    this.creatorId,
     this.formatKey,
     this.clipEventType,
     this.teamName,
@@ -34,6 +38,7 @@ class TrackEventRequest {
   final String? country;
   final String? referrer;
   final String? contentType;
+  final String? creatorId;
   final String? formatKey;
   final String? clipEventType;
   final String? teamName;
@@ -44,11 +49,11 @@ class QueuedEvent {
   const QueuedEvent({
     required this.eventId,
     required this.clipId,
+    required this.userId,
     required this.sessionId,
     required this.timestamp,
     required this.eventType,
     required this.metadata,
-    this.userId,
     this.watchTimeMs,
     this.videoLengthMs,
     this.retryCount = 0,
@@ -58,7 +63,7 @@ class QueuedEvent {
     return QueuedEvent(
       eventId: (json['event_id'] ?? '').toString(),
       clipId: (json['clip_id'] ?? '').toString(),
-      userId: _stringOrNull(json['user_id']),
+      userId: (json['user_id'] ?? '').toString(),
       sessionId: (json['session_id'] ?? '').toString(),
       timestamp: DateTime.parse((json['timestamp'] ?? '').toString()).toUtc(),
       eventType: (json['event_type'] ?? '').toString(),
@@ -76,7 +81,7 @@ class QueuedEvent {
 
   final String eventId;
   final String clipId;
-  final String? userId;
+  final String userId;
   final String sessionId;
   final DateTime timestamp;
   final String eventType;
@@ -136,6 +141,7 @@ class EventMetadata {
     required this.country,
     required this.referrer,
     this.contentType,
+    this.creatorId,
     this.formatKey,
     this.clipEventType,
     this.teamName,
@@ -148,6 +154,7 @@ class EventMetadata {
       country: (json['country'] ?? '').toString(),
       referrer: (json['referrer'] ?? '').toString(),
       contentType: _stringOrNull(json['content_type']),
+      creatorId: _stringOrNull(json['creator_id']),
       formatKey: _stringOrNull(json['format_key']),
       clipEventType: _stringOrNull(json['clip_event_type']),
       teamName: _stringOrNull(json['team_name']),
@@ -159,6 +166,7 @@ class EventMetadata {
   final String country;
   final String referrer;
   final String? contentType;
+  final String? creatorId;
   final String? formatKey;
   final String? clipEventType;
   final String? teamName;
@@ -170,6 +178,7 @@ class EventMetadata {
       'country': country,
       'referrer': referrer,
       'content_type': contentType,
+      'creator_id': creatorId,
       'format_key': formatKey,
       'clip_event_type': clipEventType,
       'team_name': teamName,
@@ -182,25 +191,18 @@ abstract class EventQueueStore {
   Future<List<QueuedEvent>> readQueue();
 
   Future<void> writeQueue(List<QueuedEvent> events);
-
-  Future<String?> readSessionId();
-
-  Future<void> writeSessionId(String sessionId);
 }
 
 class SharedPreferencesEventQueueStore implements EventQueueStore {
   SharedPreferencesEventQueueStore({
     SharedPreferences? preferences,
     this.queueKey = _defaultQueueKey,
-    this.sessionIdKey = _defaultSessionIdKey,
   }) : _preferences = preferences;
 
   static const String _defaultQueueKey = 'gtex_action_pipeline_queue';
-  static const String _defaultSessionIdKey = 'gtex_action_pipeline_session_id';
 
   SharedPreferences? _preferences;
   final String queueKey;
-  final String sessionIdKey;
 
   Future<SharedPreferences> _prefs() async {
     _preferences ??= await SharedPreferences.getInstance();
@@ -235,23 +237,14 @@ class SharedPreferencesEventQueueStore implements EventQueueStore {
     );
     await prefs.setString(queueKey, payload);
   }
-
-  @override
-  Future<String?> readSessionId() async {
-    final SharedPreferences prefs = await _prefs();
-    final String value = (prefs.getString(sessionIdKey) ?? '').trim();
-    return value.isEmpty ? null : value;
-  }
-
-  @override
-  Future<void> writeSessionId(String sessionId) async {
-    final SharedPreferences prefs = await _prefs();
-    await prefs.setString(sessionIdKey, sessionId);
-  }
 }
 
 abstract class EventTransport {
-  Future<void> postEvents(List<QueuedEvent> events);
+  Future<void> postEvents(
+    List<QueuedEvent> events, {
+    required AuthSession authSession,
+    required String deviceId,
+  });
 }
 
 class ClipEventsApiTransport implements EventTransport {
@@ -267,55 +260,26 @@ class ClipEventsApiTransport implements EventTransport {
   final GteTransport _transport;
 
   @override
-  Future<void> postEvents(List<QueuedEvent> events) async {
-    final GteTransportResponse response = await _transport.send(
-      GteTransportRequest(
-        method: 'POST',
-        uri: _config.uriFor(endpointPath),
-        headers: const <String, String>{'Content-Type': 'application/json'},
-        body: <String, Object?>{
-          'events': events
-              .map((QueuedEvent event) => event.toApiJson())
-              .toList(growable: false),
-        },
-      ),
+  Future<void> postEvents(
+    List<QueuedEvent> events, {
+    required AuthSession authSession,
+    required String deviceId,
+  }) async {
+    final GteAuthedApi api = GteAuthedApi(
+      config: _config,
+      transport: _transport,
+      authSession: authSession,
+      deviceId: deviceId,
+      mode: GteBackendMode.live,
     );
-    if (response.statusCode >= 400) {
-      throw GteApiException(
-        type: _errorType(response.statusCode),
-        message: _errorMessage(response.body),
-        statusCode: response.statusCode,
-      );
-    }
-  }
-
-  GteApiErrorType _errorType(int statusCode) {
-    if (statusCode == 401 || statusCode == 403) {
-      return GteApiErrorType.unauthorized;
-    }
-    if (statusCode == 404) {
-      return GteApiErrorType.notFound;
-    }
-    if (statusCode == 422) {
-      return GteApiErrorType.validation;
-    }
-    if (statusCode >= 500) {
-      return GteApiErrorType.unavailable;
-    }
-    return GteApiErrorType.unknown;
-  }
-
-  String _errorMessage(Object? body) {
-    if (body is Map<String, dynamic>) {
-      final Object? detail = body['detail'] ?? body['message'];
-      if (detail != null && detail.toString().trim().isNotEmpty) {
-        return detail.toString();
-      }
-    }
-    if (body is String && body.trim().isNotEmpty) {
-      return body;
-    }
-    return 'Clip event request failed.';
+    await api.post(
+      endpointPath,
+      body: <String, Object?>{
+        'events': events
+            .map((QueuedEvent event) => event.toApiJson())
+            .toList(growable: false),
+      },
+    );
   }
 }
 
@@ -323,6 +287,8 @@ class EventService {
   EventService({
     required EventTransport transport,
     required EventQueueStore store,
+    required AuthSessionStore authSessionStore,
+    required DeviceIdentityStore deviceIdentityStore,
     Duration? batchWindow,
     Duration? retryBaseDelay,
     Duration? retryMaxDelay,
@@ -330,11 +296,14 @@ class EventService {
     String defaultCountry = 'unknown',
     String defaultReferrer = 'viral_feed',
     String defaultContentType = 'clip',
+    String? deviceId,
     DateTime Function()? now,
     String Function()? uuidGenerator,
     String Function()? deviceResolver,
   }) : _transport = transport,
        _store = store,
+       _authSessionStore = authSessionStore,
+       _deviceIdentityStore = deviceIdentityStore,
        batchWindow = batchWindow ?? const Duration(milliseconds: 300),
        retryBaseDelay = retryBaseDelay ?? const Duration(seconds: 1),
        retryMaxDelay = retryMaxDelay ?? const Duration(seconds: 30),
@@ -342,17 +311,21 @@ class EventService {
        _defaultCountry = defaultCountry,
        _defaultReferrer = defaultReferrer,
        _defaultContentType = defaultContentType,
+       _configuredDeviceId = deviceId?.trim(),
        _now = now ?? _defaultNow,
-       _uuidGenerator = uuidGenerator ?? _generateUuid,
+       _uuidGenerator = uuidGenerator ?? generateIdentityUuid,
        _deviceResolver = deviceResolver ?? _defaultDevice;
 
   factory EventService.standard({
     String baseUrl = _defaultActionApiBaseUrl,
     GteTransport? transport,
     EventQueueStore? store,
+    AuthSessionStore? authSessionStore,
+    DeviceIdentityStore? deviceIdentityStore,
     Duration? batchWindow,
     Duration? retryBaseDelay,
     Duration? retryMaxDelay,
+    String? deviceId,
   }) {
     return EventService(
       transport: ClipEventsApiTransport(
@@ -363,14 +336,19 @@ class EventService {
         transport: transport,
       ),
       store: store ?? SharedPreferencesEventQueueStore(),
+      authSessionStore: authSessionStore ?? SecureAuthSessionStore(),
+      deviceIdentityStore: deviceIdentityStore ?? SecureDeviceIdentityStore(),
       batchWindow: batchWindow,
       retryBaseDelay: retryBaseDelay,
       retryMaxDelay: retryMaxDelay,
+      deviceId: deviceId,
     );
   }
 
   final EventTransport _transport;
   final EventQueueStore _store;
+  final AuthSessionStore _authSessionStore;
+  final DeviceIdentityStore _deviceIdentityStore;
   final Duration batchWindow;
   final Duration retryBaseDelay;
   final Duration retryMaxDelay;
@@ -378,6 +356,7 @@ class EventService {
   final String _defaultCountry;
   final String _defaultReferrer;
   final String _defaultContentType;
+  final String? _configuredDeviceId;
   final DateTime Function() _now;
   final String Function() _uuidGenerator;
   final String Function() _deviceResolver;
@@ -386,7 +365,6 @@ class EventService {
   bool _initialized = false;
   bool _isFlushing = false;
   Future<void>? _initializing;
-  String? _sessionId;
   Timer? _flushTimer;
   Timer? _retryTimer;
 
@@ -395,11 +373,13 @@ class EventService {
 
   Future<void> trackEvent(TrackEventRequest request) async {
     await _ensureInitialized();
+    final AuthSession authSession = await _requireAuthSession();
+    final String deviceId = await _resolveDeviceId();
     final QueuedEvent event = QueuedEvent(
       eventId: _uuidGenerator(),
       clipId: request.clipId,
-      userId: _trimmedOrNull(request.userId),
-      sessionId: _sessionId!,
+      userId: authSession.userId,
+      sessionId: authSession.sessionId,
       timestamp: _now().toUtc(),
       eventType: request.eventType,
       watchTimeMs: request.watchTimeMs,
@@ -409,6 +389,7 @@ class EventService {
         country: _trimmedOrFallback(request.country, _defaultCountry),
         referrer: _trimmedOrFallback(request.referrer, _defaultReferrer),
         contentType: _trimmedOrNull(request.contentType) ?? _defaultContentType,
+        creatorId: _trimmedOrNull(request.creatorId),
         formatKey: _trimmedOrNull(request.formatKey),
         clipEventType: _trimmedOrNull(request.clipEventType),
         teamName: _trimmedOrNull(request.teamName),
@@ -418,13 +399,19 @@ class EventService {
             .toList(growable: false),
       ),
     );
-    _queue.add(event);
-    await _persistQueue();
-    if (_queue.length >= _maxBatchSize) {
-      _scheduleFlush(Duration.zero);
-      return;
+    try {
+      await _transport.postEvents(
+        <QueuedEvent>[event],
+        authSession: authSession,
+        deviceId: deviceId,
+      );
+    } catch (error, stackTrace) {
+      _queue.add(event.copyWith(retryCount: 1));
+      await _persistQueue();
+      _scheduleRetry(_retryDelayFor(1));
+      debugPrint('EventService.trackEvent failed: $error\n$stackTrace');
+      rethrow;
     }
-    _scheduleFlush(batchWindow);
   }
 
   Future<void> flush({bool propagateError = false}) async {
@@ -432,17 +419,28 @@ class EventService {
     if (_isFlushing || _queue.isEmpty) {
       return;
     }
+    await _discardStaleQueue();
+    if (_queue.isEmpty) {
+      return;
+    }
+
     _flushTimer?.cancel();
     _flushTimer = null;
     _retryTimer?.cancel();
     _retryTimer = null;
 
     _isFlushing = true;
+    final AuthSession authSession = await _requireAuthSession();
+    final String deviceId = await _resolveDeviceId();
     final List<QueuedEvent> batch = _queue
         .take(_maxBatchSize)
         .toList(growable: false);
     try {
-      await _transport.postEvents(batch);
+      await _transport.postEvents(
+        batch,
+        authSession: authSession,
+        deviceId: deviceId,
+      );
       _queue.removeRange(0, batch.length);
       await _persistQueue();
       if (_queue.isNotEmpty) {
@@ -486,13 +484,56 @@ class EventService {
     _queue
       ..clear()
       ..addAll(storedQueue);
-    _sessionId = await _store.readSessionId();
-    _sessionId ??= _uuidGenerator();
-    await _store.writeSessionId(_sessionId!);
     _initialized = true;
+    await _resolveDeviceId();
     if (_queue.isNotEmpty) {
       _scheduleFlush(const Duration(milliseconds: 10));
     }
+  }
+
+  Future<AuthSession> _requireAuthSession() async {
+    final AuthSession? authSession = await _authSessionStore.readSession();
+    if (authSession == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unauthorized,
+        message: 'Authentication required for this action.',
+      );
+    }
+    return authSession;
+  }
+
+  Future<String> _resolveDeviceId() async {
+    final String resolvedDeviceId = _configuredDeviceId?.trim() ?? '';
+    if (resolvedDeviceId.isNotEmpty) {
+      await _deviceIdentityStore.writeDeviceId(resolvedDeviceId);
+      return resolvedDeviceId;
+    }
+    return ensureDeviceId(_deviceIdentityStore, uuidGenerator: _uuidGenerator);
+  }
+
+  Future<void> _discardStaleQueue() async {
+    final AuthSession? authSession = await _authSessionStore.readSession();
+    if (authSession == null) {
+      if (_queue.isNotEmpty) {
+        _queue.clear();
+        await _persistQueue();
+      }
+      return;
+    }
+    final List<QueuedEvent> retained = _queue
+        .where(
+          (QueuedEvent event) =>
+              event.userId == authSession.userId &&
+              event.sessionId == authSession.sessionId,
+        )
+        .toList(growable: false);
+    if (retained.length == _queue.length) {
+      return;
+    }
+    _queue
+      ..clear()
+      ..addAll(retained);
+    await _persistQueue();
   }
 
   Future<void> _persistQueue() {
@@ -576,32 +617,4 @@ String? _trimmedOrNull(String? value) {
 
 String _trimmedOrFallback(String? value, String fallback) {
   return _trimmedOrNull(value) ?? fallback;
-}
-
-final math.Random _uuidRandom = _createUuidRandom();
-
-math.Random _createUuidRandom() {
-  try {
-    return math.Random.secure();
-  } catch (_) {
-    return math.Random();
-  }
-}
-
-String _generateUuid() {
-  final List<int> bytes = List<int>.generate(
-    16,
-    (_) => _uuidRandom.nextInt(256),
-  );
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  final String hex =
-      bytes.map((int value) => value.toRadixString(16).padLeft(2, '0')).join();
-  return <String>[
-    hex.substring(0, 8),
-    hex.substring(8, 12),
-    hex.substring(12, 16),
-    hex.substring(16, 20),
-    hex.substring(20, 32),
-  ].join('-');
 }

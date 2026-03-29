@@ -2,21 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/actions/action_pipeline.dart';
+import '../core/actions/event_service.dart';
 import '../core/theme/app_motion.dart';
 import '../features/home/home_screen.dart';
 import '../features/match/match_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/tasks/tasks_screen.dart';
-import '../features/viral_feed/data/viral_feed_repository.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
+import '../features/viral_feed/data/viral_feed_repository.dart';
 import '../features/viral_feed/presentation/viral_feed_screen.dart';
 import '../features/world/world_screen.dart';
+import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
 import 'app_destinations.dart';
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
-  final String? accessToken = ref.watch(authProvider).accessToken;
+  final AuthSession? authSession = ref.watch(authProvider);
+  final String deviceId = ref.watch(deviceIdProvider);
+  final EventService eventService = EventService.standard(
+    authSessionStore: ref.watch(authSessionStoreProvider),
+    deviceIdentityStore: ref.watch(deviceIdentityStoreProvider),
+    deviceId: deviceId,
+  );
+
   return GoRouter(
     initialLocation: AppRoutes.home,
     routes: <RouteBase>[
@@ -103,8 +113,13 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                 AppMotion.slidePage<void>(
                   state: state,
                   child: ViralFeedScreen(
+                    currentUserId: authSession?.userId,
                     repository: ViralFeedApiRepository.standard(
-                      accessToken: accessToken,
+                      authSession: authSession,
+                      deviceId: deviceId,
+                    ),
+                    actionDispatcher: ActionPipeline(
+                      eventService: eventService,
                     ),
                   ),
                 ),

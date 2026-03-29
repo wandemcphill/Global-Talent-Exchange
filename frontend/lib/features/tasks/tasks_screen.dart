@@ -10,7 +10,7 @@ import '../../core/widgets/app_hover_lift.dart';
 import '../../core/widgets/app_press_scale.dart';
 import '../../core/widgets/gtex_surface_card.dart';
 import '../../core/widgets/task_reward_pop.dart';
-import '../../shared/models/auth_session.dart';
+import '../../shared/models/auth_presentation.dart';
 import '../../shared/models/club.dart';
 import '../../shared/models/daily_task.dart';
 import '../../shared/models/season_pass.dart';
@@ -29,7 +29,7 @@ class TasksScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final TasksState state = ref.watch(tasksProvider);
     final Club club = ref.watch(clubProvider);
-    final AuthSession auth = ref.watch(authProvider);
+    final AuthPresentation auth = ref.watch(authPresentationProvider);
 
     void claimTask(DailyTask task) {
       final TaskClaimResult? result = ref
@@ -151,7 +151,7 @@ class _TasksOverviewCard extends StatelessWidget {
 
   final TasksState state;
   final Club club;
-  final AuthSession auth;
+  final AuthPresentation auth;
 
   @override
   Widget build(BuildContext context) {

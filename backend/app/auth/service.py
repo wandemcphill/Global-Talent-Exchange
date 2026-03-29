@@ -5,6 +5,7 @@ import hashlib
 import logging
 import re
 import secrets
+from uuid import uuid4
 
 from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
@@ -128,21 +129,33 @@ class AuthService:
         return user
 
     def issue_access_token(self, user: User, *, session: Session | None = None) -> tuple[str, int]:
+        token, expires_in, _session_id = self.issue_access_token_with_session(user, session=session)
+        return token, expires_in
+
+    def issue_access_token_with_session(
+        self,
+        user: User,
+        *,
+        session: Session | None = None,
+        session_id: str | None = None,
+    ) -> tuple[str, int, str]:
         effective_role = user.role
         active_org_id: str | None = None
         if session is not None:
             access_context = AccessControlService(session).bind_user_access_context(user)
             effective_role = access_context.effective_role
             active_org_id = access_context.active_organization_id
+        resolved_session_id = (session_id or str(uuid4())).strip()
         token = create_access_token(
             user.id,
             claims={
                 "email": user.email,
                 "role": effective_role.value,
                 "org_id": active_org_id,
+                "sid": resolved_session_id,
             },
         )
-        return token, ACCESS_TOKEN_TTL_SECONDS
+        return token, ACCESS_TOKEN_TTL_SECONDS, resolved_session_id
 
     def resolve_user_permissions(self, app, user: User, *, session: Session | None = None) -> list[str]:
         if session is not None:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,13 @@ from app.models.user import User, UserRole
 from app.services.runtime_control_service import RuntimeControlService
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+@dataclass(frozen=True)
+class IdentityContext:
+    user_id: str
+    session_id: str
+    device_id: str
 
 
 def get_session() -> Iterator[Session]:
@@ -63,6 +71,7 @@ def _resolve_authenticated_user(
 
     AccessControlService(session).bind_user_access_context(user)
     if request is not None:
+        request.state.auth_token_payload = payload
         control = RuntimeControlService(request.app).get_account_control(user_id=user.id)
         if control is not None and control.freeze_login:
             raise HTTPException(
@@ -162,6 +171,103 @@ def get_current_social_user(
         scope="social",
         detail="Social access is temporarily frozen for this account.",
     )
+
+
+def _raise_missing_identity() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Missing identity context",
+    )
+
+
+def _resolve_identity_context(
+    *,
+    request: Request,
+    current_user: User,
+    credentials: HTTPAuthorizationCredentials | None,
+    x_user_id: str | None,
+    x_session_id: str | None,
+    x_device_id: str | None,
+) -> IdentityContext:
+    if not x_user_id or not x_session_id or not x_device_id:
+        _raise_missing_identity()
+    token_payload = getattr(request.state, "auth_token_payload", None)
+    if not isinstance(token_payload, dict) and credentials is not None:
+        try:
+            token_payload = decode_access_token(credentials.credentials)
+        except TokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+    if not isinstance(token_payload, dict):
+        _raise_missing_identity()
+    token_session_id = token_payload.get("sid")
+    if not isinstance(token_session_id, str) or not token_session_id:
+        _raise_missing_identity()
+    if x_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identity header user does not match authenticated user.",
+        )
+    if x_session_id != token_session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Identity header session does not match authenticated session.",
+        )
+    return IdentityContext(
+        user_id=x_user_id,
+        session_id=x_session_id,
+        device_id=x_device_id,
+    )
+
+
+def get_identity_context(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_device_id: str | None = Header(default=None, alias="X-Device-Id"),
+) -> IdentityContext:
+    return _resolve_identity_context(
+        request=request,
+        current_user=current_user,
+        credentials=credentials,
+        x_user_id=x_user_id,
+        x_session_id=x_session_id,
+        x_device_id=x_device_id,
+    )
+
+
+def get_optional_identity_context(
+    request: Request,
+    current_user: User | None = Depends(get_optional_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
+    x_device_id: str | None = Header(default=None, alias="X-Device-Id"),
+) -> IdentityContext | None:
+    has_identity_headers = any(value is not None for value in (x_user_id, x_session_id))
+    if not has_identity_headers:
+        return None
+    if current_user is None:
+        _raise_missing_identity()
+    return _resolve_identity_context(
+        request=request,
+        current_user=current_user,
+        credentials=credentials,
+        x_user_id=x_user_id,
+        x_session_id=x_session_id,
+        x_device_id=x_device_id,
+    )
+
+
+def require_identity(identity: IdentityContext = Depends(get_identity_context)) -> IdentityContext:
+    if not identity.user_id or not identity.session_id:
+        _raise_missing_identity()
+    return identity
 
 
 

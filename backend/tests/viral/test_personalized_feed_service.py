@@ -19,7 +19,12 @@ from app.orchestrator.global_state import InMemoryGlobalFeedStateStore
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService
 from app.orchestrator.schemas import AttentionOrchestratorConfigUpdateRequest
 from app.users.follow_service import FollowGraphNotificationService, FollowGraphService, NullFollowGraphCache
+from app.viral.feed_contract import (
+    PERSONALIZED_FEED_SOURCE_FOLLOWING,
+    PERSONALIZED_FEED_SOURCE_FOR_YOU,
+)
 from app.viral.ingestion_schemas import ClipEvent, ClipEventMetadata, ClipEventType
+from app.viral.distribution import InMemoryViralDispatchPoolStore
 from app.viral.personalized_feed_service import (
     ClipAffinityCalculator,
     InMemoryPersonalizedFeedStore,
@@ -204,15 +209,21 @@ def test_personalized_feed_blends_following_feed_and_emits_new_clip_notification
         following_response = service.get_following(user_id="viewer-1", limit=2, refresh=True)
         hybrid_response = service.get_for_you(user_id="viewer-1", limit=2, refresh=True)
 
-        assert following_response.feed_type == "following"
+        assert following_response.feed_source == PERSONALIZED_FEED_SOURCE_FOLLOWING
         assert following_response.feed_key == "user:viewer-1:following_feed"
-        assert following_response.clips[0].clip_id == "clip-followed"
-        assert following_response.clips[0].score_breakdown.following_boost > 0.0
-        assert following_response.clips[0].score_breakdown.social_boost > 0.0
+        assert following_response.items[0].clip_id == "clip-followed"
+        assert following_response.items[0].score_breakdown.following_boost > 0.0
+        assert following_response.items[0].score_breakdown.social_boost > 0.0
 
-        assert hybrid_response.feed_type == "for_you"
-        assert hybrid_response.mix == {"for_you": 0.6, "following": 0.4}
-        assert {clip.feed_source for clip in hybrid_response.clips} == {"for_you", "following"}
+        assert hybrid_response.feed_source == PERSONALIZED_FEED_SOURCE_FOR_YOU
+        assert hybrid_response.mix == {
+            PERSONALIZED_FEED_SOURCE_FOR_YOU: 0.6,
+            PERSONALIZED_FEED_SOURCE_FOLLOWING: 0.4,
+        }
+        assert {clip.feed_source for clip in hybrid_response.items} == {
+            PERSONALIZED_FEED_SOURCE_FOR_YOU,
+            PERSONALIZED_FEED_SOURCE_FOLLOWING,
+        }
 
         notifications = list(session.scalars(select(NotificationRecord)).all())
         assert len(notifications) == 3
@@ -301,9 +312,9 @@ def test_personalized_feed_boosts_creators_trending_inside_follow_network() -> N
 
         response = service.get_for_you(user_id="viewer-network", limit=2, refresh=True)
 
-        assert response.clips[0].clip_id == "clip-network"
-        assert response.clips[0].score_breakdown.following_boost == 0.0
-        assert response.clips[0].score_breakdown.social_boost >= 0.2
+        assert response.items[0].clip_id == "clip-network"
+        assert response.items[0].score_breakdown.following_boost == 0.0
+        assert response.items[0].score_breakdown.social_boost >= 0.2
 
 
 def test_personalized_feed_reranks_after_two_session_interactions() -> None:
@@ -356,7 +367,7 @@ def test_personalized_feed_reranks_after_two_session_interactions() -> None:
     )
 
     baseline = service.get_for_you(user_id="viewer-live", limit=2, refresh=True, session_id="session-live")
-    assert baseline.clips[0].clip_id == "clip-global"
+    assert baseline.items[0].clip_id == "clip-global"
 
     tracker.observe_many(
         [
@@ -398,8 +409,11 @@ def test_personalized_feed_reranks_after_two_session_interactions() -> None:
 
     refreshed = service.get_for_you(user_id="viewer-live", limit=2, refresh=True, session_id="session-live")
 
-    assert refreshed.clips[0].clip_id == "clip-session"
-    assert refreshed.clips[0].score_breakdown.session_boost > refreshed.clips[1].score_breakdown.session_boost
+    assert refreshed.items[0].clip_id == "clip-session"
+    assert (
+        refreshed.items[0].score_breakdown.session_boost
+        > refreshed.items[1].score_breakdown.session_boost
+    )
 
 
 def test_personalized_feed_filters_seen_clips_from_future_results() -> None:
@@ -439,8 +453,10 @@ def test_personalized_feed_filters_seen_clips_from_future_results() -> None:
 
     refreshed = service.get_for_you(user_id="viewer-seen", limit=3, refresh=True)
 
-    assert {clip.clip_id for clip in refreshed.clips}.isdisjoint({clip.clip_id for clip in first_response.clips})
-    assert refreshed.clips[0].clip_id == "clip-3"
+    assert {clip.clip_id for clip in refreshed.items}.isdisjoint(
+        {clip.clip_id for clip in first_response.items}
+    )
+    assert refreshed.items[0].clip_id == "clip-3"
 
 
 def test_personalized_feed_refresh_returns_replacements_after_cursor() -> None:
@@ -486,7 +502,11 @@ def test_personalized_feed_refresh_returns_replacements_after_cursor() -> None:
     )
 
     initial = service.get_for_you(user_id="viewer-refresh", limit=3, refresh=True)
-    assert [clip.clip_id for clip in initial.clips] == ["clip-1", "clip-2", "clip-3"]
+    assert [clip.clip_id for clip in initial.items] == [
+        "clip-1",
+        "clip-2",
+        "clip-3",
+    ]
 
     feed_service.variant = "refreshed"
     refresh_payload = service.refresh_for_you(user_id="viewer-refresh", cursor=0, limit=3)
@@ -564,8 +584,11 @@ def test_personalized_feed_prioritizes_live_moment_cache_candidates() -> None:
 
     response = service.get_for_you(user_id="viewer-priority", limit=2, refresh=True)
 
-    assert response.clips[0].clip_id == "clip-moment"
-    assert {clip.clip_id for clip in response.clips} == {"clip-moment", "clip-feed"}
+    assert response.items[0].clip_id == "clip-moment"
+    assert {clip.clip_id for clip in response.items} == {
+        "clip-moment",
+        "clip-feed",
+    }
 
 
 def test_personalized_feed_applies_agent_fairness_cap_when_humans_exist() -> None:
@@ -643,12 +666,153 @@ def test_personalized_feed_applies_agent_fairness_cap_when_humans_exist() -> Non
 
     response = service.get_for_you(user_id="viewer-fair", limit=4, refresh=True)
 
-    agent_count = sum(1 for clip in response.clips if clip.metadata.get("origin") == "creator_agent")
-    human_count = sum(1 for clip in response.clips if clip.metadata.get("origin") == "human_creator")
+    agent_count = sum(
+        1
+        for clip in response.items
+        if clip.metadata.get("origin") == "creator_agent"
+    )
+    human_count = sum(
+        1
+        for clip in response.items
+        if clip.metadata.get("origin") == "human_creator"
+    )
 
-    assert len(response.clips) == 4
+    assert len(response.items) == 4
     assert agent_count <= 1
     assert human_count >= 3
+
+
+def test_personalized_feed_merges_viral_pool_candidates_without_duplicates() -> None:
+    class _FeedService:
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            clips = [
+                _build_clip(clip_id="clip-feed", creator_id="creator-feed", viral_score=84, ranking_score=84.0),
+                _build_clip(clip_id="clip-pool", creator_id="creator-pool", viral_score=83, ranking_score=83.0),
+            ]
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+        def build_match_feed(self, match_key: str, *, allocate_impressions: bool = False):  # noqa: ARG002
+            return ViralFeedResponse(clips=[], generated_at=datetime.now(UTC), personalization={"match_id": match_key})
+
+    class _RankingService:
+        def get_candidates(self, *, limit: int = 20, refresh: bool = False):  # noqa: ARG002
+            return [
+                _build_clip(clip_id="clip-pool", creator_id="creator-pool", viral_score=85, ranking_score=85.0),
+                _build_clip(clip_id="clip-ranked", creator_id="creator-ranked", viral_score=82, ranking_score=82.0),
+            ][:limit]
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    pool_store = InMemoryViralDispatchPoolStore()
+    pool_clip = _build_clip(
+        clip_id="clip-pool",
+        creator_id="creator-pool",
+        viral_score=96,
+        ranking_score=96.0,
+    )
+    pool_store.upsert(
+        clip_id=pool_clip.clip_id,
+        score=pool_clip.ranking_score,
+        payload=pool_clip.model_dump(mode="json"),
+    )
+
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=_FeedService(),
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+        ranking_service=_RankingService(),
+        viral_pool_store=pool_store,
+    )
+
+    response = service.get_for_you(user_id="viewer-pool", limit=4, refresh=True)
+    clip_ids = [clip.clip_id for clip in response.items]
+
+    assert clip_ids.count("clip-pool") == 1
+    assert set(clip_ids) == {"clip-pool", "clip-ranked", "clip-feed"}
+
+
+def test_personalized_feed_resolves_pool_identifiers_from_match_feed_and_skips_unresolved_entries() -> None:
+    class _FeedService:
+        def __init__(self) -> None:
+            self.match_feed_requests: list[str] = []
+
+        def build_feed(self, *, limit: int = 20, allocate_impressions: bool = False):  # noqa: ARG002
+            clips = [
+                _build_clip(clip_id="clip-feed", creator_id="creator-feed", viral_score=75, ranking_score=75.0),
+            ]
+            return ViralFeedResponse(clips=clips[:limit], generated_at=datetime.now(UTC), personalization={})
+
+        def build_match_feed(self, match_key: str, *, allocate_impressions: bool = False):  # noqa: ARG002
+            self.match_feed_requests.append(match_key)
+            if match_key != "match-fallback":
+                return ViralFeedResponse(clips=[], generated_at=datetime.now(UTC), personalization={"match_id": match_key})
+            clip = _build_clip(
+                clip_id="match-fallback::clip-fallback",
+                creator_id="creator-fallback",
+                viral_score=93,
+                ranking_score=93.0,
+                metadata={"match_id": "match-fallback"},
+            ).model_copy(update={"match_id": "match-fallback"})
+            return ViralFeedResponse(clips=[clip], generated_at=datetime.now(UTC), personalization={"match_id": match_key})
+
+    class _FeedbackEngine:
+        def creator_recommendation_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    class _ColdStartManager:
+        def is_new_user(self, _user_id: str) -> bool:
+            return False
+
+        def exploration_rate(self, *, is_new_user: bool) -> float:  # noqa: ARG002
+            return 0.0
+
+        def creator_boost(self, _creator_id: str) -> float:
+            return 0.0
+
+    pool_store = InMemoryViralDispatchPoolStore()
+    pool_store.upsert(
+        clip_id="clip-orphan",
+        score=99.0,
+        payload={"clip_id": "clip-orphan"},
+    )
+    pool_store.upsert(
+        clip_id="match-fallback::clip-fallback",
+        score=92.0,
+        payload={
+            "clip_id": "match-fallback::clip-fallback",
+            "match_id": "match-fallback",
+        },
+    )
+    feed_service = _FeedService()
+    service = PersonalizedFeedRankingService(
+        session=_NoDbSession(),
+        feed_store=InMemoryPersonalizedFeedStore(),
+        feed_service=feed_service,
+        feedback_engine=_FeedbackEngine(),
+        cold_start_manager=_ColdStartManager(),
+        viral_pool_store=pool_store,
+    )
+
+    response = service.get_for_you(user_id="viewer-fallback", limit=3, refresh=True)
+    clip_ids = [clip.clip_id for clip in response.items]
+
+    assert "match-fallback::clip-fallback" in clip_ids
+    assert "clip-orphan" not in clip_ids
+    assert "match-fallback" in feed_service.match_feed_requests
 
 
 def _build_clip(

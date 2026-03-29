@@ -1,17 +1,28 @@
 class AuthSession {
   const AuthSession({
-    required this.userName,
-    required this.role,
-    required this.clubName,
-    required this.avatarAsset,
-    required this.notifications,
-    this.accessToken,
+    required this.userId,
+    required this.accessToken,
+    required this.sessionId,
   });
 
-  final String userName;
-  final String role;
-  final String clubName;
-  final String avatarAsset;
-  final int notifications;
-  final String? accessToken;
+  final String userId;
+  final String accessToken;
+  final String sessionId;
+
+  factory AuthSession.fromJson(Map<String, Object?> json) {
+    return AuthSession(
+      userId: (json['user_id'] ?? json['userId'] ?? '').toString(),
+      accessToken:
+          (json['access_token'] ?? json['accessToken'] ?? '').toString(),
+      sessionId: (json['session_id'] ?? json['sessionId'] ?? '').toString(),
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'user_id': userId,
+      'access_token': accessToken,
+      'session_id': sessionId,
+    };
+  }
 }

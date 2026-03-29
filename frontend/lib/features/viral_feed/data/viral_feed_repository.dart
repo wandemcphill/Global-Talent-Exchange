@@ -1,7 +1,14 @@
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart';
+
+import '../../../data/gte_api_contracts.dart';
 import '../../../data/gte_api_repository.dart';
 import '../../../data/gte_authed_api.dart';
 import '../../../data/gte_http_transport.dart';
+import '../../../data/gte_models.dart';
 import '../../../services/frontend_audit_hooks.dart';
+import '../../../shared/models/auth_session.dart';
 import '../../shared/data/gte_feature_support.dart';
 import 'feed_validator.dart';
 import 'viral_feed_models.dart';
@@ -11,6 +18,11 @@ abstract class ViralFeedRepository {
     ViralFeedSource source = ViralFeedSource.forYou,
     int limit = 10,
     bool refresh = true,
+  });
+
+  Future<ViralFeedDeckRefresh> refreshForYou({
+    required int cursor,
+    int limit = 10,
   });
 }
 
@@ -26,6 +38,8 @@ class ViralFeedApiRepository implements ViralFeedRepository {
   factory ViralFeedApiRepository.standard({
     String baseUrl = _apiBaseUrl,
     String? accessToken,
+    AuthSession? authSession,
+    String? deviceId,
   }) {
     return ViralFeedApiRepository(
       client: GteAuthedApi(
@@ -35,12 +49,14 @@ class ViralFeedApiRepository implements ViralFeedRepository {
         ),
         transport: GteHttpTransport(),
         accessToken: accessToken,
+        authSession: authSession,
+        deviceId: deviceId,
         mode: GteBackendMode.live,
       ),
       validator: const ViralFeedValidator(),
       auditHooks: FrontendAuditHooks(
         baseUrl: baseUrl,
-        accessToken: accessToken,
+        accessToken: authSession?.accessToken ?? accessToken,
       ),
     );
   }
@@ -56,13 +72,15 @@ class ViralFeedApiRepository implements ViralFeedRepository {
     bool refresh = true,
   }) async {
     final Stopwatch stopwatch = Stopwatch()..start();
+    JsonMap? payload;
     _validator.validateRequestSource(source);
     try {
-      final JsonMap payload = await _client.getMap(
+      payload = await _client.getMap(
         source.path,
         query: compactQuery(<String, Object?>{
           'limit': limit,
           'refresh': refresh,
+          'session_id': _sessionId(),
         }),
       );
       _validator.validateResponse(
@@ -72,9 +90,9 @@ class ViralFeedApiRepository implements ViralFeedRepository {
       );
 
       final List<ViralClip> clips = parseList(
-        payload['clips'],
+        payload[FeedContractKeys.items],
         ViralClip.fromJson,
-        label: 'personalized feed clips',
+        label: 'personalized feed items',
       );
       final ViralFeedDeck deck = ViralFeedDeck(
         source: source,
@@ -89,7 +107,7 @@ class ViralFeedApiRepository implements ViralFeedRepository {
       await _auditHooks.trackApiResult(
         screen: 'viral_feed',
         flow: 'feed_load',
-        target: source.feedType,
+        target: source.feedSource,
         success: true,
         latencyMs: latencyMs,
         metadata: <String, Object?>{
@@ -103,7 +121,7 @@ class ViralFeedApiRepository implements ViralFeedRepository {
       await _auditHooks.trackLatency(
         screen: 'viral_feed',
         flow: 'feed_load',
-        target: source.feedType,
+        target: source.feedSource,
         latencyMs: latencyMs,
         metadata: <String, Object?>{
           'clip_count': clips.length,
@@ -115,7 +133,7 @@ class ViralFeedApiRepository implements ViralFeedRepository {
           screen: 'viral_feed',
           flow: 'feed_load',
           stage: 'empty_state',
-          target: source.feedType,
+          target: source.feedSource,
           metadata: <String, Object?>{
             'feed_source_path': source.path,
             'refresh_requested': refresh,
@@ -123,32 +141,140 @@ class ViralFeedApiRepository implements ViralFeedRepository {
         );
       }
       return deck;
-    } catch (error) {
-      final int latencyMs = stopwatch.elapsedMilliseconds;
-      await _auditHooks.trackApiResult(
-        screen: 'viral_feed',
-        flow: 'feed_load',
-        target: source.feedType,
-        success: false,
-        latencyMs: latencyMs,
-        metadata: <String, Object?>{
-          'error': error.toString(),
-          'feed_source_path': source.path,
-          'refresh_requested': refresh,
-        },
+    } on GteParsingException catch (error) {
+      final GteApiException contractError = GteApiException(
+        type: GteApiErrorType.validation,
+        message: error.message,
+        cause: error,
       );
-      await _auditHooks.trackLatency(
-        screen: 'viral_feed',
-        flow: 'feed_load',
-        target: source.feedType,
-        latencyMs: latencyMs,
-        metadata: <String, Object?>{
-          'success': false,
-          'feed_source_path': source.path,
-        },
+      await _trackContractFailure(
+        source: source,
+        refresh: refresh,
+        latencyMs: stopwatch.elapsedMilliseconds,
+        error: contractError,
+        payload: payload,
+      );
+      throw contractError;
+    } on GteApiException catch (error) {
+      if (error.type == GteApiErrorType.validation) {
+        await _trackContractFailure(
+          source: source,
+          refresh: refresh,
+          latencyMs: stopwatch.elapsedMilliseconds,
+          error: error,
+          payload: payload,
+        );
+        rethrow;
+      }
+      await _trackFailure(
+        source: source,
+        refresh: refresh,
+        latencyMs: stopwatch.elapsedMilliseconds,
+        error: error,
+      );
+      rethrow;
+    } catch (error) {
+      await _trackFailure(
+        source: source,
+        refresh: refresh,
+        latencyMs: stopwatch.elapsedMilliseconds,
+        error: error,
       );
       rethrow;
     }
+  }
+
+  @override
+  Future<ViralFeedDeckRefresh> refreshForYou({
+    required int cursor,
+    int limit = 10,
+  }) async {
+    final JsonMap payload = await _client.getMap(
+      '/feed/for-you/refresh',
+      query: compactQuery(<String, Object?>{
+        'cursor': cursor,
+        'limit': limit,
+        'session_id': _sessionId(),
+      }),
+    );
+    return ViralFeedDeckRefresh(
+      replaceIndices: _intListValue(payload['replace_indices']),
+      newItems: parseList(
+        payload['new_items'],
+        ViralClip.fromJson,
+        label: 'personalized feed refresh items',
+      ),
+    );
+  }
+
+  Future<void> _trackContractFailure({
+    required ViralFeedSource source,
+    required bool refresh,
+    required int latencyMs,
+    required GteApiException error,
+    JsonMap? payload,
+  }) async {
+    debugPrint(
+      'ViralFeedApiRepository contract failure for ${source.path}: ${error.message}',
+    );
+    developer.log(
+      'Viral feed contract failure',
+      name: 'viral_feed.contract',
+      error: error,
+    );
+    await _trackFailure(
+      source: source,
+      refresh: refresh,
+      latencyMs: latencyMs,
+      error: error,
+      extraMetadata: <String, Object?>{
+        'failure_kind': 'contract_validation',
+        'expected_feed_source': source.feedSource,
+        'payload_feed_source':
+            payload?[FeedContractKeys.feedSource]?.toString(),
+        'payload_keys':
+            payload?.keys.toList(growable: false) ?? const <String>[],
+      },
+    );
+  }
+
+  Future<void> _trackFailure({
+    required ViralFeedSource source,
+    required bool refresh,
+    required int latencyMs,
+    required Object error,
+    Map<String, Object?> extraMetadata = const <String, Object?>{},
+  }) async {
+    await _auditHooks.trackApiResult(
+      screen: 'viral_feed',
+      flow: 'feed_load',
+      target: source.feedSource,
+      success: false,
+      latencyMs: latencyMs,
+      metadata: <String, Object?>{
+        'error': error.toString(),
+        'feed_source_path': source.path,
+        'refresh_requested': refresh,
+        ...extraMetadata,
+      },
+    );
+    await _auditHooks.trackLatency(
+      screen: 'viral_feed',
+      flow: 'feed_load',
+      target: source.feedSource,
+      latencyMs: latencyMs,
+      metadata: <String, Object?>{
+        'success': false,
+        'feed_source_path': source.path,
+        if (extraMetadata.isNotEmpty)
+          'failure_kind': extraMetadata['failure_kind'],
+      },
+    );
+  }
+
+  String? _sessionId() {
+    final String sessionId = _client.authSession?.sessionId.trim() ?? '';
+    return sessionId.isEmpty ? null : sessionId;
   }
 }
 
@@ -156,3 +282,21 @@ const String _apiBaseUrl = String.fromEnvironment(
   'GTE_API_BASE_URL',
   defaultValue: 'http://127.0.0.1:8000',
 );
+
+List<int> _intListValue(Object? value) {
+  if (value is! List) {
+    return const <int>[];
+  }
+  return value
+      .map((Object? item) {
+        if (item is int) {
+          return item;
+        }
+        if (item is num) {
+          return item.toInt();
+        }
+        return int.tryParse(item?.toString() ?? '');
+      })
+      .whereType<int>()
+      .toList(growable: false);
+}

@@ -6,16 +6,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import IdentityContext, get_current_user, get_optional_current_user, require_identity
+from app.auth.security import create_access_token
 from app.db import get_session
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.models.analytics_event import AnalyticsEvent
 from app.models.base import Base
 from app.models.clip_variant import ClipVariant
 from app.models.competition_match import CompetitionMatch
+from app.models.creator_profile import CreatorProfile
 from app.models.follow import Follow
 from app.models.user import User, UserRole
+from app.models.user_affinity_profile import UserAffinityProfile
 from app.viral.distribution import build_clip_distribution_manager
+from app.viral.feed_contract import (
+    PERSONALIZED_FEED_SOURCE_FOLLOWING,
+    PERSONALIZED_FEED_SOURCE_FOR_YOU,
+)
 from app.viral.router import router as viral_router
 from app.viral.schemas import (
     PersonalizedFeedAffinityView,
@@ -41,6 +48,30 @@ class _ReusableFakeProducer:
         return len(events)
 
 
+def _set_test_identity(
+    app: FastAPI,
+    *,
+    current_user: User,
+    session_id: str = "session-1",
+    device_id: str = "device-test-1",
+) -> None:
+    app.state.test_identity = IdentityContext(
+        user_id=current_user.id,
+        session_id=session_id,
+        device_id=device_id,
+    )
+
+
+def _identity_headers(*, user_id: str, session_id: str, device_id: str = "device-test-1") -> dict[str, str]:
+    token = create_access_token(user_id, claims={"sid": session_id})
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-User-Id": user_id,
+        "X-Session-Id": session_id,
+        "X-Device-Id": device_id,
+    }
+
+
 def _build_app() -> tuple[FastAPI, sessionmaker[Session], User]:
     app = FastAPI()
     app.include_router(viral_router)
@@ -57,7 +88,9 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session], User]:
             AnalyticsEvent.__table__,
             CompetitionMatch.__table__,
             ClipVariant.__table__,
+            CreatorProfile.__table__,
             Follow.__table__,
+            UserAffinityProfile.__table__,
         ],
     )
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -77,8 +110,14 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session], User]:
         with session_factory() as session:
             yield session
 
+    def override_identity() -> IdentityContext:
+        return app.state.test_identity
+
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_current_user] = lambda: current_user
+    app.dependency_overrides[get_optional_current_user] = lambda: current_user
+    _set_test_identity(app, current_user=current_user)
+    app.dependency_overrides[require_identity] = override_identity
     return app, session_factory, current_user
 
 
@@ -190,6 +229,55 @@ def test_trending_router_returns_ranked_clips() -> None:
     assert "velocity" in body["clips"][0]["trending_metrics"]
 
 
+def test_personalized_feed_rejects_missing_identity_context() -> None:
+    app, session_factory, current_user = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=64, match_id="viral-missing-identity"))
+    _insert_match(session_factory, replay_payload)
+    del app.dependency_overrides[require_identity]
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/feed/for-you",
+            headers={"Authorization": f"Bearer {create_access_token(current_user.id, claims={'sid': 'session-missing'})}"},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing identity context"
+
+
+def test_clip_events_reject_mismatched_identity_context() -> None:
+    app, _session_factory, current_user = _build_app()
+    del app.dependency_overrides[require_identity]
+    payload = {
+        "event_id": "1c9d0d3e-19ec-4c46-98fe-66584dba5f1d",
+        "clip_id": "match-1::clip-001",
+        "user_id": current_user.id,
+        "session_id": "session-body",
+        "timestamp": "2026-03-28T12:00:00Z",
+        "event_type": "view",
+        "watch_time_ms": 1900,
+        "video_length_ms": 12000,
+        "metadata": {
+            "device": "ios",
+            "country": "NG",
+            "referrer": "viral_feed",
+        },
+    }
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/events/clip",
+            json=payload,
+            headers=_identity_headers(
+                user_id=current_user.id,
+                session_id="session-header",
+            ),
+        )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Event identity does not match authenticated identity."
+
+
 def test_personalized_feed_router_ranks_and_caches_per_user_feed() -> None:
     app, session_factory, current_user = _build_app()
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=66, match_id="viral-personalized"))
@@ -239,24 +327,34 @@ def test_personalized_feed_router_ranks_and_caches_per_user_feed() -> None:
     first_body = first_response.json()
     assert first_body["user_id"] == current_user.id
     assert first_body["feed_key"] == f"user:{current_user.id}:feed"
+    assert first_body["feed_source"] == PERSONALIZED_FEED_SOURCE_FOR_YOU
+    assert "feed_type" not in first_body
+    assert "clips" not in first_body
     assert first_body["cache_hit"] is False
-    assert first_body["clips"]
-    assert first_body["clips"][0]["score"] >= first_body["clips"][-1]["score"]
-    assert any(item["clip_id"] == preferred_clip.clip_id for item in first_body["clips"][:3])
-    assert first_body["clips"][0]["score_breakdown"]["user_affinity"] >= 0.2
-    assert "diversity_penalty" in first_body["clips"][0]["score_breakdown"]
-    assert first_body["clips"][0]["score_breakdown"]["orchestrator_weight"] >= 0.0
-    assert first_body["clips"][0]["score_breakdown"]["session_boost"] >= 1.0
-    assert first_body["clips"][0]["orchestrator"]["allocated_impressions"] >= first_body["clips"][0]["orchestrator"]["consumed_impressions"]
+    assert first_body["items"]
+    assert first_body["items"][0]["score"] >= first_body["items"][-1]["score"]
+    assert any(item["clip_id"] == preferred_clip.clip_id for item in first_body["items"][:3])
+    assert first_body["items"][0]["score_breakdown"]["user_affinity"] >= 0.2
+    assert "diversity_penalty" in first_body["items"][0]["score_breakdown"]
+    assert first_body["items"][0]["score_breakdown"]["orchestrator_weight"] >= 0.0
+    assert first_body["items"][0]["score_breakdown"]["session_boost"] >= 1.0
+    assert first_body["items"][0]["orchestrator"]["allocated_impressions"] >= first_body["items"][0]["orchestrator"]["consumed_impressions"]
+    assert {
+        item["feed_source"] for item in first_body["items"]
+    } <= {
+        PERSONALIZED_FEED_SOURCE_FOR_YOU,
+        PERSONALIZED_FEED_SOURCE_FOLLOWING,
+    }
 
     assert second_response.status_code == 200
     second_body = second_response.json()
-    assert second_body["cache_hit"] is True
-    assert [item["clip_id"] for item in second_body["clips"]] == [item["clip_id"] for item in first_body["clips"]]
+    assert second_body["cache_hit"] is False
+    assert second_body["items"]
 
 
 def test_personalized_feed_refresh_router_returns_replace_contract(monkeypatch) -> None:
     app, _session_factory, current_user = _build_app()
+    _set_test_identity(app, current_user=current_user, session_id="session-refresh")
 
     class _FakeFeedService:
         def __init__(self) -> None:
@@ -294,7 +392,7 @@ def test_personalized_feed_refresh_router_returns_replace_contract(monkeypatch) 
                         metadata={},
                         rank=2,
                         score=1.23,
-                        feed_source="for_you",
+                        feed_source=PERSONALIZED_FEED_SOURCE_FOR_YOU,
                         score_breakdown=PersonalizedFeedScoreBreakdownView(
                             affinity=PersonalizedFeedAffinityView(),
                             final_score=1.23,
@@ -313,7 +411,7 @@ def test_personalized_feed_refresh_router_returns_replace_contract(monkeypatch) 
     with TestClient(app) as client:
         response = client.get(
             "/feed/for-you/refresh",
-            params={"cursor": 1, "limit": 5, "session_id": "session-refresh"},
+            params={"cursor": 1, "limit": 5},
         )
 
     assert response.status_code == 200
@@ -347,9 +445,11 @@ def test_following_feed_router_returns_a_feed_contract() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["user_id"] == current_user.id
-    assert body["feed_type"] == "following"
+    assert body["feed_source"] == PERSONALIZED_FEED_SOURCE_FOLLOWING
+    assert "feed_type" not in body
+    assert "clips" not in body
     assert body["feed_key"] == f"user:{current_user.id}:following_feed"
-    assert body["clips"]
+    assert body["items"]
 
 
 def test_trending_router_filters_capped_clip_on_second_delivery() -> None:
@@ -433,8 +533,8 @@ def test_personalized_feed_router_filters_capped_cached_clip_on_delivery() -> No
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
-    first_ids = [item["clip_id"] for item in first_response.json()["clips"]]
-    second_ids = [item["clip_id"] for item in second_response.json()["clips"]]
+    first_ids = [item["clip_id"] for item in first_response.json()["items"]]
+    second_ids = [item["clip_id"] for item in second_response.json()["items"]]
     assert preferred_clip.clip_id in first_ids
     assert preferred_clip.clip_id not in second_ids
 
@@ -477,6 +577,70 @@ def test_clip_event_ingestion_accepts_single_event_payload() -> None:
     assert producer.received
     assert producer.received[0][0].clip_id == "clip-123"
     assert producer.received[0][0].event_type.value == "view"
+
+
+def test_clip_event_ingestion_mirrors_live_personalization_state() -> None:
+    class _FakeProducer:
+        def __init__(self) -> None:
+            self.received = []
+
+        def enqueue_many(self, events):
+            self.received.append(events)
+            return len(events)
+
+    app, session_factory, current_user = _build_app()
+    producer = _FakeProducer()
+    app.state.clip_event_ingestion_service = producer
+    app.dependency_overrides[get_optional_current_user] = lambda: current_user
+    payload = {
+        "event_id": "aa3f63ff-9b9b-4a7e-a73c-6a5d72f3f101",
+        "clip_id": "clip-live-affinity",
+        "user_id": None,
+        "session_id": "session-live-affinity",
+        "timestamp": "2026-03-28T12:00:00Z",
+        "event_type": "like",
+        "watch_time_ms": 12000,
+        "video_length_ms": 12000,
+        "metadata": {
+            "device": "ios",
+            "country": "NG",
+            "referrer": "feed",
+            "creator_id": "creator-live",
+            "format_key": "match_recap",
+            "clip_event_type": "goal",
+        },
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/events/clip", json=payload)
+        session_state = client.get("/api/viral/sessions/session-live-affinity")
+
+    assert response.status_code == 202
+    assert session_state.status_code == 200
+    assert producer.received
+    assert producer.received[0][0].user_id == current_user.id
+
+    with session_factory() as session:
+        analytics_events = session.query(AnalyticsEvent).all()
+        assert len(analytics_events) == 1
+        analytics_event = analytics_events[0]
+        assert analytics_event.name == "clip.like"
+        assert analytics_event.user_id == current_user.id
+        assert analytics_event.metadata_json["clip_id"] == "clip-live-affinity"
+        assert analytics_event.metadata_json["session_id"] == "session-live-affinity"
+        assert analytics_event.metadata_json["creator_id"] == "creator-live"
+        assert analytics_event.metadata_json["format_key"] == "match_recap"
+        assert analytics_event.metadata_json["watch_time_seconds"] == 12.0
+
+        affinity_profile = session.get(UserAffinityProfile, current_user.id)
+        assert affinity_profile is not None
+        assert affinity_profile.favorite_creators_json["creator_live"] > 0.0
+        assert affinity_profile.favorite_formats_json["match_recap"] > 0.0
+        assert affinity_profile.state_json["event_counts"]["like"] == 1
+
+    session_state_body = session_state.json()
+    assert session_state_body["clips_seen"] == 1
+    assert session_state_body["watch_time_ms"] == 12000
 
 
 def test_clip_event_ingestion_accepts_batched_events() -> None:
@@ -532,6 +696,63 @@ def test_clip_event_ingestion_accepts_batched_events() -> None:
     assert response.status_code == 202
     assert response.json()["accepted_events"] == 2
     assert len(producer.received[0]) == 2
+
+
+def test_live_clip_events_personalize_for_you_feed_within_session() -> None:
+    app, session_factory, current_user = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(
+        build_request(seed=86, match_id="viral-live-personalization")
+    )
+    _insert_match(session_factory, replay_payload)
+    app.state.clip_event_ingestion_service = _ReusableFakeProducer()
+    app.dependency_overrides[get_optional_current_user] = lambda: current_user
+    _set_test_identity(app, current_user=current_user, session_id="session-live-feedback")
+
+    with session_factory() as session:
+        target_clip = ViralFeedService(session).build_match_feed(replay_payload.match_id).clips[0]
+
+    event_payload = {
+        "events": [
+            {
+                "event_id": f"b84286bf-5f3d-48b9-a52d-{index:012d}",
+                "clip_id": target_clip.clip_id,
+                "user_id": None,
+                "session_id": "session-live-feedback",
+                "timestamp": f"2026-03-28T12:00:{index:02d}Z",
+                "event_type": event_type,
+                "watch_time_ms": 12000,
+                "video_length_ms": 12000,
+                "metadata": {
+                    "device": "android",
+                    "country": "NG",
+                    "referrer": "feed",
+                    "creator_id": target_clip.distribution_accounts[0].handle,
+                    "format_key": target_clip.editor.format_key,
+                    "clip_event_type": target_clip.event_type,
+                    "team_name": target_clip.team_name,
+                },
+            }
+            for index, event_type in enumerate(("view", "complete", "like"), start=1)
+        ]
+    }
+
+    with TestClient(app) as client:
+        ingest_response = client.post("/events/clip", json=event_payload)
+        feed_response = client.get(
+            "/feed/for-you",
+            params={"limit": 12, "refresh": True},
+        )
+
+    assert ingest_response.status_code == 202
+    assert feed_response.status_code == 200
+    body = feed_response.json()
+    assert body["cache_hit"] is False
+    assert body["items"]
+    assert all(item["score_breakdown"]["cold_start_exploration"] is False for item in body["items"])
+    target_item = next(item for item in body["items"] if item["clip_id"] == target_clip.clip_id)
+    assert target_item["score_breakdown"]["user_affinity"] > 0.0
+    assert target_item["score_breakdown"]["affinity"]["creator_preference"] > 0.0
+    assert target_item["score_breakdown"]["affinity"]["format_preference"] > 0.0
 
 
 def test_clip_event_ingestion_rejects_invalid_event_type() -> None:

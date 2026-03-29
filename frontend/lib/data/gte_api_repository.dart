@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../shared/auth/auth_identity_store.dart';
+import '../shared/models/auth_session.dart';
 import 'gte_models.dart';
 
 enum GteBackendMode {
@@ -345,12 +347,15 @@ class GteReliableApiRepository implements GteApiRepository {
     required this.transport,
     required this.fixtures,
     GteTokenStore? tokenStore,
-  }) : tokenStore = tokenStore ?? GteMemoryTokenStore();
+    AuthSessionStore? authSessionStore,
+  }) : tokenStore = tokenStore ?? GteMemoryTokenStore(),
+       _authSessionStore = authSessionStore;
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final GteApiRepository fixtures;
   final GteTokenStore tokenStore;
+  final AuthSessionStore? _authSessionStore;
 
   @override
   Future<GteAuthSession> login(GteAuthLoginRequest request) async {
@@ -362,6 +367,7 @@ class GteReliableApiRepository implements GteApiRepository {
       allowFixtureFallback: false,
     );
     await tokenStore.writeToken(session.accessToken);
+    await _persistAuthSession(session);
     return session;
   }
 
@@ -375,6 +381,7 @@ class GteReliableApiRepository implements GteApiRepository {
       allowFixtureFallback: false,
     );
     await tokenStore.writeToken(session.accessToken);
+    await _persistAuthSession(session);
     return session;
   }
 
@@ -389,7 +396,21 @@ class GteReliableApiRepository implements GteApiRepository {
   }
 
   @override
-  Future<void> logout() => tokenStore.writeToken(null);
+  Future<void> logout() async {
+    await tokenStore.writeToken(null);
+    await _authSessionStore?.writeSession(null);
+  }
+
+  Future<void> _persistAuthSession(GteAuthSession session) {
+    return _authSessionStore?.writeSession(
+          AuthSession(
+            userId: session.user.id,
+            accessToken: session.accessToken,
+            sessionId: session.sessionId,
+          ),
+        ) ??
+        Future<void>.value();
+  }
 
   @override
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({

@@ -1,3 +1,4 @@
+import '../../../data/gte_api_contracts.dart';
 import '../../../data/gte_api_repository.dart';
 import '../../shared/data/gte_feature_support.dart';
 import 'viral_feed_models.dart';
@@ -5,7 +6,7 @@ import 'viral_feed_models.dart';
 class ViralFeedValidator {
   const ViralFeedValidator();
 
-  static const String rankingEngineSource = 'ranking_engine';
+  static const Set<String> allowedSources = FeedSource.values;
 
   static const Set<String> _allowedPaths = <String>{
     '/feed/for-you',
@@ -27,12 +28,12 @@ class ViralFeedValidator {
     required JsonMap payload,
     required bool refreshRequested,
   }) {
-    final String feedType = stringValue(payload['feed_type']);
-    if (feedType != source.feedType) {
+    final String feedSource = stringValue(payload[FeedContractKeys.feedSource]);
+    if (feedSource != source.feedSource) {
       throw GteApiException(
         type: GteApiErrorType.validation,
         message:
-            'Feed type mismatch. Expected "${source.feedType}" but received "$feedType".',
+            'Feed source mismatch. Expected "${source.feedSource}" but received "$feedSource".',
       );
     }
 
@@ -43,22 +44,21 @@ class ViralFeedValidator {
       );
     }
 
-    final List<JsonMap> clips = jsonMapList(
-      payload['clips'],
-      label: 'personalized feed clips',
+    final List<JsonMap> items = jsonMapList(
+      payload[FeedContractKeys.items],
+      label: 'personalized feed items',
     );
-    for (int index = 0; index < clips.length; index += 1) {
-      final JsonMap clip = clips[index];
+    for (int index = 0; index < items.length; index += 1) {
+      final JsonMap clip = items[index];
       final String clipId = stringValue(
         clip['clip_id'],
         fallback: 'clip-$index',
       );
-      final String feedSource = stringValue(clip['feed_source']);
-      if (feedSource != rankingEngineSource) {
+      final String itemSource = stringValue(clip[FeedContractKeys.feedSource]);
+      if (!allowedSources.contains(itemSource)) {
         throw GteApiException(
           type: GteApiErrorType.validation,
-          message:
-              'Feed clip "$clipId" must come from "$rankingEngineSource".',
+          message: 'Feed item "$clipId" has unsupported source "$itemSource".',
         );
       }
     }

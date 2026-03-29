@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../shared/auth/auth_identity_store.dart';
 import 'gte_api_repository.dart';
 import 'gte_exchange_models.dart';
 import 'gte_http_transport.dart';
@@ -33,6 +34,7 @@ class GteExchangeApiClient {
         config: config,
         transport: transport,
         fixtures: fixtures,
+        authSessionStore: SecureAuthSessionStore(),
       ),
     );
   }
@@ -53,6 +55,7 @@ class GteExchangeApiClient {
         config: config,
         transport: transport,
         fixtures: fixtures,
+        authSessionStore: MemoryAuthSessionStore(),
       ),
     );
   }

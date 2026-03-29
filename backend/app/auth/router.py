@@ -80,7 +80,7 @@ def register_user(
         )
         confirmation_code = service.prepare_signup_confirmation(session, user=user)
         analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
-        token, expires_in = service.issue_access_token(user, session=session)
+        token, expires_in, session_id = service.issue_access_token_with_session(user, session=session)
         session.commit()
         session.refresh(user)
     except DuplicateUserError as exc:
@@ -98,6 +98,7 @@ def register_user(
 
     return TokenResponse(
         access_token=token,
+        session_id=session_id,
         expires_in=expires_in,
         user=service.build_user_public(session, user),
         permissions=service.resolve_user_permissions(request, user, session=session) if request is not None else [],
@@ -116,7 +117,7 @@ def login_user(
     try:
         user = service.authenticate_user(session, email=payload.email, password=payload.password)
         analytics.track_event(session, name="login_success", user_id=user.id, metadata={})
-        token, expires_in = service.issue_access_token(user, session=session)
+        token, expires_in, session_id = service.issue_access_token_with_session(user, session=session)
         session.commit()
         session.refresh(user)
     except InvalidCredentialsError as exc:
@@ -130,6 +131,7 @@ def login_user(
 
     return TokenResponse(
         access_token=token,
+        session_id=session_id,
         expires_in=expires_in,
         user=service.build_user_public(session, user),
         permissions=service.resolve_user_permissions(request, user, session=session) if request is not None else [],

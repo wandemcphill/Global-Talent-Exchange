@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_session
+from app.auth.dependencies import IdentityContext, get_current_user, get_session, require_identity
 from app.models.user import User
 from app.users.affinity_service import UserAffinityService
 from app.users.follow_service import FollowGraphError, FollowGraphNotFoundError, build_follow_graph_service
@@ -62,9 +62,11 @@ def read_current_user_affinity_profile(
 def follow_user(
     user_id: str,
     current_user: User = Depends(get_current_user),
+    identity: IdentityContext = Depends(require_identity),
     service=Depends(get_follow_graph_service),
     session: Session = Depends(get_session),
 ) -> FollowMutationView:
+    _ = identity
     try:
         payload = service.follow(actor=current_user, following_id=user_id)
     except FollowGraphError as exc:
@@ -77,9 +79,11 @@ def follow_user(
 def unfollow_user(
     user_id: str,
     current_user: User = Depends(get_current_user),
+    identity: IdentityContext = Depends(require_identity),
     service=Depends(get_follow_graph_service),
     session: Session = Depends(get_session),
 ) -> FollowMutationView:
+    _ = identity
     try:
         payload = service.unfollow(actor=current_user, following_id=user_id)
     except FollowGraphError as exc:

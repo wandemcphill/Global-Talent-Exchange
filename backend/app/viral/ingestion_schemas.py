@@ -62,6 +62,7 @@ class ClipEventMetadata(CommonSchema):
     country: str = Field(min_length=1)
     referrer: str = Field(min_length=1)
     content_type: str | None = Field(default=None, min_length=1)
+    creator_id: str | None = Field(default=None, min_length=1)
     format_key: str | None = Field(default=None, min_length=1)
     clip_event_type: str | None = Field(default=None, min_length=1)
     team_name: str | None = Field(default=None, min_length=1)
@@ -95,7 +96,7 @@ class ClipEventTrust(CommonSchema):
 class ClipEvent(CommonSchema):
     event_id: UUID
     clip_id: str = Field(min_length=1)
-    user_id: str | None = None
+    user_id: str | None = Field(default=None, min_length=1)
     session_id: str = Field(min_length=1)
     timestamp: datetime
     event_type: ClipEventType

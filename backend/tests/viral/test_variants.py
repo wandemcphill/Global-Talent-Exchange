@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.models.base import Base
 from app.models.clip_variant import ClipVariant
 from app.viral.comparator import ViralVariantScoringComparator
+from app.viral.distribution import InMemoryViralDispatchPoolStore, boost_distribution, inject_into_distribution_pool
 from app.viral.promotion import ViralClipPromotionService
 
 
@@ -87,3 +88,56 @@ def test_promotion_service_uses_epsilon_greedy_delivery_before_winner_lock() -> 
         assert exploratory_choice.variant_id != decision.leading_variant_id
         assert exploit_choice is not None
         assert exploit_choice.variant_id == decision.leading_variant_id
+
+
+def test_promotion_service_boosts_distribution_pool_when_winner_is_resolved() -> None:
+    session_factory = _session_factory()
+    comparator = ViralVariantScoringComparator()
+    pool_store = InMemoryViralDispatchPoolStore()
+    inject_into_distribution_pool("clip", 10.0, {"clip_id": "clip"}, store=pool_store)
+
+    with session_factory() as session:
+        session.add_all(
+            [
+                ClipVariant(
+                    variant_id="clip::instant",
+                    base_clip_id="clip",
+                    format_type="instant",
+                    view_count=1_500,
+                    watch_time=14.0,
+                    loop_rate=0.24,
+                    shares=72,
+                    comments=18,
+                    completion_rate=0.84,
+                    share_rate=0.08,
+                    comment_rate=0.02,
+                ),
+                ClipVariant(
+                    variant_id="clip::cinematic",
+                    base_clip_id="clip",
+                    format_type="cinematic",
+                    view_count=640,
+                    watch_time=11.5,
+                    loop_rate=0.10,
+                    shares=18,
+                    comments=7,
+                    completion_rate=0.68,
+                    share_rate=0.0281,
+                    comment_rate=0.0109,
+                ),
+            ]
+        )
+        session.commit()
+
+        service = ViralClipPromotionService(
+            session=session,
+            comparator=comparator,
+            distribution_boost_callback=lambda clip_id: boost_distribution(clip_id, store=pool_store),
+        )
+        decision = service.refresh("clip")
+        entries = pool_store.top(limit=1)
+
+        assert decision.resolved is True
+        assert decision.winner_variant_id == "clip::instant"
+        assert entries[0].clip_id == "clip"
+        assert entries[0].score == 15.0

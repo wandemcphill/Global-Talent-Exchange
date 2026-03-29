@@ -19,6 +19,7 @@ from app.runtime_config.schemas import RuntimeConfigSnapshot
 from app.runtime_config.service import default_runtime_config_snapshot
 from app.viral.accounts import build_distribution_accounts
 from app.viral.analytics import ViralFeedbackLoopService, track_clip
+from app.viral.distribution import boost_distribution
 from app.viral.editor import build_content_format_plans
 from app.viral.promotion import ViralClipPromotionService
 from app.viral.ranking import rank_score
@@ -83,7 +84,11 @@ class CampaignViralIntegrationHook:
             if self.variant_manager is None:
                 self.variant_manager = ViralClipVariantManager(session=self.session, comparator=comparator)
             if self.promotion_service is None:
-                self.promotion_service = ViralClipPromotionService(session=self.session, comparator=comparator)
+                self.promotion_service = ViralClipPromotionService(
+                    session=self.session,
+                    comparator=comparator,
+                    distribution_boost_callback=lambda clip_id: boost_distribution(clip_id, settings=self.settings),
+                )
 
     def _has_bound_table(self, table_name: str) -> bool:
         try:

@@ -21,6 +21,7 @@ from app.feedback_engine.service import FeedbackEngine
 from app.models.analytics_event import AnalyticsEvent
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
+from app.models.user_affinity_profile import UserAffinityProfile
 from app.moments.priority_cache import ensure_moment_priority_cache
 from app.orchestrator.orchestrator_service import build_attention_orchestrator_service
 from app.runtime_config.service import ensure_runtime_config_loader
@@ -30,7 +31,13 @@ from app.users.follow_service import (
     build_follow_notification_service,
     following_feed_cache_subject,
 )
+from app.viral.distribution import ensure_viral_dispatch_pool_store
 from app.viral.cold_start import ColdStartManager
+from app.viral.feed_contract import (
+    PERSONALIZED_FEED_SOURCE_FOLLOWING,
+    PERSONALIZED_FEED_SOURCE_FOR_YOU,
+    PERSONALIZED_FEED_SOURCE_KEY,
+)
 from app.viral.social_boost import SocialBoostService
 from app.viral.ingestion_schemas import ClipEventType
 from app.viral.ranking_service import build_viral_ranking_service
@@ -40,10 +47,12 @@ from app.viral.schemas import (
     PersonalizedFeedRefreshResponse,
     PersonalizedFeedResponse,
     PersonalizedFeedScoreBreakdownView,
+    ViralClipView,
     ViralTrendingClipView,
 )
 from app.viral.session_tracker import ensure_viral_session_tracker
 from app.viral.service import ViralFeedService
+from app.viral.variant_manager import parse_base_clip_id
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +70,23 @@ DEFAULT_ANALYTICS_LOOKBACK_DAYS = 90
 DEFAULT_ANALYTICS_EVENT_LIMIT = 500
 DEFAULT_HYBRID_FOR_YOU_SHARE = 0.60
 DEFAULT_HYBRID_FOLLOWING_SHARE = 0.40
+PERSONALIZED_FEED_NEW_USER_THRESHOLD = 3
 _NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 
 VIEW_EVENT_NAMES = frozenset({ClipEventType.VIEW.topic_name, "clip_view"})
+COMPLETE_EVENT_NAMES = frozenset({ClipEventType.COMPLETE.topic_name, "clip_complete"})
 LIKE_EVENT_NAMES = frozenset({ClipEventType.LIKE.topic_name, "clip_like"})
 SHARE_EVENT_NAMES = frozenset({ClipEventType.SHARE.topic_name, "clip_share"})
-AFFINITY_EVENT_NAMES = frozenset((*VIEW_EVENT_NAMES, *LIKE_EVENT_NAMES, *SHARE_EVENT_NAMES))
+SCROLL_EVENT_NAMES = frozenset({ClipEventType.SCROLL.topic_name, "clip_scroll"})
+AFFINITY_EVENT_NAMES = frozenset(
+    (
+        *VIEW_EVENT_NAMES,
+        *COMPLETE_EVENT_NAMES,
+        *LIKE_EVENT_NAMES,
+        *SHARE_EVENT_NAMES,
+        *SCROLL_EVENT_NAMES,
+    )
+)
 
 
 @dataclass(slots=True)
@@ -349,29 +369,43 @@ class RedisPersonalizedFeedStore:
 class UserAffinityScore:
     total: float = 0.0
     view_signal: float = 0.0
+    complete_signal: float = 0.0
     like_signal: float = 0.0
     share_signal: float = 0.0
+    scroll_penalty: float = 0.0
     format_preference: float = 0.0
     creator_preference: float = 0.0
+    profile_affinity: float = 0.0
 
 
 @dataclass(slots=True)
 class UserInteractionSnapshot:
     total_weight: float = 0.0
+    engagement_history: float = 0.0
     total_views: int = 0
+    total_completes: int = 0
     total_likes: int = 0
     total_shares: int = 0
+    total_scrolls: int = 0
     clip_views: Counter[str] = field(default_factory=Counter)
+    clip_completes: Counter[str] = field(default_factory=Counter)
     clip_likes: Counter[str] = field(default_factory=Counter)
     clip_shares: Counter[str] = field(default_factory=Counter)
+    clip_scrolls: Counter[str] = field(default_factory=Counter)
     creator_views: Counter[str] = field(default_factory=Counter)
+    creator_completes: Counter[str] = field(default_factory=Counter)
     creator_likes: Counter[str] = field(default_factory=Counter)
     creator_shares: Counter[str] = field(default_factory=Counter)
+    creator_scrolls: Counter[str] = field(default_factory=Counter)
     format_views: Counter[str] = field(default_factory=Counter)
+    format_completes: Counter[str] = field(default_factory=Counter)
     format_likes: Counter[str] = field(default_factory=Counter)
     format_shares: Counter[str] = field(default_factory=Counter)
+    format_scrolls: Counter[str] = field(default_factory=Counter)
     creator_weight: Counter[str] = field(default_factory=Counter)
     format_weight: Counter[str] = field(default_factory=Counter)
+    stored_format_scores: dict[str, float] = field(default_factory=dict)
+    stored_creator_scores: dict[str, float] = field(default_factory=dict)
 
     def record(self, *, event_name: str, clip_id: str | None, creator_key: str | None, format_key: str | None) -> None:
         if event_name in VIEW_EVENT_NAMES:
@@ -383,6 +417,15 @@ class UserInteractionSnapshot:
             if format_key:
                 self.format_views[format_key] += 1
             weight = 1.0
+        elif event_name in COMPLETE_EVENT_NAMES:
+            self.total_completes += 1
+            if clip_id:
+                self.clip_completes[clip_id] += 1
+            if creator_key:
+                self.creator_completes[creator_key] += 1
+            if format_key:
+                self.format_completes[format_key] += 1
+            weight = 2.5
         elif event_name in LIKE_EVENT_NAMES:
             self.total_likes += 1
             if clip_id:
@@ -401,6 +444,15 @@ class UserInteractionSnapshot:
             if format_key:
                 self.format_shares[format_key] += 1
             weight = 3.0
+        elif event_name in SCROLL_EVENT_NAMES:
+            self.total_scrolls += 1
+            if clip_id:
+                self.clip_scrolls[clip_id] += 1
+            if creator_key:
+                self.creator_scrolls[creator_key] += 1
+            if format_key:
+                self.format_scrolls[format_key] += 1
+            return
         else:
             return
         self.total_weight += weight
@@ -410,7 +462,13 @@ class UserInteractionSnapshot:
             self.format_weight[format_key] += weight
 
     def clip_interactions(self, clip_id: str) -> int:
-        return int(self.clip_views[clip_id] + self.clip_likes[clip_id] + self.clip_shares[clip_id])
+        return int(
+            self.clip_views[clip_id]
+            + self.clip_completes[clip_id]
+            + self.clip_likes[clip_id]
+            + self.clip_shares[clip_id]
+            + self.clip_scrolls[clip_id]
+        )
 
 
 @dataclass(slots=True)
@@ -420,11 +478,33 @@ class ClipAffinityCalculator:
     analytics_event_limit: int = DEFAULT_ANALYTICS_EVENT_LIMIT
 
     def build_snapshot(self, user_id: str) -> UserInteractionSnapshot:
+        snapshot = UserInteractionSnapshot()
+        profile = None
+        try:
+            connection = self.session.connection()
+            if inspect(connection).has_table(UserAffinityProfile.__tablename__) and hasattr(self.session, "scalar"):
+                profile = self.session.scalar(
+                    select(UserAffinityProfile).where(UserAffinityProfile.user_id == user_id)
+                )
+        except Exception:
+            profile = None
+        if profile is not None:
+            snapshot.stored_format_scores = {
+                _normalize_identifier(str(key)): min(max(float(value or 0.0), 0.0), 1.0)
+                for key, value in dict(profile.favorite_formats_json or {}).items()
+                if _normalize_identifier(str(key)) is not None
+            }
+            snapshot.stored_creator_scores = {
+                _normalize_identifier(str(key)): min(max(float(value or 0.0), 0.0), 1.0)
+                for key, value in dict(profile.favorite_creators_json or {}).items()
+                if _normalize_identifier(str(key)) is not None
+            }
+            snapshot.engagement_history = min(max(float(profile.engagement_score or 0.0), 0.0), 1.0)
         try:
             if not inspect(self.session.connection()).has_table(AnalyticsEvent.__tablename__):
-                return UserInteractionSnapshot()
+                return snapshot
         except Exception:
-            return UserInteractionSnapshot()
+            return snapshot
         since = datetime.now(UTC) - timedelta(days=self.analytics_lookback_days)
         stmt = (
             select(AnalyticsEvent)
@@ -436,7 +516,6 @@ class ClipAffinityCalculator:
             .order_by(AnalyticsEvent.created_at.desc())
             .limit(self.analytics_event_limit)
         )
-        snapshot = UserInteractionSnapshot()
         for event in self.session.scalars(stmt).all():
             metadata = dict(event.metadata_json or {})
             snapshot.record(
@@ -462,6 +541,12 @@ class ClipAffinityCalculator:
             + (0.35 * _ratio(snapshot.creator_views, creator_key, snapshot.total_views))
             + (0.20 * _ratio(snapshot.format_views, format_key, snapshot.total_views)),
         )
+        complete_signal = min(
+            1.0,
+            (snapshot.clip_completes[clip_id] / 2.0)
+            + (0.45 * _ratio(snapshot.creator_completes, creator_key, snapshot.total_completes))
+            + (0.25 * _ratio(snapshot.format_completes, format_key, snapshot.total_completes)),
+        )
         like_signal = min(
             1.0,
             (snapshot.clip_likes[clip_id] / 2.0)
@@ -474,23 +559,62 @@ class ClipAffinityCalculator:
             + (0.45 * _ratio(snapshot.creator_shares, creator_key, snapshot.total_shares))
             + (0.20 * _ratio(snapshot.format_shares, format_key, snapshot.total_shares)),
         )
-        format_preference = _ratio(snapshot.format_weight, format_key, snapshot.total_weight)
-        creator_preference = _ratio(snapshot.creator_weight, creator_key, snapshot.total_weight)
+        scroll_penalty = min(
+            1.0,
+            (snapshot.clip_scrolls[clip_id] / 2.0)
+            + (0.45 * _ratio(snapshot.creator_scrolls, creator_key, snapshot.total_scrolls))
+            + (0.25 * _ratio(snapshot.format_scrolls, format_key, snapshot.total_scrolls)),
+        )
+        stored_format = min(max(float(snapshot.stored_format_scores.get(format_key or "", 0.0)), 0.0), 1.0)
+        stored_creator = min(max(float(snapshot.stored_creator_scores.get(creator_key or "", 0.0)), 0.0), 1.0)
+        format_preference = min(
+            1.0,
+            max(
+                (0.65 * _ratio(snapshot.format_weight, format_key, snapshot.total_weight))
+                + (0.35 * stored_format)
+                - (0.35 * _ratio(snapshot.format_scrolls, format_key, snapshot.total_scrolls)),
+                0.0,
+            ),
+        )
+        creator_preference = min(
+            1.0,
+            max(
+                (0.65 * _ratio(snapshot.creator_weight, creator_key, snapshot.total_weight))
+                + (0.35 * stored_creator)
+                - (0.45 * _ratio(snapshot.creator_scrolls, creator_key, snapshot.total_scrolls)),
+                0.0,
+            ),
+        )
+        profile_affinity = min(
+            1.0,
+            (0.40 * stored_format)
+            + (0.35 * stored_creator)
+            + (0.25 * snapshot.engagement_history),
+        )
         total = min(
             1.0,
-            (0.20 * view_signal)
-            + (0.20 * like_signal)
-            + (0.15 * share_signal)
-            + (0.20 * format_preference)
-            + (0.25 * creator_preference),
+            max(
+                (0.10 * view_signal)
+                + (0.16 * complete_signal)
+                + (0.18 * like_signal)
+                + (0.14 * share_signal)
+                + (0.16 * format_preference)
+                + (0.18 * creator_preference)
+                + (0.16 * profile_affinity)
+                - (0.12 * scroll_penalty),
+                0.0,
+            ),
         )
         return UserAffinityScore(
             total=round(total, 6),
             view_signal=round(view_signal, 6),
+            complete_signal=round(complete_signal, 6),
             like_signal=round(like_signal, 6),
             share_signal=round(share_signal, 6),
+            scroll_penalty=round(scroll_penalty, 6),
             format_preference=round(format_preference, 6),
             creator_preference=round(creator_preference, 6),
+            profile_affinity=round(profile_affinity, 6),
         )
 
 
@@ -542,6 +666,7 @@ class PersonalizedFeedRankingService:
     attention_orchestrator: Any | None = None
     session_tracker: Any | None = None
     moment_priority_cache: Any | None = None
+    viral_pool_store: Any | None = None
     hybrid_for_you_share: float = DEFAULT_HYBRID_FOR_YOU_SHARE
     hybrid_following_share: float = DEFAULT_HYBRID_FOLLOWING_SHARE
 
@@ -558,6 +683,7 @@ class PersonalizedFeedRankingService:
             self.cold_start_manager = ColdStartManager(
                 session=self.session,
                 feedback_engine=self.feedback_engine,
+                new_user_event_threshold=PERSONALIZED_FEED_NEW_USER_THRESHOLD,
             )
         if self.social_boost_service is None and self.follow_graph_service is not None:
             self.social_boost_service = SocialBoostService(follow_graph_service=self.follow_graph_service)
@@ -588,24 +714,24 @@ class PersonalizedFeedRankingService:
             limit=resolved_limit,
             refresh=refresh,
             feed_key=FOR_YOU_FEED_KEY_TEMPLATE.format(user_id=user_id),
-            feed_type="for_you",
+            feed_source=PERSONALIZED_FEED_SOURCE_FOR_YOU,
             mix={
-                "for_you": round(self.hybrid_for_you_share, 2),
-                "following": round(self.hybrid_following_share, 2),
+                PERSONALIZED_FEED_SOURCE_FOR_YOU: round(self.hybrid_for_you_share, 2),
+                PERSONALIZED_FEED_SOURCE_FOLLOWING: round(self.hybrid_following_share, 2),
             },
             ranker=lambda: self._allocate_ranked_entries(
                 self._blend_entries(
                     algorithmic=self._rank_mode_candidates(
                         user_id=user_id,
                         limit=resolved_limit,
-                        mode="for_you",
+                        mode=PERSONALIZED_FEED_SOURCE_FOR_YOU,
                         allocate=False,
                         session_id=session_id,
                     ),
                     following=self._rank_mode_candidates(
                         user_id=user_id,
                         limit=resolved_limit,
-                        mode="following",
+                        mode=PERSONALIZED_FEED_SOURCE_FOLLOWING,
                         allocate=False,
                         session_id=session_id,
                     ),
@@ -631,12 +757,15 @@ class PersonalizedFeedRankingService:
             limit=resolved_limit,
             refresh=refresh,
             feed_key=FOLLOWING_FEED_KEY_TEMPLATE.format(user_id=user_id),
-            feed_type="following",
-            mix={"for_you": 0.0, "following": 1.0},
+            feed_source=PERSONALIZED_FEED_SOURCE_FOLLOWING,
+            mix={
+                PERSONALIZED_FEED_SOURCE_FOR_YOU: 0.0,
+                PERSONALIZED_FEED_SOURCE_FOLLOWING: 1.0,
+            },
             ranker=lambda: self._rank_mode_candidates(
                 user_id=user_id,
                 limit=resolved_limit,
-                mode="following",
+                mode=PERSONALIZED_FEED_SOURCE_FOLLOWING,
                 session_id=session_id,
             ),
         )
@@ -664,7 +793,7 @@ class PersonalizedFeedRankingService:
         resolved_cursor = max(int(cursor), -1)
         replace_indices: list[int] = []
         new_items: list[PersonalizedFeedClipView] = []
-        for index, clip in enumerate(refreshed.clips):
+        for index, clip in enumerate(refreshed.items):
             if index <= resolved_cursor:
                 continue
             current_clip_id = current_clip_ids[index] if index < len(current_clip_ids) else None
@@ -678,15 +807,15 @@ class PersonalizedFeedRankingService:
         )
 
     def record_delivery(self, response: PersonalizedFeedResponse) -> None:
-        if not response.clips:
+        if not response.items:
             return
         cache_subject = response.user_id
-        if response.feed_type == "following":
+        if response.feed_source == PERSONALIZED_FEED_SOURCE_FOLLOWING:
             cache_subject = following_feed_cache_subject(response.user_id)
         self._record_clip_delivery(
             cache_subject=cache_subject,
             user_id=response.user_id,
-            clips=response.clips,
+            clips=response.items,
         )
 
     def record_refresh_delivery(self, *, user_id: str, clips: list[PersonalizedFeedClipView]) -> None:
@@ -706,33 +835,33 @@ class PersonalizedFeedRankingService:
         limit: int,
         refresh: bool,
         feed_key: str,
-        feed_type: str,
+        feed_source: str,
         mix: dict[str, float],
         ranker,
     ) -> PersonalizedFeedResponse:
-        if not refresh:
+        if not refresh and feed_source != PERSONALIZED_FEED_SOURCE_FOR_YOU:
             cached_entries = self.feed_store.top(cache_subject, limit)
             if cached_entries:
-                clips = [PersonalizedFeedClipView.model_validate(entry.payload) for entry in cached_entries]
+                items = [PersonalizedFeedClipView.model_validate(entry.payload) for entry in cached_entries]
                 return PersonalizedFeedResponse(
                     user_id=user_id,
-                    clips=clips,
+                    items=items,
                     generated_at=datetime.now(UTC),
                     feed_key=feed_key,
-                    feed_type=feed_type,
+                    feed_source=feed_source,
                     mix=mix,
                     cache_hit=True,
                 )
 
         ranked_entries = ranker()
         self.feed_store.replace(cache_subject, ranked_entries)
-        clips = [PersonalizedFeedClipView.model_validate(entry.payload) for entry in ranked_entries[:limit]]
+        items = [PersonalizedFeedClipView.model_validate(entry.payload) for entry in ranked_entries[:limit]]
         return PersonalizedFeedResponse(
             user_id=user_id,
-            clips=clips,
+            items=items,
             generated_at=datetime.now(UTC),
             feed_key=feed_key,
-            feed_type=feed_type,
+            feed_source=feed_source,
             mix=mix,
             cache_hit=False,
         )
@@ -769,8 +898,15 @@ class PersonalizedFeedRankingService:
         match_updates = self._match_updated_at_map({clip.match_id for clip in candidate_clips})
         max_viral_score = max(float(getattr(clip, "viral_score", 0.0) or 0.0) for clip in candidate_clips) or 1.0
         snapshot = self.affinity_calculator.build_snapshot(user_id)
-        new_user = bool(mode == "for_you" and self.cold_start_manager.is_new_user(user_id))
-        history_subject = user_id if mode == "for_you" else following_feed_cache_subject(user_id)
+        new_user = bool(
+            mode == PERSONALIZED_FEED_SOURCE_FOR_YOU
+            and self.cold_start_manager.is_new_user(user_id)
+        )
+        history_subject = (
+            user_id
+            if mode == PERSONALIZED_FEED_SOURCE_FOR_YOU
+            else following_feed_cache_subject(user_id)
+        )
         history = self.feed_store.recent_history(history_subject, limit=self.history_limit)
         history_counters = self._history_counters(history)
         creator_user_by_clip = {
@@ -817,7 +953,7 @@ class PersonalizedFeedRankingService:
                 )
             )
 
-        if new_user and mode == "for_you":
+        if new_user and mode == PERSONALIZED_FEED_SOURCE_FOR_YOU:
             return self._build_cold_start_entries(
                 candidates=candidates,
                 limit=limit,
@@ -931,7 +1067,11 @@ class PersonalizedFeedRankingService:
             selected_similarity_counts[chosen.similarity_key] += 1
 
         envelopes: list[PersonalizedFeedEnvelope] = []
-        feed_source = "following" if mode == "following" else "for_you"
+        feed_source = (
+            PERSONALIZED_FEED_SOURCE_FOLLOWING
+            if mode == PERSONALIZED_FEED_SOURCE_FOLLOWING
+            else PERSONALIZED_FEED_SOURCE_FOR_YOU
+        )
         for rank, (candidate, score, repetition_penalty, diversity_penalty, following_boost, base_score, session_boost) in enumerate(selected_candidates, start=1):
             clip_view = PersonalizedFeedClipView(
                 **self._base_clip_payload(candidate.clip),
@@ -994,7 +1134,14 @@ class PersonalizedFeedRankingService:
             seen_clip_ids.add(entry.clip_id)
 
         for entry in following:
-            if len([item for item in selected if item.payload.get("feed_source") == "following"]) >= target_following:
+            if len(
+                [
+                    item
+                    for item in selected
+                    if item.payload.get(PERSONALIZED_FEED_SOURCE_KEY)
+                    == PERSONALIZED_FEED_SOURCE_FOLLOWING
+                ]
+            ) >= target_following:
                 break
             if entry.clip_id in seen_clip_ids:
                 continue
@@ -1029,6 +1176,7 @@ class PersonalizedFeedRankingService:
                 -round(
                     candidate.viral_input
                     + candidate.recency_score
+                    + (0.85 * candidate.affinity.total)
                     + candidate.creator_boost
                     + candidate.social_boost,
                     6,
@@ -1060,7 +1208,15 @@ class PersonalizedFeedRankingService:
 
         envelopes: list[PersonalizedFeedEnvelope] = []
         for rank, candidate in enumerate(selected[:limit], start=1):
-            base_score = round(max(candidate.viral_input + candidate.recency_score, 0.0), 6)
+            base_score = round(
+                max(
+                    candidate.viral_input
+                    + candidate.recency_score
+                    + candidate.affinity.total,
+                    0.0,
+                ),
+                6,
+            )
             score = round(
                 max(base_score, 0.0) * self._session_multiplier(candidate.session_boost),
                 6,
@@ -1084,10 +1240,10 @@ class PersonalizedFeedRankingService:
                 **self._base_clip_payload(candidate.clip),
                 rank=rank,
                 score=score,
-                feed_source="for_you",
+                feed_source=PERSONALIZED_FEED_SOURCE_FOR_YOU,
                 score_breakdown=PersonalizedFeedScoreBreakdownView(
                     viral_score=round(candidate.viral_input, 6),
-                    user_affinity=0.0,
+                    user_affinity=round(candidate.affinity.total, 6),
                     recency_score=round(candidate.recency_score, 6),
                     repetition_penalty=0.0,
                     diversity_penalty=0.0,
@@ -1099,7 +1255,13 @@ class PersonalizedFeedRankingService:
                     creator_boost=round(candidate.creator_boost, 6),
                     following_boost=round(candidate.following_boost, 6),
                     cold_start_exploration=bool(candidate.cold_start_exploration),
-                    affinity=PersonalizedFeedAffinityView(),
+                    affinity=PersonalizedFeedAffinityView(
+                        view_signal=round(candidate.affinity.view_signal, 6),
+                        like_signal=round(candidate.affinity.like_signal, 6),
+                        share_signal=round(candidate.affinity.share_signal, 6),
+                        format_preference=round(candidate.affinity.format_preference, 6),
+                        creator_preference=round(candidate.affinity.creator_preference, 6),
+                    ),
                 ),
             )
             envelopes.append(
@@ -1206,6 +1368,21 @@ class PersonalizedFeedRankingService:
                     continue
                 candidates.append(clip)
                 seen_clip_ids.add(clip_id)
+        if self.viral_pool_store is not None:
+            try:
+                pool_entries = self.viral_pool_store.top(
+                    limit=max(limit, 1),
+                    excluded_clip_ids=blocked_clip_ids.union(seen_clip_ids),
+                )
+            except Exception:
+                pool_entries = []
+            for entry in pool_entries:
+                clip = self._resolve_pool_candidate(entry.payload if hasattr(entry, "payload") else entry)
+                clip_id = str(getattr(clip, "clip_id", "") or "")
+                if not clip_id or clip_id in seen_clip_ids or clip_id in blocked_clip_ids:
+                    continue
+                candidates.append(clip)
+                seen_clip_ids.add(clip_id)
         if self.ranking_service is not None:
             try:
                 ranked_candidates = self.ranking_service.get_candidates(limit=max(limit, 1), refresh=False)
@@ -1225,6 +1402,49 @@ class PersonalizedFeedRankingService:
             candidates.append(clip)
             seen_clip_ids.add(clip_id)
         return candidates
+
+    def _resolve_pool_candidate(self, payload: dict[str, Any] | Any) -> ViralTrendingClipView | ViralClipView | None:
+        if not isinstance(payload, dict):
+            return None
+        normalized_payload = self._pool_payload_for_validation(payload)
+        for schema in (ViralTrendingClipView, ViralClipView):
+            try:
+                return schema.model_validate(normalized_payload)
+            except Exception:
+                continue
+
+        clip_id = _first_non_empty(normalized_payload, "clip_id", "base_clip_id", "moment_id")
+        if clip_id is None:
+            return None
+        match_id = _first_non_empty(normalized_payload, "match_id")
+        metadata = normalized_payload.get("metadata")
+        if match_id is None and isinstance(metadata, dict):
+            match_id = _first_non_empty(metadata, "match_id")
+        if match_id is None:
+            parsed = parse_base_clip_id(clip_id)
+            if parsed is not None:
+                match_id, _highlight_id = parsed
+        if match_id is None:
+            return None
+        return self._resolve_clip_from_match_feed(match_id=match_id, clip_id=clip_id)
+
+    @staticmethod
+    def _pool_payload_for_validation(payload: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(payload)
+        normalized.pop("inserted_at", None)
+        normalized.pop("expires_at", None)
+        normalized.pop("pool_score", None)
+        return normalized
+
+    def _resolve_clip_from_match_feed(self, *, match_id: str, clip_id: str) -> ViralClipView | None:
+        try:
+            feed = self.feed_service.build_match_feed(match_id, allocate_impressions=False)
+        except Exception:
+            return None
+        for clip in feed.clips:
+            if str(getattr(clip, "clip_id", "") or "") == clip_id:
+                return clip
+        return None
 
     def _rebalance_entry_mix(
         self,
@@ -1372,7 +1592,7 @@ class PersonalizedFeedRankingService:
             exclude={
                 "rank",
                 "score",
-                "feed_source",
+                PERSONALIZED_FEED_SOURCE_KEY,
                 "score_breakdown",
                 "trending_score",
                 "age_hours",
@@ -1503,12 +1723,17 @@ def build_personalized_feed_service(*, app: FastAPI, session: Session) -> Person
         follow_graph_service=build_follow_graph_service(app=app, session=session),
         notification_service=build_follow_notification_service(app=app, session=session),
         feedback_engine=feedback_engine,
-        cold_start_manager=ColdStartManager(session=session, feedback_engine=feedback_engine),
+        cold_start_manager=ColdStartManager(
+            session=session,
+            feedback_engine=feedback_engine,
+            new_user_event_threshold=PERSONALIZED_FEED_NEW_USER_THRESHOLD,
+        ),
         runtime_config_loader=ensure_runtime_config_loader(app),
         ranking_service=build_viral_ranking_service(app=app, session=session),
         attention_orchestrator=build_attention_orchestrator_service(app=app, session=session),
         session_tracker=ensure_viral_session_tracker(app),
         moment_priority_cache=ensure_moment_priority_cache(app),
+        viral_pool_store=ensure_viral_dispatch_pool_store(app, settings=settings),
     )
 
 

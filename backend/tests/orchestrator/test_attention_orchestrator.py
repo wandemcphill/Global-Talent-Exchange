@@ -142,6 +142,110 @@ def test_attention_orchestrator_variant_budget_manager_splits_and_locks_winner()
         assert locked_variants["match-3::clip-base::instant"].distribution_weight == 0.0
 
 
+def test_attention_orchestrator_preserves_exploration_floor_for_five_variant_bursts() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine, tables=[ClipVariant.__table__])
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    with session_factory() as session:
+        session.add_all(
+            [
+                ClipVariant(
+                    variant_id="match-4::clip-base::instant",
+                    base_clip_id="match-4::clip-base",
+                    format_type="instant",
+                    viral_score=96.0,
+                    distribution_weight=0.2,
+                    promotion_status="exploring",
+                    promotion_enabled=True,
+                    pushed_to_trending=False,
+                    is_winner=False,
+                    metadata_json={},
+                ),
+                ClipVariant(
+                    variant_id="match-4::clip-base::cinematic",
+                    base_clip_id="match-4::clip-base",
+                    format_type="cinematic",
+                    viral_score=84.0,
+                    distribution_weight=0.2,
+                    promotion_status="exploring",
+                    promotion_enabled=True,
+                    pushed_to_trending=False,
+                    is_winner=False,
+                    metadata_json={},
+                ),
+                ClipVariant(
+                    variant_id="match-4::clip-base::debate",
+                    base_clip_id="match-4::clip-base",
+                    format_type="debate",
+                    viral_score=81.0,
+                    distribution_weight=0.2,
+                    promotion_status="exploring",
+                    promotion_enabled=True,
+                    pushed_to_trending=False,
+                    is_winner=False,
+                    metadata_json={},
+                ),
+                ClipVariant(
+                    variant_id="match-4::clip-base::tactical",
+                    base_clip_id="match-4::clip-base",
+                    format_type="tactical",
+                    viral_score=78.0,
+                    distribution_weight=0.2,
+                    promotion_status="exploring",
+                    promotion_enabled=True,
+                    pushed_to_trending=False,
+                    is_winner=False,
+                    metadata_json={},
+                ),
+                ClipVariant(
+                    variant_id="match-4::clip-base::meme",
+                    base_clip_id="match-4::clip-base",
+                    format_type="meme",
+                    viral_score=75.0,
+                    distribution_weight=0.2,
+                    promotion_status="exploring",
+                    promotion_enabled=True,
+                    pushed_to_trending=False,
+                    is_winner=False,
+                    metadata_json={},
+                ),
+            ]
+        )
+        session.commit()
+
+        service = AttentionOrchestratorService(
+            state_store=InMemoryGlobalFeedStateStore(),
+            session=session,
+        )
+        clip = ContentAgent(
+            clip_id="match-4::clip-base",
+            creator_id="creator-4",
+            quality=0.8,
+            format="instant_clip",
+            trust=0.96,
+            velocity=1.9,
+            age_hours=1.0,
+        ).as_clip()
+
+        service.refresh_clip_state(clip)
+        variants = list(
+            session.query(ClipVariant)
+            .filter(ClipVariant.base_clip_id == "match-4::clip-base")
+            .order_by(ClipVariant.viral_score.desc())
+            .all()
+        )
+
+        assert len(variants) == 5
+        assert round(sum(variant.distribution_weight for variant in variants), 4) == 1.0
+        for variant in variants[1:]:
+            assert variant.distribution_weight >= 0.2
+
+
 def test_attention_orchestrator_persists_variant_feedback_into_clip_metadata() -> None:
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",

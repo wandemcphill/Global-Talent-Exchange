@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.user_affinity_profile import UserAffinityProfile
+from app.viral.ingestion_schemas import ClipEvent
 
 CLIP_AFFINITY_EVENTS = frozenset(
     {
@@ -82,17 +83,42 @@ class UserAffinityService:
         name: str,
         metadata: Mapping[str, Any] | None = None,
     ) -> UserAffinityProfile | None:
-        if not user_id or name not in CLIP_AFFINITY_EVENTS:
+        return self.update_user_embedding(
+            user_id=user_id,
+            clip_id=self._extract_text(metadata or {}, "clip_id", "base_clip_id"),
+            event_type=name,
+            metadata=metadata,
+        )
+
+    def process_event(self, event: ClipEvent) -> UserAffinityProfile | None:
+        return self.update_user_embedding(
+            user_id=event.user_id,
+            clip_id=event.clip_id,
+            event_type=event.kafka_topic,
+            metadata=self._metadata_from_event(event),
+        )
+
+    def update_user_embedding(
+        self,
+        *,
+        user_id: str | None,
+        clip_id: str | None,
+        event_type: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> UserAffinityProfile | None:
+        if not user_id or event_type not in CLIP_AFFINITY_EVENTS:
             return None
         if self.session.get(User, user_id) is None:
             return None
 
+        payload = dict(metadata or {})
+        if clip_id:
+            payload.setdefault("clip_id", clip_id)
         profile = self._get_or_create_profile(user_id=user_id)
         state = self._state(profile)
-        event_key = name.rsplit(".", maxsplit=1)[-1]
+        event_key = event_type.rsplit(".", maxsplit=1)[-1]
         state["event_counts"][event_key] = int(state["event_counts"].get(event_key, 0)) + 1
 
-        payload = metadata or {}
         watch_time = self._extract_float(
             payload,
             "watch_time",
@@ -106,9 +132,29 @@ class UserAffinityService:
 
         self._update_session_metrics(state, payload)
 
-        signal_weight = EVENT_SIGNAL_WEIGHTS[name]
-        format_key = self._extract_text(payload, "format", "format_type", "clip_format", "content_format")
-        creator_key = self._extract_text(payload, "creator_id", "creator", "author_id", "creator_handle")
+        signal_weight = EVENT_SIGNAL_WEIGHTS[event_type]
+        format_key = self._normalize_affinity_key(
+            self._extract_text(
+                payload,
+                "format_key",
+                "format",
+                "format_type",
+                "clip_format",
+                "content_format",
+            )
+        )
+        creator_key = self._normalize_affinity_key(
+            self._extract_text(
+                payload,
+                "creator_id",
+                "creator_key",
+                "creator",
+                "author_id",
+                "creator_handle",
+                "creator_name",
+                "team_name",
+            )
+        )
         self._apply_signal(state["format_scores"], format_key, signal_weight)
         self._apply_signal(state["creator_scores"], creator_key, signal_weight)
 
@@ -130,7 +176,7 @@ class UserAffinityService:
 
         profile = self._get_or_create_profile(user_id=user_id)
         state = self._state(profile)
-        self._apply_signal(state["creator_scores"], creator_id, delta)
+        self._apply_signal(state["creator_scores"], self._normalize_affinity_key(creator_id), delta)
         self._refresh_profile(profile, state)
         self.session.flush()
         return profile
@@ -162,8 +208,10 @@ class UserAffinityService:
         format_key: str | None = None,
         creator_id: str | None = None,
     ) -> dict[str, Any]:
-        format_match = float((profile.favorite_formats_json or {}).get(format_key or "", 0.0))
-        creator_match = float((profile.favorite_creators_json or {}).get(creator_id or "", 0.0))
+        normalized_format_key = self._normalize_affinity_key(format_key)
+        normalized_creator_id = self._normalize_affinity_key(creator_id)
+        format_match = float((profile.favorite_formats_json or {}).get(normalized_format_key or "", 0.0))
+        creator_match = float((profile.favorite_creators_json or {}).get(normalized_creator_id or "", 0.0))
         engagement_history = _clamp(
             (float(profile.engagement_score or 0.0) * 0.65)
             + (_clamp(float(profile.avg_watch_time or 0.0) / WATCH_TIME_BASELINE_SECONDS) * 0.20)
@@ -175,8 +223,8 @@ class UserAffinityService:
             + (AFFINITY_WEIGHTS["engagement_history"] * engagement_history)
         )
         return {
-            "format": format_key,
-            "creator_id": creator_id,
+            "format": normalized_format_key,
+            "creator_id": normalized_creator_id,
             "format_match": round(format_match, 4),
             "creator_match": round(creator_match, 4),
             "engagement_history": round(engagement_history, 4),
@@ -281,6 +329,19 @@ class UserAffinityService:
         return state
 
     @staticmethod
+    def _metadata_from_event(event: ClipEvent) -> dict[str, Any]:
+        metadata = event.metadata.model_dump(mode="json")
+        metadata["clip_id"] = event.clip_id
+        metadata["session_id"] = event.session_id
+        metadata["event_type"] = event.kafka_topic
+        if event.watch_time_ms is not None:
+            metadata["watch_time_ms"] = int(event.watch_time_ms)
+            metadata["watch_time_seconds"] = round(float(event.watch_time_ms) / 1000.0, 6)
+        if event.video_length_ms is not None:
+            metadata["video_length_ms"] = int(event.video_length_ms)
+        return metadata
+
+    @staticmethod
     def _extract_text(metadata: Mapping[str, Any], *keys: str) -> str | None:
         for key in keys:
             value = metadata.get(key)
@@ -290,6 +351,16 @@ class UserAffinityService:
             if candidate:
                 return candidate
         return None
+
+    @staticmethod
+    def _normalize_affinity_key(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = "".join(character.lower() if character.isalnum() else "_" for character in value.strip())
+        normalized = normalized.strip("_")
+        while "__" in normalized:
+            normalized = normalized.replace("__", "_")
+        return normalized or None
 
     @staticmethod
     def _extract_float(metadata: Mapping[str, Any], *keys: str) -> float:

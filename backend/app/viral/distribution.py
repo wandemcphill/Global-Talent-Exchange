@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 import logging
 from threading import Lock
 from typing import Any, Protocol
 
+from fastapi import FastAPI
 from app.core.cache import CacheBackend, NullCacheBackend, RedisCacheBackend, build_cache_backend
 from app.core.config import Settings, get_settings
 
@@ -36,6 +37,11 @@ DEFAULT_MIN_IMPRESSIONS_BEFORE_FREEZE = 100
 DEFAULT_FREEZE_COMPLETION_FLOOR = 0.42
 DEFAULT_FREEZE_SHARE_FLOOR = 0.01
 DEFAULT_FREEZE_SKIP_CEILING = 0.55
+VIRAL_POOL_KEY = "viral_pool"
+VIRAL_POOL_PAYLOAD_KEY = "viral_pool:payloads"
+DEFAULT_VIRAL_POOL_TTL_SECONDS = 3_600
+DEFAULT_VIRAL_POOL_MAX_ITEMS = 500
+DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER = 1.5
 
 
 def distribution_cache_key(clip_id: str) -> str:
@@ -52,6 +58,335 @@ def distribution_cap_key(clip_id: str) -> str:
 
 def distribution_frozen_key(clip_id: str) -> str:
     return f"clip:{clip_id}:distribution_frozen"
+
+
+def viral_pool_key() -> str:
+    return VIRAL_POOL_KEY
+
+
+def viral_pool_payload_key() -> str:
+    return VIRAL_POOL_PAYLOAD_KEY
+
+
+@dataclass(frozen=True, slots=True)
+class ViralDispatchEnvelope:
+    clip_id: str
+    score: float
+    payload: dict[str, Any]
+    inserted_at: datetime
+    expires_at: datetime
+
+    @property
+    def expired(self) -> bool:
+        return self.expires_at <= datetime.now(UTC)
+
+
+class ViralDispatchPoolStore(Protocol):
+    def upsert(
+        self,
+        *,
+        clip_id: str,
+        score: float,
+        payload: Mapping[str, Any] | None = None,
+    ) -> ViralDispatchEnvelope:
+        ...
+
+    def top(
+        self,
+        *,
+        limit: int,
+        excluded_clip_ids: set[str] | None = None,
+    ) -> list[ViralDispatchEnvelope]:
+        ...
+
+    def boost(
+        self,
+        clip_id: str,
+        *,
+        multiplier: float = DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER,
+    ) -> ViralDispatchEnvelope | None:
+        ...
+
+    def clear(self) -> None:
+        ...
+
+
+@dataclass(slots=True)
+class InMemoryViralDispatchPoolStore:
+    ttl_seconds: int = DEFAULT_VIRAL_POOL_TTL_SECONDS
+    max_items: int = DEFAULT_VIRAL_POOL_MAX_ITEMS
+    _entries: dict[str, ViralDispatchEnvelope] = field(default_factory=dict, init=False, repr=False)
+    _lock: Lock = field(default_factory=Lock, init=False, repr=False)
+
+    def upsert(
+        self,
+        *,
+        clip_id: str,
+        score: float,
+        payload: Mapping[str, Any] | None = None,
+    ) -> ViralDispatchEnvelope:
+        inserted_at = datetime.now(UTC)
+        expires_at = inserted_at + timedelta(seconds=max(int(self.ttl_seconds), 1))
+        envelope = _build_viral_dispatch_envelope(
+            clip_id=clip_id,
+            score=score,
+            payload=payload,
+            inserted_at=inserted_at,
+            expires_at=expires_at,
+        )
+        with self._lock:
+            self._prune_locked()
+            self._entries[clip_id] = envelope
+            self._trim_locked()
+        return _clone_dispatch_envelope(envelope)
+
+    def top(
+        self,
+        *,
+        limit: int,
+        excluded_clip_ids: set[str] | None = None,
+    ) -> list[ViralDispatchEnvelope]:
+        if limit <= 0:
+            return []
+        blocked = excluded_clip_ids or set()
+        with self._lock:
+            self._prune_locked()
+            ranked = sorted(
+                (
+                    item
+                    for item in self._entries.values()
+                    if item.clip_id not in blocked
+                ),
+                key=lambda item: (-item.score, -item.inserted_at.timestamp(), item.clip_id),
+            )[: max(int(limit), 0)]
+        return [_clone_dispatch_envelope(item) for item in ranked]
+
+    def boost(
+        self,
+        clip_id: str,
+        *,
+        multiplier: float = DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER,
+    ) -> ViralDispatchEnvelope | None:
+        normalized_clip_id = str(clip_id or "").strip()
+        if not normalized_clip_id:
+            return None
+        with self._lock:
+            self._prune_locked()
+            current = self._entries.get(normalized_clip_id)
+            if current is None:
+                return None
+            expires_at = datetime.now(UTC) + timedelta(seconds=max(int(self.ttl_seconds), 1))
+            boosted = _build_viral_dispatch_envelope(
+                clip_id=current.clip_id,
+                score=float(current.score) * max(float(multiplier), 1.0),
+                payload=_pool_payload_seed(current.payload),
+                inserted_at=current.inserted_at,
+                expires_at=expires_at,
+            )
+            self._entries[normalized_clip_id] = boosted
+            self._trim_locked()
+        return _clone_dispatch_envelope(boosted)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+
+    def _prune_locked(self) -> None:
+        expired_ids = [clip_id for clip_id, entry in self._entries.items() if entry.expired]
+        for clip_id in expired_ids:
+            self._entries.pop(clip_id, None)
+
+    def _trim_locked(self) -> None:
+        if self.max_items <= 0 or len(self._entries) <= self.max_items:
+            return
+        overflow = sorted(
+            self._entries.values(),
+            key=lambda item: (-item.score, -item.inserted_at.timestamp(), item.clip_id),
+        )[self.max_items :]
+        for entry in overflow:
+            self._entries.pop(entry.clip_id, None)
+
+
+@dataclass(slots=True)
+class RedisViralDispatchPoolStore:
+    backend: RedisCacheBackend
+    ttl_seconds: int = DEFAULT_VIRAL_POOL_TTL_SECONDS
+    max_items: int = DEFAULT_VIRAL_POOL_MAX_ITEMS
+    pool_key: str = VIRAL_POOL_KEY
+    payload_key: str = VIRAL_POOL_PAYLOAD_KEY
+    _redis_client: Any = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._redis_client = self.backend.client
+
+    def upsert(
+        self,
+        *,
+        clip_id: str,
+        score: float,
+        payload: Mapping[str, Any] | None = None,
+    ) -> ViralDispatchEnvelope:
+        inserted_at = datetime.now(UTC)
+        expires_at = inserted_at + timedelta(seconds=max(int(self.ttl_seconds), 1))
+        envelope = _build_viral_dispatch_envelope(
+            clip_id=clip_id,
+            score=score,
+            payload=payload,
+            inserted_at=inserted_at,
+            expires_at=expires_at,
+        )
+        try:
+            pipeline = self._redis_client.pipeline()
+            pipeline.zadd(self.pool_key, {clip_id: float(envelope.score)})
+            pipeline.hset(self.payload_key, mapping={clip_id: json.dumps(envelope.payload, default=str)})
+            pipeline.expire(self.pool_key, max(int(self.ttl_seconds), 1))
+            pipeline.expire(self.payload_key, max(int(self.ttl_seconds), 1))
+            pipeline.execute()
+            self._prune_expired()
+            self._trim_overflow()
+        except Exception:
+            logger.warning("viral.pool.upsert_failed", extra={"clip_id": clip_id})
+        return envelope
+
+    def top(
+        self,
+        *,
+        limit: int,
+        excluded_clip_ids: set[str] | None = None,
+    ) -> list[ViralDispatchEnvelope]:
+        if limit <= 0:
+            return []
+        blocked = excluded_clip_ids or set()
+        self._prune_expired()
+        fetch_limit = max(int(limit), int(self.max_items), 1)
+        try:
+            ranked = self._redis_client.zrevrange(self.pool_key, 0, fetch_limit - 1, withscores=True)
+            clip_ids = [clip_id for clip_id, _score in ranked]
+            payloads = self._redis_client.hmget(self.payload_key, clip_ids) if clip_ids else []
+        except Exception:
+            logger.warning("viral.pool.read_failed", extra={"limit": limit})
+            return []
+
+        invalid_ids: list[str] = []
+        envelopes: list[ViralDispatchEnvelope] = []
+        for (clip_id, score), raw_payload in zip(ranked, payloads):
+            if clip_id in blocked:
+                continue
+            payload = _json_payload(raw_payload)
+            if payload is None:
+                invalid_ids.append(clip_id)
+                continue
+            envelope = _dispatch_envelope_from_payload(clip_id=clip_id, score=score, payload=payload)
+            if envelope.expired:
+                invalid_ids.append(clip_id)
+                continue
+            envelopes.append(envelope)
+            if len(envelopes) >= limit:
+                break
+        if invalid_ids:
+            self._remove_clip_ids(invalid_ids)
+        return envelopes
+
+    def boost(
+        self,
+        clip_id: str,
+        *,
+        multiplier: float = DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER,
+    ) -> ViralDispatchEnvelope | None:
+        normalized_clip_id = str(clip_id or "").strip()
+        if not normalized_clip_id:
+            return None
+        self._prune_expired()
+        try:
+            current_score = self._redis_client.zscore(self.pool_key, normalized_clip_id)
+            raw_payload = self._redis_client.hget(self.payload_key, normalized_clip_id)
+        except Exception:
+            logger.warning("viral.pool.boost_failed", extra={"clip_id": normalized_clip_id})
+            return None
+        if current_score is None:
+            return None
+        payload = _json_payload(raw_payload)
+        if payload is None:
+            self._remove_clip_ids([normalized_clip_id])
+            return None
+        existing = _dispatch_envelope_from_payload(
+            clip_id=normalized_clip_id,
+            score=current_score,
+            payload=payload,
+        )
+        refreshed = _build_viral_dispatch_envelope(
+            clip_id=existing.clip_id,
+            score=float(existing.score) * max(float(multiplier), 1.0),
+            payload=_pool_payload_seed(existing.payload),
+            inserted_at=existing.inserted_at,
+            expires_at=datetime.now(UTC) + timedelta(seconds=max(int(self.ttl_seconds), 1)),
+        )
+        try:
+            pipeline = self._redis_client.pipeline()
+            pipeline.zadd(self.pool_key, {normalized_clip_id: float(refreshed.score)})
+            pipeline.hset(self.payload_key, mapping={normalized_clip_id: json.dumps(refreshed.payload, default=str)})
+            pipeline.expire(self.pool_key, max(int(self.ttl_seconds), 1))
+            pipeline.expire(self.payload_key, max(int(self.ttl_seconds), 1))
+            pipeline.execute()
+        except Exception:
+            logger.warning("viral.pool.boost_failed", extra={"clip_id": normalized_clip_id})
+            return None
+        return refreshed
+
+    def clear(self) -> None:
+        try:
+            self._redis_client.delete(self.pool_key, self.payload_key)
+        except Exception:
+            logger.warning("viral.pool.clear_failed")
+
+    def _prune_expired(self) -> None:
+        try:
+            clip_ids = self._redis_client.zrange(self.pool_key, 0, -1)
+            payloads = self._redis_client.hmget(self.payload_key, clip_ids) if clip_ids else []
+        except Exception:
+            logger.warning("viral.pool.prune_failed")
+            return
+        expired_ids: list[str] = []
+        for clip_id, raw_payload in zip(clip_ids, payloads):
+            payload = _json_payload(raw_payload)
+            if payload is None:
+                expired_ids.append(clip_id)
+                continue
+            envelope = _dispatch_envelope_from_payload(clip_id=clip_id, score=0.0, payload=payload)
+            if envelope.expired:
+                expired_ids.append(clip_id)
+        if expired_ids:
+            self._remove_clip_ids(expired_ids)
+
+    def _trim_overflow(self) -> None:
+        if self.max_items <= 0:
+            return
+        try:
+            entry_count = int(self._redis_client.zcard(self.pool_key) or 0)
+        except Exception:
+            logger.warning("viral.pool.trim_failed")
+            return
+        overflow = entry_count - self.max_items
+        if overflow <= 0:
+            return
+        try:
+            clip_ids = self._redis_client.zrange(self.pool_key, 0, overflow - 1)
+        except Exception:
+            logger.warning("viral.pool.trim_failed")
+            return
+        if clip_ids:
+            self._remove_clip_ids(list(clip_ids))
+
+    def _remove_clip_ids(self, clip_ids: list[str]) -> None:
+        if not clip_ids:
+            return
+        try:
+            pipeline = self._redis_client.pipeline()
+            pipeline.zrem(self.pool_key, *clip_ids)
+            pipeline.hdel(self.payload_key, *clip_ids)
+            pipeline.execute()
+        except Exception:
+            logger.warning("viral.pool.remove_failed", extra={"clip_count": len(clip_ids)})
 
 
 @dataclass(slots=True)
@@ -346,6 +681,94 @@ class CacheClipDistributionStore:
 
 
 _SHARED_IN_MEMORY_STORE = InMemoryClipDistributionStore()
+_SHARED_IN_MEMORY_VIRAL_POOL_STORE = InMemoryViralDispatchPoolStore()
+
+
+def build_viral_dispatch_pool_store(
+    *,
+    settings: Settings | None = None,
+    backend: CacheBackend | None = None,
+    ttl_seconds: int = DEFAULT_VIRAL_POOL_TTL_SECONDS,
+    max_items: int = DEFAULT_VIRAL_POOL_MAX_ITEMS,
+) -> ViralDispatchPoolStore:
+    resolved_backend = backend or build_cache_backend(settings=settings)
+    if isinstance(resolved_backend, RedisCacheBackend) and getattr(resolved_backend, "enabled", False):
+        return RedisViralDispatchPoolStore(
+            backend=resolved_backend,
+            ttl_seconds=ttl_seconds,
+            max_items=max_items,
+        )
+    if ttl_seconds != DEFAULT_VIRAL_POOL_TTL_SECONDS or max_items != DEFAULT_VIRAL_POOL_MAX_ITEMS:
+        return InMemoryViralDispatchPoolStore(ttl_seconds=ttl_seconds, max_items=max_items)
+    return _SHARED_IN_MEMORY_VIRAL_POOL_STORE
+
+
+def ensure_viral_dispatch_pool_store(
+    app: FastAPI,
+    *,
+    settings: Settings | None = None,
+) -> ViralDispatchPoolStore:
+    store = getattr(app.state, "viral_dispatch_pool_store", None)
+    if store is None:
+        store = build_viral_dispatch_pool_store(settings=settings or getattr(app.state, "settings", None))
+        app.state.viral_dispatch_pool_store = store
+    return store
+
+
+def inject_into_distribution_pool(
+    clip_id: str,
+    score: float,
+    payload: Mapping[str, Any] | None = None,
+    *,
+    store: ViralDispatchPoolStore | None = None,
+    settings: Settings | None = None,
+    backend: CacheBackend | None = None,
+) -> ViralDispatchEnvelope:
+    normalized_clip_id = str(clip_id or "").strip()
+    if not normalized_clip_id:
+        raise ValueError("clip_id is required to inject a clip into the viral distribution pool.")
+    resolved_store = store or build_viral_dispatch_pool_store(settings=settings, backend=backend)
+    return resolved_store.upsert(
+        clip_id=normalized_clip_id,
+        score=float(score),
+        payload=payload,
+    )
+
+
+def read_distribution_pool(
+    limit: int,
+    excluded_clip_ids: set[str] | None = None,
+    *,
+    store: ViralDispatchPoolStore | None = None,
+    settings: Settings | None = None,
+    backend: CacheBackend | None = None,
+) -> list[dict[str, Any]]:
+    resolved_store = store or build_viral_dispatch_pool_store(settings=settings, backend=backend)
+    return [
+        dict(entry.payload)
+        for entry in resolved_store.top(
+            limit=max(int(limit), 0),
+            excluded_clip_ids=excluded_clip_ids,
+        )
+    ]
+
+
+def boost_distribution(
+    clip_id: str,
+    multiplier: float = DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER,
+    *,
+    store: ViralDispatchPoolStore | None = None,
+    settings: Settings | None = None,
+    backend: CacheBackend | None = None,
+) -> ViralDispatchEnvelope | None:
+    normalized_clip_id = str(clip_id or "").strip()
+    if not normalized_clip_id:
+        return None
+    resolved_store = store or build_viral_dispatch_pool_store(settings=settings, backend=backend)
+    return resolved_store.boost(
+        normalized_clip_id,
+        multiplier=max(float(multiplier), 1.0),
+    )
 
 
 def build_clip_distribution_store(
@@ -514,6 +937,114 @@ class ClipDistributionManager:
             return default
 
 
+def _build_viral_dispatch_envelope(
+    *,
+    clip_id: str,
+    score: float,
+    payload: Mapping[str, Any] | None,
+    inserted_at: datetime,
+    expires_at: datetime,
+) -> ViralDispatchEnvelope:
+    normalized_payload = _pool_payload_seed(payload)
+    metadata = dict(normalized_payload.get("metadata") or {})
+    metadata["viral_pool_inserted_at"] = inserted_at.astimezone(UTC).isoformat()
+    metadata["viral_pool_expires_at"] = expires_at.astimezone(UTC).isoformat()
+    metadata["viral_pool_score"] = round(float(score), 6)
+    normalized_payload["clip_id"] = str(normalized_payload.get("clip_id") or clip_id).strip() or clip_id
+    normalized_payload["metadata"] = metadata
+    normalized_payload["inserted_at"] = inserted_at.astimezone(UTC).isoformat()
+    normalized_payload["expires_at"] = expires_at.astimezone(UTC).isoformat()
+    normalized_payload["pool_score"] = round(float(score), 6)
+    return ViralDispatchEnvelope(
+        clip_id=clip_id,
+        score=round(float(score), 6),
+        payload=normalized_payload,
+        inserted_at=inserted_at.astimezone(UTC),
+        expires_at=expires_at.astimezone(UTC),
+    )
+
+
+def _dispatch_envelope_from_payload(
+    *,
+    clip_id: str,
+    score: float,
+    payload: Mapping[str, Any],
+) -> ViralDispatchEnvelope:
+    inserted_at = _coerce_datetime(
+        payload.get("inserted_at"),
+        default=_coerce_datetime(
+            dict(payload.get("metadata") or {}).get("viral_pool_inserted_at"),
+            default=datetime.now(UTC),
+        ),
+    )
+    expires_at = _coerce_datetime(
+        payload.get("expires_at"),
+        default=_coerce_datetime(
+            dict(payload.get("metadata") or {}).get("viral_pool_expires_at"),
+            default=inserted_at + timedelta(seconds=DEFAULT_VIRAL_POOL_TTL_SECONDS),
+        ),
+    )
+    return ViralDispatchEnvelope(
+        clip_id=clip_id,
+        score=round(float(score), 6),
+        payload=dict(payload),
+        inserted_at=inserted_at,
+        expires_at=expires_at,
+    )
+
+
+def _clone_dispatch_envelope(envelope: ViralDispatchEnvelope) -> ViralDispatchEnvelope:
+    return ViralDispatchEnvelope(
+        clip_id=envelope.clip_id,
+        score=float(envelope.score),
+        payload=dict(envelope.payload),
+        inserted_at=envelope.inserted_at,
+        expires_at=envelope.expires_at,
+    )
+
+
+def _pool_payload_seed(payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    normalized.pop("inserted_at", None)
+    normalized.pop("expires_at", None)
+    normalized.pop("pool_score", None)
+    metadata = dict(normalized.get("metadata") or {})
+    metadata.pop("viral_pool_inserted_at", None)
+    metadata.pop("viral_pool_expires_at", None)
+    metadata.pop("viral_pool_score", None)
+    if metadata:
+        normalized["metadata"] = metadata
+    elif "metadata" in normalized:
+        normalized["metadata"] = {}
+    return normalized
+
+
+def _json_payload(raw_payload: object) -> dict[str, Any] | None:
+    if raw_payload is None:
+        return None
+    if isinstance(raw_payload, dict):
+        return dict(raw_payload)
+    if not isinstance(raw_payload, str):
+        return None
+    try:
+        decoded = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _coerce_datetime(value: object, *, default: datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC) if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return default
+        return parsed.astimezone(UTC) if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return default
+
+
 def _coerce_int(value: object, *, default: int = 0) -> int:
     try:
         return int(value)
@@ -533,18 +1064,32 @@ def build_clip_distribution_manager(
 
 
 __all__ = [
+    "DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER",
+    "DEFAULT_VIRAL_POOL_MAX_ITEMS",
+    "DEFAULT_VIRAL_POOL_TTL_SECONDS",
     "CacheClipDistributionStore",
     "ClipDistributionAllocation",
     "ClipDistributionManager",
     "ClipDistributionState",
     "EXPAND_STAGE",
     "InMemoryClipDistributionStore",
+    "InMemoryViralDispatchPoolStore",
+    "RedisViralDispatchPoolStore",
     "TEST_STAGE",
     "VIRAL_STAGE",
+    "ViralDispatchEnvelope",
+    "ViralDispatchPoolStore",
     "build_clip_distribution_manager",
     "build_clip_distribution_store",
+    "build_viral_dispatch_pool_store",
+    "boost_distribution",
     "distribution_cap_key",
     "distribution_cache_key",
     "distribution_frozen_key",
     "distribution_impressions_key",
+    "ensure_viral_dispatch_pool_store",
+    "inject_into_distribution_pool",
+    "read_distribution_pool",
+    "viral_pool_key",
+    "viral_pool_payload_key",
 ]

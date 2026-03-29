@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+import logging
 import random
+from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
 from app.models.clip_variant import ClipVariant
 from app.viral.comparator import ViralVariantScoringComparator
 from app.viral.variant_manager import ViralClipVariantManager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -28,6 +32,7 @@ class ViralClipPromotionService:
     moment_winner_window: timedelta = field(default_factory=lambda: timedelta(minutes=3))
     winner_view_threshold: int = 1000
     exploitation_weight: float = 0.8
+    distribution_boost_callback: Callable[[str], Any] | None = None
 
     def refresh(self, base_clip_id: str) -> VariantPromotionDecision:
         manager = ViralClipVariantManager(session=self.session, comparator=self.comparator)
@@ -52,6 +57,8 @@ class ViralClipPromotionService:
             self._apply_exploration_weights(variants=variants, leading_variant=leading_variant)
 
         self.session.commit()
+        if decision_reason is not None:
+            self._boost_distribution(base_clip_id)
         return VariantPromotionDecision(
             base_clip_id=base_clip_id,
             resolved=decision_reason is not None,
@@ -132,6 +139,20 @@ class ViralClipPromotionService:
             variant.promotion_enabled = variant.variant_id == winner.variant_id
             variant.distribution_weight = 1.0 if variant.variant_id == winner.variant_id else 0.0
             variant.promotion_status = "boosted" if variant.variant_id == winner.variant_id else "killed"
+
+    def _boost_distribution(self, base_clip_id: str) -> None:
+        if self.distribution_boost_callback is not None:
+            try:
+                self.distribution_boost_callback(base_clip_id)
+            except Exception:
+                logger.warning("viral.promotion.boost_callback_failed base_clip_id=%s", base_clip_id)
+            return
+        try:
+            from app.viral.distribution import boost_distribution
+
+            boost_distribution(base_clip_id)
+        except Exception:
+            logger.warning("viral.promotion.boost_failed base_clip_id=%s", base_clip_id)
 
 
 __all__ = ["VariantPromotionDecision", "ViralClipPromotionService"]

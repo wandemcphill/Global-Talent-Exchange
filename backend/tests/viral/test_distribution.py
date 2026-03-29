@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+
 from app.viral.distribution import (
     ClipDistributionManager,
+    InMemoryViralDispatchPoolStore,
     InMemoryClipDistributionStore,
     TEST_STAGE,
     EXPAND_STAGE,
     VIRAL_STAGE,
+    boost_distribution,
+    inject_into_distribution_pool,
+    read_distribution_pool,
 )
 
 
@@ -176,3 +183,62 @@ def test_distribution_manager_freezes_when_viral_score_drops_below_stage_thresho
     assert dropped.freeze_reason == "viral_score_drop"
     assert dropped.impressions_cap == dropped.impressions_served
     assert manager.allocate_impressions("clip-viral-drop", count=1).allocated is False
+
+
+def test_viral_dispatch_pool_orders_payloads_trims_overflow_and_boosts_winners() -> None:
+    store = InMemoryViralDispatchPoolStore(max_items=2)
+
+    inject_into_distribution_pool(
+        "clip-low",
+        1.0,
+        {"clip_id": "clip-low", "metadata": {"source": "test"}},
+        store=store,
+    )
+    inject_into_distribution_pool(
+        "clip-high",
+        5.0,
+        {"clip_id": "clip-high", "metadata": {"source": "test"}},
+        store=store,
+    )
+    inject_into_distribution_pool(
+        "clip-mid",
+        4.0,
+        {"clip_id": "clip-mid", "metadata": {"source": "test"}},
+        store=store,
+    )
+
+    entries = store.top(limit=5)
+
+    assert [entry.clip_id for entry in entries] == ["clip-high", "clip-mid"]
+    assert entries[0].payload["inserted_at"]
+    assert entries[0].payload["expires_at"]
+    assert entries[0].payload["pool_score"] == 5.0
+    assert entries[0].payload["metadata"]["viral_pool_inserted_at"]
+    assert entries[0].payload["metadata"]["viral_pool_expires_at"]
+    assert entries[0].payload["metadata"]["viral_pool_score"] == 5.0
+
+    boosted = boost_distribution("clip-mid", store=store)
+    pool_payloads = read_distribution_pool(limit=5, store=store)
+
+    assert boosted is not None
+    assert boosted.score == 6.0
+    assert [payload["clip_id"] for payload in pool_payloads] == ["clip-mid", "clip-high"]
+    assert pool_payloads[0]["pool_score"] == 6.0
+
+
+def test_viral_dispatch_pool_prunes_expired_entries_before_reads() -> None:
+    store = InMemoryViralDispatchPoolStore()
+
+    inject_into_distribution_pool(
+        "clip-expired",
+        2.0,
+        {"clip_id": "clip-expired"},
+        store=store,
+    )
+    store._entries["clip-expired"] = replace(  # noqa: SLF001
+        store._entries["clip-expired"],  # noqa: SLF001
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
+    )
+
+    assert store.top(limit=5) == []
+    assert read_distribution_pool(limit=5, store=store) == []

@@ -16,6 +16,7 @@ import '../data/viral_feed_repository.dart';
 class ViralFeedScreen extends StatefulWidget {
   const ViralFeedScreen({
     super.key,
+    this.currentUserId,
     ViralFeedRepository? repository,
     feed_actions.ClipActionDispatcher? actionDispatcher,
     ReliableEventQueue? eventQueue,
@@ -23,6 +24,7 @@ class ViralFeedScreen extends StatefulWidget {
        _actionDispatcher = actionDispatcher,
        _eventQueue = eventQueue;
 
+  final String? currentUserId;
   final ViralFeedRepository? _repository;
   final feed_actions.ClipActionDispatcher? _actionDispatcher;
   final ReliableEventQueue? _eventQueue;
@@ -32,6 +34,8 @@ class ViralFeedScreen extends StatefulWidget {
 }
 
 class _ViralFeedScreenState extends State<ViralFeedScreen> {
+  static const int _feedbackRefreshThreshold = 3;
+
   late final ViralFeedRepository _repository;
   late final feed_actions.ClipActionDispatcher _actionDispatcher;
   late final FrontendAuditHooks _auditHooks;
@@ -55,6 +59,7 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
   Timer? _feedRefreshDebounce;
   String? _activeClipId;
   String? _pendingClipActivationId;
+  int _successfulFeedbackInteractions = 0;
 
   @override
   void initState() {
@@ -216,7 +221,118 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
   }
 
   Future<void> _syncDeck() {
+    final ViralFeedDeck? deck = _deck;
+    if (_source == ViralFeedSource.forYou &&
+        deck != null &&
+        deck.clips.isNotEmpty) {
+      return _refreshForYou(showErrorFeedback: true);
+    }
     return _loadDeck(refresh: true, showErrorFeedback: _deck != null);
+  }
+
+  Future<void> _refreshForYou({required bool showErrorFeedback}) async {
+    final ViralFeedDeck? currentDeck = _deck;
+    if (currentDeck == null || currentDeck.clips.isEmpty) {
+      await _loadDeck(refresh: true, showErrorFeedback: showErrorFeedback);
+      return;
+    }
+    try {
+      final ViralFeedDeckRefresh refresh = await _repository.refreshForYou(
+        cursor: _pageIndex,
+        limit: currentDeck.clips.length,
+      );
+      if (!mounted) {
+        return;
+      }
+      final ViralFeedDeck nextDeck = _applyRefresh(currentDeck, refresh);
+      final int nextIndex =
+          nextDeck.clips.isEmpty
+              ? 0
+              : _pageIndex.clamp(0, nextDeck.clips.length - 1);
+      setState(() {
+        _deck = nextDeck;
+        _loadError = null;
+        _isBootstrapping = false;
+        _pageIndex = nextIndex;
+      });
+      if (nextDeck.clips.isNotEmpty) {
+        _jumpToPage(nextIndex);
+        _scheduleActiveClip(nextDeck.clips[nextIndex]);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isBootstrapping = false;
+      });
+      if (showErrorFeedback) {
+        AppFeedback.showError(context, error);
+      }
+    }
+  }
+
+  ViralFeedDeck _applyRefresh(
+    ViralFeedDeck currentDeck,
+    ViralFeedDeckRefresh refresh,
+  ) {
+    if (refresh.replaceIndices.isEmpty || refresh.newItems.isEmpty) {
+      return currentDeck;
+    }
+    final List<ViralClip> updatedClips = List<ViralClip>.from(
+      currentDeck.clips,
+    );
+    final int replaceCount = math.min(
+      refresh.replaceIndices.length,
+      refresh.newItems.length,
+    );
+    for (int index = 0; index < replaceCount; index += 1) {
+      final int targetIndex = refresh.replaceIndices[index];
+      if (targetIndex < 0 || targetIndex >= updatedClips.length) {
+        continue;
+      }
+      updatedClips[targetIndex] = refresh.newItems[index];
+    }
+    return ViralFeedDeck(
+      source: currentDeck.source,
+      feedKey: currentDeck.feedKey,
+      generatedAt: DateTime.now().toUtc(),
+      cacheHit: false,
+      clips: updatedClips,
+      debatesByMatch: currentDeck.debatesByMatch,
+    );
+  }
+
+  Future<void> _recordSuccessfulInteraction(String action) async {
+    if (_source != ViralFeedSource.forYou) {
+      return;
+    }
+    if (!const <String>{
+      'scroll',
+      'complete',
+      'like',
+      'share',
+    }.contains(action)) {
+      return;
+    }
+    _successfulFeedbackInteractions += 1;
+    if (_successfulFeedbackInteractions < _feedbackRefreshThreshold) {
+      return;
+    }
+    _successfulFeedbackInteractions = 0;
+    await _refreshForYou(showErrorFeedback: false);
+  }
+
+  Future<void> _dispatchPassiveInteraction(
+    String action,
+    ViralClip clip,
+  ) async {
+    try {
+      await _dispatchAction(action, clip);
+      await _recordSuccessfulInteraction(action);
+    } catch (error, stackTrace) {
+      debugPrint('Passive feed interaction failed: $error\n$stackTrace');
+    }
   }
 
   void _handleRetry() {
@@ -236,7 +352,7 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
         screen: 'viral_feed',
         flow: 'feed_load',
         target: 'refresh_button',
-        metadata: <String, Object?>{'feed_type': _source.feedType},
+        metadata: <String, Object?>{'feed_source': _source.feedSource},
       ),
     );
     unawaited(_syncSystem.sync());
@@ -255,12 +371,13 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
       _deck = null;
       _loadError = null;
       _isBootstrapping = true;
+      _successfulFeedbackInteractions = 0;
     });
     unawaited(
       _auditHooks.trackButtonClick(
         screen: 'viral_feed',
         flow: 'feed_source',
-        target: source.feedType,
+        target: source.feedSource,
       ),
     );
     unawaited(_loadDeck(refresh: true, resetPosition: true));
@@ -304,7 +421,7 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
     if (_pageIndex >= 0 && _pageIndex < deck.clips.length) {
       final ViralClip previousClip = deck.clips[_pageIndex];
       if (!_completedClipIds.contains(previousClip.clipId)) {
-        unawaited(_dispatchAction('scroll', previousClip));
+        unawaited(_dispatchPassiveInteraction('scroll', previousClip));
       }
     }
     setState(() {
@@ -342,7 +459,7 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
         return;
       }
       _completedClipIds.add(clip.clipId);
-      unawaited(_dispatchAction('complete', clip));
+      unawaited(_dispatchPassiveInteraction('complete', clip));
     });
   }
 
@@ -388,10 +505,9 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
             'highlight_id': clip.highlightId,
           },
           dedupeKey: 'viral-like:${clip.clipId}',
-          feedRefreshTrigger: FeedRefreshTrigger.majorInteraction,
         );
         await _dispatchAction('like', clip, commitImmediately: true);
-        unawaited(_syncSystem.syncAfterCriticalAction());
+        await _recordSuccessfulInteraction('like');
       },
     );
   }
@@ -435,9 +551,9 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
             'channel': clip.shareChannel,
           },
           dedupeKey: 'viral-share:${clip.clipId}',
-          feedRefreshTrigger: FeedRefreshTrigger.majorInteraction,
         );
         await _dispatchAction('share', clip, commitImmediately: true);
+        await _recordSuccessfulInteraction('share');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -447,7 +563,6 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
             ),
           );
         }
-        unawaited(_syncSystem.syncAfterCriticalAction());
       },
     );
   }
@@ -492,8 +607,11 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
       feed_actions.ActionInvocation(
         action: action,
         clipId: clip.clipId,
+        userId: widget.currentUserId,
         videoLengthMs: clip.videoLengthMs,
         referrer: 'viral_feed',
+        creatorId: clip.creatorId,
+        formatKey: clip.formatKey,
         clipEventType: clip.eventType,
         teamName: clip.teamName,
         tags: clip.tags,

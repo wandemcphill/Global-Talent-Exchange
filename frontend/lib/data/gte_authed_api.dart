@@ -1,17 +1,21 @@
 import 'gte_api_repository.dart';
-import 'gte_http_transport.dart';
+import '../shared/models/auth_session.dart';
 
 class GteAuthedApi {
   GteAuthedApi({
     required this.config,
     required this.transport,
     this.accessToken,
+    this.authSession,
+    this.deviceId,
     this.mode = GteBackendMode.liveThenFixture,
   });
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final String? accessToken;
+  final AuthSession? authSession;
+  final String? deviceId;
   final GteBackendMode mode;
 
   Future<T> withFallback<T>(
@@ -43,13 +47,21 @@ class GteAuthedApi {
       'Content-Type': 'application/json',
     };
     if (auth) {
-      if (accessToken == null || accessToken!.isEmpty) {
+      final String resolvedAccessToken =
+          authSession?.accessToken ?? accessToken ?? '';
+      if (resolvedAccessToken.isEmpty) {
         throw const GteApiException(
           type: GteApiErrorType.unauthorized,
           message: 'Authentication required for this action.',
         );
       }
-      headers['Authorization'] = 'Bearer $accessToken';
+      headers['Authorization'] = 'Bearer $resolvedAccessToken';
+      final String resolvedDeviceId = deviceId?.trim() ?? '';
+      if (authSession != null && resolvedDeviceId.isNotEmpty) {
+        headers['X-User-Id'] = authSession!.userId;
+        headers['X-Session-Id'] = authSession!.sessionId;
+        headers['X-Device-Id'] = resolvedDeviceId;
+      }
     }
     final GteTransportResponse response = await transport.send(
       GteTransportRequest(

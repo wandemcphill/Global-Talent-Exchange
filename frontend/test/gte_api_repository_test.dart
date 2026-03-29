@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
 
 void main() {
   test('live-then-fixture mode falls back to fixtures for market reads',
@@ -72,6 +74,7 @@ void main() {
         statusCode: 200,
         body: <String, Object?>{
           'access_token': 'live-token',
+          'session_id': 'live-session',
           'token_type': 'bearer',
           'expires_in': 3600,
           'user': <String, Object?>{
@@ -95,6 +98,7 @@ void main() {
       ),
     ]);
     final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
+    final MemoryAuthSessionStore authSessionStore = MemoryAuthSessionStore();
     final GteReliableApiRepository repository = GteReliableApiRepository(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
@@ -103,6 +107,7 @@ void main() {
       transport: transport,
       fixtures: GteMockApi(latency: Duration.zero),
       tokenStore: tokenStore,
+      authSessionStore: authSessionStore,
     );
 
     final GteAuthSession session = await repository.login(
@@ -114,12 +119,44 @@ void main() {
     final GteCurrentUser user = await repository.fetchCurrentUser();
 
     expect(session.accessToken, 'live-token');
+    expect(session.sessionId, 'live-session');
     expect(await tokenStore.readToken(), 'live-token');
+    expect((await authSessionStore.readSession())?.userId, 'user-1');
+    expect((await authSessionStore.readSession())?.sessionId, 'live-session');
     expect(user.username, 'qa_user');
     expect(
       transport.requests.last.headers['Authorization'],
       'Bearer live-token',
     );
+  });
+
+  test('logout clears persisted auth session', () async {
+    final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
+    final MemoryAuthSessionStore authSessionStore = MemoryAuthSessionStore();
+    final GteReliableApiRepository repository = GteReliableApiRepository(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.live,
+      ),
+      transport: _RecordingTransport(const <GteTransportResponse>[]),
+      fixtures: GteMockApi(latency: Duration.zero),
+      tokenStore: tokenStore,
+      authSessionStore: authSessionStore,
+    );
+
+    await tokenStore.writeToken('live-token');
+    await authSessionStore.writeSession(
+      const AuthSession(
+        userId: 'user-1',
+        accessToken: 'live-token',
+        sessionId: 'session-1',
+      ),
+    );
+
+    await repository.logout();
+
+    expect(await tokenStore.readToken(), isNull);
+    expect(await authSessionStore.readSession(), isNull);
   });
 
   test('list orders serializes repeated status filters for open order queries',

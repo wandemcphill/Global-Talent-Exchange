@@ -26,7 +26,7 @@ class DistributionFilterMiddleware:
         self,
         response: PersonalizedFeedResponse,
     ) -> PersonalizedFeedResponse:
-        return response.model_copy(update={"clips": self.deliver_ranked_clips(response.clips)})
+        return response.model_copy(update={"items": self.deliver_ranked_clips(response.items)})
 
     def deliver_trending_response(self, response: ViralTrendingResponse) -> ViralTrendingResponse:
         clips = self.deliver_ranked_clips(response.clips)

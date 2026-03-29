@@ -18,7 +18,12 @@ from app.viral.campaign_integration import CampaignViralIntegrationHook
 from app.viral.cascade import ViralCascadeEngine
 from app.viral.captions import ViralCaptionService
 from app.viral.cold_start import ColdStartManager
-from app.viral.distribution import ClipDistributionManager, ClipDistributionState, build_clip_distribution_manager
+from app.viral.distribution import (
+    ClipDistributionManager,
+    ClipDistributionState,
+    boost_distribution,
+    build_clip_distribution_manager,
+)
 from app.viral.editor import build_content_format_plans
 from app.viral.promotion import VariantPromotionDecision, ViralClipPromotionService
 from app.viral.ranking import rank_score
@@ -131,7 +136,11 @@ class ViralFeedService:
             if self.variant_manager is None:
                 self.variant_manager = ViralClipVariantManager(session=self.session, comparator=comparator)
             if self.promotion_service is None:
-                self.promotion_service = ViralClipPromotionService(session=self.session, comparator=comparator)
+                self.promotion_service = ViralClipPromotionService(
+                    session=self.session,
+                    comparator=comparator,
+                    distribution_boost_callback=lambda clip_id: boost_distribution(clip_id, settings=self.settings),
+                )
         if self.campaign_integration_hook is None:
             self.campaign_integration_hook = CampaignViralIntegrationHook(
                 session=self.session,

@@ -16,6 +16,8 @@ from app.moments.service import MomentsEngine
 from app.models.base import Base
 from app.models.clip_variant import ClipVariant
 from app.storage import LocalObjectStorage
+from app.viral.distribution import InMemoryViralDispatchPoolStore
+from app.viral.ingestion_runtime import ViralDispatchRuntime
 from app.viral.promotion import ViralClipPromotionService
 from app.viral.ranking_service import InMemoryViralLeaderboardStore
 
@@ -96,6 +98,39 @@ def test_moments_engine_applies_goal_boost_and_hot_window(tmp_path) -> None:
     top = leaderboard.top(1)
     assert len(top) == 1
     assert top[0].clip_id == moment.moment_id
+
+
+def test_moments_engine_dispatch_events_seed_the_viral_pool_runtime(tmp_path) -> None:
+    engine, publisher, _leaderboard, _session_factory = _build_engine(tmp_path)
+    pool_store = InMemoryViralDispatchPoolStore()
+    runtime = ViralDispatchRuntime(pool_store=pool_store)
+    runtime.ensure_event_subscription(publisher)
+
+    engine.handle_event(
+        DomainEvent(
+            name="match.events",
+            payload={
+                "match_id": "match-runtime",
+                "event_id": "evt-runtime",
+                "event_type": "goal",
+                "source_event_type": "goal",
+                "minute": 9,
+                "clock": "9'",
+                "team": "Runtime FC",
+                "player": "Seeder",
+                "home_score": 1,
+                "away_score": 0,
+                "metadata": {},
+            },
+        )
+    )
+
+    moment = engine.live(limit=1, match_id="match-runtime").moments[0]
+    pool_entries = pool_store.top(limit=1)
+
+    assert len(pool_entries) == 1
+    assert pool_entries[0].clip_id == moment.moment_id
+    assert pool_entries[0].payload["metadata"]["dispatch_event_name"] == "viral.clip.dispatch.requested"
 
 
 def test_moments_engine_detects_last_minute_win(tmp_path) -> None:

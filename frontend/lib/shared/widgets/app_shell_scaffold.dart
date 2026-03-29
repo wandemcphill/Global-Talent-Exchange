@@ -22,7 +22,7 @@ class AppShellScaffold extends ConsumerStatefulWidget {
 class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
   @override
   Widget build(BuildContext context) {
-    final auth = ref.watch(authProvider);
+    final auth = ref.watch(authPresentationProvider);
     final StatefulNavigationShell navigationShell = widget.navigationShell;
     final AppDestination destination =
         appDestinations[navigationShell.currentIndex];

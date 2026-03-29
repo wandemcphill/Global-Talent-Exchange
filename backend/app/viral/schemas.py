@@ -7,6 +7,7 @@ from pydantic import Field
 
 from app.common.schemas.base import CommonSchema
 from app.orchestrator.schemas import ClipAttentionStateView
+from app.viral.feed_contract import PERSONALIZED_FEED_SOURCE_FOR_YOU
 
 
 class ViralScoreBreakdownView(CommonSchema):
@@ -271,16 +272,16 @@ class PersonalizedFeedScoreBreakdownView(CommonSchema):
 class PersonalizedFeedClipView(ViralClipView):
     rank: int = Field(default=1, ge=1)
     score: float = Field(default=0.0, ge=0.0)
-    feed_source: str = "for_you"
+    feed_source: str = PERSONALIZED_FEED_SOURCE_FOR_YOU
     score_breakdown: PersonalizedFeedScoreBreakdownView
 
 
 class PersonalizedFeedResponse(CommonSchema):
     user_id: str
-    clips: list[PersonalizedFeedClipView] = Field(default_factory=list)
+    items: list[PersonalizedFeedClipView] = Field(default_factory=list)
     generated_at: datetime
     feed_key: str
-    feed_type: str = "for_you"
+    feed_source: str = PERSONALIZED_FEED_SOURCE_FOR_YOU
     mix: dict[str, float] = Field(default_factory=dict)
     cache_hit: bool = False
 

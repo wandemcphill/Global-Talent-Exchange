@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/core/actions/action_pipeline.dart' as feed_actions;
+import 'package:gte_frontend/data/gte_api_contracts.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/core/theme/app_theme.dart';
 import 'package:gte_frontend/features/viral_feed/data/viral_feed_models.dart';
 import 'package:gte_frontend/features/viral_feed/data/viral_feed_repository.dart';
@@ -75,6 +77,13 @@ void main() {
           ),
       isTrue,
     );
+    final feed_actions.ActionInvocation likeInvocation = dispatcher.invocations
+        .firstWhere(
+          (feed_actions.ActionInvocation item) => item.action == 'like',
+        );
+    expect(likeInvocation.userId, 'user-feed-1');
+    expect(likeInvocation.creatorId, 'creator-1');
+    expect(likeInvocation.formatKey, 'match_recap');
   });
 
   testWidgets('page change dispatches scroll action for an incomplete clip', (
@@ -126,11 +135,29 @@ void main() {
     );
   });
 
-  testWidgets('feed refresh trigger reloads the deck', (
+  testWidgets('feed refresh trigger applies the refresh contract', (
     WidgetTester tester,
   ) async {
     final _CountingViralFeedRepository repository =
-        _CountingViralFeedRepository(_buildDeck(durationSeconds: 5));
+        _CountingViralFeedRepository(
+          _buildDeck(durationSeconds: 5),
+          refresh: ViralFeedDeckRefresh(
+            replaceIndices: const <int>[0],
+            newItems: <ViralClip>[
+              _buildClip(
+                clipId: 'match-3::clip-003',
+                highlightId: 'clip-003',
+                title: 'Clip Three',
+                eventType: 'goal',
+                minute: 77,
+                summaryLine: 'The deck was refreshed in place.',
+                creatorId: 'creator-3',
+                formatKey: 'refresh',
+                durationSeconds: 5,
+              ),
+            ],
+          ),
+        );
     final ReliableEventQueue eventQueue = ReliableEventQueue();
     addTearDown(() async {
       await eventQueue.dispose();
@@ -157,7 +184,102 @@ void main() {
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
 
-    expect(repository.fetchCount, 2);
+    expect(repository.fetchCount, 1);
+    expect(repository.refreshCount, 1);
+    expect(find.byKey(const Key('viral-hook-clip-003')), findsOneWidget);
+    expect(find.text('The deck was refreshed in place.'), findsOneWidget);
+  });
+
+  testWidgets('three successful interactions trigger a for-you refresh', (
+    WidgetTester tester,
+  ) async {
+    final _CountingViralFeedRepository repository =
+        _CountingViralFeedRepository(
+          _buildDeck(durationSeconds: 5),
+          refresh: ViralFeedDeckRefresh(
+            replaceIndices: const <int>[1],
+            newItems: <ViralClip>[
+              _buildClip(
+                clipId: 'match-4::clip-004',
+                highlightId: 'clip-004',
+                title: 'Clip Four',
+                eventType: 'assist',
+                minute: 64,
+                summaryLine: 'The deck reacted after three interactions.',
+                creatorId: 'creator-4',
+                formatKey: 'reaction',
+                durationSeconds: 5,
+              ),
+            ],
+          ),
+        );
+    final _RecordingActionDispatcher dispatcher = _RecordingActionDispatcher();
+    final ReliableEventQueue eventQueue = ReliableEventQueue();
+    addTearDown(() async {
+      await eventQueue.dispose();
+    });
+
+    await tester.pumpWidget(
+      _buildHarness(
+        repository: repository,
+        dispatcher: dispatcher,
+        eventQueue: eventQueue,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final PageView pageView = tester.widget<PageView>(
+      find.byKey(const Key('viral-feed-page-view')),
+    );
+    pageView.onPageChanged?.call(1);
+    await tester.pump();
+    pageView.onPageChanged?.call(0);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('viral-like-clip-001')));
+    await tester.pump();
+    for (
+      int attempt = 0;
+      attempt < 20 && repository.refreshCount == 0;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(repository.refreshCount, 1);
+    expect(
+      dispatcher.invocations
+          .map((feed_actions.ActionInvocation item) => item.action)
+          .where(
+            (String action) =>
+                const <String>{'scroll', 'like'}.contains(action),
+          ),
+      containsAll(<String>['scroll', 'like']),
+    );
+  });
+
+  testWidgets('refresh failure keeps the last good deck and shows feedback', (
+    WidgetTester tester,
+  ) async {
+    final _FailingOnRefreshViralFeedRepository repository =
+        _FailingOnRefreshViralFeedRepository(_buildDeck(durationSeconds: 5));
+
+    await tester.pumpWidget(
+      _buildHarness(
+        repository: repository,
+        dispatcher: _RecordingActionDispatcher(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('viral-hook-clip-001')), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.refresh_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byKey(const Key('viral-hook-clip-001')), findsOneWidget);
+    expect(find.text('Contract mismatch during refresh.'), findsOneWidget);
   });
 }
 
@@ -169,9 +291,10 @@ Widget _buildHarness({
   return MaterialApp(
     theme: AppTheme.dark(),
     home: ViralFeedScreen(
+      currentUserId: 'user-feed-1',
       repository: repository,
       actionDispatcher: dispatcher,
-      eventQueue: eventQueue,
+      eventQueue: eventQueue ?? ReliableEventQueue(),
     ),
   );
 }
@@ -187,65 +310,90 @@ ViralFeedDeck _buildDeck({
     generatedAt: DateTime.utc(2026, 3, 28),
     cacheHit: false,
     clips: <ViralClip>[
-      ViralClip(
+      _buildClip(
         clipId: 'match-1::clip-001',
-        matchId: 'match-1',
         highlightId: 'clip-001',
         title: 'Clip One',
         eventType: 'goal',
         minute: 18,
-        viralScore: 88,
-        rankingScore: 79.4,
-        caption: ViralCaption(
-          hook: firstHook,
-          caption: 'Clip one caption',
-          cta: 'Share to WhatsApp',
-          hashtags: const <String>['#GTEX'],
-        ),
-        tags: const <String>['goal'],
-        rank: 1,
-        score: 98.2,
-        feedSource: 'ranking_engine',
-        metadata: <String, Object?>{
-          'summary_line': firstSummaryLine,
-          'creator_id': 'creator-1',
-        },
-        teamName: 'Royal Lagos FC',
+        summaryLine: firstSummaryLine,
+        creatorId: 'creator-1',
+        formatKey: 'match_recap',
         durationSeconds: durationSeconds,
+        hook: firstHook,
       ),
-      ViralClip(
+      _buildClip(
         clipId: 'match-2::clip-002',
-        matchId: 'match-2',
         highlightId: 'clip-002',
         title: 'Clip Two',
         eventType: 'assist',
         minute: 42,
-        viralScore: 74,
-        rankingScore: 68.2,
-        caption: ViralCaption(
-          hook: 'Clip two hook',
-          caption: 'Clip two caption',
-          cta: 'Share to WhatsApp',
-          hashtags: <String>['#GTEX'],
-        ),
-        tags: <String>['assist'],
-        rank: 2,
-        score: 76.4,
-        feedSource: 'ranking_engine',
-        metadata: <String, Object?>{
-          'summary_line': 'Second clip is held in the live deck.',
-        },
-        teamName: 'Harbor City',
+        summaryLine: 'Second clip is held in the live deck.',
+        creatorId: 'creator-2',
+        formatKey: 'quick_cut',
         durationSeconds: durationSeconds,
+        teamName: 'Harbor City',
+        feedSource: FeedSource.following,
+        hook: 'Clip two hook',
       ),
     ],
   );
 }
 
+ViralClip _buildClip({
+  required String clipId,
+  required String highlightId,
+  required String title,
+  required String eventType,
+  required int minute,
+  required String summaryLine,
+  required String creatorId,
+  required String formatKey,
+  required double durationSeconds,
+  String teamName = 'Royal Lagos FC',
+  String hook = 'Clip hook',
+  String feedSource = FeedSource.forYou,
+}) {
+  return ViralClip(
+    clipId: clipId,
+    matchId: clipId.split('::').first,
+    highlightId: highlightId,
+    title: title,
+    eventType: eventType,
+    minute: minute,
+    viralScore: 88,
+    rankingScore: 79.4,
+    caption: ViralCaption(
+      hook: hook,
+      caption: '$title caption',
+      cta: 'Share to WhatsApp',
+      hashtags: const <String>['#GTEX'],
+    ),
+    tags: <String>[eventType],
+    rank: 1,
+    score: 98.2,
+    feedSource: feedSource,
+    metadata: <String, Object?>{
+      'summary_line': summaryLine,
+      'creator_id': creatorId,
+      'format_key': formatKey,
+    },
+    teamName: teamName,
+    durationSeconds: durationSeconds,
+  );
+}
+
 class _FakeViralFeedRepository implements ViralFeedRepository {
-  _FakeViralFeedRepository(this._deck);
+  _FakeViralFeedRepository(this._deck, {ViralFeedDeckRefresh? refresh})
+    : _refresh =
+          refresh ??
+          const ViralFeedDeckRefresh(
+            replaceIndices: <int>[],
+            newItems: <ViralClip>[],
+          );
 
   final ViralFeedDeck _deck;
+  final ViralFeedDeckRefresh _refresh;
 
   @override
   Future<ViralFeedDeck> fetchDeck({
@@ -255,12 +403,21 @@ class _FakeViralFeedRepository implements ViralFeedRepository {
   }) async {
     return _deck;
   }
+
+  @override
+  Future<ViralFeedDeckRefresh> refreshForYou({
+    required int cursor,
+    int limit = 10,
+  }) async {
+    return _refresh;
+  }
 }
 
 class _CountingViralFeedRepository extends _FakeViralFeedRepository {
-  _CountingViralFeedRepository(super.deck);
+  _CountingViralFeedRepository(super.deck, {super.refresh});
 
   int fetchCount = 0;
+  int refreshCount = 0;
 
   @override
   Future<ViralFeedDeck> fetchDeck({
@@ -270,6 +427,30 @@ class _CountingViralFeedRepository extends _FakeViralFeedRepository {
   }) async {
     fetchCount += 1;
     return super.fetchDeck(source: source, limit: limit, refresh: refresh);
+  }
+
+  @override
+  Future<ViralFeedDeckRefresh> refreshForYou({
+    required int cursor,
+    int limit = 10,
+  }) async {
+    refreshCount += 1;
+    return super.refreshForYou(cursor: cursor, limit: limit);
+  }
+}
+
+class _FailingOnRefreshViralFeedRepository extends _FakeViralFeedRepository {
+  _FailingOnRefreshViralFeedRepository(super.deck);
+
+  @override
+  Future<ViralFeedDeckRefresh> refreshForYou({
+    required int cursor,
+    int limit = 10,
+  }) async {
+    throw const GteApiException(
+      type: GteApiErrorType.validation,
+      message: 'Contract mismatch during refresh.',
+    );
   }
 }
 

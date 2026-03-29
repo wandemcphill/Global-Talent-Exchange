@@ -13,6 +13,7 @@ class ActionInvocation {
     this.country,
     this.referrer,
     this.contentType = 'clip',
+    this.creatorId,
     this.formatKey,
     this.clipEventType,
     this.teamName,
@@ -29,6 +30,7 @@ class ActionInvocation {
   final String? country;
   final String? referrer;
   final String? contentType;
+  final String? creatorId;
   final String? formatKey;
   final String? clipEventType;
   final String? teamName;
@@ -70,13 +72,13 @@ class ActionPipeline implements ClipActionDispatcher {
       TrackEventRequest(
         clipId: invocation.clipId,
         eventType: registration.eventType,
-        userId: invocation.userId,
         watchTimeMs: invocation.watchTimeMs,
         videoLengthMs: invocation.videoLengthMs,
         device: invocation.device,
         country: invocation.country,
         referrer: invocation.referrer,
         contentType: invocation.contentType,
+        creatorId: invocation.creatorId,
         formatKey: invocation.formatKey,
         clipEventType: invocation.clipEventType,
         teamName: invocation.teamName,

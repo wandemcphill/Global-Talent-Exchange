@@ -6,14 +6,21 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import (
+    IdentityContext,
+    get_current_user,
+    require_identity,
+)
 from app.core.config import get_settings
 from app.db import get_session
 from app.infinite_league.service import InfiniteLeagueRuntime, ensure_infinite_league_runtime
+from app.models.analytics_event import AnalyticsEvent
 from app.models.user import User
 from app.models.user import UserRole
+from app.users.affinity_service import UserAffinityService
 from app.viral.event_weighting import ClipEventWeightingMiddleware
 from app.viral.accounts import PERSONAS, catalog_accounts
 from app.viral.cascade import ensure_viral_cascade_engine
@@ -22,8 +29,10 @@ from app.viral.ingestion_runtime import (
     ClipEventIngestionUnavailable,
     ClipEventKafkaProducer,
     ClipEventQueueSaturated,
+    ensure_viral_dispatch_runtime,
+    shutdown_viral_dispatch_runtime,
 )
-from app.viral.ingestion_schemas import CLIP_EVENT_TOPICS, ClipEventIngestionAccepted, parse_clip_events
+from app.viral.ingestion_schemas import CLIP_EVENT_TOPICS, ClipEvent, ClipEventIngestionAccepted, parse_clip_events
 from app.viral.personalized_feed_service import build_personalized_feed_service
 from app.viral.ranking_service import build_viral_ranking_service
 from app.viral.schemas import (
@@ -76,29 +85,56 @@ def ensure_clip_event_ingestion_service(request: Request) -> ClipEventKafkaProdu
         return service
 
 
+def _has_table(session: Session, table_name: str) -> bool:
+    try:
+        return bool(inspect(session.connection()).has_table(table_name))
+    except Exception:
+        return False
+
+
+def _resolve_clip_event_user_id(
+    *,
+    event: ClipEvent,
+    session: Session,
+) -> str | None:
+    if event.user_id and session.get(User, event.user_id) is not None:
+        return event.user_id
+    return None
+
+
+def _analytics_metadata_for_event(event: ClipEvent) -> dict[str, object]:
+    metadata = event.metadata.model_dump(mode="json")
+    metadata["clip_id"] = event.clip_id
+    metadata["session_id"] = event.session_id
+    metadata["event_type"] = event.kafka_topic
+    if event.watch_time_ms is not None:
+        metadata["watch_time_ms"] = int(event.watch_time_ms)
+        metadata["watch_time_seconds"] = round(float(event.watch_time_ms) / 1000.0, 6)
+    if event.video_length_ms is not None:
+        metadata["video_length_ms"] = int(event.video_length_ms)
+    return metadata
+
+
 def startup(app, _context) -> None:
     from app.viral.worker import bind_viral_ranking_scheduler
 
-    if getattr(app.state, "clip_event_ingestion_service", None) is not None:
-        bind_viral_ranking_scheduler(app, _context)
-        return
     settings = getattr(app.state, "settings", None)
-    if settings is not None:
+    if getattr(app.state, "clip_event_ingestion_service", None) is None and settings is not None:
         service = ClipEventKafkaProducer(settings=settings)
         service.start()
         app.state.clip_event_ingestion_service = service
+    ensure_viral_dispatch_runtime(app)
     bind_viral_ranking_scheduler(app, _context)
 
 
 def shutdown(app, _context) -> None:
     from app.viral.worker import shutdown_viral_ranking_scheduler
 
+    shutdown_viral_dispatch_runtime(app)
     service = getattr(app.state, "clip_event_ingestion_service", None)
-    if service is None:
-        shutdown_viral_ranking_scheduler(app, _context)
-        return
-    service.stop()
-    app.state.clip_event_ingestion_service = None
+    if service is not None:
+        service.stop()
+        app.state.clip_event_ingestion_service = None
     shutdown_viral_ranking_scheduler(app, _context)
 
 
@@ -191,6 +227,7 @@ def _resolve_feed(
 async def ingest_clip_events(
     request: Request,
     producer: ClipEventKafkaProducer = Depends(ensure_clip_event_ingestion_service),
+    identity: IdentityContext = Depends(require_identity),
     session: Session = Depends(get_session),
 ) -> ClipEventIngestionAccepted:
     try:
@@ -200,6 +237,24 @@ async def ingest_clip_events(
         raise RequestValidationError(exc.errors()) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    normalized_events = []
+    for event in events:
+        if event.user_id != identity.user_id or event.session_id != identity.session_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Event identity does not match authenticated identity.",
+            )
+        normalized_events.append(
+            event.model_copy(
+                update={
+                    "user_id": _resolve_clip_event_user_id(
+                        event=event,
+                        session=session,
+                    ),
+                    "session_id": identity.session_id,
+                }
+            )
+        )
     client_host = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for")
     if client_host and "," in client_host:
         client_host = client_host.split(",", 1)[0].strip()
@@ -208,7 +263,7 @@ async def ingest_clip_events(
     weighted_events = ClipEventWeightingMiddleware(
         trust_service=ensure_trust_score_service(request.app, settings=getattr(request.app.state, "settings", None)),
     ).validate_and_weight(
-        events=events,
+        events=normalized_events,
         headers=request.headers,
         ip_address=client_host,
         session=session,
@@ -219,7 +274,23 @@ async def ingest_clip_events(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except ClipEventIngestionUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    analytics_table_exists = _has_table(session, AnalyticsEvent.__tablename__)
+    affinity_service = UserAffinityService(session)
+    feedback_engine = FeedbackEngine(session)
+    for event in weighted_events:
+        metadata = _analytics_metadata_for_event(event)
+        if analytics_table_exists:
+            session.add(
+                AnalyticsEvent(
+                    name=event.kafka_topic,
+                    user_id=event.user_id,
+                    metadata_json=metadata,
+                )
+            )
+        affinity_service.process_event(event)
+        feedback_engine.record_interaction_event(name=event.kafka_topic, metadata=metadata)
     ensure_viral_session_tracker(request.app).observe_many(weighted_events)
+    session.commit()
     return ClipEventIngestionAccepted(
         accepted_events=len(weighted_events),
         queue_depth=queue_depth,
@@ -271,8 +342,8 @@ def read_personalized_feed(
     request: Request,
     limit: int = 20,
     refresh: bool = False,
-    session_id: str | None = None,
     current_user: User = Depends(get_current_user),
+    identity: IdentityContext = Depends(require_identity),
     session: Session = Depends(get_session),
 ) -> PersonalizedFeedResponse:
     service = build_personalized_feed_service(app=request.app, session=session)
@@ -280,7 +351,7 @@ def read_personalized_feed(
         user_id=current_user.id,
         limit=max(limit, 1),
         refresh=refresh,
-        session_id=session_id,
+        session_id=identity.session_id,
     )
     response = ensure_distribution_filter_middleware(request.app).deliver_personalized_feed_response(response)
     service.record_delivery(response)
@@ -293,8 +364,8 @@ def read_following_feed(
     request: Request,
     limit: int = 20,
     refresh: bool = False,
-    session_id: str | None = None,
     current_user: User = Depends(get_current_user),
+    identity: IdentityContext = Depends(require_identity),
     session: Session = Depends(get_session),
 ) -> PersonalizedFeedResponse:
     service = build_personalized_feed_service(app=request.app, session=session)
@@ -302,7 +373,7 @@ def read_following_feed(
         user_id=current_user.id,
         limit=max(limit, 1),
         refresh=refresh,
-        session_id=session_id,
+        session_id=identity.session_id,
     )
     response = ensure_distribution_filter_middleware(request.app).deliver_personalized_feed_response(response)
     service.record_delivery(response)
@@ -315,8 +386,8 @@ def refresh_personalized_feed(
     request: Request,
     cursor: int = 0,
     limit: int = 20,
-    session_id: str | None = None,
     current_user: User = Depends(get_current_user),
+    identity: IdentityContext = Depends(require_identity),
     session: Session = Depends(get_session),
 ) -> PersonalizedFeedRefreshResponse:
     service = build_personalized_feed_service(app=request.app, session=session)
@@ -324,7 +395,7 @@ def refresh_personalized_feed(
         user_id=current_user.id,
         cursor=cursor,
         limit=max(limit, 1),
-        session_id=session_id,
+        session_id=identity.session_id,
     )
     service.record_refresh_delivery(user_id=current_user.id, clips=response.new_items)
     session.commit()

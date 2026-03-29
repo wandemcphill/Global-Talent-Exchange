@@ -1,3 +1,4 @@
+import '../../../data/gte_api_contracts.dart';
 import '../../shared/data/gte_feature_support.dart';
 
 enum ViralFeedSource { forYou, following }
@@ -12,12 +13,12 @@ extension ViralFeedSourceX on ViralFeedSource {
     }
   }
 
-  String get feedType {
+  String get feedSource {
     switch (this) {
       case ViralFeedSource.forYou:
-        return 'for_you';
+        return FeedSource.forYou;
       case ViralFeedSource.following:
-        return 'following';
+        return FeedSource.following;
     }
   }
 
@@ -49,6 +50,16 @@ class ViralFeedDeck {
   final Map<String, PunditDebate> debatesByMatch;
 }
 
+class ViralFeedDeckRefresh {
+  const ViralFeedDeckRefresh({
+    required this.replaceIndices,
+    required this.newItems,
+  });
+
+  final List<int> replaceIndices;
+  final List<ViralClip> newItems;
+}
+
 class ViralClip {
   const ViralClip({
     required this.clipId,
@@ -78,10 +89,7 @@ class ViralClip {
     final String matchId = stringValue(json['match_id']);
     final String highlightId = stringValue(json['highlight_id']);
     return ViralClip(
-      clipId: stringValue(
-        json['clip_id'],
-        fallback: '$matchId::$highlightId',
-      ),
+      clipId: stringValue(json['clip_id'], fallback: '$matchId::$highlightId'),
       matchId: matchId,
       highlightId: highlightId,
       title: stringValue(json['title']),
@@ -93,7 +101,7 @@ class ViralClip {
       tags: stringListValue(json['tags']),
       rank: intValue(json['rank']),
       score: numberValue(json['score']),
-      feedSource: stringValue(json['feed_source']),
+      feedSource: stringValue(json[FeedContractKeys.feedSource]),
       metadata: jsonMap(
         json['metadata'],
         label: 'viral clip metadata',
@@ -138,10 +146,15 @@ class ViralClip {
 
   String? get summaryLine => stringOrNullValue(metadata['summary_line']);
 
-  String? get creatorId => _firstString(
-    metadata,
-    const <String>['creator_user_id', 'creator_id', 'author_user_id'],
-  );
+  String? get creatorId => _firstString(metadata, const <String>[
+    'creator_user_id',
+    'creator_id',
+    'author_user_id',
+  ]);
+
+  String? get formatKey =>
+      _firstString(metadata, const <String>['format_key', 'format_type']) ??
+      _firstString(metadata, const <String>['clip_format', 'content_format']);
 }
 
 double? _numberOrNullValue(Object? value) {

@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.router import login_user, register_user
+from app.auth.security import decode_access_token
 from app.auth.schemas import LoginRequest, RegisterRequest
 from app.auth.service import AuthService
 from app.main import create_app
@@ -69,10 +70,16 @@ def test_register_login_and_me_flow(session) -> None:
 
     me_response = read_current_user(current_user=current_user)
     login_response = login_user(LoginRequest(email="fan@example.com", password="SuperSecret1"), session)
+    register_claims = decode_access_token(register_response.access_token)
+    login_claims = decode_access_token(login_response.access_token)
 
     assert register_response.user.email == "fan@example.com"
+    assert register_response.session_id
+    assert register_claims["sid"] == register_response.session_id
     assert me_response.id == register_response.user.id
     assert login_response.user.id == register_response.user.id
+    assert login_response.session_id
+    assert login_claims["sid"] == login_response.session_id
 
 
 def test_duplicate_registration_returns_conflict(session) -> None:

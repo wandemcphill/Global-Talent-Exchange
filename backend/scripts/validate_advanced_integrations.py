@@ -256,12 +256,12 @@ def _validate_follow_system() -> dict[str, Any]:
             after = service.get_following(user_id=viewer.id, limit=2, refresh=True)
 
             before_rank = next(
-                (index for index, clip in enumerate(before.clips) if clip.clip_id == "clip-followed"),
-                len(before.clips),
+                (index for index, clip in enumerate(before.items) if clip.clip_id == "clip-followed"),
+                len(before.items),
             )
             after_rank = next(
-                (index for index, clip in enumerate(after.clips) if clip.clip_id == "clip-followed"),
-                len(after.clips),
+                (index for index, clip in enumerate(after.items) if clip.clip_id == "clip-followed"),
+                len(after.items),
             )
             return {
                 "status": "validated",
@@ -269,10 +269,10 @@ def _validate_follow_system() -> dict[str, Any]:
                 "mutation": mutation,
                 "feed_refresh": {
                     "refresh_parameter_supported": True,
-                    "feed_type": after.feed_type,
+                    "feed_source": after.feed_source,
                     "feed_key": after.feed_key,
-                    "top_clip_before_follow": before.clips[0].clip_id if before.clips else None,
-                    "top_clip_after_follow": after.clips[0].clip_id if after.clips else None,
+                    "top_clip_before_follow": before.items[0].clip_id if before.items else None,
+                    "top_clip_after_follow": after.items[0].clip_id if after.items else None,
                 },
                 "creator_visibility_increased": after_rank < before_rank,
                 "rank_before_follow": before_rank,

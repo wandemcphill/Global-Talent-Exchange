@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/core/actions/action_pipeline.dart';
 import 'package:gte_frontend/core/actions/action_registry.dart';
 import 'package:gte_frontend/core/actions/event_service.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
 
 void main() {
   test('action registry exposes required clip actions', () {
@@ -35,8 +37,11 @@ void main() {
       const ActionInvocation(
         action: 'like',
         clipId: 'clip-101',
+        userId: 'user-42',
         videoLengthMs: 12000,
         referrer: 'viral_feed',
+        creatorId: 'creator-9',
+        formatKey: 'match_recap',
         clipEventType: 'goal',
         teamName: 'Royal Lagos FC',
         tags: <String>['goal', 'winner'],
@@ -47,8 +52,11 @@ void main() {
     final TrackEventRequest request = service.requests.single;
     expect(request.clipId, 'clip-101');
     expect(request.eventType, 'like');
+    expect(request.userId, isNull);
     expect(request.videoLengthMs, 12000);
     expect(request.referrer, 'viral_feed');
+    expect(request.creatorId, 'creator-9');
+    expect(request.formatKey, 'match_recap');
     expect(request.clipEventType, 'goal');
     expect(request.teamName, 'Royal Lagos FC');
     expect(request.tags, <String>['goal', 'winner']);
@@ -57,7 +65,20 @@ void main() {
 
 class _RecordingEventService extends EventService {
   _RecordingEventService()
-    : super(transport: _NoopTransport(), store: _MemoryStore());
+    : super(
+        transport: _NoopTransport(),
+        store: _MemoryStore(),
+        authSessionStore:
+            MemoryAuthSessionStore()..writeSession(
+              const AuthSession(
+                userId: 'user-pipeline',
+                accessToken: 'token-pipeline',
+                sessionId: 'session-pipeline',
+              ),
+            ),
+        deviceIdentityStore:
+            MemoryDeviceIdentityStore()..writeDeviceId('device-pipeline'),
+      );
 
   final List<TrackEventRequest> requests = <TrackEventRequest>[];
 
@@ -69,23 +90,17 @@ class _RecordingEventService extends EventService {
 
 class _NoopTransport implements EventTransport {
   @override
-  Future<void> postEvents(List<QueuedEvent> events) async {}
+  Future<void> postEvents(
+    List<QueuedEvent> events, {
+    required AuthSession authSession,
+    required String deviceId,
+  }) async {}
 }
 
 class _MemoryStore implements EventQueueStore {
-  String? _sessionId;
-
   @override
   Future<List<QueuedEvent>> readQueue() async => const <QueuedEvent>[];
 
   @override
-  Future<String?> readSessionId() async => _sessionId;
-
-  @override
   Future<void> writeQueue(List<QueuedEvent> events) async {}
-
-  @override
-  Future<void> writeSessionId(String sessionId) async {
-    _sessionId = sessionId;
-  }
 }

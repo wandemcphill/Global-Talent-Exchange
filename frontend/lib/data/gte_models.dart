@@ -606,6 +606,7 @@ class GteCurrentUser {
 class GteAuthSession {
   const GteAuthSession({
     required this.accessToken,
+    required this.sessionId,
     required this.tokenType,
     required this.expiresIn,
     required this.user,
@@ -615,6 +616,7 @@ class GteAuthSession {
   });
 
   final String accessToken;
+  final String sessionId;
   final String tokenType;
   final int expiresIn;
   final GteCurrentUser user;
@@ -627,6 +629,8 @@ class GteAuthSession {
     return GteAuthSession(
       accessToken:
           GteJson.string(json, <String>['access_token', 'accessToken']),
+      sessionId:
+          GteJson.string(json, <String>['session_id', 'sessionId']),
       tokenType: GteJson.string(json, <String>['token_type', 'tokenType'],
           fallback: 'bearer'),
       expiresIn: GteJson.integer(json, <String>['expires_in', 'expiresIn'],
