@@ -5,9 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../core/actions/action_pipeline.dart';
 import '../core/actions/event_service.dart';
 import '../core/theme/app_motion.dart';
+import '../features/competitions/live_competitions_hub_screen.dart';
+import '../features/competitions/live_competitions_provider.dart';
 import '../features/home/home_screen.dart';
 import '../features/match/match_screen.dart';
+import '../features/match/match_simulate_screen.dart';
+import '../features/match/match_spectate_screen.dart';
+import '../features/profile/profile_admin_screen.dart';
+import '../features/profile/profile_login_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/profile/profile_signup_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
 import '../features/viral_feed/data/viral_feed_repository.dart';
@@ -17,6 +24,17 @@ import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
 import 'app_destinations.dart';
+
+CompetitionFamilyRoute _competitionFamilyFromSegment(String value) {
+  switch (value.trim().toLowerCase()) {
+    case 'hosted':
+      return CompetitionFamilyRoute.hosted;
+    case 'streamer':
+      return CompetitionFamilyRoute.streamer;
+    default:
+      return CompetitionFamilyRoute.gtex;
+  }
+}
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
   final AuthSession? authSession = ref.watch(authProvider);
@@ -122,6 +140,86 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
                       eventService: eventService,
                     ),
                   ),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.profileLogin,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const ProfileLoginScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.profileSignup,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const ProfileSignupScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.profileAdmin,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const ProfileAdminScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.competitions,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const LiveCompetitionsHubScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.competitionsFamily,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String family = state.pathParameters['family'] ?? 'gtex';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: LiveCompetitionsHubScreen(
+              family: _competitionFamilyFromSegment(family),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.competitionsDetail,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String family = state.pathParameters['family'] ?? 'gtex';
+          final String id = state.pathParameters['id'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: LiveCompetitionDetailScreen(
+              family: _competitionFamilyFromSegment(family),
+              competitionId: id,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.matchesSpectate,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const MatchSpectateScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.matchesSimulate,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const MatchSimulateScreen(),
                 ),
       ),
     ],

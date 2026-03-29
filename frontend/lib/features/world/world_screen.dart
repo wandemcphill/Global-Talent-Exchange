@@ -1,206 +1,280 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../core/constants/app_breakpoints.dart';
+import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
-import '../../shared/providers/regen_provider.dart';
-import '../../shared/widgets/metric_pill.dart';
-import '../../shared/widgets/section_heading.dart';
-import 'widgets/world_screen_widgets.dart';
+import '../../features/competitions/live_competitions_provider.dart';
+import '../../features/shared/data/gte_feature_support.dart';
+import '../../shared/models/data_source_status.dart';
+import '../../shared/widgets/app_page_layout.dart';
+import '../../shared/widgets/data_source_badge.dart';
+import 'live_world_provider.dart';
 
-class WorldScreen extends ConsumerStatefulWidget {
+class WorldScreen extends ConsumerWidget {
   const WorldScreen({super.key});
 
   @override
-  ConsumerState<WorldScreen> createState() => _WorldScreenState();
-}
-
-class _WorldScreenState extends ConsumerState<WorldScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  final Set<WorldTab> _loadedTabs = <WorldTab>{};
-  final Set<WorldTab> _loadingTabs = <WorldTab>{};
-  final Set<String> _joinedFederations = <String>{};
-  final Map<WorldTab, Timer> _loadTimers = <WorldTab, Timer>{};
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: WorldTab.values.length, vsync: this);
-    _tabController.addListener(_handleTabChanged);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureTabLoaded(WorldTab.values[_tabController.index]);
-    });
-  }
-
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabChanged);
-    _tabController.dispose();
-
-    for (final Timer timer in _loadTimers.values) {
-      timer.cancel();
-    }
-
-    super.dispose();
-  }
-
-  void _handleTabChanged() {
-    _ensureTabLoaded(WorldTab.values[_tabController.index]);
-  }
-
-  void _ensureTabLoaded(WorldTab tab) {
-    if (_loadedTabs.contains(tab) || _loadingTabs.contains(tab)) {
-      return;
-    }
-
-    setState(() => _loadingTabs.add(tab));
-
-    final int index = WorldTab.values.indexOf(tab);
-    _loadTimers[tab]?.cancel();
-    _loadTimers[tab] = Timer(Duration(milliseconds: 360 + (index * 140)), () {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _loadingTabs.remove(tab);
-        _loadedTabs.add(tab);
-      });
-    });
-  }
-
-  void _joinFederation(String federationName) {
-    if (_joinedFederations.contains(federationName)) {
-      return;
-    }
-
-    setState(() => _joinedFederations.add(federationName));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final regens = ref.watch(regenProvider);
-    final competitions = ref.watch(competitionsProvider);
-    final history = ref.watch(historyProvider);
-    final federations = ref.watch(federationsProvider);
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double horizontalPadding =
-            constraints.maxWidth >= AppBreakpoints.medium
-                ? spacingLG
-                : spacingMD;
-        final double bottomPadding = MediaQuery.paddingOf(context).bottom + 88;
-
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1440),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                spacingLG,
-                horizontalPadding,
-                0,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<WorldAggregateData> worldValue = ref.watch(
+      worldAggregateProvider,
+    );
+    return AppPageLayout(
+      title: 'World',
+      subtitle:
+          'The active shell now reads live regen, history, federation, and competition summary data instead of local demo lists.',
+      trailing: DataSourceBadge(
+        status:
+            worldValue.hasError
+                ? DataSourceStatus.blocked
+                : DataSourceStatus.live,
+      ),
+      children: <Widget>[
+        worldValue.when(
+          data:
+              (WorldAggregateData world) => Column(
                 children: <Widget>[
-                  const SectionHeading(
-                    title: 'World',
+                  _SectionCard(
+                    title: 'Competition families',
                     subtitle:
-                        'Regens, competitions, global history, and federation activity in one live world feed.',
-                    trailing: MetricPill(
-                      label: 'Coverage',
-                      value: 'Global',
-                      highlight: true,
+                        'World is now a live discovery layer. Full lifecycle actions move into routed competition screens.',
+                    child: Wrap(
+                      spacing: spacingSM,
+                      runSpacing: spacingSM,
+                      children: <Widget>[
+                        _FamilyButton(
+                          label:
+                              'GTEX hosted (${world.competitions.gtexCompetitions.length})',
+                          onTap:
+                              () => context.push(
+                                '/competitions/${CompetitionFamilyRoute.gtex.pathSegment}',
+                              ),
+                        ),
+                        _FamilyButton(
+                          label:
+                              'User hosted (${world.competitions.hostedCompetitions.length})',
+                          onTap:
+                              () => context.push(
+                                '/competitions/${CompetitionFamilyRoute.hosted.pathSegment}',
+                              ),
+                        ),
+                        _FamilyButton(
+                          label:
+                              'Creator tournaments (${world.competitions.streamerTournaments.length})',
+                          onTap:
+                              () => context.push(
+                                '/competitions/${CompetitionFamilyRoute.streamer.pathSegment}',
+                              ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: spacingLG),
-                  WorldTabBar(
-                    controller: _tabController,
-                    onTap:
-                        (int index) => _ensureTabLoaded(WorldTab.values[index]),
+                  const SizedBox(height: spacingMD),
+                  _SectionCard(
+                    title: 'Rising stars',
+                    subtitle: 'Live regens from /regen-universe/rising-stars.',
+                    child: Column(
+                      children: world.risingStars
+                          .take(8)
+                          .map(
+                            (JsonMap item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                stringValue(
+                                  item['player_name'],
+                                  fallback: stringValue(item['name']),
+                                ),
+                              ),
+                              subtitle: Text(
+                                item.entries
+                                    .take(4)
+                                    .map(
+                                      (MapEntry<String, Object?> entry) =>
+                                          '${entry.key}: ${entry.value}',
+                                    )
+                                    .join(' | '),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
                   ),
-                  const SizedBox(height: spacingLG),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
+                  const SizedBox(height: spacingMD),
+                  _SectionCard(
+                    title: 'Scouting feed',
+                    subtitle:
+                        'Live scouting feed from /regen-universe/scouting-feed.',
+                    child: Column(
+                      children: world.scoutingFeed
+                          .take(6)
+                          .map(
+                            (JsonMap item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                stringValue(
+                                  item['headline'],
+                                  fallback: stringValue(item['player_name']),
+                                ),
+                              ),
+                              subtitle: Text(
+                                item.entries
+                                    .take(4)
+                                    .map(
+                                      (MapEntry<String, Object?> entry) =>
+                                          '${entry.key}: ${entry.value}',
+                                    )
+                                    .join(' | '),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ),
+                  const SizedBox(height: spacingMD),
+                  _SectionCard(
+                    title: 'History',
+                    subtitle:
+                        'Seasons, awards, and hall of fame are read from live regen-universe endpoints.',
+                    child: Wrap(
+                      spacing: spacingSM,
+                      runSpacing: spacingSM,
                       children: <Widget>[
-                        WorldTabStatePanel(
-                          tab: WorldTab.regens,
-                          loading: _loadingTabs.contains(WorldTab.regens),
-                          isEmpty: regens.isEmpty,
-                          loadingLabel: 'Loading regen pathways',
-                          emptyTitle: 'No regen prospects found',
-                          emptyBody:
-                              'The global scouting stream is quiet for this cycle.',
-                          emptyIcon: Icons.auto_awesome_rounded,
-                          child: RegensGrid(
-                            regens: regens,
-                            bottomPadding: bottomPadding,
+                        Chip(label: Text('Seasons ${world.seasons.length}')),
+                        Chip(label: Text('Awards ${world.awards.length}')),
+                        Chip(
+                          label: Text(
+                            'Hall of fame ${world.hallOfFame.length}',
                           ),
                         ),
-                        WorldTabStatePanel(
-                          tab: WorldTab.competitions,
-                          loading: _loadingTabs.contains(WorldTab.competitions),
-                          isEmpty: competitions.isEmpty,
-                          loadingLabel: 'Loading competition banners',
-                          emptyTitle: 'No live competitions',
-                          emptyBody:
-                              'No world events are currently broadcasting into this feed.',
-                          emptyIcon: Icons.emoji_events_rounded,
-                          child: CompetitionsList(
-                            competitions: competitions,
-                            bottomPadding: bottomPadding,
-                          ),
-                        ),
-                        WorldTabStatePanel(
-                          tab: WorldTab.history,
-                          loading: _loadingTabs.contains(WorldTab.history),
-                          isEmpty: history.isEmpty,
-                          loadingLabel: 'Loading historical archive',
-                          emptyTitle: 'No historical records',
-                          emptyBody:
-                              'The archive has not surfaced any world records yet.',
-                          emptyIcon: Icons.history_edu_rounded,
-                          child: HistoryRecordsList(
-                            records: history,
-                            bottomPadding: bottomPadding,
-                          ),
-                        ),
-                        WorldTabStatePanel(
-                          tab: WorldTab.federations,
-                          loading: _loadingTabs.contains(WorldTab.federations),
-                          isEmpty: federations.isEmpty,
-                          loadingLabel: 'Loading federation network',
-                          emptyTitle: 'No federations available',
-                          emptyBody:
-                              'There are no federation alliances ready to join right now.',
-                          emptyIcon: Icons.public_rounded,
-                          child: FederationsList(
-                            federations: federations,
-                            joinedFederations: _joinedFederations,
-                            onJoin: _joinFederation,
-                            bottomPadding: bottomPadding,
+                        Chip(
+                          label: Text(
+                            'Tracking ${world.tracking['season_phase'] ?? world.tracking['status'] ?? 'live'}',
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: spacingMD),
+                  _SectionCard(
+                    title: 'Federations',
+                    subtitle: world.federationJoinReason,
+                    child: Column(
+                      children: world.federations
+                          .take(8)
+                          .map(
+                            (JsonMap item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                stringValue(
+                                  item['name'],
+                                  fallback: stringValue(item['id']),
+                                ),
+                              ),
+                              subtitle: Text(
+                                item.entries
+                                    .take(4)
+                                    .map(
+                                      (MapEntry<String, Object?> entry) =>
+                                          '${entry.key}: ${entry.value}',
+                                    )
+                                    .join(' | '),
+                              ),
+                              trailing: OutlinedButton(
+                                onPressed: null,
+                                child: const Text('Join blocked'),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ),
-        );
-      },
+          loading:
+              () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(spacingLG),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+          error:
+              (Object error, StackTrace stackTrace) => _BlockedCard(
+                title: 'World is blocked',
+                message: AppFeedback.messageFor(error),
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(spacingLG),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: spacingXS),
+            Text(subtitle),
+            const SizedBox(height: spacingMD),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FamilyButton extends StatelessWidget {
+  const _FamilyButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.open_in_new_rounded),
+      label: Text(label),
+    );
+  }
+}
+
+class _BlockedCard extends StatelessWidget {
+  const _BlockedCard({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(spacingLG),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: spacingSM),
+            Text(message),
+          ],
+        ),
+      ),
     );
   }
 }

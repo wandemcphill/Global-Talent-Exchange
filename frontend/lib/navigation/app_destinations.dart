@@ -11,6 +11,14 @@ class AppRoutes {
   static const String world = '/world';
   static const String tasks = '/tasks';
   static const String profile = '/profile';
+  static const String profileLogin = '/profile/login';
+  static const String profileSignup = '/profile/signup';
+  static const String profileAdmin = '/profile/admin';
+  static const String competitions = '/competitions';
+  static const String competitionsFamily = '/competitions/:family';
+  static const String competitionsDetail = '/competitions/:family/:id';
+  static const String matchesSpectate = '/matches/spectate';
+  static const String matchesSimulate = '/matches/simulate';
 }
 
 class AppDestination {

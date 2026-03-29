@@ -5,28 +5,29 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
-  test('session identity falls back to guest user without a canonical club',
-      () {
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
+  test(
+    'session identity falls back to guest user without a canonical club',
+    () {
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
 
-    final GteSessionIdentity identity =
-        GteSessionIdentity.fromExchangeController(controller);
+      final GteSessionIdentity identity =
+          GteSessionIdentity.fromExchangeController(controller);
 
-    expect(identity.userId, 'guest-user');
-    expect(identity.clubId, isNull);
-    expect(identity.clubName, isNull);
-  });
+      expect(identity.userId, 'guest-user');
+      expect(identity.clubId, isNull);
+      expect(identity.clubName, isNull);
+    },
+  );
 
   test(
-      'session identity prefers current_club_id from the authenticated payload',
-      () {
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _sessionFromJson(
-      <String, Object?>{
+    'session identity prefers current_club_id from the authenticated payload',
+    () {
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _sessionFromJson(<String, Object?>{
         'current_club_id': 'ibadan-lions',
         'current_club_name': 'Ibadan Lions FC',
         'user': <String, Object?>{
@@ -44,34 +45,32 @@ void main() {
             },
           ],
         },
-      },
-    );
+      });
 
-    final GteSessionIdentity identity =
-        GteSessionIdentity.fromExchangeController(controller);
+      final GteSessionIdentity identity =
+          GteSessionIdentity.fromExchangeController(controller);
 
-    expect(identity.userId, 'user-1');
-    expect(identity.userName, 'Ibadan Owner');
-    expect(identity.clubId, 'ibadan-lions');
-    expect(identity.clubName, 'Ibadan Lions FC');
-  });
+      expect(identity.userId, 'user-1');
+      expect(identity.userName, 'Ibadan Owner');
+      expect(identity.clubId, 'ibadan-lions');
+      expect(identity.clubName, 'Ibadan Lions FC');
+    },
+  );
 
   test('session identity falls back to clubId when current club is absent', () {
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );
-    controller.session = _sessionFromJson(
-      <String, Object?>{
-        'user': <String, Object?>{
-          'id': 'user-2',
-          'email': 'user-2@gtex.test',
-          'username': 'ondo_manager',
-          'role': 'user',
-          'clubId': 'ondo-waves',
-          'clubName': 'Ondo Waves FC',
-        },
+    controller.session = _sessionFromJson(<String, Object?>{
+      'user': <String, Object?>{
+        'id': 'user-2',
+        'email': 'user-2@gtex.test',
+        'username': 'ondo_manager',
+        'role': 'user',
+        'clubId': 'ondo-waves',
+        'clubName': 'Ondo Waves FC',
       },
-    );
+    });
 
     final GteSessionIdentity identity =
         GteSessionIdentity.fromExchangeController(controller);
@@ -81,13 +80,12 @@ void main() {
   });
 
   test(
-      'session identity derives the first canonical membership club when direct fields are absent',
-      () {
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _sessionFromJson(
-      <String, Object?>{
+    'session identity derives the first canonical membership club when direct fields are absent',
+    () {
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _sessionFromJson(<String, Object?>{
         'user': <String, Object?>{
           'id': 'user-3',
           'email': 'user-3@gtex.test',
@@ -107,30 +105,29 @@ void main() {
             },
           ],
         },
-      },
-    );
+      });
 
-    final GteSessionIdentity identity =
-        GteSessionIdentity.fromExchangeController(controller);
+      final GteSessionIdentity identity =
+          GteSessionIdentity.fromExchangeController(controller);
 
-    expect(identity.clubId, 'akure-city');
-    expect(identity.clubName, 'Akure City');
-  });
+      expect(identity.clubId, 'akure-city');
+      expect(identity.clubName, 'Akure City');
+    },
+  );
 }
 
 GteAuthSession _sessionFromJson(Map<String, Object?> payload) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'token_type': 'bearer',
-      'expires_in': 3600,
-      'user': <String, Object?>{
-        'id': 'test-user',
-        'email': 'test-user@gtex.test',
-        'username': 'tester',
-        'role': 'user',
-      },
-      ...payload,
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'session_id': 'session-1',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    'user': <String, Object?>{
+      'id': 'test-user',
+      'email': 'test-user@gtex.test',
+      'username': 'tester',
+      'role': 'user',
     },
-  );
+    ...payload,
+  });
 }

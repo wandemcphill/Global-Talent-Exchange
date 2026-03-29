@@ -20,7 +20,7 @@ Future<void> main() async {
       overrides: [
         authSessionStoreProvider.overrideWithValue(authSessionStore),
         deviceIdentityStoreProvider.overrideWithValue(deviceIdentityStore),
-        authProvider.overrideWithValue(authSession),
+        initialAuthSessionProvider.overrideWithValue(authSession),
         deviceIdProvider.overrideWithValue(deviceId),
       ],
       child: const GtexApp(),
@@ -33,6 +33,7 @@ class GtexApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(sessionHydrationProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'GTEX',

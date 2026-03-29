@@ -2,211 +2,198 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/constants/app_breakpoints.dart';
+import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
-import '../../core/widgets/app_press_scale.dart';
-import '../../core/widgets/task_reward_pop.dart';
+import '../../features/competitions/live_competitions_provider.dart';
+import '../../features/profile/live_profile_provider.dart';
+import '../../features/tasks/live_tasks_provider.dart';
+import '../../features/transfer_market/live_market_provider.dart';
+import '../../features/world/live_world_provider.dart';
 import '../../navigation/app_destinations.dart';
-import '../../shared/models/club.dart';
-import '../../shared/models/daily_task.dart';
-import '../../shared/models/live_match.dart';
-import '../../shared/providers/club_provider.dart';
-import '../../shared/providers/match_provider.dart';
-import '../../shared/providers/tasks_provider.dart';
-import 'widgets/home_screen_widgets.dart';
+import '../../shared/models/data_source_status.dart';
+import '../../shared/widgets/app_page_layout.dart';
+import '../../shared/widgets/data_source_badge.dart';
 
-class HomeScreen extends ConsumerStatefulWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<ProfileData> profileValue = ref.watch(profileDataProvider);
+    final AsyncValue<CompetitionHubData> competitionsValue = ref.watch(
+      competitionHubProvider,
+    );
+    final AsyncValue<MarketDashboardData> marketValue = ref.watch(
+      marketDashboardProvider,
+    );
+    final AsyncValue<WorldAggregateData> worldValue = ref.watch(
+      worldAggregateProvider,
+    );
+    final AsyncValue<LiveTasksData> tasksValue = ref.watch(liveTasksProvider);
+    final bool blocked = <AsyncValue<Object?>>[
+      profileValue,
+      competitionsValue,
+      marketValue,
+      worldValue,
+      tasksValue,
+    ].any((AsyncValue<Object?> item) => item.hasError);
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  @override
-  Widget build(BuildContext context) {
-    final Club club = ref.watch(clubProvider);
-    final List<LiveMatch> matches = ref.watch(matchProvider);
-    final TasksState taskState = ref.watch(tasksProvider);
-    final List<DailyTask> tasks = taskState.dailyTasks;
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final double horizontalPadding =
-            constraints.maxWidth >= AppBreakpoints.medium
-                ? spacingLG
-                : spacingMD;
-        final double bottomPadding =
-            MediaQuery.viewPaddingOf(context).bottom + 120;
-
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1440),
-            child: ListView(
-              key: const PageStorageKey<String>('gtex-home-scroll'),
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                spacingLG,
-                horizontalPadding,
-                bottomPadding,
-              ),
+    return AppPageLayout(
+      title: 'Home',
+      subtitle:
+          'The home surface now summarizes the live session, world, competitions, market, and daily challenge state instead of synthetic club and match cards.',
+      trailing: DataSourceBadge(
+        status: blocked ? DataSourceStatus.blocked : DataSourceStatus.live,
+      ),
+      children: <Widget>[
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(spacingLG),
+            child: Wrap(
+              spacing: spacingSM,
+              runSpacing: spacingSM,
               children: <Widget>[
-                HomeAnimatedSection(
-                  delay: const Duration(milliseconds: 60),
-                  child: ClubOverviewCard(
-                    club: club,
-                    onPlay: () => context.go(AppRoutes.matches),
-                    onProfile: () => context.go(AppRoutes.profile),
-                  ),
+                FilledButton(
+                  onPressed: () => context.go(AppRoutes.matches),
+                  child: const Text('Matches'),
                 ),
-                const SizedBox(height: spacingLG),
-                HomeAnimatedSection(
-                  delay: const Duration(milliseconds: 140),
-                  child: HomeSection(
-                    title: 'Quick Actions',
-                    subtitle:
-                        'Direct access to play, market, academy tracking, and competition flow.',
-                    child: QuickActionsGrid(
-                      actions: <HomeQuickAction>[
-                        HomeQuickAction(
-                          label: 'Play',
-                          caption: 'Jump into the live match deck.',
-                          icon: Icons.play_circle_fill_rounded,
-                          kind: HomeCardKind.primary,
-                          onTap: () => context.go(AppRoutes.matches),
-                        ),
-                        HomeQuickAction(
-                          label: 'Market',
-                          caption:
-                              'Open the wallet, payment rails, and player shares desk.',
-                          icon: Icons.storefront_rounded,
-                          kind: HomeCardKind.gold,
-                          onTap: () => context.go(AppRoutes.market),
-                        ),
-                        HomeQuickAction(
-                          label: 'Academy',
-                          caption: 'Review breakout prospects and pathways.',
-                          icon: Icons.school_rounded,
-                          kind: HomeCardKind.primary,
-                          onTap: () => context.go(AppRoutes.world),
-                        ),
-                        HomeQuickAction(
-                          label: 'Competitions',
-                          caption: 'Track brackets, fixtures, and spotlight.',
-                          icon: Icons.emoji_events_rounded,
-                          kind: HomeCardKind.gold,
-                          onTap: () => context.go(AppRoutes.world),
-                        ),
-                        HomeQuickAction(
-                          label: 'Tasks',
-                          caption: 'Claim rewards and hold the streak flame.',
-                          icon: Icons.task_alt_rounded,
-                          kind: HomeCardKind.primary,
-                          onTap: () => context.push(AppRoutes.tasks),
-                        ),
-                      ],
-                    ),
-                  ),
+                FilledButton(
+                  onPressed: () => context.go(AppRoutes.market),
+                  child: const Text('Market'),
                 ),
-                const SizedBox(height: spacingLG),
-                HomeAnimatedSection(
-                  delay: const Duration(milliseconds: 220),
-                  child: HomeSection(
-                    title: 'Live Matches',
-                    subtitle:
-                        'Smooth horizontal scrolling across the live match slate.',
-                    trailingLabel: '${matches.length} live',
-                    child: LiveMatchesCarousel(matches: matches),
-                  ),
+                FilledButton(
+                  onPressed: () => context.push(AppRoutes.competitions),
+                  child: const Text('Competitions'),
                 ),
-                const SizedBox(height: spacingLG),
-                HomeAnimatedSection(
-                  delay: const Duration(milliseconds: 300),
-                  child: HomeSection(
-                    title: 'Story Highlights',
-                    subtitle:
-                        'Visual cards for the biggest GTEX stories shaping your next move.',
-                    child: StoryHighlightsGrid(
-                      stories: <HomeStoryHighlight>[
-                        HomeStoryHighlight(
-                          title: '${club.name} academy wave lifts fan optimism',
-                          caption:
-                              'Youth scouting confidence is rising across the club.',
-                          imageAsset: club.badgeAsset,
-                          kind: HomeCardKind.primary,
-                          onTap: () => context.go(AppRoutes.world),
-                        ),
-                        HomeStoryHighlight(
-                          title:
-                              'Broadcast buzz spikes after a dramatic finish',
-                          caption:
-                              'Live match demand is climbing after late-game chaos.',
-                          imageAsset: 'assets/branding/gtex_icon.png',
-                          kind: HomeCardKind.gold,
-                          onTap: () => context.go(AppRoutes.matches),
-                        ),
-                        HomeStoryHighlight(
-                          title:
-                              'Transfer chatter intensifies around elite prospects',
-                          caption:
-                              'Market attention is closing in on your tracked names.',
-                          imageAsset: 'assets/branding/gtex_logo.png',
-                          kind: HomeCardKind.primary,
-                          onTap: () => context.go(AppRoutes.market),
-                        ),
-                      ],
-                    ),
-                  ),
+                FilledButton(
+                  onPressed: () => context.go(AppRoutes.world),
+                  child: const Text('World'),
                 ),
-                const SizedBox(height: spacingLG),
-                HomeAnimatedSection(
-                  delay: const Duration(milliseconds: 380),
-                  child: HomeSection(
-                    title: 'Daily Tasks',
-                    subtitle:
-                        'Progress loops with rewards, claim states, and clean feedback.',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        DailyTasksGrid(
-                          tasks: tasks,
-                          claimedTaskIds: taskState.claimedTaskIds,
-                          onClaim: _claimTask,
-                        ),
-                        const SizedBox(height: spacingMD),
-                        AppPressScale(
-                          child: OutlinedButton.icon(
-                            onPressed: () => context.push(AppRoutes.tasks),
-                            icon: const Icon(
-                              Icons.local_fire_department_rounded,
-                            ),
-                            label: const Text('Open Tasks & Streak'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                FilledButton(
+                  onPressed: () => context.push(AppRoutes.tasks),
+                  child: const Text('Tasks'),
+                ),
+                FilledButton(
+                  onPressed: () => context.push(AppRoutes.clips),
+                  child: const Text('Clips'),
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: spacingMD),
+        _AsyncSummaryCard<ProfileData>(
+          value: profileValue,
+          title: 'Session',
+          builder: (ProfileData data) {
+            final String label =
+                data.authenticated
+                    ? data.user['display_name']?.toString() ??
+                        data.user['username']?.toString() ??
+                        data.user['email']?.toString() ??
+                        'Authenticated user'
+                    : 'Guest session';
+            return _chipWrap(<String>[
+              label,
+              'Followers ${data.followers}',
+              'Following ${data.following}',
+              if (data.club != null)
+                'Club ${data.club!['name'] ?? data.club!['id']}',
+            ]);
+          },
+        ),
+        const SizedBox(height: spacingMD),
+        _AsyncSummaryCard<CompetitionHubData>(
+          value: competitionsValue,
+          title: 'Competition Pulse',
+          builder:
+              (CompetitionHubData data) => _chipWrap(<String>[
+                'GTEX ${data.gtexCompetitions.length}',
+                'Hosted ${data.hostedCompetitions.length}',
+                'Creator ${data.streamerTournaments.length}',
+              ]),
+        ),
+        const SizedBox(height: spacingMD),
+        _AsyncSummaryCard<MarketDashboardData>(
+          value: marketValue,
+          title: 'Market Pulse',
+          builder:
+              (MarketDashboardData data) => _chipWrap(<String>[
+                'Players ${data.playerShares.length}',
+                'Listings ${data.transferListings.length}',
+                'Holdings ${data.holdings.length}',
+                if (data.wallet != null)
+                  'Wallet ${data.wallet!.totalEquity.toStringAsFixed(2)}',
+              ]),
+        ),
+        const SizedBox(height: spacingMD),
+        _AsyncSummaryCard<WorldAggregateData>(
+          value: worldValue,
+          title: 'World Pulse',
+          builder:
+              (WorldAggregateData data) => _chipWrap(<String>[
+                'Rising stars ${data.risingStars.length}',
+                'Scouting feed ${data.scoutingFeed.length}',
+                'Seasons ${data.seasons.length}',
+                'Federations ${data.federations.length}',
+              ]),
+        ),
+        const SizedBox(height: spacingMD),
+        _AsyncSummaryCard<LiveTasksData>(
+          value: tasksValue,
+          title: 'Task Pulse',
+          builder:
+              (LiveTasksData data) => _chipWrap(<String>[
+                'Challenges ${data.challenges.length}',
+                'Claims today ${data.claimsToday.length}',
+                'Current streak ${data.currentStreak}',
+                'Longest streak ${data.longestStreak}',
+              ]),
+        ),
+      ],
     );
   }
 
-  void _claimTask(DailyTask task) {
-    final TaskClaimResult? result = ref
-        .read(tasksProvider.notifier)
-        .claimTask(task.id);
-    if (result == null) {
-      return;
-    }
+  Widget _chipWrap(List<String> labels) {
+    return Wrap(
+      spacing: spacingSM,
+      runSpacing: spacingSM,
+      children: labels.map((String item) => Chip(label: Text(item))).toList(),
+    );
+  }
+}
 
-    showTaskRewardCelebration(context, result);
+class _AsyncSummaryCard<T> extends StatelessWidget {
+  const _AsyncSummaryCard({
+    required this.value,
+    required this.title,
+    required this.builder,
+  });
+
+  final AsyncValue<T> value;
+  final String title;
+  final Widget Function(T data) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(spacingLG),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: spacingSM),
+            value.when(
+              data: builder,
+              loading: () => const CircularProgressIndicator(),
+              error:
+                  (Object error, StackTrace stackTrace) =>
+                      Text(AppFeedback.messageFor(error)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
