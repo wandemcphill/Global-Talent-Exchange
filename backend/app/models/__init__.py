@@ -1,5 +1,6 @@
 import app.ingestion.models  # noqa: F401
 import app.agents.models  # noqa: F401
+import app.models.scale_backbone  # noqa: F401
 
 from app.models.academy_graduation_event import AcademyGraduationEvent
 from app.models.academy_player import AcademyPlayer
@@ -49,6 +50,14 @@ from app.models.club_finance_account import ClubFinanceAccount
 from app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
 from app.models.club_hall_of_fame import ClubHallOfFameEntry
 from app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
+from app.models.club_ownership import (
+    ClubDividendDistribution,
+    ClubGovernanceState,
+    ClubHolding,
+    ClubToken,
+    ClubTreasury,
+    ClubTreasuryEntry,
+)
 from app.models.club_identity_theme import ClubIdentityTheme
 from app.models.club_jersey_design import ClubJerseyDesign
 from app.models.club_profile import ClubProfile
@@ -103,16 +112,19 @@ from app.models.clip_variant import ClipVariant
 from app.models.competition import Competition, UserCompetition
 from app.models.competition_autofill_rule import CompetitionAutofillRule
 from app.models.competition_entry import CompetitionEntry
+from app.models.competition_history_entry import CompetitionHistoryEntry
 from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.highlight_event import HighlightEvent
 from app.models.commentary_event import CommentaryEvent
+from app.models.commentator_profile import CommentaryProfileSelection, CommentatorProfile
 from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerControlMode, ManagerProfile
 from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
 from app.models.competition_participant import CompetitionParticipant
 from app.models.competition_playoff import CompetitionPlayoff
 from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_progress_profile import CompetitionProgressProfile
 from app.models.competition_reward import CompetitionReward
 from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.competition_round import CompetitionRound
@@ -121,6 +133,17 @@ from app.models.competition_schedule_job import CompetitionScheduleJob
 from app.models.competition_seed_rule import CompetitionSeedRule
 from app.models.competition_visibility_rule import CompetitionVisibilityRule
 from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.tournament import (
+    Tournament,
+    TournamentGameType,
+    TournamentMatch,
+    TournamentMatchStatus,
+    TournamentPlayer,
+    TournamentPlayerStatus,
+    TournamentRound,
+    TournamentRoundStatus,
+    TournamentStatus,
+)
 from app.models.creator_campaign import CreatorCampaign
 from app.models.creator_marketplace import (
     CreatorMarketplaceCampaign,
@@ -430,6 +453,7 @@ from app.models.risk_ops import AmlCase, AuditLog, FraudCase, RiskCaseStatus, Ri
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
 from app.models.governance_engine import GovernanceProposal, GovernanceProposalScope, GovernanceProposalStatus, GovernanceVote, GovernanceVoteChoice
+from app.models.creator_attention_earnings import ClipEarningEventType, ClipEarningsLog, CreatorWallet
 from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
 from app.models.sponsored_clip import SponsoredClip
 from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
@@ -465,7 +489,13 @@ from app.models.ownership_group import (
     OwnershipGroupClub,
     OwnershipGroupEvent,
 )
-from app.models.national_team import NationalTeamCompetition, NationalTeamEntry, NationalTeamManagerHistory, NationalTeamSquadMember
+from app.models.national_team import (
+    NationalTeamCompetition,
+    NationalTeamCompetitionEntry,
+    NationalTeamEntry,
+    NationalTeamManagerHistory,
+    NationalTeamSquadMember,
+)
 from app.models.national_team_tournament import (
     FreePlayerTier,
     NationalTeamRentalSquadMember,
@@ -495,6 +525,34 @@ from app.models.wallet import (
     PaymentStatus,
     PayoutRequest,
     PayoutStatus,
+)
+from app.models.gtex_economy import (
+    GtexAIProfile,
+    GtexAiProfileType,
+    GtexAssetSubjectType,
+    GtexContributionSourceType,
+    GtexCreatorAsset,
+    GtexCreatorHolding,
+    GtexCreatorPriceHistory,
+    GtexCreatorTrade,
+    GtexJackpotContribution,
+    GtexJackpotDistributionMode,
+    GtexJackpotPayout,
+    GtexJackpotRound,
+    GtexJackpotRoundStatus,
+    GtexJackpotTriggerMode,
+    GtexLeague,
+    GtexLeagueStanding,
+    GtexLeagueType,
+    GtexMatch,
+    GtexMatchEvent,
+    GtexMatchQueueEntry,
+    GtexMatchStatus,
+    GtexParticipantType,
+    GtexQueueEntryStatus,
+    GtexRiskFlag,
+    GtexRiskFlagStatus,
+    GtexTradeSide,
 )
 from app.models.withdrawal_review import WithdrawalReview
 from app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
@@ -535,6 +593,12 @@ __all__ = [
     "ClubFinanceLedgerEntry",
     "ClubFacility",
     "ClubStadium",
+    "ClubToken",
+    "ClubHolding",
+    "ClubTreasury",
+    "ClubTreasuryEntry",
+    "ClubGovernanceState",
+    "ClubDividendDistribution",
     "ClubSupporterHolding",
     "ClubSupporterToken",
     "ClubIdentityTheme",
@@ -581,11 +645,14 @@ __all__ = [
     "UserCompetition",
     "CompetitionAutofillRule",
     "CompetitionEntry",
+    "CompetitionHistoryEntry",
     "CompetitionInvite",
     "CompetitionMatch",
     "CompetitionMatchEvent",
     "HighlightEvent",
     "CommentaryEvent",
+    "CommentatorProfile",
+    "CommentaryProfileSelection",
     "ManagerContract",
     "ManagerContractStatus",
     "ManagerControlMode",
@@ -596,6 +663,7 @@ __all__ = [
     "CompetitionParticipant",
     "CompetitionPlayoff",
     "CompetitionPrizeRule",
+    "CompetitionProgressProfile",
     "CompetitionReward",
     "CompetitionRewardPool",
     "CompetitionRound",
@@ -604,6 +672,15 @@ __all__ = [
     "CompetitionSeedRule",
     "CompetitionVisibilityRule",
     "CompetitionWalletLedger",
+    "Tournament",
+    "TournamentGameType",
+    "TournamentMatch",
+    "TournamentMatchStatus",
+    "TournamentPlayer",
+    "TournamentPlayerStatus",
+    "TournamentRound",
+    "TournamentRoundStatus",
+    "TournamentStatus",
     "CreatorCampaign",
     "CreatorBroadcastModeConfig",
     "CreatorBroadcastPurchase",
@@ -863,6 +940,9 @@ __all__ = [
     "SystemEventSeverity",
     "SponsorshipLead",
     "CreatorCampaignMetricSnapshot",
+    "ClipEarningEventType",
+    "ClipEarningsLog",
+    "CreatorWallet",
     "CreatorClipRevenueAttribution",
     "SponsoredClip",
     "GovernanceProposal",
@@ -929,6 +1009,32 @@ __all__ = [
     "CompetitiveNotificationChannel",
     "CompetitiveNotificationStatus",
     "FastGameRun",
+    "GtexAIProfile",
+    "GtexAiProfileType",
+    "GtexAssetSubjectType",
+    "GtexContributionSourceType",
+    "GtexCreatorAsset",
+    "GtexCreatorHolding",
+    "GtexCreatorPriceHistory",
+    "GtexCreatorTrade",
+    "GtexJackpotContribution",
+    "GtexJackpotDistributionMode",
+    "GtexJackpotPayout",
+    "GtexJackpotRound",
+    "GtexJackpotRoundStatus",
+    "GtexJackpotTriggerMode",
+    "GtexLeague",
+    "GtexLeagueStanding",
+    "GtexLeagueType",
+    "GtexMatch",
+    "GtexMatchEvent",
+    "GtexMatchQueueEntry",
+    "GtexMatchStatus",
+    "GtexParticipantType",
+    "GtexQueueEntryStatus",
+    "GtexRiskFlag",
+    "GtexRiskFlagStatus",
+    "GtexTradeSide",
     "Manager",
     "ManagerType",
     "Match",

@@ -14,17 +14,30 @@ from fastapi import FastAPI
 from redis import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import inspect, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.core.database import (
+    create_database_engine,
+    create_read_database_engine,
+    create_read_session_factory,
+    create_session_factory,
+)
 from app.feedback_engine.service import FeedbackEngine
 from app.models.analytics_event import AnalyticsEvent
+from app.models.base import generate_uuid
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
+from app.models.scale_backbone import (
+    PersonalizedFeedCacheEntryRecord,
+    PersonalizedFeedHistoryEntryRecord,
+    PersonalizedFeedSeenClipRecord,
+)
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.moments.priority_cache import ensure_moment_priority_cache
 from app.orchestrator.orchestrator_service import build_attention_orchestrator_service
 from app.runtime_config.service import ensure_runtime_config_loader
+from app.services.creator_attention_earnings_service import CreatorAttentionEarningsService
 from app.users.follow_service import (
     FOLLOWING_FEED_KEY_TEMPLATE,
     build_follow_graph_service,
@@ -366,6 +379,176 @@ class RedisPersonalizedFeedStore:
 
 
 @dataclass(slots=True)
+class PersistentPersonalizedFeedStore:
+    session_factory: sessionmaker[Session]
+    read_session_factory: sessionmaker[Session] | None = None
+    redis_store: RedisPersonalizedFeedStore | None = None
+    history_ttl_seconds: int = DEFAULT_HISTORY_TTL_SECONDS
+    max_history: int = DEFAULT_HISTORY_LIMIT
+
+    def __post_init__(self) -> None:
+        if self.read_session_factory is None:
+            self.read_session_factory = self.session_factory
+
+    def replace(self, user_id: str, entries: list[PersonalizedFeedEnvelope]) -> None:
+        with self.session_factory() as session:
+            session.query(PersonalizedFeedCacheEntryRecord).filter(
+                PersonalizedFeedCacheEntryRecord.subject_key == user_id
+            ).delete()
+            for position, entry in enumerate(entries, start=1):
+                session.add(
+                    PersonalizedFeedCacheEntryRecord(
+                        id=generate_uuid(),
+                        subject_key=user_id,
+                        clip_id=entry.clip_id,
+                        position=position,
+                        score=float(entry.score),
+                        payload_json=dict(entry.payload or {}),
+                    )
+                )
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.replace(user_id, entries)
+
+    def top(self, user_id: str, limit: int) -> list[PersonalizedFeedEnvelope]:
+        if limit <= 0:
+            return []
+        if self.redis_store is not None:
+            cached = self.redis_store.top(user_id, limit)
+            if cached:
+                return cached
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            records = list(
+                session.scalars(
+                    select(PersonalizedFeedCacheEntryRecord)
+                    .where(PersonalizedFeedCacheEntryRecord.subject_key == user_id)
+                    .order_by(PersonalizedFeedCacheEntryRecord.position.asc(), PersonalizedFeedCacheEntryRecord.clip_id.asc())
+                    .limit(limit)
+                ).all()
+            )
+        entries = [
+            PersonalizedFeedEnvelope(
+                clip_id=record.clip_id,
+                score=float(record.score),
+                payload=dict(record.payload_json or {}),
+            )
+            for record in records
+        ]
+        if entries and self.redis_store is not None:
+            self.redis_store.replace(user_id, entries)
+        return entries
+
+    def mark_served(self, user_id: str, entries: list[SeenClipHistory]) -> None:
+        if not entries:
+            return
+        cutoff = datetime.now(UTC) - timedelta(seconds=max(self.history_ttl_seconds, 1))
+        with self.session_factory() as session:
+            session.query(PersonalizedFeedHistoryEntryRecord).filter(
+                PersonalizedFeedHistoryEntryRecord.subject_key == user_id,
+                PersonalizedFeedHistoryEntryRecord.served_at < cutoff,
+            ).delete()
+            for entry in entries[: self.max_history]:
+                served_at = datetime.fromisoformat(entry.served_at)
+                if served_at.tzinfo is None:
+                    served_at = served_at.replace(tzinfo=UTC)
+                session.add(
+                    PersonalizedFeedHistoryEntryRecord(
+                        id=generate_uuid(),
+                        subject_key=user_id,
+                        clip_id=entry.clip_id,
+                        creator_key=entry.creator_key,
+                        format_key=entry.format_key,
+                        similarity_key=entry.similarity_key,
+                        served_at=served_at.astimezone(UTC),
+                    )
+                )
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.mark_served(user_id, entries)
+
+    def recent_history(self, user_id: str, limit: int) -> list[SeenClipHistory]:
+        if limit <= 0:
+            return []
+        if self.redis_store is not None:
+            cached = self.redis_store.recent_history(user_id, limit)
+            if cached:
+                return cached
+        cutoff = datetime.now(UTC) - timedelta(seconds=max(self.history_ttl_seconds, 1))
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            records = list(
+                session.scalars(
+                    select(PersonalizedFeedHistoryEntryRecord)
+                    .where(
+                        PersonalizedFeedHistoryEntryRecord.subject_key == user_id,
+                        PersonalizedFeedHistoryEntryRecord.served_at >= cutoff,
+                    )
+                    .order_by(PersonalizedFeedHistoryEntryRecord.served_at.desc())
+                    .limit(limit)
+                ).all()
+            )
+        history = [
+            SeenClipHistory(
+                clip_id=record.clip_id,
+                creator_key=record.creator_key,
+                format_key=record.format_key,
+                similarity_key=record.similarity_key,
+                served_at=(
+                    record.served_at.astimezone(UTC).isoformat()
+                    if record.served_at.tzinfo is not None
+                    else record.served_at.replace(tzinfo=UTC).isoformat()
+                ),
+            )
+            for record in records
+        ]
+        if history and self.redis_store is not None:
+            self.redis_store.mark_served(user_id, history)
+        return history
+
+    def mark_seen(self, user_id: str, clip_ids: list[str]) -> None:
+        normalized = [clip_id.strip() for clip_id in clip_ids if clip_id.strip()]
+        if not normalized:
+            return
+        now = datetime.now(UTC)
+        with self.session_factory() as session:
+            for clip_id in normalized:
+                record = session.get(
+                    PersonalizedFeedSeenClipRecord,
+                    {"user_id": user_id, "clip_id": clip_id},
+                )
+                if record is None:
+                    record = PersonalizedFeedSeenClipRecord(user_id=user_id, clip_id=clip_id, seen_at=now)
+                    session.add(record)
+                else:
+                    record.seen_at = now
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.mark_seen(user_id, normalized)
+
+    def seen_clip_ids(self, user_id: str) -> set[str]:
+        if self.redis_store is not None:
+            cached = self.redis_store.seen_clip_ids(user_id)
+            if cached:
+                return cached
+        cutoff = datetime.now(UTC) - timedelta(seconds=max(self.history_ttl_seconds, 1))
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            rows = list(
+                session.scalars(
+                    select(PersonalizedFeedSeenClipRecord.clip_id).where(
+                        PersonalizedFeedSeenClipRecord.user_id == user_id,
+                        PersonalizedFeedSeenClipRecord.seen_at >= cutoff,
+                    )
+                ).all()
+            )
+        resolved = {str(item) for item in rows}
+        if resolved and self.redis_store is not None:
+            self.redis_store.mark_seen(user_id, list(resolved))
+        return resolved
+
+
+@dataclass(slots=True)
 class UserAffinityScore:
     total: float = 0.0
     view_signal: float = 0.0
@@ -667,6 +850,7 @@ class PersonalizedFeedRankingService:
     session_tracker: Any | None = None
     moment_priority_cache: Any | None = None
     viral_pool_store: Any | None = None
+    creator_earnings_service: CreatorAttentionEarningsService | None = None
     hybrid_for_you_share: float = DEFAULT_HYBRID_FOR_YOU_SHARE
     hybrid_following_share: float = DEFAULT_HYBRID_FOLLOWING_SHARE
 
@@ -687,6 +871,11 @@ class PersonalizedFeedRankingService:
             )
         if self.social_boost_service is None and self.follow_graph_service is not None:
             self.social_boost_service = SocialBoostService(follow_graph_service=self.follow_graph_service)
+        if self.creator_earnings_service is None:
+            self.creator_earnings_service = CreatorAttentionEarningsService(
+                session=self.session,
+                settings=self.settings,
+            )
 
     def _apply_dynamic_config(self) -> None:
         if self.runtime_config_loader is None:
@@ -816,6 +1005,7 @@ class PersonalizedFeedRankingService:
             cache_subject=cache_subject,
             user_id=response.user_id,
             clips=response.items,
+            delivered_at=response.generated_at,
         )
 
     def record_refresh_delivery(self, *, user_id: str, clips: list[PersonalizedFeedClipView]) -> None:
@@ -825,6 +1015,7 @@ class PersonalizedFeedRankingService:
             cache_subject=user_id,
             user_id=user_id,
             clips=clips,
+            delivered_at=datetime.now(UTC),
         )
 
     def _build_response(
@@ -1539,11 +1730,24 @@ class PersonalizedFeedRankingService:
         cache_subject: str,
         user_id: str,
         clips: list[PersonalizedFeedClipView],
+        delivered_at: datetime,
     ) -> None:
         if not clips:
             return
         self.feed_store.mark_served(cache_subject, self._history_entries(clips))
         self.feed_store.mark_seen(user_id, [clip.clip_id for clip in clips])
+        if self.creator_earnings_service is None:
+            return
+        for slot_index, clip in enumerate(clips):
+            feed_source = str(getattr(clip, PERSONALIZED_FEED_SOURCE_KEY, PERSONALIZED_FEED_SOURCE_FOR_YOU))
+            self.creator_earnings_service.track_impression(
+                clip=clip,
+                viewer_user_id=user_id,
+                feed_source=feed_source,
+                reference_key=(
+                    f"personalized-feed:{feed_source}:{user_id}:{slot_index}:{clip.clip_id}:{delivered_at.isoformat()}"
+                ),
+            )
 
     @staticmethod
     def _session_multiplier(session_boost: float) -> float:
@@ -1696,19 +1900,39 @@ class PersonalizedFeedRankingService:
         return max((datetime.now(UTC) - resolved.astimezone(UTC)).total_seconds() / 3600.0, 0.0)
 
 
-def build_personalized_feed_store(*, settings: Settings | None = None) -> PersonalizedFeedStore:
+def build_personalized_feed_store(
+    *,
+    settings: Settings | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+    read_session_factory: sessionmaker[Session] | None = None,
+) -> PersonalizedFeedStore:
     resolved_settings = settings or get_settings()
+    redis_store = None
     if resolved_settings.redis_url:
-        redis_store = RedisPersonalizedFeedStore(resolved_settings.redis_url)
-        if redis_store.ping():
-            return redis_store
-    return InMemoryPersonalizedFeedStore()
+        candidate = RedisPersonalizedFeedStore(resolved_settings.redis_url)
+        if candidate.ping():
+            redis_store = candidate
+    resolved_session_factory = session_factory or create_session_factory(
+        create_database_engine(resolved_settings.database_url)
+    )
+    resolved_read_session_factory = read_session_factory or create_read_session_factory(
+        create_read_database_engine(resolved_settings.database_read_url)
+    )
+    return PersistentPersonalizedFeedStore(
+        session_factory=resolved_session_factory,
+        read_session_factory=resolved_read_session_factory,
+        redis_store=redis_store,
+    )
 
 
 def ensure_personalized_feed_store(app: FastAPI, *, settings: Settings | None = None) -> PersonalizedFeedStore:
     store = getattr(app.state, "personalized_feed_store", None)
     if store is None:
-        store = build_personalized_feed_store(settings=settings or getattr(app.state, "settings", None))
+        store = build_personalized_feed_store(
+            settings=settings or getattr(app.state, "settings", None),
+            session_factory=getattr(app.state, "session_factory", None),
+            read_session_factory=getattr(app.state, "read_session_factory", None),
+        )
         app.state.personalized_feed_store = store
     return store
 
@@ -1734,6 +1958,7 @@ def build_personalized_feed_service(*, app: FastAPI, session: Session) -> Person
         session_tracker=ensure_viral_session_tracker(app),
         moment_priority_cache=ensure_moment_priority_cache(app),
         viral_pool_store=ensure_viral_dispatch_pool_store(app, settings=settings),
+        creator_earnings_service=CreatorAttentionEarningsService(session=session, app=app, settings=settings),
     )
 
 

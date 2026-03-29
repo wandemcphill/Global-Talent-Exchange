@@ -53,6 +53,10 @@ def get_database_url() -> str:
     return get_settings().database_url
 
 
+def get_database_read_url() -> str:
+    return get_settings().database_read_url
+
+
 def load_model_modules() -> None:
     for module_path in MODEL_MODULES:
         import_module(module_path)
@@ -88,13 +92,39 @@ def get_engine() -> Engine:
     return create_database_engine()
 
 
+def create_read_database_engine(database_url: str | None = None) -> Engine:
+    return create_database_engine(database_url or get_database_read_url())
+
+
+@lru_cache
+def get_read_engine() -> Engine:
+    return create_read_database_engine()
+
+
 @lru_cache
 def get_session_factory() -> sessionmaker[Session]:
     return create_session_factory()
 
 
+def create_read_session_factory(engine: Engine | None = None) -> sessionmaker[Session]:
+    return create_session_factory(engine or get_read_engine())
+
+
+@lru_cache
+def get_read_session_factory() -> sessionmaker[Session]:
+    return create_read_session_factory()
+
+
 def get_session() -> Iterator[Session]:
     session = get_session_factory()()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def get_read_session() -> Iterator[Session]:
+    session = get_read_session_factory()()
     try:
         yield session
     finally:
@@ -251,6 +281,8 @@ class DatabaseRuntime:
     settings: Settings
     engine: Engine
     session_factory: sessionmaker[Session]
+    read_engine: Engine
+    read_session_factory: sessionmaker[Session]
 
     @classmethod
     def build(
@@ -259,14 +291,20 @@ class DatabaseRuntime:
         settings: Settings | None = None,
         engine: Engine | None = None,
         session_factory: sessionmaker[Session] | None = None,
+        read_engine: Engine | None = None,
+        read_session_factory: sessionmaker[Session] | None = None,
     ) -> "DatabaseRuntime":
         resolved_settings = settings or get_settings()
         resolved_engine = engine or create_database_engine(resolved_settings.database_url)
         resolved_session_factory = session_factory or create_session_factory(resolved_engine)
+        resolved_read_engine = read_engine or create_read_database_engine(resolved_settings.database_read_url)
+        resolved_read_session_factory = read_session_factory or create_read_session_factory(resolved_read_engine)
         return cls(
             settings=resolved_settings,
             engine=resolved_engine,
             session_factory=resolved_session_factory,
+            read_engine=resolved_read_engine,
+            read_session_factory=resolved_read_session_factory,
         )
 
     def initialize(self, *, run_migration_check: bool | None = None) -> Engine:
@@ -277,6 +315,13 @@ class DatabaseRuntime:
 
     def get_session(self) -> Iterator[Session]:
         session = self.session_factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    def get_read_session(self) -> Iterator[Session]:
+        session = self.read_session_factory()
         try:
             yield session
         finally:

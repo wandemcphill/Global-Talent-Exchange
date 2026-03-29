@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.common.enums.creator_profile_status import CreatorProfileStatus
 from app.fairness.spend_balance_controller import SpendBalanceController, TournamentFairnessMode
+from app.leaderboards.ranking_service import RankingService
+from app.leaderboards.season_service import SeasonService
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
 from app.models.competition import Competition
@@ -20,6 +22,7 @@ from app.models.creator_monetization import CreatorMatchGiftEvent, CreatorSeason
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorSquad
 from app.models.creator_share_market import CreatorClubShareHolding
+from app.models.history_engagement import FollowTargetType, UserFollow, UserProfile
 from app.models.streamer_tournament import (
     StreamerTournament,
     StreamerTournamentApprovalStatus,
@@ -39,12 +42,14 @@ from app.models.streamer_tournament import (
     StreamerTournamentType,
 )
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.reward_engine.service import RewardEngineService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_POLICY_KEY = "default"
+CREATOR_PARTICIPATION_BONUS_PER_ENTRY = Decimal("10.0000")
+CREATOR_VISIBILITY_BOOST_PER_ENTRY = 3
 SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
@@ -431,8 +436,22 @@ class StreamerTournamentService:
                             note=placement.note or note,
                         )
                     )
+        self._apply_leaderboard_progression(
+            tournament=tournament,
+            entries_by_user=entries_by_user,
+            grants=grants,
+        )
+        creator_growth = self._apply_creator_host_program(
+            actor=actor,
+            tournament=tournament,
+            entries_by_user=entries_by_user,
+        )
         tournament.status = StreamerTournamentStatus.COMPLETED
         tournament.completed_at = utcnow()
+        tournament.metadata_json = {
+            **(tournament.metadata_json or {}),
+            "creator_growth": creator_growth,
+        }
         self.session.flush()
         return {
             "tournament": self.serialize_tournament(tournament),
@@ -1133,6 +1152,235 @@ class StreamerTournamentService:
             actor=actor,
         )
         return entries[0].transaction_id if entries else None
+
+    def _apply_leaderboard_progression(
+        self,
+        *,
+        tournament: StreamerTournament,
+        entries_by_user: dict[str, StreamerTournamentEntry],
+        grants: list[StreamerTournamentRewardGrant],
+    ) -> None:
+        season = SeasonService(self.session).get_current_season(auto_rollover=True)
+        ranking_service = RankingService(self.session)
+        earnings_by_user: dict[str, Decimal] = {}
+        for grant in grants:
+            if grant.amount is None:
+                continue
+            current_total = earnings_by_user.get(grant.recipient_user_id, Decimal("0.0000"))
+            earnings_by_user[grant.recipient_user_id] = current_total + self._normalize_amount(grant.amount)
+
+        for user_id, entry in entries_by_user.items():
+            row = ranking_service.ensure_player_rating(season=season, player_id=user_id)
+            metadata = dict(row.metadata_json or {})
+            season_competition = metadata.get("season_competition")
+            season_competition = dict(season_competition) if isinstance(season_competition, dict) else {}
+            processed_tournament_ids = [
+                str(item) for item in (season_competition.get("processed_tournament_ids") or [])
+            ]
+            if tournament.id in processed_tournament_ids:
+                continue
+            season_competition["tournament_entries"] = int(season_competition.get("tournament_entries", 0) or 0) + 1
+            if entry.placement is not None:
+                season_competition["best_placement"] = min(
+                    int(season_competition.get("best_placement") or entry.placement),
+                    int(entry.placement),
+                )
+                if int(entry.placement) == 1:
+                    season_competition["tournament_titles"] = int(
+                        season_competition.get("tournament_titles", 0) or 0
+                    ) + 1
+                if int(entry.placement) <= 3:
+                    season_competition["podium_finishes"] = int(
+                        season_competition.get("podium_finishes", 0) or 0
+                    ) + 1
+            earnings_total = self._metadata_decimal(season_competition.get("earnings_total"))
+            season_competition["earnings_total"] = str(
+                earnings_total + earnings_by_user.get(user_id, Decimal("0.0000"))
+            )
+            processed_tournament_ids.append(tournament.id)
+            season_competition["processed_tournament_ids"] = processed_tournament_ids
+            season_competition["last_tournament_id"] = tournament.id
+            season_competition["last_tournament_title"] = tournament.title
+            season_competition["last_tournament_completed_at"] = utcnow().isoformat()
+            metadata["season_competition"] = season_competition
+            row.metadata_json = metadata
+            row.last_active_at = utcnow()
+        self.session.flush()
+
+    def _apply_creator_host_program(
+        self,
+        *,
+        actor: User,
+        tournament: StreamerTournament,
+        entries_by_user: dict[str, StreamerTournamentEntry],
+    ) -> dict[str, object]:
+        existing_program = (tournament.metadata_json or {}).get("creator_growth")
+        if isinstance(existing_program, dict) and existing_program:
+            return dict(existing_program)
+        host_user = self.session.get(User, tournament.host_user_id)
+        if host_user is None or not host_user.is_active:
+            return {
+                "participant_count": len(entries_by_user),
+                "payout_coin": "0.0000",
+                "new_followers": 0,
+                "visibility_boost": 0,
+                "ledger_transaction_id": None,
+            }
+
+        participant_count = len(entries_by_user)
+        payout_amount = self._normalize_amount(CREATOR_PARTICIPATION_BONUS_PER_ENTRY * Decimal(participant_count))
+        ledger_transaction_id = None
+        if payout_amount > Decimal("0.0000"):
+            creator_account = self.wallet_service.get_user_account(self.session, host_user, LedgerUnit.COIN)
+            platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
+            entries = self.wallet_service.append_transaction(
+                self.session,
+                postings=[
+                    LedgerPosting(
+                        account=creator_account,
+                        amount=payout_amount,
+                        source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                        transaction_type=LedgerTransactionType.MATCH_REWARD,
+                    ),
+                    LedgerPosting(
+                        account=platform_account,
+                        amount=-payout_amount,
+                        source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                        transaction_type=LedgerTransactionType.MATCH_REWARD,
+                    ),
+                ],
+                reason=LedgerEntryReason.COMPETITION_REWARD,
+                source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                transaction_type=LedgerTransactionType.MATCH_REWARD,
+                reference=f"streamer-tournament:{tournament.id}:host-program",
+                description=f"Creator participation payout for {tournament.title}",
+                actor=actor,
+                idempotency_key=f"streamer-tournament:{tournament.id}:host-program",
+                metadata={
+                    "reward_source": "streamer_tournament_host_program",
+                    "tournament_id": tournament.id,
+                    "participant_count": participant_count,
+                },
+            )
+            if entries:
+                ledger_transaction_id = entries[0].transaction_id
+
+        new_followers = 0
+        for entry in entries_by_user.values():
+            new_followers += self._ensure_creator_follow(
+                follower_user_id=entry.user_id,
+                host_user_id=tournament.host_user_id,
+                tournament_id=tournament.id,
+            )
+
+        visibility_boost = participant_count * CREATOR_VISIBILITY_BOOST_PER_ENTRY
+        profile = self._ensure_user_profile(tournament.host_user_id)
+        profile.profile_boost_total += visibility_boost
+        profile_metadata = dict(profile.metadata_json or {})
+        processed_host_programs = [str(item) for item in (profile_metadata.get("creator_program_tournaments") or [])]
+        if tournament.id in processed_host_programs:
+            self._refresh_profile_counters(tournament.host_user_id)
+            return {
+                "participant_count": participant_count,
+                "payout_coin": str(payout_amount),
+                "new_followers": 0,
+                "visibility_boost": 0,
+                "ledger_transaction_id": ledger_transaction_id,
+            }
+        profile_metadata["creator_tournaments_hosted"] = int(
+            profile_metadata.get("creator_tournaments_hosted", 0) or 0
+        ) + 1
+        profile_metadata["creator_tournament_earnings_total"] = str(
+            self._metadata_decimal(profile_metadata.get("creator_tournament_earnings_total")) + payout_amount
+        )
+        profile_metadata["creator_tournament_followers_gained"] = int(
+            profile_metadata.get("creator_tournament_followers_gained", 0) or 0
+        ) + new_followers
+        profile_metadata["last_creator_tournament_program"] = {
+            "tournament_id": tournament.id,
+            "participant_count": participant_count,
+            "payout_coin": str(payout_amount),
+            "new_followers": new_followers,
+            "visibility_boost": visibility_boost,
+        }
+        processed_host_programs.append(tournament.id)
+        profile_metadata["creator_program_tournaments"] = processed_host_programs
+        profile.metadata_json = profile_metadata
+        self._refresh_profile_counters(tournament.host_user_id)
+        return {
+            "participant_count": participant_count,
+            "payout_coin": str(payout_amount),
+            "new_followers": new_followers,
+            "visibility_boost": visibility_boost,
+            "ledger_transaction_id": ledger_transaction_id,
+        }
+
+    def _ensure_creator_follow(
+        self,
+        *,
+        follower_user_id: str,
+        host_user_id: str,
+        tournament_id: str,
+    ) -> int:
+        if follower_user_id == host_user_id:
+            return 0
+        target_key = f"{FollowTargetType.MANAGER.value}:{host_user_id}"
+        existing = self.session.scalar(
+            select(UserFollow).where(
+                UserFollow.follower_user_id == follower_user_id,
+                UserFollow.target_key == target_key,
+            )
+        )
+        if existing is not None:
+            return 0
+        self.session.add(
+            UserFollow(
+                follower_user_id=follower_user_id,
+                target_key=target_key,
+                target_type=FollowTargetType.MANAGER,
+                target_user_id=host_user_id,
+                metadata_json={
+                    "source": "streamer_tournament",
+                    "tournament_id": tournament_id,
+                },
+            )
+        )
+        self.session.flush()
+        self._refresh_profile_counters(follower_user_id)
+        return 1
+
+    def _ensure_user_profile(self, user_id: str) -> UserProfile:
+        profile = self.session.scalar(select(UserProfile).where(UserProfile.user_id == user_id))
+        if profile is not None:
+            return profile
+        profile = UserProfile(user_id=user_id)
+        self.session.add(profile)
+        self.session.flush()
+        return profile
+
+    def _refresh_profile_counters(self, user_id: str) -> None:
+        profile = self._ensure_user_profile(user_id)
+        profile.followers = int(
+            self.session.scalar(
+                select(func.count(UserFollow.id)).where(
+                    UserFollow.target_user_id == user_id,
+                    UserFollow.target_type == FollowTargetType.MANAGER,
+                )
+            )
+            or 0
+        )
+        profile.following = int(
+            self.session.scalar(select(func.count(UserFollow.id)).where(UserFollow.follower_user_id == user_id)) or 0
+        )
+
+    @staticmethod
+    def _metadata_decimal(value: object) -> Decimal:
+        if value is None:
+            return Decimal("0.0000")
+        try:
+            return Decimal(str(value)).quantize(AMOUNT_QUANTUM)
+        except Exception:
+            return Decimal("0.0000")
 
     def _list_rewards(self, tournament_id: str) -> list[StreamerTournamentReward]:
         return list(

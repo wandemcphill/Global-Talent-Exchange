@@ -9,9 +9,18 @@ from threading import Lock
 from typing import Any, Protocol
 
 from redis.exceptions import RedisError
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.cache import CacheBackend, RedisCacheBackend, build_cache_backend
 from app.core.config import Settings, get_settings
+from app.core.database import (
+    create_database_engine,
+    create_read_database_engine,
+    create_read_session_factory,
+    create_session_factory,
+)
+from app.models.scale_backbone import OrchestratorClipStateRecord, OrchestratorConfigRecord
 
 logger = logging.getLogger(__name__)
 
@@ -438,12 +447,165 @@ class CacheGlobalFeedStateStore:
         return AttentionOrchestratorConfig.from_payload(payload)
 
 
-def build_global_feed_state_store(*, settings: Settings | None = None) -> GlobalFeedStateStore:
+@dataclass(slots=True)
+class PersistentGlobalFeedStateStore:
+    session_factory: sessionmaker[Session]
+    read_session_factory: sessionmaker[Session] | None = None
+    cache_store: CacheGlobalFeedStateStore | None = None
+
+    def __post_init__(self) -> None:
+        if self.read_session_factory is None:
+            self.read_session_factory = self.session_factory
+
+    def load_clip(self, clip_id: str) -> ClipGlobalState | None:
+        if self.cache_store is not None:
+            cached = self.cache_store.load_clip(clip_id)
+            if cached is not None:
+                return cached
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            record = session.get(OrchestratorClipStateRecord, clip_id)
+            if record is None:
+                return None
+            state = self._state_from_record(record)
+        self._sync_cache(state)
+        return state
+
+    def save_clip(self, state: ClipGlobalState) -> ClipGlobalState:
+        with self.session_factory() as session:
+            record = session.get(OrchestratorClipStateRecord, state.clip_id)
+            if record is None:
+                record = OrchestratorClipStateRecord(clip_id=state.clip_id)
+                session.add(record)
+            self._apply_state(record, state)
+            session.commit()
+            session.refresh(record)
+            resolved = self._state_from_record(record)
+        self._sync_cache(resolved)
+        return resolved
+
+    def allocate_clip(self, clip_id: str, *, count: int = 1) -> ClipGlobalAllocation:
+        with self.session_factory() as session:
+            record = session.scalar(
+                select(OrchestratorClipStateRecord)
+                .where(OrchestratorClipStateRecord.clip_id == clip_id)
+                .with_for_update()
+            )
+            if record is None:
+                raise KeyError(f"Global state for {clip_id} was not found.")
+            state = self._state_from_record(record)
+            if count <= 0 or state.consumed_impressions >= state.allocated_impressions or state.stage == DECAY_STAGE:
+                allocated_count = 0
+            else:
+                allocated_count = min(max(int(count), 0), state.remaining_impressions)
+                state.consumed_impressions += allocated_count
+                state.updated_at = datetime.now(UTC)
+                self._apply_state(record, state)
+            session.commit()
+            session.refresh(record)
+            resolved = self._state_from_record(record)
+        self._sync_cache(resolved)
+        return ClipGlobalAllocation(state=resolved, allocated_count=allocated_count)
+
+    def list_clips(self, *, limit: int | None = None) -> list[ClipGlobalState]:
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            stmt = select(OrchestratorClipStateRecord).order_by(OrchestratorClipStateRecord.updated_at.desc())
+            if limit is not None:
+                stmt = stmt.limit(max(int(limit), 0))
+            records = list(session.scalars(stmt).all())
+        states = [self._state_from_record(record) for record in records]
+        for state in states:
+            self._sync_cache(state)
+        return states
+
+    def load_config(self) -> AttentionOrchestratorConfig:
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            record = session.get(OrchestratorConfigRecord, GLOBAL_CONFIG_KEY)
+            if record is None:
+                return AttentionOrchestratorConfig()
+            config = AttentionOrchestratorConfig.from_payload(record.payload_json)
+        if self.cache_store is not None:
+            self.cache_store.save_config(config)
+        return config
+
+    def save_config(self, config: AttentionOrchestratorConfig) -> AttentionOrchestratorConfig:
+        payload = config.as_payload()
+        with self.session_factory() as session:
+            record = session.get(OrchestratorConfigRecord, GLOBAL_CONFIG_KEY)
+            if record is None:
+                record = OrchestratorConfigRecord(config_key=GLOBAL_CONFIG_KEY)
+                session.add(record)
+            record.payload_json = payload
+            session.commit()
+        resolved = AttentionOrchestratorConfig.from_payload(payload)
+        if self.cache_store is not None:
+            self.cache_store.save_config(resolved)
+        return resolved
+
+    def _sync_cache(self, state: ClipGlobalState) -> None:
+        if self.cache_store is not None:
+            self.cache_store.save_clip(state)
+
+    @staticmethod
+    def _state_from_record(record: OrchestratorClipStateRecord) -> ClipGlobalState:
+        return ClipGlobalState(
+            clip_id=record.clip_id,
+            stage=str(record.stage or TEST_STAGE),
+            allocated_impressions=max(int(record.allocated_impressions or 0), 0),
+            consumed_impressions=max(int(record.consumed_impressions or 0), 0),
+            velocity_score=max(float(record.velocity_score or 0.0), 0.0),
+            quality_score=min(max(float(record.quality_score or 0.0), 0.0), 1.0),
+            trust_score=min(max(float(record.trust_score or 0.0), 0.0), 1.0),
+            is_ad=bool(record.is_ad),
+            is_moment=bool(record.is_moment),
+            bid_weight=max(float(record.bid_weight or 0.0), 0.0),
+            age_hours=max(float(record.age_hours or 0.0), 0.0),
+            base_clip_id=_as_optional_text(record.base_clip_id),
+            winner_variant_id=_as_optional_text(record.winner_variant_id),
+            metadata=dict(record.metadata_json or {}),
+            updated_at=record.updated_at.astimezone(UTC) if record.updated_at.tzinfo is not None else record.updated_at.replace(tzinfo=UTC),
+        )
+
+    @staticmethod
+    def _apply_state(record: OrchestratorClipStateRecord, state: ClipGlobalState) -> None:
+        record.stage = str(state.stage or TEST_STAGE)
+        record.allocated_impressions = max(int(state.allocated_impressions), 0)
+        record.consumed_impressions = max(int(state.consumed_impressions), 0)
+        record.velocity_score = max(float(state.velocity_score), 0.0)
+        record.quality_score = min(max(float(state.quality_score), 0.0), 1.0)
+        record.trust_score = min(max(float(state.trust_score), 0.0), 1.0)
+        record.is_ad = bool(state.is_ad)
+        record.is_moment = bool(state.is_moment)
+        record.bid_weight = max(float(state.bid_weight), 0.0)
+        record.age_hours = max(float(state.age_hours), 0.0)
+        record.base_clip_id = _as_optional_text(state.base_clip_id)
+        record.winner_variant_id = _as_optional_text(state.winner_variant_id)
+        record.metadata_json = dict(state.metadata or {})
+        record.updated_at = state.updated_at.astimezone(UTC)
+
+
+def build_global_feed_state_store(
+    *,
+    settings: Settings | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+    read_session_factory: sessionmaker[Session] | None = None,
+    backend: CacheBackend | None = None,
+) -> GlobalFeedStateStore:
     resolved_settings = settings or get_settings()
-    backend = build_cache_backend(settings=resolved_settings)
-    if isinstance(backend, RedisCacheBackend):
-        return CacheGlobalFeedStateStore(backend=backend)
-    return InMemoryGlobalFeedStateStore()
+    resolved_session_factory = session_factory or create_session_factory(
+        create_database_engine(resolved_settings.database_url)
+    )
+    resolved_read_session_factory = read_session_factory or create_read_session_factory(
+        create_read_database_engine(resolved_settings.database_read_url)
+    )
+    resolved_backend = backend or build_cache_backend(settings=resolved_settings)
+    return PersistentGlobalFeedStateStore(
+        session_factory=resolved_session_factory,
+        read_session_factory=resolved_read_session_factory,
+        cache_store=CacheGlobalFeedStateStore(backend=resolved_backend),
+    )
 
 
 def _as_float(value: object, default: float) -> float:

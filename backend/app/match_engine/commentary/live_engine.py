@@ -289,9 +289,17 @@ class LiveCommentaryEngine:
         context["generated_by"] = provider
         context["llm_budget"] = llm_budget
         intensity = self._intensity_for(context, tier=tier)
-        tone = "hype" if tier == "llm" or context["is_major_moment"] else "tactical"
+        tone = (
+            "high_intensity"
+            if context["is_final"]
+            else "dramatic"
+            if context["late_deadlock"]
+            else "hype"
+            if tier == "llm" or context["is_major_moment"]
+            else "tactical"
+        )
         commentator = "lead" if tier == "llm" or context["event_family"] in {"goal", "card"} else "analyst"
-        audio_channel = "headline" if tone == "hype" else "match_bed"
+        audio_channel = "headline" if tone in {"high_intensity", "dramatic", "hype"} else "match_bed"
 
         self._update_memory(memory, context)
         self.memory_store.save(match_id, memory)
@@ -329,6 +337,7 @@ class LiveCommentaryEngine:
         home_score = int(getattr(event, "home_score", 0) or 0)
         away_score = int(getattr(event, "away_score", 0) or 0)
         score_delta = home_score - away_score
+        score_diff = abs(score_delta)
         previous_delta = memory.previous_home_score - memory.previous_away_score
         metadata = _metadata(event)
         xg = _float_value(metadata.get("xg"), default=_float_value(metadata.get("chance_quality"), default=0.0))
@@ -372,6 +381,7 @@ class LiveCommentaryEngine:
             "scoreline": f"{home_score}-{away_score}",
             "previous_scoreline": f"{memory.previous_home_score}-{memory.previous_away_score}",
             "score_delta": score_delta,
+            "score_diff": score_diff,
             "xg": round(xg, 2),
             "shot_distance": round(_float_value(metadata.get("shot_distance"), default=0.0), 2),
             "shot_angle": round(_float_value(metadata.get("shot_angle"), default=0.0), 2),
@@ -391,7 +401,12 @@ class LiveCommentaryEngine:
             "equalizer": equalizer,
             "go_ahead": go_ahead,
             "comeback": comeback,
+            "is_final": bool(metadata.get("is_final")),
+            "competition_name": _string_or_none(metadata.get("competition_name")),
+            "stage_name": _string_or_none(metadata.get("stage_name")),
+            "player_story_hook": _string_or_none(metadata.get("player_story_hook")),
             "late_drama": minute >= 85 and abs(score_delta) <= 1,
+            "late_deadlock": minute >= 85 and score_diff == 0,
             "is_major_moment": event_family in {"goal", "card"} or bool(
                 minute >= 85 and (xg >= 0.35 or go_ahead or equalizer or comeback)
             ),
@@ -597,8 +612,11 @@ class LiveCommentaryEngine:
         distance = int(round(float(context.get("shot_distance") or 0)))
         player_form = context.get("player_form") or "steady"
         if context["event_family"] == "goal":
+            stage = context.get("stage_name") or context.get("competition_name")
             if context["reviewable"] and context["review_decision"] == "disallowed":
                 return f"Chaos for {team}, but the goal is wiped away after the review."
+            if context["is_final"] and stage:
+                return f"{player} lands a final-stage blow for {team}! {stage} pressure turns into release."
             if context["equalizer"]:
                 return f"{player} drags {team} level! The pressure had been building and they finally break through."
             if context["go_ahead"] and context["late_drama"]:
@@ -611,14 +629,23 @@ class LiveCommentaryEngine:
                 base = f"{player} buries it for {team} from {distance} yards."
             else:
                 base = f"{player} delivers for {team}!"
+            story_hook = context.get("player_story_hook")
             if player_form == "on_fire":
+                if story_hook:
+                    return f"{base} {story_hook}"
                 return f"{base} He has been threatening this all match."
             if context["momentum"] == context.get("team_side"):
                 return f"{base} It felt like this moment was coming."
+            if story_hook:
+                return f"{base} {story_hook}"
             return base
         if context["event_type"] == MatchEventType.RED_CARD.value:
+            if context["is_final"]:
+                return f"{player} is off in the final stretch! {team} now face a brutal climb."
             return f"{player} is off! {team} are down to ten and the match tilts instantly."
         if context["event_family"] == "shot":
+            if context["late_deadlock"]:
+                return "The tension is unbearable as the chance opens up. Who breaks the deadlock now?"
             if context["late_drama"]:
                 return f"{player} goes for the killer blow for {team}, and everyone inside the ground holds their breath."
             if context["xg"] >= 0.55:

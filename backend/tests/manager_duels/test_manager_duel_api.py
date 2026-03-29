@@ -132,7 +132,11 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         spectate_payload = spectate_response.json()
         assert spectate_payload["user_id"] == spectator_user.id
         assert spectate_payload["read_only"] is True
-        assert spectate_payload["channel"] == f"match:{duel_id}"
+        assert spectate_payload["channel"] == f"match:{duel_id}:events"
+        assert spectate_payload["presence_channel"] == f"match:{duel_id}:events"
+        assert spectate_payload["presence_websocket_path"] == f"/ws/spectate/{duel_id}"
+        assert spectate_payload["replay_route"] == f"/api/matches/{duel_id}/replay"
+        assert [item["key"] for item in spectate_payload["speed_modes"]] == ["normal", "fast", "turbo"]
         assert spectate_payload["sync_strategy"] == "deterministic_playback"
         assert spectate_payload["watch_party_enabled"] is True
         assert spectate_payload["reactions_enabled"] is True
@@ -142,7 +146,7 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         websocket_path = spectate_payload["websocket_path"]
         with client.websocket_connect(websocket_path) as websocket:
             first_message = websocket.receive_json()
-            assert first_message["channel"] == f"match:{duel_id}"
+            assert first_message["channel"] == f"match:{duel_id}:events"
             assert first_message["kind"] == "snapshot"
             assert {"home", "draw", "away"} <= set(
                 first_message["payload"]["win_probability"].keys()

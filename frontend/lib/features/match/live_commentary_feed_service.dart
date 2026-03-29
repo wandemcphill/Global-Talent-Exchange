@@ -7,6 +7,8 @@ import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/services/reliability/reliable_event_queue.dart';
 import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dart';
 
+import 'live_match_session_service.dart';
+
 abstract interface class LiveCommentaryFeedService {
   Stream<List<LiveMatchEvent>> watch({
     required String matchId,
@@ -18,10 +20,13 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
   HybridLiveCommentaryFeedService({
     GteAppConfig? config,
     LiveCommentaryFeedService? fallback,
+    LiveMatchSessionService? sessionService,
   }) : _config = config ?? GteAppConfig.fromEnvironment(),
-       _fallback = fallback ?? const StaticLiveCommentaryFeedService();
+       _sessionService = sessionService ?? LiveMatchSessionService(config: config),
+        _fallback = fallback ?? const StaticLiveCommentaryFeedService();
 
   final GteAppConfig _config;
+  final LiveMatchSessionService _sessionService;
   final LiveCommentaryFeedService _fallback;
 
   @override
@@ -29,43 +34,42 @@ class HybridLiveCommentaryFeedService implements LiveCommentaryFeedService {
     required String matchId,
     required List<LiveMatchEvent> seedEvents,
   }) {
-    final Uri? socketUri = _socketUriFor(_config.apiBaseUrl, matchId: matchId);
-    final bool canUseWebSocket =
-        _config.backendMode != GteBackendMode.fixture &&
-        socketUri != null &&
-        !_isLocalSocket(socketUri);
-    if (!canUseWebSocket) {
+    if (_config.backendMode == GteBackendMode.fixture) {
       return _fallback.watch(matchId: matchId, seedEvents: seedEvents);
     }
-    return WebSocketLiveCommentaryFeedService(
-      socketUri: socketUri,
-    ).watch(matchId: matchId, seedEvents: seedEvents);
-  }
+    return Stream<List<LiveMatchEvent>>.multi((
+      MultiStreamController<List<LiveMatchEvent>> controller,
+    ) {
+      controller.add(List<LiveMatchEvent>.unmodifiable(_sortEvents(seedEvents)));
 
-  static Uri? _socketUriFor(String baseUrl, {required String matchId}) {
-    final Uri? parsed = Uri.tryParse(baseUrl);
-    if (parsed == null || !parsed.hasScheme || parsed.host.trim().isEmpty) {
-      return null;
-    }
-    final String scheme = switch (parsed.scheme) {
-      'https' => 'wss',
-      'http' => 'ws',
-      'wss' || 'ws' => parsed.scheme,
-      _ => 'wss',
-    };
-    return parsed.replace(
-      scheme: scheme,
-      path: '/commentary',
-      queryParameters: <String, String>{'match_id': matchId},
-    );
-  }
+      StreamSubscription<List<LiveMatchEvent>>? relaySubscription;
 
-  static bool _isLocalSocket(Uri socketUri) {
-    final String host = socketUri.host.trim().toLowerCase();
-    return host.isEmpty ||
-        host == 'localhost' ||
-        host == '127.0.0.1' ||
-        host == '::1';
+      () async {
+        final session = await _sessionService.resolveSession(matchId);
+        final Uri? socketUri = _sessionService.resolveWebSocketUri(
+          session?.commentaryWebsocketPath,
+        );
+        if (socketUri == null) {
+          relaySubscription = _fallback
+              .watch(matchId: matchId, seedEvents: seedEvents)
+              .listen(
+                (List<LiveMatchEvent> events) => controller.add(events),
+                onError: (_) {},
+              );
+          return;
+        }
+        relaySubscription = WebSocketLiveCommentaryFeedService(
+          socketUri: socketUri,
+        ).watch(matchId: matchId, seedEvents: seedEvents).listen(
+              (List<LiveMatchEvent> events) => controller.add(events),
+              onError: (_) {},
+            );
+      }();
+
+      controller.onCancel = () async {
+        await relaySubscription?.cancel();
+      };
+    });
   }
 }
 

@@ -50,7 +50,7 @@ from app.models.transfer_window import TransferWindow
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.club_identity.models.reputation import ClubReputationProfile
-from app.club_finance.service import ClubFinanceService
+from app.club_finance.service import ClubFinanceError, ClubFinanceService
 from app.ownership_groups.service import OwnershipGroupService
 from app.schemas.player_lifecycle import (
     AvailabilityBadgeView,
@@ -1482,7 +1482,10 @@ class PlayerLifecycleService:
         if payload.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bids require a buying club")
         self._require_club_profile(payload.buying_club_id)
-        ClubFinanceService(self.session).assert_transfer_allowed_for_club(club_id=payload.buying_club_id)
+        try:
+            ClubFinanceService(self.session).assert_transfer_allowed_for_club(club_id=payload.buying_club_id)
+        except ClubFinanceError as exc:
+            raise PlayerLifecycleValidationError(exc.detail) from exc
         if payload.selling_club_id is not None:
             self._require_club_profile(payload.selling_club_id)
 

@@ -68,6 +68,8 @@ def create_app(
     app.state.context = context
     app.state.db_engine = context.database.engine
     app.state.session_factory = context.database.session_factory
+    app.state.read_db_engine = context.database.read_engine
+    app.state.read_session_factory = context.database.read_session_factory
     app.state.metrics = context.metrics
     app.state.module_specs = modules
     app.state.domain_modules = tuple(module.name for module in modules)
@@ -101,6 +103,7 @@ def get_asgi_app() -> FastAPI:
 
 def register_core(app: FastAPI) -> None:
     from app.auth.dependencies import get_session as auth_get_session
+    from app.core.database import get_read_session as core_get_read_session
     from app.core.database import get_session as core_get_session
     from app.core.health import router as health_router
     from app.core.rate_limit import RateLimitMiddleware
@@ -117,6 +120,7 @@ def register_core(app: FastAPI) -> None:
         app.add_middleware(ObservabilityMiddleware, metrics=context.metrics)
     app.dependency_overrides[db_get_session] = context.database.get_session
     app.dependency_overrides[core_get_session] = context.database.get_session
+    app.dependency_overrides[core_get_read_session] = context.database.get_read_session
     app.dependency_overrides[auth_get_session] = context.database.get_session
 
     @app.on_event("startup")

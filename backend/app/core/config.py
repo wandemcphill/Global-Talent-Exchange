@@ -47,6 +47,7 @@ class SettingsSource(BaseSettings):
     app_env: str = Field(default="development", validation_alias="GTE_APP_ENV")
     phase_marker: str = Field(default="phase-8", validation_alias="GTE_PHASE_MARKER")
     config_root_override: str | None = Field(default=None, validation_alias="GTE_CONFIG_DIR")
+    database_read_url: str | None = Field(default=None, validation_alias="GTE_DATABASE_READ_URL")
     redis_url: str | None = Field(default=None, validation_alias="GTE_REDIS_URL")
     redis_event_channel: str = Field(default="gtex.events", validation_alias="GTE_REDIS_EVENT_CHANNEL")
     redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
@@ -248,6 +249,13 @@ def resolve_database_url(environ: Mapping[str, str]) -> str:
         "DATABASE_URL is required for backend database access. "
         "GTE_DATABASE_URL is accepted only as a legacy fallback."
     )
+
+
+def resolve_database_read_url(environ: Mapping[str, str], *, default_database_url: str) -> str:
+    value = environ.get("GTE_DATABASE_READ_URL")
+    if value is None or not value.strip():
+        return default_database_url
+    return normalize_database_url(value)
 
 
 def _load_toml_document(path: Path) -> dict[str, object]:
@@ -633,6 +641,7 @@ class Settings:
     backend_root: Path
     config_root: Path
     database_url: str
+    database_read_url: str
     redis_url: str | None
     redis_event_channel: str
     redis_realtime_channel: str
@@ -1768,6 +1777,7 @@ def load_settings(
         resolved_environ,
         config_root if config_root is not None else source.config_root_override,
     )
+    database_url = resolve_database_url(resolved_environ)
     return Settings(
         app_name=source.app_name,
         app_version=source.app_version,
@@ -1776,7 +1786,8 @@ def load_settings(
         project_root=PROJECT_ROOT,
         backend_root=BACKEND_ROOT,
         config_root=resolved_config_root,
-        database_url=resolve_database_url(resolved_environ),
+        database_url=database_url,
+        database_read_url=resolve_database_read_url(resolved_environ, default_database_url=database_url),
         redis_url=source.redis_url,
         redis_event_channel=source.redis_event_channel,
         redis_realtime_channel=source.redis_realtime_channel,

@@ -9,19 +9,15 @@ from sqlalchemy.orm import Session
 
 from app.core.trust_middleware import SharedTrustMiddleware
 from app.leaderboards.models import LeaderboardMatchResult, LeaderboardPlayerRating, LeaderboardSeason
+from app.leaderboards.season_config import DEFAULT_RANK_TIERS, rank_tier_for_rating
 from app.models.user import User
 from app.models.user_region import UserRegionProfile
 
 DEFAULT_RATING = 1200
 DEFAULT_K_FACTOR = 32
 DEFAULT_DIVISION = "bronze"
-DIVISION_THRESHOLDS: tuple[tuple[int, str], ...] = (
-    (1700, "elite"),
-    (1550, "diamond"),
-    (1400, "platinum"),
-    (1250, "gold"),
-    (1100, "silver"),
-    (0, "bronze"),
+DIVISION_THRESHOLDS: tuple[tuple[int, str], ...] = tuple(
+    (tier.min_rating, tier.key) for tier in DEFAULT_RANK_TIERS
 )
 
 
@@ -271,11 +267,7 @@ class RankingService:
 
     @staticmethod
     def division_for_rating(rating: int | float) -> str:
-        resolved_rating = int(round(float(rating)))
-        for threshold, division in DIVISION_THRESHOLDS:
-            if resolved_rating >= threshold:
-                return division
-        return DEFAULT_DIVISION
+        return rank_tier_for_rating(rating).key
 
     def _refresh_player_identity(
         self,

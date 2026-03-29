@@ -11,6 +11,7 @@ from app.live_matches.schemas import (
     MatchHighlightResponseView,
     MatchHighlightShareItemView,
     MatchHighlightSharePackageView,
+    LiveMatchSpeedModeView,
     SpectatorSessionView,
 )
 from app.live_matches.service import LiveMatchError, ensure_live_match_hub
@@ -68,10 +69,18 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         user_id=item.user_id,
         joined_at=item.joined_at,
         read_only=True,
-        channel=f"match:{match_id}",
+        channel=f"match:{match_id}:events",
         websocket_path=f"/api/matches/{match_id}/stream?session_id={item.id}",
         commentary_websocket_path=f"/api/matches/{match_id}/commentary/stream?session_id={item.id}",
+        presence_channel=f"match:{match_id}:events",
+        presence_websocket_path=f"/ws/spectate/{match_id}",
         tts_websocket_path="/tts/live?voice=default",
+        replay_route=f"/api/matches/{match_id}/replay",
+        speed_modes=[
+            LiveMatchSpeedModeView(key="normal", label="Normal", target_duration_seconds=90),
+            LiveMatchSpeedModeView(key="fast", label="Fast", target_duration_seconds=30),
+            LiveMatchSpeedModeView(key="turbo", label="Turbo", target_duration_seconds=10),
+        ],
         access_source=payload.get("access_source"),
         rights_owner_id=payload.get("rights_owner_id"),
         viewing_fee_coin=payload.get("viewing_fee_coin") or 0,
@@ -87,16 +96,16 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
 def _commentary_payload(events) -> list[dict[str, object]]:
     payload: list[dict[str, object]] = []
     for event in events:
-        line = str(event.metadata.get("description") or "").strip()
+        line = str(event.commentary or event.metadata.get("description") or "").strip()
         if not line:
             continue
         payload.append(
             {
                 "minute": event.minute,
-                "event_type": str(event.metadata.get("raw_event_type") or event.event_type),
+                "event_type": str(event.source_event_type or event.metadata.get("raw_event_type") or event.event_type),
                 "line": line,
-                "team": event.metadata.get("team_name"),
-                "player": event.metadata.get("player_name"),
+                "team": event.team or event.metadata.get("team_name"),
+                "player": event.player or event.metadata.get("player_name"),
                 "context": dict(event.metadata.get("commentary_context") or {}),
                 "cue": event.experience.commentary.model_dump(mode="json") if event.experience is not None and event.experience.commentary is not None else None,
             }

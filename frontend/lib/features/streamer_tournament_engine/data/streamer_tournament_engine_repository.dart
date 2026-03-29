@@ -8,6 +8,14 @@ abstract class StreamerTournamentEngineRepository {
 
   Future<StreamerTournamentList> listMyTournaments();
 
+  Future<LeaderboardBoard> fetchGlobalLeaderboard({int limit = 12});
+
+  Future<LeaderboardSeason> fetchCurrentSeason();
+
+  Future<LeaderboardSeasonHistory> fetchSeasonHistory({int limit = 4});
+
+  Future<LeaderboardPlayerRanks> fetchPlayerRanks(String playerId);
+
   Future<StreamerTournament> createTournament(
     StreamerTournamentCreateRequest request,
   );
@@ -61,13 +69,16 @@ abstract class StreamerTournamentEngineRepository {
     String tournamentId,
     StreamerTournamentSettleRequest request,
   );
+
+  Future<LeaderboardSeasonLifecycle> archiveSeason();
+
+  Future<LeaderboardSeasonLifecycle> resetSeason();
 }
 
 class StreamerTournamentEngineApiRepository
     implements StreamerTournamentEngineRepository {
-  StreamerTournamentEngineApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  StreamerTournamentEngineApiRepository({required GteAuthedApi client})
+    : _client = client;
 
   factory StreamerTournamentEngineApiRepository.standard({
     required String baseUrl,
@@ -96,6 +107,42 @@ class StreamerTournamentEngineApiRepository
   Future<StreamerTournamentList> listMyTournaments() async {
     return StreamerTournamentList.fromJson(
       await _client.getMap('/streamer-tournaments/mine'),
+    );
+  }
+
+  @override
+  Future<LeaderboardBoard> fetchGlobalLeaderboard({int limit = 12}) async {
+    return LeaderboardBoard.fromJson(
+      await _client.getMap(
+        '/leaderboard/global',
+        auth: false,
+        query: <String, Object?>{'limit': limit},
+      ),
+    );
+  }
+
+  @override
+  Future<LeaderboardSeason> fetchCurrentSeason() async {
+    return LeaderboardSeason.fromJson(
+      await _client.getMap('/season/current', auth: false),
+    );
+  }
+
+  @override
+  Future<LeaderboardSeasonHistory> fetchSeasonHistory({int limit = 4}) async {
+    return LeaderboardSeasonHistory.fromJson(
+      await _client.getMap(
+        '/season/history',
+        auth: false,
+        query: <String, Object?>{'limit': limit},
+      ),
+    );
+  }
+
+  @override
+  Future<LeaderboardPlayerRanks> fetchPlayerRanks(String playerId) async {
+    return LeaderboardPlayerRanks.fromJson(
+      await _client.getMap('/leaderboard/player/$playerId', auth: false),
     );
   }
 
@@ -257,6 +304,20 @@ class StreamerTournamentEngineApiRepository
         '/admin/streamer-tournaments/$tournamentId/settle',
         body: request.toJson(),
       ),
+    );
+  }
+
+  @override
+  Future<LeaderboardSeasonLifecycle> archiveSeason() async {
+    return LeaderboardSeasonLifecycle.fromJson(
+      await _client.post('/admin/leaderboard/season/archive'),
+    );
+  }
+
+  @override
+  Future<LeaderboardSeasonLifecycle> resetSeason() async {
+    return LeaderboardSeasonLifecycle.fromJson(
+      await _client.post('/admin/leaderboard/season/reset'),
     );
   }
 }

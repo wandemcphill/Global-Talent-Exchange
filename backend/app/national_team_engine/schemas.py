@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -120,9 +120,14 @@ class NationalTeamRentalPlayerView(BaseModel):
     current_club_name: str | None = None
     current_league_name: str | None = None
     nationality: str | None = None
+    country_code: str | None = None
+    gsi: int
     base_value_coin: Decimal
     loan_price_coin: Decimal
     tier_label: str
+    source_bucket: str
+    tradable: bool = True
+    supply_mode: str = "infinite"
 
 
 class NationalTeamRentalPlayerCollectionResponse(BaseModel):
@@ -133,6 +138,35 @@ class NationalTeamRentalPlayerCollectionResponse(BaseModel):
 class NationalTeamRentalCreateRequest(BaseModel):
     player_id: str = Field(min_length=1, max_length=36)
     shirt_number: int | None = Field(default=None, ge=1, le=99)
+
+
+class NationalTeamAutoBuildRequest(BaseModel):
+    country_code: str = Field(min_length=2, max_length=8)
+    budget_coin: Decimal = Field(gt=0)
+    tactic: str = Field(default="balanced", min_length=2, max_length=32)
+    real_only: bool = False
+    preseeded_only: bool = False
+    source_buckets: tuple[str, ...] = Field(default_factory=tuple)
+    positions: tuple[str, ...] = Field(default_factory=tuple)
+    tradable_only: bool = False
+
+
+class NationalTeamAutoBuildPlayerView(NationalTeamRentalPlayerView):
+    assigned_slot: str
+
+
+class NationalTeamAutoBuildResponse(BaseModel):
+    competition_id: str
+    country_code: str
+    tactic: str
+    formation: str
+    requested_budget_coin: Decimal
+    total_cost_coin: Decimal
+    remaining_budget_coin: Decimal
+    selected_count: int
+    complete: bool
+    unfilled_slots: list[str] = Field(default_factory=list)
+    players: list[NationalTeamAutoBuildPlayerView] = Field(default_factory=list)
 
 
 class RentalContractResponse(BaseModel):
@@ -249,6 +283,62 @@ class NationalTeamCompetitionPresentationResponse(BaseModel):
     active_theme: TournamentThemeResponse | None = None
     active_ads: list[StadiumAdResponse] = Field(default_factory=list)
     story_events: list[StoryEventResponse] = Field(default_factory=list)
+
+
+class NationalTeamCompetitionSquadPlayerRequest(BaseModel):
+    player_id: str | None = Field(default=None, max_length=36)
+    player_name: str | None = Field(default=None, max_length=160)
+    date_of_birth: date | None = None
+    age: int | None = Field(default=None, ge=1, le=60)
+    overall_rating: int | None = Field(default=None, ge=40, le=99)
+    position: str | None = Field(default=None, max_length=32)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalTeamCompetitionEntrySubmitRequest(BaseModel):
+    country_code: str = Field(min_length=2, max_length=8)
+    country_name: str = Field(min_length=2, max_length=120)
+    squad: list[NationalTeamCompetitionSquadPlayerRequest] = Field(default_factory=list)
+
+
+class NationalTeamCompetitionSquadPlayerResponse(BaseModel):
+    player_id: str | None = None
+    player_name: str
+    date_of_birth: date | None = None
+    age: int | None = None
+    resolved_age: int | None = None
+    overall_rating: int | None = None
+    position: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalTeamCompetitionEntryResponse(BaseModel):
+    id: str
+    competition_id: str
+    user_id: str
+    country_code: str
+    country_name: str
+    locked: bool
+    qualified: bool
+    status: str
+    strength_rating: float
+    squad: list[NationalTeamCompetitionSquadPlayerResponse] = Field(default_factory=list)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class NationalTeamCompetitionLifecycleResponse(BaseModel):
+    competition: NationalTeamCompetitionResponse
+    profile: dict[str, Any] = Field(default_factory=dict)
+    current_stage: str
+    submitted_entries: list[NationalTeamCompetitionEntryResponse] = Field(default_factory=list)
+    representative_entries: list[NationalTeamCompetitionEntryResponse] = Field(default_factory=list)
+    qualified_entries: list[NationalTeamCompetitionEntryResponse] = Field(default_factory=list)
+    champion_entry_id: str | None = None
+    schedule_plan: list[dict[str, Any]] = Field(default_factory=list)
+    stage_history: list[dict[str, Any]] = Field(default_factory=list)
+    stage_results: dict[str, Any] = Field(default_factory=dict)
 
 
 NationalTeamEntryDetailResponse.model_rebuild()

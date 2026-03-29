@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 import logging
 from threading import Lock
@@ -11,13 +11,21 @@ from fastapi import FastAPI
 from redis import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import inspect, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.core.database import (
+    create_database_engine,
+    create_read_database_engine,
+    create_read_session_factory,
+    create_session_factory,
+)
 from app.core.trust_middleware import SharedTrustMiddleware
 from app.feedback_engine.service import FeedbackEngine
+from app.models.analytics_event import AnalyticsEvent
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
+from app.models.scale_backbone import ViralLeaderboardEntryRecord
 from app.runtime_config.service import ensure_runtime_config_loader
 from app.users.follow_service import build_follow_notification_service
 from app.viral.aggregation_worker import (
@@ -167,6 +175,75 @@ class RedisViralLeaderboardStore:
         return envelopes
 
 
+@dataclass(slots=True)
+class PersistentViralLeaderboardStore:
+    session_factory: sessionmaker[Session]
+    read_session_factory: sessionmaker[Session] | None = None
+    redis_store: RedisViralLeaderboardStore | None = None
+
+    def __post_init__(self) -> None:
+        if self.read_session_factory is None:
+            self.read_session_factory = self.session_factory
+
+    def upsert(self, entries: list[LeaderboardEnvelope]) -> None:
+        if not entries:
+            return
+        with self.session_factory() as session:
+            for entry in entries:
+                record = session.get(ViralLeaderboardEntryRecord, entry.clip_id)
+                if record is None:
+                    record = ViralLeaderboardEntryRecord(clip_id=entry.clip_id)
+                    session.add(record)
+                record.score = float(entry.score)
+                record.payload_json = dict(entry.payload or {})
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.upsert(entries)
+
+    def replace(self, entries: list[LeaderboardEnvelope]) -> None:
+        with self.session_factory() as session:
+            session.query(ViralLeaderboardEntryRecord).delete()
+            for entry in entries:
+                session.add(
+                    ViralLeaderboardEntryRecord(
+                        clip_id=entry.clip_id,
+                        score=float(entry.score),
+                        payload_json=dict(entry.payload or {}),
+                    )
+                )
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.replace(entries)
+
+    def top(self, limit: int) -> list[LeaderboardEnvelope]:
+        if limit <= 0:
+            return []
+        if self.redis_store is not None:
+            cached = self.redis_store.top(limit)
+            if cached:
+                return cached
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            records = list(
+                session.scalars(
+                    select(ViralLeaderboardEntryRecord)
+                    .order_by(ViralLeaderboardEntryRecord.score.desc(), ViralLeaderboardEntryRecord.clip_id.asc())
+                    .limit(limit)
+                ).all()
+            )
+        envelopes = [
+            LeaderboardEnvelope(
+                clip_id=record.clip_id,
+                score=float(record.score),
+                payload=dict(record.payload_json or {}),
+            )
+            for record in records
+        ]
+        if envelopes and self.redis_store is not None:
+            self.redis_store.replace(envelopes)
+        return envelopes
+
+
 @dataclass(frozen=True, slots=True)
 class ClipLiveMetricsSnapshot:
     views: float = 0.0
@@ -249,6 +326,69 @@ class RedisClipLiveMetricsStore:
             views_last_60min=_sum_velocity_bucket_window(velocity_payload, now=now, minutes=60),
             low_trust_views_last_10min=_sum_velocity_bucket_window(low_trust_payload, now=now, minutes=10),
             low_trust_views_last_60min=_sum_velocity_bucket_window(low_trust_payload, now=now, minutes=60),
+        )
+
+
+@dataclass(slots=True)
+class DatabaseClipLiveMetricsStore:
+    read_session_factory: sessionmaker[Session]
+
+    def get_snapshot(self, clip_id: str, *, now: datetime) -> ClipLiveMetricsSnapshot | None:
+        lookback = now - timedelta(minutes=60)
+        try:
+            with self.read_session_factory() as session:
+                events = list(
+                    session.scalars(
+                        select(AnalyticsEvent).where(
+                            AnalyticsEvent.created_at >= lookback,
+                            AnalyticsEvent.metadata_json["clip_id"].as_string() == clip_id,
+                        )
+                    ).all()
+                )
+        except Exception:
+            return None
+        if not events:
+            return None
+        snapshot = ClipLiveMetricsSnapshot()
+        views_last_10min = 0
+        views_last_60min = 0
+        completions = 0.0
+        total_watch_time = 0.0
+        loops = 0.0
+        shares = 0.0
+        comments = 0.0
+        skips = 0.0
+        for event in events:
+            created_at = event.created_at.astimezone(UTC) if event.created_at.tzinfo is not None else event.created_at.replace(tzinfo=UTC)
+            name = str(event.name or "").strip().lower()
+            metadata = dict(event.metadata_json or {})
+            if name == "clip.view":
+                views_last_60min += 1
+                if created_at >= now - timedelta(minutes=10):
+                    views_last_10min += 1
+            elif name == "clip.complete":
+                completions += 1.0
+            elif name == "clip.loop":
+                loops += 1.0
+            elif name == "clip.share":
+                shares += 1.0
+            elif name == "clip.comment":
+                comments += 1.0
+            elif name == "clip.scroll":
+                skips += 1.0
+            total_watch_time += _as_float(metadata.get("watch_time_seconds"))
+        return ClipLiveMetricsSnapshot(
+            views=float(views_last_60min),
+            completions=completions,
+            total_watch_time=round(total_watch_time, 6),
+            loops=loops,
+            shares=shares,
+            comments=comments,
+            skips=skips,
+            views_last_10min=views_last_10min,
+            views_last_60min=views_last_60min,
+            low_trust_views_last_10min=0,
+            low_trust_views_last_60min=0,
         )
 
 
@@ -681,28 +821,55 @@ class ViralRankingService:
         return None
 
 
-def build_viral_leaderboard_store(*, settings: Settings | None = None) -> ViralLeaderboardStore:
+def build_viral_leaderboard_store(
+    *,
+    settings: Settings | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+    read_session_factory: sessionmaker[Session] | None = None,
+) -> ViralLeaderboardStore:
     resolved_settings = settings or get_settings()
+    redis_store = None
     if resolved_settings.redis_url:
-        redis_store = RedisViralLeaderboardStore(resolved_settings.redis_url)
-        if redis_store.ping():
-            return redis_store
-    return InMemoryViralLeaderboardStore()
+        candidate = RedisViralLeaderboardStore(resolved_settings.redis_url)
+        if candidate.ping():
+            redis_store = candidate
+    resolved_session_factory = session_factory or create_session_factory(
+        create_database_engine(resolved_settings.database_url)
+    )
+    resolved_read_session_factory = read_session_factory or create_read_session_factory(
+        create_read_database_engine(resolved_settings.database_read_url)
+    )
+    return PersistentViralLeaderboardStore(
+        session_factory=resolved_session_factory,
+        read_session_factory=resolved_read_session_factory,
+        redis_store=redis_store,
+    )
 
 
-def build_clip_live_metrics_store(*, settings: Settings | None = None) -> ClipLiveMetricsStore:
+def build_clip_live_metrics_store(
+    *,
+    settings: Settings | None = None,
+    read_session_factory: sessionmaker[Session] | None = None,
+) -> ClipLiveMetricsStore:
     resolved_settings = settings or get_settings()
     if resolved_settings.redis_url:
         redis_store = RedisClipLiveMetricsStore(resolved_settings.redis_url)
         if redis_store.ping():
             return redis_store
-    return InMemoryClipLiveMetricsStore()
+    resolved_read_session_factory = read_session_factory or create_read_session_factory(
+        create_read_database_engine(resolved_settings.database_read_url)
+    )
+    return DatabaseClipLiveMetricsStore(read_session_factory=resolved_read_session_factory)
 
 
 def ensure_viral_leaderboard_store(app: FastAPI, *, settings: Settings | None = None) -> ViralLeaderboardStore:
     store = getattr(app.state, "viral_leaderboard_store", None)
     if store is None:
-        store = build_viral_leaderboard_store(settings=settings or getattr(app.state, "settings", None))
+        store = build_viral_leaderboard_store(
+            settings=settings or getattr(app.state, "settings", None),
+            session_factory=getattr(app.state, "session_factory", None),
+            read_session_factory=getattr(app.state, "read_session_factory", None),
+        )
         app.state.viral_leaderboard_store = store
     return store
 
@@ -724,7 +891,10 @@ def build_viral_ranking_service(*, app: FastAPI, session: Session) -> ViralRanki
             runtime_config_loader=runtime_config_loader,
         ),
         notification_service=build_follow_notification_service(app=app, session=session),
-        metrics_store=build_clip_live_metrics_store(settings=settings),
+        metrics_store=build_clip_live_metrics_store(
+            settings=settings,
+            read_session_factory=getattr(app.state, "read_session_factory", None),
+        ),
         trust_middleware=SharedTrustMiddleware(
             session=session,
             trust_service=ensure_trust_score_service(app, settings=settings),

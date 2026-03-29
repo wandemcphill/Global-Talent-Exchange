@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -40,6 +40,10 @@ class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     created_by_user: Mapped["User | None"] = relationship()
     entries: Mapped[list["NationalTeamEntry"]] = relationship(back_populates="competition", cascade="all, delete-orphan")
+    submitted_entries: Mapped[list["NationalTeamCompetitionEntry"]] = relationship(
+        back_populates="competition",
+        cascade="all, delete-orphan",
+    )
 
 
 class NationalTeamEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -57,6 +61,43 @@ class NationalTeamEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     manager_user: Mapped["User | None"] = relationship()
     squad_members: Mapped[list["NationalTeamSquadMember"]] = relationship(back_populates="entry", cascade="all, delete-orphan")
     manager_history: Mapped[list["NationalTeamManagerHistory"]] = relationship(back_populates="entry", cascade="all, delete-orphan")
+
+
+class NationalTeamCompetitionEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "national_team_competition_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "competition_id",
+            "user_id",
+            name="uq_national_team_competition_entries_competition_user",
+        ),
+        Index("ix_national_team_competition_entries_competition_id", "competition_id"),
+        Index("ix_national_team_competition_entries_country_code", "country_code"),
+        Index("ix_national_team_competition_entries_locked", "locked"),
+        Index("ix_national_team_competition_entries_status", "status"),
+        Index("ix_national_team_competition_entries_qualified", "qualified"),
+    )
+
+    competition_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("national_team_competitions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    country_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    country_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    squad_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    qualified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted", server_default="submitted")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    competition: Mapped["NationalTeamCompetition"] = relationship(back_populates="submitted_entries")
+    user: Mapped["User"] = relationship()
 
 
 class NationalTeamSquadMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):

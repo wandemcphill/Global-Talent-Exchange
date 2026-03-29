@@ -9,6 +9,7 @@ import 'package:gte_frontend/data/match/match_simulation_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/match/live_commentary_feed_service.dart';
+import 'package:gte_frontend/features/match/live_match_snapshot_feed_service.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match/gtex_match_render_mode.dart';
@@ -68,6 +69,8 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   _LiveViewMode _viewMode = _LiveViewMode.commentary;
   final LiveCommentaryFeedService _commentaryFeedService =
       HybridLiveCommentaryFeedService();
+  final LiveMatchSnapshotFeedService _liveSnapshotFeedService =
+      HybridLiveMatchSnapshotFeedService();
   final Map<String, bool> _tacticToggles = <String, bool>{
     'High press': true,
     'Overlap fullbacks': false,
@@ -76,7 +79,10 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   };
   Stream<List<LiveMatchEvent>>? _commentaryStream;
   StreamSubscription<List<LiveMatchEvent>>? _commentarySubscription;
+  StreamSubscription<LiveMatchSnapshot>? _liveSnapshotSubscription;
   String? _commentaryBindingKey;
+  String? _liveSnapshotBindingKey;
+  LiveMatchSnapshot? _currentMatch;
   final Set<String> _seenCommentaryKeys = <String>{};
   bool _commentarySeedHydrated = false;
   bool _bigMomentPromptOpen = false;
@@ -99,9 +105,11 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
 
   void _reload() {
     _disposeCommentaryFeed();
+    _disposeLiveSnapshotFeed();
     setState(() {
       _snapshotFuture = _loadSnapshot();
       _countdownStartedAt = DateTime.now();
+      _currentMatch = null;
     });
   }
 
@@ -242,13 +250,7 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
         match.matchId?.trim().isNotEmpty == true
             ? match.matchId!.trim()
             : widget.competition.id;
-    final String bindingKey = <Object>[
-      matchKey,
-      match.minute,
-      match.homeScore,
-      match.awayScore,
-      match.commentary.length,
-    ].join('|');
+    final String bindingKey = matchKey;
     if (_commentaryBindingKey == bindingKey && _commentaryStream != null) {
       return;
     }
@@ -279,6 +281,38 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
     _commentarySeedHydrated = false;
     if (clearBindingKey) {
       _commentaryBindingKey = null;
+    }
+  }
+
+  void _bindLiveSnapshotFeed(LiveMatchSnapshot match) {
+    final String matchKey =
+        match.matchId?.trim().isNotEmpty == true
+            ? match.matchId!.trim()
+            : widget.competition.id;
+    if (_liveSnapshotBindingKey == matchKey) {
+      return;
+    }
+    _disposeLiveSnapshotFeed(clearBindingKey: false);
+    _liveSnapshotBindingKey = matchKey;
+    _currentMatch = match;
+    _liveSnapshotSubscription = _liveSnapshotFeedService
+        .watch(seed: match)
+        .listen((LiveMatchSnapshot updated) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _currentMatch = updated;
+          });
+        }, onError: (_) {});
+  }
+
+  void _disposeLiveSnapshotFeed({bool clearBindingKey = true}) {
+    _liveSnapshotSubscription?.cancel();
+    _liveSnapshotSubscription = null;
+    if (clearBindingKey) {
+      _liveSnapshotBindingKey = null;
+      _currentMatch = null;
     }
   }
 
@@ -499,6 +533,7 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   void dispose() {
     _countdownTicker.cancel();
     _disposeCommentaryFeed();
+    _disposeLiveSnapshotFeed();
     super.dispose();
   }
 
@@ -557,7 +592,8 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
               );
             }
 
-            final LiveMatchSnapshot match = snapshot.data!;
+            final LiveMatchSnapshot match = _currentMatch ?? snapshot.data!;
+            _bindLiveSnapshotFeed(match);
             _bindCommentaryFeed(match);
             final Stream<List<LiveMatchEvent>>? commentaryStream =
                 _commentaryStream;

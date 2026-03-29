@@ -7,11 +7,16 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.cache.hot_paths import HotPathCache
+from app.core.cache import CacheBackend, NullCacheBackend
+from app.models.competition_match import CompetitionMatch
 from app.models.community_engine import CompetitionWatchlist, LiveThread
 from app.models.daily_challenge import DailyChallenge, DailyChallengeStatus
 from app.models.discovery_engine import FeaturedRail, SavedSearch
 from app.models.hosted_competition import UserHostedCompetition
+from app.models.match_event import MatchEvent, MatchEventType
 from app.models.national_team import NationalTeamCompetition
+from app.models.spectator_session import SpectatorSession
 from app.models.story_feed import StoryFeedItem
 from app.models.user import User
 from app.models.youth_prospect import YouthProspect
@@ -24,6 +29,7 @@ class DiscoveryEngineError(ValueError):
 @dataclass(slots=True)
 class DiscoveryEngineService:
     session: Session
+    cache_backend: CacheBackend | None = None
 
     def seed_defaults(self) -> None:
         defaults = (
@@ -117,10 +123,12 @@ class DiscoveryEngineService:
     def home(self, *, actor: User) -> dict[str, Any]:
         featured_rails = self.list_featured_rails(active_only=True)
         featured_items = self.search(actor=actor, query="cup", entity_scope="all", limit=8)
-        live_now_items = [
-            {"item_type": "live_thread", "item_id": item.id, "title": item.title, "subtitle": item.competition_key or "community", "score": 1.0, "metadata": item.metadata_json}
-            for item in self.session.scalars(select(LiveThread).order_by(LiveThread.last_message_at.desc().nullslast(), LiveThread.created_at.desc()).limit(8)).all()
-        ]
+        live_now_items = self._live_match_items(limit=8)
+        if not live_now_items:
+            live_now_items = [
+                {"item_type": "live_thread", "item_id": item.id, "title": item.title, "subtitle": item.competition_key or "community", "score": 1.0, "metadata": item.metadata_json}
+                for item in self.session.scalars(select(LiveThread).order_by(LiveThread.last_message_at.desc().nullslast(), LiveThread.created_at.desc()).limit(8)).all()
+            ]
         recommended_items: list[dict[str, Any]] = []
         watchlist = list(self.session.scalars(select(CompetitionWatchlist).where(CompetitionWatchlist.user_id == actor.id).limit(6)).all())
         for item in watchlist:
@@ -143,6 +151,86 @@ class DiscoveryEngineService:
             "live_now_items": live_now_items,
             "saved_searches": self.list_saved_searches(actor=actor),
         }
+
+    def _live_match_items(self, *, limit: int) -> list[dict[str, Any]]:
+        hot_cache = HotPathCache(self.cache_backend or NullCacheBackend())
+        active_match_ids = hot_cache.list_active_matches()
+        if not active_match_ids:
+            return []
+        matches = {
+            item.id: item
+            for item in self.session.scalars(
+                select(CompetitionMatch).where(CompetitionMatch.id.in_(active_match_ids))
+            ).all()
+        }
+        viewer_counts = {
+            str(match_id): int(count)
+            for match_id, count in self.session.execute(
+                select(SpectatorSession.match_id, func.count(SpectatorSession.id))
+                .where(SpectatorSession.match_id.in_(active_match_ids))
+                .group_by(SpectatorSession.match_id)
+            ).all()
+        }
+        goal_counts = {
+            str(match_id): int(count)
+            for match_id, count in self.session.execute(
+                select(MatchEvent.match_id, func.count(MatchEvent.id))
+                .where(
+                    MatchEvent.match_id.in_(active_match_ids),
+                    MatchEvent.event_type == MatchEventType.GOAL,
+                )
+                .group_by(MatchEvent.match_id)
+            ).all()
+        }
+        ranked: list[tuple[int, int, int, dict[str, Any]]] = []
+        for match_id in active_match_ids:
+            state = hot_cache.get_match_state(match_id)
+            if not isinstance(state, dict) or not bool(state.get("is_live")):
+                continue
+            match = matches.get(match_id)
+            if match is None:
+                continue
+            metadata_json = dict(match.metadata_json or {}) if match is not None else {}
+            replay_payload = metadata_json.get("replay_payload")
+            summary = replay_payload.get("summary") if isinstance(replay_payload, dict) else {}
+            home_stats = summary.get("home_stats") if isinstance(summary, dict) else {}
+            away_stats = summary.get("away_stats") if isinstance(summary, dict) else {}
+            snapshot = state.get("snapshot") if isinstance(state.get("snapshot"), dict) else {}
+            score = snapshot.get("score") if isinstance(snapshot.get("score"), dict) else {}
+            viewer_count = viewer_counts.get(match_id, int(state.get("spectator_count") or 0))
+            goal_activity = goal_counts.get(match_id, 0)
+            is_final = bool(metadata_json.get("competition_context", {}).get("is_final")) if isinstance(metadata_json.get("competition_context"), dict) else False
+            if not is_final and match is not None:
+                stage_label = str(match.stage or "").strip().lower()
+                is_final = "final" in stage_label
+            home_team_name = str(home_stats.get("team_name") or metadata_json.get("home_team_name") or "Home")
+            away_team_name = str(away_stats.get("team_name") or metadata_json.get("away_team_name") or "Away")
+            minute = int(snapshot.get("current_minute") or 0)
+            item = {
+                "item_type": "live_match",
+                "item_id": match_id,
+                "title": f"{home_team_name} vs {away_team_name}",
+                "subtitle": f"{minute}' • {viewer_count} watching",
+                "score": float((viewer_count * 10) + (25 if is_final else 0) + (goal_activity * 6)),
+                "metadata": {
+                    "match_id": match_id,
+                    "home_team_name": home_team_name,
+                    "away_team_name": away_team_name,
+                    "home_score": int(score.get("home") or 0),
+                    "away_score": int(score.get("away") or 0),
+                    "minute": minute,
+                    "viewer_count": viewer_count,
+                    "goal_activity": goal_activity,
+                    "featured": bool(is_final or goal_activity > 0 or viewer_count >= 10),
+                    "is_final": is_final,
+                    "status": snapshot.get("status") or "live",
+                    "watch_route": f"/matches/{match_id}/watch",
+                    "replay_route": f"/api/matches/{match_id}/replay",
+                },
+            }
+            ranked.append((viewer_count, 1 if is_final else 0, goal_activity, item))
+        ranked.sort(key=lambda entry: (entry[0], entry[1], entry[2], entry[3]["title"]), reverse=True)
+        return [entry[3] for entry in ranked[:limit]]
 
     @staticmethod
     def _score(term: str, *texts: str | None) -> float:

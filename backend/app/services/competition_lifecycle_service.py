@@ -31,11 +31,14 @@ from app.models.wallet import LedgerUnit
 from app.reward_engine.service import RewardEngineError, RewardEngineService
 from app.services.competition_fixture_service import CompetitionFixtureService, FixtureBuildResult
 from app.services.competition_match_service import CompetitionMatchService
+from app.services.competition_progression_service import CompetitionProgressionService
 from app.services.competition_reward_service import CompetitionRewardService
 from app.services.competition_schedule_service import CompetitionScheduleService
 from app.services.competition_seeding_service import CompetitionSeedingService
 from app.services.competition_visibility_service import CompetitionVisibilityService
+from app.services.competition_lock_service import CompetitionLockService
 from app.services.dynamic_prize_pool_service import DynamicPrizePoolService
+from app.services.competition_wallet_service import CompetitionWalletService
 from app.story_feed_engine.service import StoryFeedService
 
 
@@ -49,10 +52,14 @@ class CompetitionLifecycleService:
     reward_service: CompetitionRewardService = field(default_factory=CompetitionRewardService)
     visibility_service: CompetitionVisibilityService = field(default_factory=CompetitionVisibilityService)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
+    progression_service: CompetitionProgressionService = field(init=False)
+    competition_wallet_service: CompetitionWalletService = field(init=False)
 
     def __post_init__(self) -> None:
         self.schedule_service = CompetitionScheduleService(self.session)
         self.match_service = CompetitionMatchService(self.session, event_publisher=self.event_publisher)
+        self.progression_service = CompetitionProgressionService(self.session)
+        self.competition_wallet_service = CompetitionWalletService(self.session)
 
     def seed_competition(
         self,
@@ -127,6 +134,7 @@ class CompetitionLifecycleService:
         competition.status = CompetitionStatus.LIVE.value
         competition.launched_at = datetime.now(timezone.utc)
         competition.stage = "group" if rule_set.group_stage_enabled else ("league" if competition.format == CompetitionFormat.LEAGUE.value else "knockout")
+        CompetitionLockService(self.session).activate_live_lock(competition)
         StoryFeedService(self.session).publish(
             story_type="competition_launch",
             title=f"{competition.name} is live",
@@ -185,6 +193,7 @@ class CompetitionLifecycleService:
             competition.status = CompetitionStatus.COMPLETED.value
             competition.completed_at = datetime.now(timezone.utc)
             competition.stage = "completed"
+            CompetitionLockService(self.session).release_live_lock(competition)
             self.session.flush()
             return None
 
@@ -278,15 +287,37 @@ class CompetitionLifecycleService:
                     )
                 )
         for pool in reward_pools:
-            pool.status = "settled" if settle else "planned"
+            pool.status = "pending" if settle else "planned"
         if rewards:
             self.session.add_all(rewards)
         if settle and is_platform:
             self._settle_platform_rewards(competition, rewards)
-        competition.status = CompetitionStatus.SETTLED.value if settle else CompetitionStatus.COMPLETED.value
-        competition.completed_at = competition.completed_at or datetime.now(timezone.utc)
-        competition.settled_at = datetime.now(timezone.utc) if settle else None
-        competition.stage = "settled" if settle else "completed"
+        if settle and not is_platform:
+            self._settle_user_hosted_rewards(competition, rewards)
+        resolved_users = {
+            participant.id: self._resolve_reward_user(participant)
+            for participant in standings
+        }
+        self.progression_service.sync_competition_results(
+            competition=competition,
+            standings=standings,
+            rewards=rewards,
+            resolved_users=resolved_users,
+        )
+        now = datetime.now(timezone.utc)
+        fully_settled = self._all_rewards_settled(rewards) if settle else False
+        if settle and fully_settled:
+            for pool in reward_pools:
+                pool.status = "settled"
+        competition.status = (
+            CompetitionStatus.SETTLED.value
+            if settle and fully_settled
+            else CompetitionStatus.COMPLETED.value
+        )
+        competition.completed_at = competition.completed_at or now
+        competition.settled_at = now if settle and fully_settled else None
+        competition.stage = "settled" if settle and fully_settled else "completed"
+        CompetitionLockService(self.session).release_live_lock(competition)
         StoryFeedService(self.session).publish(
             story_type="competition_result",
             title=f"{competition.name} completed",
@@ -294,7 +325,7 @@ class CompetitionLifecycleService:
             audience="public",
             subject_type="competition",
             subject_id=competition.id,
-            metadata_json={"competition_id": competition.id, "settled": settle},
+            metadata_json={"competition_id": competition.id, "settled": fully_settled},
             published_by_user_id=competition.host_user_id,
         )
         self.session.flush()
@@ -303,7 +334,7 @@ class CompetitionLifecycleService:
                 name="competition_settled",
                 payload={
                     "competition_id": competition.id,
-                    "settled": settle,
+                    "settled": fully_settled,
                     "reward_pool_ids": [pool.id for pool in reward_pools],
                     "reward_pool_types": [pool.pool_type for pool in reward_pools],
                 },
@@ -400,6 +431,67 @@ class CompetitionLifecycleService:
                 "reward_settlement_id": settlement.id,
                 "reward_source": settlement.reward_source,
             }
+
+    def _settle_user_hosted_rewards(self, competition: Competition, rewards: list[CompetitionReward]) -> None:
+        if not rewards:
+            return
+        actor = self.session.get(User, competition.host_user_id) if competition.host_user_id else None
+        now = datetime.now(timezone.utc)
+        for reward in rewards:
+            if reward.ledger_transaction_id:
+                reward.status = "settled"
+                reward.settled_at = reward.settled_at or now
+                continue
+            amount = self._minor_to_decimal(reward.amount_minor)
+            if amount <= Decimal("0.0000"):
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "zero_amount"}
+                continue
+            participant = self.session.get(CompetitionParticipant, reward.participant_id) if reward.participant_id else None
+            if participant is None:
+                reward.status = "pending"
+                reward.settled_at = None
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "missing_participant"}
+                continue
+            user = self._resolve_reward_user(participant)
+            if user is None:
+                reward.status = "pending"
+                reward.settled_at = None
+                reward.metadata_json = {**(reward.metadata_json or {}), "settlement_skipped": "missing_user"}
+                continue
+            settlement = self.competition_wallet_service.settle_reward(
+                competition=competition,
+                reward=reward,
+                recipient=user,
+                actor=actor or user,
+            )
+            reward.ledger_transaction_id = settlement.transaction_id
+            reward.status = "settled"
+            reward.settled_at = now
+            reward.metadata_json = {
+                **(reward.metadata_json or {}),
+                "reward_source": "competition_entry_pool",
+                "escrow_used_minor": settlement.escrow_used_minor,
+                "platform_backstop_minor": settlement.platform_backstop_minor,
+            }
+        platform_fee_minor = competition.gross_pool_minor * competition.platform_fee_bps // 10_000
+        host_fee_minor = competition.gross_pool_minor * competition.host_fee_bps // 10_000
+        if platform_fee_minor > 0:
+            self.competition_wallet_service.settle_fee_distribution(
+                competition=competition,
+                entry_type="platform_fee_distribution",
+                amount_minor=platform_fee_minor,
+            )
+        if host_fee_minor > 0:
+            self.competition_wallet_service.settle_fee_distribution(
+                competition=competition,
+                entry_type="host_fee_distribution",
+                amount_minor=host_fee_minor,
+            )
+
+    @staticmethod
+    def _all_rewards_settled(rewards: Iterable[CompetitionReward]) -> bool:
+        relevant = [reward for reward in rewards if reward.amount_minor > 0]
+        return all(reward.status == "settled" for reward in relevant)
 
     def record_match_event(
         self,

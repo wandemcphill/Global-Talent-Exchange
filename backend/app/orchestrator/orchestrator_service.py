@@ -587,7 +587,11 @@ class AttentionOrchestratorService:
 def ensure_attention_orchestrator_store(app: FastAPI, *, settings: Settings | None = None) -> GlobalFeedStateStore:
     store = getattr(app.state, "attention_orchestrator_store", None)
     if store is None:
-        store = build_global_feed_state_store(settings=settings or getattr(app.state, "settings", None))
+        store = build_global_feed_state_store(
+            settings=settings or getattr(app.state, "settings", None),
+            session_factory=getattr(app.state, "session_factory", None),
+            read_session_factory=getattr(app.state, "read_session_factory", None),
+        )
         app.state.attention_orchestrator_store = store
     return store
 

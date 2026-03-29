@@ -16,6 +16,7 @@ from app.models.competition_participant import CompetitionParticipant
 from app.models.notification_record import NotificationRecord
 from app.models.player_contract import PlayerContract
 from app.models.user import User
+from app.services.competition_lock_service import CompetitionLockError, CompetitionLockService
 
 DECIMAL_QUANTUM = Decimal("0.0001")
 BASE_MATCH_INCOME = Decimal("8.0000")
@@ -276,6 +277,10 @@ class ClubFinanceService:
         self._enforce_constraints(profile)
         if profile.transfers_blocked or Decimal(profile.balance) < Decimal("0.0000"):
             raise ClubFinanceError("Transfers are blocked while club finances are below zero.")
+        try:
+            CompetitionLockService(self.session).ensure_transfers_allowed(club_id=club_id)
+        except CompetitionLockError as exc:
+            raise ClubFinanceError(exc.detail) from exc
 
     def apply_season_pass_currency_bonus(
         self,

@@ -188,6 +188,57 @@ class LiveMatchSnapshot {
   bool get isHalftime => phase == LiveMatchPhase.halftime;
 
   bool get isFinal => phase == LiveMatchPhase.fullTime;
+
+  LiveMatchSnapshot copyWith({
+    String? matchId,
+    bool? halftimeAnalyticsAvailable,
+    bool? highlightsAvailable,
+    bool? keyMomentsAvailable,
+    String? homeTeam,
+    String? awayTeam,
+    int? homeScore,
+    int? awayScore,
+    int? minute,
+    LiveMatchPhase? phase,
+    List<int>? momentum,
+    List<LiveMatchEvent>? commentary,
+    List<LiveMatchLineupPlayer>? homeLineup,
+    List<LiveMatchLineupPlayer>? awayLineup,
+    List<LiveMatchEvent>? substitutions,
+    List<LiveMatchEvent>? cards,
+    List<LiveMatchTacticalSuggestion>? tacticalSuggestions,
+    List<LiveMatchHighlightClip>? keyMoments,
+    List<LiveMatchHighlightClip>? highlights,
+    DateTime? standardHighlightExpiresAt,
+    DateTime? premiumHighlightExpiresAt,
+  }) {
+    return LiveMatchSnapshot(
+      matchId: matchId ?? this.matchId,
+      halftimeAnalyticsAvailable:
+          halftimeAnalyticsAvailable ?? this.halftimeAnalyticsAvailable,
+      highlightsAvailable: highlightsAvailable ?? this.highlightsAvailable,
+      keyMomentsAvailable: keyMomentsAvailable ?? this.keyMomentsAvailable,
+      homeTeam: homeTeam ?? this.homeTeam,
+      awayTeam: awayTeam ?? this.awayTeam,
+      homeScore: homeScore ?? this.homeScore,
+      awayScore: awayScore ?? this.awayScore,
+      minute: minute ?? this.minute,
+      phase: phase ?? this.phase,
+      momentum: momentum ?? this.momentum,
+      commentary: commentary ?? this.commentary,
+      homeLineup: homeLineup ?? this.homeLineup,
+      awayLineup: awayLineup ?? this.awayLineup,
+      substitutions: substitutions ?? this.substitutions,
+      cards: cards ?? this.cards,
+      tacticalSuggestions: tacticalSuggestions ?? this.tacticalSuggestions,
+      keyMoments: keyMoments ?? this.keyMoments,
+      highlights: highlights ?? this.highlights,
+      standardHighlightExpiresAt:
+          standardHighlightExpiresAt ?? this.standardHighlightExpiresAt,
+      premiumHighlightExpiresAt:
+          premiumHighlightExpiresAt ?? this.premiumHighlightExpiresAt,
+    );
+  }
 }
 
 Future<LiveMatchSnapshot> loadLiveMatchSnapshot(

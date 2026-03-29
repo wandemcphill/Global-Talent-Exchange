@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.agents.agent_brain import AgentBrain, AgentDecisionContext, AgentIdentity, AgentMomentCandidate, AgentProfile, AgentStrategy
 from app.agents.agent_wallet import AgentWallet, AgentWalletService
+from app.backbone.scale_events import enqueue_viral_dispatch
 from app.agents.content_generator import AgentContentGenerator, AgentGeneratedClip
 from app.agents.learning_engine import AgentLearningEngine, AgentLearningState, AgentPerformanceSignal
 from app.agents.state_store import AgentPerformanceLogEntry, AgentStateStore, build_agent_state_store
@@ -809,6 +810,21 @@ class CreatorAgentManager:
             producer="creator-agent-manager",
             payload=generated.payload,
         )
+        session_factory = getattr(self.app.state, "session_factory", None)
+        if session_factory is not None:
+            try:
+                with session_factory() as session:
+                    enqueue_viral_dispatch(
+                        session=session,
+                        aggregate_id=generated.agent_id,
+                        aggregate_type="creator_agent",
+                        partition_key=generated.agent_id,
+                        producer="creator-agent-manager",
+                        payload=generated.payload,
+                    )
+                    session.commit()
+            except Exception:
+                logger.exception("agents.dispatch.enqueue_failed agent_id=%s clip_id=%s", generated.agent_id, generated.clip_id)
         if self.event_publisher is not None:
             self.event_publisher.publish(event)
         else:

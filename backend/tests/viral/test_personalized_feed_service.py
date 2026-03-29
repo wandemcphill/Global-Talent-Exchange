@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -12,12 +13,14 @@ from sqlalchemy.pool import StaticPool
 from app.moments.priority_cache import ensure_moment_priority_cache
 from app.models.analytics_event import AnalyticsEvent
 from app.models.base import Base
+from app.models.creator_attention_earnings import ClipEarningsLog, CreatorWallet
 from app.models.follow import Follow
 from app.models.notification_record import NotificationRecord
 from app.models.user import User, UserRole
 from app.orchestrator.global_state import InMemoryGlobalFeedStateStore
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService
 from app.orchestrator.schemas import AttentionOrchestratorConfigUpdateRequest
+from app.services.creator_attention_earnings_service import CreatorAttentionEarningsService
 from app.users.follow_service import FollowGraphNotificationService, FollowGraphService, NullFollowGraphCache
 from app.viral.feed_contract import (
     PERSONALIZED_FEED_SOURCE_FOLLOWING,
@@ -32,12 +35,16 @@ from app.viral.personalized_feed_service import (
 )
 from app.viral.session_tracker import ViralSessionTracker
 from app.viral.schemas import (
+    PersonalizedFeedAffinityView,
+    PersonalizedFeedClipView,
     ViralCaptionView,
     ViralClipAnalyticsView,
     ViralClipView,
     ViralEditPlanView,
     ViralFeedResponse,
     ViralFeedbackLoopView,
+    PersonalizedFeedResponse,
+    PersonalizedFeedScoreBreakdownView,
     ViralScoreBreakdownView,
     ViralTrendingClipView,
     ViralTrendingMetricsView,
@@ -47,6 +54,14 @@ from app.viral.schemas import (
 class _NoDbSession:
     def get_bind(self):
         return None
+
+
+class _FakeCreatorEarningsCache:
+    def __init__(self) -> None:
+        self.events: list[dict[str, object]] = []
+
+    def record_delta(self, **payload) -> None:
+        self.events.append(payload)
 
 
 def test_clip_affinity_calculator_scores_creator_and_format_preferences() -> None:
@@ -230,6 +245,87 @@ def test_personalized_feed_blends_following_feed_and_emits_new_clip_notification
         assert {item.user_id for item in notifications} == {"viewer-1", "fan-a", "fan-b"}
         assert {item.template_key for item in notifications} == {"FOLLOWED_CREATOR_NEW_CLIP"}
         assert {item.resource_id for item in notifications} == {"clip-followed"}
+
+
+def test_personalized_feed_delivery_credits_creator_wallet_on_impression() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            User.__table__,
+            CreatorWallet.__table__,
+            ClipEarningsLog.__table__,
+        ],
+    )
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    cache = _FakeCreatorEarningsCache()
+
+    with session_factory() as session:
+        session.add_all(
+            [
+                User(id="viewer-wallet-1", email="viewer-wallet@example.com", username="viewer-wallet", password_hash="hashed", role=UserRole.USER),
+                User(id="creator-wallet-1", email="creator-wallet@example.com", username="creator-wallet", password_hash="hashed", role=UserRole.USER),
+            ]
+        )
+        session.commit()
+
+    with session_factory() as session:
+        service = PersonalizedFeedRankingService(
+            session=session,
+            feed_store=InMemoryPersonalizedFeedStore(),
+            creator_earnings_service=CreatorAttentionEarningsService(session=session, cache=cache),
+        )
+        clip = PersonalizedFeedClipView.model_validate(
+            {
+                **_build_clip(
+                    clip_id="clip-wallet-1",
+                    creator_id="creator-wallet-1",
+                    viral_score=84,
+                    ranking_score=63.0,
+                    metadata={"creator_user_id": "creator-wallet-1"},
+                ).model_dump(mode="python"),
+                "rank": 1,
+                "score": 1.42,
+                "feed_source": PERSONALIZED_FEED_SOURCE_FOR_YOU,
+                "score_breakdown": PersonalizedFeedScoreBreakdownView(
+                    affinity=PersonalizedFeedAffinityView(),
+                    final_score=1.42,
+                ).model_dump(mode="python"),
+            }
+        )
+        response = PersonalizedFeedResponse(
+            user_id="viewer-wallet-1",
+            items=[clip],
+            generated_at=datetime(2026, 3, 29, 10, 30, tzinfo=UTC),
+            feed_key="user:viewer-wallet-1:feed",
+            feed_source=PERSONALIZED_FEED_SOURCE_FOR_YOU,
+            mix={PERSONALIZED_FEED_SOURCE_FOR_YOU: 1.0},
+            cache_hit=False,
+        )
+
+        service.record_delivery(response)
+
+        wallet = session.scalar(
+            select(CreatorWallet).where(CreatorWallet.creator_user_id == "creator-wallet-1")
+        )
+        logs = list(session.scalars(select(ClipEarningsLog)).all())
+
+        assert wallet is not None
+        assert wallet.total_impressions == 1
+        assert wallet.total_earnings_credit == Decimal("0.0020")
+        assert len(logs) == 1
+        assert logs[0].clip_id == "clip-wallet-1"
+        assert logs[0].metadata_json["feed_source"] == PERSONALIZED_FEED_SOURCE_FOR_YOU
+        assert cache.events == []
+
+        session.commit()
+
+    assert len(cache.events) == 1
+    assert cache.events[0]["creator_user_id"] == "creator-wallet-1"
 
 
 def test_personalized_feed_boosts_creators_trending_inside_follow_network() -> None:

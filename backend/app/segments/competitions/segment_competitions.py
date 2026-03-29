@@ -32,9 +32,11 @@ from app.schemas.competition_requests import (
 )
 from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
+    CompetitionProgressionView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
     CompetitionListResponse,
+    CompetitionRewardsResponse,
     CompetitionSummaryView,
 )
 from app.services.competition_orchestrator import (
@@ -79,6 +81,20 @@ def publish_competition(
     return result
 
 
+@router.get("/players/{subject_id}/progression", response_model=CompetitionProgressionView, response_model_exclude_none=True)
+def get_competition_progression(
+    subject_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionProgressionView:
+    result = orchestrator.progression(subject_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Competition progression for {subject_id} was not found",
+        )
+    return result
+
+
 @router.get("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def get_competition(
     competition_id: str,
@@ -118,11 +134,13 @@ def join_competition(
     payload: CompetitionJoinRequest,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    result = orchestrator.join(
-        competition_id,
-        user_id=payload.user_id,
-        user_name=payload.user_name,
-        invite_code=payload.invite_code,
+    result = _handle_competition_errors(
+        lambda: orchestrator.join(
+            competition_id,
+            user_id=payload.user_id,
+            user_name=payload.user_name,
+            invite_code=payload.invite_code,
+        )
     )
     if result is None:
         raise _not_found(competition_id)
@@ -137,7 +155,7 @@ def leave_competition(
     payload: CompetitionLeaveRequest,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    result = orchestrator.leave(competition_id, user_id=payload.user_id)
+    result = _handle_competition_errors(lambda: orchestrator.leave(competition_id, user_id=payload.user_id))
     if result is None:
         raise _not_found(competition_id)
     return result
@@ -205,6 +223,17 @@ def get_competition_financials(
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionFinancialSummaryView:
     result = orchestrator.financials(competition_id)
+    if result is None:
+        raise _not_found(competition_id)
+    return result
+
+
+@router.get("/{competition_id}/rewards", response_model=CompetitionRewardsResponse, response_model_exclude_none=True)
+def get_competition_rewards(
+    competition_id: str,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionRewardsResponse:
+    result = orchestrator.rewards(competition_id)
     if result is None:
         raise _not_found(competition_id)
     return result

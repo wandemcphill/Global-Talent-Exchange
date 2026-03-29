@@ -22,15 +22,20 @@ from app.leaderboards.models import (
     SeasonStatus,
 )
 from app.leaderboards.ranking_service import DEFAULT_K_FACTOR, DEFAULT_RATING, RankingService
+from app.leaderboards.season_config import (
+    DEFAULT_RANK_TIERS,
+    DEFAULT_REWARD_BOARD,
+    DEFAULT_REWARD_TIERS,
+    DEFAULT_SEASON_DURATION_DAYS,
+    DEFAULT_SOFT_RESET_FACTOR,
+    carry_over_player_metadata,
+    serialize_rank_tier,
+    serialize_reward_tier,
+)
 from app.models.history_engagement import UserProfile
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
-
-DEFAULT_SEASON_DURATION_DAYS = 90
-DEFAULT_SOFT_RESET_FACTOR = 0.5
-DEFAULT_REWARD_BOARD = "global"
-
 
 class SeasonError(ValueError):
     pass
@@ -38,21 +43,6 @@ class SeasonError(ValueError):
 
 class SeasonNotFoundError(SeasonError):
     pass
-
-
-@dataclass(frozen=True, slots=True)
-class SeasonRewardTier:
-    rank_position: int
-    coins: Decimal
-    trophies: int
-    badges: tuple[str, ...]
-
-
-DEFAULT_REWARD_TIERS: tuple[SeasonRewardTier, ...] = (
-    SeasonRewardTier(rank_position=1, coins=Decimal("1000.0000"), trophies=3, badges=("season_champion",)),
-    SeasonRewardTier(rank_position=2, coins=Decimal("500.0000"), trophies=2, badges=("season_finalist",)),
-    SeasonRewardTier(rank_position=3, coins=Decimal("250.0000"), trophies=1, badges=("season_podium",)),
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +92,12 @@ class SeasonService:
             ).all()
         )
 
+    def archive_season(self, *, season_id: str | None = None) -> SeasonLifecycleResult:
+        return self.end_season(season_id=season_id, create_next_season=False)
+
+    def reset_rankings(self, *, season_id: str | None = None) -> SeasonLifecycleResult:
+        return self.end_season(season_id=season_id, create_next_season=True)
+
     def start_new_season(
         self,
         *,
@@ -144,7 +140,11 @@ class SeasonService:
             k_factor=resolved_k_factor,
             reset_strategy=resolved_reset_strategy,
             soft_reset_factor=resolved_soft_reset_factor,
-            metadata_json={},
+            metadata_json={
+                "duration_days": duration_days,
+                "rank_tiers": [serialize_rank_tier(tier) for tier in DEFAULT_RANK_TIERS],
+                "reward_tiers": [serialize_reward_tier(tier) for tier in DEFAULT_REWARD_TIERS],
+            },
         )
         self.session.add(season)
         self.session.flush()
@@ -183,7 +183,7 @@ class SeasonService:
                         last_match_id=None,
                         last_result=None,
                         last_active_at=None,
-                        metadata_json=dict(row.metadata_json or {}),
+                        metadata_json=carry_over_player_metadata(dict(row.metadata_json or {})),
                     )
                 )
             self.session.flush()
@@ -266,6 +266,9 @@ class SeasonService:
                             "coins": str(reward.coins),
                             "trophies": reward.trophies,
                             "badges": list(reward.badges_json or []),
+                            "title": (reward.metadata_json or {}).get("title"),
+                            "visibility_boost": (reward.metadata_json or {}).get("visibility_boost", 0),
+                            "exclusive_tournament_key": (reward.metadata_json or {}).get("exclusive_tournament_key"),
                             "status": reward.status,
                         }
                         for reward in rewards
@@ -389,7 +392,12 @@ class SeasonService:
                     trophies=tier.trophies,
                     badges_json=list(tier.badges),
                     status=RewardDeliveryStatus.PENDING,
-                    metadata_json={"season_id": season.id},
+                    metadata_json={
+                        "season_id": season.id,
+                        "title": tier.title,
+                        "visibility_boost": tier.visibility_boost,
+                        "exclusive_tournament_key": tier.exclusive_tournament_key,
+                    },
                 )
                 self.session.add(reward)
                 self.session.flush()
@@ -455,8 +463,18 @@ class SeasonService:
             if badge not in badges:
                 badges.append(str(badge))
         profile.badge_inventory_json = badges
+        reward_metadata = dict(reward.metadata_json or {})
+        visibility_boost = int(reward_metadata.get("visibility_boost", 0) or 0)
+        exclusive_tournament_key = reward_metadata.get("exclusive_tournament_key")
+        if visibility_boost > 0:
+            profile.profile_boost_total += visibility_boost
         metadata = dict(profile.metadata_json or {})
         metadata["season_trophies_total"] = int(metadata.get("season_trophies_total", 0) or 0) + int(reward.trophies)
+        if exclusive_tournament_key:
+            exclusive_access = list(metadata.get("exclusive_tournament_access", []) or [])
+            if exclusive_tournament_key not in exclusive_access:
+                exclusive_access.append(str(exclusive_tournament_key))
+            metadata["exclusive_tournament_access"] = exclusive_access
         metadata["last_leaderboard_reward"] = {
             "season_id": season.id,
             "rank_position": reward.rank_position,
@@ -464,8 +482,25 @@ class SeasonService:
             "coins": str(reward.coins),
             "trophies": reward.trophies,
             "badges": list(reward.badges_json or []),
+            "title": reward_metadata.get("title"),
+            "visibility_boost": visibility_boost,
+            "exclusive_tournament_key": exclusive_tournament_key,
         }
         profile.metadata_json = metadata
+        row_metadata = dict(row.metadata_json or {})
+        reward_entitlements = row_metadata.get("reward_entitlements")
+        reward_entitlements = dict(reward_entitlements) if isinstance(reward_entitlements, dict) else {}
+        reward_entitlements["visibility_boost_total"] = int(
+            reward_entitlements.get("visibility_boost_total", 0) or 0
+        ) + visibility_boost
+        exclusive_access = [
+            str(item) for item in (reward_entitlements.get("exclusive_tournament_access") or [])
+        ]
+        if exclusive_tournament_key and exclusive_tournament_key not in exclusive_access:
+            exclusive_access.append(str(exclusive_tournament_key))
+        reward_entitlements["exclusive_tournament_access"] = exclusive_access
+        row_metadata["reward_entitlements"] = reward_entitlements
+        row.metadata_json = row_metadata
 
         reward.ledger_transaction_id = ledger_transaction_id
         reward.distributed_at = self._now()
@@ -476,6 +511,9 @@ class SeasonService:
             "division": row.division,
             "rating": row.rating,
             "points": row.points,
+            "title": reward_metadata.get("title"),
+            "visibility_boost": visibility_boost,
+            "exclusive_tournament_key": exclusive_tournament_key,
         }
 
     def _ordered_rows(self, season_id: str) -> list[LeaderboardPlayerRating]:
@@ -574,6 +612,5 @@ __all__ = [
     "SeasonError",
     "SeasonLifecycleResult",
     "SeasonNotFoundError",
-    "SeasonRewardTier",
     "SeasonService",
 ]

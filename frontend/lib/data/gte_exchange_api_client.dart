@@ -534,6 +534,35 @@ class GteExchangeApiClient {
     );
   }
 
+  Future<Map<String, Object?>> joinMatchSpectateSession(
+    String matchKey, {
+    bool payToView = false,
+  }) async {
+    if (config.mode == GteBackendMode.fixture) {
+      return _fixtureSpectateSession(matchKey);
+    }
+    final GteApiRepository resolvedRepository = repository;
+    if (resolvedRepository is! GteReliableApiRepository) {
+      return _fixtureSpectateSession(matchKey);
+    }
+    return GteJson.map(
+      await resolvedRepository.requestJson(
+        'POST',
+        '/api/matches/$matchKey/spectate',
+        query: <String, Object?>{'pay_to_view': payToView},
+        requiresAuth: true,
+      ),
+      label: 'match spectate session',
+    );
+  }
+
+  Future<Map<String, Object?>> fetchMatchReplay(String matchKey) async {
+    return GteJson.map(
+      await _sendPublicGet('/api/matches/$matchKey/replay'),
+      label: 'match replay',
+    );
+  }
+
   Future<GteMarketCandles> fetchCandles(
     String playerId, {
     String interval = '1h',
@@ -621,6 +650,47 @@ class GteExchangeApiClient {
         cause: error,
       );
     }
+  }
+
+  Map<String, Object?> _fixtureSpectateSession(String matchKey) {
+    return <String, Object?>{
+      'id': 'fixture-spectator-$matchKey',
+      'match_id': matchKey,
+      'user_id': 'fixture-user',
+      'joined_at': DateTime.now().toUtc().toIso8601String(),
+      'read_only': true,
+      'channel': 'match:$matchKey:events',
+      'websocket_path': '/api/matches/$matchKey/stream?session_id=fixture-spectator-$matchKey',
+      'commentary_websocket_path':
+          '/api/matches/$matchKey/commentary/stream?session_id=fixture-spectator-$matchKey',
+      'presence_channel': 'match:$matchKey:events',
+      'presence_websocket_path': '/ws/spectate/$matchKey',
+      'tts_websocket_path': '/tts/live?voice=default',
+      'replay_route': '/api/matches/$matchKey/replay',
+      'speed_modes': const <Map<String, Object?>>[
+        <String, Object?>{
+          'key': 'normal',
+          'label': 'Normal',
+          'target_duration_seconds': 90,
+        },
+        <String, Object?>{
+          'key': 'fast',
+          'label': 'Fast',
+          'target_duration_seconds': 30,
+        },
+        <String, Object?>{
+          'key': 'turbo',
+          'label': 'Turbo',
+          'target_duration_seconds': 10,
+        },
+      ],
+      'sync_strategy': 'deterministic_playback',
+      'watch_party_enabled': true,
+      'reactions_enabled': true,
+      'premium_features': const <String, Object?>{},
+      'sponsored_overlays': const <Object?>[],
+      'stadium_ads': const <Object?>[],
+    };
   }
 
   bool _shouldFallback(Object error) {

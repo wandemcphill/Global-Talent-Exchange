@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from app.models.calendar_engine import CalendarEvent
+from app.models.competition import Competition
 
 
 def _create_competition(client, *, name: str, format: str, capacity: int) -> str:
@@ -146,3 +147,23 @@ def test_schedule_blackout_avoids_exclusive_window(client, app_session_factory) 
     payload = preview.json()
     assert "Schedule avoided calendar blackout windows." in payload["warnings"]
     assert blocked_date.isoformat() not in payload["assigned_dates"]
+
+
+def test_launch_applies_tournament_lock_metadata(client, app_session_factory) -> None:
+    competition_id = _create_competition(client, name="Locked League", format="league", capacity=4)
+    _publish_and_join(client, competition_id, ["club-lock-a", "club-lock-b", "club-lock-c", "club-lock-d"])
+
+    seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
+    assert seed.status_code == 200
+    launch = client.post(f"/api/competitions/{competition_id}/launch")
+    assert launch.status_code == 200
+
+    with app_session_factory() as session:
+        competition = session.get(Competition, competition_id)
+        assert competition is not None
+        lock = dict((competition.metadata_json or {}).get("tournament_lock") or {})
+
+    assert lock["active"] is True
+    assert lock["reason"] == "competition_live"
+    assert lock["transfers_disabled"] is True
+    assert lock["rentals_disabled"] is True

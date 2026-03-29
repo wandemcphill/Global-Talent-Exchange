@@ -32,6 +32,10 @@ _EVENT_TOPIC_MAP = {
     "wallet.withdrawal.requested": "transactions.withdrawal.requested",
     "wallet.conversion.completed": "transactions.wallet.conversion",
     "risk.fraud.detected": "risk.fraud.detected",
+    "viral.clip.dispatch.requested": "viral.clip.dispatch.requested",
+    "feed.cache.refresh.requested": "feed.cache.refresh.requested",
+    "ads.feed.refresh.requested": "ads.feed.refresh.requested",
+    "creator.earnings.recompute.requested": "creator.earnings.recompute.requested",
 }
 
 

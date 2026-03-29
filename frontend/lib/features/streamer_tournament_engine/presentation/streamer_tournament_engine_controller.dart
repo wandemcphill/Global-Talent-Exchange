@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/app_feedback.dart';
 import '../../../data/gte_api_repository.dart';
+import '../../shared/data/gte_feature_support.dart';
 import '../data/streamer_tournament_engine_models.dart';
 import '../data/streamer_tournament_engine_repository.dart';
 
@@ -28,6 +29,7 @@ class StreamerTournamentEngineController extends ChangeNotifier {
   final GteRequestGate _listGate = GteRequestGate();
   final GteRequestGate _detailGate = GteRequestGate();
   final GteRequestGate _adminGate = GteRequestGate();
+  final GteRequestGate _competitionGate = GteRequestGate();
 
   StreamerTournamentList publicTournaments =
       const StreamerTournamentList.empty();
@@ -37,10 +39,17 @@ class StreamerTournamentEngineController extends ChangeNotifier {
   List<StreamerTournamentRiskSignal> riskSignals =
       const <StreamerTournamentRiskSignal>[];
   StreamerTournamentSettlement? latestSettlement;
+  LeaderboardBoard? globalLeaderboard;
+  LeaderboardSeason? currentSeason;
+  LeaderboardSeasonHistory seasonHistory =
+      const LeaderboardSeasonHistory.empty();
+  LeaderboardPlayerRanks? currentPlayerRanks;
+  LeaderboardSeasonLifecycle? latestSeasonLifecycle;
 
   bool isLoadingLists = false;
   bool isLoadingTournament = false;
   bool isLoadingAdmin = false;
+  bool isLoadingCompetition = false;
   bool isCreatingTournament = false;
   bool isUpdatingTournament = false;
   bool isReplacingRewardPlan = false;
@@ -51,11 +60,14 @@ class StreamerTournamentEngineController extends ChangeNotifier {
   bool isReviewingTournament = false;
   bool isReviewingRiskSignal = false;
   bool isSettlingTournament = false;
+  bool isRunningSeasonAdminAction = false;
 
   String? listError;
   String? tournamentError;
   String? adminError;
+  String? competitionError;
   String? actionError;
+  String? _competitionPlayerId;
 
   Future<void> loadLists({bool includeMine = false}) async {
     final int requestId = _listGate.begin();
@@ -66,9 +78,9 @@ class StreamerTournamentEngineController extends ChangeNotifier {
     try {
       final List<Object?> payload =
           await Future.wait<Object?>(<Future<Object?>>[
-        _repository.listPublicTournaments(),
-        if (includeMine) _repository.listMyTournaments(),
-      ]);
+            _repository.listPublicTournaments(),
+            if (includeMine) _repository.listMyTournaments(),
+          ]);
       if (!_listGate.isActive(requestId)) {
         return;
       }
@@ -95,8 +107,9 @@ class StreamerTournamentEngineController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final StreamerTournament result =
-          await _repository.fetchTournament(tournamentId);
+      final StreamerTournament result = await _repository.fetchTournament(
+        tournamentId,
+      );
       if (!_detailGate.isActive(requestId)) {
         return;
       }
@@ -113,6 +126,59 @@ class StreamerTournamentEngineController extends ChangeNotifier {
     }
   }
 
+  Future<void> loadCompetitionLayer({
+    String? playerId,
+    int leaderboardLimit = 12,
+    int historyLimit = 4,
+  }) async {
+    final int requestId = _competitionGate.begin();
+    competitionError = null;
+    isLoadingCompetition = true;
+    _competitionPlayerId = playerId?.trim();
+    notifyListeners();
+
+    Future<LeaderboardPlayerRanks?> loadPlayerRanks() async {
+      final String resolvedPlayerId = _competitionPlayerId ?? '';
+      if (resolvedPlayerId.isEmpty) {
+        return null;
+      }
+      try {
+        return await _repository.fetchPlayerRanks(resolvedPlayerId);
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          return null;
+        }
+        rethrow;
+      }
+    }
+
+    try {
+      final List<Object?> payload =
+          await Future.wait<Object?>(<Future<Object?>>[
+            _repository.fetchCurrentSeason(),
+            _repository.fetchGlobalLeaderboard(limit: leaderboardLimit),
+            _repository.fetchSeasonHistory(limit: historyLimit),
+            loadPlayerRanks(),
+          ]);
+      if (!_competitionGate.isActive(requestId)) {
+        return;
+      }
+      currentSeason = payload[0] as LeaderboardSeason;
+      globalLeaderboard = payload[1] as LeaderboardBoard;
+      seasonHistory = payload[2] as LeaderboardSeasonHistory;
+      currentPlayerRanks = payload[3] as LeaderboardPlayerRanks?;
+    } catch (error) {
+      if (_competitionGate.isActive(requestId)) {
+        competitionError = AppFeedback.messageFor(error);
+      }
+    } finally {
+      if (_competitionGate.isActive(requestId)) {
+        isLoadingCompetition = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> loadAdmin() async {
     final int requestId = _adminGate.begin();
     adminError = null;
@@ -120,11 +186,12 @@ class StreamerTournamentEngineController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<Object?> payload =
-          await Future.wait<Object?>(<Future<Object?>>[
-        _repository.fetchPolicy(),
-        _repository.listRiskSignals(),
-      ]);
+      final List<Object?> payload = await Future.wait<Object?>(
+        <Future<Object?>>[
+          _repository.fetchPolicy(),
+          _repository.listRiskSignals(),
+        ],
+      );
       if (!_adminGate.isActive(requestId)) {
         return;
       }
@@ -139,6 +206,42 @@ class StreamerTournamentEngineController extends ChangeNotifier {
         isLoadingAdmin = false;
         notifyListeners();
       }
+    }
+  }
+
+  Future<void> archiveSeason() async {
+    if (isRunningSeasonAdminAction) {
+      return;
+    }
+    isRunningSeasonAdminAction = true;
+    actionError = null;
+    notifyListeners();
+    try {
+      latestSeasonLifecycle = await _repository.archiveSeason();
+      await loadCompetitionLayer(playerId: _competitionPlayerId);
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+    } finally {
+      isRunningSeasonAdminAction = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> resetSeason() async {
+    if (isRunningSeasonAdminAction) {
+      return;
+    }
+    isRunningSeasonAdminAction = true;
+    actionError = null;
+    notifyListeners();
+    try {
+      latestSeasonLifecycle = await _repository.resetSeason();
+      await loadCompetitionLayer(playerId: _competitionPlayerId);
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+    } finally {
+      isRunningSeasonAdminAction = false;
+      notifyListeners();
     }
   }
 
@@ -341,12 +444,15 @@ class StreamerTournamentEngineController extends ChangeNotifier {
     actionError = null;
     notifyListeners();
     try {
-      latestSettlement =
-          await _repository.settleTournament(tournamentId, request);
+      latestSettlement = await _repository.settleTournament(
+        tournamentId,
+        request,
+      );
       tournament = latestSettlement!.tournament;
       await Future.wait<void>(<Future<void>>[
         loadTournament(tournamentId),
         loadAdmin(),
+        loadCompetitionLayer(playerId: _competitionPlayerId),
       ]);
     } catch (error) {
       actionError = AppFeedback.messageFor(error);

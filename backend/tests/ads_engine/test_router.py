@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,12 +10,16 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.ads_engine.router import router as ads_router
+from app.ads_engine.service import AudienceContext, OrganicCandidate, SponsoredClipService
 from app.analytics.service import AnalyticsService
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.infinite_league.router import router as infinite_league_router
 from app.models.analytics_event import AnalyticsEvent
 from app.models.base import Base
 from app.models.competition_match import CompetitionMatch
+from app.models.creator_attention_earnings import ClipEarningsLog, CreatorWallet
+from app.models.creator_profile import CreatorProfile
+from app.models.event_backbone import EventOutbox
 from app.models.highlight_event import HighlightEvent
 from app.models.manager_duel import ManagerDuel
 from app.models.spectator_session import SpectatorSession
@@ -24,6 +29,8 @@ from app.models.user import User, UserRole
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user_region import UserRegionProfile
 from app.replay_archive.persistence import ReplayArchiveRecordRow
+from app.services.creator_attention_earnings_service import CreatorAttentionEarningsService
+from app.viral.schemas import ViralClipView
 from app.viral.trust import InMemoryTrustStateStore, TrustFactorBreakdown, TrustScoreService, TrustState
 
 
@@ -42,6 +49,10 @@ def _build_app() -> tuple[TestClient, sessionmaker[Session], User, User]:
         tables=[
             AnalyticsEvent.__table__,
             CompetitionMatch.__table__,
+            CreatorWallet.__table__,
+            ClipEarningsLog.__table__,
+            CreatorProfile.__table__,
+            EventOutbox.__table__,
             HighlightEvent.__table__,
             ManagerDuel.__table__,
             ReplayArchiveRecordRow.__table__,
@@ -185,6 +196,86 @@ def test_sponsored_feed_injects_one_ad_without_duplicate_clip() -> None:
 
         performance = client.get("/ads/performance").json()
         assert performance["ads"][0]["impressions_served"] == 1
+
+
+def test_sponsored_feed_credits_creator_wallet_on_delivery(monkeypatch) -> None:
+    client, session_factory, _admin, viewer = _build_app()
+
+    with client:
+        clip = _seed_clip(client)
+
+    with session_factory() as session:
+        session.add(
+            User(
+                id="creator-sponsored-wallet-1",
+                email="creator-sponsored-wallet@example.com",
+                username="creator-sponsored-wallet",
+                password_hash="unused",
+                role=UserRole.USER,
+                is_active=True,
+            )
+        )
+        session.commit()
+
+    with session_factory() as session:
+        service = SponsoredClipService(
+            session=session,
+            creator_earnings_service=CreatorAttentionEarningsService(session=session),
+        )
+        feed_clip = ViralClipView.model_validate(
+            {
+                **clip,
+                "metadata": {
+                    **dict(clip.get("metadata") or {}),
+                    "creator_user_id": "creator-sponsored-wallet-1",
+                    "creator_id": "creator-sponsored-wallet-1",
+                },
+            }
+        )
+
+        monkeypatch.setattr(
+            SponsoredClipService,
+            "_build_organic_candidates",
+            lambda self, *, user, limit, refresh: [
+                OrganicCandidate(
+                    clip=feed_clip,
+                    organic_score=0.98,
+                    organic_rank=1,
+                )
+            ],
+        )
+        monkeypatch.setattr(SponsoredClipService, "_recent_clip_lookup", lambda self, *, limit: {})
+        monkeypatch.setattr(
+            SponsoredClipService,
+            "_audience_context",
+            lambda self, *, user, region=None: AudienceContext(
+                user_id=user.id,
+                region=region or "NG",
+                favorite_formats={},
+                favorite_creators={},
+                engagement_score=0.8,
+                avg_watch_time=24.0,
+                skip_rate=0.1,
+            ),
+        )
+        monkeypatch.setattr(SponsoredClipService, "_rank_ads", lambda self, *, context, clip_lookup, now: [])
+
+        response = service.build_sponsored_feed(user=viewer, limit=12)
+
+        assert response.items
+        assert response.items[0].clip_id == clip["clip_id"]
+
+        session.commit()
+
+    with session_factory() as session:
+        wallet = session.query(CreatorWallet).filter(CreatorWallet.creator_user_id == "creator-sponsored-wallet-1").one_or_none()
+        logs = session.query(ClipEarningsLog).filter(ClipEarningsLog.creator_user_id == "creator-sponsored-wallet-1").all()
+
+        assert wallet is not None
+        assert wallet.total_impressions == 1
+        assert wallet.total_earnings_credit == Decimal("0.0020")
+        assert len(logs) == 1
+        assert logs[0].metadata_json["feed_source"] == "sponsored_feed"
 
 
 def test_unified_feed_keeps_ads_spaced_to_one_per_five_clips() -> None:

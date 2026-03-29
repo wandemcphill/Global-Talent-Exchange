@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.leaderboards.models import LeaderboardMatchResult, LeaderboardPlayerRating, LeaderboardSeason
 from app.models.admin_rules import AdminRewardRule
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
@@ -33,6 +34,11 @@ from app.models.creator_share_market import (
     CreatorClubSharePurchase,
 )
 from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.economy_daily_stat import EconomyDailyStat
+from app.models.economy_governor import EconomyGovernorPolicy
+from app.models.event_backbone import EventOutbox
+from app.models.history_engagement import UserFollow, UserProfile
+from app.models.player_token_market import PlayerShareEvent
 from app.models.revenue_share_rule import RevenueShareRule
 from app.models.reward_settlement import RewardSettlement
 from app.models.spending_control import SpendingControlAuditEvent
@@ -46,7 +52,8 @@ from app.models.streamer_tournament import (
     StreamerTournamentRiskSignal,
 )
 from app.models.user import KycStatus, User, UserRole
-from app.models.wallet import LedgerAccount, LedgerEntry
+from app.models.user_region import UserRegionProfile
+from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerEntry, LedgerTransaction
 from app.streamer_tournament_engine.router import admin_router, router
 
 
@@ -78,6 +85,16 @@ def session() -> Iterator[Session]:
             CreatorClubSharePurchase.__table__,
             CreatorClubShareDistribution.__table__,
             CreatorClubSharePayout.__table__,
+            UserRegionProfile.__table__,
+            UserProfile.__table__,
+            UserFollow.__table__,
+            LeaderboardSeason.__table__,
+            LeaderboardPlayerRating.__table__,
+            LeaderboardMatchResult.__table__,
+            EconomyDailyStat.__table__,
+            EconomyGovernorPolicy.__table__,
+            EventOutbox.__table__,
+            PlayerShareEvent.__table__,
             StreamerTournamentPolicy.__table__,
             StreamerTournament.__table__,
             StreamerTournamentInvite.__table__,
@@ -91,6 +108,8 @@ def session() -> Iterator[Session]:
             SpendingControlAuditEvent.__table__,
             EconomyBurnEvent.__table__,
             LedgerAccount.__table__,
+            LedgerBalanceProjection.__table__,
+            LedgerTransaction.__table__,
             LedgerEntry.__table__,
         ],
     )

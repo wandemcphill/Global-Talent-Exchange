@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 from typing import Iterable
@@ -12,6 +13,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.leaderboards.models import LeaderboardPlayerRating
+from app.leaderboards.season_config import rank_tier_for_rating
 from app.leaderboards.schemas import LeaderboardEntryView, LeaderboardView, PlayerRanksView
 
 logger = logging.getLogger(__name__)
@@ -105,32 +107,9 @@ class LeaderboardService:
         region: str | None = None,
         division: str | None = None,
     ) -> list[LeaderboardEntryView]:
-        resolved_limit = max(1, int(limit))
-        board = self._board_name(region=region, division=division)
-        redis_client = None if self._should_bypass_redis() else self._redis_client()
-        if redis_client is not None:
-            key = self._board_key(region=region, division=division)
-            try:
-                rows = redis_client.zrevrange(key, 0, resolved_limit - 1, withscores=True)
-            except RedisError:
-                logger.warning("leaderboard.redis.read_failed board=%s", board)
-                rows = []
-            if rows:
-                metadata_map = self._metadata_for_ids(
-                    player_ids=[player_id for player_id, _score in rows],
-                    season_id=season_id,
-                )
-                entries: list[LeaderboardEntryView] = []
-                for rank, (player_id, score) in enumerate(rows, start=1):
-                    payload = metadata_map.get(player_id)
-                    if payload is None:
-                        continue
-                    entries.append(self._entry_view_from_payload(payload=payload, board=board, rank=rank, score=float(score)))
-                if entries:
-                    return entries
         return self._query_top_players(
             season_id=season_id,
-            limit=resolved_limit,
+            limit=max(1, int(limit)),
             region=region,
             division=division,
         )
@@ -146,17 +125,6 @@ class LeaderboardService:
         resolved_player_id = str(player_id or "").strip()
         if not resolved_player_id:
             raise ValueError("player_id is required")
-        redis_client = None if self._should_bypass_redis() else self._redis_client()
-        if redis_client is not None:
-            try:
-                rank = redis_client.zrevrank(
-                    self._board_key(region=region, division=division),
-                    resolved_player_id,
-                )
-            except RedisError:
-                rank = None
-            if rank is not None:
-                return int(rank) + 1
         entry = self._player_entry(season_id=season_id, player_id=resolved_player_id)
         if entry is None:
             return None
@@ -190,18 +158,29 @@ class LeaderboardService:
         entry = self._player_entry(season_id=season_id, player_id=player_id)
         if entry is None:
             raise LeaderboardNotFoundError(f"Leaderboard player {player_id} was not found.")
+        season_stats = self._season_stats(entry.metadata_json or {})
+        tier = rank_tier_for_rating(entry.rating)
         return PlayerRanksView(
             season_id=season_id,
             player_id=entry.player_id,
             display_name=entry.display_name,
             region=entry.region,
             division=entry.division,
+            tier=tier.label,
             rating=entry.rating,
             points=entry.points,
             matches_played=entry.matches_played,
             wins=entry.wins,
             losses=entry.losses,
             draws=entry.draws,
+            win_rate=self._win_rate(wins=entry.wins, matches_played=entry.matches_played),
+            earnings=season_stats["earnings"],
+            tournament_entries=season_stats["tournament_entries"],
+            tournament_titles=season_stats["tournament_titles"],
+            podium_finishes=season_stats["podium_finishes"],
+            best_placement=season_stats["best_placement"],
+            visibility_boost=season_stats["visibility_boost"],
+            exclusive_tournament_access=season_stats["exclusive_tournament_access"],
             last_rating_delta=entry.last_rating_delta,
             global_rank=self.get_player_rank(entry.player_id, season_id=season_id),
             region_rank=(
@@ -332,17 +311,28 @@ class LeaderboardService:
 
     @staticmethod
     def _metadata_for_entry(entry: LeaderboardPlayerRating) -> dict[str, object]:
+        season_stats = LeaderboardService._season_stats(entry.metadata_json or {})
+        tier = rank_tier_for_rating(entry.rating)
         return {
             "player_id": entry.player_id,
             "display_name": entry.display_name,
             "region": entry.region,
             "division": entry.division,
+            "tier": tier.label,
             "rating": entry.rating,
             "points": entry.points,
             "matches_played": entry.matches_played,
             "wins": entry.wins,
             "losses": entry.losses,
             "draws": entry.draws,
+            "win_rate": LeaderboardService._win_rate(wins=entry.wins, matches_played=entry.matches_played),
+            "earnings": str(season_stats["earnings"]),
+            "tournament_entries": season_stats["tournament_entries"],
+            "tournament_titles": season_stats["tournament_titles"],
+            "podium_finishes": season_stats["podium_finishes"],
+            "best_placement": season_stats["best_placement"],
+            "visibility_boost": season_stats["visibility_boost"],
+            "exclusive_tournament_access": season_stats["exclusive_tournament_access"],
             "last_rating_delta": entry.last_rating_delta,
             "last_active_at": entry.last_active_at.isoformat() if entry.last_active_at else None,
         }
@@ -355,18 +345,29 @@ class LeaderboardService:
         rank: int,
         score: float,
     ) -> LeaderboardEntryView:
+        season_stats = LeaderboardService._season_stats(row.metadata_json or {})
+        tier = rank_tier_for_rating(row.rating)
         return LeaderboardEntryView(
             board=board,
             player_id=row.player_id,
             display_name=row.display_name,
             region=row.region,
             division=row.division,
+            tier=tier.label,
             rating=row.rating,
             points=row.points,
             matches_played=row.matches_played,
             wins=row.wins,
             losses=row.losses,
             draws=row.draws,
+            win_rate=LeaderboardService._win_rate(wins=row.wins, matches_played=row.matches_played),
+            earnings=season_stats["earnings"],
+            tournament_entries=season_stats["tournament_entries"],
+            tournament_titles=season_stats["tournament_titles"],
+            podium_finishes=season_stats["podium_finishes"],
+            best_placement=season_stats["best_placement"],
+            visibility_boost=season_stats["visibility_boost"],
+            exclusive_tournament_access=season_stats["exclusive_tournament_access"],
             rank=rank,
             score=score,
             last_rating_delta=row.last_rating_delta,
@@ -385,23 +386,72 @@ class LeaderboardService:
         resolved_last_active_at = None
         if isinstance(last_active_at, str) and last_active_at.strip():
             resolved_last_active_at = datetime.fromisoformat(last_active_at.replace("Z", "+00:00"))
+        wins = int(payload.get("wins") or 0)
+        matches_played = int(payload.get("matches_played") or 0)
         return LeaderboardEntryView(
             board=board,
             player_id=str(payload.get("player_id") or ""),
             display_name=str(payload.get("display_name") or payload.get("player_id") or ""),
             region=(str(payload.get("region")).strip() or None) if payload.get("region") is not None else None,
             division=(str(payload.get("division")).strip() or None) if payload.get("division") is not None else None,
+            tier=str(payload.get("tier") or rank_tier_for_rating(int(payload.get("rating") or 0)).label),
             rating=int(payload.get("rating") or 0),
             points=int(payload.get("points") or 0),
-            matches_played=int(payload.get("matches_played") or 0),
-            wins=int(payload.get("wins") or 0),
+            matches_played=matches_played,
+            wins=wins,
             losses=int(payload.get("losses") or 0),
             draws=int(payload.get("draws") or 0),
+            win_rate=float(payload.get("win_rate") or LeaderboardService._win_rate(wins=wins, matches_played=matches_played)),
+            earnings=LeaderboardService._decimal_value(payload.get("earnings")),
+            tournament_entries=int(payload.get("tournament_entries") or 0),
+            tournament_titles=int(payload.get("tournament_titles") or 0),
+            podium_finishes=int(payload.get("podium_finishes") or 0),
+            best_placement=int(payload["best_placement"]) if payload.get("best_placement") is not None else None,
+            visibility_boost=int(payload.get("visibility_boost") or 0),
+            exclusive_tournament_access=[str(item) for item in (payload.get("exclusive_tournament_access") or [])],
             rank=rank,
             score=score,
             last_rating_delta=int(payload.get("last_rating_delta") or 0),
             last_active_at=resolved_last_active_at,
         )
+
+    @staticmethod
+    def _season_stats(metadata_json: dict[str, object] | None) -> dict[str, object]:
+        payload = dict(metadata_json or {})
+        season_competition = payload.get("season_competition")
+        reward_entitlements = payload.get("reward_entitlements")
+        season_competition = season_competition if isinstance(season_competition, dict) else {}
+        reward_entitlements = reward_entitlements if isinstance(reward_entitlements, dict) else {}
+        return {
+            "earnings": LeaderboardService._decimal_value(season_competition.get("earnings_total")),
+            "tournament_entries": int(season_competition.get("tournament_entries", 0) or 0),
+            "tournament_titles": int(season_competition.get("tournament_titles", 0) or 0),
+            "podium_finishes": int(season_competition.get("podium_finishes", 0) or 0),
+            "best_placement": (
+                int(season_competition["best_placement"])
+                if season_competition.get("best_placement") is not None
+                else None
+            ),
+            "visibility_boost": int(reward_entitlements.get("visibility_boost_total", 0) or 0),
+            "exclusive_tournament_access": [
+                str(item) for item in (reward_entitlements.get("exclusive_tournament_access") or [])
+            ],
+        }
+
+    @staticmethod
+    def _win_rate(*, wins: int, matches_played: int) -> float:
+        if int(matches_played or 0) <= 0:
+            return 0.0
+        return round(float(int(wins or 0) / int(matches_played)), 4)
+
+    @staticmethod
+    def _decimal_value(value: object) -> Decimal:
+        if value is None:
+            return Decimal("0.0000")
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return Decimal("0.0000")
 
     @staticmethod
     def _board_name(*, region: str | None, division: str | None) -> str:

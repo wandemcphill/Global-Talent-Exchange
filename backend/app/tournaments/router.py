@@ -1,0 +1,133 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.db import get_session
+from app.tournaments.schemas import (
+    TournamentCreateRequest,
+    TournamentJoinRequest,
+    TournamentListView,
+    TournamentMatchResultRequest,
+    TournamentView,
+)
+from app.tournaments.service import (
+    TournamentError,
+    TournamentNotFoundError,
+    TournamentService,
+    TournamentValidationError,
+)
+
+router = APIRouter(prefix="/api/tournaments", tags=["tournaments"])
+
+
+def _service(session: Session = Depends(get_session)) -> TournamentService:
+    return TournamentService(session=session)
+
+
+def _raise_http(exc: TournamentError) -> None:
+    if isinstance(exc, TournamentNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail) from exc
+    if isinstance(exc, TournamentValidationError):
+        conflict_reasons = {
+            "insufficient_balance",
+            "registration_closed",
+            "round_locked",
+            "round_not_ready",
+            "tournament_full",
+        }
+        status_code = status.HTTP_409_CONFLICT if exc.reason in conflict_reasons else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+
+
+@router.get("", response_model=TournamentListView)
+def list_tournaments(
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentListView:
+    try:
+        tournaments = service.list_tournaments()
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentListView(tournaments=[TournamentView.model_validate(item) for item in tournaments])
+
+
+@router.post("", response_model=TournamentView, status_code=status.HTTP_201_CREATED)
+def create_tournament(
+    payload: TournamentCreateRequest,
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    try:
+        tournament = service.create_tournament(payload)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)
+
+
+@router.get("/{tournament_id}", response_model=TournamentView)
+def get_tournament(
+    tournament_id: str,
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    try:
+        tournament = service.get_tournament(tournament_id)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)
+
+
+@router.post("/{tournament_id}/join", response_model=TournamentView)
+def join_tournament(
+    tournament_id: str,
+    payload: TournamentJoinRequest,
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    try:
+        tournament = service.join_tournament(tournament_id, user_id=payload.user_id)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)
+
+
+@router.post("/{tournament_id}/matches/{match_id}/result", response_model=TournamentView)
+def report_match_result(
+    tournament_id: str,
+    match_id: str,
+    payload: TournamentMatchResultRequest,
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    try:
+        tournament = service.record_match_result(tournament_id, match_id, payload)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)
+
+
+@router.post("/{tournament_id}/advance", response_model=TournamentView)
+def advance_tournament(
+    tournament_id: str,
+    session: Session = Depends(get_session),
+    service: TournamentService = Depends(_service),
+) -> TournamentView:
+    try:
+        tournament = service.advance_tournament(tournament_id)
+        session.commit()
+    except TournamentError as exc:
+        session.rollback()
+        _raise_http(exc)
+    return TournamentView.model_validate(tournament)

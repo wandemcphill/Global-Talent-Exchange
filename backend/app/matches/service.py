@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.common.enums.match_status import MatchStatus
-from app.match_engine.schemas import MatchReplayPayloadView, ReplayEventLogEntryView
+from app.match_engine.schemas import MatchEventView, MatchReplayPayloadView, ReplayEventLogEntryView
 from app.models.competition_match import CompetitionMatch
 from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
 from app.orchestrator.orchestrator_service import OrchestratorService
@@ -387,8 +387,10 @@ class MatchEventLoggerService:
     def _build_rows(self, *, match_id: str, replay_payload: MatchReplayPayloadView) -> list[MatchEvent]:
         rows: list[MatchEvent] = []
         pending_shots: dict[tuple[MatchEventTeam, str | None, int], MatchEvent] = {}
+        timeline_events = {item.sequence: item for item in replay_payload.timeline.events}
         sequence = 1
         for item in replay_payload.replay_log:
+            timeline_event = timeline_events.get(item.sequence)
             team = self._team_for_source(item, replay_payload)
             if team is None:
                 continue
@@ -402,6 +404,7 @@ class MatchEventLoggerService:
                         MatchEventType.CHANCE_CREATED,
                         self._chance_metadata(item),
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                     )
                 )
                 sequence += 1
@@ -411,6 +414,7 @@ class MatchEventLoggerService:
                     item,
                     team,
                     replay_payload=replay_payload,
+                    timeline_event=timeline_event,
                 )
                 if pass_row is not None:
                     rows.append(pass_row)
@@ -425,6 +429,7 @@ class MatchEventLoggerService:
                     MatchEventType.SHOT,
                     self._shot_metadata(item),
                     replay_payload=replay_payload,
+                    timeline_event=timeline_event,
                 )
                 pending_shots[(team, item.player_id, item.minute)] = shot_row
                 rows.append(shot_row)
@@ -473,6 +478,7 @@ class MatchEventLoggerService:
                         MatchEventType.GOAL,
                         self._goal_metadata(item),
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                     )
                 )
                 sequence += 1
@@ -486,6 +492,7 @@ class MatchEventLoggerService:
                             MatchEventType.SHOT,
                             self._penalty_shot_metadata(item),
                             replay_payload=replay_payload,
+                            timeline_event=timeline_event,
                         )
                     )
                     sequence += 1
@@ -500,6 +507,7 @@ class MatchEventLoggerService:
                         MatchEventType.SHOT,
                         self._penalty_shot_metadata(item),
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                     )
                 )
                 sequence += 1
@@ -516,11 +524,19 @@ class MatchEventLoggerService:
                         MatchEventType.FOUL,
                         self._foul_metadata(item),
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                         player_id=foul_player_id,
                     )
                 )
                 sequence += 1
-                tackle_row = self._derived_tackle_row(match_id, sequence, item, foul_team, replay_payload=replay_payload)
+                tackle_row = self._derived_tackle_row(
+                    match_id,
+                    sequence,
+                    item,
+                    foul_team,
+                    replay_payload=replay_payload,
+                    timeline_event=timeline_event,
+                )
                 if tackle_row is not None:
                     rows.append(tackle_row)
                     sequence += 1
@@ -535,6 +551,7 @@ class MatchEventLoggerService:
                         MatchEventType.CARD,
                         self._card_metadata(item),
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                     )
                 )
                 sequence += 1
@@ -549,6 +566,7 @@ class MatchEventLoggerService:
                         MatchEventType.SUBSTITUTION,
                         self._substitution_metadata(item),
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                     )
                 )
                 sequence += 1
@@ -566,6 +584,7 @@ class MatchEventLoggerService:
                         MatchEventType.FORMATION_CHANGE,
                         metadata,
                         replay_payload=replay_payload,
+                        timeline_event=timeline_event,
                     )
                 )
                 sequence += 1
@@ -577,6 +596,7 @@ class MatchEventLoggerService:
                     item,
                     self._opponent(team),
                     replay_payload=replay_payload,
+                    timeline_event=timeline_event,
                 )
                 if tackle_row is not None:
                     rows.append(tackle_row)
@@ -593,6 +613,7 @@ class MatchEventLoggerService:
         metadata: dict[str, Any],
         *,
         replay_payload: MatchReplayPayloadView,
+        timeline_event: MatchEventView | None = None,
         player_id: str | None = None,
     ) -> MatchEvent:
         payload = dict(item.payload or {})
@@ -614,6 +635,7 @@ class MatchEventLoggerService:
                 "away_score": item.away_score,
                 "source_sequence": item.sequence,
                 "source_event_type": item.event_type.value,
+                **self._viewer_metadata(item, timeline_event=timeline_event),
                 **metadata,
             },
         )
@@ -732,6 +754,7 @@ class MatchEventLoggerService:
         team: MatchEventTeam,
         *,
         replay_payload: MatchReplayPayloadView,
+        timeline_event: MatchEventView | None = None,
     ) -> MatchEvent | None:
         payload = dict(item.payload or {})
         creator_player_id = payload.get("creator_player_id")
@@ -755,6 +778,7 @@ class MatchEventLoggerService:
                 "importance": 2,
                 "source_sequence": item.sequence,
                 "source_event_type": item.event_type.value,
+                **self._viewer_metadata(item, timeline_event=timeline_event),
             },
         )
 
@@ -766,6 +790,7 @@ class MatchEventLoggerService:
         team: MatchEventTeam,
         *,
         replay_payload: MatchReplayPayloadView,
+        timeline_event: MatchEventView | None = None,
     ) -> MatchEvent | None:
         payload = dict(item.payload or {})
         player_id = item.player_id
@@ -793,8 +818,42 @@ class MatchEventLoggerService:
                 "importance": 2,
                 "source_sequence": item.sequence,
                 "source_event_type": item.event_type.value,
+                **self._viewer_metadata(item, timeline_event=timeline_event),
             },
         )
+
+    @staticmethod
+    def _viewer_metadata(
+        item: ReplayEventLogEntryView,
+        *,
+        timeline_event: MatchEventView | None,
+    ) -> dict[str, Any]:
+        metadata = dict(timeline_event.metadata) if timeline_event is not None else {}
+        render = metadata.get("render")
+        commentary_context = metadata.get("commentary_context")
+        viewer_payload: dict[str, Any] = {
+            "clock_label": timeline_event.clock_label if timeline_event is not None else f"{item.minute}'",
+            "presentation_second": timeline_event.presentation_second if timeline_event is not None else None,
+            "description": timeline_event.commentary if timeline_event is not None else None,
+            "commentary": timeline_event.commentary if timeline_event is not None else None,
+            "analyst_commentary": timeline_event.analyst_commentary if timeline_event is not None else None,
+            "highlight_eligible": bool(
+                metadata.get("render", {}).get("replay", {}).get("eligible", False)
+                if isinstance(metadata.get("render"), dict)
+                else False
+            )
+            or item.event_type in {
+                MatchEventType.GOAL,
+                MatchEventType.PENALTY_GOAL,
+                MatchEventType.PENALTY_SCORED,
+                MatchEventType.RED_CARD,
+            },
+        }
+        if isinstance(render, dict):
+            viewer_payload["render"] = render
+        if isinstance(commentary_context, dict):
+            viewer_payload["commentary_context"] = commentary_context
+        return viewer_payload
 
     @staticmethod
     def _update_pending_shot(

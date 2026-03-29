@@ -71,6 +71,7 @@ class _LiveMatchRuntime:
     pause_replay_enabled: bool
     reactions_enabled: bool
     read_only: bool
+    step_interval_seconds: float
     event_batches: list[_LiveBatch]
     on_batch: BatchCallback | None = None
     on_complete: CompleteCallback | None = None
@@ -104,15 +105,17 @@ class LiveMatchHub:
         replay_payload: MatchReplayPayloadView,
         *,
         read_only: bool = True,
+        target_runtime_seconds: float | None = None,
         on_batch: BatchCallback | None = None,
         on_complete: CompleteCallback | None = None,
     ) -> None:
         if self.is_match_halted(match_id):
             raise LiveMatchError("Match is currently halted by the admin kill switch.")
         self.commentary_engine.reset_match(match_id)
+        event_batches = self._build_batches(replay_payload)
         runtime = _LiveMatchRuntime(
             match_id=match_id,
-            channel=f"match:{match_id}",
+            channel=f"match:{match_id}:events",
             home_team_id=replay_payload.summary.home_stats.team_id,
             away_team_id=replay_payload.summary.away_stats.team_id,
             home_team_name=replay_payload.summary.home_stats.team_name,
@@ -126,7 +129,11 @@ class LiveMatchHub:
             pause_replay_enabled=(replay_payload.spectator_package.can_pause if replay_payload.spectator_package is not None else False),
             reactions_enabled=(replay_payload.spectator_package.reactions_enabled if replay_payload.spectator_package is not None else True),
             read_only=read_only,
-            event_batches=self._build_batches(replay_payload),
+            step_interval_seconds=self._resolve_step_interval(
+                batch_count=len(event_batches),
+                target_runtime_seconds=target_runtime_seconds,
+            ),
+            event_batches=event_batches,
             on_batch=on_batch,
             on_complete=on_complete,
             last_snapshot=self._build_initial_snapshot(
@@ -155,6 +162,7 @@ class LiveMatchHub:
         pause_replay_enabled: bool = False,
         reactions_enabled: bool = True,
         read_only: bool = True,
+        target_runtime_seconds: float | None = None,
         on_batch: BatchCallback | None = None,
         on_complete: CompleteCallback | None = None,
     ) -> None:
@@ -165,9 +173,10 @@ class LiveMatchHub:
             if existing is not None and existing.live:
                 return
         self.commentary_engine.reset_match(match_id)
+        event_batches = self._build_event_batches(events)
         runtime = _LiveMatchRuntime(
             match_id=match_id,
-            channel=f"match:{match_id}",
+            channel=f"match:{match_id}:events",
             home_team_id=home_team_id,
             away_team_id=away_team_id,
             home_team_name=home_team_name,
@@ -181,7 +190,11 @@ class LiveMatchHub:
             pause_replay_enabled=pause_replay_enabled,
             reactions_enabled=reactions_enabled,
             read_only=read_only,
-            event_batches=self._build_event_batches(events),
+            step_interval_seconds=self._resolve_step_interval(
+                batch_count=len(event_batches),
+                target_runtime_seconds=target_runtime_seconds,
+            ),
+            event_batches=event_batches,
             on_batch=on_batch,
             on_complete=on_complete,
             last_snapshot=self._build_initial_snapshot(
@@ -193,9 +206,10 @@ class LiveMatchHub:
         self._start_runtime(runtime)
 
     def join_spectate(self, match_id: str, user_id: str) -> SpectatorSession:
-        runtime = self._require_live_match(match_id)
+        runtime = self._resolve_runtime_for_spectate(match_id)
         with self._lock:
-            runtime.spectator_user_ids.add(user_id)
+            if runtime is not None:
+                runtime.spectator_user_ids.add(user_id)
         if self.session_factory is None:
             return SpectatorSession(
                 id=f"spec-{user_id}-{match_id}",
@@ -369,7 +383,7 @@ class LiveMatchHub:
             self._publish_channel(channel, {"kind": "snapshot", "payload": snapshot.model_dump(mode="json")})
             if batch_callback is not None and next_batch.events:
                 batch_callback(match_id, next_batch.events, snapshot)
-            time.sleep(max(self.step_interval_seconds, 0.01))
+            time.sleep(max(runtime.step_interval_seconds, 0.01))
 
         with self._lock:
             runtime = self._matches.get(match_id)
@@ -422,6 +436,13 @@ class LiveMatchHub:
             if event is not None
         ]
         return self._build_event_batches(mapped_events)
+
+    def _resolve_step_interval(self, *, batch_count: int, target_runtime_seconds: float | None) -> float:
+        if batch_count <= 0:
+            return max(self.step_interval_seconds, 0.01)
+        if target_runtime_seconds is None or target_runtime_seconds <= 0:
+            return max(self.step_interval_seconds, 0.01)
+        return max(float(target_runtime_seconds) / float(batch_count), 0.01)
 
     def _build_event_batches(self, events: Sequence[LiveMatchStreamEventView]) -> list[_LiveBatch]:
         batches: list[_LiveBatch] = []
@@ -586,14 +607,28 @@ class LiveMatchHub:
         return LiveMatchStreamEventView(
             match_id=match_id,
             event_id=raw_event.event_id,
+            sequence=raw_event.sequence,
             tick=max(0, int(round(raw_event.presentation_second * tick_rate_hz))),
             minute=raw_event.minute,
             event_type=mapped_type,
+            source_event_type=raw_event.event_type.value,
             team_id=home_team_id if team_side == "home" else away_team_id if team_side == "away" else raw_event.team_id,
             team=raw_event.team_name,
+            team_side=team_side,
             player_id=self._actor_player_id(raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id),
             player=raw_event.primary_player.player_name if raw_event.primary_player is not None else None,
             secondary_player_id=self._secondary_actor_id(raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id),
+            secondary_player=raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None,
+            commentary=generated_commentary.line,
+            home_score=raw_event.home_score,
+            away_score=raw_event.away_score,
+            clock_label=raw_event.clock_label,
+            presentation_second=raw_event.presentation_second,
+            highlight_eligible=bool(
+                replay.get("eligible", False)
+                or mapped_type == "goal"
+                or raw_event.event_type is MatchEventType.RED_CARD
+            ),
             position=position,
             target_position=target_position,
             meta=meta,
@@ -715,6 +750,18 @@ class LiveMatchHub:
                 raise LiveMatchError("Match is not currently live for spectating.")
             return runtime
 
+    def _resolve_runtime_for_spectate(self, match_id: str) -> _LiveMatchRuntime | None:
+        with self._lock:
+            runtime = self._matches.get(match_id)
+            if match_id in self._halted_matches:
+                raise LiveMatchError("Match has been halted by the admin kill switch.")
+            if runtime is not None and runtime.live:
+                return runtime
+        cached_state = self.get_state(match_id)
+        if cached_state is None or not cached_state.is_live:
+            raise LiveMatchError("Match is not currently live for spectating.")
+        return None
+
     def _build_state_view(self, runtime: _LiveMatchRuntime) -> LiveMatchStateView:
         return LiveMatchStateView(
             match_id=runtime.match_id,
@@ -740,7 +787,7 @@ class LiveMatchHub:
     def _publish_channel(self, channel: str, payload: dict[str, object]) -> None:
         if not channel.startswith("match:"):
             return
-        self._hot_cache.publish_match_channel(channel.split(":", 1)[1], dict(payload))
+        self._hot_cache.publish_match_channel(channel, dict(payload))
 
 
 def _build_win_probability(

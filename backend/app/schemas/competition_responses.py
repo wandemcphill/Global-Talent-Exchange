@@ -101,3 +101,59 @@ class CompetitionFinancialSummaryView(CommonSchema):
     payout_structure: tuple[PayoutBreakdown, ...]
     dynamic_prize_pool: DynamicPrizePoolView | None = None
     currency: str
+
+
+class CompetitionRewardView(CommonSchema):
+    reward_id: str
+    subject_id: str
+    resolved_user_id: str | None = None
+    display_name: str | None = None
+    placement: int | None = None
+    amount: Decimal = Field(ge=0)
+    currency: str
+    status: str
+    ledger_transaction_id: str | None = None
+    badge_code: str | None = None
+    title_awarded: str | None = None
+    ranking_points_delta: int = 0
+
+
+class CompetitionRewardsResponse(CommonSchema):
+    competition_id: str
+    rewards: tuple[CompetitionRewardView, ...]
+
+
+class CompetitionHistoryEntryView(CommonSchema):
+    competition_id: str
+    competition_name: str
+    placement: int | None = None
+    played: int = Field(ge=0)
+    wins: int = Field(ge=0)
+    draws: int = Field(ge=0)
+    losses: int = Field(ge=0)
+    points: int = Field(ge=0)
+    earnings: Decimal = Field(ge=0)
+    currency: str
+    reward_status: str
+    ledger_transaction_id: str | None = None
+    badge_code: str | None = None
+    title_awarded: str | None = None
+    ranking_points_delta: int = 0
+    completed_at: datetime | None = None
+
+
+class CompetitionProgressionView(CommonSchema):
+    subject_id: str
+    resolved_user_id: str | None = None
+    display_name: str | None = None
+    current_title: str
+    ranking_points: int = Field(ge=0)
+    total_wins: int = Field(ge=0)
+    total_championships: int = Field(ge=0)
+    total_podiums: int = Field(ge=0)
+    total_competitions: int = Field(ge=0)
+    total_earnings: Decimal = Field(ge=0)
+    best_placement: int | None = Field(default=None, ge=1)
+    badges: tuple[str, ...] = ()
+    titles: tuple[str, ...] = ()
+    history: tuple[CompetitionHistoryEntryView, ...] = ()

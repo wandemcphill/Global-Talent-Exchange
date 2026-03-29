@@ -57,6 +57,7 @@ from app.services.creator_clip_monetization_service import (
     CreatorClipMonetizationError,
     CreatorClipMonetizationService,
 )
+from app.services.creator_clip_earnings_projection_service import CreatorClipEarningsProjectionService
 from app.services.creator_revenue_service import CreatorRevenueService
 from app.services.creator_stadium_service import CreatorMatchStadiumOffer, CreatorStadiumBundle, CreatorStadiumError, CreatorStadiumService
 from app.services.media_access_service import MediaAccessError, MediaAccessService
@@ -771,7 +772,9 @@ def get_my_clip_earnings(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> CreatorClipEarningsSummaryView:
-    summary = _creator_clip_service(session).build_creator_summary(actor=user)
+    summary = CreatorClipEarningsProjectionService(session).load(creator_user_id=user.id)
+    if summary is None:
+        summary = _creator_clip_service(session).build_creator_summary(actor=user)
     return _creator_clip_summary(summary, user_id=user.id)
 
 

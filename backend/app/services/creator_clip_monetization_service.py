@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.backbone.scale_events import enqueue_creator_earnings_recompute
 from app.core.trust_middleware import SharedTrustMiddleware
 from app.models.base import generate_uuid
 from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
@@ -159,6 +160,13 @@ class CreatorClipMonetizationService:
             reference=reference,
             actor=actor,
             export=export,
+        )
+        enqueue_creator_earnings_recompute(
+            session=self.session,
+            creator_user_id=creator.id,
+            export_id=export.id,
+            match_key=export.match_key,
+            producer="creator-monetization",
         )
         return attribution
 

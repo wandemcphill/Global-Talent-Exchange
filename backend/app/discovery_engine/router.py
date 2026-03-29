@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
@@ -12,8 +12,11 @@ router = APIRouter(prefix="/discovery", tags=["discovery"])
 admin_router = APIRouter(prefix="/admin/discovery", tags=["admin-discovery"])
 
 
-def get_service(session: Session = Depends(get_session)) -> DiscoveryEngineService:
-    return DiscoveryEngineService(session)
+def get_service(request: Request, session: Session = Depends(get_session)) -> DiscoveryEngineService:
+    return DiscoveryEngineService(
+        session,
+        cache_backend=getattr(request.app.state, "cache_backend", None),
+    )
 
 
 def _raise(exc: DiscoveryEngineError) -> None:

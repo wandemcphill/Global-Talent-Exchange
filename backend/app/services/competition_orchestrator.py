@@ -29,6 +29,7 @@ from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_participant import CompetitionParticipant
 from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_reward import CompetitionReward
 from app.models.competition_reward_pool import CompetitionRewardPool
 from app.models.competition_round import CompetitionRound
 from app.models.competition_rule_set import CompetitionRuleSet
@@ -62,11 +63,15 @@ from app.schemas.competition_requests import (
 )
 from app.schemas.competition_responses import (
     CompetitionFinancialSummaryView,
+    CompetitionHistoryEntryView,
     CompetitionFeesView,
+    CompetitionProgressionView,
     DynamicPrizePoolView,
     CompetitionInviteView,
     CompetitionInvitesResponse,
     CompetitionListResponse,
+    CompetitionRewardView,
+    CompetitionRewardsResponse,
     CompetitionSummaryView,
     JoinEligibilityView,
 )
@@ -76,10 +81,13 @@ from app.services.competition_discovery_service import CompetitionDiscoveryFilte
 from app.services.competition_fee_service import CompetitionFeeService
 from app.services.competition_join_service import CompetitionJoinService, JoinDecision
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
+from app.services.competition_progression_service import CompetitionProgressionService
 from app.services.competition_rules_engine import CompetitionRulesEngine
 from app.services.competition_validation_service import CompetitionValidationService
 from app.services.competition_visibility_service import CompetitionVisibilityService
+from app.services.competition_wallet_service import CompetitionWalletService
 from app.services.dynamic_prize_pool_service import DynamicPrizePoolService
+from app.wallets.service import InsufficientBalanceError
 
 _DEFAULT_RULES = (
     "Skill-based, player-versus-player contest with transparent entry fees, disclosed platform service fees, "
@@ -116,10 +124,14 @@ class CompetitionOrchestrator:
     validation_service: CompetitionValidationService = field(default_factory=CompetitionValidationService)
     visibility_service: CompetitionVisibilityService = field(default_factory=CompetitionVisibilityService)
     lifecycle_service: CompetitionLifecycleService = field(init=False)
+    competition_wallet_service: CompetitionWalletService = field(init=False)
+    progression_service: CompetitionProgressionService = field(init=False)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
 
     def __post_init__(self) -> None:
         self.lifecycle_service = CompetitionLifecycleService(self.session, event_publisher=self.event_publisher)
+        self.competition_wallet_service = CompetitionWalletService(self.session)
+        self.progression_service = CompetitionProgressionService(self.session)
 
     def create(self, payload: CompetitionCreateRequest) -> CompetitionSummaryView:
         self._validate_against_thread_a_domain(payload)
@@ -417,9 +429,25 @@ class CompetitionOrchestrator:
             entry_id=entry.id,
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
-            paid_at=datetime.now(timezone.utc) if competition.entry_fee_minor > 0 else None,
         )
         self.session.add(participant)
+        try:
+            fee_result = self.competition_wallet_service.collect_entry_fee(
+                competition=competition,
+                participant_user_id=user_id,
+            )
+        except InsufficientBalanceError as exc:
+            raise CompetitionActionError(
+                "Available balance is lower than the competition entry fee.",
+                reason="entry_fee_insufficient_balance",
+            ) from exc
+        entry.metadata_json = {
+            **dict(entry.metadata_json or {}),
+            "entry_fee_status": fee_result.status,
+            "entry_fee_transaction_id": fee_result.transaction_id,
+            "entry_fee_reason": fee_result.reason,
+        }
+        participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
         self._refresh_financials(competition, rule_set, participant_count=participant_count + 1)
         self.session.commit()
         self.session.refresh(competition)
@@ -433,8 +461,36 @@ class CompetitionOrchestrator:
         participant = self._participant(competition.id, user_id)
         if participant is None:
             return self._to_summary(competition, user_id=user_id)
+        if CompetitionStatus(competition.status) in {
+            CompetitionStatus.SEEDED,
+            CompetitionStatus.LIVE,
+            CompetitionStatus.COMPLETED,
+            CompetitionStatus.SETTLED,
+        }:
+            raise CompetitionActionError(
+                "Competition entries can no longer be withdrawn after the bracket locks.",
+                reason="competition_locked",
+            )
         entry = self.session.get(CompetitionEntry, participant.entry_id) if participant.entry_id else None
         if entry is not None:
+            if (entry.metadata_json or {}).get("entry_fee_status") == "settled":
+                try:
+                    refund_result = self.competition_wallet_service.refund_entry_fee(
+                        competition=competition,
+                        participant_user_id=user_id,
+                        amount_minor=participant.paid_entry_fee_minor,
+                    )
+                except InsufficientBalanceError as exc:
+                    raise CompetitionActionError(
+                        "Competition escrow balance is lower than the refundable entry fee.",
+                        reason="entry_fee_refund_unavailable",
+                    ) from exc
+                entry.metadata_json = {
+                    **dict(entry.metadata_json or {}),
+                    "entry_fee_refund_status": refund_result.status,
+                    "entry_fee_refund_transaction_id": refund_result.transaction_id,
+                    "entry_fee_refund_reason": refund_result.reason,
+                }
             entry.status = "withdrawn"
             entry.responded_at = datetime.now(timezone.utc)
         self.session.delete(participant)
@@ -526,9 +582,25 @@ class CompetitionOrchestrator:
             entry_id=entry.id,
             status="joined",
             paid_entry_fee_minor=competition.entry_fee_minor,
-            paid_at=datetime.now(timezone.utc) if competition.entry_fee_minor > 0 else None,
         )
         self.session.add(participant)
+        try:
+            fee_result = self.competition_wallet_service.collect_entry_fee(
+                competition=competition,
+                participant_user_id=club_id,
+            )
+        except InsufficientBalanceError as exc:
+            raise CompetitionActionError(
+                "Available balance is lower than the competition entry fee.",
+                reason="entry_fee_insufficient_balance",
+            ) from exc
+        entry.metadata_json = {
+            **dict(entry.metadata_json or {}),
+            "entry_fee_status": fee_result.status,
+            "entry_fee_transaction_id": fee_result.transaction_id,
+            "entry_fee_reason": fee_result.reason,
+        }
+        participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
         participant_count = self._participant_count(competition.id) + 1
         self._refresh_financials(competition, rule_set, participant_count=participant_count)
         self.session.commit()
@@ -561,6 +633,44 @@ class CompetitionOrchestrator:
             payout_structure=payout_structure,
             dynamic_prize_pool=self._dynamic_prize_pool_view(dynamic_prize_pool),
             currency=competition.currency,
+        )
+
+    def rewards(self, competition_id: str) -> CompetitionRewardsResponse | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        rewards = list(
+            self.session.scalars(
+                select(CompetitionReward)
+                .where(CompetitionReward.competition_id == competition_id)
+                .order_by(CompetitionReward.placement.asc(), CompetitionReward.created_at.asc())
+            ).all()
+        )
+        return CompetitionRewardsResponse(
+            competition_id=competition_id,
+            rewards=tuple(self._reward_view(item) for item in rewards),
+        )
+
+    def progression(self, subject_id: str) -> CompetitionProgressionView | None:
+        profile = self.progression_service.profile_for_subject(subject_id)
+        if profile is None:
+            return None
+        history = self.progression_service.history_for_subject(subject_id)
+        return CompetitionProgressionView(
+            subject_id=profile.subject_id,
+            resolved_user_id=profile.resolved_user_id,
+            display_name=profile.display_name,
+            current_title=profile.current_title or "Rising Challenger",
+            ranking_points=profile.ranking_points,
+            total_wins=profile.total_wins,
+            total_championships=profile.total_championships,
+            total_podiums=profile.total_podiums,
+            total_competitions=profile.total_competitions,
+            total_earnings=self.progression_service.minor_to_decimal(profile.total_earnings_minor),
+            best_placement=profile.best_placement,
+            badges=tuple(profile.badges_json or []),
+            titles=tuple(profile.titles_json or []),
+            history=tuple(self._history_view(item) for item in history),
         )
 
     def rounds(self, competition_id: str) -> tuple[CompetitionRoundView, ...] | None:
@@ -599,8 +709,12 @@ class CompetitionOrchestrator:
             rule_set=rule_set,
             group_key=group_key,
         )
+        history_map = self.progression_service.history_map_for_competition(competition.id)
+        profile_map = self.progression_service.profile_map(participant.club_id for participant in standings)
         views: list[CompetitionStandingView] = []
         for index, participant in enumerate(standings, start=1):
+            history = history_map.get(participant.club_id)
+            profile = profile_map.get(participant.club_id)
             views.append(
                 CompetitionStandingView(
                     club_id=participant.club_id,
@@ -615,6 +729,20 @@ class CompetitionOrchestrator:
                     goal_diff=participant.goal_diff,
                     points=participant.points,
                     rank=index,
+                    reward_amount=self.progression_service.minor_to_decimal(history.earnings_minor) if history is not None else Decimal("0.0000"),
+                    reward_currency=history.currency if history is not None else None,
+                    reward_status=history.reward_status if history is not None else None,
+                    badge_code=history.badge_code if history is not None else None,
+                    title_awarded=history.title_awarded if history is not None else None,
+                    ranking_points_delta=history.ranking_points_delta if history is not None else 0,
+                    career_title=profile.current_title if profile is not None else None,
+                    career_ranking_points=profile.ranking_points if profile is not None else 0,
+                    career_total_wins=profile.total_wins if profile is not None else 0,
+                    career_total_earnings=(
+                        self.progression_service.minor_to_decimal(profile.total_earnings_minor)
+                        if profile is not None
+                        else Decimal("0.0000")
+                    ),
                 )
             )
         return tuple(views)
@@ -990,6 +1118,44 @@ class CompetitionOrchestrator:
             highlight=event.highlight,
             created_at=event.created_at,
             metadata_json=event.metadata_json or {},
+        )
+
+    def _reward_view(self, reward: CompetitionReward) -> CompetitionRewardView:
+        metadata = dict(reward.metadata_json or {})
+        display_name = metadata.get("display_name")
+        return CompetitionRewardView(
+            reward_id=reward.id,
+            subject_id=metadata.get("subject_id") or reward.club_id or reward.participant_id or reward.id,
+            resolved_user_id=metadata.get("resolved_user_id"),
+            display_name=display_name if isinstance(display_name, str) else None,
+            placement=reward.placement,
+            amount=self._to_decimal(reward.amount_minor),
+            currency=reward.currency,
+            status=reward.status,
+            ledger_transaction_id=reward.ledger_transaction_id,
+            badge_code=metadata.get("badge_code") if isinstance(metadata.get("badge_code"), str) else None,
+            title_awarded=metadata.get("title_awarded") if isinstance(metadata.get("title_awarded"), str) else None,
+            ranking_points_delta=int(metadata.get("ranking_points_delta") or 0),
+        )
+
+    def _history_view(self, entry) -> CompetitionHistoryEntryView:
+        return CompetitionHistoryEntryView(
+            competition_id=entry.competition_id,
+            competition_name=entry.competition_name,
+            placement=entry.placement,
+            played=entry.played,
+            wins=entry.wins,
+            draws=entry.draws,
+            losses=entry.losses,
+            points=entry.points,
+            earnings=self.progression_service.minor_to_decimal(entry.earnings_minor),
+            currency=entry.currency,
+            reward_status=entry.reward_status,
+            ledger_transaction_id=entry.ledger_transaction_id,
+            badge_code=entry.badge_code,
+            title_awarded=entry.title_awarded,
+            ranking_points_delta=entry.ranking_points_delta,
+            completed_at=entry.completed_at,
         )
 
     def _schedule_job_view(self, job: CompetitionScheduleJob) -> CompetitionScheduleJobView:

@@ -1447,6 +1447,25 @@ class GteReliableApiRepository implements GteApiRepository {
     }
   }
 
+  Future<Map<String, Object?>> requestJson(
+    String method,
+    String path, {
+    Map<String, Object?> query = const <String, Object?>{},
+    Object? body,
+    bool requiresAuth = false,
+  }) async {
+    return GteJson.map(
+      await _request(
+        method,
+        path,
+        query: query,
+        body: body,
+        requiresAuth: requiresAuth,
+      ),
+      label: 'json response',
+    );
+  }
+
   Future<T> _withFallback<T>(
     Future<T> Function() liveCall,
     Future<T> Function() fixtureCall, {

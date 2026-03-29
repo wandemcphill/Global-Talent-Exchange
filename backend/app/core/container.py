@@ -275,6 +275,8 @@ def bind_application_state(
     app.state.context = context
     app.state.db_engine = context.database.engine
     app.state.session_factory = context.database.session_factory
+    app.state.read_db_engine = context.database.read_engine
+    app.state.read_session_factory = context.database.read_session_factory
     app.state.email_service = context.email_service
     app.state.cache_backend = context.cache_backend
     app.state.event_publisher = context.event_publisher

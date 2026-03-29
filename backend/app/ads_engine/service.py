@@ -13,6 +13,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.backbone.scale_events import enqueue_ads_feed_refresh
 from app.ads_engine.schemas import (
     SponsoredClipCreateRequest,
     SponsoredClipPerformanceResponse,
@@ -36,6 +37,7 @@ from app.models.user import User
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user_region import UserRegionProfile
 from app.runtime_config.service import ensure_runtime_config_loader
+from app.services.creator_attention_earnings_service import CreatorAttentionEarningsService
 from app.services.ads.analytics import build_tracking_token
 from app.viral.personalized_feed_service import build_personalized_feed_service
 from app.viral.schemas import ViralClipView
@@ -300,6 +302,7 @@ class SponsoredClipService:
     trust_middleware: SharedTrustMiddleware | None = None
     trust_reader: ClipTrustMetricsReader | None = None
     runtime_config_loader: Any | None = None
+    creator_earnings_service: CreatorAttentionEarningsService | None = None
 
     def __post_init__(self) -> None:
         if self.settings is None:
@@ -321,6 +324,12 @@ class SponsoredClipService:
             self.trust_reader = build_clip_trust_metrics_reader(settings=self.settings)
         if self.runtime_config_loader is None and self.app is not None:
             self.runtime_config_loader = ensure_runtime_config_loader(self.app)
+        if self.creator_earnings_service is None:
+            self.creator_earnings_service = CreatorAttentionEarningsService(
+                session=self.session,
+                app=self.app,
+                settings=self.settings,
+            )
 
     def create_sponsored_clip(self, payload: SponsoredClipCreateRequest) -> SponsoredClip:
         clip = self._resolve_clip(payload.clip_id)
@@ -342,6 +351,19 @@ class SponsoredClipService:
         )
         self.session.add(ad)
         self.session.flush()
+        self.cache.sync(ad, active=_is_active_campaign(ad, now=_utcnow()))
+        enqueue_ads_feed_refresh(
+            session=self.session,
+            ad_id=ad.id,
+            advertiser_id=ad.advertiser_id,
+            producer="ads-engine",
+        )
+        return ad
+
+    def sync_cached_ad(self, ad_id: str) -> SponsoredClip | None:
+        ad = self.session.get(SponsoredClip, ad_id)
+        if ad is None:
+            return None
         self.cache.sync(ad, active=_is_active_campaign(ad, now=_utcnow()))
         return ad
 
@@ -474,6 +496,7 @@ class SponsoredClipService:
         items: list[SponsoredFeedItemView] = []
         organic_count = 0
         sponsored_count = 0
+        generated_at = _utcnow()
 
         for slot_index, ranked_item in enumerate(ranked_items):
             if ranked_item.item_type == "sponsored":
@@ -505,9 +528,22 @@ class SponsoredClipService:
             )
             organic_count += 1
 
+        if self.creator_earnings_service is not None:
+            for slot_index, item in enumerate(items):
+                self.creator_earnings_service.track_impression(
+                    clip=item,
+                    viewer_user_id=user.id,
+                    feed_source="sponsored_feed",
+                    session_id=resolved_session_id,
+                    slot_index=slot_index,
+                    reference_key=(
+                        f"sponsored-feed:{user.id}:{resolved_session_id}:{slot_index}:{item.clip_id}:{generated_at.isoformat()}"
+                    ),
+                )
+
         return SponsoredFeedResponse(
             items=items,
-            generated_at=_utcnow(),
+            generated_at=generated_at,
             session_id=resolved_session_id,
             injection_interval=ad_frequency_window,
             organic_count=organic_count,

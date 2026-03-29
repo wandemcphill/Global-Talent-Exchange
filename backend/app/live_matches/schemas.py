@@ -44,17 +44,33 @@ class LiveMatchRenderPointView(CommonSchema):
     y: float = Field(ge=0.0, le=100.0)
 
 
+class LiveMatchSpeedModeView(CommonSchema):
+    key: str
+    label: str
+    target_duration_seconds: int = Field(ge=1)
+
+
 class LiveMatchStreamEventView(CommonSchema):
     match_id: str | None = None
     event_id: str | None = None
+    sequence: int | None = Field(default=None, ge=1)
     tick: int | None = Field(default=None, ge=0)
     minute: int = Field(ge=0, le=120)
     event_type: str
+    source_event_type: str | None = None
     team_id: str | None = None
     team: str | None = None
+    team_side: str | None = None
     player_id: str | None = None
     player: str | None = None
     secondary_player_id: str | None = None
+    secondary_player: str | None = None
+    commentary: str | None = None
+    home_score: int | None = Field(default=None, ge=0)
+    away_score: int | None = Field(default=None, ge=0)
+    clock_label: str | None = None
+    presentation_second: int | None = Field(default=None, ge=0)
+    highlight_eligible: bool = False
     position: LiveMatchRenderPointView | None = None
     target_position: LiveMatchRenderPointView | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
@@ -95,7 +111,11 @@ class SpectatorSessionView(CommonSchema):
     channel: str
     websocket_path: str
     commentary_websocket_path: str | None = None
+    presence_channel: str | None = None
+    presence_websocket_path: str | None = None
     tts_websocket_path: str | None = None
+    replay_route: str | None = None
+    speed_modes: list[LiveMatchSpeedModeView] = Field(default_factory=list)
     access_source: str | None = None
     rights_owner_id: str | None = None
     viewing_fee_coin: Decimal = Decimal("0.0000")

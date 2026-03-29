@@ -9,8 +9,18 @@ from threading import Lock
 from typing import Any, Protocol
 
 from fastapi import FastAPI
+from sqlalchemy import select
+from sqlalchemy.orm import Session, sessionmaker
+
 from app.core.cache import CacheBackend, NullCacheBackend, RedisCacheBackend, build_cache_backend
 from app.core.config import Settings, get_settings
+from app.core.database import (
+    create_database_engine,
+    create_read_database_engine,
+    create_read_session_factory,
+    create_session_factory,
+)
+from app.models.scale_backbone import ViralDispatchPoolEntryRecord
 
 logger = logging.getLogger(__name__)
 
@@ -390,6 +400,142 @@ class RedisViralDispatchPoolStore:
 
 
 @dataclass(slots=True)
+class PersistentViralDispatchPoolStore:
+    session_factory: sessionmaker[Session]
+    read_session_factory: sessionmaker[Session] | None = None
+    redis_store: RedisViralDispatchPoolStore | None = None
+    ttl_seconds: int = DEFAULT_VIRAL_POOL_TTL_SECONDS
+    max_items: int = DEFAULT_VIRAL_POOL_MAX_ITEMS
+
+    def __post_init__(self) -> None:
+        if self.read_session_factory is None:
+            self.read_session_factory = self.session_factory
+
+    def upsert(
+        self,
+        *,
+        clip_id: str,
+        score: float,
+        payload: Mapping[str, Any] | None = None,
+    ) -> ViralDispatchEnvelope:
+        inserted_at = datetime.now(UTC)
+        expires_at = inserted_at + timedelta(seconds=max(int(self.ttl_seconds), 1))
+        envelope = _build_viral_dispatch_envelope(
+            clip_id=clip_id,
+            score=score,
+            payload=payload,
+            inserted_at=inserted_at,
+            expires_at=expires_at,
+        )
+        with self.session_factory() as session:
+            record = session.get(ViralDispatchPoolEntryRecord, clip_id)
+            if record is None:
+                record = ViralDispatchPoolEntryRecord(clip_id=clip_id)
+                session.add(record)
+            record.score = float(envelope.score)
+            record.payload_json = dict(envelope.payload or {})
+            record.expires_at = envelope.expires_at
+            session.commit()
+            self._trim_overflow(session)
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.upsert(clip_id=clip_id, score=score, payload=payload)
+        return envelope
+
+    def top(
+        self,
+        *,
+        limit: int,
+        excluded_clip_ids: set[str] | None = None,
+    ) -> list[ViralDispatchEnvelope]:
+        if limit <= 0:
+            return []
+        if self.redis_store is not None:
+            cached = self.redis_store.top(limit=limit, excluded_clip_ids=excluded_clip_ids)
+            if cached:
+                return cached
+        blocked = excluded_clip_ids or set()
+        assert self.read_session_factory is not None
+        with self.read_session_factory() as session:
+            now = datetime.now(UTC)
+            records = list(
+                session.scalars(
+                    select(ViralDispatchPoolEntryRecord)
+                    .where(
+                        ViralDispatchPoolEntryRecord.expires_at >= now,
+                    )
+                    .order_by(ViralDispatchPoolEntryRecord.score.desc(), ViralDispatchPoolEntryRecord.created_at.desc())
+                    .limit(max(limit * 2, limit))
+                ).all()
+            )
+        envelopes = [
+            _build_viral_dispatch_envelope(
+                clip_id=record.clip_id,
+                score=float(record.score),
+                payload=dict(record.payload_json or {}),
+                inserted_at=record.created_at.astimezone(UTC) if record.created_at.tzinfo is not None else record.created_at.replace(tzinfo=UTC),
+                expires_at=record.expires_at.astimezone(UTC) if record.expires_at.tzinfo is not None else record.expires_at.replace(tzinfo=UTC),
+            )
+            for record in records
+            if record.clip_id not in blocked
+        ]
+        return envelopes[:limit]
+
+    def boost(
+        self,
+        clip_id: str,
+        *,
+        multiplier: float = DEFAULT_VIRAL_POOL_BOOST_MULTIPLIER,
+    ) -> ViralDispatchEnvelope | None:
+        normalized_clip_id = str(clip_id or "").strip()
+        if not normalized_clip_id:
+            return None
+        with self.session_factory() as session:
+            record = session.get(ViralDispatchPoolEntryRecord, normalized_clip_id)
+            if record is None:
+                return None
+            inserted_at = record.created_at.astimezone(UTC) if record.created_at.tzinfo is not None else record.created_at.replace(tzinfo=UTC)
+            refreshed = _build_viral_dispatch_envelope(
+                clip_id=record.clip_id,
+                score=float(record.score) * max(float(multiplier), 1.0),
+                payload=dict(record.payload_json or {}),
+                inserted_at=inserted_at,
+                expires_at=datetime.now(UTC) + timedelta(seconds=max(int(self.ttl_seconds), 1)),
+            )
+            record.score = float(refreshed.score)
+            record.payload_json = dict(refreshed.payload or {})
+            record.expires_at = refreshed.expires_at
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.upsert(
+                clip_id=normalized_clip_id,
+                score=float(refreshed.score),
+                payload=dict(refreshed.payload or {}),
+            )
+        return refreshed
+
+    def clear(self) -> None:
+        with self.session_factory() as session:
+            session.query(ViralDispatchPoolEntryRecord).delete()
+            session.commit()
+        if self.redis_store is not None:
+            self.redis_store.clear()
+
+    def _trim_overflow(self, session: Session) -> None:
+        if self.max_items <= 0:
+            return
+        records = list(
+            session.scalars(
+                select(ViralDispatchPoolEntryRecord)
+                .order_by(ViralDispatchPoolEntryRecord.score.desc(), ViralDispatchPoolEntryRecord.created_at.desc())
+            ).all()
+        )
+        overflow = records[self.max_items :]
+        for record in overflow:
+            session.delete(record)
+
+
+@dataclass(slots=True)
 class ClipDistributionState:
     clip_id: str
     impressions_served: int = 0
@@ -687,20 +833,34 @@ _SHARED_IN_MEMORY_VIRAL_POOL_STORE = InMemoryViralDispatchPoolStore()
 def build_viral_dispatch_pool_store(
     *,
     settings: Settings | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+    read_session_factory: sessionmaker[Session] | None = None,
     backend: CacheBackend | None = None,
     ttl_seconds: int = DEFAULT_VIRAL_POOL_TTL_SECONDS,
     max_items: int = DEFAULT_VIRAL_POOL_MAX_ITEMS,
 ) -> ViralDispatchPoolStore:
-    resolved_backend = backend or build_cache_backend(settings=settings)
+    resolved_settings = settings or get_settings()
+    resolved_backend = backend or build_cache_backend(settings=resolved_settings)
+    redis_store = None
     if isinstance(resolved_backend, RedisCacheBackend) and getattr(resolved_backend, "enabled", False):
-        return RedisViralDispatchPoolStore(
+        redis_store = RedisViralDispatchPoolStore(
             backend=resolved_backend,
             ttl_seconds=ttl_seconds,
             max_items=max_items,
         )
-    if ttl_seconds != DEFAULT_VIRAL_POOL_TTL_SECONDS or max_items != DEFAULT_VIRAL_POOL_MAX_ITEMS:
-        return InMemoryViralDispatchPoolStore(ttl_seconds=ttl_seconds, max_items=max_items)
-    return _SHARED_IN_MEMORY_VIRAL_POOL_STORE
+    resolved_session_factory = session_factory or create_session_factory(
+        create_database_engine(resolved_settings.database_url)
+    )
+    resolved_read_session_factory = read_session_factory or create_read_session_factory(
+        create_read_database_engine(resolved_settings.database_read_url)
+    )
+    return PersistentViralDispatchPoolStore(
+        session_factory=resolved_session_factory,
+        read_session_factory=resolved_read_session_factory,
+        redis_store=redis_store,
+        ttl_seconds=ttl_seconds,
+        max_items=max_items,
+    )
 
 
 def ensure_viral_dispatch_pool_store(
@@ -710,7 +870,11 @@ def ensure_viral_dispatch_pool_store(
 ) -> ViralDispatchPoolStore:
     store = getattr(app.state, "viral_dispatch_pool_store", None)
     if store is None:
-        store = build_viral_dispatch_pool_store(settings=settings or getattr(app.state, "settings", None))
+        store = build_viral_dispatch_pool_store(
+            settings=settings or getattr(app.state, "settings", None),
+            session_factory=getattr(app.state, "session_factory", None),
+            read_session_factory=getattr(app.state, "read_session_factory", None),
+        )
         app.state.viral_dispatch_pool_store = store
     return store
 

@@ -26,12 +26,15 @@ from app.competition_engine.queue_contracts import (
     PayoutSettlementJob,
     QueuedJobRecord,
 )
+from app.core.cache import CacheBackend
 from app.core.event_backbone import build_outbox_event
 from app.core.events import DomainEvent, EventPublisher
 from app.fairness.fairness_guard import FairnessGuard
 from app.fairness.match_integrity_service import MatchIntegrityService
 from app.fairness.spend_balance_controller import SpendBalanceController
 from app.live_matches.highlights import SmartHighlightService
+from app.live_matches.service import LiveMatchHub
+from app.cache.hot_paths import HotPathCache
 from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
 from app.leagues.service import LeagueSeasonLifecycleService
 from app.manager_marketplace.service import ManagerMarketplaceService
@@ -204,11 +207,13 @@ class LocalMatchExecutionWorker:
     team_factory: SyntheticSquadFactory = field(default_factory=SyntheticSquadFactory)
     match_stream_service: MatchStreamService | None = None
     session_factory: sessionmaker[Session] | None = None
+    cache_backend: CacheBackend | None = None
     _completed_match_jobs: set[str] = field(default_factory=set)
     _completed_advancement_jobs: set[str] = field(default_factory=set)
     _completed_notification_jobs: set[str] = field(default_factory=set)
     _completed_settlement_jobs: set[str] = field(default_factory=set)
     _league_club_user_ids: dict[str, dict[str, str]] = field(default_factory=dict)
+    _live_match_hub: LiveMatchHub | None = field(default=None, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock)
 
     def register_league_club_users(self, season_id: str, *, club_user_ids: dict[str, str]) -> None:
@@ -272,6 +277,7 @@ class LocalMatchExecutionWorker:
                     request=normalized_request,
                     replay_payload=replay_payload,
                 )
+                replay_payload = self._attach_live_story_context(job, replay_payload)
                 viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
                 fairness_envelope = MatchIntegrityService().build_fairness_envelope(
                     locked_context=locked_context,
@@ -560,7 +566,20 @@ class LocalMatchExecutionWorker:
         job: MatchSimulationJob,
         replay_payload: MatchReplayPayloadView,
     ) -> None:
-        if self.match_stream_service is None:
+        live_stream_started = False
+        live_hub = self._ensure_live_match_hub()
+        if live_hub is not None:
+            try:
+                live_hub.start_stream(
+                    job.fixture_id,
+                    replay_payload,
+                    read_only=True,
+                    target_runtime_seconds=90.0,
+                )
+                live_stream_started = True
+            except Exception:
+                logger.exception("match.live_hub.start_failed fixture_id=%s", job.fixture_id)
+        if self.match_stream_service is None or live_stream_started:
             return
         try:
             self.match_stream_service.publish_replay_timeline(
@@ -571,6 +590,22 @@ class LocalMatchExecutionWorker:
             )
         except Exception:
             logger.exception("match.realtime_stream.publish_failed fixture_id=%s", job.fixture_id)
+
+    def _ensure_live_match_hub(self) -> LiveMatchHub | None:
+        if self.cache_backend is None:
+            return None
+        with self._lock:
+            if self._live_match_hub is None:
+                self._live_match_hub = LiveMatchHub(
+                    session_factory=self.session_factory,
+                    cache_backend=self.cache_backend,
+                )
+            else:
+                self._live_match_hub.session_factory = self.session_factory
+                self._live_match_hub.cache_backend = self.cache_backend
+                self._live_match_hub._hot_cache = HotPathCache(self.cache_backend)
+                self._live_match_hub.commentary_engine.configure(cache_backend=self.cache_backend)
+        return self._live_match_hub
 
     def _persist_projection_outbox_events(
         self,
@@ -644,6 +679,48 @@ class LocalMatchExecutionWorker:
             return replay_payload
         finally:
             session.close()
+
+    def _attach_live_story_context(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> MatchReplayPayloadView:
+        shared_context = {
+            "is_final": bool(job.is_final),
+            "competition_name": job.competition_name or job.competition_id,
+            "stage_name": job.stage_name or ("final" if job.is_final else "regular"),
+        }
+        story_hook = None
+        if job.is_final:
+            stage_name = shared_context["stage_name"]
+            story_hook = f"{stage_name} pressure leaves no room for hesitation."
+        for event in replay_payload.timeline.events:
+            metadata = dict(event.metadata or {})
+            metadata.update({key: value for key, value in shared_context.items() if value is not None})
+            if story_hook and event.event_type in {
+                MatchEventType.GOAL,
+                MatchEventType.RED_CARD,
+                MatchEventType.SHOT,
+                MatchEventType.SHOT_ON_TARGET,
+                MatchEventType.MISSED_BIG_CHANCE,
+            }:
+                metadata.setdefault("player_story_hook", story_hook)
+            event.metadata = metadata
+        for item in replay_payload.replay_log:
+            payload = dict(item.payload or {})
+            payload.update({key: value for key, value in shared_context.items() if value is not None})
+            if story_hook and item.event_type in {
+                MatchEventType.GOAL,
+                MatchEventType.PENALTY_GOAL,
+                MatchEventType.PENALTY_SCORED,
+                MatchEventType.RED_CARD,
+                MatchEventType.SHOT,
+                MatchEventType.SHOT_ON_TARGET,
+                MatchEventType.MISSED_BIG_CHANCE,
+            }:
+                payload.setdefault("player_story_hook", story_hook)
+            item.payload = payload
+        return replay_payload
 
     def _store_offline_match_notifications(
         self,

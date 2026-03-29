@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/core/actions/action_pipeline.dart' as feed_actions;
@@ -258,6 +260,99 @@ void main() {
     );
   });
 
+  testWidgets('for-you refresh waits for the third interaction to finish', (
+    WidgetTester tester,
+  ) async {
+    final _CountingViralFeedRepository repository =
+        _CountingViralFeedRepository(_buildDeck(durationSeconds: 5));
+    final _ControllableActionDispatcher dispatcher =
+        _ControllableActionDispatcher(blockedActions: <String>{'like'});
+
+    await tester.pumpWidget(
+      _buildHarness(repository: repository, dispatcher: dispatcher),
+    );
+    await tester.pumpAndSettle();
+
+    final PageView pageView = tester.widget<PageView>(
+      find.byKey(const Key('viral-feed-page-view')),
+    );
+    pageView.onPageChanged?.call(1);
+    await tester.pump();
+    pageView.onPageChanged?.call(0);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('viral-like-clip-001')));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(repository.refreshCount, 0);
+
+    dispatcher.completeNext('like');
+    await tester.pumpAndSettle();
+
+    expect(repository.refreshCount, 1);
+  });
+
+  testWidgets('for-you refresh is guarded while a refresh is in progress', (
+    WidgetTester tester,
+  ) async {
+    final _PendingRefreshViralFeedRepository repository =
+        _PendingRefreshViralFeedRepository(
+          _buildDeck(durationSeconds: 5),
+          refresh: ViralFeedDeckRefresh(
+            replaceIndices: const <int>[1],
+            newItems: <ViralClip>[
+              _buildClip(
+                clipId: 'match-5::clip-005',
+                highlightId: 'clip-005',
+                title: 'Clip Five',
+                eventType: 'assist',
+                minute: 52,
+                summaryLine:
+                    'The deck refreshed once after a guarded threshold.',
+                creatorId: 'creator-5',
+                formatKey: 'guarded',
+                durationSeconds: 5,
+              ),
+            ],
+          ),
+        );
+
+    await tester.pumpWidget(
+      _buildHarness(
+        repository: repository,
+        dispatcher: _RecordingActionDispatcher(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final PageView pageView = tester.widget<PageView>(
+      find.byKey(const Key('viral-feed-page-view')),
+    );
+    pageView.onPageChanged?.call(1);
+    await tester.pump();
+    pageView.onPageChanged?.call(0);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('viral-like-clip-001')));
+    await tester.pump();
+
+    expect(repository.refreshCount, 1);
+
+    await tester.tap(find.text('Share to WhatsApp'));
+    await tester.pump();
+    pageView.onPageChanged?.call(1);
+    await tester.pump();
+    pageView.onPageChanged?.call(0);
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(repository.refreshCount, 1);
+
+    repository.completeNextRefresh();
+    await tester.pumpAndSettle();
+
+    expect(repository.refreshCount, 1);
+  });
+
   testWidgets('refresh failure keeps the last good deck and shows feedback', (
     WidgetTester tester,
   ) async {
@@ -439,6 +534,50 @@ class _CountingViralFeedRepository extends _FakeViralFeedRepository {
   }
 }
 
+class _PendingRefreshViralFeedRepository implements ViralFeedRepository {
+  _PendingRefreshViralFeedRepository(
+    this._deck, {
+    required ViralFeedDeckRefresh refresh,
+  }) : _refresh = refresh;
+
+  final ViralFeedDeck _deck;
+  final ViralFeedDeckRefresh _refresh;
+  final List<Completer<ViralFeedDeckRefresh>> _pendingRefreshes =
+      <Completer<ViralFeedDeckRefresh>>[];
+
+  int fetchCount = 0;
+  int refreshCount = 0;
+
+  @override
+  Future<ViralFeedDeck> fetchDeck({
+    ViralFeedSource source = ViralFeedSource.forYou,
+    int limit = 10,
+    bool refresh = true,
+  }) async {
+    fetchCount += 1;
+    return _deck;
+  }
+
+  @override
+  Future<ViralFeedDeckRefresh> refreshForYou({
+    required int cursor,
+    int limit = 10,
+  }) {
+    refreshCount += 1;
+    final Completer<ViralFeedDeckRefresh> completer =
+        Completer<ViralFeedDeckRefresh>();
+    _pendingRefreshes.add(completer);
+    return completer.future;
+  }
+
+  void completeNextRefresh() {
+    if (_pendingRefreshes.isEmpty) {
+      return;
+    }
+    _pendingRefreshes.removeAt(0).complete(_refresh);
+  }
+}
+
 class _FailingOnRefreshViralFeedRepository extends _FakeViralFeedRepository {
   _FailingOnRefreshViralFeedRepository(super.deck);
 
@@ -461,6 +600,45 @@ class _RecordingActionDispatcher implements feed_actions.ClipActionDispatcher {
   @override
   Future<void> dispatch(feed_actions.ActionInvocation invocation) async {
     invocations.add(invocation);
+  }
+
+  @override
+  void dispose() {}
+}
+
+class _ControllableActionDispatcher
+    implements feed_actions.ClipActionDispatcher {
+  _ControllableActionDispatcher({Set<String> blockedActions = const <String>{}})
+    : _blockedActions = Set<String>.from(blockedActions);
+
+  final Set<String> _blockedActions;
+  final List<feed_actions.ActionInvocation> invocations =
+      <feed_actions.ActionInvocation>[];
+  final Map<String, List<Completer<void>>> _pendingByAction =
+      <String, List<Completer<void>>>{};
+
+  @override
+  Future<void> dispatch(feed_actions.ActionInvocation invocation) {
+    invocations.add(invocation);
+    if (!_blockedActions.contains(invocation.action)) {
+      return Future<void>.value();
+    }
+    final Completer<void> completer = Completer<void>();
+    _pendingByAction
+        .putIfAbsent(invocation.action, () => <Completer<void>>[])
+        .add(completer);
+    return completer.future;
+  }
+
+  void completeNext(String action) {
+    final List<Completer<void>>? pending = _pendingByAction[action];
+    if (pending == null || pending.isEmpty) {
+      return;
+    }
+    pending.removeAt(0).complete();
+    if (pending.isEmpty) {
+      _pendingByAction.remove(action);
+    }
   }
 
   @override

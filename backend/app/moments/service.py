@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.backbone.scale_events import enqueue_viral_dispatch
 from app.core.events import DomainEvent, EventPublisher
 from app.highlights.queue import HighlightRenderJob
 from app.highlights.service import HighlightGenerationService
@@ -256,6 +257,31 @@ class MomentsEngine:
         )
 
     def _dispatch_to_viral_engine(self, moment: LiveMomentView) -> None:
+        payload = {
+            "match_id": moment.match_id,
+            "moment_id": moment.moment_id,
+            "clip_id": moment.moment_id,
+            "source_event_id": moment.source_event_id,
+            "event_type": moment.event_type,
+            "detected_events": list(moment.detected_events),
+            "priority_score": moment.boost.final_score,
+            "storage_key": moment.clip.storage_key,
+            "render_status": moment.clip.render_status,
+        }
+        if self.session_factory is not None:
+            try:
+                with self.session_factory() as session:
+                    enqueue_viral_dispatch(
+                        session=session,
+                        aggregate_id=moment.match_id,
+                        aggregate_type="moment",
+                        partition_key=moment.match_id,
+                        producer="moments-engine",
+                        payload=payload,
+                    )
+                    session.commit()
+            except Exception:
+                logger.exception("moments.dispatch.enqueue_failed match_id=%s moment_id=%s", moment.match_id, moment.moment_id)
         if self.event_publisher is None:
             return
         self.event_publisher.publish(
@@ -265,17 +291,7 @@ class MomentsEngine:
                 aggregate_type="moment",
                 partition_key=moment.match_id,
                 producer="moments-engine",
-                payload={
-                    "match_id": moment.match_id,
-                    "moment_id": moment.moment_id,
-                    "clip_id": moment.moment_id,
-                    "source_event_id": moment.source_event_id,
-                    "event_type": moment.event_type,
-                    "detected_events": list(moment.detected_events),
-                    "priority_score": moment.boost.final_score,
-                    "storage_key": moment.clip.storage_key,
-                    "render_status": moment.clip.render_status,
-                },
+                payload=payload,
             )
         )
 

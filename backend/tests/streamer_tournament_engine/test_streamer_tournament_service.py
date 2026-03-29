@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sqlalchemy import select
+
+from app.leaderboards.models import LeaderboardPlayerRating, LeaderboardSeason
 from app.models.reward_settlement import RewardSettlement
 from app.models.competition import Competition
 from app.models.creator_share_market import (
@@ -7,6 +10,7 @@ from app.models.creator_share_market import (
     CreatorClubShareMarket,
     CreatorClubShareMarketControl,
 )
+from app.models.history_engagement import UserFollow, UserProfile
 from app.models.streamer_tournament import (
     StreamerTournamentApprovalStatus,
     StreamerTournamentRewardGrant,
@@ -102,6 +106,86 @@ def test_high_reward_tournament_requires_admin_review_and_settles_rewards(sessio
     assert settlements[0].gross_amount == 750
     assert len(grants) == 2
     assert all(item.ledger_transaction_id is not None or item.reward_settlement_id is not None for item in grants)
+
+
+def test_settlement_updates_season_stats_and_creator_growth(session, seeded_context) -> None:
+    service = StreamerTournamentService(session)
+    admin = seeded_context["admin"]
+    creator = seeded_context["creator"]
+    invitee = seeded_context["invitee"]
+
+    tournament = service.create_tournament(
+        actor=creator,
+        payload=StreamerTournamentCreateRequest(
+            title="Creator Ladder",
+            tournament_type="creator_invitation",
+            max_participants=8,
+            rewards=[
+                StreamerTournamentRewardInput(
+                    title="Ladder purse",
+                    reward_type="gtex_coin",
+                    placement_start=1,
+                    placement_end=1,
+                    amount="100.0000",
+                ),
+            ],
+            invite_user_ids=[invitee.id],
+        ),
+    )
+    service.publish_tournament(
+        actor=creator,
+        tournament_id=tournament["id"],
+        submission_notes=None,
+    )
+    service.join_tournament(
+        actor=invitee,
+        tournament_id=tournament["id"],
+        payload=StreamerTournamentJoinRequest(),
+    )
+    RewardEngineService(session).credit_promo_pool(
+        actor=admin,
+        amount="500.0000",
+        unit=LedgerUnit.COIN,
+        note="test seeding",
+    )
+
+    result = service.settle_tournament(
+        actor=creator,
+        tournament_id=tournament["id"],
+        placements=[
+            StreamerTournamentSettlementPlacement(user_id=invitee.id, placement=1),
+        ],
+        note="settled",
+    )
+    session.commit()
+
+    leaderboard_season = session.scalar(select(LeaderboardSeason))
+    invitee_rating = session.scalar(
+        select(LeaderboardPlayerRating).where(LeaderboardPlayerRating.player_id == invitee.id)
+    )
+    creator_profile = session.scalar(select(UserProfile).where(UserProfile.user_id == creator.id))
+    creator_follow = session.scalar(
+        select(UserFollow).where(
+            UserFollow.follower_user_id == invitee.id,
+            UserFollow.target_user_id == creator.id,
+        )
+    )
+
+    assert leaderboard_season is not None
+    assert invitee_rating is not None
+    assert invitee_rating.metadata_json["season_competition"]["tournament_entries"] == 1
+    assert invitee_rating.metadata_json["season_competition"]["tournament_titles"] == 1
+    assert invitee_rating.metadata_json["season_competition"]["best_placement"] == 1
+    assert invitee_rating.metadata_json["season_competition"]["earnings_total"] == "100.0000"
+    assert creator_profile is not None
+    assert creator_profile.followers == 1
+    assert creator_profile.profile_boost_total == 3
+    assert creator_profile.metadata_json["creator_tournament_earnings_total"] == "10.0000"
+    assert creator_profile.metadata_json["creator_tournament_followers_gained"] == 1
+    assert creator_follow is not None
+    assert result["tournament"]["metadata_json"]["creator_growth"]["participant_count"] == 1
+    assert result["tournament"]["metadata_json"]["creator_growth"]["new_followers"] == 1
+    assert result["tournament"]["metadata_json"]["creator_growth"]["payout_coin"] == "10.0000"
 
 
 def test_shareholders_can_join_shareholder_qualified_tournaments(session, seeded_context) -> None:

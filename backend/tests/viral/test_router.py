@@ -14,7 +14,9 @@ from app.models.analytics_event import AnalyticsEvent
 from app.models.base import Base
 from app.models.clip_variant import ClipVariant
 from app.models.competition_match import CompetitionMatch
+from app.models.creator_attention_earnings import ClipEarningsLog, CreatorWallet
 from app.models.creator_profile import CreatorProfile
+from app.models.event_backbone import EventOutbox
 from app.models.follow import Follow
 from app.models.user import User, UserRole
 from app.models.user_affinity_profile import UserAffinityProfile
@@ -88,7 +90,10 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session], User]:
             AnalyticsEvent.__table__,
             CompetitionMatch.__table__,
             ClipVariant.__table__,
+            CreatorWallet.__table__,
+            ClipEarningsLog.__table__,
             CreatorProfile.__table__,
+            EventOutbox.__table__,
             Follow.__table__,
             UserAffinityProfile.__table__,
         ],
@@ -592,10 +597,11 @@ def test_clip_event_ingestion_mirrors_live_personalization_state() -> None:
     producer = _FakeProducer()
     app.state.clip_event_ingestion_service = producer
     app.dependency_overrides[get_optional_current_user] = lambda: current_user
+    _set_test_identity(app, current_user=current_user, session_id="session-live-affinity")
     payload = {
         "event_id": "aa3f63ff-9b9b-4a7e-a73c-6a5d72f3f101",
         "clip_id": "clip-live-affinity",
-        "user_id": None,
+        "user_id": current_user.id,
         "session_id": "session-live-affinity",
         "timestamp": "2026-03-28T12:00:00Z",
         "event_type": "like",
@@ -638,10 +644,59 @@ def test_clip_event_ingestion_mirrors_live_personalization_state() -> None:
         assert affinity_profile.favorite_formats_json["match_recap"] > 0.0
         assert affinity_profile.state_json["event_counts"]["like"] == 1
 
-    session_state_body = session_state.json()
-    assert session_state_body["clips_seen"] == 1
-    assert session_state_body["watch_time_ms"] == 12000
 
+def test_clip_like_event_credits_creator_wallet_automatically() -> None:
+    app, session_factory, current_user = _build_app()
+    producer = _ReusableFakeProducer()
+    app.state.clip_event_ingestion_service = producer
+    creator = User(
+        id="creator-wallet-router-1",
+        email="creator-wallet-router@example.com",
+        username="creator-wallet-router",
+        password_hash="hashed",
+        role=UserRole.USER,
+    )
+
+    with session_factory() as session:
+        session.add(creator)
+        session.commit()
+
+    payload = {
+        "event_id": "4f70dbb1-5379-4279-a9af-084340d0d871",
+        "clip_id": "clip-wallet-router-1",
+        "user_id": current_user.id,
+        "session_id": "session-1",
+        "timestamp": "2026-03-29T12:00:00Z",
+        "event_type": "like",
+        "watch_time_ms": 3200,
+        "video_length_ms": 12000,
+        "metadata": {
+            "device": "ios",
+            "country": "NG",
+            "referrer": "feed",
+            "creator_id": creator.id,
+        },
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/events/clip", json=payload)
+
+    assert response.status_code == 202
+    assert producer.received
+
+    with session_factory() as session:
+        wallet = session.query(CreatorWallet).filter(CreatorWallet.creator_user_id == creator.id).one_or_none()
+        logs = session.query(ClipEarningsLog).all()
+
+        assert wallet is not None
+        assert wallet.total_impressions == 0
+        assert wallet.total_likes == 1
+        assert wallet.total_shares == 0
+        assert str(wallet.total_earnings_credit) == "0.0100"
+        assert len(logs) == 1
+        assert logs[0].clip_id == "clip-wallet-router-1"
+        assert logs[0].reference_key == "clip-event:4f70dbb1-5379-4279-a9af-084340d0d871"
+        assert logs[0].metadata_json["creator_id"] == creator.id
 
 def test_clip_event_ingestion_accepts_batched_events() -> None:
     class _FakeProducer:

@@ -238,13 +238,24 @@ class _DiscoveryFixtures {
     ];
     final List<DiscoveryItem> live = <DiscoveryItem>[
       DiscoveryItem(
-        itemType: 'fixture',
+        itemType: 'live_match',
         itemId: 'fixture-1',
         title: 'Live match story',
         subtitle: 'Match minute 54',
         railKey: 'live-now',
         score: 99,
-        metadata: const <String, Object?>{'lane': 'arena'},
+        metadata: const <String, Object?>{
+          'lane': 'arena',
+          'match_id': 'fixture-1',
+          'home_team_name': 'Brazil',
+          'away_team_name': 'Nigeria',
+          'home_score': 2,
+          'away_score': 1,
+          'minute': 54,
+          'viewer_count': 2300,
+          'featured': true,
+          'watch_route': '/matches/fixture-1/watch',
+        },
       ),
     ];
     final List<SavedSearch> searches = <SavedSearch>[

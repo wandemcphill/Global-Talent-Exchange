@@ -403,6 +403,7 @@ DOMAIN_MODULES = (
         on_startup=("app.leaderboards.leaderboard_worker:bind_leaderboard_worker",),
         on_shutdown=("app.leaderboards.leaderboard_worker:shutdown_leaderboard_worker",),
     ),
+    _module("leaderboards_admin", router_path="app.leaderboards.router:admin_router"),
     _module(
         "world_simulation",
         router_path="app.world_simulation.router:router",
@@ -472,6 +473,7 @@ DOMAIN_MODULES = (
     _module("admin_analytics", router_path="app.analytics.router:admin_router"),
     _module("public_analytics", router_path="app.analytics.router:public_router"),
     _module("players", router_path="app.players.router:router"),
+    _module("global_memory", router_path="app.global_memory.router:router"),
     _module("regen_ecosystem", router_path="app.regen_ecosystem.router:router", with_api_alias=True),
     _module(
         "regen_universe",
@@ -495,6 +497,7 @@ DOMAIN_MODULES = (
     _module("admin_clubs", router_path="app.routes.admin_clubs:router"),
     _module("club_ops", router_path="app.routes.club_ops:router"),
     _module("competitions", router_path="app.routes.competitions:router"),
+    _module("tournaments", router_path="app.tournaments.router:router"),
     _module("creators", router_path="app.routes.creators:router"),
     _module("referrals", router_path="app.routes.referrals:router"),
     _module("admin_referrals", router_path="app.routes.admin_referrals:router"),
@@ -557,6 +560,12 @@ DOMAIN_MODULES = (
         router_path="app.broadcast.spectator_gateway:router",
         on_startup=("app.broadcast.spectator_gateway:install_broadcast_runtime",),
         on_shutdown=("app.broadcast.spectator_gateway:shutdown_broadcast_runtime",),
+    ),
+    _module(
+        "gtex",
+        router_path="app.gtex.router:router",
+        on_startup=("app.gtex.runtime:bind_gtex_runtime",),
+        on_shutdown=("app.gtex.runtime:shutdown_gtex_runtime",),
     ),
     _module("realtime", router_path="app.realtime.router:router"),
     _module("users", router_path="app.users.router:router"),

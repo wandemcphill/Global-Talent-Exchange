@@ -14,12 +14,14 @@ from app.auth.dependencies import (
     get_current_user,
     require_identity,
 )
+from app.backbone.scale_events import enqueue_feed_cache_refresh
 from app.core.config import get_settings
 from app.db import get_session
 from app.infinite_league.service import InfiniteLeagueRuntime, ensure_infinite_league_runtime
 from app.models.analytics_event import AnalyticsEvent
 from app.models.user import User
 from app.models.user import UserRole
+from app.services.creator_attention_earnings_service import build_creator_attention_earnings_service
 from app.users.affinity_service import UserAffinityService
 from app.viral.event_weighting import ClipEventWeightingMiddleware
 from app.viral.accounts import PERSONAS, catalog_accounts
@@ -32,7 +34,13 @@ from app.viral.ingestion_runtime import (
     ensure_viral_dispatch_runtime,
     shutdown_viral_dispatch_runtime,
 )
-from app.viral.ingestion_schemas import CLIP_EVENT_TOPICS, ClipEvent, ClipEventIngestionAccepted, parse_clip_events
+from app.viral.ingestion_schemas import (
+    CLIP_EVENT_TOPICS,
+    ClipEvent,
+    ClipEventIngestionAccepted,
+    ClipEventType,
+    parse_clip_events,
+)
 from app.viral.personalized_feed_service import build_personalized_feed_service
 from app.viral.ranking_service import build_viral_ranking_service
 from app.viral.schemas import (
@@ -277,6 +285,10 @@ async def ingest_clip_events(
     analytics_table_exists = _has_table(session, AnalyticsEvent.__tablename__)
     affinity_service = UserAffinityService(session)
     feedback_engine = FeedbackEngine(session)
+    creator_earnings_service = build_creator_attention_earnings_service(
+        session=session,
+        app=request.app,
+    )
     for event in weighted_events:
         metadata = _analytics_metadata_for_event(event)
         if analytics_table_exists:
@@ -289,7 +301,24 @@ async def ingest_clip_events(
             )
         affinity_service.process_event(event)
         feedback_engine.record_interaction_event(name=event.kafka_topic, metadata=metadata)
+        if event.event_type in {ClipEventType.LIKE, ClipEventType.SHARE}:
+            creator_earnings_service.track_engagement_event(
+                name=event.kafka_topic,
+                clip_id=event.clip_id,
+                viewer_user_id=event.user_id,
+                metadata=metadata,
+                reference_key=f"clip-event:{event.event_id}",
+            )
     ensure_viral_session_tracker(request.app).observe_many(weighted_events)
+    if identity.user_id:
+        enqueue_feed_cache_refresh(
+            session=session,
+            user_id=identity.user_id,
+            session_id=identity.session_id,
+            limit=20,
+            reason="clip_event_ingestion",
+            producer="viral-router",
+        )
     session.commit()
     return ClipEventIngestionAccepted(
         accepted_events=len(weighted_events),

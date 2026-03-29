@@ -97,14 +97,14 @@ class HotPathCache:
     def clear_match_events(self, match_id: str) -> None:
         self.backend.delete_many([self.match_events_key(match_id)])
 
-    def publish_match_channel(self, match_id: str, payload: dict[str, Any]) -> None:
+    def publish_match_channel(self, channel: str, payload: dict[str, Any]) -> None:
         client = self._client()
         if client is None:
             return
         try:
-            client.publish(f"match:{match_id}", json.dumps(payload, default=str))
+            client.publish(channel, json.dumps(payload, default=str))
         except RedisError:
-            logger.warning("hot_path.match_publish.failed", extra={"match_id": match_id})
+            logger.warning("hot_path.match_publish.failed", extra={"channel": channel})
 
     def list_active_matches(self) -> list[str]:
         key = self.active_matches_key()

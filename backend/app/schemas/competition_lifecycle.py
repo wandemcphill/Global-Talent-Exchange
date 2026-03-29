@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import Field
@@ -149,6 +150,16 @@ class CompetitionStandingView(CommonSchema):
     goal_diff: int
     points: int
     rank: int
+    reward_amount: Decimal = Field(default=Decimal("0.0000"), ge=0)
+    reward_currency: str | None = None
+    reward_status: str | None = None
+    badge_code: str | None = None
+    title_awarded: str | None = None
+    ranking_points_delta: int = 0
+    career_title: str | None = None
+    career_ranking_points: int = 0
+    career_total_wins: int = 0
+    career_total_earnings: Decimal = Field(default=Decimal("0.0000"), ge=0)
 
 
 class CompetitionAdvanceRequest(CommonSchema):

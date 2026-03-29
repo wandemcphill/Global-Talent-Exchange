@@ -60,6 +60,7 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
   String? _activeClipId;
   String? _pendingClipActivationId;
   int _successfulFeedbackInteractions = 0;
+  Future<void>? _forYouRefreshFuture;
 
   @override
   void initState() {
@@ -231,6 +232,23 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
   }
 
   Future<void> _refreshForYou({required bool showErrorFeedback}) async {
+    final Future<void>? inFlightRefresh = _forYouRefreshFuture;
+    if (inFlightRefresh != null) {
+      return inFlightRefresh;
+    }
+    late final Future<void> trackedRefresh;
+    trackedRefresh = _runForYouRefresh(
+      showErrorFeedback: showErrorFeedback,
+    ).whenComplete(() {
+      if (identical(_forYouRefreshFuture, trackedRefresh)) {
+        _forYouRefreshFuture = null;
+      }
+    });
+    _forYouRefreshFuture = trackedRefresh;
+    return trackedRefresh;
+  }
+
+  Future<void> _runForYouRefresh({required bool showErrorFeedback}) async {
     final ViralFeedDeck? currentDeck = _deck;
     if (currentDeck == null || currentDeck.clips.isEmpty) {
       await _loadDeck(refresh: true, showErrorFeedback: showErrorFeedback);
@@ -254,6 +272,7 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
         _loadError = null;
         _isBootstrapping = false;
         _pageIndex = nextIndex;
+        _successfulFeedbackInteractions = 0;
       });
       if (nextDeck.clips.isNotEmpty) {
         _jumpToPage(nextIndex);
@@ -316,7 +335,8 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
       return;
     }
     _successfulFeedbackInteractions += 1;
-    if (_successfulFeedbackInteractions < _feedbackRefreshThreshold) {
+    if (_successfulFeedbackInteractions < _feedbackRefreshThreshold ||
+        _forYouRefreshFuture != null) {
       return;
     }
     _successfulFeedbackInteractions = 0;
