@@ -32,20 +32,26 @@ void main() {
     expect(container.read(isAdminProvider), isTrue);
     expect(container.read(isDelegatedAdminProvider), isTrue);
     expect(container.read(isSuperAdminProvider), isFalse);
-    expect(container.read(canAccessGodModeProvider), isTrue);
+    expect(container.read(canAccessGodModeProvider), isFalse);
 
     await container.read(appSessionControllerProvider.notifier).mergeProfile(
       <String, Object?>{
         'display_name': 'Ayo Admin',
         'club_id': 'club-1',
         'federation_id': 'fed-1',
+        'permissions': <String>['view_audit_log'],
       },
     );
 
     expect(container.read(currentUserNameProvider), 'Ayo Admin');
     expect(container.read(clubContextProvider)?.id, 'club-1');
     expect(container.read(federationContextProvider)?.id, 'fed-1');
+    expect(container.read(canAccessGodModeProvider), isTrue);
     expect((await store.readSession())?.displayName, 'Ayo Admin');
+    expect(
+      (await store.readSession())?.hasPermission('view_audit_log'),
+      isTrue,
+    );
 
     await container
         .read(appSessionControllerProvider.notifier)
@@ -61,6 +67,7 @@ void main() {
 
     expect(container.read(isSuperAdminProvider), isTrue);
     expect(container.read(isDelegatedAdminProvider), isFalse);
+    expect(container.read(canAccessGodModeProvider), isTrue);
     expect(
       container.read(authProvider)?.hasPermission('manage_payment_rails'),
       isTrue,

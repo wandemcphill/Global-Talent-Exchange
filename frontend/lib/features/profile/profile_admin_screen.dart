@@ -37,25 +37,27 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
     final bool isAdmin = ref.watch(isAdminProvider);
     final bool isSuperAdmin = ref.watch(isSuperAdminProvider);
     final bool isDelegatedAdmin = ref.watch(isDelegatedAdminProvider);
+    final bool canManageCatalog = ref.watch(canManageManagerCatalogProvider);
+    final bool canManageSupply = ref.watch(canManageManagerSupplyProvider);
     final bool canAccessGodMode = ref.watch(canAccessGodModeProvider);
     final String? godModeBlockedReason = ref.watch(
       godModeBlockedReasonProvider,
     );
+    final bool hasAdminCapability =
+        canManageCatalog || canManageSupply || canAccessGodMode;
     final AsyncValue<AdminImportOverviewData>? overview =
-        authenticated && isAdmin
+        authenticated && isAdmin && canManageCatalog
             ? ref.watch(adminImportOverviewProvider)
             : null;
     final DataSourceStatus status =
-        overview == null
-            ? DataSourceStatus.blocked
-            : overview.hasError
+        !authenticated || !isAdmin || !hasAdminCapability
             ? DataSourceStatus.blocked
             : DataSourceStatus.live;
 
     return AppPageLayout(
       title: 'Profile > Admin',
       subtitle:
-          'Provider health, real-player import, batch issues, and share-market issuance stay admin-only in the active shell.',
+          'The active shell only exposes import, supply, and God Mode controls when the authenticated admin session carries the matching backend permission.',
       trailing: DataSourceBadge(status: status),
       children: <Widget>[
         if (!authenticated)
@@ -67,6 +69,12 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
           const _BlockedCard(
             title: 'Admin tooling is blocked',
             message: 'This session does not carry admin permissions.',
+          )
+        else if (!hasAdminCapability)
+          const _BlockedCard(
+            title: 'Admin tooling is blocked',
+            message:
+                'This admin session is authenticated, but it does not carry catalog, supply, or audit permissions for the active shell.',
           )
         else ...<Widget>[
           Card(
@@ -88,6 +96,10 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                               : 'ADMIN',
                         ),
                       ),
+                      if (!canManageCatalog)
+                        const Chip(label: Text('Catalog blocked')),
+                      if (!canManageSupply)
+                        const Chip(label: Text('Supply blocked')),
                       if (!canAccessGodMode)
                         Chip(
                           label: Text(
@@ -97,26 +109,32 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                     ],
                   ),
                   const SizedBox(height: spacingMD),
-                  TextField(
-                    controller: _providerController,
-                    decoration: const InputDecoration(
-                      labelText: 'Provider name',
+                  if (canManageCatalog)
+                    TextField(
+                      controller: _providerController,
+                      decoration: const InputDecoration(
+                        labelText: 'Provider name',
+                      ),
+                      onSubmitted: (String value) {
+                        ref
+                            .read(adminImportProviderNameProvider.notifier)
+                            .setProviderName(value);
+                      },
+                    )
+                  else
+                    const Text(
+                      'Real-player import controls are hidden until this session carries manage_manager_catalog.',
                     ),
-                    onSubmitted: (String value) {
-                      ref
-                          .read(adminImportProviderNameProvider.notifier)
-                          .setProviderName(value);
-                    },
-                  ),
                   const SizedBox(height: spacingMD),
                   Wrap(
                     spacing: spacingSM,
                     runSpacing: spacingSM,
                     children: <Widget>[
-                      FilledButton(
-                        onPressed: _busy ? null : _triggerImport,
-                        child: const Text('Trigger import'),
-                      ),
+                      if (canManageCatalog)
+                        FilledButton(
+                          onPressed: _busy ? null : _triggerImport,
+                          child: const Text('Trigger import'),
+                        ),
                       if (canAccessGodMode)
                         OutlinedButton(
                           onPressed:
@@ -126,84 +144,57 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                                       context.push(AppRoutes.profileGodMode),
                           child: const Text('Open God Mode'),
                         ),
-                      OutlinedButton(
-                        onPressed: _busy ? null : _resumeSelectedBatch,
-                        child: const Text('Resume selected batch'),
-                      ),
-                      OutlinedButton(
-                        onPressed: _busy ? null : _issueShareMarket,
-                        child: const Text('Issue share market'),
-                      ),
+                      if (canManageCatalog)
+                        OutlinedButton(
+                          onPressed: _busy ? null : _resumeSelectedBatch,
+                          child: const Text('Resume selected batch'),
+                        ),
+                      if (canManageSupply)
+                        OutlinedButton(
+                          onPressed: _busy ? null : _issueShareMarket,
+                          child: const Text('Issue share market'),
+                        ),
                     ],
                   ),
                 ],
               ),
             ),
           ),
-          if (!canAccessGodMode)
+          if (!canManageCatalog) ...<Widget>[
+            const SizedBox(height: spacingMD),
+            const _BlockedCard(
+              title: 'Player import is blocked',
+              message:
+                  'This session lacks the manage_manager_catalog permission required by the active-shell import surface.',
+            ),
+          ],
+          if (!canManageSupply) ...<Widget>[
+            const SizedBox(height: spacingMD),
+            const _BlockedCard(
+              title: 'Share issuance is blocked',
+              message:
+                  'This session lacks the manage_manager_supply permission required to issue live player share markets.',
+            ),
+          ],
+          if (!canAccessGodMode) ...<Widget>[
+            const SizedBox(height: spacingMD),
             _BlockedCard(
               title: 'God Mode is blocked',
               message: godModeBlockedReason ?? 'missing session claims',
             ),
-          if (!canAccessGodMode) const SizedBox(height: spacingMD),
-          overview!.when(
-            data:
-                (AdminImportOverviewData value) => Column(
-                  children: <Widget>[
-                    _JsonCard(title: 'Provider health', payload: value.health),
-                    const SizedBox(height: spacingMD),
-                    _JsonCard(title: 'Import status', payload: value.status),
-                    const SizedBox(height: spacingMD),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(spacingLG),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'Recent batches',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: spacingSM),
-                            if (value.batches.isEmpty)
-                              const Text('No import batches returned yet.')
-                            else
-                              ...value.batches.map(
-                                (JsonMap batch) => RadioListTile<String>(
-                                  value: stringValue(batch['id']),
-                                  groupValue: ref.watch(
-                                    adminSelectedBatchIdProvider,
-                                  ),
-                                  onChanged: (String? next) {
-                                    ref
-                                        .read(
-                                          adminSelectedBatchIdProvider.notifier,
-                                        )
-                                        .select(next);
-                                  },
-                                  title: Text(
-                                    stringValue(
-                                      batch['batch_key'],
-                                      fallback: stringValue(batch['id']),
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    'status ${stringValue(batch['status'])} | created ${intValue(batch['created_player_count'])} | updated ${intValue(batch['updated_player_count'])} | failed ${intValue(batch['failed_row_count'])}',
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (value.selectedBatch != null) ...<Widget>[
-                      const SizedBox(height: spacingMD),
+          ],
+          if (overview != null) ...<Widget>[
+            const SizedBox(height: spacingMD),
+            overview.when(
+              data:
+                  (AdminImportOverviewData value) => Column(
+                    children: <Widget>[
                       _JsonCard(
-                        title: 'Selected batch',
-                        payload: value.selectedBatch!,
+                        title: 'Provider health',
+                        payload: value.health,
                       ),
-                    ],
-                    if (value.selectedBatchIssues.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: spacingMD),
+                      _JsonCard(title: 'Import status', payload: value.status),
                       const SizedBox(height: spacingMD),
                       Card(
                         child: Padding(
@@ -212,62 +203,121 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
                               Text(
-                                'Selected batch issues',
+                                'Recent batches',
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               const SizedBox(height: spacingSM),
-                              ...value.selectedBatchIssues
-                                  .take(12)
-                                  .map(
-                                    (JsonMap issue) => ListTile(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      title: Text(
-                                        stringValue(
-                                          issue['canonical_name'],
-                                          fallback: stringValue(
-                                            issue['row_id'],
-                                          ),
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        '${stringValue(issue['issue_type'])} | ${stringValue(issue['required_action'])}',
+                              if (value.batches.isEmpty)
+                                const Text('No import batches returned yet.')
+                              else
+                                ...value.batches.map(
+                                  (JsonMap batch) => RadioListTile<String>(
+                                    value: stringValue(batch['id']),
+                                    groupValue: ref.watch(
+                                      adminSelectedBatchIdProvider,
+                                    ),
+                                    onChanged: (String? next) {
+                                      ref
+                                          .read(
+                                            adminSelectedBatchIdProvider
+                                                .notifier,
+                                          )
+                                          .select(next);
+                                    },
+                                    title: Text(
+                                      stringValue(
+                                        batch['batch_key'],
+                                        fallback: stringValue(batch['id']),
                                       ),
                                     ),
+                                    subtitle: Text(
+                                      'status ${stringValue(batch['status'])} | created ${intValue(batch['created_player_count'])} | updated ${intValue(batch['updated_player_count'])} | failed ${intValue(batch['failed_row_count'])}',
+                                    ),
                                   ),
+                                ),
                             ],
                           ),
                         ),
                       ),
+                      if (value.selectedBatch != null) ...<Widget>[
+                        const SizedBox(height: spacingMD),
+                        _JsonCard(
+                          title: 'Selected batch',
+                          payload: value.selectedBatch!,
+                        ),
+                      ],
+                      if (value.selectedBatchIssues.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: spacingMD),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(spacingLG),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Selected batch issues',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: spacingSM),
+                                ...value.selectedBatchIssues
+                                    .take(12)
+                                    .map(
+                                      (JsonMap issue) => ListTile(
+                                        dense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(
+                                          stringValue(
+                                            issue['canonical_name'],
+                                            fallback: stringValue(
+                                              issue['row_id'],
+                                            ),
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          '${stringValue(issue['issue_type'])} | ${stringValue(issue['required_action'])}',
+                                        ),
+                                      ),
+                                    ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (value.selectedBatchValuation != null) ...<Widget>[
+                        const SizedBox(height: spacingMD),
+                        _JsonCard(
+                          title: 'Selected batch valuation status',
+                          payload: value.selectedBatchValuation!,
+                        ),
+                      ],
                     ],
-                    if (value.selectedBatchValuation != null) ...<Widget>[
-                      const SizedBox(height: spacingMD),
-                      _JsonCard(
-                        title: 'Selected batch valuation status',
-                        payload: value.selectedBatchValuation!,
-                      ),
-                    ],
-                  ],
-                ),
-            loading:
-                () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(spacingLG),
-                    child: CircularProgressIndicator(),
                   ),
-                ),
-            error:
-                (Object error, StackTrace stackTrace) => _BlockedCard(
-                  title: 'Admin import surface is blocked',
-                  message: AppFeedback.messageFor(error),
-                ),
-          ),
+              loading:
+                  () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(spacingLG),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+              error:
+                  (Object error, StackTrace stackTrace) => _BlockedCard(
+                    title: 'Admin import surface is blocked',
+                    message: AppFeedback.messageFor(error),
+                  ),
+            ),
+          ],
         ],
       ],
     );
   }
 
   Future<void> _triggerImport() async {
+    if (!ref.read(canManageManagerCatalogProvider)) {
+      _showMessage(
+        'Real-player import is blocked: manage_manager_catalog required.',
+      );
+      return;
+    }
     await _runAction(() async {
       final String providerName = _resolvedProviderName();
       await ref
@@ -284,6 +334,10 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
   }
 
   Future<void> _resumeSelectedBatch() async {
+    if (!ref.read(canManageManagerCatalogProvider)) {
+      _showMessage('Batch resume is blocked: manage_manager_catalog required.');
+      return;
+    }
     final String? batchId = ref.read(adminSelectedBatchIdProvider);
     if (batchId == null || batchId.trim().isEmpty) {
       _showMessage('Select an import batch first.');
@@ -301,6 +355,12 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
   }
 
   Future<void> _issueShareMarket() async {
+    if (!ref.read(canManageManagerSupplyProvider)) {
+      _showMessage(
+        'Share issuance is blocked: manage_manager_supply required.',
+      );
+      return;
+    }
     final TextEditingController playerController = TextEditingController();
     final TextEditingController sharesController = TextEditingController(
       text: '1000',

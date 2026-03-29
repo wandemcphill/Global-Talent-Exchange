@@ -62,7 +62,13 @@ class AuthSession {
     return false;
   }
 
-  bool get canAccessGodMode => isAuthenticated && isAdmin;
+  bool get canAccessGodMode =>
+      isAuthenticated &&
+      (isSuperAdmin ||
+          hasAnyPermission(const <String>[
+            'view_audit_log',
+            'review_audit_log',
+          ]));
 
   String get resolvedUserName {
     final String? display = displayName?.trim();
@@ -147,10 +153,25 @@ class AuthSession {
       ...profileJson,
       'access_token': accessToken,
       'session_id': sessionId,
-      'permissions': permissions,
-      if (role.trim().isNotEmpty) 'role': role,
-      if (userId.trim().isNotEmpty) 'user_id': userId,
     };
+    if (_firstString(nextRaw, const <String>['role']) == null &&
+        role.trim().isNotEmpty) {
+      nextRaw['role'] = role;
+    }
+    if (_firstString(nextRaw, const <String>['user_id', 'userId', 'id']) ==
+            null &&
+        userId.trim().isNotEmpty) {
+      nextRaw['user_id'] = userId;
+    }
+    final Map<String, Object?> mergedUser =
+        _mapValue(nextRaw['user'] ?? nextRaw['current_user']) ??
+        const <String, Object?>{};
+    final bool hasPermissions =
+        _stringList(nextRaw['permissions']).isNotEmpty ||
+        _stringList(mergedUser['permissions']).isNotEmpty;
+    if (!hasPermissions && permissions.isNotEmpty) {
+      nextRaw['permissions'] = permissions;
+    }
     return AuthSession.fromJson(nextRaw);
   }
 

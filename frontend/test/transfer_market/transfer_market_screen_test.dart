@@ -1,71 +1,106 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/core/theme/app_theme.dart';
+import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
 import 'package:gte_frontend/features/transfer_market/transfer_market_screen.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
+import 'package:gte_frontend/shared/providers/auth_provider.dart';
 
 void main() {
-  testWidgets('shows wallet flows and buys player shares', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(1280, 1800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          theme: AppTheme.dark(),
-          home: const Scaffold(body: TransferMarketScreen()),
+  testWidgets(
+    'market screen keeps wallet, shares, listings, and holdings segmented',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authProvider.overrideWith(
+              (Ref ref) => const AuthSession(
+                userId: 'user-1',
+                accessToken: 'token-1',
+                sessionId: 'session-1',
+                role: 'user',
+              ),
+            ),
+            marketDashboardProvider.overrideWith((Ref ref) async {
+              return const MarketDashboardData(
+                playerShares: <PlayerShareSummary>[
+                  PlayerShareSummary(
+                    playerId: 'player-1',
+                    playerName: 'Cole Palmer',
+                    position: 'AM',
+                    nationality: 'England',
+                    currentClubName: 'Chelsea',
+                    age: 24,
+                    currentValueCredits: 1250,
+                    marketInterestScore: 91,
+                    marketStatus: 'active',
+                    marketMessage: 'Share market is live.',
+                    sharePriceCoin: 16,
+                    totalShares: 1000,
+                    circulatingShares: 700,
+                  ),
+                ],
+                holdings: <PlayerShareHoldingSummary>[
+                  PlayerShareHoldingSummary(
+                    playerId: 'player-1',
+                    shareCount: 12,
+                    averageCostCoin: 14,
+                    dividendsEarnedCoin: 24,
+                  ),
+                ],
+                transferListings: <TransferListingSummary>[
+                  TransferListingSummary(
+                    id: 'listing-1',
+                    playerId: 'player-2',
+                    playerName: 'William Saliba',
+                    currentClubName: 'Arsenal',
+                    currentHighestBid: 82,
+                    basePrice: 70,
+                    status: 'open',
+                    watchlistCount: 4,
+                    bidCount: 2,
+                    marketSignal: 'Live transfer listing',
+                    channel: 'market:listing-1',
+                    timeRemaining: 600,
+                  ),
+                ],
+                wallet: MarketWalletSnapshot(
+                  coinBalance: 120,
+                  creditBalance: 40,
+                  totalEquity: 160,
+                  canTradeMarket: true,
+                  canDeposit: true,
+                  canWithdraw: true,
+                  complianceMessage:
+                      'Wallet and compliance state loaded from live backend.',
+                ),
+                authenticated: true,
+                warnings: <String>[],
+              );
+            }),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: TransferMarketScreen()),
+          ),
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 600));
+      );
 
-    expect(find.text('Transfer Market'), findsOneWidget);
-    expect(find.text('Wallet Dashboard'), findsOneWidget);
-    expect(find.byKey(const Key('wallet-action-deposit')), findsOneWidget);
-    expect(find.byKey(const Key('trading-card-market-mbappe')), findsOneWidget);
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('trading-filter-defenders')));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.byKey(const Key('trading-card-market-saliba')), findsOneWidget);
-    expect(find.byKey(const Key('trading-card-market-mbappe')), findsNothing);
-
-    await tester.tap(find.byKey(const Key('trading-filter-all')));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    await tester.tap(find.byKey(const Key('wallet-action-deposit')));
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(find.byKey(const Key('deposit-flow-sheet')), findsOneWidget);
-    expect(find.text('Choose method'), findsOneWidget);
-
-    await tester.ensureVisible(find.byKey(const Key('sheet-close')));
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const Key('sheet-close')));
-    await tester.pump(const Duration(milliseconds: 500));
-
-    await tester.ensureVisible(
-      find.byKey(const Key('trading-card-market-palmer')),
-    );
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const Key('trading-card-market-palmer')));
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(find.byKey(const Key('player-trade-sheet')), findsOneWidget);
-
-    await tester.ensureVisible(find.byKey(const Key('trade-submit-buy')));
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.byKey(const Key('trade-submit-buy')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(find.text('Bought 1 share of Cole Palmer.'), findsOneWidget);
-  });
+      expect(find.text('Market'), findsOneWidget);
+      expect(find.text('Wallet & Compliance'), findsOneWidget);
+      expect(find.text('Player Shares'), findsOneWidget);
+      expect(find.text('Transfer Listings'), findsOneWidget);
+      expect(find.text('Share Holdings'), findsOneWidget);
+      expect(find.text('Cole Palmer'), findsWidgets);
+      expect(find.text('William Saliba'), findsOneWidget);
+      expect(
+        find.text(
+          'Bidding and watchlisting are blocked because this session has no verified club context.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

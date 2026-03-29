@@ -24,6 +24,7 @@ import '../features/profile/profile_signup_screen.dart';
 import '../features/tasks/tasks_screen.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
 import '../features/viral_feed/data/viral_feed_repository.dart';
+import '../features/viral_feed/presentation/clips_blocked_screen.dart';
 import '../features/viral_feed/presentation/viral_feed_screen.dart';
 import '../features/world/world_screen.dart';
 import '../shared/models/auth_session.dart';
@@ -132,21 +133,25 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoutes.clips,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: ViralFeedScreen(
-                    currentUserId: authSession?.userId,
-                    repository: ViralFeedApiRepository.standard(
-                      authSession: authSession,
-                      deviceId: deviceId,
-                    ),
-                    actionDispatcher: ActionPipeline(
-                      eventService: eventService,
-                    ),
-                  ),
-                ),
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final bool canOpenClips = authSession?.isAuthenticated ?? false;
+          return AppMotion.slidePage<void>(
+            state: state,
+            child:
+                canOpenClips
+                    ? ViralFeedScreen(
+                      currentUserId: authSession?.userId,
+                      repository: ViralFeedApiRepository.standard(
+                        authSession: authSession,
+                        deviceId: deviceId,
+                      ),
+                      actionDispatcher: ActionPipeline(
+                        eventService: eventService,
+                      ),
+                    )
+                    : const ClipsBlockedScreen(),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.profileLogin,

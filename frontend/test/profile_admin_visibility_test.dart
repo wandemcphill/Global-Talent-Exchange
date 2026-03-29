@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
+import 'package:gte_frontend/features/profile/profile_admin_screen.dart';
 import 'package:gte_frontend/features/profile/profile_screen.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
@@ -86,4 +87,37 @@ void main() {
 
     expect(find.text('Open Admin'), findsNothing);
   });
+
+  testWidgets(
+    'scoped admins only see admin actions backed by their permissions',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authSessionStoreProvider.overrideWithValue(
+              MemoryAuthSessionStore(),
+            ),
+            initialAuthSessionProvider.overrideWithValue(
+              const AuthSession(
+                userId: 'scoped-admin-1',
+                accessToken: 'token-1',
+                sessionId: 'session-1',
+                role: 'scoped_admin',
+                permissions: <String>['manage_manager_supply'],
+              ),
+            ),
+          ],
+          child: const MaterialApp(home: Scaffold(body: ProfileAdminScreen())),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Issue share market'), findsOneWidget);
+      expect(find.text('Trigger import'), findsNothing);
+      expect(find.text('Resume selected batch'), findsNothing);
+      expect(find.text('Open God Mode'), findsNothing);
+      expect(find.text('Player import is blocked'), findsOneWidget);
+    },
+  );
 }

@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
-import '../../data/competition_api.dart';
 import '../../data/hosted_competition_api.dart';
 import '../../features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import '../../models/competition_models.dart';
@@ -278,7 +277,7 @@ class _GtexDetail extends ConsumerWidget {
     final String? userId = ref.watch(currentUserIdProvider);
     final String? userName = ref.watch(currentUserNameProvider);
     final bool isAdmin = ref.watch(isAdminProvider);
-    final CompetitionApi api = ref.watch(competitionApiProvider);
+    final bool canManageCompetitions = ref.watch(canManageCompetitionsProvider);
 
     return detail.when(
       data: (GtexCompetitionDetailBundle value) {
@@ -292,6 +291,8 @@ class _GtexDetail extends ConsumerWidget {
             'Prize ${value.financials.prizePool.toStringAsFixed(0)} ${value.financials.currency.toUpperCase()}',
             'Standings ${value.standings.length}',
             'Fixtures ${value.fixtures.length}',
+            if (isAdmin && !canManageCompetitions)
+              'Publish blocked: manage_competitions required',
           ],
           actions: <Widget>[
             FilledButton(
@@ -299,43 +300,91 @@ class _GtexDetail extends ConsumerWidget {
                   userId == null || !item.joinEligibility.eligible
                       ? null
                       : () async {
-                        await api.joinCompetition(
-                          item.id,
-                          userId: userId,
-                          userName: userName,
-                        );
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(gtexCompetitionDetailProvider(item.id));
+                        try {
+                          await ref
+                              .read(authedApiProvider)
+                              .post(
+                                '/api/competitions/${item.id}/join',
+                                body: <String, Object?>{
+                                  'user_id': userId,
+                                  if (userName != null &&
+                                      userName.trim().isNotEmpty)
+                                    'user_name': userName.trim(),
+                                },
+                              );
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            gtexCompetitionDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Competition joined.',
+                            );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       },
               child: const Text('Join'),
             ),
             OutlinedButton(
               onPressed:
-                  isAdmin
+                  canManageCompetitions
                       ? () async {
-                        await ref
-                            .read(authedApiProvider)
-                            .post(
-                              '/api/competitions/${item.id}/publish',
-                              body: const <String, Object?>{
-                                'open_for_join': true,
-                              },
+                        try {
+                          await ref
+                              .read(authedApiProvider)
+                              .post(
+                                '/api/competitions/${item.id}/publish',
+                                body: const <String, Object?>{
+                                  'open_for_join': true,
+                                },
+                              );
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            gtexCompetitionDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Competition published.',
                             );
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(gtexCompetitionDetailProvider(item.id));
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       }
                       : null,
               child: const Text('Publish'),
             ),
             OutlinedButton(
               onPressed:
-                  isAdmin
+                  canManageCompetitions
                       ? () async {
-                        await ref
-                            .read(authedApiProvider)
-                            .post('/api/competitions/${item.id}/launch');
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(gtexCompetitionDetailProvider(item.id));
+                        try {
+                          await ref
+                              .read(authedApiProvider)
+                              .post('/api/competitions/${item.id}/launch');
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            gtexCompetitionDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Competition launched.',
+                            );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       }
                       : null,
               child: const Text('Launch'),

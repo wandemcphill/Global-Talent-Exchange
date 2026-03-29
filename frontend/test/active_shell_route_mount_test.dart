@@ -93,6 +93,29 @@ void main() {
 
     expect(find.text('Sign in'), findsOneWidget);
   });
+
+  testWidgets(
+    'guest sessions see clips route as blocked instead of mounting the live feed',
+    (WidgetTester tester) async {
+      final ProviderContainer container = _buildContainer(session: null);
+      addTearDown(container.dispose);
+      final router = container.read(appRouterProvider);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      router.go(AppRoutes.clips);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Clips are blocked'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
+    },
+  );
 }
 
 ProviderContainer _buildContainer({

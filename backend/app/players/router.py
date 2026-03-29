@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Never
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
+from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
 from app.models.user import User
 from app.players.real_player_schemas import (
@@ -53,6 +54,7 @@ from app.regen_universe.expansion_service import (
 from app.schemas.avatar import PlayerAvatarRenderView
 from app.schemas.regen_universe_expansion import PlayerDNAView, PlayerRivalryView, PlayerStoryView
 from app.services.player_face_service import PlayerFaceError, PlayerFaceNotFoundError, PlayerFaceService
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/players", tags=["players"])
 
@@ -113,6 +115,23 @@ def raise_player_token_market_http_exception(exc: PlayerTokenMarketError) -> Nev
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
 
 
+def _require_manager_supply_permission(request: Request, actor: User) -> None:
+    service = AdminGodModeService(
+        wallet_service=WalletService(
+            cache_backend=getattr(request.app.state, "cache_backend", None)
+        )
+    )
+    try:
+        state = service._load_state(request.app)
+        profile = service.resolve_profile(actor, state)
+        service._assert_has_permission(profile, "manage_manager_supply")
+    except PermissionDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
+
 @router.get("/summaries/recent", response_model=list[PlayerSummaryView])
 def list_recent_player_summaries(
     limit: int = Query(default=20, ge=1, le=100),
@@ -171,9 +190,11 @@ def list_my_player_share_holdings(
 def issue_player_share_market(
     player_id: str,
     payload: PlayerShareMarketIssueRequest,
+    request: Request,
     session: Session = Depends(get_session),
     actor: User = Depends(get_current_admin),
 ) -> PlayerShareMarketView:
+    _require_manager_supply_permission(request, actor)
     service = PlayerTokenMarketService(session)
     try:
         market = service.issue_market(
@@ -217,9 +238,11 @@ def buy_player_shares(
 def reprice_player_shares_from_performance(
     player_id: str,
     payload: PlayerSharePerformanceRequest,
+    request: Request,
     session: Session = Depends(get_session),
     actor: User = Depends(get_current_admin),
 ) -> PlayerShareMarketView:
+    _require_manager_supply_permission(request, actor)
     service = PlayerTokenMarketService(session)
     try:
         market = service.apply_performance_adjustment(
@@ -239,9 +262,11 @@ def reprice_player_shares_from_performance(
 def distribute_player_share_dividends(
     player_id: str,
     payload: PlayerShareDividendRequest,
+    request: Request,
     session: Session = Depends(get_session),
     actor: User = Depends(get_current_admin),
 ) -> PlayerShareDividendView:
+    _require_manager_supply_permission(request, actor)
     service = PlayerTokenMarketService(session)
     try:
         result = service.distribute_dividend(

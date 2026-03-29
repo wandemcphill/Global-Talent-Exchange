@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/match/live_match_overview_provider.dart';
 import 'package:gte_frontend/features/match/match_screen.dart';
 import 'package:gte_frontend/features/profile/profile_admin_screen.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
@@ -188,27 +189,48 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: MatchScreen())),
+      ProviderScope(
+        overrides: [
+          authProvider.overrideWith((Ref ref) => session),
+          liveMatchOverviewProvider.overrideWith(
+            (Ref ref) async => const LiveMatchOverview(
+              entries: <LiveMatchOverviewEntry>[
+                LiveMatchOverviewEntry(
+                  matchKey: 'live-1',
+                  title: 'GTEX Matchday',
+                  subtitle: 'Broadcast live from Lagos.',
+                  channelLabel: 'Featured channel',
+                  isFeatured: true,
+                  isLive: true,
+                ),
+              ],
+              generatedAt: null,
+              sourcePath: '/api/broadcast/home',
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: MatchScreen())),
+      ),
     );
 
     await tester.pumpAndSettle();
 
-    expect(find.text('2D Viewer'), findsOneWidget);
-    expect(find.text('Broadcast+'), findsOneWidget);
+    expect(find.text('Open 2D'), findsOneWidget);
+    expect(find.text('Open Broadcast+'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Open Flutter 3D'),
+      find.text('See native 3D status'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Open Flutter 3D'), findsOneWidget);
+    expect(find.text('See native 3D status'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Simulate'),
+      find.text('Open simulate'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Simulate'), findsOneWidget);
+    expect(find.text('Open simulate'), findsOneWidget);
   });
 
   testWidgets('tasks screen renders live daily challenges', (

@@ -8,6 +8,11 @@ import '../auth/auth_identity_store.dart';
 import '../models/auth_presentation.dart';
 import '../models/auth_session.dart';
 
+const String adminPermissionViewAuditLog = 'view_audit_log';
+const String adminPermissionManageCompetitions = 'manage_competitions';
+const String adminPermissionManageManagerCatalog = 'manage_manager_catalog';
+const String adminPermissionManageManagerSupply = 'manage_manager_supply';
+
 final Provider<AuthSessionStore> authSessionStoreProvider =
     Provider<AuthSessionStore>(
       (Ref ref) =>
@@ -87,6 +92,27 @@ final Provider<bool> canAccessGodModeProvider = Provider<bool>(
   (Ref ref) => ref.watch(authProvider)?.canAccessGodMode ?? false,
 );
 
+final Provider<bool> canManageCompetitionsProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageCompetitions,
+  ),
+);
+
+final Provider<bool> canManageManagerCatalogProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageManagerCatalog,
+  ),
+);
+
+final Provider<bool> canManageManagerSupplyProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageManagerSupply,
+  ),
+);
+
 final Provider<String?> godModeBlockedReasonProvider = Provider<String?>((
   Ref ref,
 ) {
@@ -99,6 +125,9 @@ final Provider<String?> godModeBlockedReasonProvider = Provider<String?>((
   }
   if (session.accessToken.trim().isEmpty) {
     return 'missing session claims';
+  }
+  if (!session.canAccessGodMode) {
+    return 'missing audit permission';
   }
   return null;
 });
@@ -214,4 +243,11 @@ class AppSessionController extends Notifier<AuthSession?> {
   }
 
   Future<void> clear() => updateSession(null);
+}
+
+bool _hasAdminPermission(AuthSession? session, String permission) {
+  if (session == null || !session.isAuthenticated || !session.isAdmin) {
+    return false;
+  }
+  return session.isSuperAdmin || session.hasPermission(permission);
 }
