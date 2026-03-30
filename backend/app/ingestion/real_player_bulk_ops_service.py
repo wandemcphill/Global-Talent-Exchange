@@ -118,7 +118,7 @@ class RealPlayerBulkImportOpsService:
     def __post_init__(self) -> None:
         self.mapping_service = RealPlayerCanonicalMappingService(
             settings=self.settings,
-            auto_create_missing_entities=False,
+            auto_create_missing_entities=self.settings.real_player_mapping_auto_create_missing_entities,
         )
         self.backfill_service = FootballsquadsCanonicalBackfillService(settings=self.settings)
 

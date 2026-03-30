@@ -30,6 +30,15 @@ from app.models.real_player_reference_mapping import (
 )
 
 _CLUB_REFERENCE_PLACEHOLDERS = {"free agent", "unattached"}
+_CONTINENTAL_REGION_KEYS = {
+    normalize_country_name("Africa"),
+    normalize_country_name("Asia"),
+    normalize_country_name("Europe"),
+    normalize_country_name("North America"),
+    normalize_country_name("South America"),
+    normalize_country_name("Oceania"),
+    normalize_country_name("World"),
+}
 
 
 class CanonicalReferenceEntityType(StrEnum):
@@ -49,6 +58,32 @@ class CanonicalReferenceStatus(StrEnum):
 def _is_club_placeholder_label(value: str | None) -> bool:
     cleaned = clean_name(value)
     return bool(cleaned and cleaned.casefold() in _CLUB_REFERENCE_PLACEHOLDERS)
+
+
+def _club_auto_create_is_safe(
+    reference: "CanonicalReferenceInput",
+    *,
+    competition: "Competition | None",
+) -> bool:
+    normalized_display_name = reference.normalized_display_name
+    if not normalized_display_name:
+        return False
+
+    normalized_country_name = normalize_country_name(reference.country_name)
+    if normalized_country_name and normalized_display_name.casefold() == normalized_country_name.casefold():
+        return False
+
+    if competition is None:
+        return False
+
+    competition_country = getattr(competition, "country", None)
+    competition_country_name = normalize_country_name(
+        competition_country.name if competition_country is not None else None
+    )
+    if not competition_country_name or competition_country_name in _CONTINENTAL_REGION_KEYS:
+        return False
+
+    return True
 
 
 @dataclass(frozen=True, slots=True)
@@ -626,7 +661,7 @@ class RealPlayerCanonicalMappingService:
                 metadata_json={"candidate_ids": [candidate.id for candidate in candidates]},
             )
 
-        if self.auto_create_missing_entities:
+        if self.auto_create_missing_entities and _club_auto_create_is_safe(reference, competition=competition):
             create_plan = prepare_club_create_plan(
                 source_name=reference.source_name,
                 provider_external_id=reference.provider_external_id,

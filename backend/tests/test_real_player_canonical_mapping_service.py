@@ -151,10 +151,20 @@ def test_mapping_service_can_auto_create_missing_entities_when_enabled() -> None
     try:
         service = RealPlayerCanonicalMappingService(settings=_settings(auto_create=True))
         with session_factory() as session:
+            turkey = Country(
+                source_provider="curated-feed",
+                provider_external_id="TR",
+                name="Turkey",
+                alpha2_code="TR",
+            )
+            session.add(turkey)
+            session.flush()
             competition_resolution = service.resolve_competition(
                 session,
                 source_name="curated-feed",
                 name="Super Lig",
+                country=turkey,
+                country_name="Turkey",
                 auto_create_values={
                     "competition_type": "league",
                     "format_type": "real_world",
@@ -182,6 +192,38 @@ def test_mapping_service_can_auto_create_missing_entities_when_enabled() -> None
             assert session.scalar(select(func.count()).select_from(Club)) == 1
             assert session.scalar(select(func.count()).select_from(RealPlayerReferenceMapping)) == 2
             assert session.scalar(select(func.count()).select_from(RealPlayerUnresolvedReference)) == 0
+    finally:
+        engine.dispose()
+
+
+def test_mapping_service_does_not_auto_create_club_without_safe_competition_context() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        service = RealPlayerCanonicalMappingService(settings=_settings(auto_create=True))
+        with session_factory() as session:
+            england = Country(
+                source_provider="seed",
+                provider_external_id="ENG",
+                name="England",
+                alpha3_code="ENG",
+                fifa_code="ENG",
+            )
+            session.add(england)
+            session.commit()
+
+            club_resolution = service.resolve_club(
+                session,
+                source_name="sportmonks",
+                provider_external_id="18645",
+                name="England",
+                country=england,
+                country_name="England",
+                competition=None,
+                competition_name=None,
+            )
+
+            assert club_resolution.status == "unresolved"
+            assert session.scalar(select(func.count()).select_from(Club)) == 0
     finally:
         engine.dispose()
 

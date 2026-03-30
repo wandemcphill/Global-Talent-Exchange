@@ -522,6 +522,8 @@ class SportMonksAdapter(BaseFootballProvider):
         club_id = str(team.get("id") or selected.get("team_id") or "").strip()
         club_name = self._clean_text(team.get("name"))
         team_context = self._load_team_directory_context(club_id)
+        if club_id and not any(team_context.values()):
+            return None
         if not club_id and not club_name:
             return None
         return {
@@ -552,15 +554,28 @@ class SportMonksAdapter(BaseFootballProvider):
         try:
             response = self._get(
                 f"/teams/{club_id}",
-                params={"include": "country;latest;latest.league;latest.league.country"},
+                params={
+                    "include": (
+                        "country;"
+                        "activeseasons;activeseasons.league;activeseasons.league.country;"
+                        "latest;latest.league;latest.league.country"
+                    )
+                },
             )
         except Exception:
             self._team_directory_context_cache[club_id] = context
             return context
         team = response.get("data") or {}
+        if not team:
+            self._team_directory_context_cache[club_id] = context
+            return context
         context["club_name"] = self._clean_text(team.get("name"))
+        active_seasons = list(team.get("activeseasons") or [])
         latest_fixtures = list(team.get("latest") or [])
-        selected_competition = self._select_team_competition(latest_fixtures)
+        selected_competition = self._select_team_competition(
+            active_seasons=active_seasons,
+            fixtures=latest_fixtures,
+        )
         if selected_competition is not None:
             context["competition_id"] = selected_competition.get("competition_id")
             context["competition_name"] = selected_competition.get("competition_name")
@@ -568,7 +583,46 @@ class SportMonksAdapter(BaseFootballProvider):
         self._team_directory_context_cache[club_id] = context
         return context
 
-    def _select_team_competition(self, fixtures: list[dict[str, Any]]) -> dict[str, str | None] | None:
+    def _select_team_competition(
+        self,
+        *,
+        active_seasons: list[dict[str, Any]],
+        fixtures: list[dict[str, Any]],
+    ) -> dict[str, str | None] | None:
+        selected = self._select_active_season_competition(active_seasons)
+        if selected is not None:
+            return selected
+        return self._select_fixture_competition(fixtures)
+
+    def _select_active_season_competition(
+        self,
+        active_seasons: list[dict[str, Any]],
+    ) -> dict[str, str | None] | None:
+        if not active_seasons:
+            return None
+        selected = sorted(
+            active_seasons,
+            key=lambda item: (
+                0 if bool(item.get("is_current")) else 1,
+                0 if str(((item.get("league") or {}).get("sub_type") or "")).strip().lower() == "domestic" else 1,
+                0 if str(((item.get("league") or {}).get("type") or "")).strip().lower() == "league" else 1,
+                self._clean_text(item.get("starting_at")) or "",
+            ),
+            reverse=False,
+        )[0]
+        league = selected.get("league") or {}
+        competition_id = str(league.get("id") or selected.get("league_id") or "").strip() or None
+        competition_name = self._clean_text(league.get("name"))
+        season_id = str(selected.get("id") or "").strip() or None
+        if competition_id is None and competition_name is None:
+            return None
+        return {
+            "competition_id": competition_id,
+            "competition_name": competition_name,
+            "season_id": season_id,
+        }
+
+    def _select_fixture_competition(self, fixtures: list[dict[str, Any]]) -> dict[str, str | None] | None:
         if not fixtures:
             return None
         selected = sorted(

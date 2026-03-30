@@ -113,16 +113,29 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
 
 def test_fetch_player_directory_page_filters_non_current_or_overage_rows(monkeypatch) -> None:
     adapter = _adapter()
-    monkeypatch.setattr(
-        adapter,
-        "_load_team_directory_context",
-        lambda club_id: {
-            "club_name": "Espanyol" if club_id == "300" else "Active Veterans",
-            "competition_id": "140" if club_id == "300" else "999",
-            "competition_name": "La Liga" if club_id == "300" else "Legends League",
+    def _fake_team_context(club_id: str):
+        if club_id == "300":
+            return {
+                "club_name": "Espanyol",
+                "competition_id": "140",
+                "competition_name": "La Liga",
+                "season_id": "30001",
+            }
+        if club_id == "999":
+            return {
+                "club_name": None,
+                "competition_id": None,
+                "competition_name": None,
+                "season_id": None,
+            }
+        return {
+            "club_name": "Active Veterans",
+            "competition_id": "999",
+            "competition_name": "Legends League",
             "season_id": "30001",
-        },
-    )
+        }
+
+    monkeypatch.setattr(adapter, "_load_team_directory_context", _fake_team_context)
 
     monkeypatch.setattr(
         adapter,
@@ -195,6 +208,32 @@ def test_fetch_player_directory_page_filters_non_current_or_overage_rows(monkeyp
                         }
                     ],
                     "type_id": 27,
+                },
+                {
+                    "id": 4,
+                    "name": "National Team Only",
+                    "display_name": "National Team Only",
+                    "common_name": "N. Team",
+                    "firstname": "National",
+                    "lastname": "Only",
+                    "position": {"name": "Defender"},
+                    "detailedposition": {"name": "Centre Back"},
+                    "date_of_birth": "1997-04-20",
+                    "nationality": {"name": "England", "iso2": "EN"},
+                    "country": {"name": "England", "iso2": "EN"},
+                    "teams": [
+                        {
+                            "id": 40,
+                            "end": None,
+                            "team_id": 999,
+                            "team": {
+                                "id": 999,
+                                "name": "England",
+                                "last_played_at": "2026-03-26 18:00:00",
+                            },
+                        }
+                    ],
+                    "type_id": 24,
                 },
             ],
             "pagination": {"has_more": False},

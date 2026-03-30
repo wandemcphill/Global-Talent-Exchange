@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -41,20 +41,20 @@ def _session_factory():
     return engine, sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
-def _settings():
+def _settings(*, auto_create: bool = False):
     return load_settings(
         environ={
             **os.environ,
             "GTE_DATABASE_URL": _database_url(),
-            "GTE_REAL_PLAYER_MAPPING_AUTO_CREATE_MISSING_ENTITIES": "0",
+            "GTE_REAL_PLAYER_MAPPING_AUTO_CREATE_MISSING_ENTITIES": "1" if auto_create else "0",
         }
     )
 
 
-def _service(session_factory) -> RealPlayerBulkImportOpsService:
+def _service(session_factory, *, auto_create: bool = False) -> RealPlayerBulkImportOpsService:
     return RealPlayerBulkImportOpsService(
         session_factory=session_factory,
-        settings=_settings(),
+        settings=_settings(auto_create=auto_create),
     )
 
 
@@ -523,6 +523,46 @@ def test_bulk_ops_repair_mappings_can_promote_partial_rows_to_publish_ready(tmp_
         assert report.run.publish_ready_rows == 4
         assert report.run.mapped_partial_rows == 0
         assert report.run.unresolved_rows == 0
+    finally:
+        engine.dispose()
+
+
+def test_bulk_ops_repair_mappings_can_auto_create_missing_club_context(tmp_path: Path) -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            _seed_canonical_entities(session)
+
+        import_path = _write_fixture_copy(tmp_path)
+        rows = json.loads(import_path.read_text(encoding="utf-8"))
+        rows[1]["current_real_world_club"] = "Unknown FC"
+        rows[1]["current_real_world_club_key"] = "unknown-fc"
+        rows[1]["current_real_world_league"] = "Unknown League"
+        rows[1]["current_real_world_league_key"] = "unknown-league"
+        import_path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+
+        import_service = _service(session_factory, auto_create=False)
+        imported = import_service.import_file(
+            file_path=str(import_path),
+            provider_name="bulk-fixture",
+            batch_size=4,
+        )
+
+        assert imported.run is not None
+        assert imported.run.unresolved_rows == 1
+        assert imported.run.publish_ready_rows == 3
+
+        repair_service = _service(session_factory, auto_create=True)
+        repaired = repair_service.repair_mappings(run_id=imported.run.id)
+        report = repair_service.report_run(run_id=imported.run.id)
+
+        assert repaired.details_json["transitioned_ready_rows"] == 1
+        assert repaired.details_json["remaining_unresolved_rows"] == 0
+        assert report.run is not None
+        assert report.run.publish_ready_rows == 4
+
+        with session_factory() as session:
+            assert session.scalar(select(func.count()).select_from(Competition).where(Competition.name == "Unknown League")) == 1
     finally:
         engine.dispose()
 
