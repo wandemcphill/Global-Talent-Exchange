@@ -362,7 +362,7 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
     super.dispose();
   }
 
-  void _placeBid(TransferMarketListing listing) {
+  Future<void> _placeBid(TransferMarketListing listing) async {
     final TransferMarketNotifier notifier = ref.read(transferProvider.notifier);
     final double minimumBid = notifier.minimumBidFor(widget.playerId);
     final double? parsedBid = double.tryParse(_bidController.text.trim());
@@ -382,7 +382,22 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
       return;
     }
 
-    final double placedBid = notifier.placeBid(widget.playerId, parsedBid);
+    final double? placedBid = await notifier.submitBid(
+      widget.playerId,
+      parsedBid,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (placedBid == null) {
+      HapticFeedback.heavyImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bid could not be submitted. Refresh and try again.'),
+        ),
+      );
+      return;
+    }
     final double nextMinimum = notifier.minimumBidFor(widget.playerId);
 
     _bidController

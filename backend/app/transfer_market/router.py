@@ -3,9 +3,14 @@ from __future__ import annotations
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.access_control.service import AccessControlService
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.access_control import OrganizationRole, OrganizationType
+from app.models.club_profile import ClubProfile
+from app.models.user import User
 from app.transfer_market.schemas import (
     ClubTeamDynamicsView,
     CoachDemandCreateRequest,
@@ -27,6 +32,7 @@ from app.transfer_market.schemas import (
 )
 from app.transfer_market.service import (
     TransferMarketNotFoundError,
+    TransferMarketPermissionError,
     TransferMarketService,
     TransferMarketValidationError,
     ensure_transfer_market_hub,
@@ -44,9 +50,76 @@ def _service(request: Request, session: Session = Depends(get_session)) -> Trans
 def _raise_transfer_market_error(exc: Exception) -> None:
     if isinstance(exc, TransferMarketNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, TransferMarketPermissionError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     if isinstance(exc, TransferMarketValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     raise exc
+
+
+def _require_transfer_market_club_access(
+    *,
+    access_service: AccessControlService,
+    current_user: User,
+    club_id: str,
+) -> ClubProfile:
+    try:
+        return access_service.require_club_access(
+            user=current_user,
+            club_id=club_id,
+            allowed_roles={OrganizationRole.CLUB, OrganizationRole.ADMIN},
+            forbidden_detail="transfer_market_club_access_required",
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+def _resolve_transfer_market_actor_club(
+    *,
+    request: Request,
+    session: Session,
+    current_user: User,
+    requested_club_id: str | None = None,
+) -> ClubProfile:
+    access_service = AccessControlService(session)
+    if requested_club_id:
+        return _require_transfer_market_club_access(
+            access_service=access_service,
+            current_user=current_user,
+            club_id=requested_club_id,
+        )
+
+    access_context = access_service.bind_user_access_context(current_user)
+    candidate_club_ids: list[str] = []
+    token_payload = getattr(request.state, "auth_token_payload", None)
+    token_org_id = token_payload.get("org_id") if isinstance(token_payload, dict) else None
+    if (
+        isinstance(token_org_id, str)
+        and token_org_id
+        and any(
+            membership.organization_id == token_org_id and membership.organization_type == OrganizationType.CLUB
+            for membership in access_context.memberships
+        )
+    ):
+        candidate_club_ids.append(token_org_id)
+    for membership in access_context.memberships:
+        if membership.organization_type == OrganizationType.CLUB and membership.organization_id not in candidate_club_ids:
+            candidate_club_ids.append(membership.organization_id)
+    for club_id in session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == current_user.id)).all():
+        if club_id not in candidate_club_ids:
+            candidate_club_ids.append(club_id)
+
+    if not candidate_club_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="transfer_market_club_access_required")
+    if len(candidate_club_ids) > 1:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="transfer_market_club_context_required")
+    return _require_transfer_market_club_access(
+        access_service=access_service,
+        current_user=current_user,
+        club_id=candidate_club_ids[0],
+    )
 
 
 @router.get("/api/transfer-market/listings", response_model=list[TransferListingView])
@@ -63,10 +136,11 @@ def list_transfer_market_listings(
 def create_transfer_market_listing(
     payload: TransferListingCreateRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> TransferListingView:
     try:
-        return service.create_listing(payload)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.create_listing(payload, actor=current_user, selling_club_id=payload.selling_club_id)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -83,23 +157,29 @@ def place_transfer_market_bid(
     listing_id: str,
     payload: TransferBidPlaceRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> TransferListingView:
     try:
         return service.place_bid(
             listing_id,
+            actor=current_user,
             bidder_club_id=payload.bidder_club_id,
             amount=payload.amount,
             activity_context=payload.activity_context,
         )
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
 @router.post("/api/transfer-market/listings/{listing_id}/close", response_model=TransferListingView)
-def close_transfer_market_listing(listing_id: str, service: TransferMarketService = Depends(_service)) -> TransferListingView:
+def close_transfer_market_listing(
+    listing_id: str,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> TransferListingView:
     try:
-        return service.finalize_listing(listing_id)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.finalize_listing(listing_id, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -107,10 +187,11 @@ def close_transfer_market_listing(listing_id: str, service: TransferMarketServic
 def get_transfer_market_negotiation(
     listing_id: str,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> TransferNegotiationView:
     try:
-        return service.get_negotiation(listing_id)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.get_negotiation(listing_id, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -119,20 +200,35 @@ def submit_transfer_market_contract_offer(
     listing_id: str,
     payload: ContractOfferRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> TransferNegotiationView:
     try:
-        return service.submit_contract_offer(listing_id, payload)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.submit_contract_offer(
+            listing_id,
+            payload,
+            actor=current_user,
+            bidder_club_id=payload.bidder_club_id,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
 @router.put("/api/transfer-market/players/{player_id}/decision-profile", response_model=PlayerDecisionProfileView)
 def upsert_transfer_market_player_profile(
+    request: Request,
     player_id: str,
     payload: PlayerDecisionProfileUpsertRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> PlayerDecisionProfileView:
     try:
+        player_club = service.get_current_player_club(player_id)
+        _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=player_club.id,
+        )
         return service.upsert_player_decision_profile(player_id, payload)
     except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
@@ -143,10 +239,11 @@ def upsert_transfer_market_coach_profile(
     club_id: str,
     payload: CoachProfileUpsertRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> CoachProfileView:
     try:
-        return service.upsert_coach_profile(club_id, payload)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.upsert_coach_profile(club_id, payload, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -155,10 +252,11 @@ def create_transfer_market_coach_demand(
     club_id: str,
     payload: CoachDemandCreateRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> CoachDemandView:
     try:
-        return service.create_coach_demand(club_id, payload)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.create_coach_demand(club_id, payload, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -167,10 +265,11 @@ def upsert_transfer_market_team_dynamics(
     club_id: str,
     payload: TeamDynamicsUpsertRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> ClubTeamDynamicsView:
     try:
-        return service.upsert_team_dynamics(club_id, payload)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.upsert_team_dynamics(club_id, payload, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -178,10 +277,11 @@ def upsert_transfer_market_team_dynamics(
 def add_transfer_market_watchlist_entry(
     payload: WatchlistEntryCreateRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
 ) -> MarketWatchlistEntryView:
     try:
-        return service.add_watchlist_entry(payload)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.add_watchlist_entry(payload, actor=current_user, club_id=payload.club_id)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
@@ -189,10 +289,11 @@ def add_transfer_market_watchlist_entry(
 def run_transfer_market_jobs(
     payload: TransferMarketJobRunRequest,
     service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
 ) -> TransferMarketJobRunView:
     try:
-        return service.run_background_jobs(reference_at=payload.reference_at)
-    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        return service.run_background_jobs(actor=current_user, reference_at=payload.reference_at)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 
 
