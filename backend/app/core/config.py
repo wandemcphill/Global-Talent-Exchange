@@ -104,6 +104,11 @@ class SettingsSource(BaseSettings):
         validation_alias="FOOTBALL_DATA_BASE_URL",
     )
     football_data_api_key: str | None = Field(default=None, validation_alias="FOOTBALL_DATA_API_KEY")
+    api_sports_base_url: str = Field(
+        default="https://v3.football.api-sports.io",
+        validation_alias="API_SPORTS_BASE_URL",
+    )
+    api_sports_api_key: str | None = Field(default=None, validation_alias="API_SPORTS_API_KEY")
     value_snapshot_lookback_days: int = Field(default=7, validation_alias="GTE_VALUE_SNAPSHOT_LOOKBACK_DAYS")
     kafka_brokers: tuple[str, ...] = Field(default=(), validation_alias="GTE_KAFKA_BROKERS")
     kafka_client_id: str = Field(default="gtex-api", validation_alias="GTE_KAFKA_CLIENT_ID")
@@ -685,6 +690,8 @@ class Settings:
     provider_timeout_seconds: int
     football_data_base_url: str
     football_data_api_key: str | None
+    api_sports_base_url: str
+    api_sports_api_key: str | None
     value_snapshot_lookback_days: int
     kafka_brokers: tuple[str, ...]
     kafka_client_id: str
@@ -1742,9 +1749,15 @@ def load_real_player_import_config(
     default_provider_name: str,
     default_timeout_seconds: int,
 ) -> RealPlayerImportConfig:
+    resolved_default_provider_name = default_provider_name
+    if resolved_default_provider_name == "mock" and environ.get("API_SPORTS_API_KEY", "").strip():
+        resolved_default_provider_name = "api_sports"
     cursor_key = environ.get("GTE_REAL_PLAYER_IMPORT_CURSOR_KEY", "real-player-directory").strip()
     return RealPlayerImportConfig(
-        provider_name=environ.get("GTE_REAL_PLAYER_IMPORT_PROVIDER", default_provider_name).strip() or default_provider_name,
+        provider_name=(
+            environ.get("GTE_REAL_PLAYER_IMPORT_PROVIDER", resolved_default_provider_name).strip()
+            or resolved_default_provider_name
+        ),
         batch_size=min(5000, max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE", 1000))),
         max_pages_per_run=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_MAX_PAGES_PER_RUN", 40)),
         rate_limit_per_minute=max(1, _get_int(environ, "GTE_REAL_PLAYER_IMPORT_RATE_LIMIT_PER_MINUTE", 120)),
@@ -1836,6 +1849,8 @@ def load_settings(
         provider_timeout_seconds=source.provider_timeout_seconds,
         football_data_base_url=source.football_data_base_url,
         football_data_api_key=source.football_data_api_key,
+        api_sports_base_url=source.api_sports_base_url,
+        api_sports_api_key=source.api_sports_api_key,
         value_snapshot_lookback_days=source.value_snapshot_lookback_days,
         kafka_brokers=source.kafka_brokers,
         kafka_client_id=source.kafka_client_id,

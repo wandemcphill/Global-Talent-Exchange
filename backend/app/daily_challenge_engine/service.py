@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.admin_engine.service import AdminEngineService
 from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
 from app.models.user import User
+from app.models.wallet import LedgerUnit
 from app.reward_engine.service import RewardEngineService
 
 DEFAULT_DAILY_CHALLENGES: tuple[dict[str, object], ...] = (
@@ -148,6 +149,7 @@ class DailyChallengeService:
         if challenge.challenge_key == "daily-login":
             bonus_amount = Decimal(str(streak_snapshot["next_bonus_amount"]))
             reward_amount = (Decimal(challenge.reward_amount) + bonus_amount).quantize(Decimal("0.0001"))
+        reward_unit = str(challenge.reward_unit or "").strip().lower()
         settlement = reward_service.settle_reward(
             actor=user,
             user_id=user.id,
@@ -156,6 +158,7 @@ class DailyChallengeService:
             gross_amount=reward_amount,
             reward_source='daily_challenge',
             note='Daily challenge reward',
+            ledger_unit=LedgerUnit.CREDIT if reward_unit == "credit" else LedgerUnit.COIN,
         )
         claim = DailyChallengeClaim(
             user_id=user.id,

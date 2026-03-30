@@ -13,7 +13,7 @@ from sqlalchemy import column, select, table, update
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService, MembershipAccessContext
-from app.admin_godmode.service import AdminGodModeService
+from app.admin_godmode.service import AdminGodModeService, SUPER_ADMIN_EXTRA_PERMISSIONS
 from app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
 from app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
 from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
@@ -248,9 +248,7 @@ class AuthService:
                             "view_audit_log",
                             "pause_payments",
                             "view_integrity_controls",
-                            "manage_manager_catalog",
-                            "manage_competitions",
-                            "manage_manager_supply",
+                            *SUPER_ADMIN_EXTRA_PERMISSIONS,
                         ],
                     )
                 )

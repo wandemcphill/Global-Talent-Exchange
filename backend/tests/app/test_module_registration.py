@@ -248,3 +248,13 @@ def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
     assert player_story_response.status_code == 404
     assert player_dna_response.status_code == 404
     assert player_rivalries_response.status_code == 404
+
+
+def test_streamer_tournaments_route_does_not_force_global_lazy_hydration(mounted_app) -> None:
+    assert mounted_app.state.modules_hydrated is False
+
+    with TestClient(mounted_app) as client:
+        response = client.get("/streamer-tournaments")
+
+    assert response.status_code == 200
+    assert mounted_app.state.modules_hydrated is False

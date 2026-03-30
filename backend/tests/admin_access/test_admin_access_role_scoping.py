@@ -22,6 +22,7 @@ from app.admin_godmode.service import (
     DEFAULT_ROLE_PERMISSIONS,
     GOD_MODE_ROLE_NAME,
     SCOPED_ADMIN_ROLE_NAME,
+    SUPER_ADMIN_EXTRA_PERMISSIONS,
 )
 from app.auth.dependencies import get_current_super_admin, get_session
 from app.auth.service import AuthService
@@ -149,7 +150,10 @@ def test_resolve_profile_keeps_super_admin_full_and_plain_admin_scoped(
     assert plain_profile.permissions == []
     assert super_profile.role_name == GOD_MODE_ROLE_NAME
     assert sorted(super_profile.permissions) == sorted(
-        DEFAULT_ROLE_PERMISSIONS[GOD_MODE_ROLE_NAME]
+        [
+            *DEFAULT_ROLE_PERMISSIONS[GOD_MODE_ROLE_NAME],
+            *SUPER_ADMIN_EXTRA_PERMISSIONS,
+        ]
     )
 
 

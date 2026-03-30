@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
+from .api_sports_adapter import ApiSportsAdapter
 from .base import BaseFootballProvider
 from .football_data_adapter import FootballDataAdapter
 from .mock_provider import MockFootballProvider
@@ -18,24 +19,31 @@ ProviderFactory = Callable[..., BaseFootballProvider]
 class ProviderRegistry:
     factories: dict[str, ProviderFactory] = field(
         default_factory=lambda: {
+            "api_sports": ApiSportsAdapter,
             "mock": MockFootballProvider,
             "football_data": FootballDataAdapter,
         }
     )
 
     def create(self, provider_name: str, *, settings: Settings | None = None) -> BaseFootballProvider:
+        normalized_provider_name = self._normalize_provider_name(provider_name)
         try:
-            factory = self.factories[provider_name]
+            factory = self.factories[normalized_provider_name]
         except KeyError as exc:
             available = ", ".join(sorted(self.factories))
-            raise KeyError(f"Unknown ingestion provider '{provider_name}'. Available: {available}.") from exc
+            raise KeyError(
+                f"Unknown ingestion provider '{provider_name}'. Available: {available}."
+            ) from exc
         try:
             return factory(settings=settings)
         except TypeError:
             return factory()
 
     def register(self, provider_name: str, factory: ProviderFactory) -> None:
-        self.factories[provider_name] = factory
+        self.factories[self._normalize_provider_name(provider_name)] = factory
 
     def list_provider_names(self) -> list[str]:
         return sorted(self.factories)
+
+    def _normalize_provider_name(self, provider_name: str) -> str:
+        return provider_name.strip().lower().replace("-", "_")

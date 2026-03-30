@@ -17,6 +17,7 @@ LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/api/auth",
     "/api/competitions",
     "/hosted-competitions",
+    "/streamer-tournaments",
 )
 EAGER_MODULE_NAMES = frozenset(
     {
@@ -25,6 +26,7 @@ EAGER_MODULE_NAMES = frozenset(
         "competitions",
         "hosted_competition_engine",
         "hosted_competition_engine_admin",
+        "streamer_tournament_engine",
     }
 )
 

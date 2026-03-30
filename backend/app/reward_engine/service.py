@@ -60,7 +60,18 @@ class RewardEngineService:
             return LedgerTransactionType.LOTTERY_REWARD
         return LedgerTransactionType.MATCH_REWARD
 
-    def settle_reward(self, *, actor: User, user_id: str, competition_key: str, title: str, gross_amount: Decimal, reward_source: str = 'gtex_promotional_pool', note: str | None = None) -> RewardSettlement:
+    def settle_reward(
+        self,
+        *,
+        actor: User,
+        user_id: str,
+        competition_key: str,
+        title: str,
+        gross_amount: Decimal,
+        reward_source: str = 'gtex_promotional_pool',
+        note: str | None = None,
+        ledger_unit: LedgerUnit = LedgerUnit.COIN,
+    ) -> RewardSettlement:
         user = self.session.get(User, user_id)
         if user is None or not user.is_active:
             raise RewardEngineError('Reward recipient user was not found.', reason="recipient_not_found")
@@ -77,7 +88,6 @@ class RewardEngineService:
         fee_amount = self._normalize_amount(split.platform_amount)
         burn_amount = self._normalize_amount(split.burn_amount)
         net_amount = self._normalize_amount(normalized_gross - fee_amount - burn_amount)
-        ledger_unit = LedgerUnit.COIN
         source_tag = self._reward_source_tag(reward_source)
         transaction_type = self._reward_transaction_type(reward_source)
         user_account = self.wallet_service.get_user_account(self.session, user, ledger_unit)

@@ -96,6 +96,14 @@ class NationalTeamsApi {
         .toList(growable: false);
   }
 
+  Future<NationalTeamCompetition> fetchCompetition(String competitionId) async {
+    final JsonMap payload = await client.getMap(
+      '/national-team-engine/competitions/$competitionId',
+      auth: false,
+    );
+    return NationalTeamCompetition.fromJson(payload);
+  }
+
   Future<JsonMap> fetchLifecycle(String competitionId) {
     return client.getMap(
       '/national-team-engine/competitions/$competitionId/lifecycle',
@@ -173,9 +181,14 @@ final dynamic nationalTeamCompetitionDetailProvider = FutureProvider
       final NationalTeamsHubData hub = await ref.watch(
         nationalTeamsHubProvider.future,
       );
-      final NationalTeamCompetition competition = hub.competitions.firstWhere(
-        (NationalTeamCompetition item) => item.id == competitionId,
-      );
+      NationalTeamCompetition? competition;
+      for (final NationalTeamCompetition item in hub.competitions) {
+        if (item.id == competitionId) {
+          competition = item;
+          break;
+        }
+      }
+      competition ??= await api.fetchCompetition(competitionId);
       final Future<JsonMap> lifecycleFuture = api.fetchLifecycle(competitionId);
       final Future<JsonMap> presentationFuture = api.fetchPresentation(
         competitionId,

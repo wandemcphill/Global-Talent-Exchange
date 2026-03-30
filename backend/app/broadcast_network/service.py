@@ -144,7 +144,9 @@ class BroadcastNetworkRuntime:
         cached = self._cache.get_json(cache_key)
         if isinstance(cached, dict) and isinstance(cached.get("payload"), dict):
             try:
-                return BroadcastHomeView.model_validate(cached["payload"])
+                payload = BroadcastHomeView.model_validate(cached["payload"])
+                if self._home_payload_is_current(payload):
+                    return payload
             except Exception:
                 pass
         channels, ranked = self._channel_bundle()
@@ -161,7 +163,7 @@ class BroadcastNetworkRuntime:
         return payload
 
     def join_channel(self, *, channel_id: str, user_id: str) -> ChannelSessionView:
-        channel = self._channel_by_id(channel_id)
+        channel = self._session_channel_by_id(channel_id)
         if channel is None:
             raise BroadcastNetworkError("Broadcast channel was not found.")
         session = self._create_watch_session(
@@ -179,7 +181,7 @@ class BroadcastNetworkRuntime:
         hydrate_match_session: bool = False,
     ) -> ChannelSessionView:
         watch_session = self._load_watch_session(session_id=session_id, channel_id=channel_id)
-        channel = self._channel_by_id(channel_id)
+        channel = self._session_channel_by_id(channel_id)
         if channel is None:
             raise BroadcastNetworkError("Broadcast channel was not found.")
         current_program = channel.current_program
@@ -245,8 +247,12 @@ class BroadcastNetworkRuntime:
 
     def audio_manifest(self, *, channel_id: str, session_id: str) -> BroadcastAudioManifestView:
         watch_session = self._load_watch_session(session_id=session_id, channel_id=channel_id)
-        channel = self._channel_by_id(channel_id)
-        match_id = channel.current_program.match_id if channel is not None and channel.current_program is not None else watch_session.current_match_id
+        channel = self._session_channel_by_id(channel_id)
+        match_id = (
+            channel.current_program.match_id
+            if channel is not None and channel.current_program is not None and channel.current_program.match_id is not None
+            else watch_session.current_match_id
+        )
         return self.commentary_orchestrator.build_manifest(channel_id=channel_id, match_id=match_id)
 
     def audio_frames(self, *, channel_id: str, session_id: str, cursor: int) -> tuple[list[dict[str, Any]], int]:
@@ -259,7 +265,13 @@ class BroadcastNetworkRuntime:
         return [item.model_dump(mode="json") for item in frames], next_cursor
 
     def _channel_bundle(self) -> tuple[list[BroadcastChannelView], list[BroadcastDirectorFocusView]]:
-        ranked_candidates = self._ranked_candidates()
+        live_candidates = self._live_candidates()
+        ai_candidates = self._ai_candidates()
+        ranked_candidates = sorted(
+            [*live_candidates, *ai_candidates],
+            key=lambda candidate: (candidate.score, candidate.viewer_count, candidate.goals, candidate.title),
+            reverse=True,
+        )[:20]
         ranked_focus = [self.director_service.focus(candidate) for candidate in ranked_candidates[:20]]
         viewer_counts = self._channel_viewer_counts()
         channels = [
@@ -268,7 +280,7 @@ class BroadcastNetworkRuntime:
                 name="Live Channel",
                 channel_type="live",
                 description="Ongoing live coverage across the GTEX network.",
-                candidates=[candidate for candidate in ranked_candidates if not bool(candidate.metadata.get("ai_match"))],
+                candidates=live_candidates,
                 viewer_count=viewer_counts.get("live", 0),
             ),
             self._build_channel(
@@ -284,7 +296,7 @@ class BroadcastNetworkRuntime:
                 name="AI Channel",
                 channel_type="ai",
                 description="24/7 AI-generated fixtures and replay loops.",
-                candidates=[candidate for candidate in ranked_candidates if bool(candidate.metadata.get("ai_match"))],
+                candidates=ai_candidates,
                 viewer_count=viewer_counts.get("ai", 0),
             ),
             self._build_channel(
@@ -308,15 +320,28 @@ class BroadcastNetworkRuntime:
             )
         return channels, ranked_focus
 
-    def _channel_by_id(self, channel_id: str) -> BroadcastChannelView | None:
-        cached = self._cache.get_json(f"broadcast_network:channel:{channel_id}")
-        if isinstance(cached, dict) and isinstance(cached.get("payload"), dict):
-            try:
-                return BroadcastChannelView.model_validate(cached["payload"])
-            except Exception:
-                pass
+    def _channel_by_id(self, channel_id: str, *, use_cache: bool = True) -> BroadcastChannelView | None:
+        if use_cache:
+            cached = self._cache.get_json(f"broadcast_network:channel:{channel_id}")
+            if isinstance(cached, dict) and isinstance(cached.get("payload"), dict):
+                try:
+                    return BroadcastChannelView.model_validate(cached["payload"])
+                except Exception:
+                    pass
         channels, _ = self._channel_bundle()
         return next((channel for channel in channels if channel.channel_id == channel_id), None)
+
+    def _session_channel_by_id(self, channel_id: str) -> BroadcastChannelView | None:
+        if channel_id == "live":
+            return self._build_channel(
+                channel_id="live",
+                name="Live Channel",
+                channel_type="live",
+                description="Ongoing live coverage across the GTEX network.",
+                candidates=self._live_candidates(),
+                viewer_count=self._channel_viewer_counts().get("live", 0),
+            )
+        return self._channel_by_id(channel_id, use_cache=False)
 
     def _ranked_candidates(self) -> list[_ProgramCandidate]:
         candidates = [*self._live_candidates(), *self._ai_candidates()]
@@ -328,7 +353,27 @@ class BroadcastNetworkRuntime:
 
     def _live_candidates(self) -> list[_ProgramCandidate]:
         hub = ensure_live_match_hub(self.app)
-        active_match_ids = hub.list_active_matches()
+        print(
+            "DEBUG _live_candidates",
+            {
+                "app_id": id(self.app),
+                "hub_id": id(hub),
+                "state_hub_id": id(getattr(self.app.state, "live_match_hub", None)),
+                "active_before": hub.list_active_matches(),
+                "match_keys": list(getattr(hub, "_matches", {}).keys()),
+            },
+        )
+        active_match_ids = set(hub.list_active_matches())
+        with hub._lock:
+            for runtime in hub._matches.values():
+                if runtime.last_snapshot is None:
+                    continue
+                if runtime.live or runtime.completed_at is None:
+                    active_match_ids.add(runtime.match_id)
+                    continue
+                age_seconds = max((_utcnow() - _as_utc(runtime.completed_at)).total_seconds(), 0.0)
+                if age_seconds <= self.schedule_ttl_seconds:
+                    active_match_ids.add(runtime.match_id)
         if not active_match_ids:
             return []
         matches: dict[str, CompetitionMatch] = {}
@@ -341,8 +386,9 @@ class BroadcastNetworkRuntime:
                     ).all()
                 }
         candidates: list[_ProgramCandidate] = []
-        for match_id in active_match_ids:
+        for match_id in sorted(active_match_ids):
             state = hub.get_state(match_id)
+            print("DEBUG _live_candidates.state", match_id, state)
             if state is None:
                 continue
             snapshot = state.snapshot
@@ -398,6 +444,7 @@ class BroadcastNetworkRuntime:
                 },
             )
             candidates.append(replace(candidate, score=self.director_service.score(candidate)))
+        print("DEBUG _live_candidates.result", [candidate.match_id for candidate in candidates])
         return candidates
 
     def _ai_candidates(self) -> list[_ProgramCandidate]:
@@ -731,6 +778,20 @@ class BroadcastNetworkRuntime:
             return True
         context = dict(match.metadata_json or {}).get("competition_context")
         return bool(context.get("is_final")) if isinstance(context, dict) else False
+
+    def _home_payload_is_current(self, payload: BroadcastHomeView) -> bool:
+        current_program = payload.match_of_the_moment
+        if current_program is not None and current_program.match_id is not None:
+            return True
+        if payload.channels:
+            live_channel = next((channel for channel in payload.channels if channel.channel_id == "live"), None)
+            if live_channel is not None and live_channel.current_program is not None and live_channel.current_program.match_id is not None:
+                return True
+        return not any(
+            candidate.match_id
+            for candidate in self._ranked_candidates()
+            if not bool(candidate.metadata.get("ai_match"))
+        )
 
 
 def ensure_broadcast_network_runtime(app: FastAPI) -> BroadcastNetworkRuntime:

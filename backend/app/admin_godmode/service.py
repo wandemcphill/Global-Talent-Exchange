@@ -53,6 +53,11 @@ ADMIN_GODMODE_FILE = "admin_god_mode.json"
 AUDIT_LOG_FILE = "admin_god_mode.audit.jsonl"
 GOD_MODE_ROLE_NAME = "god_mode"
 SCOPED_ADMIN_ROLE_NAME = "scoped_admin"
+SUPER_ADMIN_EXTRA_PERMISSIONS: tuple[str, ...] = (
+    "manage_manager_catalog",
+    "manage_manager_supply",
+    "manage_competitions",
+)
 
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     GOD_MODE_ROLE_NAME: [
@@ -769,7 +774,12 @@ class AdminGodModeService:
         roles_block = self._normalize_roles_block(state.get("roles") or {})
         available_roles = dict(roles_block.get("available_roles") or DEFAULT_ROLE_PERMISSIONS)
         if actor.role.value == "super_admin":
-            permissions = sorted(set(available_roles.get(GOD_MODE_ROLE_NAME, [])))
+            permissions = sorted(
+                {
+                    *available_roles.get(GOD_MODE_ROLE_NAME, []),
+                    *SUPER_ADMIN_EXTRA_PERMISSIONS,
+                }
+            )
             return GodModeProfileView(
                 subject_key=actor.id,
                 role_name=GOD_MODE_ROLE_NAME,

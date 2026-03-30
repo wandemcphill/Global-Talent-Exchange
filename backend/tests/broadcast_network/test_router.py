@@ -23,13 +23,18 @@ def _ensure_live_match(app, *, seed: int = 17) -> str:
 
 def test_broadcast_network_join_and_stream_channel(client, app, demo_auth_headers) -> None:
     live_match_id = _ensure_live_match(app, seed=23)
+    hub = ensure_live_match_hub(app)
+    print("DEBUG active", hub.list_active_matches())
+    print("DEBUG state", hub.get_state(live_match_id))
 
     channels_response = client.get("/api/broadcast/channels", headers=demo_auth_headers)
+    print("DEBUG channels", channels_response.json())
     assert channels_response.status_code == 200
     channel_ids = {item["channel_id"] for item in channels_response.json()}
     assert {"live", "trending", "ai", "tournament"} <= channel_ids
 
     join_response = client.post("/api/broadcast/channels/live/join", headers=demo_auth_headers)
+    print("DEBUG join", join_response.json())
     assert join_response.status_code == 200
     payload = join_response.json()
     assert payload["channel"]["channel_id"] == "live"
@@ -81,3 +86,26 @@ def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoi
     assert session_response.status_code == 200
     assert timeline_response.json()["match_id"] == match_key
     assert session_response.json()["match_id"] == match_key
+
+
+def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_starts(client, app, demo_auth_headers) -> None:
+    hub = ensure_live_match_hub(app)
+    for match_id in hub.list_active_matches():
+        hub.halt_match(match_id, reason="test-reset")
+
+    warm_response = client.get("/api/broadcast/home", headers=demo_auth_headers)
+    assert warm_response.status_code == 200
+    warm_payload = warm_response.json()
+    live_channel_before = next(item for item in warm_payload["channels"] if item["channel_id"] == "live")
+    assert live_channel_before["current_program"]["match_id"] is None
+
+    live_match_id = _ensure_live_match(app, seed=37)
+
+    join_response = client.post("/api/broadcast/channels/live/join", headers=demo_auth_headers)
+    assert join_response.status_code == 200
+    assert join_response.json()["current_program"]["match_id"] == live_match_id
+
+    refreshed_home = client.get("/api/broadcast/home", headers=demo_auth_headers)
+    assert refreshed_home.status_code == 200
+    live_channel_after = next(item for item in refreshed_home.json()["channels"] if item["channel_id"] == "live")
+    assert live_channel_after["current_program"]["match_id"] == live_match_id

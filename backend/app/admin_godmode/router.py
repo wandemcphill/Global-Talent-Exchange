@@ -55,7 +55,10 @@ def read_bootstrap(
     actor: User = Depends(get_current_admin),
     service: AdminGodModeService = Depends(get_service),
 ) -> GodModeBootstrapView:
-    return service.load_bootstrap(request.app, session, actor)
+    try:
+        return service.load_bootstrap(request.app, session, actor)
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/roles", response_model=AdminRoleCatalogView)

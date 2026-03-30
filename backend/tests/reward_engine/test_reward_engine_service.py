@@ -12,6 +12,7 @@ from app.auth.service import AuthService
 from app.models import (
     AdminRewardRule,
     Base,
+    LedgerUnit,
     SpendingControlAuditEvent,
     SpendingControlDecision,
 )
@@ -113,3 +114,45 @@ def test_reward_controls_flag_near_limit_and_block_daily_count_limit(session) ->
     assert blocked is not None
     assert blocked.control_scope == "reward"
     assert blocked.primary_reason_code == "daily_user_count_limit_exceeded"
+
+
+def test_reward_service_supports_credit_ledger_settlement(session) -> None:
+    admin = _create_user(session, email="credit-admin@example.com", username="credit-admin")
+    recipient = _create_user(session, email="credit-user@example.com", username="credit-user")
+
+    session.add(
+        AdminRewardRule(
+            rule_key="credit-reward-controls",
+            title="Credit Reward Controls",
+            description="Allow FanCoin-style reward settlement.",
+            trading_fee_bps=2000,
+            gift_platform_rake_bps=3000,
+            withdrawal_fee_bps=1000,
+            minimum_withdrawal_fee_credits=Decimal("5.0000"),
+            competition_platform_fee_bps=1000,
+            stability_controls_json=AdminRewardRuleStabilityControls().model_dump(mode="json"),
+            active=True,
+        )
+    )
+    session.commit()
+
+    service = RewardEngineService(session)
+    service.credit_promo_pool(
+        actor=admin,
+        amount=Decimal("125.0000"),
+        unit=LedgerUnit.CREDIT,
+    )
+    session.commit()
+
+    settlement = service.settle_reward(
+        actor=admin,
+        user_id=recipient.id,
+        competition_key="daily:watch-highlight:2026-03-30",
+        title="Watch a Highlight",
+        gross_amount=Decimal("20.0000"),
+        reward_source="daily_challenge",
+        ledger_unit=LedgerUnit.CREDIT,
+    )
+    session.commit()
+
+    assert settlement.ledger_unit == LedgerUnit.CREDIT

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'gte_api_repository.dart';
 import '../shared/models/auth_session.dart';
 
@@ -56,10 +58,21 @@ class GteAuthedApi {
         );
       }
       headers['Authorization'] = 'Bearer $resolvedAccessToken';
-      final String resolvedDeviceId = deviceId?.trim() ?? '';
-      if (authSession != null && resolvedDeviceId.isNotEmpty) {
-        headers['X-User-Id'] = authSession!.userId;
-        headers['X-Session-Id'] = authSession!.sessionId;
+      final Map<String, Object?> tokenClaims = _decodeJwtClaims(
+        resolvedAccessToken,
+      );
+      final String resolvedUserId = _firstNonEmpty(
+        authSession?.userId,
+        _stringClaim(tokenClaims, 'sub'),
+      );
+      final String resolvedSessionId = _firstNonEmpty(
+        authSession?.sessionId,
+        _stringClaim(tokenClaims, 'sid'),
+      );
+      final String resolvedDeviceId = _firstNonEmpty(deviceId, 'web-client');
+      if (resolvedUserId.isNotEmpty && resolvedSessionId.isNotEmpty) {
+        headers['X-User-Id'] = resolvedUserId;
+        headers['X-Session-Id'] = resolvedSessionId;
         headers['X-Device-Id'] = resolvedDeviceId;
       }
     }
@@ -83,13 +96,7 @@ class GteAuthedApi {
     Object? body,
     bool auth = true,
   }) {
-    return request(
-      'POST',
-      path,
-      query: query,
-      body: body,
-      auth: auth,
-    );
+    return request('POST', path, query: query, body: body, auth: auth);
   }
 
   Future<Map<String, dynamic>> getMap(
@@ -152,4 +159,45 @@ class GteAuthedApi {
     }
     return GteApiErrorType.unknown;
   }
+}
+
+String _firstNonEmpty(String? first, [String? second]) {
+  final String resolvedFirst = first?.trim() ?? '';
+  if (resolvedFirst.isNotEmpty) {
+    return resolvedFirst;
+  }
+  return second?.trim() ?? '';
+}
+
+String? _stringClaim(Map<String, Object?> claims, String key) {
+  final Object? value = claims[key];
+  if (value == null) {
+    return null;
+  }
+  final String resolved = value.toString().trim();
+  return resolved.isEmpty ? null : resolved;
+}
+
+Map<String, Object?> _decodeJwtClaims(String token) {
+  final List<String> segments = token.split('.');
+  if (segments.length < 2) {
+    return const <String, Object?>{};
+  }
+  try {
+    final String normalized = base64Url.normalize(segments[1]);
+    final Object? decoded = jsonDecode(
+      utf8.decode(base64Url.decode(normalized)),
+    );
+    if (decoded is Map<String, dynamic>) {
+      return Map<String, Object?>.from(decoded);
+    }
+    if (decoded is Map) {
+      return decoded.map(
+        (Object? key, Object? value) => MapEntry(key.toString(), value),
+      );
+    }
+  } catch (_) {
+    return const <String, Object?>{};
+  }
+  return const <String, Object?>{};
 }
