@@ -218,9 +218,12 @@ class Container:
         self._initialized = False
         logger.info("container.shutdown.complete")
 
-    def check_db(self) -> None:
+    def check_db(self, *, check_schema: bool | None = None) -> None:
         if not self.database.ping():
             raise RuntimeError("Database health check failed.")
+        should_check_schema = self.settings.run_migration_check if check_schema is None else check_schema
+        if should_check_schema:
+            self.database.check_schema_smoke()
 
     def check_redis(self) -> None:
         if not self.settings.redis_url:

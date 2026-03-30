@@ -49,7 +49,7 @@ class SystemStatusService:
     def build_health(self) -> HealthResponse:
         return HealthResponse()
 
-    def build_readiness(self, database: DatabaseRuntime) -> ReadinessResponse:
+    def build_readiness(self, database: DatabaseRuntime, *, check_schema: bool = True) -> ReadinessResponse:
         try:
             is_ready = database.ping()
         except Exception as exc:
@@ -69,9 +69,23 @@ class SystemStatusService:
                 },
             )
 
+        checks: dict[str, ReadinessCheck] = {"database": ReadinessCheck(status="ok")}
+        if check_schema:
+            try:
+                database.check_schema_smoke()
+            except Exception as exc:
+                return ReadinessResponse(
+                    status="not_ready",
+                    checks={
+                        **checks,
+                        "schema": ReadinessCheck(status="error", detail=str(exc)),
+                    },
+                )
+            checks["schema"] = ReadinessCheck(status="ok")
+
         return ReadinessResponse(
             status="ready",
-            checks={"database": ReadinessCheck(status="ok")},
+            checks=checks,
         )
 
     def build_version(self, settings: Settings) -> VersionResponse:
@@ -141,7 +155,8 @@ def read_ready(
     response: Response,
     service: SystemStatusService = Depends(get_system_status_service),
 ) -> ReadinessResponse:
-    readiness = service.build_readiness(request.app.state.context.database)
+    check_schema = request.app.state.settings.run_migration_check if request.app.state.run_migration_check is None else request.app.state.run_migration_check
+    readiness = service.build_readiness(request.app.state.context.database, check_schema=check_schema)
     if readiness.status != "ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return readiness

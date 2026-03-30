@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import time
 
-from sqlalchemy import MetaData, create_engine, text
+from sqlalchemy import MetaData, create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
@@ -46,6 +46,19 @@ MODEL_MODULES = (
 DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10
 DEFAULT_DATABASE_INIT_RETRIES = 3
 DEFAULT_DATABASE_INIT_RETRY_DELAY_SECONDS = 2.0
+RUNTIME_SCHEMA_SMOKE_TABLES = (
+    "wallets",
+    "ledger_entries",
+    "ledger_balance_projections",
+    "player_share_markets",
+    "player_share_events",
+    "leaderboard_seasons",
+    "leaderboard_player_ratings",
+    "leaderboard_match_results",
+    "leaderboard_season_snapshots",
+    "leaderboard_season_rewards",
+    "national_regen_seeds",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -256,6 +269,23 @@ def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, .
     return current_heads
 
 
+def check_runtime_schema_smoke(
+    engine: Engine | None = None,
+    *,
+    required_tables: tuple[str, ...] = RUNTIME_SCHEMA_SMOKE_TABLES,
+) -> tuple[str, ...]:
+    database_engine = engine or get_engine()
+    inspector = inspect(database_engine)
+    missing_tables = tuple(table_name for table_name in required_tables if not inspector.has_table(table_name))
+    if missing_tables:
+        raise RuntimeError(
+            "Database schema smoke check failed. Missing tables: "
+            + ", ".join(missing_tables)
+            + "."
+        )
+    return required_tables
+
+
 def get_target_metadata() -> MetaData:
     load_model_modules()
     from app.models import Base
@@ -367,3 +397,6 @@ class DatabaseRuntime:
             return True
         except Exception:
             return False
+
+    def check_schema_smoke(self, *, required_tables: tuple[str, ...] = RUNTIME_SCHEMA_SMOKE_TABLES) -> tuple[str, ...]:
+        return check_runtime_schema_smoke(self.engine, required_tables=required_tables)

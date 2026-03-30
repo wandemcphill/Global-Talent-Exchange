@@ -78,7 +78,7 @@ CREATE INDEX IF NOT EXISTS ix_ledger_entries_transaction_wallet
 CREATE INDEX IF NOT EXISTS ix_ledger_entries_wallet_created_at
     ON ledger_entries (wallet_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS wallet_balance_projections (
+CREATE TABLE IF NOT EXISTS ledger_balance_projections (
     wallet_id uuid PRIMARY KEY REFERENCES wallets(id) ON DELETE CASCADE,
     available_balance_minor bigint NOT NULL DEFAULT 0 CHECK (available_balance_minor >= 0),
     locked_balance_minor bigint NOT NULL DEFAULT 0 CHECK (locked_balance_minor >= 0),
@@ -86,8 +86,8 @@ CREATE TABLE IF NOT EXISTS wallet_balance_projections (
     last_transaction_id uuid REFERENCES transactions(id) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS ix_wallet_balance_projections_last_transaction
-    ON wallet_balance_projections (last_transaction_id);
+CREATE INDEX IF NOT EXISTS ix_ledger_balance_projections_last_transaction
+    ON ledger_balance_projections (last_transaction_id);
 
 CREATE TABLE IF NOT EXISTS clubs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

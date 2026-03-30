@@ -12,7 +12,7 @@ def test_postgres_live_economy_schema_covers_thread_a_core_tables() -> None:
         "CREATE TABLE IF NOT EXISTS wallets (",
         "CREATE TABLE IF NOT EXISTS transactions (",
         "CREATE TABLE IF NOT EXISTS ledger_entries (",
-        "CREATE TABLE IF NOT EXISTS wallet_balance_projections (",
+        "CREATE TABLE IF NOT EXISTS ledger_balance_projections (",
         "CREATE TABLE IF NOT EXISTS match_participants (",
         "CREATE TABLE IF NOT EXISTS player_share_markets (",
         "CREATE TABLE IF NOT EXISTS player_share_holdings (",

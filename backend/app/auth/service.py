@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
+from time import perf_counter
 import re
 import secrets
 from uuid import uuid4
@@ -23,6 +25,7 @@ from app.users.schemas import UserPublic
 from app.wallets.service import WalletService
 
 logger = logging.getLogger(__name__)
+AuthTimingRecorder = Callable[[str, float], None]
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
 PROFILE_MUTABLE_FIELDS = (
@@ -52,6 +55,12 @@ class InvalidCredentialsError(AuthError):
     pass
 
 
+def _record_timing(recorder: AuthTimingRecorder | None, step: str, started_at: float) -> None:
+    if recorder is None:
+        return
+    recorder(step, round((perf_counter() - started_at) * 1000, 2))
+
+
 class AuthService:
     def __init__(
         self,
@@ -74,11 +83,16 @@ class AuthService:
         password: str,
         display_name: str | None = None,
         role: UserRole = UserRole.USER,
+        timing_recorder: AuthTimingRecorder | None = None,
     ) -> User:
+        normalize_started_at = perf_counter()
         normalized_email = self._normalize_email(email)
+        _record_timing(timing_recorder, "auth.normalize_email_ms", normalize_started_at)
         if not is_over_18:
             raise AuthError("You must be at least 18 years old to sign up.")
+        username_started_at = perf_counter()
         normalized_username = self._normalize_username(username) if username else None
+        _record_timing(timing_recorder, "auth.normalize_username_ms", username_started_at)
         self._validate_password(password)
 
         resolved_full_name = (full_name or display_name or normalized_username or normalized_email.split("@", 1)[0]).strip()
@@ -88,44 +102,77 @@ class AuthService:
         if not resolved_phone_number:
             resolved_phone_number = "0000000000"
 
+        lookup_started_at = perf_counter()
         existing_user = session.scalar(select(User).where(User.email == normalized_email))
+        _record_timing(timing_recorder, "db.lookup_user_by_email_ms", lookup_started_at)
         if existing_user is not None:
             raise DuplicateUserError("Email address is already registered.")
 
         if normalized_username is None:
+            username_generation_started_at = perf_counter()
             normalized_username = self._generate_unique_username(session, resolved_full_name, normalized_email)
+            _record_timing(timing_recorder, "db.generate_username_ms", username_generation_started_at)
         else:
+            username_lookup_started_at = perf_counter()
             existing_username = session.scalar(select(User).where(User.username == normalized_username))
+            _record_timing(timing_recorder, "db.lookup_user_by_username_ms", username_lookup_started_at)
             if existing_username is not None:
                 raise DuplicateUserError("Username is already taken.")
 
+        password_hash_started_at = perf_counter()
+        password_hash = hash_password(password)
+        _record_timing(timing_recorder, "auth.hash_password_ms", password_hash_started_at)
         user = User(
             email=normalized_email,
             username=normalized_username,
             full_name=resolved_full_name,
             phone_number=resolved_phone_number,
             display_name=display_name or resolved_full_name or normalized_username,
-            password_hash=hash_password(password),
+            password_hash=password_hash,
             role=role,
             age_confirmed_at=utcnow(),
         )
         session.add(user)
+        initial_flush_started_at = perf_counter()
         session.flush()
+        _record_timing(timing_recorder, "db.flush_user_ms", initial_flush_started_at)
+        wallet_started_at = perf_counter()
         self.wallet_service.ensure_default_accounts(session, user)
+        _record_timing(timing_recorder, "db.ensure_default_wallets_ms", wallet_started_at)
+        region_started_at = perf_counter()
         PolicyService(session).ensure_user_region_profile(user=user, region_code=region_code)
+        _record_timing(timing_recorder, "db.ensure_user_region_profile_ms", region_started_at)
+        final_flush_started_at = perf_counter()
         session.flush()
+        _record_timing(timing_recorder, "db.flush_registration_side_effects_ms", final_flush_started_at)
         return user
 
-    def authenticate_user(self, session: Session, *, email: str, password: str) -> User:
+    def authenticate_user(
+        self,
+        session: Session,
+        *,
+        email: str,
+        password: str,
+        timing_recorder: AuthTimingRecorder | None = None,
+    ) -> User:
+        normalize_started_at = perf_counter()
         normalized_email = self._normalize_email(email)
+        _record_timing(timing_recorder, "auth.normalize_email_ms", normalize_started_at)
+        lookup_started_at = perf_counter()
         user = session.scalar(select(User).where(User.email == normalized_email))
-        if user is None or not verify_password(password, user.password_hash):
+        _record_timing(timing_recorder, "db.lookup_user_by_email_ms", lookup_started_at)
+        verify_started_at = perf_counter()
+        credentials_valid = user is not None and verify_password(password, user.password_hash)
+        _record_timing(timing_recorder, "auth.verify_password_ms", verify_started_at)
+        if not credentials_valid:
             raise InvalidCredentialsError("Invalid email or password.")
         if not user.is_active:
             raise InvalidCredentialsError("User account is inactive.")
 
         user.last_login_at = utcnow()
+        flush_started_at = perf_counter()
         session.flush()
+        _record_timing(timing_recorder, "db.flush_last_login_ms", flush_started_at)
         return user
 
     def issue_access_token(self, user: User, *, session: Session | None = None) -> tuple[str, int]:

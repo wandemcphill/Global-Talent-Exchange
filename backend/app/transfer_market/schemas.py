@@ -184,7 +184,7 @@ class TransferMarketJobRunView(CommonSchema):
 
 class TransferListingCreateRequest(CommonSchema):
     player_id: str = Field(min_length=1, max_length=36)
-    selling_club_id: str = Field(min_length=1, max_length=36)
+    selling_club_id: str | None = Field(default=None, min_length=1, max_length=36)
     base_price: Decimal = Field(ge=0)
     expires_at: datetime
     window_id: str | None = Field(default=None, min_length=1, max_length=36)
@@ -193,13 +193,13 @@ class TransferListingCreateRequest(CommonSchema):
 
 
 class TransferBidPlaceRequest(CommonSchema):
-    bidder_club_id: str = Field(min_length=1, max_length=36)
+    bidder_club_id: str | None = Field(default=None, min_length=1, max_length=36)
     amount: Decimal = Field(gt=0)
     activity_context: str | None = Field(default=None, max_length=120)
 
 
 class ContractOfferRequest(CommonSchema):
-    bidder_club_id: str = Field(min_length=1, max_length=36)
+    bidder_club_id: str | None = Field(default=None, min_length=1, max_length=36)
     wage_offer_amount: Decimal = Field(ge=0)
     contract_years: int = Field(default=3, ge=1, le=5)
     expected_role: str | None = Field(default=None, max_length=40)
@@ -246,7 +246,7 @@ class TeamDynamicsUpsertRequest(CommonSchema):
 
 
 class WatchlistEntryCreateRequest(CommonSchema):
-    club_id: str = Field(min_length=1, max_length=36)
+    club_id: str | None = Field(default=None, min_length=1, max_length=36)
     player_id: str = Field(min_length=1, max_length=36)
     source: str = Field(default="scouting", max_length=32)
     discovery_score: float = Field(default=50, ge=0, le=100)

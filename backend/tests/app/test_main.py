@@ -134,6 +134,10 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
             "database": {
                 "status": "ok",
                 "detail": None,
+            },
+            "schema": {
+                "status": "ok",
+                "detail": None,
             }
         },
     }
@@ -382,6 +386,32 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
                 "status": "error",
                 "detail": "db offline",
             }
+        },
+    }
+
+
+def test_ready_returns_service_unavailable_when_schema_smoke_fails(app_and_engine, monkeypatch) -> None:
+    app, _engine = app_and_engine
+
+    def _raise_schema_error(_self) -> tuple[str, ...]:
+        raise RuntimeError("Database schema smoke check failed. Missing tables: player_share_markets.")
+
+    with TestClient(app) as client:
+        monkeypatch.setattr(DatabaseRuntime, "check_schema_smoke", _raise_schema_error)
+        response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "checks": {
+            "database": {
+                "status": "ok",
+                "detail": None,
+            },
+            "schema": {
+                "status": "error",
+                "detail": "Database schema smoke check failed. Missing tables: player_share_markets.",
+            },
         },
     }
 

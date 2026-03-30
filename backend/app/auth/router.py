@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from time import perf_counter
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -28,6 +29,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
 api_router = APIRouter(prefix="/api/auth")
+
+
+class _AuthRouteTelemetry:
+    def __init__(self, flow: str) -> None:
+        self.flow = flow
+        self.started_at = perf_counter()
+        self.steps: dict[str, float] = {}
+
+    def capture(self, step: str, duration_ms: float) -> None:
+        self.steps[step] = round(duration_ms, 2)
+
+    def mark(self, step: str, started_at: float) -> None:
+        self.capture(step, (perf_counter() - started_at) * 1000)
+
+    def log_success(self, *, status_code: int, user_id: str | None) -> None:
+        logger.info(
+            "auth.request.completed flow=%s status_code=%s user_id=%s duration_ms=%.2f steps=%s",
+            self.flow,
+            status_code,
+            user_id,
+            (perf_counter() - self.started_at) * 1000,
+            self.steps,
+        )
+
+    def log_failure(self, *, status_code: int, user_id: str | None, error: str) -> None:
+        logger.warning(
+            "auth.request.failed flow=%s status_code=%s user_id=%s duration_ms=%.2f error=%s steps=%s",
+            self.flow,
+            status_code,
+            user_id,
+            (perf_counter() - self.started_at) * 1000,
+            error,
+            self.steps,
+        )
 
 
 def _build_auth_service(request: Request | None) -> AuthService:
@@ -62,11 +97,18 @@ def register_user(
     service = _build_auth_service(request)
     analytics = AnalyticsService()
     confirmation_code: str | None = None
+    telemetry = _AuthRouteTelemetry("register")
+    user: User | None = None
     try:
+        analytics_started_at = perf_counter()
         analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email})
+        telemetry.mark("analytics.signup_started_ms", analytics_started_at)
         if not payload.is_over_18:
+            underage_started_at = perf_counter()
             analytics.track_event(session, name="underage_signup_blocked", user_id=None, metadata={"email": payload.email})
+            telemetry.mark("analytics.underage_signup_blocked_ms", underage_started_at)
             raise AuthError("You must be at least 18 years old to sign up.")
+        register_started_at = perf_counter()
         user = service.register_user(
             session,
             email=payload.email,
@@ -77,24 +119,45 @@ def register_user(
             username=payload.username,
             password=payload.password,
             display_name=payload.full_name,
+            timing_recorder=telemetry.capture,
         )
+        telemetry.mark("service.register_user_ms", register_started_at)
+        confirmation_started_at = perf_counter()
         confirmation_code = service.prepare_signup_confirmation(session, user=user)
+        telemetry.mark("service.prepare_signup_confirmation_ms", confirmation_started_at)
+        analytics_completed_started_at = perf_counter()
         analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
+        telemetry.mark("analytics.signup_completed_ms", analytics_completed_started_at)
+        token_started_at = perf_counter()
         token, expires_in, session_id = service.issue_access_token_with_session(user, session=session)
+        telemetry.mark("service.issue_access_token_ms", token_started_at)
+        commit_started_at = perf_counter()
         session.commit()
+        telemetry.mark("db.commit_ms", commit_started_at)
+        refresh_started_at = perf_counter()
         session.refresh(user)
+        telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except DuplicateUserError as exc:
         session.rollback()
+        telemetry.log_failure(status_code=status.HTTP_409_CONFLICT, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AuthError as exc:
         session.rollback()
+        telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        session.rollback()
+        telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
+        raise
     else:
         if confirmation_code is not None:
             try:
+                email_started_at = perf_counter()
                 service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
+                telemetry.mark("email.signup_confirmation_ms", email_started_at)
             except Exception as exc:
                 _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
+        telemetry.log_success(status_code=status.HTTP_201_CREATED, user_id=user.id)
 
     return TokenResponse(
         access_token=token,
@@ -114,20 +177,48 @@ def login_user(
 ) -> TokenResponse:
     service = _build_auth_service(request)
     analytics = AnalyticsService()
+    telemetry = _AuthRouteTelemetry("login")
+    user: User | None = None
     try:
-        user = service.authenticate_user(session, email=payload.email, password=payload.password)
+        login_started_at = perf_counter()
+        user = service.authenticate_user(
+            session,
+            email=payload.email,
+            password=payload.password,
+            timing_recorder=telemetry.capture,
+        )
+        telemetry.mark("service.authenticate_user_ms", login_started_at)
+        analytics_success_started_at = perf_counter()
         analytics.track_event(session, name="login_success", user_id=user.id, metadata={})
+        telemetry.mark("analytics.login_success_ms", analytics_success_started_at)
+        token_started_at = perf_counter()
         token, expires_in, session_id = service.issue_access_token_with_session(user, session=session)
+        telemetry.mark("service.issue_access_token_ms", token_started_at)
+        commit_started_at = perf_counter()
         session.commit()
+        telemetry.mark("db.commit_ms", commit_started_at)
+        refresh_started_at = perf_counter()
         session.refresh(user)
+        telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except InvalidCredentialsError as exc:
+        analytics_failure_started_at = perf_counter()
         analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
+        telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         session.rollback()
+        telemetry.log_failure(status_code=status.HTTP_401_UNAUTHORIZED, user_id=None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AuthError as exc:
+        analytics_failure_started_at = perf_counter()
         analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
+        telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         session.rollback()
+        telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        session.rollback()
+        telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
+        raise
+    telemetry.log_success(status_code=status.HTTP_200_OK, user_id=user.id)
 
     return TokenResponse(
         access_token=token,

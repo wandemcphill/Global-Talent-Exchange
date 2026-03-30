@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
@@ -200,3 +202,45 @@ def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
 
     assert response.status_code == 422
     assert "Protected fields cannot be updated" in response.text
+
+
+def test_register_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO):
+        response = register_user(
+            RegisterRequest(
+                email="telemetry-register@example.com",
+                username="telemetryregister",
+                password="SuperSecret1",
+                full_name="Telemetry Register",
+                region_code="NG",
+            ),
+            session,
+        )
+
+    assert response.user.email == "telemetry-register@example.com"
+    assert any("auth.request.completed flow=register status_code=201" in message for message in caplog.messages)
+    assert any("db.commit_ms" in message for message in caplog.messages)
+
+
+def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -> None:
+    register_user(
+        RegisterRequest(
+            email="telemetry-login@example.com",
+            username="telemetrylogin",
+            password="SuperSecret1",
+            full_name="Telemetry Login",
+            region_code="NG",
+        ),
+        session,
+    )
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        response = login_user(
+            LoginRequest(email="telemetry-login@example.com", password="SuperSecret1"),
+            session,
+        )
+
+    assert response.user.email == "telemetry-login@example.com"
+    assert any("auth.request.completed flow=login status_code=200" in message for message in caplog.messages)
+    assert any("service.authenticate_user_ms" in message for message in caplog.messages)

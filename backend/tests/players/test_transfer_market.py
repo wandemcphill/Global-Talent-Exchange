@@ -10,10 +10,13 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.access_control.service import AccessControlService
 from app.auth.dependencies import get_session
+from app.auth.service import AuthService
 from app.common.enums.contract_status import ContractStatus
 from app.ingestion.models import Club as IngestionClub
 from app.ingestion.models import Competition, Player, Season
+from app.models.access_control import Organization, OrganizationMembership  # noqa: F401
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.player_contract import PlayerContract
@@ -181,26 +184,41 @@ def seed_transfer_market_context(session: Session) -> dict[str, str]:
         ]
     )
     session.commit()
+    access_service = AccessControlService(session)
+    access_service.ensure_club_organization(seller_profile, owner_user_id=seller_user.id)
+    access_service.ensure_club_organization(buyer_profile, owner_user_id=buyer_user.id)
+    session.commit()
     return {
         "player_id": player.id,
         "seller_club_id": seller_profile.id,
         "buyer_club_id": buyer_profile.id,
+        "seller_user_id": seller_user.id,
+        "buyer_user_id": buyer_user.id,
         "window_id": window.id,
     }
 
 
+def _auth_headers(session: Session, *, user_id: str) -> dict[str, str]:
+    user = session.get(User, user_id)
+    assert user is not None
+    token, _expires_in, _session_id = AuthService().issue_access_token_with_session(user, session=session)
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_transfer_market_bid_extends_auction_window(transfer_market_api: TestClient, transfer_market_session: Session) -> None:
     context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
     expires_at = datetime.now(UTC) + timedelta(seconds=20)
     listing_response = transfer_market_api.post(
         "/api/transfer-market/listings",
         json={
             "player_id": context["player_id"],
-            "selling_club_id": context["seller_club_id"],
             "base_price": "1500000.00",
             "expires_at": expires_at.isoformat(),
             "window_id": context["window_id"],
         },
+        headers=seller_headers,
     )
     assert listing_response.status_code == 201
     listing_id = listing_response.json()["id"]
@@ -208,10 +226,10 @@ def test_transfer_market_bid_extends_auction_window(transfer_market_api: TestCli
     bid_response = transfer_market_api.post(
         f"/api/transfer-market/listings/{listing_id}/bids",
         json={
-            "bidder_club_id": context["buyer_club_id"],
             "amount": "1700000.00",
             "activity_context": "aggressive_push",
         },
+        headers=buyer_headers,
     )
     assert bid_response.status_code == 200
     payload = bid_response.json()
@@ -225,15 +243,17 @@ def test_transfer_market_completes_transfer_after_player_and_coach_approval(
     transfer_market_session: Session,
 ) -> None:
     context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
     listing_response = transfer_market_api.post(
         "/api/transfer-market/listings",
         json={
             "player_id": context["player_id"],
-            "selling_club_id": context["seller_club_id"],
             "base_price": "2000000.00",
             "expires_at": (datetime.now(UTC) + timedelta(hours=2)).isoformat(),
             "window_id": context["window_id"],
         },
+        headers=seller_headers,
     )
     assert listing_response.status_code == 201
     listing_id = listing_response.json()["id"]
@@ -250,6 +270,7 @@ def test_transfer_market_completes_transfer_after_player_and_coach_approval(
             "ambition": 84,
             "frustration": 18,
         },
+        headers=seller_headers,
     )
     assert decision_profile_response.status_code == 200
 
@@ -261,12 +282,14 @@ def test_transfer_market_completes_transfer_after_player_and_coach_approval(
             "authority_level": 84,
             "transfer_preference": "pressing",
         },
+        headers=buyer_headers,
     )
     assert coach_profile_response.status_code == 200
 
     coach_demand_response = transfer_market_api.post(
         f"/api/transfer-market/coaches/{context['buyer_club_id']}/demands",
         json={"need": "forward", "urgency": "high"},
+        headers=buyer_headers,
     )
     assert coach_demand_response.status_code == 201
 
@@ -278,26 +301,29 @@ def test_transfer_market_completes_transfer_after_player_and_coach_approval(
             "morale_groups_json": [],
             "chemistry_risk": 8,
         },
+        headers=buyer_headers,
     )
     assert dynamics_response.status_code == 200
 
     bid_response = transfer_market_api.post(
         f"/api/transfer-market/listings/{listing_id}/bids",
         json={
-            "bidder_club_id": context["buyer_club_id"],
             "amount": "2500000.00",
         },
+        headers=buyer_headers,
     )
     assert bid_response.status_code == 200
 
-    close_response = transfer_market_api.post(f"/api/transfer-market/listings/{listing_id}/close")
+    close_response = transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/close",
+        headers=seller_headers,
+    )
     assert close_response.status_code == 200
     assert close_response.json()["status"] == "closed"
 
     contract_offer_response = transfer_market_api.post(
         f"/api/transfer-market/listings/{listing_id}/contract-offer",
         json={
-            "bidder_club_id": context["buyer_club_id"],
             "wage_offer_amount": "2200.00",
             "contract_years": 4,
             "expected_role": "starter",
@@ -305,6 +331,7 @@ def test_transfer_market_completes_transfer_after_player_and_coach_approval(
             "bonus_terms": "Goal bonus",
             "notes": "Move fast",
         },
+        headers=buyer_headers,
     )
     assert contract_offer_response.status_code == 200
     negotiation_payload = contract_offer_response.json()
@@ -336,15 +363,17 @@ def test_transfer_market_blocks_move_when_coach_strongly_disagrees(
     transfer_market_session: Session,
 ) -> None:
     context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
     listing_response = transfer_market_api.post(
         "/api/transfer-market/listings",
         json={
             "player_id": context["player_id"],
-            "selling_club_id": context["seller_club_id"],
             "base_price": "1800000.00",
             "expires_at": (datetime.now(UTC) + timedelta(hours=2)).isoformat(),
             "window_id": context["window_id"],
         },
+        headers=seller_headers,
     )
     listing_id = listing_response.json()["id"]
 
@@ -360,6 +389,7 @@ def test_transfer_market_blocks_move_when_coach_strongly_disagrees(
             "ambition": 82,
             "frustration": 20,
         },
+        headers=seller_headers,
     )
     transfer_market_api.put(
         f"/api/transfer-market/coaches/{context['buyer_club_id']}/profile",
@@ -369,28 +399,33 @@ def test_transfer_market_blocks_move_when_coach_strongly_disagrees(
             "authority_level": 95,
             "transfer_preference": "control",
         },
+        headers=buyer_headers,
     )
     transfer_market_api.post(
         f"/api/transfer-market/coaches/{context['buyer_club_id']}/demands",
         json={"need": "defensive_midfielder", "urgency": "high"},
+        headers=buyer_headers,
     )
     transfer_market_api.post(
         f"/api/transfer-market/listings/{listing_id}/bids",
         json={
-            "bidder_club_id": context["buyer_club_id"],
             "amount": "2050000.00",
         },
+        headers=buyer_headers,
     )
-    transfer_market_api.post(f"/api/transfer-market/listings/{listing_id}/close")
+    transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/close",
+        headers=seller_headers,
+    )
 
     contract_offer_response = transfer_market_api.post(
         f"/api/transfer-market/listings/{listing_id}/contract-offer",
         json={
-            "bidder_club_id": context["buyer_club_id"],
             "wage_offer_amount": "2300.00",
             "contract_years": 4,
             "expected_role": "starter",
         },
+        headers=buyer_headers,
     )
     assert contract_offer_response.status_code == 200
     negotiation_payload = contract_offer_response.json()
@@ -405,3 +440,180 @@ def test_transfer_market_blocks_move_when_coach_strongly_disagrees(
     ) is not None
     assert transfer_market_session.scalar(select(TransferBid).where(TransferBid.player_id == context["player_id"])) is None
     assert transfer_market_session.scalar(select(CoachProfile).where(CoachProfile.club_id == context["buyer_club_id"])) is not None
+
+
+def test_transfer_market_watchlist_uses_authenticated_club_context(
+    transfer_market_api: TestClient,
+    transfer_market_session: Session,
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+
+    response = transfer_market_api.post(
+        "/api/transfer-market/watchlist",
+        json={
+            "player_id": context["player_id"],
+            "source": "scouting",
+            "discovery_score": 74,
+        },
+        headers=buyer_headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["club_id"] == context["buyer_club_id"]
+    assert response.json()["player_id"] == context["player_id"]
+
+
+def test_transfer_market_rejects_spoofed_selling_club_id(
+    transfer_market_api: TestClient,
+    transfer_market_session: Session,
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+
+    response = transfer_market_api.post(
+        "/api/transfer-market/listings",
+        json={
+            "player_id": context["player_id"],
+            "selling_club_id": context["buyer_club_id"],
+            "base_price": "1600000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "transfer_market_club_access_required"
+
+
+def test_transfer_market_rejects_spoofed_bidder_club_id(
+    transfer_market_api: TestClient,
+    transfer_market_session: Session,
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+    listing_response = transfer_market_api.post(
+        "/api/transfer-market/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "1500000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+    listing_id = listing_response.json()["id"]
+
+    response = transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/bids",
+        json={
+            "bidder_club_id": context["seller_club_id"],
+            "amount": "1700000.00",
+        },
+        headers=buyer_headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "transfer_market_club_access_required"
+
+
+@pytest.mark.parametrize(
+    ("method", "path_builder", "payload_builder"),
+    [
+        ("post", lambda _context, _listing_id: "/api/transfer-market/listings", lambda context: {
+            "player_id": context["player_id"],
+            "base_price": "1500000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "window_id": context["window_id"],
+        }),
+        ("post", lambda _context, listing_id: f"/api/transfer-market/listings/{listing_id}/bids", lambda _context: {"amount": "1700000.00"}),
+        ("post", lambda _context, listing_id: f"/api/transfer-market/listings/{listing_id}/close", lambda _context: None),
+        ("post", lambda _context, listing_id: f"/api/transfer-market/listings/{listing_id}/contract-offer", lambda _context: {
+            "wage_offer_amount": "2100.00",
+            "contract_years": 4,
+            "expected_role": "starter",
+        }),
+        ("put", lambda context, _listing_id: f"/api/transfer-market/players/{context['player_id']}/decision-profile", lambda _context: {
+            "preferred_leagues_json": ["es"],
+            "preferred_play_style": "pressing",
+            "wage_expectation_amount": "1500.00",
+            "ambition_level": 80,
+            "happiness": 45,
+            "loyalty": 35,
+            "ambition": 84,
+            "frustration": 12,
+        }),
+        ("put", lambda context, _listing_id: f"/api/transfer-market/coaches/{context['buyer_club_id']}/profile", lambda _context: {
+            "personality_json": {"discipline": 62},
+            "tactical_philosophy": "pressing",
+            "authority_level": 84,
+            "transfer_preference": "pressing",
+        }),
+        ("post", lambda context, _listing_id: f"/api/transfer-market/coaches/{context['buyer_club_id']}/demands", lambda _context: {
+            "need": "forward",
+            "urgency": "high",
+        }),
+        ("put", lambda context, _listing_id: f"/api/transfer-market/clubs/{context['buyer_club_id']}/team-dynamics", lambda _context: {
+            "leaders_json": [],
+            "cliques_json": [],
+            "morale_groups_json": [],
+            "chemistry_risk": 8,
+        }),
+        ("post", lambda _context, _listing_id: "/api/transfer-market/watchlist", lambda context: {
+            "player_id": context["player_id"],
+            "source": "scouting",
+            "discovery_score": 71,
+        }),
+        ("post", lambda _context, _listing_id: "/api/transfer-market/jobs/run", lambda _context: {}),
+    ],
+)
+def test_transfer_market_mutations_require_authentication(
+    transfer_market_api: TestClient,
+    transfer_market_session: Session,
+    method: str,
+    path_builder,
+    payload_builder,
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+
+    listing_response = transfer_market_api.post(
+        "/api/transfer-market/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "1500000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+    listing_id = listing_response.json()["id"]
+
+    transfer_market_api.put(
+        f"/api/transfer-market/coaches/{context['buyer_club_id']}/profile",
+        json={
+            "personality_json": {"discipline": 62},
+            "tactical_philosophy": "pressing",
+            "authority_level": 84,
+            "transfer_preference": "pressing",
+        },
+        headers=buyer_headers,
+    )
+    transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/bids",
+        json={"amount": "1800000.00"},
+        headers=buyer_headers,
+    )
+    transfer_market_api.post(
+        f"/api/transfer-market/listings/{listing_id}/close",
+        headers=seller_headers,
+    )
+
+    path = path_builder(context, listing_id)
+    payload = payload_builder(context)
+    response = getattr(transfer_market_api, method)(path, json=payload) if payload is not None else getattr(transfer_market_api, method)(path)
+
+    assert response.status_code == 401
