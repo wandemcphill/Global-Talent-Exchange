@@ -29,7 +29,6 @@ import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/national_team_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/navigation/app_router.dart';
-import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
@@ -430,7 +429,9 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, 'Open 2D'));
       await tester.pumpAndSettle();
-      expect(find.text('Match viewer unavailable'), findsOneWidget);
+      expect(find.text('2D Match Viewer'), findsWidgets);
+      expect(find.text('Viewer contract unavailable'), findsOneWidget);
+      expect(find.text('Route blocked'), findsOneWidget);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
@@ -442,7 +443,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Open 3D'));
       await tester.pumpAndSettle();
-      expect(find.text('Match viewer unavailable'), findsOneWidget);
+      expect(find.text('3D Match Viewer'), findsWidgets);
+      expect(find.text('Viewer contract unavailable'), findsOneWidget);
+      expect(find.text('Route blocked'), findsOneWidget);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
@@ -450,7 +453,8 @@ void main() {
         find.widgetWithText(FilledButton, 'Open spectate probe'),
       );
       await tester.pumpAndSettle();
-      expect(find.text('2D Viewer'), findsOneWidget);
+      expect(find.text('2D Spectate Probe'), findsWidgets);
+      expect(find.text('Route blocked'), findsOneWidget);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
@@ -479,7 +483,6 @@ ProviderContainer _buildRouterContainer({
   StreamerTournamentEngineRepository? streamerRepository,
   LiveMatchOverview? matchOverview,
   LiveMatchViewerRepository? matchViewerRepository,
-  Match3DBridge? match3dBridge,
 }) {
   const CompetitionHubData emptyHub = CompetitionHubData(
     gtexCompetitions: <CompetitionSummary>[],
@@ -562,10 +565,6 @@ ProviderContainer _buildRouterContainer({
               ),
               viewState: buildBroadcastTestViewState(),
             ),
-      ),
-      match3dBridgeProvider.overrideWithValue(
-        match3dBridge ??
-            Match3DBridge(backend: const _FakeMatch3dBridgeBackend(false)),
       ),
     ],
   );
@@ -1095,21 +1094,6 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
       competition: competition,
     );
   }
-}
-
-class _FakeMatch3dBridgeBackend implements Match3dBridgeBackend {
-  const _FakeMatch3dBridgeBackend(this.available);
-
-  final bool available;
-
-  @override
-  Stream<dynamic> get events => const Stream<dynamic>.empty();
-
-  @override
-  Future<void> handleEvent(Map<String, dynamic> event) async {}
-
-  @override
-  Future<bool> isAvailable() async => available;
 }
 
 class _FakeFederationsApi extends FederationsApi {

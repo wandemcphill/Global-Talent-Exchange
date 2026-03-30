@@ -18,7 +18,6 @@ import '../features/match/match_spectate_screen.dart';
 import '../features/match/match_viewer_route_screen.dart';
 import '../features/national_teams/national_teams_screen.dart';
 import '../features/profile/profile_admin_screen.dart';
-import '../features/profile/profile_god_mode_screen.dart';
 import '../features/profile/profile_login_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/profile_signup_screen.dart';
@@ -246,12 +245,9 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoutes.profileGodMode,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const ProfileGodModeScreen(),
-                ),
+        redirect: (BuildContext context, GoRouterState state) {
+          return AppRoutes.profileAdmin;
+        },
       ),
       GoRoute(
         path: AppRoutes.competitions,

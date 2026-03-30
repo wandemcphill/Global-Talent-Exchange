@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_feedback.dart';
-import '../../core/constants/app_spacing.dart';
 import '../../data/gte_api_repository.dart';
 import '../../screens/admin/god_mode_admin_screen.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/gte_state_panel.dart';
 
 class GodModeAccessGate {
   const GodModeAccessGate._({required this.allowed, this.reason});
@@ -22,21 +23,22 @@ class GodModeAccessGate {
   final String? reason;
 }
 
-final godModeAccessGateProvider =
-    FutureProvider.autoDispose<GodModeAccessGate>((Ref ref) async {
-      final String? blockedReason = ref.watch(godModeBlockedReasonProvider);
-      if (blockedReason != null) {
-        return GodModeAccessGate.blocked(blockedReason);
-      }
-      try {
-        await ref
-            .watch(authedApiProvider)
-            .getMap('/api/admin/god-mode/bootstrap');
-        return const GodModeAccessGate.allowed();
-      } catch (error) {
-        return GodModeAccessGate.blocked(_probeBlockedReason(error));
-      }
-    });
+final godModeAccessGateProvider = FutureProvider.autoDispose<GodModeAccessGate>(
+  (Ref ref) async {
+    final String? blockedReason = ref.watch(godModeBlockedReasonProvider);
+    if (blockedReason != null) {
+      return GodModeAccessGate.blocked(blockedReason);
+    }
+    try {
+      await ref
+          .watch(authedApiProvider)
+          .getMap('/api/admin/god-mode/bootstrap');
+      return const GodModeAccessGate.allowed();
+    } catch (error) {
+      return GodModeAccessGate.blocked(_probeBlockedReason(error));
+    }
+  },
+);
 
 class ProfileGodModeScreen extends ConsumerWidget {
   const ProfileGodModeScreen({super.key});
@@ -69,11 +71,13 @@ class ProfileGodModeScreen extends ConsumerWidget {
                 'Verifying admin bootstrap access before exposing the shipped God Mode console.',
             trailing: DataSourceBadge(status: DataSourceStatus.live),
             children: <Widget>[
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
+              GteStatePanel(
+                eyebrow: 'GOD MODE ACCESS',
+                title: 'Verifying bootstrap route',
+                message:
+                    'Checking the backend bootstrap before exposing any deeper admin console surface.',
+                icon: Icons.admin_panel_settings_outlined,
+                isLoading: true,
               ),
             ],
           ),
@@ -98,30 +102,30 @@ class _GodModeBlockedScreen extends ConsumerWidget {
           'The active shell only exposes God Mode when the authenticated admin session can actually reach the backend bootstrap route.',
       trailing: const DataSourceBadge(status: DataSourceStatus.blocked),
       children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(spacingLG),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'God Mode blocked',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: spacingSM),
-                Text(reason),
-                if (permissions.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: spacingMD),
-                  Wrap(
-                    spacing: spacingSM,
-                    runSpacing: spacingSM,
-                    children: permissions
-                        .map((String value) => Chip(label: Text(value)))
-                        .toList(growable: false),
-                  ),
-                ],
-              ],
-            ),
+        GtexHeroPanel(
+          eyebrow: 'GOD MODE ACCESS',
+          title: 'God Mode blocked',
+          description: reason,
+          metrics: <Widget>[
+            const GtexPill(label: 'BLOCKED', tone: GtexSurfaceTone.danger),
+            if (permissions.isNotEmpty)
+              ...permissions.map(
+                (String value) =>
+                    GtexPill(label: value, tone: GtexSurfaceTone.warning),
+              ),
+          ],
+        ),
+        GtexSectionPanel(
+          eyebrow: 'ACCESS TRUTH',
+          title: 'Bootstrap route required',
+          subtitle:
+              'The active shell keeps God Mode behind a real backend bootstrap check instead of exposing a disconnected admin shell.',
+          child: GteStatePanel(
+            eyebrow: 'GOD MODE',
+            title: 'Backend access not available',
+            message: reason,
+            icon: Icons.lock_outline_rounded,
+            accentColor: Theme.of(context).colorScheme.error,
           ),
         ),
       ],

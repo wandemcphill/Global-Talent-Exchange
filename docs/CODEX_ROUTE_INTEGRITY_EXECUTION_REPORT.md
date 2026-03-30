@@ -1,147 +1,124 @@
 # CODEX Route Integrity Execution Report
 
-## Scope
-This pass executed the route reclassification defined in:
-- `docs/CODEX_SILENT_FALLBACK_KILL_LIST.md`
-- `docs/CODEX_ROUTE_INTEGRITY_RECLASSIFICATION.md`
+Date: 2026-03-30
 
-It did not add new product features or revive legacy shell paths. The implementation goal was enforced directly in routing, shell composition, and route-entry screens: no user-visible GTEX route in this pass silently downgrades into fixture, mock, stub, or local-only data while presenting itself as live.
+Runtime scope for this execution pass was limited to the shipped Flutter runtime:
 
-## Routes Removed From Active Shell
-- `Navigation shell club destination`
-  - `frontend/lib/features/navigation/presentation/gte_navigation_shell_screen.dart`
-  - Club is no longer in `_shellPrimaryDestinations`.
-  - Club tab entry now resolves to an explicit `NOT IN ACTIVE SHELL` integrity state.
-- `Navigation shell community destination`
-  - `frontend/lib/features/navigation/presentation/gte_navigation_shell_screen.dart`
-  - Community is no longer in `_shellPrimaryDestinations`.
-  - Community shell slot now resolves to an explicit `NOT IN ACTIVE SHELL` integrity state.
-- `Admin command center` shell launch
-  - `frontend/lib/features/navigation/presentation/gte_navigation_shell_screen.dart`
-  - Admin command-center action was removed from the shell app bar.
-- `God Mode` shell launch
-  - `frontend/lib/features/navigation/presentation/gte_navigation_shell_screen.dart`
-  - God Mode action was removed from the shell app bar.
+- `frontend/lib/main.dart`
+- `frontend/lib/navigation/app_router.dart`
 
-## Routes Converted To Blocked
-- `ClubProfileScreen`
-  - `frontend/lib/screens/clubs/club_profile_screen.dart`
-- `Club ops host and child routes`
-  - `frontend/lib/screens/clubs/club_ops_screen_host.dart`
-  - This blocks academy, finance, sponsorship, scouting, youth pipeline, and club-ops admin descendants that mount through the host.
-- `ClubAdminScreen`
-  - `frontend/lib/screens/admin/club_admin_screen.dart`
-- `Club reputation routes`
-  - `frontend/lib/features/app_routes/gte_app_route_registry.dart`
-- `Club trophy routes`
-  - `frontend/lib/features/app_routes/gte_app_route_registry.dart`
-- `Club dynasty routes`
-  - `frontend/lib/features/app_routes/gte_app_route_registry.dart`
-- `CreatorLeaderboardScreen`
-  - `frontend/lib/screens/admin/creator_leaderboard_screen.dart`
-- `AdminFinancialDashboardScreen`
-  - `frontend/lib/screens/admin/admin_financial_dashboard_screen.dart`
-- `GteTreasuryOpsScreen`
-  - `frontend/lib/screens/admin/treasury_ops_screen.dart`
-- `Deep match viewer stack`
-  - `frontend/lib/screens/match/gtex_match_viewer_screen.dart`
-  - `frontend/lib/screens/match/gtex_match_broadcast_screen.dart`
-  - `frontend/lib/screens/competitions/gte_live_match_center_screen.dart`
-  - `frontend/lib/screens/competitions/gte_halftime_analytics_screen.dart`
-  - `frontend/lib/screens/competitions/gte_match_highlights_screen.dart`
-- `Home club trophy and tactics deep links`
-  - `frontend/lib/features/home_dashboard/home_dashboard_screen.dart`
-  - Home now pushes an explicit blocked state instead of opening fallback-capable club identity routes.
+No legacy shell runtime was revived.
 
-## Routes Converted To Preview
-- `ClubIdentityScreen`
-  - `frontend/lib/features/club_identity/jerseys/presentation/club_identity_screen.dart`
-- `ReferralHubScreen`
-  - `frontend/lib/screens/referrals/referral_hub_screen.dart`
-- `CreatorDashboardScreen`
-  - `frontend/lib/screens/creators/creator_dashboard_screen.dart`
-- `CreatorProfileScreen`
-  - `frontend/lib/screens/creators/creator_profile_screen.dart`
+## Executive Summary
 
-## Routes Kept Live
-- `CompetitionDiscoveryScreen`
-  - `frontend/lib/screens/competitions/competition_discovery_screen.dart`
-  - Default backend mode changed to `GteBackendMode.live`.
-- `Competition routes in route registry`
-  - `frontend/lib/features/app_routes/gte_app_route_registry.dart`
-  - Competition discovery, detail, create, join, and share now use `dependencies.liveOnly()`.
-- `HomeDashboardScreen`
-  - `frontend/lib/features/home_dashboard/home_dashboard_screen.dart`
-  - Club and competition controllers now mount with `GteBackendMode.live`.
-- `Navigation shell live surfaces`
-  - `frontend/lib/features/navigation/presentation/gte_navigation_shell_screen.dart`
-  - Home, market, competitions, and wallet remain active.
-  - Shell-created competition, creator-application, creator, and referral controllers now mount with `GteBackendMode.live`.
-- `GteExchangePlayerDetailScreen`
-  - `frontend/lib/screens/gte_exchange_player_detail_screen.dart`
-  - Kept live, but deceptive degraded-data copy was removed.
-- `MatchSimulateScreen`
-  - Preserved as the disclosed local/demo route. No integrity downgrade path was reintroduced there.
+- Shipped routed clients now default to `GteBackendMode.live` and fail closed on live-route errors.
+- `/matches/viewer/:matchKey`, `/matches/3d/:matchKey`, and `/matches/spectate` now resolve to explicit blocked surfaces instead of probing or degrading into believable fallback behavior.
+- `/matches/broadcast/:matchKey` remains visible and live-only.
+- `/matches/simulate` remains explicit demo/local.
+- `/profile/admin/god-mode` no longer exposes a shipped surface and now redirects back to `/profile/admin`.
+- Active-shell routed providers were verified to clamp `liveThenFixture` down to `live`.
 
-## Fallback Primitives Disabled Or Quarantined
-- `GteNavigationDependencies` now defaults to `GteBackendMode.live`.
-  - `frontend/lib/features/navigation_guards/gte_navigation_guards.dart`
-- Added `GteNavigationDependencies.liveOnly()`.
-  - `frontend/lib/features/navigation_guards/gte_navigation_guards.dart`
-- Route-level `_withApi` fallback was disabled.
-  - `frontend/lib/features/app_routes/gte_feature_route_builders.dart`
-  - Routed feature surfaces no longer use fixture payloads when live requests fail.
-- Routed fake player-card detail payload was removed.
-  - `frontend/lib/features/app_routes/gte_feature_route_builders.dart`
-- Shell and home no longer construct competition and club controllers from raw fallback-capable mode.
-  - `frontend/lib/features/navigation/presentation/gte_navigation_shell_screen.dart`
-  - `frontend/lib/features/home_dashboard/home_dashboard_screen.dart`
-- Route registry now forces live-only dependencies for routes kept live.
-  - `frontend/lib/features/app_routes/gte_app_route_registry.dart`
-- Navigation guard fallback probes for trophy and dynasty routes were removed.
-  - `frontend/lib/features/navigation_guards/gte_navigation_guards.dart`
-- Player action silent-success fallback was removed.
-  - `frontend/lib/data/player_service.dart`
-  - Scout, shortlist, and contact now fail closed on backend errors.
-- Shared blocked/preview/hidden integrity state screen added for explicit route reclassification.
-  - `frontend/lib/widgets/gte_route_integrity_screen.dart`
+## Before / After Route Classification
 
-## Copy Changes Made
-- Replaced hidden routes with explicit `NOT IN ACTIVE SHELL` wording.
-  - Club hub
-  - Community hub
-  - Admin command center
-  - God Mode
-- Replaced blocked routes with explicit unavailable wording.
-  - Club profile
-  - Club ops
-  - Club admin
-  - Admin finance
-  - Treasury ops
-  - Deep match viewer stack
-- Replaced preview routes with explicit preview wording.
-  - Club identity
-  - Creator referrals
-  - Creator dashboard
-  - Creator profile
-- Removed deceptive player-detail refresh copy.
-  - `frontend/lib/screens/gte_exchange_player_detail_screen.dart`
-  - Replaced “latest confirmed profile” and “latest available profile snapshot” wording with plain failure wording.
+| Route / Surface | Before | After | Notes |
+| --- | --- | --- | --- |
+| Home | Live route with routed fallback risk | Keep live | Routed dependencies remain live-only through `criticalBackendModeProvider`. |
+| Matches | Live route with deep viewer routes still implying live entry | Keep live | Match hub stays live, but blocked/deep/demo routes are clearly separated. |
+| Market | Live route with routed fallback risk | Keep live | Routed dependencies remain live-only through `criticalBackendModeProvider`. |
+| Competitions | Live route with routed fallback risk | Keep live | Routed dependencies remain live-only through `criticalBackendModeProvider`. |
+| `/matches/broadcast/:matchKey` | Visible live deep route | Keep live | Remains live-backed and fails closed on bootstrap failure. |
+| `/matches/viewer/:matchKey` | Deep route that previously tried to open the 2D viewer lane | Convert to blocked | Now mounts `MatchRouteBlockedScreen`. |
+| `/matches/3d/:matchKey` | Deep route that previously tried to open Flutter/native-backed 3D | Convert to blocked | Now mounts `MatchRouteBlockedScreen`. |
+| `/matches/spectate` | Manual live probe route | Convert to blocked | Now mounts `MatchRouteBlockedScreen`. |
+| `/matches/simulate` | Demo/local route | Keep demo | Remains explicitly local and separate from live spectating. |
+| `/profile/admin/god-mode` | Hidden deep admin route still addressable from shipped runtime | Hide from active shell | Route now redirects to `/profile/admin`. |
 
-## Tests Run And Results
-- `dart format`
-  - Ran on all edited source files plus edited tests.
-  - Result: passed.
-- `dart analyze`
-  - Ran on the edited route, shell, controller, API, and integrity-screen files.
-  - Result: passed with no issues.
-- `flutter test test/club_identity/club_identity_screen_test.dart test/referrals/referral_hub_test.dart test/player_service_test.dart`
-  - Result: passed.
-  - Total observed result: `13` tests passed.
-- `flutter test test/active_shell_route_mount_test.dart test/gte_feature_routing_test.dart test/club_identity/club_identity_screen_test.dart test/referrals/referral_hub_test.dart test/player_detail/player_detail_screen_test.dart test/competitions/competition_discovery_test.dart`
-  - Result: timed out during the broader grouped route sweep.
-  - Follow-up: verification was narrowed to focused route tests after updating expectations to the new blocked/preview behavior.
+## Preserved Existing Reclassifications
 
-## Notes
-- This workspace already contains unrelated user changes outside this execution pass. They were not reverted.
-- The integrity changes here are intentionally strict: affected routes now fail closed as blocked, preview, or hidden instead of fabricating believable fallback data.
+These surfaces were already reclassified in the tree and were preserved as-is during this execution pass:
+
+- Hidden from active shell: `ClubHubScreen`, `CommunityHubScreen`, `AdminCommandCenterScreen`, `GodModeAdminScreen` shell entry.
+- Blocked: `ClubProfileScreen`, `ClubOpsScreenHost`, club-admin overlays, `AdminFinancialDashboardScreen`, `GteTreasuryOpsScreen`.
+- Preview: `ClubIdentityScreen`, `ReferralHubScreen`, `CreatorDashboardScreen`, `CreatorProfileScreen`.
+- Demo/local: `MatchSimulateScreen`.
+
+## Active-Shell Navigation Changes
+
+- `ProfileAdminScreen` no longer exposes an `Open God Mode` action from the shipped shell.
+- `AppRoutes.profileGodMode` now redirects to `AppRoutes.profileAdmin`.
+- The matches hub still links to 2D, 3D, Broadcast+, spectate probe, native 3D disclosure, and simulate routes, but the blocked routes now disclose their blocked state honestly when opened.
+- Route inventory metadata was updated so hidden deep routes no longer describe the blocked viewer lanes as live.
+
+## Fallback Primitive Changes
+
+- `frontend/lib/data/gte_authed_api.dart`
+  - Default constructor mode changed from `liveThenFixture` to `live`.
+  - `withFallback` was retained only as a compatibility helper for explicit fixture or quarantined legacy callers.
+  - In `live` mode it now fails closed and rethrows instead of silently swallowing every error.
+- `frontend/lib/data/gte_exchange_api_client.dart`
+  - `GteExchangeApiClient.standard()` now defaults to `GteBackendMode.live`.
+  - `joinMatchSpectateSession()` now throws `GteApiException.unavailable` when the real backend repository is absent instead of fabricating a spectate session.
+- `frontend/lib/features/match/match_live_subscription.dart`
+  - Default subscription service is now disconnected instead of mock-ticking live data.
+- `frontend/lib/shared/providers/auth_provider.dart` plus `frontend/lib/shared/providers/live_clients_provider.dart`
+  - Routed active-shell providers were validated to clamp configured `liveThenFixture` down to `live`.
+
+## Copy Honesty Cleanup
+
+- Match hub spectate-probe copy now labels the route as blocked instead of implying a live probe.
+- Viewer route inventory summaries now describe blocked 2D, 3D, and spectate surfaces as blocked.
+- Hidden God Mode inventory summary now describes the redirect back to the admin surface.
+- Demo/local simulation copy remains explicitly local and non-live.
+
+## Changed Files
+
+Primary shipped-runtime and shared primitive files affected by this pass:
+
+- `frontend/lib/data/gte_authed_api.dart`
+- `frontend/lib/data/gte_exchange_api_client.dart`
+- `frontend/lib/features/match/live_match_viewer_route_support.dart`
+- `frontend/lib/features/match/match_live_subscription.dart`
+- `frontend/lib/features/match/match_viewer_route_screen.dart`
+- `frontend/lib/features/match/match_3d_route_screen.dart`
+- `frontend/lib/features/match/match_spectate_screen.dart`
+- `frontend/lib/features/match/match_screen.dart`
+- `frontend/lib/features/profile/profile_admin_screen.dart`
+- `frontend/lib/features/profile/profile_god_mode_screen.dart`
+- `frontend/lib/navigation/app_destinations.dart`
+- `frontend/lib/navigation/app_router.dart`
+
+Test coverage updated or added:
+
+- `frontend/test/active_shell_route_mount_test.dart`
+- `frontend/test/gte_authed_api_test.dart`
+- `frontend/test/gte_exchange_api_client_test.dart`
+- `frontend/test/live_clients_provider_test.dart`
+- `frontend/test/match_3d_route_truth_test.dart`
+- `frontend/test/match_simulate_screen_test.dart`
+- `frontend/test/surface_runtime_proof_test.dart`
+
+## Test Commands / Results
+
+Passed:
+
+```bash
+flutter test test/active_shell_route_mount_test.dart test/navigation_surface_truth_test.dart test/profile_admin_visibility_test.dart test/match_3d_route_truth_test.dart test/match_broadcast_route_screen_test.dart test/gte_exchange_api_client_test.dart test/gte_api_repository_test.dart test/gte_authed_api_test.dart test/live_clients_provider_test.dart
+```
+
+Passed:
+
+```bash
+flutter test test/match_simulate_screen_test.dart
+```
+
+Passed:
+
+```bash
+flutter test test/surface_runtime_proof_test.dart
+```
+
+## Remaining Backlog / Intentional Deferrals
+
+- Inactive or legacy-only APIs outside the shipped `main.dart` + `app_router.dart` runtime still contain `liveThenFixture` or fixture helpers. They were not rewritten in this pass because the task scope explicitly excluded reviving or broadening the legacy shell.
+- No backend rewires were attempted for the blocked 2D, 3D, or spectate viewer routes. They remain blocked until real viewer/session/commentary/event contracts are available end to end.
+- Existing preview and blocked placeholder surfaces outside the shipped runtime were preserved rather than expanded into new feature work.

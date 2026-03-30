@@ -7,9 +7,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
-import 'package:gte_frontend/features/match/match_3d_route_screen.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
-import 'package:gte_frontend/features/profile/profile_god_mode_screen.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
@@ -20,7 +18,6 @@ import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/navigation/app_router.dart';
-import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
@@ -28,53 +25,57 @@ import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
-  testWidgets('router mounts live viewer, broadcast, 3D, and God Mode routes', (
-    WidgetTester tester,
-  ) async {
-    final ProviderContainer container = _buildContainer(
-      session: const AuthSession(
-        userId: 'admin-1',
-        accessToken: 'token-1',
-        sessionId: 'session-1',
-        role: 'admin',
-      ),
-      godModeGate: const GodModeAccessGate.blocked('admin required'),
-    );
-    addTearDown(container.dispose);
-    final router = container.read(appRouterProvider);
+  testWidgets(
+    'router mounts blocked viewer routes, live broadcast, and admin redirect',
+    (WidgetTester tester) async {
+      final ProviderContainer container = _buildContainer(
+        session: const AuthSession(
+          userId: 'admin-1',
+          accessToken: 'token-1',
+          sessionId: 'session-1',
+          role: 'admin',
+        ),
+      );
+      addTearDown(container.dispose);
+      final router = container.read(appRouterProvider);
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(routerConfig: router),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    router.go(AppRoutes.matchesViewerLocation('live-match-001'));
-    await tester.pumpAndSettle();
-    expect(find.text('2D Match Viewer'), findsWidgets);
+      router.go(AppRoutes.matchesViewerLocation('live-match-001'));
+      await tester.pumpAndSettle();
+      expect(find.text('2D Match Viewer'), findsWidgets);
+      expect(find.text('Route blocked'), findsOneWidget);
 
-    router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
-    await tester.pumpAndSettle();
-    expect(find.text('Broadcast Package'), findsWidgets);
+      router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
+      await tester.pumpAndSettle();
+      expect(find.text('Broadcast Package'), findsWidgets);
 
-    router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
-    await tester.pumpAndSettle();
-    expect(find.text('3D Match Viewer'), findsWidgets);
+      router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
+      await tester.pumpAndSettle();
+      expect(find.text('3D Match Viewer'), findsWidgets);
+      expect(find.text('Route blocked'), findsOneWidget);
 
-    router.go(AppRoutes.matchesNativeThreeD);
-    await tester.pumpAndSettle();
-    expect(find.text('Native 3D is coming soon'), findsOneWidget);
+      router.go(AppRoutes.matchesNativeThreeD);
+      await tester.pumpAndSettle();
+      expect(find.text('Native 3D is coming soon'), findsOneWidget);
 
-    router.go(AppRoutes.streamerEngine);
-    await tester.pumpAndSettle();
-    expect(find.text('Streamer Tournament Engine'), findsOneWidget);
+      router.go(AppRoutes.streamerEngine);
+      await tester.pumpAndSettle();
+      expect(find.text('Streamer Tournament Engine'), findsOneWidget);
 
-    router.go(AppRoutes.profileGodMode);
-    await tester.pumpAndSettle();
-    expect(find.text('God Mode blocked'), findsOneWidget);
-  });
+      router.go(AppRoutes.profileGodMode);
+      await tester.pumpAndSettle();
+      expect(find.text('Profile > Admin'), findsOneWidget);
+      expect(find.text('Admin tooling is blocked'), findsOneWidget);
+      expect(find.text('God Mode blocked'), findsNothing);
+    },
+  );
 
   testWidgets('profile route exposes the auth entry path for guest sessions', (
     WidgetTester tester,
@@ -118,12 +119,7 @@ void main() {
   );
 }
 
-ProviderContainer _buildContainer({
-  AuthSession? session,
-  GodModeAccessGate godModeGate = const GodModeAccessGate.blocked(
-    'admin required',
-  ),
-}) {
+ProviderContainer _buildContainer({AuthSession? session}) {
   const CompetitionHubData emptyHub = CompetitionHubData(
     gtexCompetitions: <CompetitionSummary>[],
     hostedCompetitions: <HostedCompetition>[],
@@ -154,10 +150,6 @@ ProviderContainer _buildContainer({
           viewState: viewState,
         ),
       ),
-      match3dBridgeProvider.overrideWithValue(
-        Match3DBridge(backend: const _FakeMatch3dBridgeBackend(false)),
-      ),
-      godModeAccessGateProvider.overrideWith((Ref ref) async => godModeGate),
       profileDataProvider.overrideWith(
         (Ref ref) async => const ProfileData.unauthenticated(),
       ),
@@ -225,21 +217,6 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
       competition: competition,
     );
   }
-}
-
-class _FakeMatch3dBridgeBackend implements Match3dBridgeBackend {
-  const _FakeMatch3dBridgeBackend(this.available);
-
-  final bool available;
-
-  @override
-  Stream<dynamic> get events => const Stream<dynamic>.empty();
-
-  @override
-  Future<void> handleEvent(Map<String, dynamic> event) async {}
-
-  @override
-  Future<bool> isAvailable() async => available;
 }
 
 CompetitionSummary _buildCompetition({

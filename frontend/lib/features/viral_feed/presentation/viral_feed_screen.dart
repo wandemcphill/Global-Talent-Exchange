@@ -803,73 +803,91 @@ class _ViralClipPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: tokens.panelStrong.withValues(
-                                  alpha: 0.62,
-                                ),
-                                border: Border.all(
-                                  color: tokens.stroke.withValues(alpha: 0.9),
-                                ),
-                              ),
-                              child: IconButton(
-                                key: const Key('viral-back-button'),
-                                onPressed: onBack,
-                                icon: const Icon(
-                                  Icons.arrow_back_ios_new_rounded,
-                                ),
-                                color: tokens.textPrimary,
-                              ),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: tokens.panelStrong.withValues(alpha: 0.56),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: tokens.stroke.withValues(alpha: 0.92),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: ViralFeedSource.values
-                                    .map<Widget>(
-                                      (ViralFeedSource value) =>
-                                          _FeedSourceChip(
-                                            label: value.label,
-                                            isSelected: value == source,
-                                            onTap: () => onSelectSource(value),
-                                          ),
-                                    )
-                                    .toList(growable: false),
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: accent.withValues(alpha: 0.12),
+                                blurRadius: 20,
+                                spreadRadius: 1,
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: tokens.panelStrong.withValues(
-                                  alpha: 0.62,
+                            ],
+                          ),
+                          child: Row(
+                            children: <Widget>[
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: tokens.panelStrong.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                  border: Border.all(
+                                    color: tokens.stroke.withValues(alpha: 0.9),
+                                  ),
                                 ),
-                                border: Border.all(
-                                  color: tokens.stroke.withValues(alpha: 0.9),
+                                child: IconButton(
+                                  key: const Key('viral-back-button'),
+                                  onPressed: onBack,
+                                  icon: const Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                  ),
+                                  color: tokens.textPrimary,
                                 ),
                               ),
-                              child: IconButton(
-                                key: const Key('viral-refresh-button'),
-                                onPressed: onRefresh,
-                                icon:
-                                    isSyncing
-                                        ? SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: definition.primaryColor,
-                                          ),
-                                        )
-                                        : const Icon(Icons.refresh_rounded),
-                                color: tokens.textPrimary,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: ViralFeedSource.values
+                                      .map<Widget>(
+                                        (ViralFeedSource value) =>
+                                            _FeedSourceChip(
+                                              label: value.label,
+                                              isSelected: value == source,
+                                              onTap:
+                                                  () => onSelectSource(value),
+                                            ),
+                                      )
+                                      .toList(growable: false),
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 10),
+                              Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: tokens.panelStrong.withValues(
+                                    alpha: 0.72,
+                                  ),
+                                  border: Border.all(
+                                    color: tokens.stroke.withValues(alpha: 0.9),
+                                  ),
+                                ),
+                                child: IconButton(
+                                  key: const Key('viral-refresh-button'),
+                                  onPressed: onRefresh,
+                                  icon:
+                                      isSyncing
+                                          ? SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: definition.primaryColor,
+                                            ),
+                                          )
+                                          : const Icon(Icons.refresh_rounded),
+                                  color: tokens.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Wrap(
@@ -1024,38 +1042,58 @@ class _StageCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Text(
-                    clip.playerName == null
-                        ? clip.title
-                        : '${clip.playerName} | ${clip.title}',
-                    style: theme.textTheme.titleLarge,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'CLIP STAGE',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.9,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        clip.playerName == null
+                            ? clip.title
+                            : '${clip.playerName} | ${clip.title}',
+                        style: theme.textTheme.titleLarge,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            _SignalLine(
-              label: 'Feed source',
-              value: clip.feedSource,
-              accent: accent,
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _StageMetricPill(
+                  label: 'Feed source',
+                  value: clip.feedSource,
+                  accent: accent,
+                ),
+                _StageMetricPill(
+                  label: 'Deck',
+                  value: deck.source.label,
+                  accent: accent,
+                ),
+                _StageMetricPill(
+                  label: 'Score',
+                  value: clip.score.toStringAsFixed(1),
+                  accent: accent,
+                ),
+                if (clip.creatorId != null)
+                  _StageMetricPill(
+                    label: 'Creator',
+                    value: clip.creatorId!,
+                    accent: accent,
+                  ),
+              ],
             ),
-            _SignalLine(
-              label: 'Deck',
-              value: deck.source.label,
-              accent: accent,
-            ),
-            _SignalLine(
-              label: 'Score',
-              value: clip.score.toStringAsFixed(1),
-              accent: accent,
-            ),
-            if (clip.creatorId != null)
-              _SignalLine(
-                label: 'Creator',
-                value: clip.creatorId!,
-                accent: accent,
-              ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
@@ -1099,8 +1137,8 @@ class _StageCard extends StatelessWidget {
   }
 }
 
-class _SignalLine extends StatelessWidget {
-  const _SignalLine({
+class _StageMetricPill extends StatelessWidget {
+  const _StageMetricPill({
     required this.label,
     required this.value,
     required this.accent,
@@ -1112,24 +1150,33 @@ class _SignalLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+    final tokens = GteShellTheme.tokensOf(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 128),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.24)),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          SizedBox(
-            width: 92,
-            child: Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: accent,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
             ),
           ),
-          Expanded(
-            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: tokens.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -1170,6 +1217,16 @@ class _ActionRail extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: <Widget>[
+            Text(
+              'ACTION RAIL',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.9,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
             _ActionBubble(
               icon: Icons.local_fire_department_rounded,
               label: 'Hot',

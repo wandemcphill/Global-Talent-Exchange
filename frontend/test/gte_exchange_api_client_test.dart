@@ -7,6 +7,14 @@ import 'package:gte_frontend/data/gte_mock_api.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 
 void main() {
+  test('standard client defaults to live mode', () {
+    final GteExchangeApiClient client = GteExchangeApiClient.standard(
+      baseUrl: 'https://example.test',
+    );
+
+    expect(client.config.mode, GteBackendMode.live);
+  });
+
   test('fixture client paginates and filters the market directory', () async {
     final GteExchangeApiClient client = GteExchangeApiClient.fixture();
 
@@ -38,87 +46,117 @@ void main() {
     expect(filtered.items.single.playerName, 'Lamine Yamal');
   });
 
-  test('fixture client composes player detail, ticker, candles, and order book',
-      () async {
-    final GteExchangeApiClient client = GteExchangeApiClient.fixture();
+  test(
+    'fixture client composes player detail, ticker, candles, and order book',
+    () async {
+      final GteExchangeApiClient client = GteExchangeApiClient.fixture();
 
-    final snapshot = await client.fetchPlayerMarket('lamine-yamal');
+      final snapshot = await client.fetchPlayerMarket('lamine-yamal');
 
-    expect(snapshot.detail.identity.playerName, 'Lamine Yamal');
-    expect(snapshot.ticker.playerId, 'lamine-yamal');
-    expect(snapshot.candles.candles, isNotEmpty);
-    expect(snapshot.orderBook.bids, isNotEmpty);
-  });
+      expect(snapshot.detail.identity.playerName, 'Lamine Yamal');
+      expect(snapshot.ticker.playerId, 'lamine-yamal');
+      expect(snapshot.candles.candles, isNotEmpty);
+      expect(snapshot.orderBook.bids, isNotEmpty);
+    },
+  );
 
-  test('fixture client exposes an illiquid player shape for sparse UI states',
-      () async {
-    final GteExchangeApiClient client = GteExchangeApiClient.fixture();
+  test(
+    'fixture client exposes an illiquid player shape for sparse UI states',
+    () async {
+      final GteExchangeApiClient client = GteExchangeApiClient.fixture();
 
-    final snapshot = await client.fetchPlayerMarket('victor-osimhen');
+      final snapshot = await client.fetchPlayerMarket('victor-osimhen');
 
-    expect(snapshot.candles.candles, hasLength(1));
-    expect(snapshot.orderBook.bids, isEmpty);
-    expect(snapshot.orderBook.asks, isNotEmpty);
-  });
+      expect(snapshot.candles.candles, hasLength(1));
+      expect(snapshot.orderBook.bids, isEmpty);
+      expect(snapshot.orderBook.asks, isNotEmpty);
+    },
+  );
 
-  test('match viewer requests include the selected mode query parameter',
-      () async {
-    final _RecordingTransport transport = _RecordingTransport();
-    final GteExchangeApiClient client = GteExchangeApiClient(
-      config: const GteRepositoryConfig(
-        baseUrl: 'https://example.test',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      repository: GteMockApi(),
-    );
+  test(
+    'match viewer requests include the selected mode query parameter',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport();
+      final GteExchangeApiClient client = GteExchangeApiClient(
+        config: const GteRepositoryConfig(
+          baseUrl: 'https://example.test',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        repository: GteMockApi(),
+      );
 
-    await client.fetchMatchViewer(
-      'match-001',
-      mode: MatchMode.cinematic,
-    );
+      await client.fetchMatchViewer('match-001', mode: MatchMode.cinematic);
 
-    expect(transport.lastRequest, isNotNull);
-    expect(transport.lastRequest!.uri.path, '/api/match-viewer/match-001');
-    expect(transport.lastRequest!.uri.queryParameters['mode'], 'cinematic');
-  });
+      expect(transport.lastRequest, isNotNull);
+      expect(transport.lastRequest!.uri.path, '/api/match-viewer/match-001');
+      expect(transport.lastRequest!.uri.queryParameters['mode'], 'cinematic');
+    },
+  );
 
-  test('live client routes market discovery through the unified players query',
-      () async {
-    final _RecordingTransport transport = _RecordingTransport();
-    final GteExchangeApiClient client = GteExchangeApiClient(
-      config: const GteRepositoryConfig(
-        baseUrl: 'https://example.test',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      repository: GteMockApi(),
-    );
+  test(
+    'live client routes market discovery through the unified players query',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport();
+      final GteExchangeApiClient client = GteExchangeApiClient(
+        config: const GteRepositoryConfig(
+          baseUrl: 'https://example.test',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        repository: GteMockApi(),
+      );
 
-    await client.fetchPlayers(
-      query: const GteMarketPlayersQuery(
-        limit: 20,
-        search: 'ronaldo',
-        position: 'ST',
-        country: 'Nigeria',
-        minAge: 18,
-        maxAge: 28,
-        availability: 'free_agent',
-      ),
-    );
+      await client.fetchPlayers(
+        query: const GteMarketPlayersQuery(
+          limit: 20,
+          search: 'ronaldo',
+          position: 'ST',
+          country: 'Nigeria',
+          minAge: 18,
+          maxAge: 28,
+          availability: 'free_agent',
+        ),
+      );
 
-    expect(transport.lastRequest, isNotNull);
-    expect(transport.lastRequest!.uri.path, '/players');
-    expect(transport.lastRequest!.uri.queryParameters['search'], 'ronaldo');
-    expect(transport.lastRequest!.uri.queryParameters['position'], 'ST');
-    expect(transport.lastRequest!.uri.queryParameters['country'], 'Nigeria');
-    expect(transport.lastRequest!.uri.queryParameters['min_age'], '18');
-    expect(transport.lastRequest!.uri.queryParameters['max_age'], '28');
-    expect(
-      transport.lastRequest!.uri.queryParameters['availability'],
-      'free_agent',
-    );
-  });
+      expect(transport.lastRequest, isNotNull);
+      expect(transport.lastRequest!.uri.path, '/marketplace/players');
+      expect(transport.lastRequest!.uri.queryParameters['search'], 'ronaldo');
+      expect(transport.lastRequest!.uri.queryParameters['position'], 'ST');
+      expect(transport.lastRequest!.uri.queryParameters['country'], 'Nigeria');
+      expect(transport.lastRequest!.uri.queryParameters['min_age'], '18');
+      expect(transport.lastRequest!.uri.queryParameters['max_age'], '28');
+      expect(
+        transport.lastRequest!.uri.queryParameters['availability'],
+        'free_agent',
+      );
+    },
+  );
+
+  test(
+    'live spectate sessions fail closed without the real backend repository',
+    () async {
+      final GteExchangeApiClient client = GteExchangeApiClient(
+        config: const GteRepositoryConfig(
+          baseUrl: 'https://example.test',
+          mode: GteBackendMode.live,
+        ),
+        transport: _RecordingTransport(),
+        repository: GteMockApi(),
+      );
+
+      expect(
+        () => client.joinMatchSpectateSession('match-001'),
+        throwsA(
+          isA<GteApiException>().having(
+            (GteApiException error) => error.type,
+            'type',
+            GteApiErrorType.unavailable,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _RecordingTransport implements GteTransport {

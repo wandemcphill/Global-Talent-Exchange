@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,7 +12,9 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../widgets/gte_state_panel.dart';
+import '../../widgets/gte_surface_panel.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'match_viewer_capability.dart';
 
@@ -179,11 +182,32 @@ class MatchRouteLoadingScreen extends StatelessWidget {
         status: DataSourceStatus.live,
         capability: capability,
       ),
-      children: const <Widget>[
-        GteStatePanel(
-          title: 'Loading route',
-          message: 'Verifying the live route capability before entry.',
-          isLoading: true,
+      children: <Widget>[
+        GtexHeroPanel(
+          eyebrow: 'MATCH ROUTE VERIFY',
+          title: title,
+          description: subtitle,
+          metrics: <Widget>[
+            GtexPill(
+              label: capability.label.replaceAll('_', ' '),
+              tone: _capabilityTone(capability),
+            ),
+            const GtexPill(
+              label: 'LIVE ENDPOINT CHECK',
+              tone: GtexSurfaceTone.live,
+            ),
+          ],
+        ),
+        GtexSectionPanel(
+          eyebrow: 'RUNTIME GATE',
+          title: 'Verifying shipped capability',
+          subtitle:
+              'The active shell only opens this match route after the live match-viewer session confirms the mounted capability.',
+          child: const GteStatePanel(
+            title: 'Loading route',
+            message: 'Verifying the live route capability before entry.',
+            isLoading: true,
+          ),
         ),
       ],
     );
@@ -212,11 +236,27 @@ class MatchRouteBlockedScreen extends StatelessWidget {
         capability: MatchViewerCapability.blocked,
       ),
       children: <Widget>[
-        GteStatePanel(
-          title: 'Route blocked',
-          message: reason,
-          icon: Icons.error_outline_rounded,
-          accentColor: Theme.of(context).colorScheme.error,
+        GtexHeroPanel(
+          eyebrow: 'MATCH ROUTE GATE',
+          title: title,
+          description: subtitle,
+          metrics: const <Widget>[
+            GtexPill(label: 'Route blocked', tone: GtexSurfaceTone.danger),
+            GtexPill(label: 'BLOCKED', tone: GtexSurfaceTone.danger),
+            GtexPill(label: 'TRUTH PRESERVED', tone: GtexSurfaceTone.warning),
+          ],
+        ),
+        GtexSectionPanel(
+          eyebrow: 'BLOCKED DETAIL',
+          title: 'Blocked detail',
+          subtitle:
+              'This route stays visibly blocked until the mounted runtime can answer with real match-viewer data.',
+          child: GteStatePanel(
+            title: 'Viewer contract unavailable',
+            message: reason,
+            icon: Icons.error_outline_rounded,
+            accentColor: Theme.of(context).colorScheme.error,
+          ),
         ),
       ],
     );
@@ -237,6 +277,9 @@ class MatchRouteCapabilityOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!kDebugMode) {
+      return child;
+    }
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
@@ -245,8 +288,12 @@ class MatchRouteCapabilityOverlay extends StatelessWidget {
           top: spacingMD,
           right: spacingMD,
           child: SafeArea(
-            child: IgnorePointer(
-              child: _RouteBadgeRow(status: status, capability: capability),
+            child: GteSurfacePanel(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              accentColor: capability.color(context),
+              child: IgnorePointer(
+                child: _RouteBadgeRow(status: status, capability: capability),
+              ),
             ),
           ),
         ),
@@ -263,6 +310,9 @@ class _RouteBadgeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!kDebugMode) {
+      return const SizedBox.shrink();
+    }
     return Wrap(
       spacing: spacingSM,
       runSpacing: spacingSM,
@@ -297,4 +347,14 @@ Future<JsonMap> _fetchFirstMap(
         type: GteApiErrorType.notFound,
         message: 'No live match viewer endpoint responded for this match key.',
       );
+}
+
+GtexSurfaceTone _capabilityTone(MatchViewerCapability capability) {
+  return switch (capability) {
+    MatchViewerCapability.twoD => GtexSurfaceTone.live,
+    MatchViewerCapability.pseudo3d => GtexSurfaceTone.info,
+    MatchViewerCapability.flutter3d => GtexSurfaceTone.warning,
+    MatchViewerCapability.native3d => GtexSurfaceTone.success,
+    MatchViewerCapability.blocked => GtexSurfaceTone.danger,
+  };
 }

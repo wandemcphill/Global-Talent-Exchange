@@ -6,6 +6,16 @@ import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 
 void main() {
+  test('authed api defaults to live mode', () {
+    final GteAuthedApi client = GteAuthedApi(
+      config: const GteRepositoryConfig(baseUrl: 'http://127.0.0.1:8000'),
+      transport: _RecordingTransport(),
+    );
+
+    expect(client.mode, GteBackendMode.live);
+    expect(client.config.mode, GteBackendMode.liveThenFixture);
+  });
+
   test('authenticated requests include bearer and identity headers', () async {
     final _RecordingTransport transport = _RecordingTransport();
     final GteAuthedApi client = GteAuthedApi(
@@ -59,6 +69,52 @@ void main() {
       expect(request.headers['X-Device-Id'], 'web-client');
     },
   );
+
+  test('withFallback fails closed in live mode', () async {
+    final GteAuthedApi client = GteAuthedApi(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.live,
+      ),
+      transport: _RecordingTransport(),
+      mode: GteBackendMode.live,
+    );
+
+    expect(
+      () => client.withFallback<int>(
+        () =>
+            throw const GteApiException(
+              type: GteApiErrorType.unavailable,
+              message: 'backend unavailable',
+            ),
+        () => 7,
+      ),
+      throwsA(isA<GteApiException>()),
+    );
+  });
+
+  test('withFallback remains available for explicit fixture mode', () async {
+    final GteAuthedApi client = GteAuthedApi(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.fixture,
+      ),
+      transport: _RecordingTransport(),
+      mode: GteBackendMode.fixture,
+    );
+
+    expect(
+      await client.withFallback<int>(
+        () =>
+            throw const GteApiException(
+              type: GteApiErrorType.unavailable,
+              message: 'backend unavailable',
+            ),
+        () => 7,
+      ),
+      7,
+    );
+  });
 }
 
 String _jwtToken(Map<String, Object?> payload) {

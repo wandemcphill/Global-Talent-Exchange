@@ -354,20 +354,17 @@ class MatchViewState {
         GteJson.value(json, <String>['monetization']),
       ),
       presentationPackage:
-          GteJson.value(
-                    json,
-                    <String>[
-                      'presentation_package',
-                      'presentationPackage',
-                    ],
-                  ) ==
+          GteJson.value(json, <String>[
+                    'presentation_package',
+                    'presentationPackage',
+                  ]) ==
                   null
               ? null
               : MatchPresentationPackage.fromJson(
-                GteJson.value(
-                  json,
-                  <String>['presentation_package', 'presentationPackage'],
-                ),
+                GteJson.value(json, <String>[
+                  'presentation_package',
+                  'presentationPackage',
+                ]),
               ),
     );
   }
@@ -388,7 +385,7 @@ class MatchViewState {
     int? segmentStartSeconds,
     int? segmentEndSeconds,
     bool? hasMoreSegments,
-    String? nextSegmentToken,
+    Object? nextSegmentToken = _matchViewStateUnset,
     MatchViewerMonetization? monetization,
     Object? presentationPackage = _matchViewStateUnset,
   }) {
@@ -409,7 +406,10 @@ class MatchViewState {
       segmentStartSeconds: segmentStartSeconds ?? this.segmentStartSeconds,
       segmentEndSeconds: segmentEndSeconds ?? this.segmentEndSeconds,
       hasMoreSegments: hasMoreSegments ?? this.hasMoreSegments,
-      nextSegmentToken: nextSegmentToken ?? this.nextSegmentToken,
+      nextSegmentToken:
+          identical(nextSegmentToken, _matchViewStateUnset)
+              ? this.nextSegmentToken
+              : nextSegmentToken as String?,
       monetization: monetization ?? this.monetization,
       presentationPackage:
           identical(presentationPackage, _matchViewStateUnset)

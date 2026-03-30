@@ -53,33 +53,28 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                 data.history?.managedEntries ?? const <dynamic>[];
             return Column(
               children: <Widget>[
-                GtexSectionPanel(
+                GtexHeroPanel(
                   eyebrow: 'COUNTRY PROGRAMS',
                   title: 'National team operations board',
-                  subtitle:
+                  description:
                       'Live competitions, ranking ladders, and authenticated draft-squad history from the national-team engine.',
-                  emphasized: true,
-                  child: Wrap(
-                    spacing: spacingSM,
-                    runSpacing: spacingSM,
-                    children: <Widget>[
-                      _MetricChip(
-                        label: 'Competitions',
-                        value: '${data.competitions.length}',
-                        tone: GtexSurfaceTone.live,
-                      ),
-                      _MetricChip(
-                        label: 'Rankings',
-                        value: '${data.rankings.length}',
-                        tone: GtexSurfaceTone.info,
-                      ),
-                      _MetricChip(
-                        label: 'My entries',
-                        value: '${managedEntries.length}',
-                        tone: GtexSurfaceTone.success,
-                      ),
-                    ],
-                  ),
+                  metrics: <Widget>[
+                    _MetricChip(
+                      label: 'Competitions',
+                      value: '${data.competitions.length}',
+                      tone: GtexSurfaceTone.live,
+                    ),
+                    _MetricChip(
+                      label: 'Rankings',
+                      value: '${data.rankings.length}',
+                      tone: GtexSurfaceTone.info,
+                    ),
+                    _MetricChip(
+                      label: 'My entries',
+                      value: '${managedEntries.length}',
+                      tone: GtexSurfaceTone.success,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: spacingMD),
                 _SectionCard(
@@ -280,56 +275,47 @@ class _NationalTeamCompetitionDetailScreenState
                 const <dynamic>[];
             return Column(
               children: <Widget>[
-                GtexSectionPanel(
+                GtexHeroPanel(
                   eyebrow: 'COMPETITION DETAIL',
                   title: 'Country squad command',
-                  subtitle:
+                  description:
                       'Lifecycle stage, tournament framing, and draft-squad controls for this live national-team competition.',
-                  emphasized: true,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Wrap(
-                        spacing: spacingSM,
-                        runSpacing: spacingSM,
-                        children: <Widget>[
-                          _MetricChip(
-                            label: 'Season',
-                            value: detail.competition.seasonLabel,
-                            tone: GtexSurfaceTone.live,
-                          ),
-                          _MetricChip(
-                            label: 'Region',
-                            value: detail.competition.regionType,
-                            tone: GtexSurfaceTone.info,
-                          ),
-                          _MetricChip(
-                            label: 'Age band',
-                            value: detail.competition.ageBand,
-                            tone: GtexSurfaceTone.warning,
-                          ),
-                          _MetricChip(
-                            label: 'Format',
-                            value: detail.competition.formatType,
-                            tone: GtexSurfaceTone.success,
-                          ),
-                          _MetricChip(
-                            label: 'Lifecycle',
-                            value: stringValue(
-                              detail.lifecycle['current_stage'],
-                              fallback: detail.competition.status,
-                            ),
-                            tone: GtexSurfaceTone.neutral,
-                          ),
-                        ],
+                  metrics: <Widget>[
+                    _MetricChip(
+                      label: 'Season',
+                      value: detail.competition.seasonLabel,
+                      tone: GtexSurfaceTone.live,
+                    ),
+                    _MetricChip(
+                      label: 'Region',
+                      value: detail.competition.regionType,
+                      tone: GtexSurfaceTone.info,
+                    ),
+                    _MetricChip(
+                      label: 'Age band',
+                      value: detail.competition.ageBand,
+                      tone: GtexSurfaceTone.warning,
+                    ),
+                    _MetricChip(
+                      label: 'Format',
+                      value: detail.competition.formatType,
+                      tone: GtexSurfaceTone.success,
+                    ),
+                    _MetricChip(
+                      label: 'Lifecycle',
+                      value: stringValue(
+                        detail.lifecycle['current_stage'],
+                        fallback: detail.competition.status,
                       ),
-                      const SizedBox(height: spacingMD),
-                      FilledButton(
-                        onPressed: () => _runAutoBuild(context),
-                        child: const Text('Build draft squad'),
-                      ),
-                    ],
-                  ),
+                      tone: GtexSurfaceTone.neutral,
+                    ),
+                  ],
+                  actions: <Widget>[
+                    FilledButton(
+                      onPressed: () => _runAutoBuild(context),
+                      child: const Text('Build draft squad'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: spacingMD),
                 if (myEntries.isNotEmpty) ...<Widget>[
@@ -756,11 +742,11 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      message,
-      style: Theme.of(
-        context,
-      ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+    return GtexListTile(
+      title: 'Nothing live yet',
+      subtitle: message,
+      leadingIcon: Icons.hourglass_empty_rounded,
+      tone: GtexSurfaceTone.neutral,
     );
   }
 }

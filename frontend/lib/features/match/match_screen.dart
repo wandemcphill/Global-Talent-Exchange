@@ -203,7 +203,7 @@ class _ActionDeck extends StatelessWidget {
   Widget build(BuildContext context) {
     return GtexSectionPanel(
       eyebrow: 'VIEWER LANES',
-      title: 'Manual probes and truth-preserving side routes',
+      title: 'Blocked probes and truth-preserving side routes',
       subtitle:
           'These routes stay explicit so live, blocked, and simulated states are never confused.',
       child: Column(
@@ -211,8 +211,8 @@ class _ActionDeck extends StatelessWidget {
           _ActionCard(
             title: 'Open by match key',
             description:
-                'Manual launch path. Probes the real match-viewer contract before opening the existing 2D viewer.',
-            chips: const <String>['LIVE', '2D'],
+                'Manual launch path. This route is addressable, but it stays visibly blocked until the live viewer session can be served without fabricated fallback state.',
+            chips: const <String>['BLOCKED', '2D'],
             primaryLabel: 'Open spectate probe',
             onPrimaryTap: () => context.push(AppRoutes.matchesSpectate),
           ),

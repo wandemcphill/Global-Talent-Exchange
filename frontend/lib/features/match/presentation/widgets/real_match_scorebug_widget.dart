@@ -90,7 +90,12 @@ class RealMatchScorebugWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _MetaChip(label: cameraLabel, accent: const Color(0xFF53B1FD)),
+                Expanded(
+                  child: _MetaChip(
+                    label: cameraLabel,
+                    accent: const Color(0xFF53B1FD),
+                  ),
+                ),
               ],
             ),
             if (eventLabel != null &&
@@ -183,6 +188,8 @@ class _MetaChip extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: Colors.white,

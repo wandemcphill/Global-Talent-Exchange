@@ -21,7 +21,7 @@ class GteExchangeApiClient {
 
   factory GteExchangeApiClient.standard({
     required String baseUrl,
-    GteBackendMode mode = GteBackendMode.liveThenFixture,
+    GteBackendMode mode = GteBackendMode.live,
   }) {
     final GteRepositoryConfig config =
         GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
@@ -543,7 +543,11 @@ class GteExchangeApiClient {
     }
     final GteApiRepository resolvedRepository = repository;
     if (resolvedRepository is! GteReliableApiRepository) {
-      return _fixtureSpectateSession(matchKey);
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Live match spectate sessions require the real backend repository.',
+      );
     }
     return GteJson.map(
       await resolvedRepository.requestJson(

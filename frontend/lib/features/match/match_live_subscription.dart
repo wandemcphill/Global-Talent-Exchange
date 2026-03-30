@@ -45,6 +45,27 @@ abstract interface class MatchLiveSubscriptionService {
   });
 }
 
+class DisconnectedMatchLiveSubscriptionService
+    implements MatchLiveSubscriptionService {
+  const DisconnectedMatchLiveSubscriptionService();
+
+  @override
+  Stream<MatchSubscriptionTick> subscribe({
+    required String matchId,
+    required int frameCount,
+  }) {
+    return Stream<MatchSubscriptionTick>.value(
+      MatchSubscriptionTick(
+        channel: 'match:$matchId',
+        frameIndex: 0,
+        feedLatencyMs: 0,
+        tick: 0,
+        connected: false,
+      ),
+    );
+  }
+}
+
 class MockMatchLiveSubscriptionService implements MatchLiveSubscriptionService {
   const MockMatchLiveSubscriptionService();
 
@@ -104,7 +125,7 @@ class MockMatchLiveSubscriptionService implements MatchLiveSubscriptionService {
 
 final Provider<MatchLiveSubscriptionService>
 matchLiveSubscriptionServiceProvider = Provider<MatchLiveSubscriptionService>(
-  (Ref ref) => const MockMatchLiveSubscriptionService(),
+  (Ref ref) => const DisconnectedMatchLiveSubscriptionService(),
 );
 
 final matchLiveSubscriptionProvider = StreamProvider.autoDispose

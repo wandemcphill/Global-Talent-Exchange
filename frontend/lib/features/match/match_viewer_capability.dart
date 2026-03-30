@@ -17,13 +17,15 @@ extension MatchViewerCapabilityLabel on MatchViewerCapability {
     };
   }
 
-  Color color(ColorScheme colors) {
+  Color color(BuildContext context) {
+    final theme = GteShellTheme.definitionOf(context);
+    final tokens = GteShellTheme.tokensOf(context);
     return switch (this) {
-      MatchViewerCapability.twoD => colors.primary,
-      MatchViewerCapability.pseudo3d => colors.secondary,
-      MatchViewerCapability.flutter3d => colors.tertiary,
-      MatchViewerCapability.native3d => colors.primaryContainer,
-      MatchViewerCapability.blocked => colors.error,
+      MatchViewerCapability.twoD => theme.primaryColor,
+      MatchViewerCapability.pseudo3d => theme.secondaryColor,
+      MatchViewerCapability.flutter3d => theme.accentColor,
+      MatchViewerCapability.native3d => tokens.accentWarm,
+      MatchViewerCapability.blocked => tokens.negative,
     };
   }
 }
@@ -38,7 +40,7 @@ class MatchViewerCapabilityBadge extends StatelessWidget {
     if (!kDebugMode) {
       return const SizedBox.shrink();
     }
-    final Color color = capability.color(Theme.of(context).colorScheme);
+    final Color color = capability.color(context);
     final tokens = GteShellTheme.tokensOf(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: spacingSM, vertical: 6),

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../features/shared/data/gte_feature_support.dart';
-import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
@@ -41,12 +39,7 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
     final bool isDelegatedAdmin = ref.watch(isDelegatedAdminProvider);
     final bool canManageCatalog = ref.watch(canManageManagerCatalogProvider);
     final bool canManageSupply = ref.watch(canManageManagerSupplyProvider);
-    final bool canAccessGodMode = ref.watch(canAccessGodModeProvider);
-    final String? godModeBlockedReason = ref.watch(
-      godModeBlockedReasonProvider,
-    );
-    final bool hasAdminCapability =
-        canManageCatalog || canManageSupply || canAccessGodMode;
+    final bool hasAdminCapability = canManageCatalog || canManageSupply;
     final AsyncValue<AdminImportOverviewData>? overview =
         authenticated && isAdmin && canManageCatalog
             ? ref.watch(adminImportOverviewProvider)
@@ -59,7 +52,7 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
     return AppPageLayout(
       title: 'Profile > Admin',
       subtitle:
-          'The active shell only exposes import, supply, and God Mode controls when the authenticated admin session carries the matching backend permission.',
+          'The active shell only exposes import and supply controls when the authenticated admin session carries the matching backend permission.',
       trailing: DataSourceBadge(status: status),
       children: <Widget>[
         if (!authenticated)
@@ -76,7 +69,7 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
           const _BlockedCard(
             title: 'Admin tooling is blocked',
             message:
-                'This admin session is authenticated, but it does not carry catalog, supply, or audit permissions for the active shell.',
+                'This admin session is authenticated, but it does not carry catalog or supply permissions for the active shell.',
           )
         else ...<Widget>[
           GtexHeroPanel(
@@ -88,7 +81,7 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                     ? 'Delegated admin controls are live.'
                     : 'Admin controls are live.',
             description:
-                'Import, supply, and God Mode actions remain gated by explicit backend permissions carried on the authenticated session.',
+                'Import and supply actions remain gated by explicit backend permissions carried on the authenticated session.',
             metrics: <Widget>[
               GtexPill(
                 label:
@@ -109,25 +102,12 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                   label: 'Supply blocked',
                   tone: GtexSurfaceTone.warning,
                 ),
-              if (!canAccessGodMode)
-                GtexPill(
-                  label: 'God Mode ${godModeBlockedReason ?? 'blocked'}',
-                  tone: GtexSurfaceTone.warning,
-                ),
             ],
             actions: <Widget>[
               if (canManageCatalog)
                 FilledButton(
                   onPressed: _busy ? null : _triggerImport,
                   child: const Text('Trigger import'),
-                ),
-              if (canAccessGodMode)
-                OutlinedButton(
-                  onPressed:
-                      _busy
-                          ? null
-                          : () => context.push(AppRoutes.profileGodMode),
-                  child: const Text('Open God Mode'),
                 ),
               if (canManageCatalog)
                 OutlinedButton(
@@ -182,122 +162,142 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                   'This session lacks the manage_manager_supply permission required to issue live player share markets.',
             ),
           ],
-          if (!canAccessGodMode) ...<Widget>[
-            const SizedBox(height: spacingMD),
-            _BlockedCard(
-              title: 'God Mode is blocked',
-              message: godModeBlockedReason ?? 'missing session claims',
-            ),
-          ],
           if (overview != null) ...<Widget>[
             const SizedBox(height: spacingMD),
             overview.when(
-              data:
-                  (AdminImportOverviewData value) => Column(
-                    children: <Widget>[
-                      _JsonCard(
-                        title: 'Provider health',
-                        payload: value.health,
-                      ),
-                      const SizedBox(height: spacingMD),
-                      _JsonCard(title: 'Import status', payload: value.status),
-                      const SizedBox(height: spacingMD),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(spacingLG),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'Recent batches',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: spacingSM),
-                              if (value.batches.isEmpty)
-                                const Text('No import batches returned yet.')
-                              else
-                                ...value.batches.map(
-                                  (JsonMap batch) => RadioListTile<String>(
-                                    value: stringValue(batch['id']),
-                                    groupValue: ref.watch(
-                                      adminSelectedBatchIdProvider,
-                                    ),
-                                    onChanged: (String? next) {
-                                      ref
-                                          .read(
-                                            adminSelectedBatchIdProvider
-                                                .notifier,
-                                          )
-                                          .select(next);
-                                    },
-                                    title: Text(
-                                      stringValue(
-                                        batch['batch_key'],
-                                        fallback: stringValue(batch['id']),
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      'status ${stringValue(batch['status'])} | created ${intValue(batch['created_player_count'])} | updated ${intValue(batch['updated_player_count'])} | failed ${intValue(batch['failed_row_count'])}',
-                                    ),
-                                  ),
-                                ),
-                            ],
+              data: (AdminImportOverviewData value) {
+                final String? selectedBatchId = ref.watch(
+                  adminSelectedBatchIdProvider,
+                );
+                return Column(
+                  children: <Widget>[
+                    GtexSectionPanel(
+                      eyebrow: 'PIPELINE SNAPSHOT',
+                      title: 'Import queue posture',
+                      subtitle:
+                          'Live provider and batch counts from the admin ingestion backend.',
+                      child: Wrap(
+                        spacing: spacingSM,
+                        runSpacing: spacingSM,
+                        children: <Widget>[
+                          GtexStatTile(
+                            label: 'Batches',
+                            value: '${value.batches.length}',
+                            tone: GtexSurfaceTone.live,
                           ),
-                        ),
+                          GtexStatTile(
+                            label: 'Issues',
+                            value: '${value.selectedBatchIssues.length}',
+                            tone: GtexSurfaceTone.warning,
+                          ),
+                          GtexStatTile(
+                            label: 'Selected',
+                            value: value.selectedBatch == null ? 'None' : '1',
+                            tone: GtexSurfaceTone.info,
+                          ),
+                        ],
                       ),
-                      if (value.selectedBatch != null) ...<Widget>[
-                        const SizedBox(height: spacingMD),
-                        _JsonCard(
-                          title: 'Selected batch',
-                          payload: value.selectedBatch!,
-                        ),
-                      ],
-                      if (value.selectedBatchIssues.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: spacingMD),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(spacingLG),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  'Selected batch issues',
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: spacingSM),
-                                ...value.selectedBatchIssues
-                                    .take(12)
+                    ),
+                    const SizedBox(height: spacingMD),
+                    _JsonCard(title: 'Provider health', payload: value.health),
+                    const SizedBox(height: spacingMD),
+                    _JsonCard(title: 'Import status', payload: value.status),
+                    const SizedBox(height: spacingMD),
+                    GtexSectionPanel(
+                      eyebrow: 'IMPORT BATCHES',
+                      title: 'Recent batches',
+                      subtitle:
+                          'Select a live batch before resuming write mode or inspecting detailed issues.',
+                      child:
+                          value.batches.isEmpty
+                              ? const Text('No import batches returned yet.')
+                              : Column(
+                                children: value.batches
                                     .map(
-                                      (JsonMap issue) => ListTile(
-                                        dense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        title: Text(
-                                          stringValue(
-                                            issue['canonical_name'],
-                                            fallback: stringValue(
-                                              issue['row_id'],
-                                            ),
+                                      (JsonMap batch) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: spacingSM,
+                                        ),
+                                        child: GtexListTile(
+                                          title: stringValue(
+                                            batch['batch_key'],
+                                            fallback: stringValue(batch['id']),
+                                          ),
+                                          subtitle:
+                                              'status ${stringValue(batch['status'])} | created ${intValue(batch['created_player_count'])} | updated ${intValue(batch['updated_player_count'])} | failed ${intValue(batch['failed_row_count'])}',
+                                          leadingIcon:
+                                              Icons.inventory_2_rounded,
+                                          tone:
+                                              stringValue(batch['status']) ==
+                                                      'completed'
+                                                  ? GtexSurfaceTone.success
+                                                  : GtexSurfaceTone.info,
+                                          trailing: Radio<String>(
+                                            value: stringValue(batch['id']),
+                                            groupValue: selectedBatchId,
+                                            onChanged: (String? next) {
+                                              ref
+                                                  .read(
+                                                    adminSelectedBatchIdProvider
+                                                        .notifier,
+                                                  )
+                                                  .select(next);
+                                            },
                                           ),
                                         ),
-                                        subtitle: Text(
-                                          '${stringValue(issue['issue_type'])} | ${stringValue(issue['required_action'])}',
-                                        ),
                                       ),
-                                    ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (value.selectedBatchValuation != null) ...<Widget>[
-                        const SizedBox(height: spacingMD),
-                        _JsonCard(
-                          title: 'Selected batch valuation status',
-                          payload: value.selectedBatchValuation!,
-                        ),
-                      ],
+                                    )
+                                    .toList(growable: false),
+                              ),
+                    ),
+                    if (value.selectedBatch != null) ...<Widget>[
+                      const SizedBox(height: spacingMD),
+                      _JsonCard(
+                        title: 'Selected batch',
+                        payload: value.selectedBatch!,
+                      ),
                     ],
-                  ),
+                    if (value.selectedBatchIssues.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: spacingMD),
+                      GtexSectionPanel(
+                        eyebrow: 'ISSUE LEDGER',
+                        title: 'Selected batch issues',
+                        subtitle:
+                            'The active shell keeps the live issue queue visible before any resume action.',
+                        child: Column(
+                          children: value.selectedBatchIssues
+                              .take(12)
+                              .map(
+                                (JsonMap issue) => Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: spacingSM,
+                                  ),
+                                  child: GtexListTile(
+                                    title: stringValue(
+                                      issue['canonical_name'],
+                                      fallback: stringValue(issue['row_id']),
+                                    ),
+                                    subtitle:
+                                        '${stringValue(issue['issue_type'])} | ${stringValue(issue['required_action'])}',
+                                    leadingIcon: Icons.rule_folder_rounded,
+                                    tone: GtexSurfaceTone.warning,
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                        ),
+                      ),
+                    ],
+                    if (value.selectedBatchValuation != null) ...<Widget>[
+                      const SizedBox(height: spacingMD),
+                      _JsonCard(
+                        title: 'Selected batch valuation status',
+                        payload: value.selectedBatchValuation!,
+                      ),
+                    ],
+                  ],
+                );
+              },
               loading:
                   () => const GteStatePanel(
                     title: 'Loading admin import surface',

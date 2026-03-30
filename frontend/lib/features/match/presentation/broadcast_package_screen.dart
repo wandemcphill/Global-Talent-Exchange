@@ -411,29 +411,61 @@ class _SceneControlBar extends StatelessWidget {
     return GteSurfacePanel(
       padding: const EdgeInsets.all(14),
       accentColor: GteShellTheme.definitionOf(context).primaryColor,
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              scene.label,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w800,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool stacked = constraints.maxWidth < 760;
+          final Widget summary = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Scene control dock',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: GteShellTheme.definitionOf(context).primaryColor,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.9,
+                ),
               ),
-            ),
-          ),
-          TextButton.icon(
-            onPressed: onRestart,
-            icon: const Icon(Icons.restart_alt),
-            label: const Text('Restart'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: onSkipToLive,
-            icon: const Icon(Icons.play_circle_fill_rounded),
-            label: const Text('Jump to live'),
-          ),
-        ],
+              const SizedBox(height: 6),
+              Text(
+                scene.label,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          );
+          final Widget actions = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              TextButton.icon(
+                onPressed: onRestart,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Restart'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: onSkipToLive,
+                icon: const Icon(Icons.play_circle_fill_rounded),
+                label: const Text('Jump to live'),
+              ),
+            ],
+          );
+          if (stacked) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[summary, const SizedBox(height: 14), actions],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(child: summary),
+              const SizedBox(width: 16),
+              actions,
+            ],
+          );
+        },
       ),
     );
   }
@@ -493,7 +525,9 @@ class _SceneSequenceStrip extends StatelessWidget {
       children: groups
           .map((MapEntry<String, List<BroadcastPackageScene>> group) {
             final bool active = group.value.contains(scene);
-            return Container(
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(999),

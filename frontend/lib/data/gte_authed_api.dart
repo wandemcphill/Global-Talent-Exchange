@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'gte_api_repository.dart';
@@ -10,7 +11,7 @@ class GteAuthedApi {
     this.accessToken,
     this.authSession,
     this.deviceId,
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
   });
 
   final GteRepositoryConfig config;
@@ -19,24 +20,6 @@ class GteAuthedApi {
   final AuthSession? authSession;
   final String? deviceId;
   final GteBackendMode mode;
-
-  Future<T> withFallback<T>(
-    Future<T> Function() live,
-    Future<T> Function() fixtures,
-  ) async {
-    switch (mode) {
-      case GteBackendMode.fixture:
-        return fixtures();
-      case GteBackendMode.liveThenFixture:
-        try {
-          return await live();
-        } catch (_) {
-          return fixtures();
-        }
-      case GteBackendMode.live:
-        return live();
-    }
-  }
 
   Future<Object?> request(
     String method,
@@ -127,6 +110,24 @@ class GteAuthedApi {
       type: GteApiErrorType.parsing,
       message: 'Unexpected list response shape.',
     );
+  }
+
+  Future<T> withFallback<T>(
+    FutureOr<T> Function() liveCall,
+    FutureOr<T> Function() fixtureCall,
+  ) async {
+    if (mode == GteBackendMode.fixture) {
+      return await fixtureCall();
+    }
+    try {
+      return await liveCall();
+    } on GteApiException catch (error) {
+      if (mode == GteBackendMode.liveThenFixture &&
+          error.supportsFixtureFallback) {
+        return await fixtureCall();
+      }
+      rethrow;
+    }
   }
 
   GteApiException _toException(GteTransportResponse response) {
