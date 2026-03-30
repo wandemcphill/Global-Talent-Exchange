@@ -92,9 +92,96 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
     assert first_page.items[0].current_club_name == "AFC Bournemouth"
     assert first_page.items[0].current_competition_name is None
     assert first_page.exhausted is False
-    assert first_page.next_cursor == '{"page": 2, "per_page": 1}'
+    assert first_page.next_cursor == '{"page": 2, "per_page": 25, "player_index": 0}'
     assert second_page.items[0].provider_player_id == "22169325"
     assert second_page.exhausted is True
+
+
+def test_fetch_player_directory_page_filters_non_current_or_overage_rows(monkeypatch) -> None:
+    adapter = _adapter()
+
+    monkeypatch.setattr(
+        adapter,
+        "_get",
+        lambda *args, **kwargs: {
+            "data": [
+                {
+                    "id": 1,
+                    "name": "Retired No Club",
+                    "display_name": "Retired No Club",
+                    "common_name": "R. No Club",
+                    "firstname": "Retired",
+                    "lastname": "No Club",
+                    "position": {"name": "Midfielder"},
+                    "detailedposition": {"name": "Central Midfield"},
+                    "date_of_birth": "1988-01-10",
+                    "nationality": {"name": "England", "iso2": "EN"},
+                    "country": {"name": "England", "iso2": "EN"},
+                    "teams": [],
+                    "type_id": 26,
+                },
+                {
+                    "id": 2,
+                    "name": "Too Old Active",
+                    "display_name": "Too Old Active",
+                    "common_name": "T. Old",
+                    "firstname": "Too",
+                    "lastname": "Old",
+                    "position": {"name": "Goalkeeper"},
+                    "detailedposition": {"name": "Goalkeeper"},
+                    "date_of_birth": "1978-11-28",
+                    "nationality": {"name": "England", "iso2": "EN"},
+                    "country": {"name": "England", "iso2": "EN"},
+                    "teams": [
+                        {
+                            "id": 20,
+                            "end": None,
+                            "team_id": 200,
+                            "team": {
+                                "id": 200,
+                                "name": "Active Veterans",
+                                "last_played_at": "2026-03-28 15:00:00",
+                            },
+                        }
+                    ],
+                    "type_id": 24,
+                },
+                {
+                    "id": 3,
+                    "name": "Current Player",
+                    "display_name": "Current Player",
+                    "common_name": "C. Player",
+                    "firstname": "Current",
+                    "lastname": "Player",
+                    "position": {"name": "Attacker"},
+                    "detailedposition": {"name": "Centre Forward"},
+                    "date_of_birth": "1997-03-15",
+                    "nationality": {"name": "Spain", "iso2": "ES"},
+                    "country": {"name": "Spain", "iso2": "ES"},
+                    "teams": [
+                        {
+                            "id": 30,
+                            "end": "2027-06-30",
+                            "team_id": 300,
+                            "team": {
+                                "id": 300,
+                                "name": "Espanyol",
+                                "last_played_at": "2026-03-21 15:15:00",
+                            },
+                        }
+                    ],
+                    "type_id": 27,
+                },
+            ],
+            "pagination": {"has_more": False},
+        },
+    )
+
+    page = adapter.fetch_player_directory_page(batch_size=10)
+
+    assert [item.provider_player_id for item in page.items] == ["3"]
+    assert page.items[0].current_club_name == "Espanyol"
+    assert page.exhausted is True
 
 
 def test_fetch_player_stats_maps_sportmonks_stat_details(monkeypatch) -> None:
