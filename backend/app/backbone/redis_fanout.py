@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
+import logging
 from threading import Event as ThreadEvent, RLock, Thread
 from typing import Any
 from uuid import uuid4
@@ -13,6 +14,8 @@ from redis.exceptions import RedisError
 
 from app.core.event_backbone import make_json_safe
 from app.core.events import DomainEvent, EventSubscriber, InMemoryEventPublisher
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_datetime(value: Any) -> datetime:
@@ -93,9 +96,17 @@ class HybridEventPublisher:
         assert self._redis is not None
         pubsub = self._redis.pubsub(ignore_subscribe_messages=True)
         try:
-            pubsub.subscribe(self.redis_channel)
+            try:
+                pubsub.subscribe(self.redis_channel)
+            except RedisError:
+                logger.warning("backbone.redis_fanout.subscribe_failed channel=%s", self.redis_channel)
+                return
             while not self._stop_event.is_set():
-                message = pubsub.get_message(timeout=1.0)
+                try:
+                    message = pubsub.get_message(timeout=1.0)
+                except RedisError:
+                    logger.warning("backbone.redis_fanout.listen_failed channel=%s", self.redis_channel)
+                    return
                 if not message or message.get("type") != "message":
                     continue
                 raw = message.get("data")
@@ -128,7 +139,10 @@ class HybridEventPublisher:
                 self._record_seen(event.event_id)
                 self.delegate.publish(event)
         finally:
-            pubsub.close()
+            try:
+                pubsub.close()
+            except RedisError:
+                logger.warning("backbone.redis_fanout.close_failed channel=%s", self.redis_channel)
 
     def _record_seen(self, event_id: str) -> None:
         with self._seen_lock:

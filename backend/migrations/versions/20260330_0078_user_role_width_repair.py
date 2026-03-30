@@ -30,17 +30,18 @@ def upgrade() -> None:
     if role_column is None:
         return
 
-    existing_length = role_column.get("type").length if role_column.get("type") is not None else None
+    existing_type = role_column.get("type")
+    existing_length = getattr(existing_type, "length", None)
     if existing_length is not None and existing_length >= TARGET_ROLE_LENGTH:
         return
 
-    op.alter_column(
-        "users",
-        "role",
-        existing_type=sa.String(length=existing_length or 5),
-        type_=sa.String(length=TARGET_ROLE_LENGTH),
-        existing_nullable=False,
-    )
+    with op.batch_alter_table("users", recreate="auto") as batch_op:
+        batch_op.alter_column(
+            "role",
+            existing_type=existing_type or sa.String(length=existing_length or 5),
+            type_=sa.String(length=TARGET_ROLE_LENGTH),
+            existing_nullable=role_column.get("nullable", False),
+        )
 
 
 def downgrade() -> None:

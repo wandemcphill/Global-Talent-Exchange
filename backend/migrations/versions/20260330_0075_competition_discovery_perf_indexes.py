@@ -40,36 +40,41 @@ def _drop_index_if_present(bind, *, table_name: str, index_name: str) -> None:
 
 def upgrade() -> None:
     bind = op.get_bind()
-    _create_index_if_missing(
-        bind,
-        table_name="user_competitions",
-        index_name="ix_user_competitions_visibility_created_at",
-        columns=["visibility", "created_at"],
-    )
-    _create_index_if_missing(
-        bind,
-        table_name="user_competitions",
-        index_name="ix_user_competitions_format_visibility_created_at",
-        columns=["format", "visibility", "created_at"],
-    )
-    _create_index_if_missing(
-        bind,
-        table_name="user_competitions",
-        index_name="ix_user_competitions_host_user_id_created_at",
-        columns=["host_user_id", "created_at"],
-    )
-    _create_index_if_missing(
-        bind,
-        table_name="user_hosted_competitions",
-        index_name="ix_user_hosted_competitions_visibility_created_at",
-        columns=["visibility", "created_at"],
-    )
-    _create_index_if_missing(
-        bind,
-        table_name="user_hosted_competitions",
-        index_name="ix_user_hosted_competitions_host_user_id_created_at",
-        columns=["host_user_id", "created_at"],
-    )
+    inspector = sa.inspect(bind)
+
+    if inspector.has_table("user_competitions"):
+        _create_index_if_missing(
+            bind,
+            table_name="user_competitions",
+            index_name="ix_user_competitions_visibility_created_at",
+            columns=["visibility", "created_at"],
+        )
+        _create_index_if_missing(
+            bind,
+            table_name="user_competitions",
+            index_name="ix_user_competitions_format_visibility_created_at",
+            columns=["format", "visibility", "created_at"],
+        )
+        _create_index_if_missing(
+            bind,
+            table_name="user_competitions",
+            index_name="ix_user_competitions_host_user_id_created_at",
+            columns=["host_user_id", "created_at"],
+        )
+
+    if inspector.has_table("user_hosted_competitions"):
+        _create_index_if_missing(
+            bind,
+            table_name="user_hosted_competitions",
+            index_name="ix_user_hosted_competitions_visibility_created_at",
+            columns=["visibility", "created_at"],
+        )
+        _create_index_if_missing(
+            bind,
+            table_name="user_hosted_competitions",
+            index_name="ix_user_hosted_competitions_host_user_id_created_at",
+            columns=["host_user_id", "created_at"],
+        )
 
 
 def downgrade() -> None:

@@ -419,7 +419,7 @@ def test_ready_returns_service_unavailable_when_schema_smoke_fails(app_and_engin
 def test_startup_logs_completion_and_skips_non_local_seeding(tmp_path, monkeypatch) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-log-test.db').as_posix()}"
     media_root = tmp_path / "media"
-    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda session_factory: None)
+    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda *args, **kwargs: None)
     settings = load_settings(
         environ={
             **os.environ,
@@ -442,7 +442,7 @@ def test_startup_logs_completion_and_skips_non_local_seeding(tmp_path, monkeypat
 def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, monkeypatch) -> None:
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-seeding-disabled.db').as_posix()}"
     media_root = tmp_path / "media"
-    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda session_factory: None)
+    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda *args, **kwargs: None)
     settings = load_settings(
         environ={
             **os.environ,
@@ -461,6 +461,32 @@ def test_startup_logs_completion_and_skips_seeding_when_disabled(tmp_path, monke
 
     assert "app.startup.complete" in messages
     assert any(message == "app.startup.seed.skipped seed=policy_documents reason=disabled" for message in messages)
+
+
+def test_startup_tolerates_unavailable_redis(tmp_path, monkeypatch) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'startup-redis-degraded.db').as_posix()}"
+    media_root = tmp_path / "media"
+    monkeypatch.setattr(main_module, "_ensure_initial_admin", lambda *args, **kwargs: None)
+    settings = load_settings(
+        environ={
+            **os.environ,
+            "GTE_APP_ENV": "development",
+            "GTE_DATABASE_URL": database_url,
+            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+            "GTE_REDIS_URL": "redis://127.0.0.1:1/0",
+        }
+    )
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(settings=settings, engine=engine, run_migration_check=False)
+
+    messages = _install_logger_info_spy(monkeypatch)
+    with TestClient(app) as client:
+        response = client.get("/health")
+        app.state.deferred_startup_thread.join(timeout=5)
+
+    assert response.status_code == 200
+    assert isinstance(app.state.cache_backend, NullCacheBackend)
+    assert "app.startup.complete" in messages
 
 
 def test_main_module_exposes_lazy_asgi_app(monkeypatch) -> None:

@@ -229,8 +229,13 @@ class Container:
         if not self.settings.redis_url:
             logger.info("container.health.redis.skipped")
             return
-        if self.cache_backend is None or not self.cache_backend.ping():
-            raise RuntimeError("Redis health check failed.")
+        if self.cache_backend is None:
+            logger.warning("container.health.redis.degraded reason=backend_missing")
+            return
+        if not self.cache_backend.ping():
+            logger.warning("container.health.redis.degraded reason=ping_failed")
+            return
+        logger.info("container.health.redis.complete")
 
 
 ApplicationContext = Container
