@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_3d_scene_graph.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
@@ -13,6 +15,8 @@ class PlayerEntity {
     required this.scale,
     required this.lean,
     required this.stride,
+    required this.turn,
+    required this.momentum,
     required this.fillColor,
     required this.accentColor,
     required this.headColor,
@@ -28,6 +32,8 @@ class PlayerEntity {
   final double scale;
   final double lean;
   final double stride;
+  final double turn;
+  final double momentum;
   final Color fillColor;
   final Color accentColor;
   final Color headColor;
@@ -81,16 +87,22 @@ class PlayerEntity {
             ? _parseColor(team.goalkeeperColorHex)
             : _parseColor(team.primaryColorHex);
     final Color accentColor = _parseColor(team.accentColorHex);
-    final double lean = _blendScalar(
-      _leanForState(payload.animation.currentState, payload.speedRatio),
-      _leanForState(payload.animation.targetState, payload.speedRatio),
-      payload.animation.blendFactor,
-    );
-    final double stride = _blendScalar(
-      _strideForState(payload.animation.currentState, payload.speedRatio),
-      _strideForState(payload.animation.targetState, payload.speedRatio),
-      payload.animation.blendFactor,
-    );
+    final double momentum = _resolveMomentum(node, payload);
+    final double turn = _resolveTurn(node, momentum);
+    final double lean =
+        _blendScalar(
+          _leanForState(payload.animation.currentState, payload.speedRatio),
+          _leanForState(payload.animation.targetState, payload.speedRatio),
+          payload.animation.blendFactor,
+        ) +
+        (turn * 0.06);
+    final double stride =
+        _blendScalar(
+          _strideForState(payload.animation.currentState, payload.speedRatio),
+          _strideForState(payload.animation.targetState, payload.speedRatio),
+          payload.animation.blendFactor,
+        ) +
+        (momentum * 0.12);
 
     return PlayerEntity(
       playerId: node.id,
@@ -104,6 +116,8 @@ class PlayerEntity {
               : 1),
       lean: lean,
       stride: stride,
+      turn: turn,
+      momentum: momentum,
       fillColor:
           isRenderedActive ? baseColor : baseColor.withValues(alpha: 0.28),
       accentColor:
@@ -127,15 +141,22 @@ class PlayerEntity {
     final double baseY = base.dy;
     final double torsoTop = baseY - bodyHeight;
     final double leanOffsetX = shoulderWidth * lean;
-    final double headCenterY = torsoTop - (headRadius * 0.15) - (stride * 0.18);
+    final double turnOffsetX = shoulderWidth * turn * 0.34;
+    final double hipOffsetX = bodyWidth * turn * 0.24;
+    final double momentumLift = momentum * scale * 1.2;
+    final double headCenterY =
+        torsoTop - (headRadius * 0.15) - (stride * 0.18) - momentumLift;
 
     final Paint shadowPaint =
         Paint()..color = Colors.black.withValues(alpha: isDimmed ? 0.08 : 0.18);
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(base.dx, baseY - (scale * 0.8)),
-        width: shadowWidth,
-        height: shadowHeight,
+        center: Offset(
+          base.dx + (turnOffsetX * 0.18),
+          baseY - (scale * (0.8 + (momentum * 0.2))),
+        ),
+        width: shadowWidth * (1 + (momentum * 0.12)),
+        height: shadowHeight * (1 - (momentum * 0.08)),
       ),
       shadowPaint,
     );
@@ -148,9 +169,12 @@ class PlayerEntity {
             ..color = accentColor.withValues(alpha: 0.68);
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(base.dx, torsoTop + (bodyHeight * 0.42)),
-          width: shoulderWidth * 1.55,
-          height: bodyHeight * 1.5,
+          center: Offset(
+            base.dx + (turnOffsetX * 0.12),
+            torsoTop + (bodyHeight * 0.42),
+          ),
+          width: shoulderWidth * (1.55 + (momentum * 0.08)),
+          height: bodyHeight * (1.5 + (momentum * 0.04)),
         ),
         haloPaint,
       );
@@ -159,23 +183,29 @@ class PlayerEntity {
     final Path bodyPath =
         Path()
           ..moveTo(
-            base.dx - (shoulderWidth * 0.5),
+            base.dx - (shoulderWidth * 0.5) + (turnOffsetX * 0.22),
             torsoTop + (bodyHeight * 0.28),
           )
           ..quadraticBezierTo(
-            base.dx + (leanOffsetX * 0.32),
-            torsoTop - (bodyHeight * 0.02) - (stride * 0.12),
-            base.dx + (shoulderWidth * 0.5) + (leanOffsetX * 0.12),
+            base.dx + (leanOffsetX * 0.32) + (turnOffsetX * 0.34),
+            torsoTop - (bodyHeight * 0.02) - (stride * 0.12) - momentumLift,
+            base.dx +
+                (shoulderWidth * 0.5) +
+                (leanOffsetX * 0.12) +
+                turnOffsetX,
             torsoTop + (bodyHeight * 0.28),
           )
           ..lineTo(
-            base.dx + (bodyWidth * 0.42) + (leanOffsetX * 0.24),
+            base.dx + (bodyWidth * 0.42) + (leanOffsetX * 0.24) + hipOffsetX,
             baseY - (bodyHeight * 0.08),
           )
           ..quadraticBezierTo(
-            base.dx + (leanOffsetX * 0.2),
+            base.dx + (leanOffsetX * 0.2) + (hipOffsetX * 0.6),
             baseY + (bodyHeight * 0.04),
-            base.dx - (bodyWidth * 0.42) + (leanOffsetX * 0.12),
+            base.dx -
+                (bodyWidth * 0.42) +
+                (leanOffsetX * 0.12) +
+                (hipOffsetX * 0.18),
             baseY - (bodyHeight * 0.08),
           )
           ..close();
@@ -194,10 +224,10 @@ class PlayerEntity {
     canvas.drawRect(
       Rect.fromCenter(
         center: Offset(
-          base.dx + (leanOffsetX * 0.18),
-          baseY - (bodyHeight * 0.24),
+          base.dx + (leanOffsetX * 0.18) + (turnOffsetX * 0.22),
+          baseY - (bodyHeight * 0.24) - (momentumLift * 0.28),
         ),
-        width: bodyWidth * 0.96,
+        width: bodyWidth * (0.96 + (momentum * 0.06)),
         height: 2.1 * scale,
       ),
       trimPaint,
@@ -205,9 +235,41 @@ class PlayerEntity {
 
     final Paint headPaint = Paint()..color = headColor;
     canvas.drawCircle(
-      Offset(base.dx + (leanOffsetX * 0.28), headCenterY),
+      Offset(
+        base.dx + (leanOffsetX * 0.28) + (turnOffsetX * 0.32),
+        headCenterY,
+      ),
       headRadius,
       headPaint,
+    );
+
+    final Paint armPaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.35 * scale
+          ..strokeCap = StrokeCap.round
+          ..color = accentColor.withValues(alpha: isDimmed ? 0.36 : 0.72);
+    canvas.drawLine(
+      Offset(
+        base.dx - (bodyWidth * 0.34) + (turnOffsetX * 0.12),
+        torsoTop + (bodyHeight * 0.34),
+      ),
+      Offset(
+        base.dx - (bodyWidth * 0.52) - (stride * 0.18) + (turnOffsetX * 0.08),
+        torsoTop + (bodyHeight * (0.6 + (momentum * 0.04))),
+      ),
+      armPaint,
+    );
+    canvas.drawLine(
+      Offset(
+        base.dx + (bodyWidth * 0.34) + (turnOffsetX * 0.34),
+        torsoTop + (bodyHeight * 0.34),
+      ),
+      Offset(
+        base.dx + (bodyWidth * 0.52) + (stride * 0.18) + (turnOffsetX * 0.56),
+        torsoTop + (bodyHeight * (0.6 - (momentum * 0.03))),
+      ),
+      armPaint,
     );
 
     final Paint legPaint =
@@ -217,18 +279,24 @@ class PlayerEntity {
           ..strokeCap = StrokeCap.round
           ..color = fillColor.withValues(alpha: isDimmed ? 0.45 : 0.88);
     canvas.drawLine(
-      Offset(base.dx - (bodyWidth * 0.14), baseY - (bodyHeight * 0.04)),
       Offset(
-        base.dx - (bodyWidth * 0.2) - (stride * 0.35),
-        baseY + (scale * 0.4),
+        base.dx - (bodyWidth * 0.14) + (hipOffsetX * 0.2),
+        baseY - (bodyHeight * 0.04),
+      ),
+      Offset(
+        base.dx - (bodyWidth * 0.2) - (stride * 0.35) + (turnOffsetX * 0.12),
+        baseY + (scale * (0.4 + (momentum * 0.16))),
       ),
       legPaint,
     );
     canvas.drawLine(
-      Offset(base.dx + (bodyWidth * 0.14), baseY - (bodyHeight * 0.04)),
       Offset(
-        base.dx + (bodyWidth * 0.2) + (stride * 0.35),
-        baseY + (scale * 0.4),
+        base.dx + (bodyWidth * 0.14) + (hipOffsetX * 0.54),
+        baseY - (bodyHeight * 0.04),
+      ),
+      Offset(
+        base.dx + (bodyWidth * 0.2) + (stride * 0.35) + (turnOffsetX * 0.42),
+        baseY + (scale * (0.4 + (momentum * 0.16))),
       ),
       legPaint,
     );
@@ -261,6 +329,24 @@ MatchViewerPoint _percentFromWorld(Match3dVector3 position) {
 double _blendScalar(double from, double to, double t) {
   final double resolvedT = t.clamp(0, 1).toDouble();
   return from + ((to - from) * resolvedT);
+}
+
+double _resolveMomentum(Match3dSceneNode node, Match3dPlayerPayload payload) {
+  final double velocityLoad = (node.velocity.magnitude / 13).clamp(0, 1);
+  return ((velocityLoad * 0.58) + (payload.speedRatio.clamp(0, 1) * 0.42))
+      .clamp(0, 1)
+      .toDouble();
+}
+
+double _resolveTurn(Match3dSceneNode node, double momentum) {
+  if (node.velocity.magnitude <= 0.0001) {
+    final double yaw = 2 * math.atan2(node.rotation.y, node.rotation.w);
+    return (yaw / 1.4).clamp(-0.55, 0.55).toDouble();
+  }
+  return ((node.velocity.x / math.max(node.velocity.magnitude, 0.001)) *
+          (0.42 + (momentum * 0.28)))
+      .clamp(-0.7, 0.7)
+      .toDouble();
 }
 
 double _leanForState(Match3dAnimationState state, double speedRatio) {

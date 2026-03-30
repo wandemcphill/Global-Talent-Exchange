@@ -41,11 +41,14 @@ void main() {
       expect(sceneGraph.playerNodes.length, 22);
       expect(sceneGraph.action.type, Match3dSceneActionType.goal);
       expect(sceneGraph.camera.mode, Match3dCameraMode.cinematic);
-      expect(sceneGraph.camera.projectionPreset.name, 'goalbox');
+      expect(sceneGraph.camera.projectionPreset.name, 'goal_replay');
       expect(sceneGraph.action.label, goalEvent.bannerText);
       expect(sceneGraph.experience.motionPredictions, hasLength(22));
       expect(sceneGraph.experience.commentary.line, isNotEmpty);
       expect(sceneGraph.experience.crowd.profile, isNotEmpty);
+      expect(sceneGraph.homeShape.formation, isNotEmpty);
+      expect(sceneGraph.awayShape.formation, isNotEmpty);
+      expect(sceneGraph.activeEventContext?.bannerText, goalEvent.bannerText);
       expect(
         sceneGraph.experience.spectatorSync.roomId,
         viewState.matchId.prependMatchPrefix,
@@ -75,6 +78,9 @@ void main() {
     expect(payload['matchEvent'], isA<Map<String, dynamic>>());
     expect((payload['camera'] as Map<String, dynamic>)['mode'], isNotEmpty);
     expect(payload['experience'], isA<Map<String, dynamic>>());
+    expect(payload['homeShape'], isA<Map<String, dynamic>>());
+    expect(payload['awayShape'], isA<Map<String, dynamic>>());
+    expect(payload['activeEventContext'], isA<Map<String, dynamic>>());
     expect(
       ((payload['experience'] as Map<String, dynamic>)['motionPredictions']
               as List<dynamic>)

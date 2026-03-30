@@ -8,11 +8,7 @@ import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/player_entity.dart';
 
-enum MatchPlaybackSpeedMode {
-  slow,
-  normal,
-  fast,
-}
+enum MatchPlaybackSpeedMode { slow, normal, fast }
 
 class Match3dTimelineController extends ChangeNotifier {
   Match3dTimelineController({
@@ -64,17 +60,23 @@ class Match3dTimelineController extends ChangeNotifier {
         : '${speed.toStringAsFixed(1)}x';
   }
 
-  MatchPlaybackSpeedMode get speedMode => MatchPlaybackSpeedMode
-      .values[_speedIndex.clamp(0, MatchPlaybackSpeedMode.values.length - 1)];
+  MatchPlaybackSpeedMode get speedMode =>
+      MatchPlaybackSpeedMode.values[_speedIndex.clamp(
+        0,
+        MatchPlaybackSpeedMode.values.length - 1,
+      )];
 
   double get effectivePlaybackRate =>
       isAutoPaused ? 0 : speed * displayFrame.playbackRate;
 
   double get positionSeconds => _positionSeconds;
 
-  double get progress => viewState.durationSeconds <= 0
-      ? 0
-      : (_positionSeconds / viewState.durationSeconds).clamp(0, 1).toDouble();
+  double get progress =>
+      viewState.durationSeconds <= 0
+          ? 0
+          : (_positionSeconds / viewState.durationSeconds)
+              .clamp(0, 1)
+              .toDouble();
 
   _RuntimeSnapshot get _activeSnapshot =>
       _autoPausedSnapshot ?? _runtimeSnapshot;
@@ -204,12 +206,13 @@ class Match3dTimelineController extends ChangeNotifier {
   }
 
   void updateSpeedOptions(List<double> speedOptions) {
-    final List<double> normalized = speedOptions
-        .where((double value) => value > 0)
-        .map((double value) => value.toDouble())
-        .toSet()
-        .toList()
-      ..sort();
+    final List<double> normalized =
+        speedOptions
+            .where((double value) => value > 0)
+            .map((double value) => value.toDouble())
+            .toSet()
+            .toList()
+          ..sort();
     if (normalized.isEmpty || listEquals(normalized, _speeds)) {
       return;
     }
@@ -321,7 +324,8 @@ class Match3dTimelineController extends ChangeNotifier {
       return;
     }
     _isAutoPaused = true;
-    _autoPauseResumeAt = elapsed +
+    _autoPauseResumeAt =
+        elapsed +
         Duration(
           microseconds:
               (cue.holdSeconds * Duration.microsecondsPerSecond).round(),
@@ -353,10 +357,12 @@ class Match3dTimelineController extends ChangeNotifier {
         break;
       }
     }
-    final double holdSeconds = nextFrame == null
-        ? 0.8
-        : math.max(0.2, nextFrame.timeSeconds - positionSeconds).toDouble();
-    final double resumePosition = nextFrame?.timeSeconds ??
+    final double holdSeconds =
+        nextFrame == null
+            ? 0.8
+            : math.max(0.2, nextFrame.timeSeconds - positionSeconds).toDouble();
+    final double resumePosition =
+        nextFrame?.timeSeconds ??
         (positionSeconds + 0.05).clamp(0, viewState.durationSeconds.toDouble());
     return _PauseCue(
       holdSeconds: holdSeconds,
@@ -370,8 +376,9 @@ class Match3dTimelineController extends ChangeNotifier {
         (cachedPosition - _positionSeconds).abs() < 0.000001) {
       return _cachedSnapshot!;
     }
-    final _RuntimeSnapshot snapshot =
-        _resolveRuntimeSnapshotAt(_positionSeconds);
+    final _RuntimeSnapshot snapshot = _resolveRuntimeSnapshotAt(
+      _positionSeconds,
+    );
     _cachedPositionSeconds = _positionSeconds;
     _cachedSnapshot = snapshot;
     return snapshot;
@@ -380,11 +387,12 @@ class Match3dTimelineController extends ChangeNotifier {
   _RuntimeSnapshot _resolveRuntimeSnapshotAt(double positionSeconds) {
     final _TimelineSegment segment = _segmentAt(positionSeconds);
     final double duration = segment.endTime - segment.startTime;
-    final double linearT = duration <= 0
-        ? 1
-        : ((positionSeconds - segment.startTime) / duration)
-            .clamp(0, 1)
-            .toDouble();
+    final double linearT =
+        duration <= 0
+            ? 1
+            : ((positionSeconds - segment.startTime) / duration)
+                .clamp(0, 1)
+                .toDouble();
     final double easedT = _applyEasing(segment.stage, linearT);
     final MatchTimelineFrame baseFrame = segment.startFrame.interpolate(
       segment.endFrame,
@@ -399,11 +407,7 @@ class Match3dTimelineController extends ChangeNotifier {
       linearT: linearT,
       easedT: easedT,
     );
-    return _snapshotFromFrame(
-      frame: frame,
-      segment: segment,
-      easedT: easedT,
-    );
+    return _snapshotFromFrame(frame: frame, segment: segment, easedT: easedT);
   }
 
   _RuntimeSnapshot _snapshotFromFrame({
@@ -412,47 +416,193 @@ class Match3dTimelineController extends ChangeNotifier {
     required double easedT,
   }) {
     final MatchViewerSide possessionSide = frame.possessionSide;
-    final List<PlayerEntity> players =
-        frame.players.map((MatchViewerPlayerFrame player) {
-      final MatchViewerPlayerFrame startPlayer =
-          segment.startPlayers[player.playerId] ?? player;
-      final MatchViewerPlayerFrame endPlayer =
-          segment.endPlayers[player.playerId] ?? player;
-      return PlayerEntity(
-        playerId: player.playerId,
-        teamId: player.teamId,
-        side: player.side,
-        role: player.role,
-        line: player.line,
-        label: player.label,
-        shirtNumber: player.shirtNumber,
-        active: player.active,
-        baseState: player.state,
-        runPattern: _runPatternForPlayer(
-          player: player,
-          possessionSide: possessionSide,
-          ownerPlayerId: frame.ball.ownerPlayerId,
-        ),
-        anchor: player.anchorPosition,
-        startPosition: startPlayer.position,
-        targetPosition: endPlayer.position,
-        currentPosition: player.position,
-        hasPossession: frame.ball.ownerPlayerId == player.playerId,
-        highlighted: player.highlighted ||
-            segment.highlightedIds.contains(player.playerId),
-        animationState: player.animationState,
-        speedRatio: player.speedRatio,
-        blendFactor: player.blendFactor,
-        staminaPct: player.staminaPct,
-      );
-    }).toList(growable: false);
+    final bool structuredPhase =
+        frame.phase == MatchViewerPhase.setPiece ||
+        frame.possessionPhase == MatchPossessionPhase.restart ||
+        frame.possessionPhase == MatchPossessionPhase.stoppage ||
+        segment.event?.type == MatchViewerEventType.substitution;
+    final BallEntity provisionalBall = _resolveBallEntity(
+      frame: frame,
+      segment: segment,
+      progress: easedT,
+      possessionSide: possessionSide,
+    );
+    final List<PlayerEntity> players = frame.players
+        .map((MatchViewerPlayerFrame player) {
+          final MatchViewerPlayerFrame startPlayer =
+              segment.startPlayers[player.playerId] ?? player;
+          final MatchViewerPlayerFrame endPlayer =
+              segment.endPlayers[player.playerId] ?? player;
+          return PlayerEntity.fromFrames(
+            startFrame: startPlayer,
+            targetFrame: endPlayer,
+            runPattern: _runPatternForPlayer(
+              player: player,
+              possessionSide: possessionSide,
+              ownerPlayerId: frame.ball.ownerPlayerId,
+            ),
+            anchor: player.anchorPosition,
+            progress: easedT,
+            ballSideY: provisionalBall.currentPosition.y,
+            hasPossession: frame.ball.ownerPlayerId == player.playerId,
+            highlighted:
+                player.highlighted ||
+                segment.highlightedIds.contains(player.playerId),
+            structuredPhase: structuredPhase,
+          );
+        })
+        .toList(growable: false);
+    final BallEntity ball = _resolveBallEntity(
+      frame: frame,
+      segment: segment,
+      progress: easedT,
+      possessionSide: possessionSide,
+      runtimePlayers: players,
+    );
     return _RuntimeSnapshot(
       players: players,
-      ball: BallEntity.fromFrame(frame.ball),
+      ball: ball,
       frame: frame,
       segment: segment,
       easedT: easedT,
     );
+  }
+
+  BallEntity _resolveBallEntity({
+    required MatchTimelineFrame frame,
+    required _TimelineSegment segment,
+    required double progress,
+    required MatchViewerSide possessionSide,
+    List<PlayerEntity>? runtimePlayers,
+  }) {
+    final MatchViewerBallFrame startBall = segment.startFrame.ball;
+    final MatchViewerBallFrame endBall = segment.endFrame.ball;
+    final BallTrajectoryType trajectoryType = _ballTrajectoryForSegment(
+      frame: frame,
+      segment: segment,
+    );
+    final double attackDirection = _attackDirectionFor(
+      frame: frame,
+      possessionSide: possessionSide,
+    );
+    if (trajectoryType == BallTrajectoryType.carry &&
+        runtimePlayers != null &&
+        runtimePlayers.isNotEmpty) {
+      final PlayerEntity? startOwner = runtimePlayers.byId(
+        startBall.ownerPlayerId,
+      );
+      final PlayerEntity? endOwner = runtimePlayers.byId(endBall.ownerPlayerId);
+      if (startOwner != null || endOwner != null) {
+        return BallEntity.carry(
+          ownerPosition:
+              startOwner?.startPosition ??
+              startOwner?.currentPosition ??
+              startBall.position,
+          targetPosition:
+              endOwner?.currentPosition ??
+              startOwner?.targetPosition ??
+              endBall.position,
+          progress: progress,
+          attackDirection: attackDirection,
+          ownerPlayerId:
+              progress < segment.ownershipSwitchT
+                  ? startBall.ownerPlayerId
+                  : endBall.ownerPlayerId,
+          state: frame.ball.state,
+        );
+      }
+    }
+    return BallEntity.interpolateTrajectory(
+      startPosition: startBall.position,
+      targetPosition: endBall.position,
+      progress: progress,
+      trajectoryType: trajectoryType,
+      ownerPlayerId: startBall.ownerPlayerId,
+      targetPlayerId: endBall.ownerPlayerId ?? startBall.ownerPlayerId,
+      attackDirection: attackDirection,
+      state: frame.ball.state,
+    );
+  }
+
+  BallTrajectoryType _ballTrajectoryForSegment({
+    required MatchTimelineFrame frame,
+    required _TimelineSegment segment,
+  }) {
+    final MatchViewerBallFrame startBall = segment.startFrame.ball;
+    final MatchViewerBallFrame endBall = segment.endFrame.ball;
+    final String stateSample =
+        '${startBall.state}|${endBall.state}|${frame.ball.state}|${segment.event?.type.name ?? ''}'
+            .toLowerCase();
+    final bool ownerChanged =
+        startBall.ownerPlayerId != endBall.ownerPlayerId &&
+        endBall.ownerPlayerId != null;
+    final double travelDistance = _pointDistance(
+      startBall.position,
+      endBall.position,
+    );
+    if (segment.stage == _SegmentStage.reset ||
+        frame.phase == MatchViewerPhase.kickoff) {
+      return BallTrajectoryType.reset;
+    }
+    if (frame.phase == MatchViewerPhase.setPiece) {
+      if (segment.event?.type == MatchViewerEventType.penalty ||
+          stateSample.contains('shot') ||
+          stateSample.contains('saved') ||
+          stateSample.contains('missed') ||
+          stateSample.contains('in_goal')) {
+        return BallTrajectoryType.shot;
+      }
+      if (stateSample.contains('placed')) {
+        return BallTrajectoryType.reset;
+      }
+      return travelDistance >= 5.5
+          ? BallTrajectoryType.pass
+          : BallTrajectoryType.reset;
+    }
+    if (segment.event?.type == MatchViewerEventType.goal ||
+        segment.event?.type == MatchViewerEventType.save ||
+        segment.event?.type == MatchViewerEventType.miss ||
+        segment.event?.type == MatchViewerEventType.penalty ||
+        stateSample.contains('shot') ||
+        stateSample.contains('saved') ||
+        stateSample.contains('missed') ||
+        stateSample.contains('in_goal')) {
+      return BallTrajectoryType.shot;
+    }
+    if (stateSample.contains('pass') ||
+        stateSample.contains('cross') ||
+        stateSample.contains('lob') ||
+        stateSample.contains('traveling') ||
+        ownerChanged ||
+        (segment.stage == _SegmentStage.buildUp && travelDistance >= 4.6)) {
+      return BallTrajectoryType.pass;
+    }
+    if (startBall.ownerPlayerId == null &&
+        endBall.ownerPlayerId == null &&
+        travelDistance >= 2.0) {
+      return BallTrajectoryType.loose;
+    }
+    if (stateSample.contains('stopped') || stateSample.contains('held')) {
+      return BallTrajectoryType.loose;
+    }
+    return BallTrajectoryType.carry;
+  }
+
+  double _attackDirectionFor({
+    required MatchTimelineFrame frame,
+    required MatchViewerSide possessionSide,
+  }) {
+    final bool attacksRight =
+        possessionSide == MatchViewerSide.home
+            ? frame.homeAttacksRight
+            : !frame.homeAttacksRight;
+    return attacksRight ? 1 : -1;
+  }
+
+  double _pointDistance(MatchViewerPoint left, MatchViewerPoint right) {
+    final double deltaX = left.x - right.x;
+    final double deltaY = left.y - right.y;
+    return math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
   }
 
   MatchTimelineFrame _decorateDisplayFrame({
@@ -461,8 +611,9 @@ class Match3dTimelineController extends ChangeNotifier {
     required double linearT,
     required double easedT,
   }) {
-    final List<MatchTimelineInjection> injections =
-        _activeInjectionsAt(frame.timeSeconds);
+    final List<MatchTimelineInjection> injections = _activeInjectionsAt(
+      frame.timeSeconds,
+    );
     final MatchTimelineInjection? leadInjection =
         injections.isEmpty ? null : injections.first;
     final MatchEvent? leadEvent = viewState.eventById(leadInjection?.id);
@@ -473,29 +624,34 @@ class Match3dTimelineController extends ChangeNotifier {
         positionSeconds: frame.timeSeconds,
         phase: frame.phase,
       ),
-      possessionSide: _playerSideForId(frame.players, ownerPlayerId) ??
+      possessionSide:
+          _playerSideForId(frame.players, ownerPlayerId) ??
           _sideForTeamId(leadEvent?.teamId) ??
           segment.possessionSide,
       activeEventId: leadEvent?.id ?? frame.activeEventId ?? segment.event?.id,
-      eventBanner: leadInjection?.bannerText ??
+      eventBanner:
+          leadInjection?.bannerText ??
           frame.eventBanner ??
           segment.event?.bannerText,
       overlayText: frame.overlayText ?? leadInjection?.bannerText,
       possessionPhase: _possessionPhaseForStage(segment.stage),
       sequenceId: segment.sequenceId,
-      sequenceProgress: segment.sequenceEndTime <= segment.sequenceStartTime
-          ? 1
-          : ((frame.timeSeconds - segment.sequenceStartTime) /
-                  (segment.sequenceEndTime - segment.sequenceStartTime))
-              .clamp(0, 1)
-              .toDouble(),
+      sequenceProgress:
+          segment.sequenceEndTime <= segment.sequenceStartTime
+              ? 1
+              : ((frame.timeSeconds - segment.sequenceStartTime) /
+                      (segment.sequenceEndTime - segment.sequenceStartTime))
+                  .clamp(0, 1)
+                  .toDouble(),
       isSynthetic: frame.isSynthetic || segment.synthetic,
       injectedEvents: injections,
       pausePlayback: frame.pausePlayback,
       playbackRate: frame.playbackRate,
-      flagAnimation: frame.flagAnimation ||
+      flagAnimation:
+          frame.flagAnimation ||
           leadInjection?.type == MatchTimelineInjectionType.offside,
-      celebrationTeamId: frame.celebrationTeamId ??
+      celebrationTeamId:
+          frame.celebrationTeamId ??
           (leadInjection?.type == MatchTimelineInjectionType.goal
               ? leadEvent?.teamId
               : null),
@@ -537,33 +693,36 @@ class Match3dTimelineController extends ChangeNotifier {
     if (active.length < 2) {
       return active;
     }
-    final List<MatchTimelineInjection> ordered =
-        List<MatchTimelineInjection>.of(active)
-          ..sort((MatchTimelineInjection left, MatchTimelineInjection right) {
-            final int priority = _injectionPriority(right.type)
-                .compareTo(_injectionPriority(left.type));
-            if (priority != 0) {
-              return priority;
-            }
-            final double leftDistance =
-                (positionSeconds - left.peakSeconds).abs();
-            final double rightDistance =
-                (positionSeconds - right.peakSeconds).abs();
-            return leftDistance.compareTo(rightDistance);
-          });
+    final List<MatchTimelineInjection>
+    ordered = List<MatchTimelineInjection>.of(active)..sort((
+      MatchTimelineInjection left,
+      MatchTimelineInjection right,
+    ) {
+      final int priority = _injectionPriority(
+        right.type,
+      ).compareTo(_injectionPriority(left.type));
+      if (priority != 0) {
+        return priority;
+      }
+      final double leftDistance = (positionSeconds - left.peakSeconds).abs();
+      final double rightDistance = (positionSeconds - right.peakSeconds).abs();
+      return leftDistance.compareTo(rightDistance);
+    });
     return ordered;
   }
 
   MatchTimelineInjection _buildInjectionForEvent(MatchEvent event) {
     final _InjectionWindow window = _windowForEvent(event.type);
-    final double peakSeconds = event.timeSeconds
-        .clamp(0, viewState.durationSeconds.toDouble())
-        .toDouble();
+    final double peakSeconds =
+        event.timeSeconds
+            .clamp(0, viewState.durationSeconds.toDouble())
+            .toDouble();
     final double startSeconds =
         (peakSeconds - window.leadSeconds).clamp(0, peakSeconds).toDouble();
-    final double endSeconds = (peakSeconds + window.trailSeconds)
-        .clamp(startSeconds, viewState.durationSeconds.toDouble())
-        .toDouble();
+    final double endSeconds =
+        (peakSeconds + window.trailSeconds)
+            .clamp(startSeconds, viewState.durationSeconds.toDouble())
+            .toDouble();
     return MatchTimelineInjection(
       id: event.id,
       type: _injectionTypeForEvent(event.type),
@@ -580,9 +739,9 @@ class Match3dTimelineController extends ChangeNotifier {
     final List<MatchTimelineFrame> frames = List<MatchTimelineFrame>.of(
       viewState.frames,
     )..sort(
-        (MatchTimelineFrame left, MatchTimelineFrame right) =>
-            left.timeSeconds.compareTo(right.timeSeconds),
-      );
+      (MatchTimelineFrame left, MatchTimelineFrame right) =>
+          left.timeSeconds.compareTo(right.timeSeconds),
+    );
     if (frames.isEmpty) {
       return const <_TimelineSegment>[];
     }
@@ -590,11 +749,10 @@ class Match3dTimelineController extends ChangeNotifier {
       return <_TimelineSegment>[_TimelineSegment.stationary(frames.first)];
     }
 
-    final List<MatchEvent> events = List<MatchEvent>.of(viewState.events)
-      ..sort(
-        (MatchEvent left, MatchEvent right) =>
-            left.timeSeconds.compareTo(right.timeSeconds),
-      );
+    final List<MatchEvent> events = List<MatchEvent>.of(viewState.events)..sort(
+      (MatchEvent left, MatchEvent right) =>
+          left.timeSeconds.compareTo(right.timeSeconds),
+    );
     final List<_SegmentSeed> seeds = <_SegmentSeed>[];
     int sequenceCounter = 0;
     String? currentSequenceId;
@@ -612,12 +770,14 @@ class Match3dTimelineController extends ChangeNotifier {
       for (int part = 0; part < splitCount; part += 1) {
         final double startRatio = part / splitCount;
         final double endRatio = (part + 1) / splitCount;
-        final MatchTimelineFrame segmentStart = part == 0
-            ? pairStart
-            : _virtualFrame(pairStart, pairEnd, startRatio);
-        final MatchTimelineFrame segmentEnd = part == splitCount - 1
-            ? pairEnd
-            : _virtualFrame(pairStart, pairEnd, endRatio);
+        final MatchTimelineFrame segmentStart =
+            part == 0
+                ? pairStart
+                : _virtualFrame(pairStart, pairEnd, startRatio);
+        final MatchTimelineFrame segmentEnd =
+            part == splitCount - 1
+                ? pairEnd
+                : _virtualFrame(pairStart, pairEnd, endRatio);
         final MatchEvent? event = _eventForWindow(
           events: events,
           startTime: segmentStart.timeSeconds,
@@ -636,7 +796,8 @@ class Match3dTimelineController extends ChangeNotifier {
           event: event,
           possessionSide: possessionSide,
         );
-        final bool startsNewSequence = seeds.isEmpty ||
+        final bool startsNewSequence =
+            seeds.isEmpty ||
             event != null ||
             stage == _SegmentStage.reset ||
             stage == _SegmentStage.hold ||
@@ -654,7 +815,8 @@ class Match3dTimelineController extends ChangeNotifier {
             event: event,
             stage: stage,
             possessionSide: possessionSide,
-            synthetic: splitCount > 1 ||
+            synthetic:
+                splitCount > 1 ||
                 segmentStart.isSynthetic ||
                 segmentEnd.isSynthetic,
             sequenceId: currentSequenceId ?? 'sequence-$sequenceCounter',
@@ -681,35 +843,36 @@ class Match3dTimelineController extends ChangeNotifier {
       }
     }
 
-    return seeds.map((_SegmentSeed seed) {
-      final _SequenceWindow window = sequenceWindows[seed.sequenceId]!;
-      return _TimelineSegment(
-        startFrame: seed.startFrame,
-        endFrame: seed.endFrame,
-        startPlayers: <String, MatchViewerPlayerFrame>{
-          for (final MatchViewerPlayerFrame player in seed.startFrame.players)
-            player.playerId: player,
-        },
-        endPlayers: <String, MatchViewerPlayerFrame>{
-          for (final MatchViewerPlayerFrame player in seed.endFrame.players)
-            player.playerId: player,
-        },
-        startTime: seed.startTime,
-        endTime: seed.endTime,
-        event: seed.event,
-        stage: seed.stage,
-        possessionSide: seed.possessionSide,
-        changeoverT: _changeoverForStage(seed.stage),
-        ownershipSwitchT: _ownershipSwitchForStage(seed.stage),
-        sequenceId: seed.sequenceId,
-        sequenceStartTime: window.startTime,
-        sequenceEndTime: window.endTime,
-        synthetic: seed.synthetic,
-        highlightedIds: <String>{
-          ...?seed.event?.highlightedPlayerIds,
-        },
-      );
-    }).toList(growable: false);
+    return seeds
+        .map((_SegmentSeed seed) {
+          final _SequenceWindow window = sequenceWindows[seed.sequenceId]!;
+          return _TimelineSegment(
+            startFrame: seed.startFrame,
+            endFrame: seed.endFrame,
+            startPlayers: <String, MatchViewerPlayerFrame>{
+              for (final MatchViewerPlayerFrame player
+                  in seed.startFrame.players)
+                player.playerId: player,
+            },
+            endPlayers: <String, MatchViewerPlayerFrame>{
+              for (final MatchViewerPlayerFrame player in seed.endFrame.players)
+                player.playerId: player,
+            },
+            startTime: seed.startTime,
+            endTime: seed.endTime,
+            event: seed.event,
+            stage: seed.stage,
+            possessionSide: seed.possessionSide,
+            changeoverT: _changeoverForStage(seed.stage),
+            ownershipSwitchT: _ownershipSwitchForStage(seed.stage),
+            sequenceId: seed.sequenceId,
+            sequenceStartTime: window.startTime,
+            sequenceEndTime: window.endTime,
+            synthetic: seed.synthetic,
+            highlightedIds: <String>{...?seed.event?.highlightedPlayerIds},
+          );
+        })
+        .toList(growable: false);
   }
 
   MatchTimelineFrame _virtualFrame(
@@ -792,12 +955,13 @@ class Match3dTimelineController extends ChangeNotifier {
         startFrame.activeEventId == endFrame.activeEventId) {
       return _SegmentStage.postEvent;
     }
-    final double attackDirection = possessionSide == MatchViewerSide.home
-        ? (endFrame.homeAttacksRight ? 1 : -1)
-        : (endFrame.homeAttacksRight ? -1 : 1);
+    final double attackDirection =
+        possessionSide == MatchViewerSide.home
+            ? (endFrame.homeAttacksRight ? 1 : -1)
+            : (endFrame.homeAttacksRight ? -1 : 1);
     final double forwardProgress =
         (endFrame.ball.position.x - startFrame.ball.position.x) *
-            attackDirection;
+        attackDirection;
     if (forwardProgress >= 6) {
       return _SegmentStage.event;
     }
@@ -854,8 +1018,7 @@ class Match3dTimelineController extends ChangeNotifier {
       MatchViewerEventType.miss ||
       MatchViewerEventType.attack ||
       MatchViewerEventType.penalty ||
-      MatchViewerEventType.setPiece =>
-        MatchCameraPreset.attackPush,
+      MatchViewerEventType.setPiece => MatchCameraPreset.attackPush,
       _ => MatchCameraPreset.broadcast,
     };
   }
@@ -915,8 +1078,7 @@ class Match3dTimelineController extends ChangeNotifier {
       MatchViewerEventType.save => MatchTimelineInjectionType.save,
       MatchViewerEventType.miss => MatchTimelineInjectionType.miss,
       MatchViewerEventType.redCard ||
-      MatchViewerEventType.yellowCard =>
-        MatchTimelineInjectionType.card,
+      MatchViewerEventType.yellowCard => MatchTimelineInjectionType.card,
       MatchViewerEventType.substitution =>
         MatchTimelineInjectionType.substitution,
       MatchViewerEventType.halftime => MatchTimelineInjectionType.halftime,
@@ -927,21 +1089,25 @@ class Match3dTimelineController extends ChangeNotifier {
 
   static _InjectionWindow _windowForEvent(MatchViewerEventType type) {
     return switch (type) {
-      MatchViewerEventType.goal =>
-        const _InjectionWindow(leadSeconds: 1.2, trailSeconds: 2.6),
+      MatchViewerEventType.goal => const _InjectionWindow(
+        leadSeconds: 1.2,
+        trailSeconds: 2.6,
+      ),
       MatchViewerEventType.offside ||
       MatchViewerEventType.foul ||
       MatchViewerEventType.redCard ||
-      MatchViewerEventType.yellowCard =>
-        const _InjectionWindow(leadSeconds: 0.9, trailSeconds: 1.8),
-      MatchViewerEventType.save ||
-      MatchViewerEventType.miss =>
+      MatchViewerEventType.yellowCard => const _InjectionWindow(
+        leadSeconds: 0.9,
+        trailSeconds: 1.8,
+      ),
+      MatchViewerEventType.save || MatchViewerEventType.miss =>
         const _InjectionWindow(leadSeconds: 0.6, trailSeconds: 1.4),
-      MatchViewerEventType.halftime ||
-      MatchViewerEventType.fulltime =>
+      MatchViewerEventType.halftime || MatchViewerEventType.fulltime =>
         const _InjectionWindow(leadSeconds: 0.3, trailSeconds: 2.0),
-      MatchViewerEventType.substitution =>
-        const _InjectionWindow(leadSeconds: 0.4, trailSeconds: 1.0),
+      MatchViewerEventType.substitution => const _InjectionWindow(
+        leadSeconds: 0.4,
+        trailSeconds: 1.0,
+      ),
       _ => const _InjectionWindow(leadSeconds: 0.35, trailSeconds: 0.85),
     };
   }
@@ -1058,9 +1224,9 @@ class _ClockCompression {
     final List<MatchTimelineFrame> frames = List<MatchTimelineFrame>.of(
       viewState.frames,
     )..sort(
-        (MatchTimelineFrame left, MatchTimelineFrame right) =>
-            left.timeSeconds.compareTo(right.timeSeconds),
-      );
+      (MatchTimelineFrame left, MatchTimelineFrame right) =>
+          left.timeSeconds.compareTo(right.timeSeconds),
+    );
     for (final MatchTimelineFrame frame in frames) {
       if (frame.phase == MatchViewerPhase.halftime) {
         halftimeSeconds ??= frame.timeSeconds;
@@ -1141,14 +1307,7 @@ class _ClockCompression {
   }
 }
 
-enum _SegmentStage {
-  reset,
-  buildUp,
-  event,
-  postEvent,
-  openPlay,
-  hold,
-}
+enum _SegmentStage { reset, buildUp, event, postEvent, openPlay, hold }
 
 class _SegmentSeed {
   const _SegmentSeed({
@@ -1175,10 +1334,7 @@ class _SegmentSeed {
 }
 
 class _SequenceWindow {
-  const _SequenceWindow({
-    required this.startTime,
-    required this.endTime,
-  });
+  const _SequenceWindow({required this.startTime, required this.endTime});
 
   final double startTime;
   final double endTime;
@@ -1260,10 +1416,7 @@ class _InjectionWindow {
 }
 
 class _PauseCue {
-  const _PauseCue({
-    required this.holdSeconds,
-    required this.resumePosition,
-  });
+  const _PauseCue({required this.holdSeconds, required this.resumePosition});
 
   final double holdSeconds;
   final double resumePosition;

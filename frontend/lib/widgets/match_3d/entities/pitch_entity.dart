@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 
 class PitchProjection {
   const PitchProjection({
@@ -20,6 +20,25 @@ class PitchProjection {
   final Offset nearRight;
   final Offset nearLeft;
   final double lineWidth;
+
+  static PitchProjection lerp(
+    PitchProjection from,
+    PitchProjection to,
+    double t,
+  ) {
+    final double resolvedT = t.clamp(0, 1).toDouble();
+    return PitchProjection(
+      size: Size.lerp(from.size, to.size, resolvedT) ?? to.size,
+      farLeft: Offset.lerp(from.farLeft, to.farLeft, resolvedT) ?? to.farLeft,
+      farRight:
+          Offset.lerp(from.farRight, to.farRight, resolvedT) ?? to.farRight,
+      nearRight:
+          Offset.lerp(from.nearRight, to.nearRight, resolvedT) ?? to.nearRight,
+      nearLeft:
+          Offset.lerp(from.nearLeft, to.nearLeft, resolvedT) ?? to.nearLeft,
+      lineWidth: _lerp(from.lineWidth, to.lineWidth, resolvedT),
+    );
+  }
 
   Path get fieldPath {
     return Path()
@@ -105,33 +124,74 @@ class PitchEntity {
 
   static PitchProjection project(
     Size size, {
-    Match3dCameraPreset cameraPreset = Match3dCameraPreset.broadcast,
+    MatchEngineCameraPreset cameraPreset =
+        MatchEngineCameraPreset.tactical_high,
   }) {
     final double centerX = size.width / 2;
     final double topY = switch (cameraPreset) {
-      Match3dCameraPreset.broadcast => size.height * 0.11,
-      Match3dCameraPreset.sideline => size.height * 0.09,
-      Match3dCameraPreset.goalbox => size.height * 0.16,
+      MatchEngineCameraPreset.stadium_wide => size.height * 0.08,
+      MatchEngineCameraPreset.kickoff_center => size.height * 0.11,
+      MatchEngineCameraPreset.tactical_high => size.height * 0.06,
+      MatchEngineCameraPreset.attacking_third_left ||
+      MatchEngineCameraPreset.attacking_third_right => size.height * 0.14,
+      MatchEngineCameraPreset.defensive_block => size.height * 0.10,
+      MatchEngineCameraPreset.set_piece_left ||
+      MatchEngineCameraPreset.set_piece_right => size.height * 0.14,
+      MatchEngineCameraPreset.goal_replay => size.height * 0.17,
+      MatchEngineCameraPreset.halftime_board ||
+      MatchEngineCameraPreset.fulltime_board => size.height * 0.12,
     };
     final double bottomY = switch (cameraPreset) {
-      Match3dCameraPreset.broadcast => size.height * 0.94,
-      Match3dCameraPreset.sideline => size.height * 0.96,
-      Match3dCameraPreset.goalbox => size.height * 0.95,
+      MatchEngineCameraPreset.stadium_wide => size.height * 0.93,
+      MatchEngineCameraPreset.kickoff_center => size.height * 0.95,
+      MatchEngineCameraPreset.tactical_high => size.height * 0.89,
+      MatchEngineCameraPreset.attacking_third_left ||
+      MatchEngineCameraPreset.attacking_third_right => size.height * 0.96,
+      MatchEngineCameraPreset.defensive_block => size.height * 0.95,
+      MatchEngineCameraPreset.set_piece_left ||
+      MatchEngineCameraPreset.set_piece_right => size.height * 0.96,
+      MatchEngineCameraPreset.goal_replay => size.height * 0.95,
+      MatchEngineCameraPreset.halftime_board ||
+      MatchEngineCameraPreset.fulltime_board => size.height * 0.90,
     };
     final double farHalfWidth = switch (cameraPreset) {
-      Match3dCameraPreset.broadcast => size.width * 0.39,
-      Match3dCameraPreset.sideline => size.width * 0.33,
-      Match3dCameraPreset.goalbox => size.width * 0.26,
+      MatchEngineCameraPreset.stadium_wide => size.width * 0.43,
+      MatchEngineCameraPreset.kickoff_center => size.width * 0.37,
+      MatchEngineCameraPreset.tactical_high => size.width * 0.41,
+      MatchEngineCameraPreset.attacking_third_left ||
+      MatchEngineCameraPreset.attacking_third_right => size.width * 0.25,
+      MatchEngineCameraPreset.defensive_block => size.width * 0.31,
+      MatchEngineCameraPreset.set_piece_left ||
+      MatchEngineCameraPreset.set_piece_right => size.width * 0.27,
+      MatchEngineCameraPreset.goal_replay => size.width * 0.24,
+      MatchEngineCameraPreset.halftime_board ||
+      MatchEngineCameraPreset.fulltime_board => size.width * 0.35,
     };
     final double nearHalfWidth = switch (cameraPreset) {
-      Match3dCameraPreset.broadcast => size.width * 0.48,
-      Match3dCameraPreset.sideline => size.width * 0.56,
-      Match3dCameraPreset.goalbox => size.width * 0.60,
+      MatchEngineCameraPreset.stadium_wide => size.width * 0.49,
+      MatchEngineCameraPreset.kickoff_center => size.width * 0.52,
+      MatchEngineCameraPreset.tactical_high => size.width * 0.48,
+      MatchEngineCameraPreset.attacking_third_left ||
+      MatchEngineCameraPreset.attacking_third_right => size.width * 0.62,
+      MatchEngineCameraPreset.defensive_block => size.width * 0.54,
+      MatchEngineCameraPreset.set_piece_left ||
+      MatchEngineCameraPreset.set_piece_right => size.width * 0.61,
+      MatchEngineCameraPreset.goal_replay => size.width * 0.65,
+      MatchEngineCameraPreset.halftime_board ||
+      MatchEngineCameraPreset.fulltime_board => size.width * 0.50,
     };
     final double horizonShift = switch (cameraPreset) {
-      Match3dCameraPreset.broadcast => 0,
-      Match3dCameraPreset.sideline => size.width * 0.05,
-      Match3dCameraPreset.goalbox => 0,
+      MatchEngineCameraPreset.stadium_wide => 0,
+      MatchEngineCameraPreset.kickoff_center => 0,
+      MatchEngineCameraPreset.tactical_high => 0,
+      MatchEngineCameraPreset.attacking_third_left => size.width * -0.05,
+      MatchEngineCameraPreset.attacking_third_right => size.width * 0.05,
+      MatchEngineCameraPreset.defensive_block => 0,
+      MatchEngineCameraPreset.set_piece_left => size.width * -0.03,
+      MatchEngineCameraPreset.set_piece_right => size.width * 0.03,
+      MatchEngineCameraPreset.goal_replay => 0,
+      MatchEngineCameraPreset.halftime_board => 0,
+      MatchEngineCameraPreset.fulltime_board => 0,
     };
     return PitchProjection(
       size: size,
@@ -148,33 +208,36 @@ class PitchEntity {
     final Path fieldPath = projection.fieldPath;
     final Rect fieldBounds = projection.bounds;
 
-    final Paint backdropPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[
-          Color(0xFF08141E),
-          Color(0xFF0A1F29),
-          Color(0xFF07131B),
-        ],
-      ).createShader(viewport);
+    final Paint backdropPaint =
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              Color(0xFF08141E),
+              Color(0xFF0A1F29),
+              Color(0xFF07131B),
+            ],
+          ).createShader(viewport);
     canvas.drawRect(viewport, backdropPaint);
 
-    final Paint fieldShadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.18)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+    final Paint fieldShadowPaint =
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.18)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
     canvas.drawPath(fieldPath.shift(const Offset(0, 8)), fieldShadowPaint);
 
-    final Paint fieldPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[
-          const Color(0xFF154F34),
-          const Color(0xFF1D6B42),
-          const Color(0xFF103E29),
-        ],
-      ).createShader(fieldBounds);
+    final Paint fieldPaint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              const Color(0xFF154F34),
+              const Color(0xFF1D6B42),
+              const Color(0xFF103E29),
+            ],
+          ).createShader(fieldBounds);
     canvas.drawPath(fieldPath, fieldPaint);
 
     canvas.save();
@@ -182,10 +245,12 @@ class PitchEntity {
     for (int index = 0; index < 8; index += 1) {
       final double yStart = (widthMeters / 8) * index;
       final double yEnd = (widthMeters / 8) * (index + 1);
-      final Paint stripePaint = Paint()
-        ..color = index.isEven
-            ? const Color(0x11000000)
-            : const Color(0x10FFFFFF);
+      final Paint stripePaint =
+          Paint()
+            ..color =
+                index.isEven
+                    ? const Color(0x11000000)
+                    : const Color(0x10FFFFFF);
       canvas.drawPath(
         projection.projectPolygon(<Offset>[
           Offset(0, yStart),
@@ -197,27 +262,30 @@ class PitchEntity {
       );
     }
 
-    final Paint vignettePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[
-          Colors.white.withValues(alpha: 0.06),
-          Colors.transparent,
-          Colors.black.withValues(alpha: 0.12),
-        ],
-        stops: const <double>[0, 0.45, 1],
-      ).createShader(fieldBounds);
+    final Paint vignettePaint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              Colors.white.withValues(alpha: 0.06),
+              Colors.transparent,
+              Colors.black.withValues(alpha: 0.12),
+            ],
+            stops: const <double>[0, 0.45, 1],
+          ).createShader(fieldBounds);
     canvas.drawRect(fieldBounds, vignettePaint);
     canvas.restore();
 
-    final Paint linePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = projection.lineWidth
-      ..color = Colors.white.withValues(alpha: 0.88);
-    final Paint spotPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = Colors.white.withValues(alpha: 0.88);
+    final Paint linePaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = projection.lineWidth
+          ..color = Colors.white.withValues(alpha: 0.88);
+    final Paint spotPaint =
+        Paint()
+          ..style = PaintingStyle.fill
+          ..color = Colors.white.withValues(alpha: 0.88);
 
     canvas.drawPath(fieldPath, linePaint);
     canvas.drawPath(
@@ -296,12 +364,13 @@ class PitchEntity {
   }
 
   void _drawGoals(Canvas canvas) {
-    final Paint goalFillPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08);
-    final Paint goalLinePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = projection.lineWidth * 0.9
-      ..color = Colors.white.withValues(alpha: 0.62);
+    final Paint goalFillPaint =
+        Paint()..color = Colors.white.withValues(alpha: 0.08);
+    final Paint goalLinePaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = projection.lineWidth * 0.9
+          ..color = Colors.white.withValues(alpha: 0.62);
 
     final Path leftGoal = projection.projectPolygon(<Offset>[
       const Offset(-2.6, (widthMeters / 2) - 3.66),

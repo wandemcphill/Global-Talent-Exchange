@@ -34,23 +34,25 @@ void main() {
     },
   );
 
-  testWidgets('3D route labels native mode only when the bridge is available', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      _buildWidget(
-        repository: _FakeViewerRepository(
-          viewState: buildBroadcastTestViewState(),
+  testWidgets(
+    '3D route remains Flutter 3D even when an optional bridge backend exists',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _buildWidget(
+          repository: _FakeViewerRepository(
+            viewState: buildBroadcastTestViewState(),
+          ),
+          bridge: Match3DBridge(backend: const _FakeBridgeBackend(true)),
         ),
-        bridge: Match3DBridge(backend: const _FakeBridgeBackend(true)),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(find.text('3D Match Viewer'), findsOneWidget);
-    expect(find.text('NATIVE_3D'), findsOneWidget);
-  });
+      expect(find.text('3D Match Viewer'), findsOneWidget);
+      expect(find.text('FLUTTER_3D'), findsOneWidget);
+      expect(find.text('NATIVE_3D'), findsNothing);
+    },
+  );
 
   testWidgets(
     '3D route shows blocked state when the live viewer contract fails',

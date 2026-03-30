@@ -5,8 +5,8 @@ import 'package:gte_frontend/models/match_3d_scene_graph.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 import 'package:gte_frontend/models/player_entity.dart' as runtime_player;
-import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 
 class Match3dSceneManager {
   static const String rootNodeId = 'scene-root';
@@ -26,7 +26,8 @@ class Match3dSceneManager {
     required MatchViewState viewState,
     required MatchTimelineFrame frame,
     MatchEvent? activeEvent,
-    Match3dCameraPreset requestedCameraPreset = Match3dCameraPreset.broadcast,
+    MatchEngineCameraPreset requestedCameraPreset =
+        MatchEngineCameraPreset.tactical_high,
     Iterable<runtime_player.PlayerEntity>? runtimePlayers,
     runtime_ball.BallEntity? runtimeBall,
   }) {
@@ -55,6 +56,7 @@ class Match3dSceneManager {
         player: player,
         activeEvent: activeEvent,
         highlightedEntityIds: highlightedEntityIds,
+        ball: ball,
       );
       updateEntity(node.id, node);
       playerChildIds.add(node.id);
@@ -103,6 +105,16 @@ class Match3dSceneManager {
         payload: const Match3dGroupPayload(label: 'Cameras'),
       ),
     );
+    final MatchEngineTeamShape homeShape = _teamShape(
+      viewState: viewState,
+      frame: frame,
+      side: MatchViewerSide.home,
+    );
+    final MatchEngineTeamShape awayShape = _teamShape(
+      viewState: viewState,
+      frame: frame,
+      side: MatchViewerSide.away,
+    );
 
     return Match3dSceneGraph(
       matchId: viewState.matchId,
@@ -112,11 +124,16 @@ class Match3dSceneManager {
       homeScore: frame.homeScore,
       awayScore: frame.awayScore,
       possessionSide: frame.possessionSide,
+      possessionOwnerId: ball.ownerPlayerId,
       sequenceId: frame.sequenceId,
       requestedCameraPreset: requestedCameraPreset,
       camera: camera,
       action: action,
       experience: experience,
+      homeShape: homeShape,
+      awayShape: awayShape,
+      activeEventContext:
+          activeEvent == null ? null : _eventContext(activeEvent),
       entities: Map<String, Match3dSceneNode>.unmodifiable(
         Map<String, Match3dSceneNode>.of(entities),
       ),
@@ -224,15 +241,20 @@ class Match3dSceneManager {
     required runtime_player.PlayerEntity player,
     required MatchEvent? activeEvent,
     required Set<String> highlightedEntityIds,
+    required runtime_ball.BallEntity ball,
   }) {
     final String entityId = _playerEntityId(player.playerId)!;
     final Match3dVector3 position = _worldPosition(player.currentPosition);
     final Match3dVector3 velocity =
         _worldPosition(player.targetPosition) -
         _worldPosition(player.startPosition);
+    final Match3dVector3 ballFacing =
+        _worldPosition(ball.currentPosition) - position;
     final Match3dVector3 facingVector =
         velocity.magnitude > 0.1
             ? velocity
+            : player.hasPossession || highlightedEntityIds.contains(entityId)
+            ? ballFacing
             : (_worldPosition(player.anchor) - position);
     return Match3dSceneNode(
       id: entityId,
@@ -413,7 +435,7 @@ class Match3dSceneManager {
             secondaryEntityId: _playerEntityId(activeEvent.secondaryPlayerId),
             highlightedEntityIds: highlightedEntityIds.toList()..sort(),
           );
-        case MatchViewerEventType.miss || MatchViewerEventType.penalty:
+        case MatchViewerEventType.miss:
           return Match3dSceneAction(
             type: Match3dSceneActionType.miss,
             cameraMode: Match3dCameraMode.cinematic,
@@ -464,12 +486,40 @@ class Match3dSceneManager {
                 _playerEntityId(ball.ownerPlayerId),
             highlightedEntityIds: highlightedEntityIds.toList()..sort(),
           );
+        case MatchViewerEventType.penalty:
+          return Match3dSceneAction(
+            type: Match3dSceneActionType.setPiece,
+            cameraMode: Match3dCameraMode.tactical,
+            label: activeEvent.bannerText,
+            primaryEntityId:
+                _playerEntityId(activeEvent.primaryPlayerId) ??
+                _playerEntityId(ball.ownerPlayerId),
+            secondaryEntityId: _playerEntityId(activeEvent.secondaryPlayerId),
+            highlightedEntityIds: highlightedEntityIds.toList()..sort(),
+          );
+        case MatchViewerEventType.redCard || MatchViewerEventType.yellowCard:
+          return Match3dSceneAction(
+            type: Match3dSceneActionType.booking,
+            cameraMode: Match3dCameraMode.tactical,
+            label: activeEvent.bannerText,
+            primaryEntityId:
+                _playerEntityId(activeEvent.primaryPlayerId) ??
+                _playerEntityId(ball.ownerPlayerId),
+            secondaryEntityId: _playerEntityId(activeEvent.secondaryPlayerId),
+            highlightedEntityIds: highlightedEntityIds.toList()..sort(),
+          );
+        case MatchViewerEventType.substitution:
+          return Match3dSceneAction(
+            type: Match3dSceneActionType.substitution,
+            cameraMode: Match3dCameraMode.tactical,
+            label: activeEvent.bannerText,
+            primaryEntityId: _playerEntityId(activeEvent.primaryPlayerId),
+            secondaryEntityId: _playerEntityId(activeEvent.secondaryPlayerId),
+            highlightedEntityIds: highlightedEntityIds.toList()..sort(),
+          );
         case MatchViewerEventType.attack:
           break;
-        case MatchViewerEventType.redCard ||
-            MatchViewerEventType.yellowCard ||
-            MatchViewerEventType.substitution ||
-            MatchViewerEventType.injury ||
+        case MatchViewerEventType.injury ||
             MatchViewerEventType.halftime ||
             MatchViewerEventType.fulltime ||
             MatchViewerEventType.neutral:
@@ -566,59 +616,215 @@ class Match3dSceneManager {
   Match3dCameraRig _resolveCamera({
     required MatchTimelineFrame frame,
     required runtime_ball.BallEntity ball,
-    required Match3dCameraPreset requestedCameraPreset,
+    required MatchEngineCameraPreset requestedCameraPreset,
     required Match3dSceneAction action,
   }) {
     final Match3dVector3 target = _worldPosition(ball.currentPosition);
     final double attackDirection = _attackDirection(frame);
     final Match3dCameraMode mode = action.cameraMode;
-    if (mode == Match3dCameraMode.tactical) {
-      return Match3dCameraRig(
-        id: cameraRigId,
-        mode: mode,
-        projectionPreset: Match3dCameraPreset.broadcast,
-        position: Match3dVector3(x: target.x * 0.18, y: 42, z: target.z * 0.18),
-        target: Match3dVector3(x: target.x, y: 0, z: target.z),
-      );
-    }
-    if (mode == Match3dCameraMode.cinematic) {
-      return Match3dCameraRig(
-        id: cameraRigId,
-        mode: mode,
-        projectionPreset: Match3dCameraPreset.goalbox,
-        position:
-            target +
-            Match3dVector3(
-              x: -6 * attackDirection,
-              y: 8,
-              z: ball.currentPosition.y >= 50 ? -8 : 8,
-            ),
-        target: Match3dVector3(x: target.x, y: 0, z: target.z),
-      );
-    }
-    final Match3dVector3 offset = switch (requestedCameraPreset) {
-      Match3dCameraPreset.broadcast => Match3dVector3(
-        x: -14 * attackDirection,
+    final MatchEngineCameraPreset resolvedPreset =
+        mode == Match3dCameraMode.cinematic
+            ? MatchEngineCameraPreset.goal_replay
+            : mode == Match3dCameraMode.tactical &&
+                requestedCameraPreset == MatchEngineCameraPreset.stadium_wide
+            ? MatchEngineCameraPreset.tactical_high
+            : requestedCameraPreset;
+    final Match3dVector3 offset = switch (resolvedPreset) {
+      MatchEngineCameraPreset.stadium_wide => Match3dVector3(
+        x: -20 * attackDirection,
+        y: 24,
+        z: ball.currentPosition.y >= 50 ? -24 : 24,
+      ),
+      MatchEngineCameraPreset.kickoff_center => Match3dVector3(
+        x: -8 * attackDirection,
+        y: 16,
+        z: 0,
+      ),
+      MatchEngineCameraPreset.tactical_high => Match3dVector3(
+        x: target.x * -0.08,
+        y: 44,
+        z: target.z * -0.08,
+      ),
+      MatchEngineCameraPreset.attacking_third_left => const Match3dVector3(
+        x: 10,
+        y: 11,
+        z: -18,
+      ),
+      MatchEngineCameraPreset.attacking_third_right => const Match3dVector3(
+        x: -10,
+        y: 11,
+        z: 18,
+      ),
+      MatchEngineCameraPreset.defensive_block => Match3dVector3(
+        x: 8 * attackDirection,
         y: 18,
-        z: ball.currentPosition.y >= 50 ? -18 : 18,
+        z: ball.currentPosition.y >= 50 ? -16 : 16,
       ),
-      Match3dCameraPreset.sideline => Match3dVector3(
-        x: -8 * attackDirection,
-        y: 12,
-        z: ball.currentPosition.y >= 50 ? -28 : 28,
+      MatchEngineCameraPreset.set_piece_left => const Match3dVector3(
+        x: 6,
+        y: 13,
+        z: -14,
       ),
-      Match3dCameraPreset.goalbox => Match3dVector3(
-        x: -8 * attackDirection,
-        y: 9,
-        z: ball.currentPosition.y >= 50 ? -12 : 12,
+      MatchEngineCameraPreset.set_piece_right => const Match3dVector3(
+        x: -6,
+        y: 13,
+        z: 14,
+      ),
+      MatchEngineCameraPreset.goal_replay => Match3dVector3(
+        x: -6 * attackDirection,
+        y: 8,
+        z: ball.currentPosition.y >= 50 ? -8 : 8,
+      ),
+      MatchEngineCameraPreset.halftime_board => const Match3dVector3(
+        x: 0,
+        y: 28,
+        z: -20,
+      ),
+      MatchEngineCameraPreset.fulltime_board => const Match3dVector3(
+        x: 0,
+        y: 28,
+        z: -20,
       ),
     };
     return Match3dCameraRig(
       id: cameraRigId,
       mode: mode,
-      projectionPreset: requestedCameraPreset,
+      projectionPreset: resolvedPreset,
       position: target + offset,
-      target: Match3dVector3(x: target.x, y: 0, z: target.z),
+      target: Match3dVector3(
+        x:
+            resolvedPreset == MatchEngineCameraPreset.tactical_high
+                ? 0
+                : target.x,
+        y: 0,
+        z:
+            resolvedPreset == MatchEngineCameraPreset.halftime_board ||
+                    resolvedPreset == MatchEngineCameraPreset.fulltime_board
+                ? 0
+                : target.z,
+      ),
+    );
+  }
+
+  MatchEngineTeamShape _teamShape({
+    required MatchViewState viewState,
+    required MatchTimelineFrame frame,
+    required MatchViewerSide side,
+  }) {
+    final List<MatchViewerPlayerFrame> players = frame.players
+        .where((MatchViewerPlayerFrame item) => item.side == side)
+        .where((MatchViewerPlayerFrame item) => item.active)
+        .toList(growable: false);
+    final List<MatchEngineShapeLane> lanes = <MatchEngineShapeLane>[
+      _shapeLane(players, MatchEngineShapeLine.goalkeeper),
+      _shapeLane(players, MatchEngineShapeLine.defense),
+      _shapeLane(players, MatchEngineShapeLine.midfield),
+      _shapeLane(players, MatchEngineShapeLine.attack),
+    ];
+    final List<MatchViewerPlayerFrame> outfield = players
+        .where((MatchViewerPlayerFrame item) => !item.isGoalkeeper)
+        .toList(growable: false);
+    final double width =
+        outfield.isEmpty
+            ? 0
+            : (outfield
+                        .map((MatchViewerPlayerFrame item) => item.position.y)
+                        .reduce(
+                          (double left, double right) =>
+                              left > right ? left : right,
+                        ) -
+                    outfield
+                        .map((MatchViewerPlayerFrame item) => item.position.y)
+                        .reduce(
+                          (double left, double right) =>
+                              left < right ? left : right,
+                        ))
+                .toDouble();
+    final double depth =
+        (lanes[3].averageX - lanes[1].averageX).abs().toDouble();
+    return MatchEngineTeamShape(
+      teamId: viewState.teamForSide(side).teamId,
+      side: side,
+      formation: viewState.teamForSide(side).formation,
+      width: double.parse(width.toStringAsFixed(1)),
+      depth: double.parse(depth.toStringAsFixed(1)),
+      compactness: double.parse(
+        (1 - (depth / 62)).clamp(0.16, 0.96).toStringAsFixed(3),
+      ),
+      inPossession: frame.possessionSide == side,
+      lanes: lanes,
+    );
+  }
+
+  MatchEngineShapeLane _shapeLane(
+    List<MatchViewerPlayerFrame> players,
+    MatchEngineShapeLine line,
+  ) {
+    final List<MatchViewerPlayerFrame> matching = players
+        .where(
+          (MatchViewerPlayerFrame player) => _matchesShapeLine(player, line),
+        )
+        .toList(growable: false);
+    if (matching.isEmpty) {
+      return MatchEngineShapeLane(
+        line: line,
+        averageX: 0,
+        averageY: 0,
+        width: 0,
+        activeCount: 0,
+      );
+    }
+    final double averageX =
+        matching
+            .map((MatchViewerPlayerFrame item) => item.position.x)
+            .reduce((double left, double right) => left + right) /
+        matching.length;
+    final double averageY =
+        matching
+            .map((MatchViewerPlayerFrame item) => item.position.y)
+            .reduce((double left, double right) => left + right) /
+        matching.length;
+    final double maxY = matching
+        .map((MatchViewerPlayerFrame item) => item.position.y)
+        .reduce((double left, double right) => left > right ? left : right);
+    final double minY = matching
+        .map((MatchViewerPlayerFrame item) => item.position.y)
+        .reduce((double left, double right) => left < right ? left : right);
+    return MatchEngineShapeLane(
+      line: line,
+      averageX: double.parse(averageX.toStringAsFixed(1)),
+      averageY: double.parse(averageY.toStringAsFixed(1)),
+      width: double.parse((maxY - minY).toStringAsFixed(1)),
+      activeCount: matching.length,
+    );
+  }
+
+  bool _matchesShapeLine(
+    MatchViewerPlayerFrame player,
+    MatchEngineShapeLine line,
+  ) {
+    return switch (line) {
+      MatchEngineShapeLine.goalkeeper =>
+        player.line == MatchPlayerLine.goalkeeper,
+      MatchEngineShapeLine.defense => player.line == MatchPlayerLine.defense,
+      MatchEngineShapeLine.midfield => player.line == MatchPlayerLine.midfield,
+      MatchEngineShapeLine.attack => player.line == MatchPlayerLine.attack,
+    };
+  }
+
+  MatchEngineEventContext _eventContext(MatchEvent event) {
+    return MatchEngineEventContext(
+      eventId: event.id,
+      teamId: event.teamId,
+      teamName: event.teamName,
+      primaryPlayerId: event.primaryPlayerId,
+      primaryPlayerName: event.primaryPlayerName,
+      secondaryPlayerId: event.secondaryPlayerId,
+      secondaryPlayerName: event.secondaryPlayerName,
+      bannerText: event.bannerText,
+      commentary: event.commentary,
+      reviewable: event.reviewable,
+      reviewDecision: event.reviewDecision,
     );
   }
 

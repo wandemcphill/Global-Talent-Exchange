@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/services/match_3d_monetization_service.dart';
+import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 
 enum Match3dSceneNodeType {
   root,
@@ -38,9 +38,11 @@ enum Match3dSceneActionType {
   save,
   miss,
   foul,
+  booking,
   offside,
   kickoff,
   setPiece,
+  substitution,
 }
 
 @immutable
@@ -301,7 +303,7 @@ class Match3dCameraRig {
 
   final String id;
   final Match3dCameraMode mode;
-  final Match3dCameraPreset projectionPreset;
+  final MatchEngineCameraPreset projectionPreset;
   final Match3dVector3 position;
   final Match3dVector3 target;
 
@@ -537,10 +539,14 @@ class Match3dSceneGraph {
     required this.homeScore,
     required this.awayScore,
     required this.possessionSide,
+    required this.possessionOwnerId,
     required this.requestedCameraPreset,
     required this.camera,
     required this.action,
     required this.experience,
+    required this.homeShape,
+    required this.awayShape,
+    required this.activeEventContext,
     required this.entities,
     this.sequenceId,
     this.rootNodeId = 'scene-root',
@@ -553,12 +559,16 @@ class Match3dSceneGraph {
   final int homeScore;
   final int awayScore;
   final MatchViewerSide possessionSide;
+  final String? possessionOwnerId;
   final String? sequenceId;
   final String rootNodeId;
-  final Match3dCameraPreset requestedCameraPreset;
+  final MatchEngineCameraPreset requestedCameraPreset;
   final Match3dCameraRig camera;
   final Match3dSceneAction action;
   final Match3dExperienceLayer experience;
+  final MatchEngineTeamShape homeShape;
+  final MatchEngineTeamShape awayShape;
+  final MatchEngineEventContext? activeEventContext;
   final Map<String, Match3dSceneNode> entities;
 
   Match3dSceneNode get root => entities[rootNodeId]!;
@@ -590,12 +600,16 @@ class Match3dSceneGraph {
       'homeScore': homeScore,
       'awayScore': awayScore,
       'possessionSide': possessionSide.name,
+      'possessionOwnerId': possessionOwnerId,
       'sequenceId': sequenceId,
       'rootNodeId': rootNodeId,
       'requestedCameraPreset': requestedCameraPreset.name,
       'camera': camera.toJson(),
       'action': action.toJson(),
       'experience': experience.toJson(),
+      'homeShape': homeShape.toJson(),
+      'awayShape': awayShape.toJson(),
+      'activeEventContext': activeEventContext?.toJson(),
       'entities': orderedEntities
           .map((Match3dSceneNode node) => node.toJson())
           .toList(growable: false),

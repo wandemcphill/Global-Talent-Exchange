@@ -8,7 +8,6 @@ import 'package:gte_frontend/screens/match/gtex_match_3d_screen.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/match/scoreboard_widget.dart';
 import 'package:gte_frontend/widgets/match_3d/entities/pitch_entity.dart';
 import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
 
@@ -41,7 +40,9 @@ void main() {
 
     expect(find.text('3D Match Viewer'), findsOneWidget);
     expect(find.byType(Gtex3dScene), findsOneWidget);
-    expect(find.byType(ScoreboardWidget), findsOneWidget);
+    expect(find.byKey(const Key('real-match-scorebug')), findsOneWidget);
+    expect(find.byKey(const Key('real-match-tactical-hud')), findsOneWidget);
+    expect(find.byKey(const Key('commentary-ribbon')), findsOneWidget);
     await tester.dragUntilVisible(
       find.text('Restart'),
       find.byType(Scrollable).first,
