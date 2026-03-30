@@ -1,12 +1,6 @@
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 
-enum BallTrajectoryType {
-  carry,
-  pass,
-  shot,
-  loose,
-  reset,
-}
+enum BallTrajectoryType { carry, pass, shot, loose, reset }
 
 class BallEntity {
   const BallEntity({
@@ -93,8 +87,11 @@ class BallEntity {
       return BallEntity(
         startPosition: startPosition,
         targetPosition: targetPosition,
-        currentPosition:
-            MatchViewerPoint.lerp(startPosition, targetPosition, t),
+        currentPosition: MatchViewerPoint.lerp(
+          startPosition,
+          targetPosition,
+          t,
+        ),
         elevation: trajectoryType == BallTrajectoryType.reset ? 0 : 0.05,
         ownerPlayerId: ownerPlayerId,
         targetPlayerId: targetPlayerId,
@@ -108,24 +105,26 @@ class BallEntity {
       y: (startPosition.y + targetPosition.y) / 2,
     );
     final double lateralBias =
-        ((targetPosition.y - startPosition.y).clamp(-18, 18) / 18) * 3.4;
+        ((targetPosition.y - startPosition.y).clamp(-18, 18) / 18) * 4.1;
     final MatchViewerPoint control = MatchViewerPoint(
-      x: midpoint.x + (attackDirection * 1.5),
+      x: midpoint.x + (attackDirection * 2.3),
       y: midpoint.y + lateralBias,
     );
     final double inverse = 1 - t;
     final MatchViewerPoint current = MatchViewerPoint(
-      x: (inverse * inverse * startPosition.x) +
+      x:
+          (inverse * inverse * startPosition.x) +
           (2 * inverse * t * control.x) +
           (t * t * targetPosition.x),
-      y: (inverse * inverse * startPosition.y) +
+      y:
+          (inverse * inverse * startPosition.y) +
           (2 * inverse * t * control.y) +
           (t * t * targetPosition.y),
     );
     final double peak = switch (trajectoryType) {
-      BallTrajectoryType.pass => 1.4,
-      BallTrajectoryType.shot => 2.6,
-      BallTrajectoryType.loose => 0.7,
+      BallTrajectoryType.pass => 1.8,
+      BallTrajectoryType.shot => 3.1,
+      BallTrajectoryType.loose => 0.9,
       BallTrajectoryType.carry || BallTrajectoryType.reset => 0,
     };
     final double resolvedElevation = peak * 4 * t * (1 - t);

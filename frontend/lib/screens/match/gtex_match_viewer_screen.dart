@@ -8,14 +8,18 @@ import 'package:gte_frontend/features/match/presentation/broadcast_package_model
 import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
 import 'package:gte_frontend/features/match/presentation/match_scene_director.dart';
 import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/match_scorebar_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/tactical_hud_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/match_moment_banner_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/match_recap_board_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/player_ratings_strip_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/real_match_scorebug_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/real_match_tactical_hud_widget.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
+import 'package:gte_frontend/models/real_match_engine_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_broadcast_presentation.dart';
@@ -977,22 +981,52 @@ class _ReplayViewer extends StatelessWidget {
         final bool wide = constraints.maxWidth >= 1040;
         final bool compactHeader = constraints.maxWidth < 860;
         final bool showPremiumControls = wide;
-        final BroadcastSceneSnapshot sceneSnapshot = MatchSceneDirector.resolve(
-          frame: controller.displayFrame,
-          activeEvent: activeEvent,
-          packageSeconds: controller.positionSeconds,
-        );
         final MatchPresentationPackage package =
             const BroadcastPackageRepository().resolve(viewState);
+        final MatchEnginePresentationState enginePresentation =
+            RealMatchSceneDirector.resolve(
+              viewState: viewState,
+              frame: controller.displayFrame,
+              package: package,
+              activeEvent: activeEvent,
+              playbackSeconds: controller.positionSeconds,
+            );
         final bool premiumCameraAvailable = monetization.canUsePremiumCamera(
           matchContext,
         );
-        final Match3dCameraPreset resolvedCameraPreset =
+        final MatchEngineCameraPreset resolvedCameraPreset =
             _eventDrivenCameraPreset(
-              sceneSnapshot.cameraState,
+              enginePresentation.cameraPreset,
               selectedPreset: monetization.cameraPreset,
               premiumCameraAvailable: premiumCameraAvailable,
             );
+        final bool showRatingsStrip =
+            enginePresentation.showRatingsStrip &&
+            !enginePresentation.showSummaryBoard &&
+            !enginePresentation.showBanner &&
+            !enginePresentation.isReplayMoment &&
+            enginePresentation.eventMapping != MatchSceneEventMapping.corner &&
+            enginePresentation.eventMapping !=
+                MatchSceneEventMapping.free_kick &&
+            enginePresentation.eventMapping != MatchSceneEventMapping.penalty &&
+            enginePresentation.eventMapping !=
+                MatchSceneEventMapping.substitution;
+        final bool showEventTicker =
+            activeEvent != null &&
+            !enginePresentation.showSummaryBoard &&
+            (enginePresentation.showBanner ||
+                enginePresentation.isReplayMoment ||
+                enginePresentation.eventMapping ==
+                    MatchSceneEventMapping.goal ||
+                enginePresentation.eventMapping ==
+                    MatchSceneEventMapping.save ||
+                enginePresentation.eventMapping ==
+                    MatchSceneEventMapping.shot ||
+                enginePresentation.eventMapping ==
+                    MatchSceneEventMapping.booking ||
+                enginePresentation.eventMapping ==
+                    MatchSceneEventMapping.substitution ||
+                enginePresentation.eventMapping == MatchSceneEventMapping.foul);
         final Widget field = Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
           child: Stack(
@@ -1018,50 +1052,130 @@ class _ReplayViewer extends StatelessWidget {
                   top: 12,
                   left: 12,
                   right: 12,
-                  child: MatchScorebarWidget(
-                    homeName: viewState.homeTeam.shortName,
-                    awayName: viewState.awayTeam.shortName,
-                    homeScore: controller.displayFrame.homeScore,
-                    awayScore: controller.displayFrame.awayScore,
-                    clockLabel: _sceneClockLabel(
-                      controller.displayFrame,
-                      activeEvent,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    opacity: enginePresentation.isRecapMoment ? 0.88 : 1,
+                    child: RealMatchScorebugWidget(
+                      homeName: viewState.homeTeam.shortName,
+                      awayName: viewState.awayTeam.shortName,
+                      homeScore: controller.displayFrame.homeScore,
+                      awayScore: controller.displayFrame.awayScore,
+                      clockLabel: enginePresentation.clockLabel,
+                      phaseLabel: enginePresentation.phaseLabel,
+                      stateLabel: enginePresentation.stateLabel,
+                      cameraLabel: enginePresentation.cameraLabel,
+                      eventLabel: enginePresentation.scorebugEventLabel,
                     ),
-                    statusLabel: _sceneStatusLabel(
-                      controller.displayFrame,
-                      activeEvent,
+                  ),
+                ),
+                if (!enginePresentation.showSummaryBoard) ...<Widget>[
+                  Positioned(
+                    top: compactHeader ? 92 : 100,
+                    right: 12,
+                    child: _OverlayStageSwitcher(
+                      child: ConstrainedBox(
+                        key: ValueKey<String>(
+                          'hud-${enginePresentation.sceneState.name}',
+                        ),
+                        constraints: BoxConstraints(maxWidth: wide ? 320 : 292),
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 240),
+                          curve: Curves.easeOutCubic,
+                          opacity: enginePresentation.isReplayMoment ? 0.8 : 1,
+                          child: RealMatchTacticalHudWidget(
+                            package: package,
+                            presentation: enginePresentation,
+                          ),
+                        ),
+                      ),
                     ),
-                    cameraState: sceneSnapshot.cameraState,
                   ),
-                ),
-                Positioned(
-                  top: compactHeader ? 78 : 86,
-                  right: 12,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: wide ? 320 : 280),
-                    child: TacticalHudWidget(package: package),
+                  Positioned(
+                    top: compactHeader ? 286 : 298,
+                    left: 12,
+                    child: _OverlayStageSwitcher(
+                      child:
+                          enginePresentation.showBanner
+                              ? ConstrainedBox(
+                                key: ValueKey<String>(
+                                  'banner-${enginePresentation.eventMapping.name}-${activeEvent?.id ?? 'none'}',
+                                ),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 320,
+                                ),
+                                child: MatchMomentBannerWidget(
+                                  banner: enginePresentation.banner!,
+                                ),
+                              )
+                              : null,
+                    ),
                   ),
-                ),
-                Positioned(
-                  top: compactHeader ? 270 : 286,
-                  right: 12,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 260),
-                    child: EventTickerWidget(event: activeEvent),
+                  Positioned(
+                    left: 12,
+                    right: wide ? 344 : 12,
+                    bottom: 88,
+                    child: _OverlayStageSwitcher(
+                      child:
+                          showRatingsStrip
+                              ? PlayerRatingsStripWidget(
+                                key: ValueKey<String>(
+                                  'ratings-${enginePresentation.sceneState.name}',
+                                ),
+                                players: enginePresentation.ratingLeaders,
+                              )
+                              : null,
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: 12,
-                  right: wide ? 344 : 12,
-                  bottom: 18,
-                  child: CommentaryRibbonWidget(
-                    headline: _sceneHeadline(activeEvent, sceneSnapshot),
-                    detail: _sceneDetail(package, activeEvent),
-                    trailing:
-                        activeEvent?.clockLabel ??
-                        _sceneClockLabel(controller.displayFrame, activeEvent),
+                  Positioned(
+                    left: 12,
+                    right: wide ? 344 : 12,
+                    bottom: 18,
+                    child: _OverlayStageSwitcher(
+                      child: CommentaryRibbonWidget(
+                        key: ValueKey<String>(
+                          'commentary-${enginePresentation.lowerThirdHeadline}-${enginePresentation.lowerThirdTrailing}',
+                        ),
+                        headline: enginePresentation.lowerThirdHeadline,
+                        detail: enginePresentation.lowerThirdDetail,
+                        trailing: enginePresentation.lowerThirdTrailing,
+                      ),
+                    ),
                   ),
-                ),
+                  Positioned(
+                    top: compactHeader ? 286 : 298,
+                    right: 12,
+                    child: _OverlayStageSwitcher(
+                      child:
+                          showEventTicker
+                              ? ConstrainedBox(
+                                key: ValueKey<String>(
+                                  'ticker-${activeEvent?.id ?? 'none'}',
+                                ),
+                                constraints: const BoxConstraints(
+                                  maxWidth: 260,
+                                ),
+                                child: EventTickerWidget(event: activeEvent),
+                              )
+                              : null,
+                    ),
+                  ),
+                ] else
+                  Positioned.fill(
+                    child: _OverlayStageSwitcher(
+                      child: Center(
+                        child: ConstrainedBox(
+                          key: ValueKey<String>(
+                            'recap-${enginePresentation.sceneState.name}',
+                          ),
+                          constraints: const BoxConstraints(maxWidth: 620),
+                          child: MatchRecapBoardWidget(
+                            summaryBoard: enginePresentation.summaryBoard!,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ] else
                 Positioned(
                   top: 12,
@@ -1331,8 +1445,13 @@ class _BroadcastViewer extends StatelessWidget {
                     renderMode: activeRenderMode,
                     cameraPreset:
                         activeRenderMode == RenderMode.threeD
-                            ? monetization.cameraPreset
-                            : Match3dCameraPreset.broadcast,
+                            ? _eventDrivenCameraPreset(
+                              MatchEngineCameraPreset.tactical_high,
+                              selectedPreset: monetization.cameraPreset,
+                              premiumCameraAvailable: monetization
+                                  .canUsePremiumCamera(matchContext),
+                            )
+                            : MatchEngineCameraPreset.tactical_high,
                     activeEvent: controller.activeEvent,
                     engineBridge: engineBridge,
                     broadcastMode: true,
@@ -1513,7 +1632,7 @@ class _RenderSurface extends StatelessWidget {
   final Match3dTimelineController controller;
   final MatchViewState viewState;
   final RenderMode renderMode;
-  final Match3dCameraPreset cameraPreset;
+  final MatchEngineCameraPreset cameraPreset;
   final MatchEvent? activeEvent;
   final Match3DBridge? engineBridge;
   final bool broadcastMode;
@@ -1528,6 +1647,8 @@ class _RenderSurface extends StatelessWidget {
         activeEvent: activeEvent,
         cameraPreset: cameraPreset,
         bridge: engineBridge,
+        runtimePlayers: controller.playerEntities,
+        runtimeBall: controller.ballEntity,
       );
     }
     return RepaintBoundary(
@@ -1537,6 +1658,41 @@ class _RenderSurface extends StatelessWidget {
         showFormationOverlay: !broadcastMode,
         presentation: presentation,
       ),
+    );
+  }
+}
+
+class _OverlayStageSwitcher extends StatelessWidget {
+  const _OverlayStageSwitcher({required this.child});
+
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 180),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        final Animation<Offset> slide = Tween<Offset>(
+          begin: const Offset(0, 0.06),
+          end: Offset.zero,
+        ).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: slide, child: child),
+        );
+      },
+      child:
+          child ??
+          const SizedBox(
+            key: ValueKey<String>('overlay-stage-empty'),
+            width: 0,
+            height: 0,
+          ),
     );
   }
 }
@@ -2357,29 +2513,36 @@ class _EventTile extends StatelessWidget {
   }
 }
 
-Match3dCameraPreset _eventDrivenCameraPreset(
-  MatchSimCameraState state, {
+MatchEngineCameraPreset _eventDrivenCameraPreset(
+  MatchEngineCameraPreset state, {
   required Match3dCameraPreset selectedPreset,
   required bool premiumCameraAvailable,
 }) {
-  if (premiumCameraAvailable &&
-      selectedPreset != Match3dCameraPreset.broadcast) {
-    return selectedPreset;
+  if (!premiumCameraAvailable ||
+      selectedPreset == Match3dCameraPreset.broadcast) {
+    return state;
   }
-  switch (state) {
-    case MatchSimCameraState.tunnelOrWalkout:
-    case MatchSimCameraState.goalReplayAngle:
-      return Match3dCameraPreset.sideline;
-    case MatchSimCameraState.attackingThird:
-    case MatchSimCameraState.setPieceLeft:
-    case MatchSimCameraState.setPieceRight:
-      return Match3dCameraPreset.goalbox;
-    case MatchSimCameraState.stadiumWide:
-    case MatchSimCameraState.kickoffCenter:
-    case MatchSimCameraState.tacticalTop:
-    case MatchSimCameraState.halftimeBoard:
-    case MatchSimCameraState.fulltimeBoard:
-      return Match3dCameraPreset.broadcast;
+  switch (selectedPreset) {
+    case Match3dCameraPreset.broadcast:
+      return state;
+    case Match3dCameraPreset.sideline:
+      return switch (state) {
+        MatchEngineCameraPreset.stadium_wide =>
+          MatchEngineCameraPreset.kickoff_center,
+        MatchEngineCameraPreset.tactical_high =>
+          MatchEngineCameraPreset.defensive_block,
+        _ => state,
+      };
+    case Match3dCameraPreset.goalbox:
+      return switch (state) {
+        MatchEngineCameraPreset.stadium_wide =>
+          MatchEngineCameraPreset.kickoff_center,
+        MatchEngineCameraPreset.tactical_high =>
+          MatchEngineCameraPreset.defensive_block,
+        MatchEngineCameraPreset.defensive_block =>
+          MatchEngineCameraPreset.defensive_block,
+        _ => state,
+      };
   }
 }
 
