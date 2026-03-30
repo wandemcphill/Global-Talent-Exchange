@@ -509,6 +509,51 @@ def test_main_module_exposes_lazy_asgi_app(monkeypatch) -> None:
     assert call_count == 1
 
 
+def test_get_asgi_app_defaults_production_boot_to_skip_runtime_migration_check(monkeypatch) -> None:
+    sentinel = object()
+    captured: dict[str, object] = {}
+
+    class _Settings:
+        app_env = "production"
+        run_migration_check = True
+
+    def _build_app(**kwargs):
+        captured.update(kwargs)
+        return sentinel
+
+    monkeypatch.delenv("GTE_RUN_MIGRATION_CHECK", raising=False)
+    monkeypatch.setattr(main_module, "_ASGI_APP", None)
+    monkeypatch.setattr(main_module, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(main_module, "create_app", _build_app)
+
+    app = main_module.get_asgi_app()
+
+    assert app is sentinel
+    assert captured["run_migration_check"] is False
+
+
+def test_get_asgi_app_uses_configured_migration_check_outside_production(monkeypatch) -> None:
+    sentinel = object()
+    captured: dict[str, object] = {}
+
+    class _Settings:
+        app_env = "development"
+        run_migration_check = True
+
+    def _build_app(**kwargs):
+        captured.update(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(main_module, "_ASGI_APP", None)
+    monkeypatch.setattr(main_module, "get_settings", lambda: _Settings())
+    monkeypatch.setattr(main_module, "create_app", _build_app)
+
+    app = main_module.get_asgi_app()
+
+    assert app is sentinel
+    assert captured["run_migration_check"] is True
+
+
 @pytest.mark.anyio
 async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and_engine) -> None:
     app, _engine = app_and_engine

@@ -101,7 +101,11 @@ def create_app(
 def get_asgi_app() -> FastAPI:
     global _ASGI_APP
     if _ASGI_APP is None:
-        _ASGI_APP = create_app()
+        settings = get_settings()
+        _ASGI_APP = create_app(
+            settings=settings,
+            run_migration_check=_default_asgi_run_migration_check(settings),
+        )
     return _ASGI_APP
 
 
@@ -131,14 +135,26 @@ def register_core(app: FastAPI) -> None:
     async def startup() -> None:
         runtime_context: Container = app.state.container
         module_specs: tuple[DomainModule, ...] = tuple(getattr(app.state, "module_specs", ()))
-        logger.info("app.startup.begin")
-        runtime_context.initialize(run_migration_check=app.state.run_migration_check)
-        bind_application_state(app, context=runtime_context, modules=module_specs)
-        check_db(app)
-        check_redis(app)
-        runtime_context.metrics.refresh_from_database()
-        _start_deferred_startup(app, context=runtime_context, modules=module_specs)
-        logger.info("app.startup.complete")
+        try:
+            logger.info(
+                "app.startup.begin run_migration_check=%s settings_run_migration_check=%s",
+                app.state.run_migration_check,
+                app.state.settings.run_migration_check,
+            )
+            runtime_context.initialize(run_migration_check=app.state.run_migration_check)
+            bind_application_state(app, context=runtime_context, modules=module_specs)
+            check_db(app)
+            check_redis(app)
+            runtime_context.metrics.refresh_from_database()
+            _start_deferred_startup(app, context=runtime_context, modules=module_specs)
+            logger.info("app.startup.complete")
+        except Exception:
+            logger.exception(
+                "app.startup.failed run_migration_check=%s settings_run_migration_check=%s",
+                app.state.run_migration_check,
+                app.state.settings.run_migration_check,
+            )
+            raise
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
@@ -167,6 +183,10 @@ def check_redis(app: FastAPI) -> None:
     logger.info("app.startup.health.redis.begin")
     app.state.container.check_redis()
     logger.info("app.startup.health.redis.complete")
+
+
+def _default_asgi_run_migration_check(settings: Settings) -> bool:
+    return settings.run_migration_check if settings.app_env.lower() != "production" else False
 
 
 def _mount_tts_app(app: FastAPI) -> None:
