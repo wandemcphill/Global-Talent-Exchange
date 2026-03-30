@@ -156,9 +156,9 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
   AppRouteSurface(
     label: 'World',
     location: AppRoutes.world,
-    state: AppRouteSurfaceState.partiallyWired,
+    state: AppRouteSurfaceState.live,
     summary:
-        'World discovery is live, with federations now routed and national teams linked out from the shell. Fast cups and infinite league remain next.',
+        'Live world discovery with routed federation, national team, and competition-family entry points. Deeper world programs stay gated to explicit routes as they ship.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -240,7 +240,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'God Mode',
     location: AppRoutes.profileGodMode,
     state: AppRouteSurfaceState.hidden,
-    summary: 'Deep admin console route with backend bootstrap gating.',
+    summary:
+        'Hidden admin console route that now redirects back to the active-shell admin surface.',
   ),
   AppRouteSurface(
     label: 'Competitions',
@@ -272,7 +273,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: '2D Match Viewer',
     location: AppRoutes.matchesViewer,
     state: AppRouteSurfaceState.hidden,
-    summary: 'Deep route for live 2D match sessions.',
+    summary:
+        'Deep 2D viewer route that now resolves to an explicit blocked surface.',
   ),
   AppRouteSurface(
     label: 'Broadcast+ Viewer',
@@ -284,7 +286,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: '3D Match Viewer',
     location: AppRoutes.matchesThreeD,
     state: AppRouteSurfaceState.hidden,
-    summary: 'Deep route for live Flutter or native-backed 3D sessions.',
+    summary:
+        'Deep 3D viewer route that now resolves to an explicit blocked surface.',
   ),
   AppRouteSurface(
     label: 'Native 3D',
@@ -297,7 +300,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: '2D Spectate Probe',
     location: AppRoutes.matchesSpectate,
     state: AppRouteSurfaceState.hidden,
-    summary: 'Deep manual probe route for live 2D viewer sessions.',
+    summary:
+        'Deep manual spectate route that now resolves to an explicit blocked surface.',
   ),
   AppRouteSurface(
     label: 'Simulation',
@@ -347,8 +351,8 @@ AppDestination _primaryDestinationFor(AppRouteSurface surface) {
       location: AppRoutes.world,
       icon: Icons.public_outlined,
       selectedIcon: Icons.public_rounded,
-      subtitle: 'World Ops Preview',
-      surfaceState: AppRouteSurfaceState.partiallyWired,
+      subtitle: 'World Operations',
+      surfaceState: AppRouteSurfaceState.live,
     ),
     AppRoutes.profile => const AppDestination(
       label: 'Profile',

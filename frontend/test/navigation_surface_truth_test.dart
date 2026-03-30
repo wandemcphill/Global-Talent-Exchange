@@ -16,39 +16,37 @@ import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 
 void main() {
-  test(
-    'primary nav excludes placeholder routes and records preview routes',
-    () {
-      final Set<String> primaryLocations =
-          appDestinations
-              .map((AppDestination destination) => destination.location)
-              .toSet();
+  test('primary nav excludes placeholder routes and records live routes', () {
+    final Set<String> primaryLocations =
+        appDestinations
+            .map((AppDestination destination) => destination.location)
+            .toSet();
 
-      expect(primaryLocations, contains(AppRoutes.world));
-      expect(primaryLocations, isNot(contains(AppRoutes.matchesNativeThreeD)));
-      expect(
-        appRouteSurfaceFor(AppRoutes.world)?.state,
-        AppRouteSurfaceState.partiallyWired,
-      );
-      expect(
-        appRouteSurfaceFor(AppRoutes.matchesNativeThreeD)?.state,
-        AppRouteSurfaceState.placeholder,
-      );
-    },
-  );
+    expect(primaryLocations, contains(AppRoutes.world));
+    expect(primaryLocations, isNot(contains(AppRoutes.matchesNativeThreeD)));
+    expect(
+      appRouteSurfaceFor(AppRoutes.world)?.state,
+      AppRouteSurfaceState.live,
+    );
+    expect(
+      appRouteSurfaceFor(AppRoutes.matchesNativeThreeD)?.state,
+      AppRouteSurfaceState.placeholder,
+    );
+  });
 
-  testWidgets('home quick actions label preview routes explicitly', (
+  testWidgets('home quick actions surface live world routing honestly', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(_surfaceHost(const HomeScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('World Preview'), findsOneWidget);
+    expect(find.text('World'), findsOneWidget);
+    expect(find.text('World Preview'), findsNothing);
     expect(find.text('Matches'), findsOneWidget);
     expect(find.text('Competitions'), findsOneWidget);
   });
 
-  testWidgets('world route discloses preview-only federation support', (
+  testWidgets('world route presents live route truth without preview badges', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1280, 1800);
@@ -61,7 +59,7 @@ void main() {
     await tester.pumpWidget(_surfaceHost(const WorldScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Preview'), findsWidgets);
+    expect(find.text('Preview'), findsNothing);
     expect(find.text('World route'), findsOneWidget);
   });
 

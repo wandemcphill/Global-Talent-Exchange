@@ -52,38 +52,34 @@ class _FederationsHubScreenState extends ConsumerState<FederationsHubScreen> {
           data:
               (FederationHubData data) => Column(
                 children: <Widget>[
-                  GtexSectionPanel(
+                  GtexHeroPanel(
                     eyebrow: 'FEDERATION NETWORK',
                     title: 'Regional governance command',
-                    subtitle:
+                    description:
                         'Live rankings, treasury scale, public access, and tournament coverage across the federation ecosystem.',
-                    child: Wrap(
-                      spacing: spacingSM,
-                      runSpacing: spacingSM,
-                      children: <Widget>[
-                        GtexStatTile(
-                          label: 'Federations',
-                          value: '${data.federations.length}',
-                          tone: GtexSurfaceTone.live,
-                        ),
-                        GtexStatTile(
-                          label: 'Ranked',
-                          value: '${data.rankings.length}',
-                          tone: GtexSurfaceTone.info,
-                        ),
-                        GtexStatTile(
-                          label: 'Regions',
-                          value: '${data.regionalTournaments.length}',
-                          tone: GtexSurfaceTone.warning,
-                        ),
-                        GtexStatTile(
-                          label: 'Public',
-                          value:
-                              '${data.federations.where((FederationRecord item) => item.isPublic).length}',
-                          tone: GtexSurfaceTone.success,
-                        ),
-                      ],
-                    ),
+                    metrics: <Widget>[
+                      GtexStatTile(
+                        label: 'Federations',
+                        value: '${data.federations.length}',
+                        tone: GtexSurfaceTone.live,
+                      ),
+                      GtexStatTile(
+                        label: 'Ranked',
+                        value: '${data.rankings.length}',
+                        tone: GtexSurfaceTone.info,
+                      ),
+                      GtexStatTile(
+                        label: 'Regions',
+                        value: '${data.regionalTournaments.length}',
+                        tone: GtexSurfaceTone.warning,
+                      ),
+                      GtexStatTile(
+                        label: 'Public',
+                        value:
+                            '${data.federations.where((FederationRecord item) => item.isPublic).length}',
+                        tone: GtexSurfaceTone.success,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: spacingMD),
                   _SectionCard(
@@ -284,90 +280,70 @@ class _FederationDetailScreenState
             final bool canRequestMembership = clubContext != null;
             return Column(
               children: <Widget>[
-                GtexSectionPanel(
+                GtexHeroPanel(
                   eyebrow: 'FEDERATION DETAIL',
                   title: detail.federation.name,
-                  subtitle:
+                  description:
                       federationContext?.id == widget.federationId
                           ? 'This session is already linked to this federation.'
                           : 'Live federation dashboard, governance detail, and membership workflow.',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Wrap(
-                        spacing: spacingSM,
-                        runSpacing: spacingSM,
-                        children: <Widget>[
-                          GtexStatTile(
-                            label: 'Ranking',
-                            value: detail.federation.rankingScore
-                                .toStringAsFixed(1),
-                            tone: GtexSurfaceTone.live,
-                          ),
-                          GtexStatTile(
-                            label: 'Reputation',
-                            value: detail.federation.reputationScore
-                                .toStringAsFixed(1),
-                            tone: GtexSurfaceTone.info,
-                          ),
-                          GtexStatTile(
-                            label: 'Audience',
-                            value: _compactNumber(
-                              detail.federation.audienceSize,
-                            ),
-                            tone: GtexSurfaceTone.success,
-                          ),
-                          GtexStatTile(
-                            label: 'Members',
-                            value: '${detail.federation.memberCount}',
-                            tone: GtexSurfaceTone.warning,
-                          ),
-                          GtexStatTile(
-                            label: 'Treasury',
-                            value: _coin(detail.federation.treasuryBalance),
-                            tone: GtexSurfaceTone.warning,
-                          ),
-                          GtexStatTile(
-                            label: 'Reality mode',
-                            value: detail.federation.defaultRealityMode,
-                            tone: GtexSurfaceTone.info,
-                          ),
-                        ],
+                  metrics: <Widget>[
+                    GtexStatTile(
+                      label: 'Ranking',
+                      value: detail.federation.rankingScore.toStringAsFixed(1),
+                      tone: GtexSurfaceTone.live,
+                    ),
+                    GtexStatTile(
+                      label: 'Reputation',
+                      value: detail.federation.reputationScore.toStringAsFixed(
+                        1,
                       ),
-                      const SizedBox(height: spacingMD),
-                      Wrap(
-                        spacing: spacingSM,
-                        runSpacing: spacingSM,
-                        children: <Widget>[
-                          FilledButton(
-                            onPressed:
-                                canRequestMembership
-                                    ? () => _requestMembership(
-                                      detail,
-                                      clubContext.id,
-                                    )
-                                    : null,
-                            child: Text(
-                              canRequestMembership
-                                  ? 'Request membership'
-                                  : 'Club context required',
-                            ),
-                          ),
-                          if (federationContext?.id == widget.federationId)
-                            const GtexPill(
-                              label: 'Session federation',
-                              tone: GtexSurfaceTone.success,
-                            ),
-                        ],
+                      tone: GtexSurfaceTone.info,
+                    ),
+                    GtexStatTile(
+                      label: 'Audience',
+                      value: _compactNumber(detail.federation.audienceSize),
+                      tone: GtexSurfaceTone.success,
+                    ),
+                    GtexStatTile(
+                      label: 'Members',
+                      value: '${detail.federation.memberCount}',
+                      tone: GtexSurfaceTone.warning,
+                    ),
+                    GtexStatTile(
+                      label: 'Treasury',
+                      value: _coin(detail.federation.treasuryBalance),
+                      tone: GtexSurfaceTone.warning,
+                    ),
+                    GtexStatTile(
+                      label: 'Reality mode',
+                      value: detail.federation.defaultRealityMode,
+                      tone: GtexSurfaceTone.info,
+                    ),
+                  ],
+                  actions: <Widget>[
+                    FilledButton(
+                      onPressed:
+                          canRequestMembership
+                              ? () => _requestMembership(detail, clubContext.id)
+                              : null,
+                      child: Text(
+                        canRequestMembership
+                            ? 'Request membership'
+                            : 'Club context required',
                       ),
-                      if (!canRequestMembership) ...<Widget>[
-                        const SizedBox(height: spacingSM),
-                        const Text(
-                          'Membership requests require an authenticated session with a verified club context.',
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                    if (federationContext?.id == widget.federationId)
+                      const GtexPill(
+                        label: 'Session federation',
+                        tone: GtexSurfaceTone.success,
+                      ),
+                    if (!canRequestMembership)
+                      const GtexPill(
+                        label: 'Verified club context required',
+                        tone: GtexSurfaceTone.warning,
+                      ),
+                  ],
                 ),
                 const SizedBox(height: spacingMD),
                 _SectionCard(
@@ -620,7 +596,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(message);
+    return GtexListTile(
+      title: 'Nothing live yet',
+      subtitle: message,
+      leadingIcon: Icons.hourglass_empty_rounded,
+      tone: GtexSurfaceTone.neutral,
+    );
   }
 }
 
