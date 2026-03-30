@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_spacing.dart';
+import '../../widgets/gte_shell_theme.dart';
 
 enum MatchViewerCapability { twoD, pseudo3d, flutter3d, native3d, blocked }
 
@@ -37,13 +38,13 @@ class MatchViewerCapabilityBadge extends StatelessWidget {
     if (!kDebugMode) {
       return const SizedBox.shrink();
     }
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color color = capability.color(colors);
+    final Color color = capability.color(Theme.of(context).colorScheme);
+    final tokens = GteShellTheme.tokensOf(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: spacingSM, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(tokens.radiusPill),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(

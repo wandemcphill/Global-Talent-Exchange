@@ -10,7 +10,9 @@ import '../../../models/match/gtex_match_view_type.dart';
 import '../../../models/match_event.dart';
 import '../../../models/match_timeline_frame.dart';
 import '../../../models/match_view_state.dart';
+import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_state_panel.dart';
+import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/match/broadcast/gtex_match_canvas_layer.dart';
 import 'broadcast_package_models.dart';
 import 'broadcast_package_repository.dart';
@@ -114,8 +116,9 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF060A10),
+      backgroundColor: tokens.background,
       appBar: AppBar(
         title: const Text('Broadcast Package'),
         actions: <Widget>[
@@ -132,13 +135,7 @@ class _BroadcastPackageScreenState extends State<BroadcastPackageScreen>
         ],
       ),
       body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[Color(0xFF09111A), Color(0xFF04070C)],
-          ),
-        ),
+        decoration: gteBackdropDecoration(),
         child: FutureBuilder<MatchViewState>(
           future: _viewStateFuture,
           builder: (
@@ -410,29 +407,34 @@ class _SceneControlBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Text(
-            scene.label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
+    final tokens = GteShellTheme.tokensOf(context);
+    return GteSurfacePanel(
+      padding: const EdgeInsets.all(14),
+      accentColor: GteShellTheme.definitionOf(context).primaryColor,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              scene.label,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-        ),
-        TextButton.icon(
-          onPressed: onRestart,
-          icon: const Icon(Icons.restart_alt),
-          label: const Text('Restart'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton.tonalIcon(
-          onPressed: onSkipToLive,
-          icon: const Icon(Icons.play_circle_fill_rounded),
-          label: const Text('Jump to live'),
-        ),
-      ],
+          TextButton.icon(
+            onPressed: onRestart,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Restart'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonalIcon(
+            onPressed: onSkipToLive,
+            icon: const Icon(Icons.play_circle_fill_rounded),
+            label: const Text('Jump to live'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -444,6 +446,8 @@ class _SceneSequenceStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final definition = GteShellTheme.definitionOf(context);
     const List<MapEntry<String, List<BroadcastPackageScene>>>
     groups = <MapEntry<String, List<BroadcastPackageScene>>>[
       MapEntry<String, List<BroadcastPackageScene>>(
@@ -495,19 +499,19 @@ class _SceneSequenceStrip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
                 color:
                     active
-                        ? const Color(0xFF112536)
-                        : Colors.white.withValues(alpha: 0.04),
+                        ? definition.primaryColor.withValues(alpha: 0.16)
+                        : tokens.surfaceHighlight.withValues(alpha: 0.06),
                 border: Border.all(
                   color:
                       active
-                          ? const Color(0xFF7DD3FC).withValues(alpha: 0.55)
-                          : Colors.white.withValues(alpha: 0.08),
+                          ? definition.primaryColor.withValues(alpha: 0.44)
+                          : tokens.stroke.withValues(alpha: 0.82),
                 ),
               ),
               child: Text(
                 group.key,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: active ? const Color(0xFFBFE6FF) : Colors.white70,
+                  color: active ? definition.primaryColor : tokens.textMuted,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -599,25 +603,19 @@ class _SceneSlate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    final tokens = GteShellTheme.tokensOf(context);
+    final definition = GteShellTheme.definitionOf(context);
+    return GteSurfacePanel(
+      emphasized: true,
+      accentColor: definition.primaryColor,
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF102030), Color(0xFF091017)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             'Broadcast Open',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: const Color(0xFF7DD3FC),
+              color: definition.primaryColor,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.0,
             ),
@@ -626,7 +624,7 @@ class _SceneSlate extends StatelessWidget {
           Text(
             package.matchLabel,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: Colors.white,
+              color: tokens.textPrimary,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -668,6 +666,7 @@ class _SlateMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     return SizedBox(
       width: 150,
       child: Column(
@@ -677,13 +676,13 @@ class _SlateMetric extends StatelessWidget {
             label,
             style: Theme.of(
               context,
-            ).textTheme.labelMedium?.copyWith(color: Colors.white60),
+            ).textTheme.labelMedium?.copyWith(color: tokens.textMuted),
           ),
           const SizedBox(height: 4),
           Text(
             value,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
+              color: tokens.textPrimary,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -714,18 +713,12 @@ class _BroadcastLiveWindow extends StatelessWidget {
     final String phaseLabel = _statusLabel(frame, activeEvent);
     final String headline = _commentaryHeadline(package, activeEvent, scene);
     final String detail = _commentaryDetail(package, activeEvent);
-    return Container(
-      width: double.infinity,
+    final tokens = GteShellTheme.tokensOf(context);
+    final definition = GteShellTheme.definitionOf(context);
+    return GteSurfacePanel(
+      emphasized: true,
+      accentColor: definition.primaryColor,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[Color(0xFF0F1821), Color(0xFF080D13)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -738,7 +731,7 @@ class _BroadcastLiveWindow extends StatelessWidget {
                     Text(
                       'Live Broadcast Lane',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
+                        color: tokens.textPrimary,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -747,7 +740,7 @@ class _BroadcastLiveWindow extends StatelessWidget {
                       'Pseudo-3D match window with scorebug, event ribbon, and commentary strip.',
                       style: Theme.of(
                         context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                      ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
                     ),
                   ],
                 ),
@@ -844,17 +837,19 @@ class _LaneTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final accent = GteShellTheme.definitionOf(context).primaryColor;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: accent.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white,
+          color: tokens.textPrimary,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -879,18 +874,10 @@ class _StudioWrapCard extends StatelessWidget {
     final List<String> commentary = package.commentaryHighlights
         .take(4)
         .toList(growable: false);
-    return Container(
-      width: double.infinity,
+    final tokens = GteShellTheme.tokensOf(context);
+    return GteSurfacePanel(
+      accentColor: GteShellTheme.tokensOf(context).accentWarm,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF141E2A), Color(0xFF0A0F15)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -901,7 +888,7 @@ class _StudioWrapCard extends StatelessWidget {
                 ? 'Full-time Package'
                 : 'Studio Wrap',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
+              color: tokens.textPrimary,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -910,7 +897,7 @@ class _StudioWrapCard extends StatelessWidget {
             'Momentum, coach notes, and commentary pulls from the verified package layer.',
             style: Theme.of(
               context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+            ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
           ),
           if (momentum.isNotEmpty) ...<Widget>[
             const SizedBox(height: 16),
@@ -938,13 +925,14 @@ class _WrapSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.white,
+            color: tokens.textPrimary,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -955,7 +943,7 @@ class _WrapSection extends StatelessWidget {
             child: Text(
               '- $item',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
+                color: tokens.textMuted,
                 height: 1.35,
               ),
             ),

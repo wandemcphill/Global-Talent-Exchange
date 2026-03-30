@@ -44,28 +44,6 @@ Widget _authenticatedFeatureScreen({
   );
 }
 
-Widget _adminFeatureScreen({
-  required GteNavigationDependencies dependencies,
-  required String loadingTitle,
-  required IconData icon,
-  required Color accentColor,
-  required Future<GteFeatureRouteResult> Function() load,
-}) {
-  return _featureScreen(
-    dependencies: dependencies,
-    access: GteFeatureRouteAccess.admin,
-    loadingTitle: loadingTitle,
-    lockedTitle: 'Admin sign-in required',
-    lockedMessage:
-        'This admin route requires a signed-in account before the control surface can mount.',
-    forbiddenTitle: 'Admin permission required',
-    forbiddenMessage: 'This control surface is available only to admin roles.',
-    icon: icon,
-    accentColor: accentColor,
-    load: load,
-  );
-}
-
 Widget _featureScreen({
   required GteNavigationDependencies dependencies,
   required GteFeatureRouteAccess access,
@@ -116,9 +94,10 @@ Widget _authGuardedScreen({
   if (!dependencies.isAuthenticated) {
     return _RouteStateScreen(
       title: adminOnly ? 'Admin sign-in required' : 'Sign in required',
-      message: adminOnly
-          ? 'This control surface requires an authenticated admin session.'
-          : 'This feature becomes available after sign-in.',
+      message:
+          adminOnly
+              ? 'This control surface requires an authenticated admin session.'
+              : 'This feature becomes available after sign-in.',
       icon: icon,
       actionLabel: dependencies.onOpenLogin == null ? null : 'Sign in',
       onAction: _loginAction(context, dependencies),
@@ -140,24 +119,8 @@ Future<T> _withApi<T>(
   Future<T> Function(dynamic api) live,
   FutureOr<T> Function() fixture,
 ) async {
-  final dynamic api = dependencies.createAuthedApi();
-  switch (dependencies.backendMode) {
-    case GteBackendMode.fixture:
-      return await fixture();
-    case GteBackendMode.live:
-      return live(api);
-    case GteBackendMode.liveThenFixture:
-      try {
-        return await live(api);
-      } on GteApiException catch (error) {
-        if (error.supportsFixtureFallback) {
-          return await fixture();
-        }
-        rethrow;
-      } catch (_) {
-        return await fixture();
-      }
-  }
+  final dynamic api = dependencies.liveOnly().createAuthedApi();
+  return await live(api);
 }
 
 GteFeatureRouteResult _featureUnavailable({
@@ -190,31 +153,6 @@ GteFeatureRouteAction _routeAction({
   );
 }
 
-GteFeatureRouteAction _noticeAction({
-  required GteNavigationDependencies dependencies,
-  required String label,
-  required IconData icon,
-  required String message,
-  bool primary = false,
-  bool requireAuthentication = false,
-}) {
-  return GteFeatureRouteAction(
-    label: label,
-    icon: icon,
-    primary: primary,
-    onPressed: (BuildContext context) async {
-      if (requireAuthentication && !dependencies.isAuthenticated) {
-        final bool signedIn =
-            await dependencies.onOpenLogin?.call(context) ?? false;
-        if (!signedIn || !context.mounted) {
-          return;
-        }
-      }
-      await _showRouteNotice(context, message);
-    },
-  );
-}
-
 Future<void> Function(BuildContext context) _pushRouteHandler(
   GteNavigationDependencies dependencies,
   GteAppRouteData route,
@@ -226,11 +164,6 @@ Future<void> Function(BuildContext context) _pushRouteHandler(
       dependencies: dependencies,
     );
   };
-}
-
-Future<void> _showRouteNotice(BuildContext context, String message) async {
-  final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(context);
-  messenger?.showSnackBar(SnackBar(content: Text(message)));
 }
 
 Widget _featureLoadingShell(BuildContext context, {required String title}) {
@@ -321,47 +254,9 @@ double _numberFromMap(
   return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
-int _intFromMap(
-  Map<String, dynamic> json,
-  List<String> keys, {
-  int fallback = 0,
-}) {
-  final Object? value = _pick(json, keys);
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.toInt();
-  }
-  return int.tryParse(value?.toString() ?? '') ?? fallback;
-}
-
-bool _boolFromMap(
-  Map<String, dynamic> json,
-  List<String> keys, {
-  bool fallback = false,
-}) {
-  final Object? value = _pick(json, keys);
-  if (value is bool) {
-    return value;
-  }
-  final String normalized = value?.toString().trim().toLowerCase() ?? '';
-  if (<String>{'1', 'true', 'yes', 'on'}.contains(normalized)) {
-    return true;
-  }
-  if (<String>{'0', 'false', 'no', 'off'}.contains(normalized)) {
-    return false;
-  }
-  return fallback;
-}
-
 String _creditsLabel(num value) {
   final bool whole = value == value.roundToDouble();
   return '${value.toStringAsFixed(whole ? 0 : 2)} cr';
-}
-
-String _clubLabel(String? clubName, String clubId) {
-  return clubName?.trim().isNotEmpty == true ? clubName!.trim() : clubId;
 }
 
 String _errorMessage(Object error) {
@@ -369,50 +264,6 @@ String _errorMessage(Object error) {
     return error.message;
   }
   return AppFeedback.messageFor(error);
-}
-
-Map<String, dynamic> _latestTransfer(Map<String, dynamic> history) {
-  final List<dynamic> transfers = _listFromMap(
-    history,
-    <String>['transfers', 'executions', 'completed_transfers', 'items'],
-  );
-  if (transfers.isEmpty) {
-    return const <String, dynamic>{};
-  }
-  return _asMap(transfers.first);
-}
-
-Map<String, dynamic> _highestPricedOffer(List<dynamic> offers) {
-  Map<String, dynamic> winner = const <String, dynamic>{};
-  double bestPrice = -1;
-  for (final dynamic item in offers) {
-    final Map<String, dynamic> offer = _asMap(item);
-    final double price = _numberFromMap(
-      offer,
-      <String>['offer_price_credits', 'offerPriceCredits'],
-      fallback: -1,
-    );
-    if (price > bestPrice) {
-      bestPrice = price;
-      winner = offer;
-    }
-  }
-  return winner;
-}
-
-String? _extractCreatorLeagueSeasonId(Map<String, dynamic> overview) {
-  final Map<String, dynamic> current =
-      _mapFromMap(overview, <String>['current_season', 'currentSeason']);
-  if (current.isNotEmpty) {
-    return _stringOrNull(
-        _pick(current, <String>['id', 'season_id', 'seasonId']));
-  }
-  return _stringOrNull(
-    _pick(
-      overview,
-      <String>['current_season_id', 'currentSeasonId', 'season_id', 'seasonId'],
-    ),
-  );
 }
 
 Widget _buildStreamerTournamentsListScreen(
@@ -425,11 +276,12 @@ Widget _buildStreamerTournamentsListScreen(
     accessToken: dependencies.accessToken,
     currentUserId: dependencies.currentUserId,
     currentUserRole: dependencies.currentUserRole,
-    onOpenLogin: dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          },
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            },
   );
 }
 
@@ -445,11 +297,12 @@ Widget _buildStreamerTournamentDetailScreen(
     currentUserId: dependencies.currentUserId,
     currentUserRole: dependencies.currentUserRole,
     tournamentId: route.tournamentId,
-    onOpenLogin: dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          },
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            },
   );
 }
 
@@ -464,11 +317,12 @@ Widget _buildFanPredictionMatchScreen(
     accessToken: dependencies.accessToken,
     currentUserRole: dependencies.currentUserRole,
     matchId: route.matchId,
-    onOpenLogin: dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          },
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            },
   );
 }
 
@@ -481,11 +335,12 @@ Widget _buildPlayerCardsBrowseScreen(
     backendMode: dependencies.backendMode,
     accessToken: dependencies.accessToken,
     currentUserId: dependencies.currentUserId,
-    onOpenLogin: dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          },
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            },
   );
 }
 
@@ -507,22 +362,16 @@ Widget _buildPlayerCardDetailScreen(
             '/player-cards/players/${route.playerId}',
             auth: false,
           ),
-          () async => <String, dynamic>{
-            'player_id': route.playerId,
-            'display_name': 'Ayo Adeyemi',
-            'overall_rating': 89,
-            'position': 'FW',
-            'nationality': 'Nigeria',
-            'floor_price_credits': 1200,
-          },
+          () => throw StateError('Route-level fixture fallback is disabled.'),
         );
         return GteFeatureRouteResult.ready(
           GteFeatureRouteContent(
             eyebrow: 'CARD DETAIL',
-            title: _stringFromMap(
-              detail,
-              <String>['display_name', 'displayName', 'player_name'],
-            ),
+            title: _stringFromMap(detail, <String>[
+              'display_name',
+              'displayName',
+              'player_name',
+            ]),
             description:
                 'Detail routes stay stable even when broader marketplace surfaces are still being layered in by other threads.',
             icon: Icons.badge_outlined,
@@ -530,10 +379,10 @@ Widget _buildPlayerCardDetailScreen(
             metrics: <GteFeatureRouteMetric>[
               GteFeatureRouteMetric(
                 label: 'Overall',
-                value: _stringFromMap(
-                  detail,
-                  <String>['overall_rating', 'overallRating'],
-                ),
+                value: _stringFromMap(detail, <String>[
+                  'overall_rating',
+                  'overallRating',
+                ]),
               ),
               GteFeatureRouteMetric(
                 label: 'Position',
@@ -542,10 +391,10 @@ Widget _buildPlayerCardDetailScreen(
               GteFeatureRouteMetric(
                 label: 'Floor',
                 value: _creditsLabel(
-                  _numberFromMap(
-                    detail,
-                    <String>['floor_price_credits', 'floorPriceCredits'],
-                  ),
+                  _numberFromMap(detail, <String>[
+                    'floor_price_credits',
+                    'floorPriceCredits',
+                  ]),
                 ),
               ),
             ],
@@ -778,10 +627,7 @@ class _ClubSaleOwnerOffersGateScreenState
   @override
   Widget build(BuildContext context) {
     if (_isChecking) {
-      return _featureLoadingShell(
-        context,
-        title: 'Loading owner offer inbox',
-      );
+      return _featureLoadingShell(context, title: 'Loading owner offer inbox');
     }
 
     if (_error is GteApiException &&
@@ -915,10 +761,10 @@ Widget _buildNationalTeamCompetitionsScreen(
               ),
               GteFeatureRouteMetric(
                 label: 'Entries',
-                value: _stringFromMap(
-                  featured,
-                  <String>['entry_count', 'entryCount'],
-                ),
+                value: _stringFromMap(featured, <String>[
+                  'entry_count',
+                  'entryCount',
+                ]),
               ),
             ],
             highlights: <String>[
@@ -967,10 +813,10 @@ Widget _buildNationalTeamEntryScreen(
         return GteFeatureRouteResult.ready(
           GteFeatureRouteContent(
             eyebrow: 'NATIONAL TEAM ENTRY',
-            title: _stringFromMap(
-              entry,
-              <String>['country_name', 'countryName'],
-            ),
+            title: _stringFromMap(entry, <String>[
+              'country_name',
+              'countryName',
+            ]),
             description:
                 'Entry deep links land safely even before richer national-team detail screens are wired.',
             icon: Icons.assignment_ind_outlined,
@@ -978,10 +824,10 @@ Widget _buildNationalTeamEntryScreen(
             metrics: <GteFeatureRouteMetric>[
               GteFeatureRouteMetric(
                 label: 'Competition',
-                value: _stringFromMap(
-                  entry,
-                  <String>['competition_name', 'competitionName'],
-                ),
+                value: _stringFromMap(entry, <String>[
+                  'competition_name',
+                  'competitionName',
+                ]),
               ),
               GteFeatureRouteMetric(
                 label: 'Status',
@@ -1044,8 +890,10 @@ Widget _buildNationalTeamHistoryScreen(
             ],
           },
         );
-        final List<dynamic> entries =
-            _listFromMap(history, <String>['entries', 'history']);
+        final List<dynamic> entries = _listFromMap(history, <String>[
+          'entries',
+          'history',
+        ]);
         if (entries.isEmpty) {
           return GteFeatureRouteResult.empty(
             title: 'No national-team history yet',
@@ -1076,10 +924,10 @@ Widget _buildNationalTeamHistoryScreen(
               ),
               GteFeatureRouteMetric(
                 label: 'Country',
-                value: _stringFromMap(
-                  latest,
-                  <String>['country_name', 'countryName'],
-                ),
+                value: _stringFromMap(latest, <String>[
+                  'country_name',
+                  'countryName',
+                ]),
               ),
               GteFeatureRouteMetric(
                 label: 'Caps',
@@ -1115,16 +963,17 @@ Widget _buildFootballTransferCenterScreen(
         final Map<String, dynamic> payload = await _withApi(
           dependencies,
           (dynamic api) async {
-            final List<dynamic> live =
-                await Future.wait<dynamic>(<Future<dynamic>>[
-              api.getList('/api/transfers/windows', auth: false),
-              api.getMap('/calendar-engine/dashboard', auth: false),
-              api.getList(
-                '/api/world/narratives',
-                auth: false,
-                query: const <String, Object?>{'limit': 6},
-              ),
-            ]);
+            final List<dynamic> live = await Future.wait<dynamic>(
+              <Future<dynamic>>[
+                api.getList('/api/transfers/windows', auth: false),
+                api.getMap('/calendar-engine/dashboard', auth: false),
+                api.getList(
+                  '/api/world/narratives',
+                  auth: false,
+                  query: const <String, Object?>{'limit': 6},
+                ),
+              ],
+            );
             return <String, dynamic>{
               'windows': _asList(live[0]),
               'dashboard': _asMap(live[1]),
@@ -1150,12 +999,15 @@ Widget _buildFootballTransferCenterScreen(
             ],
           },
         );
-        final List<dynamic> windows =
-            _listFromMap(payload, <String>['windows']);
-        final Map<String, dynamic> dashboard =
-            _mapFromMap(payload, <String>['dashboard']);
-        final List<dynamic> narratives =
-            _listFromMap(payload, <String>['narratives']);
+        final List<dynamic> windows = _listFromMap(payload, <String>[
+          'windows',
+        ]);
+        final Map<String, dynamic> dashboard = _mapFromMap(payload, <String>[
+          'dashboard',
+        ]);
+        final List<dynamic> narratives = _listFromMap(payload, <String>[
+          'narratives',
+        ]);
         if (windows.isEmpty && narratives.isEmpty) {
           return GteFeatureRouteResult.empty(
             title: 'No transfer center updates',
@@ -1168,8 +1020,10 @@ Widget _buildFootballTransferCenterScreen(
         }
         final Map<String, dynamic> featuredWindow =
             windows.isEmpty ? const <String, dynamic>{} : _asMap(windows.first);
-        final List<dynamic> upcomingEvents = _listFromMap(
-            dashboard, <String>['upcoming_events', 'upcomingEvents']);
+        final List<dynamic> upcomingEvents = _listFromMap(dashboard, <String>[
+          'upcoming_events',
+          'upcomingEvents',
+        ]);
         return GteFeatureRouteResult.ready(
           GteFeatureRouteContent(
             eyebrow: 'TRANSFER CENTER',
@@ -1195,10 +1049,7 @@ Widget _buildFootballTransferCenterScreen(
             highlights: <String>[
               'Transfer center routing stays public and does not crash when one feed is empty.',
               if (featuredWindow.isNotEmpty)
-                'Featured window: ${_stringFromMap(featuredWindow, <String>[
-                      'name',
-                      'title'
-                    ])}.',
+                'Featured window: ${_stringFromMap(featuredWindow, <String>['name', 'title'])}.',
             ],
             notes: <String>[
               'Window, media, and calendar gaps resolve into explicit empty states instead of blank routes.',
@@ -1231,11 +1082,12 @@ Widget _buildCreatorStadiumClubScreen(
     clubId: route.clubId,
     clubName: route.clubName,
     seasonId: route.seasonId,
-    onOpenLogin: dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          },
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            },
   );
 }
 
@@ -1251,11 +1103,12 @@ Widget _buildCreatorStadiumMatchScreen(
     currentClubId: dependencies.currentClubId,
     currentUserRole: dependencies.currentUserRole,
     matchId: route.matchId,
-    onOpenLogin: dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          },
+    onOpenLogin:
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            },
   );
 }
 
@@ -1275,11 +1128,12 @@ Widget _buildCreatorStadiumAdminControlScreen(
       currentClubId: dependencies.currentClubId,
       currentUserRole: dependencies.currentUserRole,
       adminOnly: true,
-      onOpenLogin: dependencies.onOpenLogin == null
-          ? null
-          : () {
-              dependencies.onOpenLogin!.call(context);
-            },
+      onOpenLogin:
+          dependencies.onOpenLogin == null
+              ? null
+              : () {
+                dependencies.onOpenLogin!.call(context);
+              },
     ),
   );
 }
@@ -1299,11 +1153,12 @@ Widget _buildCreatorLeagueFinancialReportScreen(
       backendMode: dependencies.backendMode,
       accessToken: dependencies.accessToken,
       currentUserRole: dependencies.currentUserRole,
-      onOpenLogin: dependencies.onOpenLogin == null
-          ? null
-          : () {
-              dependencies.onOpenLogin!.call(context);
-            },
+      onOpenLogin:
+          dependencies.onOpenLogin == null
+              ? null
+              : () {
+                dependencies.onOpenLogin!.call(context);
+              },
       seasonId: route.seasonId,
       initialView: CreatorLeagueAdminView.finance,
     ),
@@ -1325,11 +1180,12 @@ Widget _buildCreatorLeagueSettlementsScreen(
       backendMode: dependencies.backendMode,
       accessToken: dependencies.accessToken,
       currentUserRole: dependencies.currentUserRole,
-      onOpenLogin: dependencies.onOpenLogin == null
-          ? null
-          : () {
-              dependencies.onOpenLogin!.call(context);
-            },
+      onOpenLogin:
+          dependencies.onOpenLogin == null
+              ? null
+              : () {
+                dependencies.onOpenLogin!.call(context);
+              },
       seasonId: route.seasonId,
       initialView: CreatorLeagueAdminView.settlements,
     ),
@@ -1350,11 +1206,12 @@ Widget _buildGiftStabilizerScreen(
       backendMode: dependencies.backendMode,
       accessToken: dependencies.accessToken,
       currentUserRole: dependencies.currentUserRole,
-      onOpenLogin: dependencies.onOpenLogin == null
-          ? null
-          : () {
-              dependencies.onOpenLogin!.call(context);
-            },
+      onOpenLogin:
+          dependencies.onOpenLogin == null
+              ? null
+              : () {
+                dependencies.onOpenLogin!.call(context);
+              },
     ),
   );
 }

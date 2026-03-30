@@ -13,17 +13,13 @@ import 'package:gte_frontend/models/club_models.dart';
 import 'package:gte_frontend/models/club_reputation_models.dart';
 
 class ClubController extends ChangeNotifier {
-  ClubController({
-    required this.api,
-    required this.clubId,
-    this.clubName,
-  });
+  ClubController({required this.api, required this.clubId, this.clubName});
 
   factory ClubController.standard({
     required String clubId,
     String? clubName,
     required String baseUrl,
-    GteBackendMode backendMode = GteBackendMode.liveThenFixture,
+    GteBackendMode backendMode = GteBackendMode.live,
   }) {
     return ClubController(
       api: ClubApi.standard(baseUrl: baseUrl, mode: backendMode),
@@ -61,7 +57,8 @@ class ClubController extends ChangeNotifier {
   JerseyVariantDto? get selectedKitVariant =>
       identity?.jerseySet.variantFor(selectedKit);
 
-  List<ClubCatalogItem> get catalog => _data?.catalog ?? const <ClubCatalogItem>[];
+  List<ClubCatalogItem> get catalog =>
+      _data?.catalog ?? const <ClubCatalogItem>[];
   List<ClubPurchaseRecord> get purchaseHistory =>
       _data?.purchaseHistory ?? const <ClubPurchaseRecord>[];
 
@@ -191,8 +188,9 @@ class ClubController extends ChangeNotifier {
     if (current == null) {
       return;
     }
-    final JerseyVariantDto variant =
-        current.identity.jerseySet.variantFor(selectedKit);
+    final JerseyVariantDto variant = current.identity.jerseySet.variantFor(
+      selectedKit,
+    );
     final JerseyVariantDto updated = variant.copyWith(
       primaryColor: primaryColor,
       secondaryColor: secondaryColor,
@@ -204,8 +202,10 @@ class ClubController extends ChangeNotifier {
       sleeveStyle: sleeveStyle,
       badgePlacement: badgePlacement,
     );
-    final JerseySetDto updatedSet =
-        current.identity.jerseySet.updateVariant(selectedKit, updated);
+    final JerseySetDto updatedSet = current.identity.jerseySet.updateVariant(
+      selectedKit,
+      updated,
+    );
     _data = current.copyWith(
       identity: current.identity.copyWith(jerseySet: updatedSet),
     );
@@ -239,9 +239,7 @@ class ClubController extends ChangeNotifier {
     if (current == null) {
       return;
     }
-    _data = current.copyWith(
-      branding: current.branding.copyWith(motto: motto),
-    );
+    _data = current.copyWith(branding: current.branding.copyWith(motto: motto));
     notifyListeners();
   }
 
@@ -284,7 +282,8 @@ class ClubController extends ChangeNotifier {
       );
       _savedData = current.copyWith(branding: saved);
       _data = _savedData;
-      noticeMessage = 'Branding theme, motto, and showcase backdrop were saved.';
+      noticeMessage =
+          'Branding theme, motto, and showcase backdrop were saved.';
     } catch (error) {
       errorMessage = 'Unable to save club branding updates. $error';
     } finally {
@@ -340,9 +339,10 @@ class ClubController extends ChangeNotifier {
     try {
       await api.updateBrandingReview(reviewId: reviewId, approved: approved);
       await loadAdmin();
-      noticeMessage = approved
-          ? 'Branding review approved for showcase publication.'
-          : 'Branding review sent back for identity refinements.';
+      noticeMessage =
+          approved
+              ? 'Branding review approved for showcase publication.'
+              : 'Branding review sent back for identity refinements.';
     } catch (error) {
       errorMessage = 'Unable to update branding review. $error';
       notifyListeners();

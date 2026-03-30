@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/gte_shell_theme.dart';
 import 'gte_theme_controller.dart';
+import 'gte_theme_extensions.dart';
 import 'gte_theme_registry.dart';
 import 'gte_theme_scope.dart';
 import 'gte_theme_specs.dart';
@@ -15,6 +16,7 @@ class GteThemePickerSheet extends StatelessWidget {
     final GteThemeController controller = GteThemeControllerScope.of(context);
     final GteThemeDefinition activeTheme = controller.activeTheme;
     final GteThemeTokens tokens = GteShellTheme.tokensOf(context);
+    final GteThemeVisuals visuals = GteShellTheme.visualsOf(context);
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
@@ -24,7 +26,7 @@ class GteThemePickerSheet extends StatelessWidget {
           tokens.spaceLg,
         ),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760, maxHeight: 640),
+          constraints: const BoxConstraints(maxWidth: 820, maxHeight: 760),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -42,7 +44,7 @@ class GteThemePickerSheet extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         Text(
-                          'Current: ${activeTheme.metadata.label}',
+                          'Current shell: ${activeTheme.metadata.label}',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -57,8 +59,23 @@ class GteThemePickerSheet extends StatelessWidget {
               ),
               SizedBox(height: tokens.spaceSm),
               Text(
-                'Choose the shell system for feed, dashboard, and profile while keeping motion, buttons, and contrast consistent.',
+                'Choose the GTEX shell system for market, world, profile, and matchday surfaces. One global selection stays active across the app and persists after restart.',
                 style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              SizedBox(height: tokens.spaceSm),
+              Container(
+                padding: EdgeInsets.all(tokens.spaceMd),
+                decoration: BoxDecoration(
+                  color: visuals.heroAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(tokens.radiusMedium),
+                  border: Border.all(
+                    color: visuals.heroAccent.withValues(alpha: 0.24),
+                  ),
+                ),
+                child: Text(
+                  activeTheme.usage.dashboard,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
               SizedBox(height: tokens.spaceLg),
               Expanded(
@@ -107,8 +124,9 @@ class _ThemeOptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GteThemeTokens activeTokens = GteShellTheme.tokensOf(context);
-    final GteThemeMotion motion = definition.motion;
     final GteThemeTokens preview = definition.tokens;
+    final GteThemeVisuals visuals = definition.visuals;
+    final GteThemeMotion motion = definition.motion;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -121,14 +139,17 @@ class _ThemeOptionTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(preview.radiusLarge),
             border: Border.all(
-              color: selected ? activeTokens.accent : preview.outline,
+              color: selected ? activeTokens.accent : visuals.shellBorder,
               width: selected ? 1.6 : 1,
             ),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: <Color>[
-                preview.panelStrong,
+                Color.alphaBlend(
+                  visuals.heroAccent.withValues(alpha: 0.1),
+                  preview.panelStrong,
+                ),
                 preview.panel,
                 preview.backgroundSoft,
               ],
@@ -184,12 +205,24 @@ class _ThemeOptionTile extends StatelessWidget {
                         context,
                       ).textTheme.bodySmall?.copyWith(color: preview.textMuted),
                     ),
-                    SizedBox(height: activeTokens.spaceXs),
-                    Text(
-                      '${definition.typography.styleName} • ${definition.motion.feel}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: preview.accentClub,
-                      ),
+                    SizedBox(height: activeTokens.spaceSm),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        _MiniPill(
+                          label: definition.typography.styleName,
+                          color: preview.accentWarm,
+                        ),
+                        _MiniPill(
+                          label: definition.motion.feel,
+                          color: preview.accentClub,
+                        ),
+                        _MiniPill(
+                          label: definition.visuals.shellStyle,
+                          color: preview.accentCapital,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -234,6 +267,32 @@ class _ThemePreviewSwatches extends StatelessWidget {
             ),
           )
           .toList(growable: false),
+    );
+  }
+}
+
+class _MiniPill extends StatelessWidget {
+  const _MiniPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

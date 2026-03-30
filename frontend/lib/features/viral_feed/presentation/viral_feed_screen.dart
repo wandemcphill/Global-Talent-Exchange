@@ -8,10 +8,12 @@ import '../../../core/actions/action_pipeline.dart' as feed_actions;
 import '../../../core/app_feedback.dart';
 import '../../../core/optimistic_ui_handler.dart';
 import '../../../core/state_sync_system.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/data_source_status.dart';
 import '../../../services/frontend_audit_hooks.dart';
 import '../../../services/reliability/reliable_event_queue.dart';
+import '../../../widgets/gte_shell_theme.dart';
+import '../../../widgets/gte_state_panel.dart';
+import '../../../widgets/gte_surface_panel.dart';
 import '../data/viral_feed_models.dart';
 import '../data/viral_feed_repository.dart';
 
@@ -114,15 +116,16 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final ViralFeedDeck? deck = _deck;
+    final Color background = Theme.of(context).scaffoldBackgroundColor;
     if (_isBootstrapping) {
       return _buildScaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: background,
         body: const _LoadingState(),
       );
     }
     if (_loadError != null && deck == null) {
       return _buildScaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: background,
         body: _ErrorState(
           message: AppFeedback.messageFor(_loadError!),
           onRetry: _handleRetry,
@@ -131,13 +134,13 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
     }
     if (deck == null || deck.clips.isEmpty) {
       return _buildScaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: background,
         body: _EmptyState(onRetry: _handleRetry),
       );
     }
 
     return _buildScaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: background,
       body: PageView.builder(
         key: const Key('viral-feed-page-view'),
         controller: _pageController,
@@ -173,15 +176,18 @@ class _ViralFeedScreenState extends State<ViralFeedScreen> {
     required Widget body,
   }) {
     if (!kDebugMode) {
-      return Scaffold(backgroundColor: backgroundColor, body: body);
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        body: Container(decoration: gteBackdropDecoration(), child: body),
+      );
     }
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Stack(
         children: <Widget>[
-          body,
+          Container(decoration: gteBackdropDecoration(), child: body),
           Positioned(
-            top: MediaQuery.paddingOf(context).top + 12,
+            top: MediaQuery.paddingOf(context).top + 76,
             right: 12,
             child: _RouteStatusBadge(status: widget.routeStatus),
           ),
@@ -683,17 +689,28 @@ class _RouteStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     final Color color = switch (status) {
-      DataSourceStatus.live => Colors.lightGreenAccent,
-      DataSourceStatus.blocked => Colors.redAccent,
-      DataSourceStatus.demo => Colors.amberAccent,
+      DataSourceStatus.live => tokens.positive,
+      DataSourceStatus.blocked => tokens.negative,
+      DataSourceStatus.demo => tokens.warning,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.62),
+        color: Color.alphaBlend(
+          tokens.panelStrong.withValues(alpha: 0.92),
+          tokens.background,
+        ),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.44)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: color.withValues(alpha: 0.12),
+            blurRadius: 18,
+            spreadRadius: 1,
+          ),
+        ],
       ),
       child: Text(
         status.label,
@@ -745,19 +762,35 @@ class _ViralClipPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Color> palette = _paletteFor(clip.eventType);
+    final Color accent = palette.last;
+    final tokens = GteShellTheme.tokensOf(context);
+    final definition = GteShellTheme.definitionOf(context);
     final ThemeData theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: palette,
+          colors: <Color>[
+            Color.alphaBlend(
+              palette.first.withValues(alpha: 0.78),
+              tokens.background,
+            ),
+            Color.alphaBlend(
+              palette[1].withValues(alpha: 0.62),
+              tokens.backgroundSoft,
+            ),
+            Color.alphaBlend(
+              accent.withValues(alpha: 0.18),
+              tokens.panelElevated,
+            ),
+          ],
         ),
       ),
       child: Stack(
         fit: StackFit.expand,
         children: <Widget>[
-          const _BackdropTexture(),
+          _BackdropTexture(palette: palette),
           SafeArea(
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
@@ -772,12 +805,24 @@ class _ViralClipPage extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            IconButton(
-                              onPressed: onBack,
-                              icon: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: tokens.panelStrong.withValues(
+                                  alpha: 0.62,
+                                ),
+                                border: Border.all(
+                                  color: tokens.stroke.withValues(alpha: 0.9),
+                                ),
                               ),
-                              color: AppColors.textPrimary,
+                              child: IconButton(
+                                key: const Key('viral-back-button'),
+                                onPressed: onBack,
+                                icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                ),
+                                color: tokens.textPrimary,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -797,20 +842,32 @@ class _ViralClipPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: onRefresh,
-                              icon:
-                                  isSyncing
-                                      ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppColors.primary,
-                                        ),
-                                      )
-                                      : const Icon(Icons.refresh_rounded),
-                              color: AppColors.textPrimary,
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: tokens.panelStrong.withValues(
+                                  alpha: 0.62,
+                                ),
+                                border: Border.all(
+                                  color: tokens.stroke.withValues(alpha: 0.9),
+                                ),
+                              ),
+                              child: IconButton(
+                                key: const Key('viral-refresh-button'),
+                                onPressed: onRefresh,
+                                icon:
+                                    isSyncing
+                                        ? SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: definition.primaryColor,
+                                          ),
+                                        )
+                                        : const Icon(Icons.refresh_rounded),
+                                color: tokens.textPrimary,
+                              ),
                             ),
                           ],
                         ),
@@ -821,15 +878,31 @@ class _ViralClipPage extends StatelessWidget {
                           children: <Widget>[
                             _MetaChip(
                               label: isSyncing ? 'SYNCING LIVE' : 'LIVE LOCKED',
+                              accent: definition.primaryColor,
                             ),
-                            _MetaChip(label: 'RANK #${clip.rank}'),
-                            _MetaChip(label: 'ENGINE'),
-                            _MetaChip(label: "${clip.minute}'"),
+                            _MetaChip(
+                              label: 'RANK #${clip.rank}',
+                              accent: definition.accentColor,
+                            ),
+                            _MetaChip(
+                              label: 'ENGINE',
+                              accent: definition.secondaryColor,
+                            ),
+                            _MetaChip(label: "${clip.minute}'", accent: accent),
                             if (clip.teamName != null)
-                              _MetaChip(label: clip.teamName!.toUpperCase()),
+                              _MetaChip(
+                                label: clip.teamName!.toUpperCase(),
+                                accent: definition.secondaryColor,
+                              ),
                             if (clip.scorelineLabel != null)
-                              _MetaChip(label: clip.scorelineLabel!),
-                            _MetaChip(label: '${index + 1}/$total'),
+                              _MetaChip(
+                                label: clip.scorelineLabel!,
+                                accent: definition.accentColor,
+                              ),
+                            _MetaChip(
+                              label: '${index + 1}/$total',
+                              accent: tokens.textMuted,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 24),
@@ -846,7 +919,7 @@ class _ViralClipPage extends StatelessWidget {
                         Text(
                           clip.title,
                           style: theme.textTheme.titleLarge?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: tokens.textPrimary.withValues(alpha: 0.9),
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -857,7 +930,11 @@ class _ViralClipPage extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  _StageCard(clip: clip, deck: deck),
+                                  _StageCard(
+                                    clip: clip,
+                                    deck: deck,
+                                    accent: accent,
+                                  ),
                                   const SizedBox(height: 18),
                                   Text(
                                     clip.caption.caption,
@@ -873,7 +950,8 @@ class _ViralClipPage extends StatelessWidget {
                                             hashtag,
                                             style: theme.textTheme.bodySmall
                                                 ?.copyWith(
-                                                  color: AppColors.primary,
+                                                  color:
+                                                      definition.primaryColor,
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                           ),
@@ -892,6 +970,7 @@ class _ViralClipPage extends StatelessWidget {
                               sharePending: sharePending,
                               onLike: onLike,
                               onShare: onShare,
+                              accent: accent,
                             ),
                           ],
                         ),
@@ -909,29 +988,25 @@ class _ViralClipPage extends StatelessWidget {
 }
 
 class _StageCard extends StatelessWidget {
-  const _StageCard({required this.clip, required this.deck});
+  const _StageCard({
+    required this.clip,
+    required this.deck,
+    required this.accent,
+  });
 
   final ViralClip clip;
   final ViralFeedDeck deck;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return Container(
+    final tokens = GteShellTheme.tokensOf(context);
+    return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 320),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: Colors.black.withValues(alpha: 0.24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.24),
-            blurRadius: 32,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Padding(
+      child: GteSurfacePanel(
+        emphasized: true,
+        accentColor: accent,
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -943,36 +1018,50 @@ class _StageCard extends StatelessWidget {
                   height: 54,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AppColors.primary.withValues(alpha: 0.18),
+                    color: accent.withValues(alpha: 0.18),
                   ),
-                  child: Icon(
-                    _iconFor(clip.eventType),
-                    color: AppColors.primary,
-                  ),
+                  child: Icon(_iconFor(clip.eventType), color: accent),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
                     clip.playerName == null
                         ? clip.title
-                        : '${clip.playerName} • ${clip.title}',
+                        : '${clip.playerName} | ${clip.title}',
                     style: theme.textTheme.titleLarge,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 18),
-            _SignalLine(label: 'Feed source', value: clip.feedSource),
-            _SignalLine(label: 'Deck', value: deck.source.label),
-            _SignalLine(label: 'Score', value: clip.score.toStringAsFixed(1)),
+            _SignalLine(
+              label: 'Feed source',
+              value: clip.feedSource,
+              accent: accent,
+            ),
+            _SignalLine(
+              label: 'Deck',
+              value: deck.source.label,
+              accent: accent,
+            ),
+            _SignalLine(
+              label: 'Score',
+              value: clip.score.toStringAsFixed(1),
+              accent: accent,
+            ),
             if (clip.creatorId != null)
-              _SignalLine(label: 'Creator', value: clip.creatorId!),
+              _SignalLine(
+                label: 'Creator',
+                value: clip.creatorId!,
+                accent: accent,
+              ),
             const SizedBox(height: 18),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
+                color: tokens.surfaceHighlight.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: tokens.stroke.withValues(alpha: 0.7)),
               ),
               child: Text(
                 clip.summaryLine ??
@@ -984,12 +1073,13 @@ class _StageCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: accent.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: accent.withValues(alpha: 0.24)),
               ),
               child: Row(
                 children: <Widget>[
-                  const Icon(Icons.play_circle_fill_rounded, size: 20),
+                  Icon(Icons.play_circle_fill_rounded, size: 20, color: accent),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -1010,10 +1100,15 @@ class _StageCard extends StatelessWidget {
 }
 
 class _SignalLine extends StatelessWidget {
-  const _SignalLine({required this.label, required this.value});
+  const _SignalLine({
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
 
   final String label;
   final String value;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -1027,7 +1122,7 @@ class _SignalLine extends StatelessWidget {
             child: Text(
               label.toUpperCase(),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.gold,
+                color: accent,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.8,
               ),
@@ -1051,6 +1146,7 @@ class _ActionRail extends StatelessWidget {
     required this.sharePending,
     required this.onLike,
     required this.onShare,
+    required this.accent,
   });
 
   final ViralClip clip;
@@ -1060,60 +1156,70 @@ class _ActionRail extends StatelessWidget {
   final bool sharePending;
   final VoidCallback onLike;
   final VoidCallback onShare;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final tokens = GteShellTheme.tokensOf(context);
     return SizedBox(
-      width: 96,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: <Widget>[
-          const _ActionBubble(
-            icon: Icons.local_fire_department_rounded,
-            label: 'Hot',
-            active: true,
-          ),
-          const SizedBox(height: 16),
-          _ActionBubble(
-            key: Key('viral-like-${clip.highlightId}'),
-            icon:
-                isLiked
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-            label: likePending ? 'Saving' : (isLiked ? 'Liked' : 'Like'),
-            active: isLiked || likePending,
-            busy: likePending,
-            onTap: likePending ? null : onLike,
-          ),
-          const SizedBox(height: 16),
-          _ActionBubble(
-            icon: isShared ? Icons.check_circle_rounded : Icons.share_rounded,
-            label:
-                sharePending
-                    ? 'Sending'
-                    : (isShared ? 'Shared' : clip.caption.cta),
-            active: isShared || sharePending,
-            busy: sharePending,
-            onTap: sharePending ? null : onShare,
-          ),
-          const SizedBox(height: 16),
-          _ActionBubble(
-            icon: Icons.leaderboard_rounded,
-            label: 'Rank ${clip.rank}',
-            active: false,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            clip.shareChannel.toUpperCase(),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.0,
+      width: 108,
+      child: GteSurfacePanel(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+        accentColor: accent,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            _ActionBubble(
+              icon: Icons.local_fire_department_rounded,
+              label: 'Hot',
+              active: true,
+              accent: accent,
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 16),
+            _ActionBubble(
+              key: Key('viral-like-${clip.highlightId}'),
+              icon:
+                  isLiked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+              label: likePending ? 'Saving' : (isLiked ? 'Liked' : 'Like'),
+              active: isLiked || likePending,
+              busy: likePending,
+              onTap: likePending ? null : onLike,
+              accent: accent,
+            ),
+            const SizedBox(height: 16),
+            _ActionBubble(
+              icon: isShared ? Icons.check_circle_rounded : Icons.share_rounded,
+              label:
+                  sharePending
+                      ? 'Sending'
+                      : (isShared ? 'Shared' : clip.caption.cta),
+              active: isShared || sharePending,
+              busy: sharePending,
+              onTap: sharePending ? null : onShare,
+              accent: tokens.accentWarm,
+            ),
+            const SizedBox(height: 16),
+            _ActionBubble(
+              icon: Icons.leaderboard_rounded,
+              label: 'Rank ${clip.rank}',
+              active: false,
+              accent: tokens.textMuted,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              clip.shareChannel.toUpperCase(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1125,6 +1231,7 @@ class _ActionBubble extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.active,
+    required this.accent,
     this.busy = false,
     this.onTap,
   });
@@ -1132,52 +1239,63 @@ class _ActionBubble extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool active;
+  final Color accent;
   final bool busy;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final tokens = GteShellTheme.tokensOf(context);
     final Widget bubble = Column(
       children: <Widget>[
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
           width: 60,
           height: 60,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color:
                 active
-                    ? AppColors.primary.withValues(alpha: 0.2)
-                    : Colors.white.withValues(alpha: 0.08),
+                    ? accent.withValues(alpha: 0.2)
+                    : tokens.surfaceHighlight.withValues(alpha: 0.08),
             border: Border.all(
               color:
                   active
-                      ? AppColors.primary.withValues(alpha: 0.34)
-                      : Colors.white.withValues(alpha: 0.12),
+                      ? accent.withValues(alpha: 0.34)
+                      : tokens.stroke.withValues(alpha: 0.75),
             ),
+            boxShadow:
+                active
+                    ? <BoxShadow>[
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.18),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                    : const <BoxShadow>[],
           ),
           child: Center(
             child:
                 busy
-                    ? const SizedBox(
+                    ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AppColors.primary,
+                        color: accent,
                       ),
                     )
-                    : Icon(
-                      icon,
-                      color: active ? AppColors.primary : AppColors.textPrimary,
-                    ),
+                    : Icon(icon, color: active ? accent : tokens.textPrimary),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.textPrimary,
+            color: tokens.textPrimary,
             fontWeight: FontWeight.w700,
           ),
           textAlign: TextAlign.center,
@@ -1208,6 +1326,8 @@ class _FeedSourceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final accent = GteShellTheme.definitionOf(context).primaryColor;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
@@ -1216,20 +1336,20 @@ class _FeedSourceChip extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               isSelected
-                  ? Colors.black.withValues(alpha: 0.28)
-                  : Colors.black.withValues(alpha: 0.14),
+                  ? accent.withValues(alpha: 0.12)
+                  : tokens.panelStrong.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color:
                 isSelected
-                    ? AppColors.primary.withValues(alpha: 0.36)
-                    : Colors.white.withValues(alpha: 0.1),
+                    ? accent.withValues(alpha: 0.36)
+                    : tokens.stroke.withValues(alpha: 0.82),
           ),
         ),
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: isSelected ? AppColors.primary : AppColors.textPrimary,
+            color: isSelected ? accent : tokens.textPrimary,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.2,
           ),
@@ -1240,23 +1360,28 @@ class _FeedSourceChip extends StatelessWidget {
 }
 
 class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.label});
+  const _MetaChip({required this.label, required this.accent});
 
   final String label;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.24),
+        color: Color.alphaBlend(
+          accent.withValues(alpha: 0.12),
+          tokens.panelStrong.withValues(alpha: 0.88),
+        ),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: AppColors.textPrimary,
+          color: tokens.textPrimary,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.8,
         ),
@@ -1266,15 +1391,23 @@ class _MetaChip extends StatelessWidget {
 }
 
 class _BackdropTexture extends StatelessWidget {
-  const _BackdropTexture();
+  const _BackdropTexture({required this.palette});
+
+  final List<Color> palette;
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(child: CustomPaint(painter: _BackdropPainter()));
+    return IgnorePointer(
+      child: CustomPaint(painter: _BackdropPainter(palette: palette)),
+    );
   }
 }
 
 class _BackdropPainter extends CustomPainter {
+  const _BackdropPainter({required this.palette});
+
+  final List<Color> palette;
+
   @override
   void paint(Canvas canvas, Size size) {
     final Paint glowPaint = Paint()..style = PaintingStyle.fill;
@@ -1284,8 +1417,8 @@ class _BackdropPainter extends CustomPainter {
       Offset(size.width * 0.42, size.height * 0.82),
     ];
     final List<Color> colors = <Color>[
-      AppColors.primary.withValues(alpha: 0.08),
-      AppColors.gold.withValues(alpha: 0.08),
+      palette.first.withValues(alpha: 0.08),
+      palette[1].withValues(alpha: 0.08),
       Colors.white.withValues(alpha: 0.04),
     ];
     for (int i = 0; i < centers.length; i += 1) {
@@ -1325,7 +1458,17 @@ class _LoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: CircularProgressIndicator(color: AppColors.primary),
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: GteStatePanel(
+          eyebrow: 'CLIPS',
+          title: 'Loading live feed',
+          message:
+              'Preparing the ranked clip deck, interaction lane, and source controls for the active feed.',
+          icon: Icons.video_collection_rounded,
+          isLoading: true,
+        ),
+      ),
     );
   }
 }
@@ -1340,28 +1483,14 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(
-              Icons.video_collection_outlined,
-              color: AppColors.textSecondary,
-              size: 48,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No clips ready yet',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
+        child: GteStatePanel(
+          eyebrow: 'CLIPS',
+          title: 'No clips ready yet',
+          message:
               'The ranking engine will surface clips here as soon as the live feed endpoints return ranked payloads.',
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
+          icon: Icons.video_collection_outlined,
+          actionLabel: 'Retry',
+          onAction: onRetry,
         ),
       ),
     );
@@ -1379,28 +1508,13 @@ class _ErrorState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(
-              Icons.error_outline_rounded,
-              color: AppColors.danger,
-              size: 48,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Feed validation failed',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
+        child: GteStatePanel(
+          eyebrow: 'CLIPS',
+          title: 'Feed validation failed',
+          message: message,
+          icon: Icons.error_outline_rounded,
+          actionLabel: 'Retry',
+          onAction: onRetry,
         ),
       ),
     );

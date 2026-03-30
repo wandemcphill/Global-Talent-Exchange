@@ -11,6 +11,7 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../widgets/gte_state_panel.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'match_viewer_capability.dart';
 
@@ -179,11 +180,10 @@ class MatchRouteLoadingScreen extends StatelessWidget {
         capability: capability,
       ),
       children: const <Widget>[
-        Card(
-          child: Padding(
-            padding: EdgeInsets.all(spacingLG),
-            child: Center(child: CircularProgressIndicator()),
-          ),
+        GteStatePanel(
+          title: 'Loading route',
+          message: 'Verifying the live route capability before entry.',
+          isLoading: true,
         ),
       ],
     );
@@ -212,21 +212,11 @@ class MatchRouteBlockedScreen extends StatelessWidget {
         capability: MatchViewerCapability.blocked,
       ),
       children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(spacingLG),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Route blocked',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: spacingSM),
-                Text(reason),
-              ],
-            ),
-          ),
+        GteStatePanel(
+          title: 'Route blocked',
+          message: reason,
+          icon: Icons.error_outline_rounded,
+          accentColor: Theme.of(context).colorScheme.error,
         ),
       ],
     );

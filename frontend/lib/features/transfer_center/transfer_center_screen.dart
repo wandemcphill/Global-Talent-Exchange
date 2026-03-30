@@ -9,6 +9,8 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/gte_state_panel.dart';
 import '../shared/data/feature_telemetry.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'live_transfer_center_provider.dart';
@@ -51,23 +53,30 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
             final clubContext = ref.watch(clubContextProvider);
             return Column(
               children: <Widget>[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(spacingLG),
-                    child: Wrap(
-                      spacing: spacingSM,
-                      runSpacing: spacingSM,
-                      children: <Widget>[
-                        _MetricChip(
-                          label: 'Open listings',
-                          value: '${listings.length}',
-                        ),
-                        _MetricChip(
-                          label: 'Club actions',
-                          value: clubContext == null ? 'Blocked' : 'Enabled',
-                        ),
-                      ],
-                    ),
+                GtexSectionPanel(
+                  eyebrow: 'TRANSFER COMMAND',
+                  title: 'Live negotiation board',
+                  subtitle:
+                      'Premium transfer-center surface for open listings, active bidders, and club-authorized deal flow.',
+                  emphasized: true,
+                  child: Wrap(
+                    spacing: spacingSM,
+                    runSpacing: spacingSM,
+                    children: <Widget>[
+                      _MetricChip(
+                        label: 'Open listings',
+                        value: '${listings.length}',
+                        tone: GtexSurfaceTone.live,
+                      ),
+                      _MetricChip(
+                        label: 'Club actions',
+                        value: clubContext == null ? 'Blocked' : 'Enabled',
+                        tone:
+                            clubContext == null
+                                ? GtexSurfaceTone.danger
+                                : GtexSurfaceTone.success,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: spacingMD),
@@ -86,20 +95,25 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
                                 .map(
                                   (
                                     TransferCenterListingRecord listing,
-                                  ) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(listing.playerName),
-                                    subtitle: Text(
-                                      '${listing.status} | bid ${listing.currentHighestBid.toStringAsFixed(0)} | ${listing.bidCount} bids | ${listing.watchlistCount} watchlists',
+                                  ) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
                                     ),
-                                    trailing: FilledButton(
-                                      onPressed:
-                                          () => context.push(
-                                            AppRoutes.transferCenterDetailLocation(
-                                              listing.id,
+                                    child: GtexListTile(
+                                      title: listing.playerName,
+                                      subtitle:
+                                          '${listing.status} | bid ${listing.currentHighestBid.toStringAsFixed(0)} | ${listing.bidCount} bids | ${listing.watchlistCount} watchlists',
+                                      leadingIcon: Icons.candlestick_chart,
+                                      tone: GtexSurfaceTone.live,
+                                      trailing: FilledButton(
+                                        onPressed:
+                                            () => context.push(
+                                              AppRoutes.transferCenterDetailLocation(
+                                                listing.id,
+                                              ),
                                             ),
-                                          ),
-                                      child: const Text('Open'),
+                                        child: const Text('Open'),
+                                      ),
                                     ),
                                   ),
                                 )
@@ -110,11 +124,13 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
             );
           },
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => const GteStatePanel(
+                eyebrow: 'TRANSFER CENTER',
+                title: 'Loading live listings',
+                message:
+                    'Syncing the transfer market lane, bidder stack, and club access controls for this route.',
+                icon: Icons.candlestick_chart_rounded,
+                isLoading: true,
               ),
           error:
               (Object error, StackTrace stackTrace) => _BlockedCard(
@@ -201,99 +217,107 @@ class _TransferCenterDetailScreenState
                     : jsonMapOrNull(negotiation['agent_negotiation']);
             return Column(
               children: <Widget>[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(spacingLG),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Wrap(
-                          spacing: spacingSM,
-                          runSpacing: spacingSM,
-                          children: <Widget>[
-                            _MetricChip(
-                              label: 'Status',
-                              value: stringValue(
-                                detail.listing['status'],
-                                fallback: 'open',
-                              ),
+                GtexSectionPanel(
+                  eyebrow: 'LISTING DETAIL',
+                  title: 'Negotiation cockpit',
+                  subtitle:
+                      'Pricing, timing, club signal, and deal actions for this live transfer listing.',
+                  emphasized: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Wrap(
+                        spacing: spacingSM,
+                        runSpacing: spacingSM,
+                        children: <Widget>[
+                          _MetricChip(
+                            label: 'Status',
+                            value: stringValue(
+                              detail.listing['status'],
+                              fallback: 'open',
                             ),
-                            _MetricChip(
-                              label: 'Base',
-                              value: numberValue(
-                                detail.listing['base_price'],
-                              ).toStringAsFixed(0),
+                            tone: GtexSurfaceTone.live,
+                          ),
+                          _MetricChip(
+                            label: 'Base',
+                            value: numberValue(
+                              detail.listing['base_price'],
+                            ).toStringAsFixed(0),
+                            tone: GtexSurfaceTone.info,
+                          ),
+                          _MetricChip(
+                            label: 'Current bid',
+                            value: numberValue(
+                              detail.listing['current_highest_bid'],
+                            ).toStringAsFixed(0),
+                            tone: GtexSurfaceTone.warning,
+                          ),
+                          _MetricChip(
+                            label: 'Time remaining',
+                            value: _durationLabel(
+                              intValue(detail.listing['time_remaining']),
                             ),
-                            _MetricChip(
-                              label: 'Current bid',
-                              value: numberValue(
-                                detail.listing['current_highest_bid'],
-                              ).toStringAsFixed(0),
+                            tone: GtexSurfaceTone.neutral,
+                          ),
+                          _MetricChip(
+                            label: 'Channel',
+                            value: stringValue(detail.listing['channel']),
+                            tone: GtexSurfaceTone.success,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: spacingMD),
+                      GtexPill(
+                        label:
+                            '${stringValue(player['current_club_name'], fallback: 'Club unavailable')} | ${stringValue(detail.listing['market_signal'], fallback: 'No signal')}',
+                        icon: Icons.sync_alt_rounded,
+                        tone: GtexSurfaceTone.info,
+                      ),
+                      const SizedBox(height: spacingMD),
+                      Wrap(
+                        spacing: spacingSM,
+                        runSpacing: spacingSM,
+                        children: <Widget>[
+                          FilledButton(
+                            onPressed:
+                                clubContext == null
+                                    ? null
+                                    : () => _placeBid(
+                                      context,
+                                      clubContext.id,
+                                      stringValue(player['full_name']),
+                                    ),
+                            child: const Text('Bid'),
+                          ),
+                          OutlinedButton(
+                            onPressed:
+                                clubContext == null
+                                    ? null
+                                    : () => _watchlist(
+                                      context,
+                                      clubContext.id,
+                                      stringValue(player['full_name']),
+                                      stringValue(detail.listing['player_id']),
+                                    ),
+                            child: const Text('Watchlist'),
+                          ),
+                          OutlinedButton(
+                            onPressed:
+                                clubContext == null || negotiation == null
+                                    ? null
+                                    : () => _submitContractOffer(
+                                      context,
+                                      clubContext.id,
+                                    ),
+                            child: Text(
+                              negotiation == null
+                                  ? 'Negotiation unavailable'
+                                  : 'Contract offer',
                             ),
-                            _MetricChip(
-                              label: 'Time remaining',
-                              value: _durationLabel(
-                                intValue(detail.listing['time_remaining']),
-                              ),
-                            ),
-                            _MetricChip(
-                              label: 'Channel',
-                              value: stringValue(detail.listing['channel']),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: spacingMD),
-                        Text(
-                          '${stringValue(player['current_club_name'], fallback: 'Club unavailable')} | ${stringValue(detail.listing['market_signal'], fallback: 'No signal')}',
-                        ),
-                        const SizedBox(height: spacingMD),
-                        Wrap(
-                          spacing: spacingSM,
-                          runSpacing: spacingSM,
-                          children: <Widget>[
-                            FilledButton(
-                              onPressed:
-                                  clubContext == null
-                                      ? null
-                                      : () => _placeBid(
-                                        context,
-                                        clubContext.id,
-                                        stringValue(player['full_name']),
-                                      ),
-                              child: const Text('Bid'),
-                            ),
-                            OutlinedButton(
-                              onPressed:
-                                  clubContext == null
-                                      ? null
-                                      : () => _watchlist(
-                                        context,
-                                        clubContext.id,
-                                        stringValue(player['full_name']),
-                                        stringValue(
-                                          detail.listing['player_id'],
-                                        ),
-                                      ),
-                              child: const Text('Watchlist'),
-                            ),
-                            OutlinedButton(
-                              onPressed:
-                                  clubContext == null || negotiation == null
-                                      ? null
-                                      : () => _submitContractOffer(
-                                        context,
-                                        clubContext.id,
-                                      ),
-                              child: Text(
-                                negotiation == null
-                                    ? 'Negotiation unavailable'
-                                    : 'Contract offer',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: spacingMD),
@@ -308,18 +332,24 @@ class _TransferCenterDetailScreenState
                           : Column(
                             children: bidders
                                 .map(
-                                  (JsonMap bidder) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(
-                                      stringValue(
+                                  (JsonMap bidder) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: stringValue(
                                         bidder['club_name'],
                                         fallback: stringValue(
                                           bidder['club_id'],
                                         ),
                                       ),
-                                    ),
-                                    subtitle: Text(
-                                      '${numberValue(bidder['amount']).toStringAsFixed(0)} | ${boolValue(bidder['is_highest']) ? 'Highest' : 'Bid placed'}',
+                                      subtitle:
+                                          '${numberValue(bidder['amount']).toStringAsFixed(0)} | ${boolValue(bidder['is_highest']) ? 'Highest' : 'Bid placed'}',
+                                      leadingIcon: Icons.account_balance,
+                                      tone:
+                                          boolValue(bidder['is_highest'])
+                                              ? GtexSurfaceTone.success
+                                              : GtexSurfaceTone.info,
                                     ),
                                   ),
                                 )
@@ -350,54 +380,51 @@ class _TransferCenterDetailScreenState
                                       negotiation['status'],
                                       fallback: 'unknown',
                                     ),
+                                    tone: GtexSurfaceTone.live,
                                   ),
                                   _MetricChip(
                                     label: 'Contract years',
                                     value:
                                         '${intValue(negotiation['contract_years'])}',
+                                    tone: GtexSurfaceTone.info,
                                   ),
                                   _MetricChip(
                                     label: 'Wage offer',
                                     value: numberValue(
                                       negotiation['wage_offer_amount'],
                                     ).toStringAsFixed(0),
+                                    tone: GtexSurfaceTone.warning,
                                   ),
                                 ],
                               ),
                               if (playerDecision != null) ...<Widget>[
                                 const SizedBox(height: spacingMD),
-                                Text(
-                                  'Player decision',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: spacingSM),
-                                Text(
-                                  '${stringValue(playerDecision['action'], fallback: 'pending')} | Score ${numberValue(playerDecision['decision_score']).toStringAsFixed(1)}',
+                                GtexListTile(
+                                  title: 'Player decision',
+                                  subtitle:
+                                      '${stringValue(playerDecision['action'], fallback: 'pending')} | Score ${numberValue(playerDecision['decision_score']).toStringAsFixed(1)}',
+                                  leadingIcon: Icons.person_rounded,
+                                  tone: GtexSurfaceTone.success,
                                 ),
                               ],
                               if (coachOpinion != null) ...<Widget>[
                                 const SizedBox(height: spacingMD),
-                                Text(
-                                  'Coach opinion',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: spacingSM),
-                                Text(
-                                  '${stringValue(coachOpinion['stance'], fallback: 'neutral')} | ${stringValue(coachOpinion['reason'], fallback: 'No reason supplied.')}',
+                                GtexListTile(
+                                  title: 'Coach opinion',
+                                  subtitle:
+                                      '${stringValue(coachOpinion['stance'], fallback: 'neutral')} | ${stringValue(coachOpinion['reason'], fallback: 'No reason supplied.')}',
+                                  leadingIcon: Icons.ssid_chart_rounded,
+                                  tone: GtexSurfaceTone.info,
                                 ),
                               ],
                               if (agentNegotiation != null) ...<Widget>[
                                 const SizedBox(height: spacingMD),
-                                Text(
-                                  'Agent response',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: spacingSM),
-                                Text(
-                                  '${stringValue(agentNegotiation['action'], fallback: 'pending')} | ${stringValue(agentNegotiation['notes'], fallback: 'No notes supplied.')}',
+                                GtexListTile(
+                                  title: 'Agent response',
+                                  subtitle:
+                                      '${stringValue(agentNegotiation['action'], fallback: 'pending')} | ${stringValue(agentNegotiation['notes'], fallback: 'No notes supplied.')}',
+                                  leadingIcon: Icons.support_agent_rounded,
+                                  tone: GtexSurfaceTone.warning,
                                 ),
                               ],
                             ],
@@ -407,11 +434,13 @@ class _TransferCenterDetailScreenState
             );
           },
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => const GteStatePanel(
+                eyebrow: 'TRANSFER CENTER',
+                title: 'Loading listing detail',
+                message:
+                    'Resolving the live bidder stack, negotiation state, and club-authorized action lane.',
+                icon: Icons.gavel_rounded,
+                isLoading: true,
               ),
           error:
               (Object error, StackTrace stackTrace) => _BlockedCard(
@@ -525,10 +554,7 @@ class _TransferCenterDetailScreenState
     }
   }
 
-  Future<void> _submitContractOffer(
-    BuildContext context,
-    String clubId,
-  ) async {
+  Future<void> _submitContractOffer(BuildContext context, String clubId) async {
     final TextEditingController wageController = TextEditingController(
       text: '50000',
     );
@@ -637,33 +663,24 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingXS),
-            Text(subtitle),
-            const SizedBox(height: spacingMD),
-            child,
-          ],
-        ),
-      ),
-    );
+    return GtexSectionPanel(title: title, subtitle: subtitle, child: child);
   }
 }
 
 class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
+  const _MetricChip({
+    required this.label,
+    required this.value,
+    this.tone = GtexSurfaceTone.info,
+  });
 
   final String label;
   final String value;
+  final GtexSurfaceTone tone;
 
   @override
   Widget build(BuildContext context) {
-    return Chip(label: Text('$label: $value'));
+    return GtexStatTile(label: label, value: value, tone: tone);
   }
 }
 
@@ -674,7 +691,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(message);
+    return Text(
+      message,
+      style: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+    );
   }
 }
 
@@ -686,18 +708,11 @@ class _BlockedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(message),
-          ],
-        ),
-      ),
+    return GteStatePanel(
+      eyebrow: 'TRANSFER CENTER',
+      title: title,
+      message: message,
+      icon: Icons.warning_amber_rounded,
     );
   }
 }

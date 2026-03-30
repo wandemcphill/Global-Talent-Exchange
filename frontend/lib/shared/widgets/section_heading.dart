@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_spacing.dart';
-import '../../core/theme/app_colors.dart';
+import '../../widgets/gte_shell_theme.dart';
 
 class SectionHeading extends StatelessWidget {
   const SectionHeading({
@@ -17,6 +16,8 @@ class SectionHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = GteShellTheme.definitionOf(context);
+    final tokens = GteShellTheme.tokensOf(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -25,21 +26,29 @@ class SectionHeading extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall,
+                'GTEX SURFACE',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: theme.primaryColor,
+                  letterSpacing: 1.2,
+                ),
               ),
-              const SizedBox(height: spacingXS),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+              SizedBox(height: tokens.spaceXs),
+              Text(title, style: Theme.of(context).textTheme.displaySmall),
+              SizedBox(height: tokens.spaceXs),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: Text(
+                  subtitle,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: tokens.textMuted),
+                ),
               ),
             ],
           ),
         ),
         if (trailing != null) ...<Widget>[
-          const SizedBox(width: spacingMD),
+          SizedBox(width: tokens.spaceMd),
           trailing!,
         ],
       ],

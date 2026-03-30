@@ -9,31 +9,24 @@ import 'package:gte_frontend/data/creator_application_api.dart';
 import 'package:gte_frontend/data/creator_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/referral_api.dart';
-import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
-import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
-import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
-import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
 import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/features/home_dashboard/home_dashboard_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
-import 'package:gte_frontend/features/shared/presentation/gte_no_club_onboarding_view.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_player_detail_screen.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
-import 'package:gte_frontend/screens/community/community_hub_screen.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/referrals/referral_hub_screen.dart';
-import 'package:gte_frontend/screens/admin/god_mode_admin_screen.dart';
 import 'package:gte_frontend/screens/admin/manager_admin_screen.dart';
-import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
 
@@ -98,8 +91,6 @@ const List<GtePrimaryDestination> _shellPrimaryDestinations =
       GtePrimaryDestination.home,
       GtePrimaryDestination.competitions,
       GtePrimaryDestination.market,
-      GtePrimaryDestination.community,
-      GtePrimaryDestination.club,
     ];
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
@@ -111,8 +102,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late String _competitionUserId;
   late String? _competitionUserName;
   late String? _creatorAccessToken;
-  ClubNavigationTab _clubInitialTab = ClubNavigationTab.squad;
-  int _clubHostSeed = 0;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
 
   @override
@@ -311,66 +300,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                           icon: const Icon(Icons.sports_soccer_outlined),
                         ),
                       ),
-                      if (<String>{'admin', 'super_admin'}.contains(
-                        widget.controller.session?.user.role.toLowerCase() ??
-                            'user',
-                      ))
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: IconButton(
-                            tooltip: 'Admin command center',
-                            onPressed: () {
-                              final session = widget.controller.session;
-                              if (session == null) {
-                                return;
-                              }
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder:
-                                      (BuildContext context) =>
-                                          AdminCommandCenterScreen(
-                                            baseUrl: widget.apiBaseUrl,
-                                            accessToken: session.accessToken,
-                                            backendMode: widget.backendMode,
-                                          ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.dashboard_customize_outlined,
-                            ),
-                          ),
-                        ),
-                      if (<String>{'admin', 'super_admin'}.contains(
-                        widget.controller.session?.user.role.toLowerCase() ??
-                            'user',
-                      ))
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: IconButton(
-                            tooltip: 'Admin God Mode',
-                            onPressed: () {
-                              final session = widget.controller.session;
-                              if (session == null) {
-                                return;
-                              }
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder:
-                                      (BuildContext context) =>
-                                          GodModeAdminScreen(
-                                            baseUrl: widget.apiBaseUrl,
-                                            accessToken: session.accessToken,
-                                            backendMode: widget.backendMode,
-                                          ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.admin_panel_settings_outlined,
-                            ),
-                          ),
-                        ),
                       Padding(
                         padding: const EdgeInsets.only(right: 16),
                         child: FilledButton.tonal(
@@ -465,36 +394,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                               () => _pushCreatorAccessRequest(context),
                           navigationDependencies: _navigationDependencies(),
                         ),
-                        CommunityHubScreen(
-                          key: const PageStorageKey<String>('community-hub'),
-                          controller: widget.controller,
-                          baseUrl: widget.apiBaseUrl,
-                          backendMode: widget.backendMode,
-                          onOpenAdmin:
-                              <String>{'admin', 'super_admin'}.contains(
-                                    widget.controller.session?.user.role
-                                            .toLowerCase() ??
-                                        'user',
-                                  )
-                                  ? () {
-                                    final session = widget.controller.session;
-                                    if (session == null) {
-                                      return;
-                                    }
-                                    Navigator.of(context).push<void>(
-                                      MaterialPageRoute<void>(
-                                        builder:
-                                            (
-                                              BuildContext context,
-                                            ) => AdminCommandCenterScreen(
-                                              baseUrl: widget.apiBaseUrl,
-                                              accessToken: session.accessToken,
-                                              backendMode: widget.backendMode,
-                                            ),
-                                      ),
-                                    );
-                                  }
-                                  : null,
+                        const GteRouteIntegrityScreen.hidden(
+                          key: PageStorageKey<String>('community-hub'),
+                          title: 'Community removed from active shell',
+                          message:
+                              'Community, discovery, and governance routes are hidden until the real backend replaces the seeded fallback rails.',
+                          icon: Icons.forum_outlined,
                         ),
                         _buildClubDestination(),
                         GtePortfolioScreen(
@@ -538,49 +443,11 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildClubDestination() {
-    final String? canonicalClubId = _canonicalClubId()?.trim();
-    final String? canonicalClubName = _canonicalClubName()?.trim();
-    if (canonicalClubId != null && canonicalClubId.isNotEmpty) {
-      return ClubHubScreen(
-        key: ValueKey<String>('club-${_clubInitialTab.id}-$_clubHostSeed'),
-        clubId: canonicalClubId,
-        clubName:
-            canonicalClubName != null && canonicalClubName.isNotEmpty
-                ? canonicalClubName
-                : null,
-        baseUrl: widget.apiBaseUrl,
-        backendMode: widget.backendMode,
-        isAuthenticated: widget.controller.isAuthenticated,
-        onOpenLogin:
-            () => _openLogin(targetRoute: const GteNavigationRoute.club()),
-        initialTab: _clubInitialTab,
-        navigationDependencies: _navigationDependencies(),
-      );
-    }
-    if (!widget.controller.isAuthenticated) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: GteStatePanel(
-          eyebrow: 'CLUB SCOPE',
-          title: 'Sign in to open a club workspace',
-          message:
-              'Guest preview mode does not expose a canonical club. Sign in to continue with a real club context or create one first.',
-          icon: Icons.login_outlined,
-          accentColor: _routeAccentFor(context, GtePrimaryDestination.club),
-          actionLabel: 'Sign in',
-          onAction: () {
-            _openLogin(targetRoute: const GteNavigationRoute.club());
-          },
-        ),
-      );
-    }
-    return GteNoClubOnboardingView(
-      onBrowseClubMarket: () {
-        _openFeatureRoute(const ClubSaleMarketListingsRouteData());
-      },
-      onExploreArena: () {
-        _openPrimaryDestination(GtePrimaryDestination.competitions);
-      },
+    return const GteRouteIntegrityScreen.hidden(
+      title: 'Club workspace removed from active shell',
+      message:
+          'Club hub routes are hidden until the real club backend replaces the mock, stub, and local-only fallback stack.',
+      icon: Icons.shield_outlined,
     );
   }
 
@@ -609,25 +476,24 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       key: const PageStorageKey<String>('home-dashboard'),
       exchangeController: widget.controller,
       apiBaseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
+      backendMode: _liveBackendMode,
       onOpenLogin:
           () => _openLogin(targetRoute: const GteNavigationRoute.home()),
       isCheckingCreatorAccess: _isCheckingCreatorAccess,
       canHostCompetitions: _canHostCompetitions,
       clubId: _canonicalClubId(),
       clubName: _canonicalClubName(),
-      onOpenClubTab: () => _openPrimaryDestination(GtePrimaryDestination.club),
+      onOpenClubTab: null,
       onOpenCompetitionsTab:
           () => _openPrimaryDestination(GtePrimaryDestination.competitions),
       onOpenMarketTab:
           () => _openPrimaryDestination(GtePrimaryDestination.market),
-      onOpenHubTab:
-          () => _openPrimaryDestination(GtePrimaryDestination.community),
+      onOpenHubTab: null,
       onOpenWalletTab:
           () => _openPrimaryDestination(GtePrimaryDestination.wallet),
-      onOpenClubSubtab: _openClubSubtab,
+      onOpenClubSubtab: null,
       onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
-      navigationDependencies: _navigationDependencies(),
+      navigationDependencies: _navigationDependencies().liveOnly(),
     );
   }
 
@@ -712,14 +578,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return provisionStatus.trim().toLowerCase() == 'active';
   }
 
-  bool get _isReferralRuntimeAvailable =>
-      widget.backendMode == GteBackendMode.fixture;
+  bool get _isReferralRuntimeAvailable => false;
+
+  GteBackendMode get _liveBackendMode => GteBackendMode.live;
 
   CompetitionController _buildCompetitionController() {
     return CompetitionController(
       api: CompetitionApi.standard(
         baseUrl: widget.apiBaseUrl,
-        mode: widget.backendMode,
+        mode: _liveBackendMode,
       ),
       currentUserId: _competitionUserId,
       currentUserName: _competitionUserName,
@@ -731,7 +598,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       api: CreatorApplicationApi.standard(
         baseUrl: widget.apiBaseUrl,
         accessToken: widget.controller.accessToken,
-        mode: widget.backendMode,
+        mode: _liveBackendMode,
       ),
     );
   }
@@ -741,7 +608,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       api: CreatorApi.standard(
         baseUrl: widget.apiBaseUrl,
         accessToken: widget.controller.session?.accessToken,
-        mode: widget.backendMode,
+        mode: _liveBackendMode,
       ),
     );
   }
@@ -750,7 +617,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return ReferralController(
       api: ReferralApi.standard(
         baseUrl: widget.apiBaseUrl,
-        mode: widget.backendMode,
+        mode: _liveBackendMode,
       ),
     );
   }
@@ -758,7 +625,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   GteNavigationDependencies _navigationDependencies() {
     return GteNavigationDependencies(
       apiBaseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
+      backendMode: _liveBackendMode,
       currentUserId: _competitionUserId,
       currentUserName: _competitionUserName,
       currentUserRole: widget.controller.session?.user.role,
@@ -796,14 +663,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
-  Future<void> _openFeatureRoute(GteAppRouteData route) {
-    return GteNavigationHelpers.pushRoute<void>(
-      context,
-      route: route,
-      dependencies: _navigationDependencies(),
-    );
-  }
-
   void _openPrimaryDestination(GtePrimaryDestination destination) {
     setState(() {
       _route = _route.withPrimaryDestination(destination);
@@ -819,15 +678,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     widget.onRouteChanged?.call(_route);
   }
 
-  void _openClubSubtab(ClubNavigationTab tab) {
-    setState(() {
-      _clubInitialTab = tab;
-      _clubHostSeed += 1;
-      _route = const GteNavigationRoute.club();
-    });
-    widget.onRouteChanged?.call(_route);
-  }
-
   Future<bool> _openLogin({GteNavigationRoute? targetRoute}) async {
     final bool? signedIn = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
@@ -838,21 +688,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
     if (!mounted || signedIn != true) {
       return false;
-    }
-    final String role =
-        widget.controller.session?.user.role.toLowerCase() ?? 'user';
-    if (<String>{'admin', 'super_admin'}.contains(role)) {
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder:
-              (BuildContext context) => GodModeAdminScreen(
-                baseUrl: widget.apiBaseUrl,
-                accessToken: widget.controller.session!.accessToken,
-                backendMode: widget.backendMode,
-              ),
-        ),
-      );
-      return true;
     }
     if (targetRoute != null) {
       setState(() {
@@ -976,25 +811,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         return GteSyncStatusCard(
           title: 'Hub pulse',
           status:
-              widget.controller.isAuthenticated
-                  ? 'Discovery, creator, and governance surfaces are available.'
-                  : 'Community is in preview mode. Sign in to unlock participation rails.',
+              'Community routes are not connected in the active shell. Hidden surfaces stay offline until the real backend path is ready.',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
-          isRefreshing: widget.controller.isBootstrapping,
-          onRefresh: widget.controller.bootstrap,
+          isRefreshing: false,
+          onRefresh: null,
         );
       case GtePrimaryDestination.club:
         return GteSyncStatusCard(
           title: 'Club builder',
           status:
-              widget.controller.isAuthenticated
-                  ? 'Identity, squad, and culture surfaces are unlocked.'
-                  : 'Guest preview mode is active. Sign in for writable club controls.',
+              'Club routes are hidden from the active shell until the club backend can run without fixture, mock, or local-only fallback.',
           syncedAt: widget.controller.marketSyncedAt,
           accent: accent,
-          isRefreshing: widget.controller.isBootstrapping,
-          onRefresh: widget.controller.bootstrap,
+          isRefreshing: false,
+          onRefresh: null,
         );
       case GtePrimaryDestination.wallet:
         return GteSyncStatusCard(

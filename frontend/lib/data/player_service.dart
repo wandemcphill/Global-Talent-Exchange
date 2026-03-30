@@ -17,11 +17,7 @@ class PaginatedPlayers {
 }
 
 class PlayerService {
-  static const Duration _actionFallbackDelay = Duration(milliseconds: 400);
-
-  PlayerService({
-    required GteAuthedApi client,
-  }) : _client = client;
+  PlayerService({required GteAuthedApi client}) : _client = client;
 
   factory PlayerService.standard({
     required String baseUrl,
@@ -62,9 +58,10 @@ class PlayerService {
   }) async {
     final String trimmedSearch = search?.trim() ?? '';
     final String trimmedCursor = cursor?.trim() ?? '';
-    final String? resolvedCountry = country?.trim().isNotEmpty == true
-        ? country!.trim()
-        : nationality?.trim();
+    final String? resolvedCountry =
+        country?.trim().isNotEmpty == true
+            ? country!.trim()
+            : nationality?.trim();
     final Map<String, dynamic> payload = await _client.getMap(
       '/players',
       query: <String, Object?>{
@@ -89,7 +86,8 @@ class PlayerService {
       GteJson.value(json, <String>['players', 'items']),
       label: 'players',
     ).map(Player.fromBackend).toList(growable: false);
-    final int currentOffset = GteJson.integerOrNull(json, <String>['offset']) ??
+    final int currentOffset =
+        GteJson.integerOrNull(json, <String>['offset']) ??
         offset ??
         int.tryParse(trimmedCursor) ??
         0;
@@ -145,12 +143,7 @@ class PlayerService {
   }
 
   Future<void> _performActionWithFallback(String path) async {
-    try {
-      await _client.post(path);
-    } catch (_) {
-      // Keep the UI responsive until the backend action endpoints land.
-      await Future<void>.delayed(_actionFallbackDelay);
-    }
+    await _client.post(path);
   }
 
   String? _resolveNextCursor(
@@ -159,8 +152,10 @@ class PlayerService {
     required int pageSize,
     required int requestedLimit,
   }) {
-    final String? explicitCursor =
-        GteJson.stringOrNull(json, <String>['next_cursor', 'nextCursor']);
+    final String? explicitCursor = GteJson.stringOrNull(json, <String>[
+      'next_cursor',
+      'nextCursor',
+    ]);
     if (explicitCursor != null) {
       return explicitCursor;
     }
@@ -181,10 +176,10 @@ class PlayerService {
     Map<String, Object?> json, {
     required String? nextCursor,
   }) {
-    final Object? rawHasMore = GteJson.value(
-      json,
-      <String>['has_more', 'hasMore'],
-    );
+    final Object? rawHasMore = GteJson.value(json, <String>[
+      'has_more',
+      'hasMore',
+    ]);
     if (rawHasMore != null) {
       return GteJson.boolean(json, <String>['has_more', 'hasMore']);
     }

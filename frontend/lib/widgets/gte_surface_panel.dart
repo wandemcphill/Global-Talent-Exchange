@@ -21,6 +21,7 @@ class GteSurfacePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = GteShellTheme.tokensOf(context);
+    final visuals = GteShellTheme.visualsOf(context);
     final Color glow =
         accentColor ?? (emphasized ? tokens.accent : tokens.accentWarm);
     final BorderRadius radius = BorderRadius.circular(tokens.radiusLarge);
@@ -28,14 +29,20 @@ class GteSurfacePanel extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         borderRadius: radius,
-        border: Border.all(color: tokens.stroke.withValues(alpha: 0.9)),
+        border: Border.all(
+          color: (visuals.glass ? visuals.shellBorder : tokens.stroke)
+              .withValues(alpha: 0.92),
+        ),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            (emphasized ? tokens.panelElevated : tokens.panelStrong)
-                .withValues(alpha: 0.96),
-            tokens.panel.withValues(alpha: 0.95),
+            Color.alphaBlend(
+              glow.withValues(alpha: emphasized ? 0.08 : 0.04),
+              (emphasized ? tokens.panelElevated : tokens.panelStrong)
+                  .withValues(alpha: visuals.surfaceOpacity),
+            ),
+            tokens.panel.withValues(alpha: visuals.surfaceOpacity),
             tokens.surfaceHighlight.withValues(alpha: emphasized ? 0.06 : 0.03),
           ],
           stops: const <double>[0, 0.65, 1],
@@ -132,17 +139,24 @@ class GteSurfacePanel extends StatelessWidget {
       ),
     );
 
+    final Widget layeredContent =
+        visuals.glass
+            ? ClipRRect(
+              borderRadius: radius,
+              child: BackdropFilter(
+                filter: gtePanelBlur(visuals.surfaceBlurSigma),
+                child: content,
+              ),
+            )
+            : content;
+
     if (onTap == null) {
-      return Material(color: Colors.transparent, child: content);
+      return Material(color: Colors.transparent, child: layeredContent);
     }
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: onTap,
-        child: content,
-      ),
+      child: InkWell(borderRadius: radius, onTap: onTap, child: layeredContent),
     );
   }
 }

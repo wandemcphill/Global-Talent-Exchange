@@ -10,6 +10,8 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/gte_state_panel.dart';
 import 'live_profile_provider.dart';
 
 class ProfileAdminScreen extends ConsumerStatefulWidget {
@@ -77,40 +79,79 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                 'This admin session is authenticated, but it does not carry catalog, supply, or audit permissions for the active shell.',
           )
         else ...<Widget>[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(spacingLG),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Wrap(
-                    spacing: spacingSM,
-                    runSpacing: spacingSM,
-                    children: <Widget>[
-                      Chip(
-                        label: Text(
-                          isSuperAdmin
-                              ? 'SUPER_ADMIN'
-                              : isDelegatedAdmin
-                              ? 'DELEGATED_ADMIN'
-                              : 'ADMIN',
-                        ),
-                      ),
-                      if (!canManageCatalog)
-                        const Chip(label: Text('Catalog blocked')),
-                      if (!canManageSupply)
-                        const Chip(label: Text('Supply blocked')),
-                      if (!canAccessGodMode)
-                        Chip(
-                          label: Text(
-                            'God Mode ${godModeBlockedReason ?? 'blocked'}',
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: spacingMD),
-                  if (canManageCatalog)
-                    TextField(
+          GtexHeroPanel(
+            eyebrow: 'ADMIN CONTROL TOWER',
+            title:
+                isSuperAdmin
+                    ? 'Super-admin controls are live.'
+                    : isDelegatedAdmin
+                    ? 'Delegated admin controls are live.'
+                    : 'Admin controls are live.',
+            description:
+                'Import, supply, and God Mode actions remain gated by explicit backend permissions carried on the authenticated session.',
+            metrics: <Widget>[
+              GtexPill(
+                label:
+                    isSuperAdmin
+                        ? 'SUPER_ADMIN'
+                        : isDelegatedAdmin
+                        ? 'DELEGATED_ADMIN'
+                        : 'ADMIN',
+                tone: GtexSurfaceTone.live,
+              ),
+              if (!canManageCatalog)
+                const GtexPill(
+                  label: 'Catalog blocked',
+                  tone: GtexSurfaceTone.warning,
+                ),
+              if (!canManageSupply)
+                const GtexPill(
+                  label: 'Supply blocked',
+                  tone: GtexSurfaceTone.warning,
+                ),
+              if (!canAccessGodMode)
+                GtexPill(
+                  label: 'God Mode ${godModeBlockedReason ?? 'blocked'}',
+                  tone: GtexSurfaceTone.warning,
+                ),
+            ],
+            actions: <Widget>[
+              if (canManageCatalog)
+                FilledButton(
+                  onPressed: _busy ? null : _triggerImport,
+                  child: const Text('Trigger import'),
+                ),
+              if (canAccessGodMode)
+                OutlinedButton(
+                  onPressed:
+                      _busy
+                          ? null
+                          : () => context.push(AppRoutes.profileGodMode),
+                  child: const Text('Open God Mode'),
+                ),
+              if (canManageCatalog)
+                OutlinedButton(
+                  onPressed: _busy ? null : _resumeSelectedBatch,
+                  child: const Text('Resume selected batch'),
+                ),
+              if (canManageSupply)
+                OutlinedButton(
+                  onPressed: _busy ? null : _issueShareMarket,
+                  child: const Text('Issue share market'),
+                ),
+            ],
+          ),
+          const SizedBox(height: spacingMD),
+          GtexSectionPanel(
+            eyebrow: 'PROVIDER',
+            title: 'Import provider',
+            subtitle:
+                canManageCatalog
+                    ? 'Manage the provider backing live real-player import batches.'
+                    : 'Real-player import controls are hidden until this session carries manage_manager_catalog.',
+            child:
+                canManageCatalog
+                    ? TextField(
                       controller: _providerController,
                       decoration: const InputDecoration(
                         labelText: 'Provider name',
@@ -121,44 +162,9 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                             .setProviderName(value);
                       },
                     )
-                  else
-                    const Text(
+                    : const Text(
                       'Real-player import controls are hidden until this session carries manage_manager_catalog.',
                     ),
-                  const SizedBox(height: spacingMD),
-                  Wrap(
-                    spacing: spacingSM,
-                    runSpacing: spacingSM,
-                    children: <Widget>[
-                      if (canManageCatalog)
-                        FilledButton(
-                          onPressed: _busy ? null : _triggerImport,
-                          child: const Text('Trigger import'),
-                        ),
-                      if (canAccessGodMode)
-                        OutlinedButton(
-                          onPressed:
-                              _busy
-                                  ? null
-                                  : () =>
-                                      context.push(AppRoutes.profileGodMode),
-                          child: const Text('Open God Mode'),
-                        ),
-                      if (canManageCatalog)
-                        OutlinedButton(
-                          onPressed: _busy ? null : _resumeSelectedBatch,
-                          child: const Text('Resume selected batch'),
-                        ),
-                      if (canManageSupply)
-                        OutlinedButton(
-                          onPressed: _busy ? null : _issueShareMarket,
-                          child: const Text('Issue share market'),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ),
           if (!canManageCatalog) ...<Widget>[
             const SizedBox(height: spacingMD),
@@ -293,11 +299,10 @@ class _ProfileAdminScreenState extends ConsumerState<ProfileAdminScreen> {
                     ],
                   ),
               loading:
-                  () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(spacingLG),
-                      child: CircularProgressIndicator(),
-                    ),
+                  () => const GteStatePanel(
+                    title: 'Loading admin import surface',
+                    message: 'Syncing provider health and batch status.',
+                    isLoading: true,
                   ),
               error:
                   (Object error, StackTrace stackTrace) => _BlockedCard(
@@ -473,24 +478,17 @@ class _JsonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(
-              payload.entries
-                  .map(
-                    (MapEntry<String, Object?> entry) =>
-                        '${entry.key}: ${entry.value}',
-                  )
-                  .join('\n'),
-            ),
-          ],
-        ),
+    return GtexSectionPanel(
+      eyebrow: 'ADMIN DATA',
+      title: title,
+      subtitle: 'Live backend payload',
+      child: Text(
+        payload.entries
+            .map(
+              (MapEntry<String, Object?> entry) =>
+                  '${entry.key}: ${entry.value}',
+            )
+            .join('\n'),
       ),
     );
   }
@@ -504,18 +502,11 @@ class _BlockedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(message),
-          ],
-        ),
-      ),
+    return GteStatePanel(
+      title: title,
+      message: message,
+      icon: Icons.lock_outline_rounded,
+      accentColor: Theme.of(context).colorScheme.error,
     );
   }
 }

@@ -6,8 +6,8 @@ class AppMotion {
 
   static const Duration fast = Duration(milliseconds: 120);
   static const Duration hover = Duration(milliseconds: 200);
-  static const Duration medium = Duration(milliseconds: 250);
-  static const Duration slow = Duration(milliseconds: 400);
+  static const Duration medium = Duration(milliseconds: 180);
+  static const Duration slow = Duration(milliseconds: 280);
 
   static const Curve easeOut = Curves.easeOut;
   static const Curve easeInOut = Curves.easeInOut;
@@ -35,18 +35,18 @@ class AppMotion {
           reverseCurve: easeOut,
         );
         final Animation<Offset> position = Tween<Offset>(
-          begin: Offset(reverse ? -1 : 1, 0),
+          begin: Offset(reverse ? -0.06 : 0.06, 0),
           end: Offset.zero,
         ).animate(
           CurvedAnimation(
             parent: animation,
-            curve: easeInOut,
+            curve: Curves.easeOutCubic,
             reverseCurve: easeOut,
           ),
         );
 
         return FadeTransition(
-          opacity: Tween<double>(begin: 0.82, end: 1).animate(opacity),
+          opacity: Tween<double>(begin: 0.88, end: 1).animate(opacity),
           child: SlideTransition(position: position, child: child),
         );
       },
