@@ -9,6 +9,7 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_action_surface.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../shared/data/feature_telemetry.dart';
@@ -471,36 +472,53 @@ class _TransferCenterDetailScreenState
     String playerName,
   ) async {
     final TextEditingController bidController = TextEditingController();
-    final double? amount = await showDialog<double>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Bid for $playerName'),
-          content: TextField(
-            controller: bidController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Bid amount'),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed:
-                  () => Navigator.of(
-                    context,
-                  ).pop(double.tryParse(bidController.text.trim())),
-              child: const Text('Submit'),
-            ),
-          ],
-        );
-      },
-    );
-    if (amount == null || amount <= 0) {
-      return;
-    }
     try {
+      final double? amount = await showDialog<double>(
+        context: context,
+        builder: (BuildContext context) {
+          return AnimatedBuilder(
+            animation: bidController,
+            builder: (BuildContext context, Widget? child) {
+              final double? parsedAmount = double.tryParse(
+                bidController.text.trim(),
+              );
+              final bool canSubmit = parsedAmount != null && parsedAmount > 0;
+              return GtexActionDialog(
+                eyebrow: 'TRANSFER CENTER',
+                title: 'Bid for $playerName',
+                description:
+                    'Submit a live transfer bid from the negotiation board. Invalid amounts stay blocked before the request is sent.',
+                leadingIcon: Icons.gavel_rounded,
+                content: TextField(
+                  controller: bidController,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Bid amount',
+                    helperText: 'Enter a positive amount in transfer coin.',
+                  ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        canSubmit
+                            ? () => Navigator.of(context).pop(parsedAmount)
+                            : null,
+                    child: const Text('Submit'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+      if (amount == null || amount <= 0) {
+        return;
+      }
       await ref
           .read(transferCenterApiProvider)
           .placeBid(
@@ -541,61 +559,96 @@ class _TransferCenterDetailScreenState
     final TextEditingController roleController = TextEditingController(
       text: 'starter',
     );
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Submit contract offer'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextField(
-                controller: wageController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Weekly wage'),
-              ),
-              const SizedBox(height: spacingSM),
-              TextField(
-                controller: yearsController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Contract years'),
-              ),
-              const SizedBox(height: spacingSM),
-              TextField(
-                controller: roleController,
-                decoration: const InputDecoration(labelText: 'Expected role'),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Submit'),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true) {
-      return;
-    }
-    final double? wage = double.tryParse(wageController.text.trim());
-    final int? years = int.tryParse(yearsController.text.trim());
-    if (wage == null || wage < 0 || years == null || years < 1) {
-      if (!mounted) {
+    final Listenable formListenable = Listenable.merge(<Listenable>[
+      wageController,
+      yearsController,
+      roleController,
+    ]);
+    try {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AnimatedBuilder(
+            animation: formListenable,
+            builder: (BuildContext context, Widget? child) {
+              final double? wage = double.tryParse(wageController.text.trim());
+              final int? years = int.tryParse(yearsController.text.trim());
+              final bool canSubmit =
+                  wage != null && wage >= 0 && years != null && years >= 1;
+              return GtexActionDialog(
+                eyebrow: 'TRANSFER CENTER',
+                title: 'Submit contract offer',
+                description:
+                    'Send live wage, term, and role terms into the current negotiation lane for this listing.',
+                leadingIcon: Icons.handshake_rounded,
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextField(
+                      controller: wageController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Weekly wage',
+                        helperText: 'Use a non-negative weekly wage amount.',
+                      ),
+                    ),
+                    const SizedBox(height: spacingSM),
+                    TextField(
+                      controller: yearsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Contract years',
+                        helperText: 'Minimum term is one year.',
+                      ),
+                    ),
+                    const SizedBox(height: spacingSM),
+                    TextField(
+                      controller: roleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Expected role',
+                        helperText:
+                            'Leave blank to keep the default starter role.',
+                      ),
+                    ),
+                  ],
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        canSubmit
+                            ? () => Navigator.of(context).pop(true)
+                            : null,
+                    child: const Text('Submit'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+      if (confirmed != true) {
         return;
       }
-      AppFeedback.showError(
-        this.context,
-        'Enter a valid wage and contract length before submitting the offer.',
-      );
-      return;
-    }
-    try {
+      final double? wage = double.tryParse(wageController.text.trim());
+      final int? years = int.tryParse(yearsController.text.trim());
+      final String expectedRole =
+          roleController.text.trim().isEmpty
+              ? 'starter'
+              : roleController.text.trim();
+      if (wage == null || wage < 0 || years == null || years < 1) {
+        if (!mounted) {
+          return;
+        }
+        AppFeedback.showError(
+          this.context,
+          'Enter a valid wage and contract length before submitting the offer.',
+        );
+        return;
+      }
       await ref
           .read(transferCenterApiProvider)
           .submitContractOffer(
@@ -603,7 +656,7 @@ class _TransferCenterDetailScreenState
             clubId: clubId,
             wageOfferAmount: wage,
             contractYears: years,
-            expectedRole: roleController.text,
+            expectedRole: expectedRole,
           );
       trackFeatureEvent(
         topic: 'transfer_center',

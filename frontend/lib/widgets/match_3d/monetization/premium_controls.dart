@@ -38,7 +38,7 @@ class PremiumControls extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        const bool stackedActions = true;
+        final bool stackedActions = constraints.maxWidth < 400;
         return Container(
           constraints: const BoxConstraints(maxWidth: 360),
           padding: const EdgeInsets.all(14),
@@ -77,7 +77,9 @@ class PremiumControls extends StatelessWidget {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(999),
                               color: const Color(0x1FFDB022),
-                              border: Border.all(color: const Color(0x66FDB022)),
+                              border: Border.all(
+                                color: const Color(0x66FDB022),
+                              ),
                             ),
                             child: const Text(
                               'Pro Manager',
@@ -95,7 +97,9 @@ class PremiumControls extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 'Render mode',
-                style: theme.textTheme.labelLarge?.copyWith(color: Colors.white70),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: Colors.white70,
+                ),
               ),
               const SizedBox(height: 8),
               SingleChildScrollView(
@@ -128,12 +132,16 @@ class PremiumControls extends StatelessWidget {
               Text(
                 'Live mode: ${effectiveRenderMode == RenderMode.threeD ? '3D' : '2D'} | Balance ${availableCoins.toStringAsFixed(2)} coin',
                 softWrap: true,
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                ),
               ),
               const SizedBox(height: 12),
               Text(
                 'Camera',
-                style: theme.textTheme.labelLarge?.copyWith(color: Colors.white70),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: Colors.white70,
+                ),
               ),
               const SizedBox(height: 8),
               if (canUsePremiumCamera)
@@ -214,7 +222,9 @@ class PremiumControls extends StatelessWidget {
                 canUseFastReplay
                     ? 'Fast replay unlocked up to 6x.'
                     : 'Standard replay stays capped below premium speed.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                ),
               ),
             ],
           ),
@@ -253,24 +263,18 @@ class _ActionButton extends StatelessWidget {
     final Widget button = FilledButton.tonal(
       onPressed: onPressed,
       child: Row(
-        mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: <Widget>[
           Icon(icon),
           const SizedBox(width: 8),
-          if (expanded)
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 2,
-                softWrap: true,
-              ),
-            )
-          else
-            Text(
+          Flexible(
+            child: Text(
               label,
-              maxLines: 1,
+              maxLines: expanded ? 2 : 3,
+              softWrap: true,
               overflow: TextOverflow.ellipsis,
             ),
+          ),
         ],
       ),
     );

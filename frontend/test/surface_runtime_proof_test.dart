@@ -196,6 +196,72 @@ void main() {
     },
   );
 
+  testWidgets(
+    'transfer center detail places bids through the premium live dialog',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+
+      await tester.pumpWidget(
+        _screenHost(
+          child: const TransferCenterDetailScreen(
+            listingId: _FakeTransferCenterApi.listingId,
+          ),
+          session: _clubSession(),
+          overrides: [
+            transferCenterApiProvider.overrideWithValue(transferCenterApi),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Bid'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Bid'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '101000000');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.pumpAndSettle();
+
+      expect(transferCenterApi.bidRequests, 1);
+      expect(find.text('Bid submitted for Victor Osimhen.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'transfer center detail submits contract offers through the premium live dialog',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+
+      await tester.pumpWidget(
+        _screenHost(
+          child: const TransferCenterDetailScreen(
+            listingId: _FakeTransferCenterApi.listingId,
+          ),
+          session: _clubSession(),
+          overrides: [
+            transferCenterApiProvider.overrideWithValue(transferCenterApi),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, 'Contract offer'),
+      );
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Contract offer'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
+      await tester.pumpAndSettle();
+
+      expect(transferCenterApi.contractOfferRequests, 1);
+      expect(find.text('Contract offer submitted.'), findsOneWidget);
+    },
+  );
+
   testWidgets('hub open buttons navigate from live lists to deep routes', (
     WidgetTester tester,
   ) async {
@@ -1423,6 +1489,8 @@ class _FakeTransferCenterApi extends TransferCenterApi {
       );
 
   int watchlistRequests = 0;
+  int bidRequests = 0;
+  int contractOfferRequests = 0;
 
   @override
   Future<List<TransferCenterListingRecord>> listListings({
@@ -1493,7 +1561,9 @@ class _FakeTransferCenterApi extends TransferCenterApi {
     required String listingId,
     required String clubId,
     required double amount,
-  }) async {}
+  }) async {
+    bidRequests += 1;
+  }
 
   @override
   Future<void> submitContractOffer({
@@ -1502,5 +1572,7 @@ class _FakeTransferCenterApi extends TransferCenterApi {
     required double wageOfferAmount,
     required int contractYears,
     String? expectedRole,
-  }) async {}
+  }) async {
+    contractOfferRequests += 1;
+  }
 }

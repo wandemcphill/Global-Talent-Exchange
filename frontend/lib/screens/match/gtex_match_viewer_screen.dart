@@ -882,26 +882,30 @@ class _LoadedViewerBody extends StatelessWidget {
       );
     }
     if (showBroadcastMode && broadcastPresentation!.showStartingBanner) {
+      final MatchBroadcastPresentationState broadcastState =
+          broadcastPresentation;
       sceneOverlays.add(
         Positioned(
           left: 20,
           right: 20,
           top: 108,
           child: Opacity(
-            opacity: broadcastPresentation!.startingBannerOpacity,
+            opacity: broadcastState.startingBannerOpacity,
             child: const _CenterTitleBanner(title: 'Match starting...'),
           ),
         ),
       );
     }
     if (showBroadcastMode && broadcastPresentation!.showLineupBoard) {
+      final MatchBroadcastPresentationState broadcastState =
+          broadcastPresentation;
       sceneOverlays.add(
         Positioned(
           left: 18,
           right: 18,
           bottom: 94,
           child: Opacity(
-            opacity: broadcastPresentation!.lineupBoardOpacity,
+            opacity: broadcastState.lineupBoardOpacity,
             child: Row(
               children: <Widget>[
                 Expanded(

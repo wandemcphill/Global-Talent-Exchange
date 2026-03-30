@@ -6,6 +6,7 @@ import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
+import '../../shared/widgets/gtex_action_surface.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
@@ -504,76 +505,121 @@ class _NationalTeamCompetitionDetailScreenState
     final TextEditingController tacticController = TextEditingController(
       text: 'balanced',
     );
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Build draft squad'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextField(
-                controller: countryController,
-                decoration: const InputDecoration(labelText: 'Country code'),
-              ),
-              const SizedBox(height: spacingSM),
-              TextField(
-                controller: budgetController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Budget coin'),
-              ),
-              const SizedBox(height: spacingSM),
-              TextField(
-                controller: tacticController,
-                decoration: const InputDecoration(labelText: 'Tactic'),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Run'),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true) {
-      return;
-    }
-    final double? budget = double.tryParse(budgetController.text.trim());
-    if (budget == null || budget <= 0) {
-      if (!mounted) {
+    final Listenable formListenable = Listenable.merge(<Listenable>[
+      countryController,
+      budgetController,
+      tacticController,
+    ]);
+    try {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AnimatedBuilder(
+            animation: formListenable,
+            builder: (BuildContext context, Widget? child) {
+              final double? budget = double.tryParse(
+                budgetController.text.trim(),
+              );
+              final bool canRun =
+                  countryController.text.trim().isNotEmpty &&
+                  budget != null &&
+                  budget > 0;
+              return GtexActionDialog(
+                eyebrow: 'NATIONAL TEAMS',
+                title: 'Build draft squad',
+                description:
+                    'Draft a live national-team squad package for this competition using a country code, budget ceiling, and tactical profile.',
+                leadingIcon: Icons.flag_circle_rounded,
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextField(
+                      controller: countryController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Country code',
+                        helperText: 'Use the federation country code.',
+                      ),
+                    ),
+                    const SizedBox(height: spacingSM),
+                    TextField(
+                      controller: budgetController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Budget coin',
+                        helperText:
+                            'Positive coin budget sent to the live builder.',
+                      ),
+                    ),
+                    const SizedBox(height: spacingSM),
+                    TextField(
+                      controller: tacticController,
+                      decoration: const InputDecoration(
+                        labelText: 'Tactic',
+                        helperText: 'Leave blank to fall back to balanced.',
+                      ),
+                    ),
+                  ],
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        canRun ? () => Navigator.of(context).pop(true) : null,
+                    child: const Text('Run'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+      if (confirmed != true) {
         return;
       }
-      AppFeedback.showError(
-        this.context,
-        'Enter a valid positive budget before building a squad.',
-      );
-      return;
-    }
-    try {
+      final String countryCode = countryController.text.trim().toUpperCase();
+      final double? budget = double.tryParse(budgetController.text.trim());
+      final String resolvedTactic =
+          tacticController.text.trim().isEmpty
+              ? 'balanced'
+              : tacticController.text.trim();
+      if (countryCode.isEmpty) {
+        if (!mounted) {
+          return;
+        }
+        AppFeedback.showError(
+          this.context,
+          'Enter a country code before building a squad.',
+        );
+        return;
+      }
+      if (budget == null || budget <= 0) {
+        if (!mounted) {
+          return;
+        }
+        AppFeedback.showError(
+          this.context,
+          'Enter a valid positive budget before building a squad.',
+        );
+        return;
+      }
       final JsonMap result = await ref
           .read(nationalTeamsApiProvider)
           .buildAutoSquad(
             competitionId: widget.competitionId,
-            countryCode: countryController.text.trim().toUpperCase(),
+            countryCode: countryCode,
             budgetCoin: budget,
-            tactic:
-                tacticController.text.trim().isEmpty
-                    ? 'balanced'
-                    : tacticController.text.trim(),
+            tactic: resolvedTactic,
           );
       trackFeatureEvent(
         topic: 'national_teams',
         name: 'national_team_auto_build_completed',
         payload: <String, Object?>{
           'competition_id': widget.competitionId,
-          'country_code': countryController.text.trim().toUpperCase(),
+          'country_code': countryCode,
         },
       );
       if (!mounted) {
@@ -582,80 +628,98 @@ class _NationalTeamCompetitionDetailScreenState
       await showModalBottomSheet<void>(
         context: this.context,
         isScrollControlled: true,
+        backgroundColor: Colors.transparent,
         builder: (BuildContext context) {
           final List<JsonMap> players = jsonMapList(
             result['players'],
             label: 'auto build players',
           );
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(spacingLG),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+          return GtexActionSheetFrame(
+            eyebrow: 'NATIONAL TEAMS',
+            title: 'Draft squad result',
+            description:
+                'Live squad package returned for $countryCode using the $resolvedTactic build profile.',
+            leadingIcon: Icons.groups_rounded,
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Wrap(
+                  spacing: spacingSM,
+                  runSpacing: spacingSM,
                   children: <Widget>[
-                    Text(
-                      'Draft squad result',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    GtexPill(
+                      label: 'Country $countryCode',
+                      icon: Icons.flag_rounded,
+                      tone: GtexSurfaceTone.live,
                     ),
-                    const SizedBox(height: spacingMD),
-                    Wrap(
-                      spacing: spacingSM,
-                      runSpacing: spacingSM,
-                      children: <Widget>[
-                        _MetricChip(
-                          label: 'Formation',
-                          value: stringValue(result['formation']),
-                          tone: GtexSurfaceTone.live,
-                        ),
-                        _MetricChip(
-                          label: 'Selected',
-                          value: '${intValue(result['selected_count'])}',
-                          tone: GtexSurfaceTone.info,
-                        ),
-                        _MetricChip(
-                          label: 'Budget',
-                          value: numberValue(
-                            result['requested_budget_coin'],
-                          ).toStringAsFixed(0),
-                          tone: GtexSurfaceTone.warning,
-                        ),
-                        _MetricChip(
-                          label: 'Remaining',
-                          value: numberValue(
-                            result['remaining_budget_coin'],
-                          ).toStringAsFixed(0),
-                          tone: GtexSurfaceTone.success,
-                        ),
-                      ],
+                    GtexPill(
+                      label: 'Tactic $resolvedTactic',
+                      icon: Icons.tune_rounded,
+                      tone: GtexSurfaceTone.info,
                     ),
-                    const SizedBox(height: spacingMD),
-                    if (players.isEmpty)
-                      const _EmptyState(
-                        message:
-                            'No draft squad could be built for that input.',
-                      )
-                    else
-                      ...players.map(
-                        (JsonMap player) => Padding(
-                          padding: const EdgeInsets.only(bottom: spacingSM),
-                          child: GtexListTile(
-                            title: stringValue(
-                              player['player_name'],
-                              fallback: 'Player',
-                            ),
-                            subtitle:
-                                '${stringValue(player['assigned_slot'], fallback: 'slot pending')} | ${stringValue(player['primary_position'], fallback: 'position pending')} | ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} coin',
-                            leadingIcon: Icons.person_pin_circle_rounded,
-                            tone: GtexSurfaceTone.info,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
-              ),
+                const SizedBox(height: spacingMD),
+                Wrap(
+                  spacing: spacingSM,
+                  runSpacing: spacingSM,
+                  children: <Widget>[
+                    _MetricChip(
+                      label: 'Formation',
+                      value: stringValue(result['formation']),
+                      tone: GtexSurfaceTone.live,
+                    ),
+                    _MetricChip(
+                      label: 'Selected',
+                      value: '${intValue(result['selected_count'])}',
+                      tone: GtexSurfaceTone.info,
+                    ),
+                    _MetricChip(
+                      label: 'Budget',
+                      value: numberValue(
+                        result['requested_budget_coin'],
+                      ).toStringAsFixed(0),
+                      tone: GtexSurfaceTone.warning,
+                    ),
+                    _MetricChip(
+                      label: 'Remaining',
+                      value: numberValue(
+                        result['remaining_budget_coin'],
+                      ).toStringAsFixed(0),
+                      tone: GtexSurfaceTone.success,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: spacingMD),
+                if (players.isEmpty)
+                  const _EmptyState(
+                    message: 'No draft squad could be built for that input.',
+                  )
+                else
+                  ...players.map(
+                    (JsonMap player) => Padding(
+                      padding: const EdgeInsets.only(bottom: spacingSM),
+                      child: GtexListTile(
+                        title: stringValue(
+                          player['player_name'],
+                          fallback: 'Player',
+                        ),
+                        subtitle:
+                            '${stringValue(player['assigned_slot'], fallback: 'slot pending')} | ${stringValue(player['primary_position'], fallback: 'position pending')} | ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} coin',
+                        leadingIcon: Icons.person_pin_circle_rounded,
+                        tone: GtexSurfaceTone.info,
+                      ),
+                    ),
+                  ),
+              ],
             ),
+            actions: <Widget>[
+              OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
           );
         },
       );
