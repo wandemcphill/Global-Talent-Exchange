@@ -1,12 +1,13 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_breakpoints.dart';
 import '../../core/constants/app_spacing.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_motion.dart';
 import '../../navigation/app_destinations.dart';
+import '../../widgets/gte_shell_theme.dart';
 import '../providers/auth_provider.dart';
 import 'app_background.dart';
 
@@ -23,6 +24,9 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authPresentationProvider);
+    final tokens = GteShellTheme.tokensOf(context);
+    final visuals = GteShellTheme.visualsOf(context);
+    final theme = GteShellTheme.definitionOf(context);
     final StatefulNavigationShell navigationShell = widget.navigationShell;
     final AppDestination destination =
         appDestinations[navigationShell.currentIndex];
@@ -33,26 +37,16 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
-          toolbarHeight: 78,
+          toolbarHeight: 92,
           titleSpacing: spacingMD,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                'GTEX',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(letterSpacing: 1.4),
-              ),
-              const SizedBox(height: spacingXS),
-              Text(
-                destination.subtitle,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+          title: _ShellTitle(destination: destination),
           actions: <Widget>[
+            _SignalPill(
+              icon: Icons.fiber_manual_record_rounded,
+              label: theme.metadata.label,
+              tone: visuals.heroAccent,
+            ),
+            const SizedBox(width: spacingSM),
             _NotificationChip(count: auth.notifications),
             const SizedBox(width: spacingSM),
             Container(
@@ -62,9 +56,21 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
                 vertical: spacingXS,
               ),
               decoration: BoxDecoration(
-                color: AppColors.card.withValues(alpha: 0.84),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: AppColors.divider),
+                color: Color.alphaBlend(
+                  visuals.heroAccent.withValues(alpha: 0.08),
+                  visuals.shellFill,
+                ),
+                borderRadius: BorderRadius.circular(tokens.radiusPill),
+                border: Border.all(
+                  color: visuals.shellBorder.withValues(alpha: 0.94),
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: visuals.navGlow.withValues(alpha: 0.14),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -75,12 +81,19 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
                   ),
                   if (screenSize.width >= AppBreakpoints.compact) ...<Widget>[
                     const SizedBox(width: spacingSM),
-                    Text(
-                      auth.userName,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          auth.userName,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        Text(
+                          'Operator',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ],
                 ],
@@ -91,20 +104,9 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
         bottomNavigationBar:
             useRail
                 ? null
-                : NavigationBar(
-                  selectedIndex: navigationShell.currentIndex,
+                : _MobileNavDock(
+                  currentIndex: navigationShell.currentIndex,
                   onDestinationSelected: _goToBranch,
-                  destinations:
-                      appDestinations
-                          .map(
-                            (AppDestination destination) =>
-                                NavigationDestination(
-                                  icon: Icon(destination.icon),
-                                  selectedIcon: Icon(destination.selectedIcon),
-                                  label: destination.label,
-                                ),
-                          )
-                          .toList(),
                 ),
         body: SafeArea(
           top: false,
@@ -117,9 +119,17 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
                   extended: screenSize.width >= AppBreakpoints.expanded,
                 ),
               Expanded(
-                child: _ShellBodyTransition(
-                  currentIndex: navigationShell.currentIndex,
-                  child: navigationShell,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    useRail ? spacingMD : spacingSM,
+                    spacingSM,
+                    spacingMD,
+                    useRail ? spacingMD : 0,
+                  ),
+                  child: _ShellBodyTransition(
+                    currentIndex: navigationShell.currentIndex,
+                    child: navigationShell,
+                  ),
                 ),
               ),
             ],
@@ -133,6 +143,124 @@ class _AppShellScaffoldState extends ConsumerState<AppShellScaffold> {
     widget.navigationShell.goBranch(
       index,
       initialLocation: index == widget.navigationShell.currentIndex,
+    );
+  }
+}
+
+class _ShellTitle extends StatelessWidget {
+  const _ShellTitle({required this.destination});
+
+  final AppDestination destination;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final visuals = GteShellTheme.visualsOf(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Text(
+            'GTEX',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              letterSpacing: 1.6,
+              color: visuals.heroAccent,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: <Widget>[
+              Text(
+                destination.label,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(width: spacingSM),
+              Container(
+                width: 38,
+                height: 2,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(tokens.radiusPill),
+                  gradient: LinearGradient(
+                    colors: <Color>[
+                      visuals.heroAccent,
+                      visuals.heroAccent.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            destination.subtitle,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileNavDock extends StatelessWidget {
+  const _MobileNavDock({
+    required this.currentIndex,
+    required this.onDestinationSelected,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final visuals = GteShellTheme.visualsOf(context);
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(spacingMD, 0, spacingMD, spacingMD),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(tokens.radiusLarge),
+        child: BackdropFilter(
+          filter: gtePanelBlur(visuals.glass ? visuals.surfaceBlurSigma : 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                visuals.heroAccent.withValues(alpha: 0.03),
+                visuals.shellFill,
+              ),
+              borderRadius: BorderRadius.circular(tokens.radiusLarge),
+              border: Border.all(
+                color: visuals.shellBorder.withValues(alpha: 0.94),
+              ),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: visuals.navGlow.withValues(alpha: 0.18),
+                  blurRadius: 30,
+                  offset: const Offset(0, 14),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: NavigationBar(
+              selectedIndex: currentIndex,
+              onDestinationSelected: onDestinationSelected,
+              destinations: appDestinations
+                  .map(
+                    (AppDestination destination) => NavigationDestination(
+                      icon: Icon(destination.icon),
+                      selectedIcon: Icon(destination.selectedIcon),
+                      label: destination.label,
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -167,20 +295,22 @@ class _ShellBodyTransitionState extends State<_ShellBodyTransition> {
     if (_previousIndex == widget.currentIndex) {
       _previousIndex = widget.currentIndex;
     }
+    final motion = GteShellTheme.motionOf(context);
 
     return TweenAnimationBuilder<double>(
       key: ValueKey<int>(widget.currentIndex),
       tween: Tween<double>(begin: 0, end: 1),
-      duration: AppMotion.slow,
-      curve: AppMotion.easeInOut,
+      duration: motion.slow,
+      curve: motion.standardCurve,
       child: RepaintBoundary(child: widget.child),
       builder: (BuildContext context, double value, Widget? child) {
-        final double horizontalOffset = (1 - value) * 42 * _direction;
+        final double horizontalOffset = (1 - value) * 30 * _direction;
+        final double scale = 0.985 + (value * 0.015);
         return Opacity(
-          opacity: 0.7 + (value * 0.3),
+          opacity: 0.76 + (value * 0.24),
           child: Transform.translate(
             offset: Offset(horizontalOffset, 0),
-            child: child,
+            child: Transform.scale(scale: scale, child: child),
           ),
         );
       },
@@ -201,67 +331,85 @@ class _DesktopRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final visuals = GteShellTheme.visualsOf(context);
     return Container(
-      width: extended ? 248 : 104,
+      width: extended ? 272 : 110,
       margin: const EdgeInsets.fromLTRB(spacingMD, spacingMD, 0, spacingMD),
       decoration: BoxDecoration(
-        color: AppColors.card.withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.divider),
+        color: Color.alphaBlend(
+          visuals.heroAccent.withValues(alpha: 0.04),
+          visuals.shellFill,
+        ),
+        borderRadius: BorderRadius.circular(tokens.radiusLarge),
+        border: Border.all(color: visuals.shellBorder.withValues(alpha: 0.96)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
+            color: Colors.black.withValues(alpha: 0.28),
             blurRadius: 24,
             offset: const Offset(0, 18),
           ),
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            blurRadius: 28,
+            color: visuals.navGlow.withValues(alpha: 0.12),
+            blurRadius: 34,
+            spreadRadius: 2,
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: NavigationRail(
-          selectedIndex: currentIndex,
-          extended: extended,
-          minExtendedWidth: 248,
-          groupAlignment: -0.85,
-          onDestinationSelected: onDestinationSelected,
-          leading: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              spacingMD,
-              spacingLG,
-              spacingMD,
-              spacingMD,
-            ),
-            child:
-                extended
-                    ? Row(
-                      children: <Widget>[
-                        _BrandBadge(compact: false),
-                        const SizedBox(width: spacingMD),
-                        Expanded(
-                          child: Text(
-                            'Global Talent Exchange',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+        borderRadius: BorderRadius.circular(tokens.radiusLarge),
+        child: BackdropFilter(
+          filter: gtePanelBlur(visuals.glass ? visuals.surfaceBlurSigma : 10),
+          child: NavigationRail(
+            selectedIndex: currentIndex,
+            extended: extended,
+            minExtendedWidth: 272,
+            groupAlignment: -0.9,
+            onDestinationSelected: onDestinationSelected,
+            leading: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                spacingMD,
+                spacingLG,
+                spacingMD,
+                spacingMD,
+              ),
+              child:
+                  extended
+                      ? Row(
+                        children: <Widget>[
+                          const _BrandBadge(compact: false),
+                          const SizedBox(width: spacingMD),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Global Talent Exchange',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Silicon Valley football-tech shell',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    )
-                    : const _BrandBadge(compact: true),
+                        ],
+                      )
+                      : const _BrandBadge(compact: true),
+            ),
+            destinations: appDestinations
+                .map(
+                  (AppDestination destination) => NavigationRailDestination(
+                    icon: Icon(destination.icon),
+                    selectedIcon: Icon(destination.selectedIcon),
+                    label: Text(destination.label),
+                  ),
+                )
+                .toList(growable: false),
           ),
-          destinations:
-              appDestinations
-                  .map(
-                    (AppDestination destination) => NavigationRailDestination(
-                      icon: Icon(destination.icon),
-                      selectedIcon: Icon(destination.selectedIcon),
-                      label: Text(destination.label),
-                    ),
-                  )
-                  .toList(),
         ),
       ),
     );
@@ -275,23 +423,33 @@ class _BrandBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = GteShellTheme.definitionOf(context);
+    final tokens = GteShellTheme.tokensOf(context);
+    final visuals = GteShellTheme.visualsOf(context);
     return Container(
-      width: compact ? 44 : 52,
-      height: compact ? 44 : 52,
+      width: compact ? 46 : 56,
+      height: compact ? 46 : 56,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
+        borderRadius: BorderRadius.circular(tokens.radiusMedium),
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[AppColors.primary, AppColors.gold],
+          colors: <Color>[visuals.heroAccent, theme.secondaryColor],
         ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: visuals.heroAccent.withValues(alpha: 0.28),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       alignment: Alignment.center,
       child: Text(
         'G',
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: AppColors.background,
-          fontWeight: FontWeight.w800,
+          color: theme.onPrimaryColor,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );
@@ -305,50 +463,70 @@ class _NotificationChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final motion = GteShellTheme.motionOf(context);
+    final theme = GteShellTheme.definitionOf(context);
     return TweenAnimationBuilder<double>(
       key: ValueKey<int>(count),
       tween: Tween<double>(begin: 0, end: 1),
-      duration: AppMotion.medium,
-      curve: AppMotion.easeOut,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: spacingSM),
-        padding: const EdgeInsets.symmetric(
-          horizontal: spacingSM,
-          vertical: spacingXS,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.card.withValues(alpha: 0.84),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(
-              Icons.notifications_active_outlined,
-              color: AppColors.gold,
-              size: 18,
-            ),
-            const SizedBox(width: spacingXS),
-            Text(
-              '$count',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
+      duration: motion.medium,
+      curve: motion.standardCurve,
+      child: _SignalPill(
+        icon: Icons.notifications_active_outlined,
+        label: '$count',
+        tone: theme.tokens.accentCapital,
       ),
       builder: (BuildContext context, double value, Widget? child) {
         return Opacity(
           opacity: value,
           child: Transform.translate(
-            offset: Offset(0, -18 * (1 - value)),
+            offset: Offset(0, -14 * (1 - value)),
             child: child,
           ),
         );
       },
+    );
+  }
+}
+
+class _SignalPill extends StatelessWidget {
+  const _SignalPill({
+    required this.icon,
+    required this.label,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: spacingSM),
+      padding: const EdgeInsets.symmetric(
+        horizontal: spacingSM,
+        vertical: spacingXS,
+      ),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(tokens.radiusPill),
+        border: Border.all(color: tone.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, color: tone, size: 16),
+          const SizedBox(width: spacingXS),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: tone,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

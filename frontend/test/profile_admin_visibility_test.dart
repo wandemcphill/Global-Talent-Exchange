@@ -113,11 +113,22 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await _scrollTo(tester, find.text('Issue share market'));
       expect(find.text('Issue share market'), findsOneWidget);
       expect(find.text('Trigger import'), findsNothing);
       expect(find.text('Resume selected batch'), findsNothing);
       expect(find.text('Open God Mode'), findsNothing);
+      await _scrollTo(tester, find.text('Player import is blocked'));
       expect(find.text('Player import is blocked'), findsOneWidget);
     },
   );
+}
+
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    240,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
 }

@@ -3,13 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
-import '../../core/constants/app_spacing.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/live_clients_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../theme/gte_theme_picker_sheet.dart';
+import '../../widgets/gte_shell_theme.dart';
+import '../../widgets/gte_state_panel.dart';
 import 'live_profile_provider.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -21,7 +24,7 @@ class ProfileScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Profile',
       subtitle:
-          'The active shell profile now reflects the live session, user, club, and admin affordances instead of synthetic match and transfer stories.',
+          'Premium identity and account hub for live session truth, permissions, club context, and shell settings.',
       trailing: DataSourceBadge(
         status:
             profileValue.hasError
@@ -34,18 +37,20 @@ class ProfileScreen extends ConsumerWidget {
               (ProfileData profile) =>
                   profile.authenticated
                       ? _AuthenticatedProfile(profile: profile)
-                      : _GuestProfile(),
+                      : const _GuestProfile(),
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => const GteStatePanel(
+                title: 'Loading profile',
+                message:
+                    'The active shell is syncing session identity, affinity, and club context.',
+                isLoading: true,
               ),
           error:
-              (Object error, StackTrace stackTrace) => _BlockedCard(
+              (Object error, StackTrace stackTrace) => GteStatePanel(
                 title: 'Profile is blocked',
                 message: AppFeedback.messageFor(error),
+                icon: Icons.error_outline_rounded,
+                accentColor: Theme.of(context).colorScheme.error,
               ),
         ),
       ],
@@ -54,40 +59,46 @@ class ProfileScreen extends ConsumerWidget {
 }
 
 class _GuestProfile extends StatelessWidget {
+  const _GuestProfile();
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'This session is not signed in.',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: spacingSM),
-            const Text(
+    final theme = GteShellTheme.definitionOf(context);
+    return Column(
+      children: <Widget>[
+        GtexHeroPanel(
+          eyebrow: 'GUEST IDENTITY',
+          title: 'This session is not signed in.',
+          description:
               'Protected user, wallet, admin, and club-context actions stay blocked until authentication succeeds.',
+          metrics: <Widget>[
+            GtexStatTile(
+              label: 'Shell',
+              value: theme.metadata.label,
+              support: 'Global theme selection persists',
+              tone: GtexSurfaceTone.info,
             ),
-            const SizedBox(height: spacingMD),
-            Wrap(
-              spacing: spacingSM,
-              runSpacing: spacingSM,
-              children: <Widget>[
-                FilledButton(
-                  onPressed: () => context.push(AppRoutes.profileLogin),
-                  child: const Text('Sign in'),
-                ),
-                OutlinedButton(
-                  onPressed: () => context.push(AppRoutes.profileSignup),
-                  child: const Text('Create account'),
-                ),
-              ],
+            const GtexStatTile(
+              label: 'Admin',
+              value: 'Blocked',
+              support: 'Authentication required',
+              tone: GtexSurfaceTone.warning,
+            ),
+          ],
+          actions: <Widget>[
+            FilledButton(
+              onPressed: () => context.push(AppRoutes.profileLogin),
+              child: const Text('Sign in'),
+            ),
+            OutlinedButton(
+              onPressed: () => context.push(AppRoutes.profileSignup),
+              child: const Text('Create account'),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 24),
+        _ThemeSettingsPanel(),
+      ],
     );
   }
 }
@@ -103,133 +114,125 @@ class _AuthenticatedProfile extends ConsumerWidget {
     final List<String> permissions = ref.watch(currentUserPermissionsProvider);
     final bool isAdmin = ref.watch(isAdminProvider);
     final federation = ref.watch(federationContextProvider);
+    final String identityLabel =
+        profile.user['display_name']?.toString() ??
+        profile.user['username']?.toString() ??
+        profile.user['email']?.toString() ??
+        'Authenticated user';
 
     return Column(
       children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(spacingLG),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  profile.user['display_name']?.toString() ??
-                      profile.user['username']?.toString() ??
-                      profile.user['email']?.toString() ??
-                      'Authenticated user',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: spacingSM),
-                Wrap(
-                  spacing: spacingSM,
-                  runSpacing: spacingSM,
-                  children: <Widget>[
-                    Chip(label: Text('Role: $role')),
-                    Chip(label: Text('Followers: ${profile.followers}')),
-                    Chip(label: Text('Following: ${profile.following}')),
-                    if (profile.club != null)
-                      Chip(
-                        label: Text(
-                          'Club: ${profile.club!['name'] ?? profile.club!['id']}',
-                        ),
-                      ),
-                    if (federation != null)
-                      Chip(
-                        label: Text(
-                          'Federation: ${federation.name ?? federation.id}',
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: spacingMD),
-                Text(
-                  profile.user.entries
-                      .where(
-                        (MapEntry<String, Object?> entry) => <String>{
-                          'id',
-                          'email',
-                          'username',
-                          'role',
-                          'display_name',
-                        }.contains(entry.key),
-                      )
-                      .map(
-                        (MapEntry<String, Object?> entry) =>
-                            '${entry.key}: ${entry.value}',
-                      )
-                      .join('\n'),
-                ),
-                const SizedBox(height: spacingMD),
-                Wrap(
-                  spacing: spacingSM,
-                  runSpacing: spacingSM,
-                  children: <Widget>[
-                    if (isAdmin)
-                      FilledButton(
-                        onPressed: () => context.push(AppRoutes.profileAdmin),
-                        child: const Text('Open Admin'),
-                      ),
-                    OutlinedButton(
-                      onPressed: () => _signOut(context, ref),
-                      child: const Text('Sign out'),
-                    ),
-                  ],
-                ),
-              ],
+        GtexHeroPanel(
+          eyebrow: 'IDENTITY HUB',
+          title: identityLabel,
+          description:
+              'Live session identity, permissions, and club context are rendered directly from backend-backed session state.',
+          metrics: <Widget>[
+            GtexStatTile(
+              label: 'Role',
+              value: role.toUpperCase(),
+              support: 'Session authority',
+              tone: GtexSurfaceTone.live,
             ),
+            GtexStatTile(
+              label: 'Followers',
+              value: '${profile.followers}',
+              support: 'Social graph',
+              tone: GtexSurfaceTone.info,
+            ),
+            GtexStatTile(
+              label: 'Following',
+              value: '${profile.following}',
+              support: 'Tracked operators',
+              tone: GtexSurfaceTone.info,
+            ),
+            GtexStatTile(
+              label: 'Club',
+              value:
+                  profile.club == null
+                      ? 'None'
+                      : '${profile.club!['name'] ?? profile.club!['id']}',
+              support:
+                  federation == null
+                      ? 'No federation context'
+                      : 'Federation ${federation.name ?? federation.id}',
+              tone:
+                  profile.club == null
+                      ? GtexSurfaceTone.warning
+                      : GtexSurfaceTone.success,
+            ),
+          ],
+          actions: <Widget>[
+            if (isAdmin)
+              FilledButton(
+                onPressed: () => context.push(AppRoutes.profileAdmin),
+                child: const Text('Open Admin'),
+              ),
+            OutlinedButton(
+              onPressed: () => _signOut(context, ref),
+              child: const Text('Sign out'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _ThemeSettingsPanel(),
+        const SizedBox(height: 24),
+        GtexSectionPanel(
+          eyebrow: 'SESSION DETAIL',
+          title: 'Account detail',
+          subtitle: 'Critical identity fields from /api/auth/me and /users/me.',
+          child: Text(
+            profile.user.entries
+                .where(
+                  (MapEntry<String, Object?> entry) => <String>{
+                    'id',
+                    'email',
+                    'username',
+                    'role',
+                    'display_name',
+                  }.contains(entry.key),
+                )
+                .map(
+                  (MapEntry<String, Object?> entry) =>
+                      '${entry.key}: ${entry.value}',
+                )
+                .join('\n'),
           ),
         ),
         if (permissions.isNotEmpty) ...<Widget>[
-          const SizedBox(height: spacingMD),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(spacingLG),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Permissions',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: spacingSM),
-                  Wrap(
-                    spacing: spacingSM,
-                    runSpacing: spacingSM,
-                    children: permissions
-                        .map(
-                          (String permission) => Chip(label: Text(permission)),
-                        )
-                        .toList(growable: false),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 24),
+          GtexSectionPanel(
+            eyebrow: 'ACCESS',
+            title: 'Permissions',
+            subtitle:
+                'Every admin and advanced action in the active shell stays tied to explicit session claims.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: permissions
+                  .map(
+                    (String permission) =>
+                        GtexPill(label: permission, tone: GtexSurfaceTone.info),
+                  )
+                  .toList(growable: false),
             ),
           ),
         ],
         if (profile.club != null) ...<Widget>[
-          const SizedBox(height: spacingMD),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(spacingLG),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Club context',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: spacingSM),
-                  Text(
-                    profile.club!.entries
-                        .take(12)
-                        .map(
-                          (MapEntry<String, Object?> entry) =>
-                              '${entry.key}: ${entry.value}',
-                        )
-                        .join('\n'),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 24),
+          GtexSectionPanel(
+            eyebrow: 'CLUB CONTEXT',
+            title: 'Club context',
+            subtitle:
+                'Club-backed actions use this live context and do not fake fallback access.',
+            child: Text(
+              profile.club!.entries
+                  .take(12)
+                  .map(
+                    (MapEntry<String, Object?> entry) =>
+                        '${entry.key}: ${entry.value}',
+                  )
+                  .join('\n'),
             ),
           ),
         ],
@@ -254,25 +257,42 @@ class _AuthenticatedProfile extends ConsumerWidget {
   }
 }
 
-class _BlockedCard extends StatelessWidget {
-  const _BlockedCard({required this.title, required this.message});
-
-  final String title;
-  final String message;
-
+class _ThemeSettingsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(message),
-          ],
-        ),
+    final theme = GteShellTheme.definitionOf(context);
+    return GtexSectionPanel(
+      eyebrow: 'SETTINGS',
+      title: 'Theme & shell settings',
+      subtitle:
+          'Profile is the global source for visual shell selection. One choice applies across the active app and persists after restart.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              GtexPill(label: theme.metadata.label, tone: GtexSurfaceTone.live),
+              GtexPill(
+                label: theme.metadata.tagline,
+                tone: GtexSurfaceTone.info,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (BuildContext context) => const GteThemePickerSheet(),
+              );
+            },
+            icon: const Icon(Icons.palette_outlined),
+            label: const Text('Open theme selector'),
+          ),
+        ],
       ),
     );
   }

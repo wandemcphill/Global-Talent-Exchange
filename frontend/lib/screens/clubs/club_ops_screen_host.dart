@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_ops_controller.dart';
 import 'package:gte_frontend/data/club_ops_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/widgets/clubs/club_ops_scaffold.dart';
+import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
 
-typedef ClubOpsViewBuilder = Widget Function(
-  BuildContext context,
-  ClubOpsController controller,
-);
+typedef ClubOpsViewBuilder =
+    Widget Function(BuildContext context, ClubOpsController controller);
 
-class ClubOpsScreenHost extends StatefulWidget {
+class ClubOpsScreenHost extends StatelessWidget {
   const ClubOpsScreenHost({
     super.key,
     required this.title,
@@ -18,7 +16,7 @@ class ClubOpsScreenHost extends StatefulWidget {
     this.clubId = 'royal-lagos-fc',
     this.clubName,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.mode = GteBackendMode.liveThenFixture,
+    this.mode = GteBackendMode.live,
     this.api,
     this.controller,
     this.actions = const <Widget>[],
@@ -38,54 +36,12 @@ class ClubOpsScreenHost extends StatefulWidget {
   final ClubOpsViewBuilder builder;
 
   @override
-  State<ClubOpsScreenHost> createState() => _ClubOpsScreenHostState();
-}
-
-class _ClubOpsScreenHostState extends State<ClubOpsScreenHost> {
-  late final ClubOpsController _controller;
-  late final bool _ownsController;
-
-  @override
-  void initState() {
-    super.initState();
-    _ownsController = widget.controller == null;
-    _controller = widget.controller ??
-        ClubOpsController(
-          api: widget.api ??
-              ClubOpsApi.standard(
-                baseUrl: widget.baseUrl,
-                mode: widget.mode,
-              ),
-          clubId: widget.clubId,
-          clubName: widget.clubName,
-        );
-    if (widget.adminData) {
-      _controller.loadAdminData();
-    } else {
-      _controller.loadClubData();
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_ownsController) {
-      _controller.dispose();
-    }
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return ClubOpsScaffold(
-      title: widget.title,
-      subtitle: widget.subtitle,
-      actions: widget.actions,
-      body: AnimatedBuilder(
-        animation: _controller,
-        builder: (BuildContext context, Widget? child) {
-          return widget.builder(context, _controller);
-        },
-      ),
+    return const GteRouteIntegrityScreen.blocked(
+      title: 'Club operations unavailable',
+      message:
+          'Academy, finance, sponsorship, scouting, youth pipeline, and club operations admin routes are blocked until the club backend can run without fixture fallback.',
+      icon: Icons.dashboard_customize_outlined,
     );
   }
 }

@@ -7,19 +7,9 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/app_routes/gte_feature_route_support.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
-import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart';
-import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
-import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_controller.dart';
-import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_screen.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/presentation/identity_preview_screen.dart';
-import 'package:gte_frontend/features/club_identity/reputation/presentation/prestige_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_controller.dart';
-import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_history_screen.dart';
-import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_screen.dart';
-import 'package:gte_frontend/features/club_identity/trophies/presentation/honors_timeline_screen.dart';
-import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
-import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_sale_market/club_sale_market.dart';
 import 'package:gte_frontend/features/creator_league_admin/creator_league_admin.dart';
 import 'package:gte_frontend/features/creator_share_market/creator_share_market.dart';
@@ -35,35 +25,28 @@ import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_join_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
+import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 
 part 'gte_feature_route_builders.dart';
 
 class GteAppRouteRegistry {
-  const GteAppRouteRegistry({
-    required this.dependencies,
-  });
+  const GteAppRouteRegistry({required this.dependencies});
 
   final GteNavigationDependencies dependencies;
 
   List<GteAppRouteRegistration> get registrations =>
       GteAppRouteCatalog.registrations;
 
-  Route<T> routeFor<T>(
-    GteAppRouteData route, {
-    RouteSettings? settings,
-  }) {
+  Route<T> routeFor<T>(GteAppRouteData route, {RouteSettings? settings}) {
     return MaterialPageRoute<T>(
-      settings: settings ??
-          RouteSettings(
-            name: route.toUri().toString(),
-            arguments: route,
-          ),
-      builder: (BuildContext context) => _GteGuardedRouteHost(
-        registry: this,
-        route: route,
-      ),
+      settings:
+          settings ??
+          RouteSettings(name: route.toUri().toString(), arguments: route),
+      builder:
+          (BuildContext context) =>
+              _GteGuardedRouteHost(registry: this, route: route),
     );
   }
 
@@ -78,19 +61,22 @@ class GteAppRouteRegistry {
   Route<dynamic> onUnknownRoute(RouteSettings settings) {
     return MaterialPageRoute<dynamic>(
       settings: settings,
-      builder: (BuildContext context) => _RouteStateScreen(
-        title: 'Route unavailable',
-        message: settings.name == null
-            ? 'No route information was provided.'
-            : 'No screen is registered for ${settings.name}.',
-        icon: Icons.alt_route_outlined,
-      ),
+      builder:
+          (BuildContext context) => _RouteStateScreen(
+            title: 'Route unavailable',
+            message:
+                settings.name == null
+                    ? 'No route information was provided.'
+                    : 'No screen is registered for ${settings.name}.',
+            icon: Icons.alt_route_outlined,
+          ),
     );
   }
 
   GteAppRouteData? parseSettings(RouteSettings settings) {
-    final GteAppRouteData? routeFromArguments =
-        GteAppRouteParser.parse(settings.arguments);
+    final GteAppRouteData? routeFromArguments = GteAppRouteParser.parse(
+      settings.arguments,
+    );
     if (routeFromArguments != null) {
       return routeFromArguments;
     }
@@ -98,44 +84,44 @@ class GteAppRouteRegistry {
   }
 
   Widget buildScreen(BuildContext context, GteAppRouteData route) {
-    final VoidCallback? openLogin = dependencies.onOpenLogin == null
-        ? null
-        : () {
-            dependencies.onOpenLogin!.call(context);
-          };
+    final GteNavigationDependencies liveDependencies = dependencies.liveOnly();
+    final VoidCallback? openLogin =
+        dependencies.onOpenLogin == null
+            ? null
+            : () {
+              dependencies.onOpenLogin!.call(context);
+            };
     final VoidCallback? openCreatorAccessRequest =
         dependencies.onOpenCreatorAccessRequest == null
             ? null
             : () {
-                dependencies.onOpenCreatorAccessRequest!.call(context);
-              };
+              dependencies.onOpenCreatorAccessRequest!.call(context);
+            };
     if (route is CompetitionsDiscoveryRouteData) {
       return CompetitionDiscoveryScreen(
-        baseUrl: dependencies.apiBaseUrl,
-        backendMode: dependencies.backendMode,
-        currentUserId: dependencies.currentUserId,
-        currentUserName: dependencies.currentUserName,
-        isAuthenticated: dependencies.isAuthenticated,
-        isCheckingCreatorAccess: dependencies.isCheckingCreatorAccess,
-        canHostCompetitions: dependencies.canHostCompetitions,
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        currentUserId: liveDependencies.currentUserId,
+        currentUserName: liveDependencies.currentUserName,
+        isAuthenticated: liveDependencies.isAuthenticated,
+        isCheckingCreatorAccess: liveDependencies.isCheckingCreatorAccess,
+        canHostCompetitions: liveDependencies.canHostCompetitions,
         onOpenLogin: openLogin,
         onOpenCreatorAccessRequest: openCreatorAccessRequest,
       );
     }
     if (route is CompetitionCreateRouteData) {
-      return _CompetitionCreateRouteScreen(
-        dependencies: dependencies,
-      );
+      return _CompetitionCreateRouteScreen(dependencies: liveDependencies);
     }
     if (route is CompetitionDetailRouteData) {
       return _CompetitionDetailRouteScreen(
-        dependencies: dependencies,
+        dependencies: liveDependencies,
         route: route,
       );
     }
     if (route is CompetitionJoinRouteData) {
       return _CompetitionPreloadRouteScreen(
-        dependencies: dependencies,
+        dependencies: liveDependencies,
         competitionId: route.competitionId,
         inviteCode: route.inviteCode,
         loadingTitle: 'Loading competition',
@@ -146,7 +132,7 @@ class GteAppRouteRegistry {
     }
     if (route is CompetitionShareRouteData) {
       return _CompetitionPreloadRouteScreen(
-        dependencies: dependencies,
+        dependencies: liveDependencies,
         competitionId: route.competitionId,
         loadingTitle: 'Loading competition',
         builder: (CompetitionController controller) {
@@ -156,125 +142,95 @@ class GteAppRouteRegistry {
     }
     if (route is CompetitionWorldSuperCupRouteData) {
       return CompetitionDiscoveryScreen(
-        baseUrl: dependencies.apiBaseUrl,
-        backendMode: dependencies.backendMode,
-        currentUserId: dependencies.currentUserId,
-        currentUserName: dependencies.currentUserName,
-        isAuthenticated: dependencies.isAuthenticated,
-        isCheckingCreatorAccess: dependencies.isCheckingCreatorAccess,
-        canHostCompetitions: dependencies.canHostCompetitions,
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        currentUserId: liveDependencies.currentUserId,
+        currentUserName: liveDependencies.currentUserName,
+        isAuthenticated: liveDependencies.isAuthenticated,
+        isCheckingCreatorAccess: liveDependencies.isCheckingCreatorAccess,
+        canHostCompetitions: liveDependencies.canHostCompetitions,
         onOpenLogin: openLogin,
         onOpenCreatorAccessRequest: openCreatorAccessRequest,
       );
     }
     if (route is ClubIdentityJerseysRouteData) {
-      return ClubIdentityScreen(
-        clubId: route.clubId,
-        initialClubName: route.clubName,
-        apiBaseUrl: dependencies.apiBaseUrl,
-        backendMode: dependencies.backendMode,
-        repository: dependencies.clubIdentityRepository,
+      return const GteRouteIntegrityScreen.preview(
+        title: 'Club identity preview',
+        message:
+            'Club identity remains preview-only until the real backend profile service is connected. Mock and local-only identity data are disabled on this route.',
+        icon: Icons.shield_outlined,
       );
     }
     if (route is ClubReputationOverviewRouteData) {
-      return ClubReputationOverviewScreen(
-        clubId: route.clubId,
-        clubName: route.clubName,
-        baseUrl: dependencies.apiBaseUrl,
-        mode: dependencies.backendMode,
-        repository: dependencies.reputationRepository,
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Club reputation unavailable',
+        message:
+            'Club reputation routes are blocked until the backend can return real prestige data without fixture fallback.',
+        icon: Icons.emoji_events_outlined,
       );
     }
     if (route is ClubReputationHistoryRouteData) {
-      return _ReputationSubscreenRouteScreen(
-        dependencies: dependencies,
-        clubId: route.clubId,
-        clubName: route.clubName,
-        builder: (ReputationController controller) {
-          return ReputationHistoryScreen(controller: controller);
-        },
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Reputation history unavailable',
+        message:
+            'Reputation history stays blocked until it is backed by the real club backend only.',
+        icon: Icons.history_outlined,
       );
     }
     if (route is ClubReputationLeaderboardRouteData) {
-      return _ReputationSubscreenRouteScreen(
-        dependencies: dependencies,
-        clubId: route.clubId,
-        clubName: route.clubName,
-        builder: (ReputationController controller) {
-          return PrestigeLeaderboardScreen(controller: controller);
-        },
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Reputation leaderboard unavailable',
+        message:
+            'The leaderboard route is blocked until prestige rankings come from the real backend only.',
+        icon: Icons.leaderboard_outlined,
       );
     }
     if (route is ClubTrophyCabinetRouteData) {
-      return TrophyCabinetScreen(
-        clubId: route.clubId,
-        clubName: route.clubName,
-        repository: dependencies.createTrophyCabinetRepository(),
-        initialFilter: route.filter,
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Trophy cabinet unavailable',
+        message:
+            'Trophy routes are blocked until club honors come from a connected backend instead of stubbed cabinet data.',
+        icon: Icons.workspace_premium_outlined,
       );
     }
     if (route is ClubTrophyTimelineRouteData) {
-      return HonorsTimelineScreen(
-        clubId: route.clubId,
-        clubName: route.clubName,
-        repository: dependencies.createTrophyCabinetRepository(),
-        initialFilter: route.filter,
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Honors timeline unavailable',
+        message:
+            'The honors timeline remains blocked until club history is connected to the real backend.',
+        icon: Icons.timeline_outlined,
       );
     }
     if (route is ClubTrophyLeaderboardRouteData) {
-      return TrophyLeaderboardScreen(
-        repository: dependencies.createTrophyCabinetRepository(),
-        initialFilter: route.filter,
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Trophy leaderboard unavailable',
+        message:
+            'This leaderboard is blocked until it can load backend trophy records without stub entries.',
+        icon: Icons.leaderboard_outlined,
       );
     }
     if (route is ClubDynastyOverviewRouteData) {
-      return DynastyScreen(
-        clubId: route.clubId,
-        repository: dependencies.dynastyRepository,
-        baseUrl: dependencies.apiBaseUrl,
-        backendMode: dependencies.backendMode,
-        onOpenTimeline: () {
-          Navigator.of(context).push<void>(
-            routeFor<void>(
-              ClubDynastyHistoryRouteData(
-                clubId: route.clubId,
-                clubName: route.clubName,
-              ),
-            ),
-          );
-        },
-        onOpenLeaderboard: () {
-          Navigator.of(context).push<void>(
-            routeFor<void>(
-              ClubDynastyLeaderboardRouteData(
-                clubId: route.clubId,
-                clubName: route.clubName,
-              ),
-            ),
-          );
-        },
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Club dynasty unavailable',
+        message:
+            'Dynasty routes are blocked until the backend can return real era history without fixture substitution.',
+        icon: Icons.history_edu_outlined,
       );
     }
     if (route is ClubDynastyHistoryRouteData) {
-      return EraHistoryScreen(
-        clubId: route.clubId,
-        repository: dependencies.dynastyRepository,
-        baseUrl: dependencies.apiBaseUrl,
-        backendMode: dependencies.backendMode,
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Dynasty history unavailable',
+        message:
+            'Dynasty history stays blocked until it is backed by the real club backend only.',
+        icon: Icons.history_outlined,
       );
     }
     if (route is ClubDynastyLeaderboardRouteData) {
-      return DynastyLeaderboardScreen(
-        repository: dependencies.dynastyRepository,
-        baseUrl: dependencies.apiBaseUrl,
-        backendMode: dependencies.backendMode,
-        onOpenClub: (String clubId) {
-          Navigator.of(context).push<void>(
-            routeFor<void>(
-              ClubDynastyOverviewRouteData(clubId: clubId),
-            ),
-          );
-        },
+      return const GteRouteIntegrityScreen.blocked(
+        title: 'Dynasty leaderboard unavailable',
+        message:
+            'The dynasty leaderboard is blocked until the route can load real backend rankings without seeded era data.',
+        icon: Icons.leaderboard_outlined,
       );
     }
     if (route is ClubReplaysRouteData) {
@@ -285,162 +241,107 @@ class GteAppRouteRegistry {
       );
     }
     if (route is StreamerTournamentsListRouteData) {
-      return _buildStreamerTournamentsListScreen(
-        context,
-        dependencies,
-      );
+      return _buildStreamerTournamentsListScreen(context, liveDependencies);
     }
     if (route is StreamerTournamentDetailRouteData) {
       return _buildStreamerTournamentDetailScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is FanPredictionMatchRouteData) {
-      return _buildFanPredictionMatchScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildFanPredictionMatchScreen(context, liveDependencies, route);
     }
     if (route is PlayerCardsBrowseRouteData) {
-      return _buildPlayerCardsBrowseScreen(
-        context,
-        dependencies,
-      );
+      return _buildPlayerCardsBrowseScreen(context, liveDependencies);
     }
     if (route is PlayerCardDetailRouteData) {
-      return _buildPlayerCardDetailScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildPlayerCardDetailScreen(context, liveDependencies, route);
     }
     if (route is PlayerCardsInventoryRouteData) {
-      return _buildPlayerCardsInventoryScreen(
-        context,
-        dependencies,
-      );
+      return _buildPlayerCardsInventoryScreen(context, liveDependencies);
     }
     if (route is CreatorShareMarketClubRouteData) {
       return _buildCreatorShareMarketClubScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is CreatorShareMarketAdminControlRouteData) {
       return _buildCreatorShareMarketAdminControlScreen(
         context,
-        dependencies,
+        liveDependencies,
       );
     }
     if (route is ClubSaleMarketListingsRouteData) {
-      return _buildClubSaleMarketListingsScreen(
-        context,
-        dependencies,
-      );
+      return _buildClubSaleMarketListingsScreen(context, liveDependencies);
     }
     if (route is ClubSaleMarketDetailRouteData) {
-      return _buildClubSaleMarketDetailScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildClubSaleMarketDetailScreen(context, liveDependencies, route);
     }
     if (route is ClubSaleMarketOwnerOffersRouteData) {
       return _buildClubSaleMarketOwnerOffersScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is WorldOverviewRouteData) {
-      return _buildWorldOverviewScreen(
-        context,
-        dependencies,
-      );
+      return _buildWorldOverviewScreen(context, liveDependencies);
     }
     if (route is WorldClubContextRouteData) {
-      return _buildWorldClubContextScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildWorldClubContextScreen(context, liveDependencies, route);
     }
     if (route is WorldCompetitionContextRouteData) {
       return _buildWorldCompetitionContextScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is NationalTeamCompetitionsRouteData) {
-      return _buildNationalTeamCompetitionsScreen(
-        context,
-        dependencies,
-      );
+      return _buildNationalTeamCompetitionsScreen(context, liveDependencies);
     }
     if (route is NationalTeamEntryRouteData) {
-      return _buildNationalTeamEntryScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildNationalTeamEntryScreen(context, liveDependencies, route);
     }
     if (route is NationalTeamHistoryRouteData) {
-      return _buildNationalTeamHistoryScreen(
-        context,
-        dependencies,
-      );
+      return _buildNationalTeamHistoryScreen(context, liveDependencies);
     }
     if (route is FootballTransferCenterRouteData) {
       return _buildFootballTransferCenterScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is CreatorStadiumClubRouteData) {
-      return _buildCreatorStadiumClubScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildCreatorStadiumClubScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumMatchRouteData) {
-      return _buildCreatorStadiumMatchScreen(
-        context,
-        dependencies,
-        route,
-      );
+      return _buildCreatorStadiumMatchScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumAdminControlRouteData) {
-      return _buildCreatorStadiumAdminControlScreen(
-        context,
-        dependencies,
-      );
+      return _buildCreatorStadiumAdminControlScreen(context, liveDependencies);
     }
     if (route is CreatorLeagueFinancialReportRouteData) {
       return _buildCreatorLeagueFinancialReportScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is CreatorLeagueSettlementsRouteData) {
       return _buildCreatorLeagueSettlementsScreen(
         context,
-        dependencies,
+        liveDependencies,
         route,
       );
     }
     if (route is GiftStabilizerRouteData) {
-      return _buildGiftStabilizerScreen(
-        context,
-        dependencies,
-      );
+      return _buildGiftStabilizerScreen(context, liveDependencies);
     }
     return _RouteStateScreen(
       title: 'Route unavailable',
@@ -451,10 +352,7 @@ class GteAppRouteRegistry {
 }
 
 class _GteGuardedRouteHost extends StatefulWidget {
-  const _GteGuardedRouteHost({
-    required this.registry,
-    required this.route,
-  });
+  const _GteGuardedRouteHost({required this.registry, required this.route});
 
   final GteAppRouteRegistry registry;
   final GteAppRouteData route;
@@ -525,9 +423,7 @@ class _GteGuardedRouteHostState extends State<_GteGuardedRouteHost> {
 }
 
 class _CompetitionCreateRouteScreen extends StatefulWidget {
-  const _CompetitionCreateRouteScreen({
-    required this.dependencies,
-  });
+  const _CompetitionCreateRouteScreen({required this.dependencies});
 
   final GteNavigationDependencies dependencies;
 
@@ -558,17 +454,18 @@ class _CompetitionCreateRouteScreenState
 
   @override
   Widget build(BuildContext context) {
-    final VoidCallback? openLogin = widget.dependencies.onOpenLogin == null
-        ? null
-        : () {
-            widget.dependencies.onOpenLogin!.call(context);
-          };
+    final VoidCallback? openLogin =
+        widget.dependencies.onOpenLogin == null
+            ? null
+            : () {
+              widget.dependencies.onOpenLogin!.call(context);
+            };
     final VoidCallback? openCreatorAccessRequest =
         widget.dependencies.onOpenCreatorAccessRequest == null
             ? null
             : () {
-                widget.dependencies.onOpenCreatorAccessRequest!.call(context);
-              };
+              widget.dependencies.onOpenCreatorAccessRequest!.call(context);
+            };
     return CompetitionCreateScreen(
       controller: _controller,
       isAuthenticated: widget.dependencies.isAuthenticated,
@@ -717,12 +614,10 @@ class _ReputationSubscreenRouteScreen extends StatefulWidget {
     required this.dependencies,
     required this.clubId,
     required this.builder,
-    this.clubName,
   });
 
   final GteNavigationDependencies dependencies;
   final String clubId;
-  final String? clubName;
   final Widget Function(ReputationController controller) builder;
 
   @override
@@ -742,7 +637,6 @@ class _ReputationSubscreenRouteScreenState
     _controller = ReputationController(
       repository: widget.dependencies.createReputationRepository(),
       clubId: widget.clubId,
-      clubName: widget.clubName,
     );
     _prime();
   }
@@ -876,9 +770,7 @@ class _ReplayPreviewRouteScreenState extends State<_ReplayPreviewRouteScreen> {
 }
 
 class _RouteLoadingScreen extends StatelessWidget {
-  const _RouteLoadingScreen({
-    this.title = 'Opening route',
-  });
+  const _RouteLoadingScreen({this.title = 'Opening route'});
 
   final String title;
 
@@ -894,10 +786,7 @@ class _RouteLoadingScreen extends StatelessWidget {
             children: <Widget>[
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
             ],
           ),
         ),

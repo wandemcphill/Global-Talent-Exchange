@@ -8,6 +8,8 @@ import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/gte_state_panel.dart';
 import '../shared/data/feature_telemetry.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'live_national_teams_provider.dart';
@@ -51,27 +53,32 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                 data.history?.managedEntries ?? const <dynamic>[];
             return Column(
               children: <Widget>[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(spacingLG),
-                    child: Wrap(
-                      spacing: spacingSM,
-                      runSpacing: spacingSM,
-                      children: <Widget>[
-                        _MetricChip(
-                          label: 'Competitions',
-                          value: '${data.competitions.length}',
-                        ),
-                        _MetricChip(
-                          label: 'Rankings',
-                          value: '${data.rankings.length}',
-                        ),
-                        _MetricChip(
-                          label: 'My entries',
-                          value: '${managedEntries.length}',
-                        ),
-                      ],
-                    ),
+                GtexSectionPanel(
+                  eyebrow: 'COUNTRY PROGRAMS',
+                  title: 'National team operations board',
+                  subtitle:
+                      'Live competitions, ranking ladders, and authenticated draft-squad history from the national-team engine.',
+                  emphasized: true,
+                  child: Wrap(
+                    spacing: spacingSM,
+                    runSpacing: spacingSM,
+                    children: <Widget>[
+                      _MetricChip(
+                        label: 'Competitions',
+                        value: '${data.competitions.length}',
+                        tone: GtexSurfaceTone.live,
+                      ),
+                      _MetricChip(
+                        label: 'Rankings',
+                        value: '${data.rankings.length}',
+                        tone: GtexSurfaceTone.info,
+                      ),
+                      _MetricChip(
+                        label: 'My entries',
+                        value: '${managedEntries.length}',
+                        tone: GtexSurfaceTone.success,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: spacingMD),
@@ -88,20 +95,25 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                           : Column(
                             children: data.competitions
                                 .map(
-                                  (competition) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(competition.title),
-                                    subtitle: Text(
-                                      '${competition.seasonLabel} | ${competition.regionType} | ${competition.status}',
+                                  (competition) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
                                     ),
-                                    trailing: FilledButton(
-                                      onPressed:
-                                          () => context.push(
-                                            AppRoutes.nationalTeamDetailLocation(
-                                              competition.id,
+                                    child: GtexListTile(
+                                      title: competition.title,
+                                      subtitle:
+                                          '${competition.seasonLabel} | ${competition.regionType} | ${competition.status}',
+                                      leadingIcon: Icons.flag_circle_rounded,
+                                      tone: GtexSurfaceTone.live,
+                                      trailing: FilledButton(
+                                        onPressed:
+                                            () => context.push(
+                                              AppRoutes.nationalTeamDetailLocation(
+                                                competition.id,
+                                              ),
                                             ),
-                                          ),
-                                      child: const Text('Open'),
+                                        child: const Text('Open'),
+                                      ),
                                     ),
                                   ),
                                 )
@@ -123,11 +135,16 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                                 .map(
                                   (
                                     NationalTeamCountryRankingRecord item,
-                                  ) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(item.countryName),
-                                    subtitle: Text(
-                                      'ELO ${item.eloRating.toStringAsFixed(1)} | W ${item.wins} D ${item.draws} L ${item.losses} | Titles ${item.titles}',
+                                  ) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: item.countryName,
+                                      subtitle:
+                                          'ELO ${item.eloRating.toStringAsFixed(1)} | W ${item.wins} D ${item.draws} L ${item.losses} | Titles ${item.titles}',
+                                      leadingIcon: Icons.emoji_events_rounded,
+                                      tone: GtexSurfaceTone.info,
                                     ),
                                   ),
                                 )
@@ -143,11 +160,14 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                     child: Column(
                       children: managedEntries
                           .map(
-                            (dynamic entry) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(entry.countryName as String),
-                              subtitle: Text(
-                                '${entry.competitionId} | Squad ${entry.squadSize}',
+                            (dynamic entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: spacingSM),
+                              child: GtexListTile(
+                                title: entry.countryName as String,
+                                subtitle:
+                                    '${entry.competitionId} | Squad ${entry.squadSize}',
+                                leadingIcon: Icons.history_rounded,
+                                tone: GtexSurfaceTone.success,
                               ),
                             ),
                           )
@@ -159,11 +179,13 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
             );
           },
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => const GteStatePanel(
+                eyebrow: 'NATIONAL TEAMS',
+                title: 'Loading country competitions',
+                message:
+                    'Resolving the live competition index, ranking ladder, and authenticated federation history.',
+                icon: Icons.public_rounded,
+                isLoading: true,
               ),
           error:
               (Object error, StackTrace stackTrace) => _BlockedCard(
@@ -258,48 +280,55 @@ class _NationalTeamCompetitionDetailScreenState
                 const <dynamic>[];
             return Column(
               children: <Widget>[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(spacingLG),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Wrap(
-                          spacing: spacingSM,
-                          runSpacing: spacingSM,
-                          children: <Widget>[
-                            _MetricChip(
-                              label: 'Season',
-                              value: detail.competition.seasonLabel,
+                GtexSectionPanel(
+                  eyebrow: 'COMPETITION DETAIL',
+                  title: 'Country squad command',
+                  subtitle:
+                      'Lifecycle stage, tournament framing, and draft-squad controls for this live national-team competition.',
+                  emphasized: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Wrap(
+                        spacing: spacingSM,
+                        runSpacing: spacingSM,
+                        children: <Widget>[
+                          _MetricChip(
+                            label: 'Season',
+                            value: detail.competition.seasonLabel,
+                            tone: GtexSurfaceTone.live,
+                          ),
+                          _MetricChip(
+                            label: 'Region',
+                            value: detail.competition.regionType,
+                            tone: GtexSurfaceTone.info,
+                          ),
+                          _MetricChip(
+                            label: 'Age band',
+                            value: detail.competition.ageBand,
+                            tone: GtexSurfaceTone.warning,
+                          ),
+                          _MetricChip(
+                            label: 'Format',
+                            value: detail.competition.formatType,
+                            tone: GtexSurfaceTone.success,
+                          ),
+                          _MetricChip(
+                            label: 'Lifecycle',
+                            value: stringValue(
+                              detail.lifecycle['current_stage'],
+                              fallback: detail.competition.status,
                             ),
-                            _MetricChip(
-                              label: 'Region',
-                              value: detail.competition.regionType,
-                            ),
-                            _MetricChip(
-                              label: 'Age band',
-                              value: detail.competition.ageBand,
-                            ),
-                            _MetricChip(
-                              label: 'Format',
-                              value: detail.competition.formatType,
-                            ),
-                            _MetricChip(
-                              label: 'Lifecycle',
-                              value: stringValue(
-                                detail.lifecycle['current_stage'],
-                                fallback: detail.competition.status,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: spacingMD),
-                        FilledButton(
-                          onPressed: () => _runAutoBuild(context),
-                          child: const Text('Build draft squad'),
-                        ),
-                      ],
-                    ),
+                            tone: GtexSurfaceTone.neutral,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: spacingMD),
+                      FilledButton(
+                        onPressed: () => _runAutoBuild(context),
+                        child: const Text('Build draft squad'),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: spacingMD),
@@ -311,11 +340,14 @@ class _NationalTeamCompetitionDetailScreenState
                     child: Column(
                       children: myEntries
                           .map(
-                            (dynamic entry) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(entry.countryName as String),
-                              subtitle: Text(
-                                'Squad ${entry.squadSize} | Updated ${entry.updatedAt}',
+                            (dynamic entry) => Padding(
+                              padding: const EdgeInsets.only(bottom: spacingSM),
+                              child: GtexListTile(
+                                title: entry.countryName as String,
+                                subtitle:
+                                    'Squad ${entry.squadSize} | Updated ${entry.updatedAt}',
+                                leadingIcon: Icons.groups_rounded,
+                                tone: GtexSurfaceTone.success,
                               ),
                             ),
                           )
@@ -359,19 +391,21 @@ class _NationalTeamCompetitionDetailScreenState
                           : Column(
                             children: stageHistory
                                 .map(
-                                  (JsonMap item) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(
-                                      stringValue(
+                                  (JsonMap item) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: stringValue(
                                         item['stage'],
                                         fallback: 'Stage',
                                       ),
-                                    ),
-                                    subtitle: Text(
-                                      stringValue(
+                                      subtitle: stringValue(
                                         item['summary'],
                                         fallback: 'No summary available.',
                                       ),
+                                      leadingIcon: Icons.timeline_rounded,
+                                      tone: GtexSurfaceTone.info,
                                     ),
                                   ),
                                 )
@@ -387,10 +421,11 @@ class _NationalTeamCompetitionDetailScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       if (activeTheme != null)
-                        Chip(
-                          label: Text(
-                            'Theme ${stringValue(activeTheme['visual_style'], fallback: 'default')}',
-                          ),
+                        GtexPill(
+                          label:
+                              'Theme ${stringValue(activeTheme['visual_style'], fallback: 'default')}',
+                          icon: Icons.palette_rounded,
+                          tone: GtexSurfaceTone.warning,
                         ),
                       if (activeAds.isNotEmpty) ...<Widget>[
                         const SizedBox(height: spacingSM),
@@ -400,16 +435,19 @@ class _NationalTeamCompetitionDetailScreenState
                         ),
                         const SizedBox(height: spacingSM),
                         ...activeAds.map(
-                          (JsonMap ad) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              stringValue(ad['placement'], fallback: 'Ad'),
-                            ),
-                            subtitle: Text(
-                              stringValue(
+                          (JsonMap ad) => Padding(
+                            padding: const EdgeInsets.only(bottom: spacingSM),
+                            child: GtexListTile(
+                              title: stringValue(
+                                ad['placement'],
+                                fallback: 'Ad',
+                              ),
+                              subtitle: stringValue(
                                 ad['asset_url'],
                                 fallback: 'Asset unavailable.',
                               ),
+                              leadingIcon: Icons.campaign_rounded,
+                              tone: GtexSurfaceTone.warning,
                             ),
                           ),
                         ),
@@ -422,16 +460,19 @@ class _NationalTeamCompetitionDetailScreenState
                         ),
                         const SizedBox(height: spacingSM),
                         ...storyEvents.map(
-                          (JsonMap story) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              stringValue(story['type'], fallback: 'Story'),
-                            ),
-                            subtitle: Text(
-                              stringValue(
+                          (JsonMap story) => Padding(
+                            padding: const EdgeInsets.only(bottom: spacingSM),
+                            child: GtexListTile(
+                              title: stringValue(
+                                story['type'],
+                                fallback: 'Story',
+                              ),
+                              subtitle: stringValue(
                                 story['narrative_text'],
                                 fallback: 'No narrative text.',
                               ),
+                              leadingIcon: Icons.auto_stories_rounded,
+                              tone: GtexSurfaceTone.live,
                             ),
                           ),
                         ),
@@ -449,11 +490,13 @@ class _NationalTeamCompetitionDetailScreenState
             );
           },
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => const GteStatePanel(
+                eyebrow: 'NATIONAL TEAMS',
+                title: 'Loading competition detail',
+                message:
+                    'Syncing lifecycle structure, submitted entries, and presentation metadata for this tournament.',
+                icon: Icons.emoji_events_rounded,
+                isLoading: true,
               ),
           error:
               (Object error, StackTrace stackTrace) => _BlockedCard(
@@ -578,22 +621,26 @@ class _NationalTeamCompetitionDetailScreenState
                         _MetricChip(
                           label: 'Formation',
                           value: stringValue(result['formation']),
+                          tone: GtexSurfaceTone.live,
                         ),
                         _MetricChip(
                           label: 'Selected',
                           value: '${intValue(result['selected_count'])}',
+                          tone: GtexSurfaceTone.info,
                         ),
                         _MetricChip(
                           label: 'Budget',
                           value: numberValue(
                             result['requested_budget_coin'],
                           ).toStringAsFixed(0),
+                          tone: GtexSurfaceTone.warning,
                         ),
                         _MetricChip(
                           label: 'Remaining',
                           value: numberValue(
                             result['remaining_budget_coin'],
                           ).toStringAsFixed(0),
+                          tone: GtexSurfaceTone.success,
                         ),
                       ],
                     ),
@@ -605,16 +652,17 @@ class _NationalTeamCompetitionDetailScreenState
                       )
                     else
                       ...players.map(
-                        (JsonMap player) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            stringValue(
+                        (JsonMap player) => Padding(
+                          padding: const EdgeInsets.only(bottom: spacingSM),
+                          child: GtexListTile(
+                            title: stringValue(
                               player['player_name'],
                               fallback: 'Player',
                             ),
-                          ),
-                          subtitle: Text(
-                            '${stringValue(player['assigned_slot'], fallback: 'slot pending')} | ${stringValue(player['primary_position'], fallback: 'position pending')} | ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} coin',
+                            subtitle:
+                                '${stringValue(player['assigned_slot'], fallback: 'slot pending')} | ${stringValue(player['primary_position'], fallback: 'position pending')} | ${numberValue(player['loan_price_coin']).toStringAsFixed(0)} coin',
+                            leadingIcon: Icons.person_pin_circle_rounded,
+                            tone: GtexSurfaceTone.info,
                           ),
                         ),
                       ),
@@ -651,13 +699,14 @@ class _LifecycleList extends StatelessWidget {
           const _EmptyState(message: 'No teams recorded for this stage yet.')
         else
           ...items.map(
-            (JsonMap item) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                stringValue(item['country_name'], fallback: 'Country'),
-              ),
-              subtitle: Text(
-                '${stringValue(item['status'], fallback: 'submitted')} | Strength ${numberValue(item['strength_rating']).toStringAsFixed(1)}',
+            (JsonMap item) => Padding(
+              padding: const EdgeInsets.only(bottom: spacingSM),
+              child: GtexListTile(
+                title: stringValue(item['country_name'], fallback: 'Country'),
+                subtitle:
+                    '${stringValue(item['status'], fallback: 'submitted')} | Strength ${numberValue(item['strength_rating']).toStringAsFixed(1)}',
+                leadingIcon: Icons.flag_rounded,
+                tone: GtexSurfaceTone.info,
               ),
             ),
           ),
@@ -679,33 +728,24 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingXS),
-            Text(subtitle),
-            const SizedBox(height: spacingMD),
-            child,
-          ],
-        ),
-      ),
-    );
+    return GtexSectionPanel(title: title, subtitle: subtitle, child: child);
   }
 }
 
 class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
+  const _MetricChip({
+    required this.label,
+    required this.value,
+    this.tone = GtexSurfaceTone.info,
+  });
 
   final String label;
   final String value;
+  final GtexSurfaceTone tone;
 
   @override
   Widget build(BuildContext context) {
-    return Chip(label: Text('$label: $value'));
+    return GtexStatTile(label: label, value: value, tone: tone);
   }
 }
 
@@ -716,7 +756,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(message);
+    return Text(
+      message,
+      style: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+    );
   }
 }
 
@@ -728,18 +773,11 @@ class _BlockedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(message),
-          ],
-        ),
-      ),
+    return GteStatePanel(
+      eyebrow: 'NATIONAL TEAMS',
+      title: title,
+      message: message,
+      icon: Icons.warning_amber_rounded,
     );
   }
 }

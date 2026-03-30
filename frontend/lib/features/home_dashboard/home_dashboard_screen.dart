@@ -20,6 +20,7 @@ import 'package:gte_frontend/screens/clubs/club_trophy_cabinet_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
+import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
@@ -130,16 +131,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
     final CompetitionController competitionController = _competitionController!;
     return AnimatedBuilder(
-      animation: Listenable.merge(
-        <Listenable>[
-          widget.exchangeController,
-          clubController,
-          competitionController,
-        ],
-      ),
+      animation: Listenable.merge(<Listenable>[
+        widget.exchangeController,
+        clubController,
+        competitionController,
+      ]),
       builder: (BuildContext context, Widget? child) {
         final ClubDashboardData? clubData = clubController.data;
-        final bool waitingForFirstFrame = clubData == null &&
+        final bool waitingForFirstFrame =
+            clubData == null &&
             competitionController.competitions.isEmpty &&
             (clubController.isLoading ||
                 competitionController.isLoadingDiscovery);
@@ -184,15 +184,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   clubName: clubName,
                   userLabel: _displayUserLabel(),
                   title: '$clubName matchday lobby',
-                  subtitle: widget.exchangeController.isAuthenticated
-                      ? 'Your club, capital room, and next football story now live in one place.'
-                      : 'Preview the football universe first, then sign in to trade, fund, and manage the badge.',
+                  subtitle:
+                      widget.exchangeController.isAuthenticated
+                          ? 'Your club, capital room, and next football story now live in one place.'
+                          : 'Preview the football universe first, then sign in to trade, fund, and manage the badge.',
                   capitalLabel: _capitalMetricLabel(),
                   liveLabel: _livePulseLabel(snapshot),
                   isAuthenticated: widget.exchangeController.isAuthenticated,
                   onOpenClub: () => _openTarget(_HomeLinkTarget.club),
-                  onOpenCompetitions: () =>
-                      _openTarget(_HomeLinkTarget.competitions),
+                  onOpenCompetitions:
+                      () => _openTarget(_HomeLinkTarget.competitions),
                   onOpenWallet: widget.onOpenWalletTab,
                   onOpenLogin: widget.onOpenLogin,
                   chips: <Widget>[
@@ -210,8 +211,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                     GteMetricChip(
                       label: 'Orders',
-                      value: widget.exchangeController.openOrders.length
-                          .toString(),
+                      value:
+                          widget.exchangeController.openOrders.length
+                              .toString(),
                       positive: widget.exchangeController.openOrders.isNotEmpty,
                     ),
                   ],
@@ -252,8 +254,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   isAuthenticated: widget.exchangeController.isAuthenticated,
                   onOpenMarket: widget.onOpenMarketTab,
                   onOpenClub: () => _openTarget(_HomeLinkTarget.club),
-                  onOpenCompetitions: () =>
-                      _openTarget(_HomeLinkTarget.competitions),
+                  onOpenCompetitions:
+                      () => _openTarget(_HomeLinkTarget.competitions),
                   onOpenHub: widget.onOpenHubTab,
                   onOpenWallet: widget.onOpenWalletTab,
                   onOpenLogin: widget.onOpenLogin,
@@ -268,15 +270,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 14),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    final int columnCount = constraints.maxWidth >= 1220
-                        ? 2
-                        : constraints.maxWidth >= 760
+                    final int columnCount =
+                        constraints.maxWidth >= 1220
+                            ? 2
+                            : constraints.maxWidth >= 760
                             ? 2
                             : 1;
                     final double spacing = 16;
                     final double cardWidth =
                         (constraints.maxWidth - (spacing * (columnCount - 1))) /
-                            columnCount;
+                        columnCount;
                     final List<_HomeCardData> primaryCards = <_HomeCardData>[
                       snapshot.nextMatch,
                       snapshot.recentReplay,
@@ -318,15 +321,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 const SizedBox(height: 14),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
-                    final int columnCount = constraints.maxWidth >= 1220
-                        ? 2
-                        : constraints.maxWidth >= 760
+                    final int columnCount =
+                        constraints.maxWidth >= 1220
+                            ? 2
+                            : constraints.maxWidth >= 760
                             ? 2
                             : 1;
                     final double spacing = 16;
                     final double cardWidth =
                         (constraints.maxWidth - (spacing * (columnCount - 1))) /
-                            columnCount;
+                        columnCount;
                     final List<_HomeCardData> signalCards = <_HomeCardData>[
                       snapshot.leagueSnapshot,
                       snapshot.championsLeagueStatus,
@@ -361,51 +365,57 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   const SizedBox(height: 20),
                   _HomeExpansionLanesPanel(
                     isAdmin: widget.navigationDependencies!.isAdminRole,
-                    onOpenStreamerTournaments: () => _openFeatureRoute(
-                      const StreamerTournamentsListRouteData(),
-                    ),
-                    onOpenNationsCup: () => _openFeatureRoute(
-                      const NationalTeamCompetitionsRouteData(),
-                    ),
-                    onOpenWorld: () => _openFeatureRoute(
-                      const WorldOverviewRouteData(),
-                    ),
-                    onOpenTransferCenter: () => _openFeatureRoute(
-                      const FootballTransferCenterRouteData(),
-                    ),
-                    onOpenPlayerCards: () => _openFeatureRoute(
-                      const PlayerCardsBrowseRouteData(),
-                    ),
-                    onOpenCreatorShareMarket: () =>
-                        _openCurrentClubFeatureRoute(
-                      (String clubId, String? clubName) =>
-                          CreatorShareMarketClubRouteData(
-                        clubId: clubId,
-                        clubName: clubName,
-                      ),
-                      title: 'Club selection required',
-                      message:
-                          'Creator-share market routes are club-scoped and only open when the signed-in session exposes a canonical current club id.',
-                    ),
-                    onOpenClubSaleMarket: () => _openFeatureRoute(
-                      const ClubSaleMarketListingsRouteData(),
-                    ),
-                    onOpenCreatorStadium: () => _openCurrentClubFeatureRoute(
-                      (String clubId, String? clubName) =>
-                          CreatorStadiumClubRouteData(
-                        clubId: clubId,
-                        clubName: clubName,
-                      ),
-                      title: 'Club selection required',
-                      message:
-                          'Creator stadium routes are club-scoped and stay blocked until the session exposes a canonical current club id.',
-                    ),
-                    onOpenFinanceAdmin: () => _openFeatureRoute(
-                      const CreatorLeagueFinancialReportRouteData(),
-                    ),
-                    onOpenGiftStabilizer: () => _openFeatureRoute(
-                      const GiftStabilizerRouteData(),
-                    ),
+                    onOpenStreamerTournaments:
+                        () => _openFeatureRoute(
+                          const StreamerTournamentsListRouteData(),
+                        ),
+                    onOpenNationsCup:
+                        () => _openFeatureRoute(
+                          const NationalTeamCompetitionsRouteData(),
+                        ),
+                    onOpenWorld:
+                        () => _openFeatureRoute(const WorldOverviewRouteData()),
+                    onOpenTransferCenter:
+                        () => _openFeatureRoute(
+                          const FootballTransferCenterRouteData(),
+                        ),
+                    onOpenPlayerCards:
+                        () => _openFeatureRoute(
+                          const PlayerCardsBrowseRouteData(),
+                        ),
+                    onOpenCreatorShareMarket:
+                        () => _openCurrentClubFeatureRoute(
+                          (String clubId, String? clubName) =>
+                              CreatorShareMarketClubRouteData(
+                                clubId: clubId,
+                                clubName: clubName,
+                              ),
+                          title: 'Club selection required',
+                          message:
+                              'Creator-share market routes are club-scoped and only open when the signed-in session exposes a canonical current club id.',
+                        ),
+                    onOpenClubSaleMarket:
+                        () => _openFeatureRoute(
+                          const ClubSaleMarketListingsRouteData(),
+                        ),
+                    onOpenCreatorStadium:
+                        () => _openCurrentClubFeatureRoute(
+                          (String clubId, String? clubName) =>
+                              CreatorStadiumClubRouteData(
+                                clubId: clubId,
+                                clubName: clubName,
+                              ),
+                          title: 'Club selection required',
+                          message:
+                              'Creator stadium routes are club-scoped and stay blocked until the session exposes a canonical current club id.',
+                        ),
+                    onOpenFinanceAdmin:
+                        () => _openFeatureRoute(
+                          const CreatorLeagueFinancialReportRouteData(),
+                        ),
+                    onOpenGiftStabilizer:
+                        () =>
+                            _openFeatureRoute(const GiftStabilizerRouteData()),
                   ),
                 ],
               ],
@@ -552,10 +562,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }) async {
     final String? clubId = widget.navigationDependencies?.currentClubId?.trim();
     if (clubId == null || clubId.isEmpty) {
-      await _showRouteRequirementDialog(
-        title: title,
-        message: message,
-      );
+      await _showRouteRequirementDialog(title: title, message: message);
       return;
     }
     await _openFeatureRoute(
@@ -591,9 +598,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final String sessionUserId = session?.user.id.trim() ?? '';
     final String userId =
         sessionUserId.isNotEmpty ? sessionUserId : 'guest-user';
-    final String? userName = displayName?.isNotEmpty == true
-        ? displayName
-        : username.isNotEmpty
+    final String? userName =
+        displayName?.isNotEmpty == true
+            ? displayName
+            : username.isNotEmpty
             ? username
             : null;
     final String? clubId = _resolveClubId();
@@ -684,11 +692,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         .split(RegExp(r'[-_]+'))
         .where((String token) => token.isNotEmpty)
         .map((String token) {
-      if (token.length <= 3) {
-        return token.toUpperCase();
-      }
-      return '${token[0].toUpperCase()}${token.substring(1)}';
-    }).join(' ');
+          if (token.length <= 3) {
+            return token.toUpperCase();
+          }
+          return '${token[0].toUpperCase()}${token.substring(1)}';
+        })
+        .join(' ');
   }
 
   bool _hasClubScope(String? clubId, String? clubName) {
@@ -706,7 +715,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       clubId: clubId,
       clubName: clubName,
       baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
+      backendMode: GteBackendMode.live,
     );
   }
 
@@ -714,7 +723,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return CompetitionController(
       api: CompetitionApi.standard(
         baseUrl: widget.apiBaseUrl,
-        mode: widget.backendMode,
+        mode: GteBackendMode.live,
       ),
       currentUserId: _userId,
       currentUserName: _userName,
@@ -764,9 +773,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _HomeActionCard(
         eyebrow: 'STEP 1',
         title: 'Create Club',
-        detail: isAuthenticated
-            ? 'Club creation is not yet available from Home in this active shell. A dedicated create-club route is still required before this CTA can go live.'
-            : 'Sign in, then start your first club to unlock Home, trophies, and matchday stories.',
+        detail:
+            isAuthenticated
+                ? 'Club creation is not yet available from Home in this active shell. A dedicated create-club route is still required before this CTA can go live.'
+                : 'Sign in, then start your first club to unlock Home, trophies, and matchday stories.',
         icon: Icons.add_circle_outline,
         accent: GteShellTheme.accent,
         badge: 'Start',
@@ -777,9 +787,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _HomeActionCard(
         eyebrow: 'STEP 2',
         title: 'Join Club',
-        detail: isAuthenticated
-            ? 'Club linking is not yet available from Home in this active shell. A dedicated join-club route is still required before this CTA can go live.'
-            : 'Sign in to bring an existing club into Home and light up live matches, replays, and prestige.',
+        detail:
+            isAuthenticated
+                ? 'Club linking is not yet available from Home in this active shell. A dedicated join-club route is still required before this CTA can go live.'
+                : 'Sign in to bring an existing club into Home and light up live matches, replays, and prestige.',
         icon: Icons.group_add_outlined,
         accent: GteShellTheme.accentWarm,
         badge: 'Link',
@@ -814,9 +825,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 Text(
                   'HOME ONBOARDING',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: GteShellTheme.accent,
-                        letterSpacing: 1.1,
-                      ),
+                    color: GteShellTheme.accent,
+                    letterSpacing: 1.1,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -927,15 +938,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => ClubProfileScreen(
-            clubId: clubId,
-            clubName: clubName,
-            controller: clubController,
-            baseUrl: widget.apiBaseUrl,
-            backendMode: widget.backendMode,
-            isAuthenticated: widget.exchangeController.isAuthenticated,
-            onOpenLogin: widget.onOpenLogin,
-          ),
+          builder:
+              (BuildContext context) => ClubProfileScreen(
+                clubId: clubId,
+                clubName: clubName,
+                controller: clubController,
+                baseUrl: widget.apiBaseUrl,
+                backendMode: GteBackendMode.live,
+                isAuthenticated: widget.exchangeController.isAuthenticated,
+                onOpenLogin: widget.onOpenLogin,
+              ),
         ),
       );
       return;
@@ -947,18 +959,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => CompetitionDiscoveryScreen(
-            controller: _competitionController,
-            baseUrl: widget.apiBaseUrl,
-            backendMode: widget.backendMode,
-            currentUserId: _userId,
-            currentUserName: _userName,
-            isAuthenticated: widget.exchangeController.isAuthenticated,
-            isCheckingCreatorAccess: widget.isCheckingCreatorAccess,
-            canHostCompetitions: widget.canHostCompetitions,
-            onOpenLogin: widget.onOpenLogin,
-            onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
-          ),
+          builder:
+              (BuildContext context) => CompetitionDiscoveryScreen(
+                controller: _competitionController,
+                baseUrl: widget.apiBaseUrl,
+                backendMode: GteBackendMode.live,
+                currentUserId: _userId,
+                currentUserName: _userName,
+                isAuthenticated: widget.exchangeController.isAuthenticated,
+                isCheckingCreatorAccess: widget.isCheckingCreatorAccess,
+                canHostCompetitions: widget.canHostCompetitions,
+                onOpenLogin: widget.onOpenLogin,
+                onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
+              ),
         ),
       );
       return;
@@ -971,6 +984,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       widget.onOpenClubSubtab!(ClubNavigationTab.tactics);
       return;
     }
+    if (target == _HomeLinkTarget.trophies ||
+        target == _HomeLinkTarget.tactics) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder:
+              (BuildContext context) => const GteRouteIntegrityScreen.blocked(
+                title: 'Club route unavailable',
+                message:
+                    'Club trophy and tactics routes are blocked until the club backend can run without fixture, mock, or local-only fallback.',
+              ),
+        ),
+      );
+      return;
+    }
     await _ensureClubLoaded();
     if (!mounted) {
       return;
@@ -978,8 +1005,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (target == _HomeLinkTarget.trophies) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              ClubTrophyCabinetScreen(controller: clubController),
+          builder:
+              (BuildContext context) =>
+                  ClubTrophyCabinetScreen(controller: clubController),
         ),
       );
       return;
@@ -995,21 +1023,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (target == _HomeLinkTarget.replays) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => _HomeReplayHubScreen(
-            clubName: clubName,
-            replays: snapshot.replays,
-          ),
+          builder:
+              (BuildContext context) => _HomeReplayHubScreen(
+                clubName: clubName,
+                replays: snapshot.replays,
+              ),
         ),
       );
       return;
     }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => _HomeTacticsScreen(
-          clubName: clubName,
-          nextMatch: snapshot.nextMatch,
-          tacticalNotes: snapshot.tacticalNotes,
-        ),
+        builder:
+            (BuildContext context) => _HomeTacticsScreen(
+              clubName: clubName,
+              nextMatch: snapshot.nextMatch,
+              tacticalNotes: snapshot.tacticalNotes,
+            ),
       ),
     );
   }
@@ -1069,24 +1099,22 @@ class _HomeHeroPanel extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
-              _HomeStatusPill(
-                label: 'Club lobby',
-                color: GteShellTheme.accent,
-              ),
+              _HomeStatusPill(label: 'Club lobby', color: GteShellTheme.accent),
               _HomeStatusPill(
                 label: isAuthenticated ? 'Club ready' : 'Guest preview',
-                color: isAuthenticated
-                    ? GteShellTheme.accentWarm
-                    : GteShellTheme.accentCapital,
+                color:
+                    isAuthenticated
+                        ? GteShellTheme.accentWarm
+                        : GteShellTheme.accentCapital,
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             '$clubName • $userLabel',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: GteShellTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: GteShellTheme.textMuted),
           ),
           const SizedBox(height: 8),
           Text(title, style: Theme.of(context).textTheme.displaySmall),
@@ -1139,11 +1167,7 @@ class _HomeHeroPanel extends StatelessWidget {
             },
           ),
           const SizedBox(height: 18),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: chips,
-          ),
+          Wrap(spacing: 12, runSpacing: 12, children: chips),
           const SizedBox(height: 20),
           Wrap(
             spacing: 12,
@@ -1179,10 +1203,7 @@ class _HomeHeroPanel extends StatelessWidget {
 }
 
 class _HomeStatusPill extends StatelessWidget {
-  const _HomeStatusPill({
-    required this.label,
-    required this.color,
-  });
+  const _HomeStatusPill({required this.label, required this.color});
 
   final String label;
   final Color color;
@@ -1199,10 +1220,10 @@ class _HomeStatusPill extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w800,
-            ),
+          color: color,
+          letterSpacing: 1,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1233,15 +1254,12 @@ class _HomeSignalCard extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: accent,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: accent),
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text(value, style: Theme.of(context).textTheme.titleLarge),
         ],
       ),
     );
@@ -1271,15 +1289,16 @@ class _HomeQuickActionsStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columnCount = constraints.maxWidth >= 1220
-            ? 3
-            : constraints.maxWidth >= 760
+        final int columnCount =
+            constraints.maxWidth >= 1220
+                ? 3
+                : constraints.maxWidth >= 760
                 ? 2
                 : 1;
         final double spacing = 12;
         final double cardWidth =
             (constraints.maxWidth - (spacing * (columnCount - 1))) /
-                columnCount;
+            columnCount;
         final List<Widget> cards = <Widget>[
           _HomeActionCard(
             eyebrow: 'PLAY',
@@ -1307,9 +1326,10 @@ class _HomeQuickActionsStrip extends StatelessWidget {
           _HomeActionCard(
             eyebrow: 'CLUB',
             title: 'Build the badge',
-            detail: isAuthenticated
-                ? 'Identity, trophies, squad posture, and dynasty stay together instead of scattering into utility surfaces.'
-                : 'Sign in to manage your club properly, save changes, and turn Home into a real club board.',
+            detail:
+                isAuthenticated
+                    ? 'Identity, trophies, squad posture, and dynasty stay together instead of scattering into utility surfaces.'
+                    : 'Sign in to manage your club properly, save changes, and turn Home into a real club board.',
             icon: Icons.shield_outlined,
             accent: GteShellTheme.accent,
             badge: 'Builder',
@@ -1329,12 +1349,14 @@ class _HomeQuickActionsStrip extends StatelessWidget {
           ),
           _HomeActionCard(
             eyebrow: 'CAPITAL',
-            title: isAuthenticated
-                ? 'Check the capital room'
-                : 'Unlock the club wallet',
-            detail: isAuthenticated
-                ? 'Wallet, holdings, and order rails stay one move away without dominating the primary navigation.'
-                : 'Guest mode previews the calm wallet view. Sign in when you are ready to top up and play.',
+            title:
+                isAuthenticated
+                    ? 'Check the capital room'
+                    : 'Unlock the club wallet',
+            detail:
+                isAuthenticated
+                    ? 'Wallet, holdings, and order rails stay one move away without dominating the primary navigation.'
+                    : 'Guest mode previews the calm wallet view. Sign in when you are ready to top up and play.',
             icon: Icons.account_balance_wallet_outlined,
             accent: GteShellTheme.accentCapital,
             badge: isAuthenticated ? 'Balance' : 'Protected',
@@ -1346,12 +1368,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
           spacing: spacing,
           runSpacing: spacing,
           children: cards
-              .map(
-                (Widget child) => SizedBox(
-                  width: cardWidth,
-                  child: child,
-                ),
-              )
+              .map((Widget child) => SizedBox(width: cardWidth, child: child))
               .toList(growable: false),
         );
       },
@@ -1412,9 +1429,9 @@ class _HomeActionCard extends StatelessWidget {
                     Text(
                       eyebrow,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: accent,
-                            letterSpacing: 1.1,
-                          ),
+                        color: accent,
+                        letterSpacing: 1.1,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -1429,10 +1446,10 @@ class _HomeActionCard extends StatelessWidget {
                       child: Text(
                         badge.toUpperCase(),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: accent,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                   ],
@@ -1501,9 +1518,9 @@ class _HomeSectionHeading extends StatelessWidget {
           child: Text(
             eyebrow,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: GteShellTheme.accent,
-                  letterSpacing: 1.1,
-                ),
+              color: GteShellTheme.accent,
+              letterSpacing: 1.1,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1516,9 +1533,7 @@ class _HomeSectionHeading extends StatelessWidget {
 }
 
 class _InlineWarning extends StatelessWidget {
-  const _InlineWarning({
-    required this.message,
-  });
+  const _InlineWarning({required this.message});
 
   final String message;
 
@@ -1530,17 +1545,11 @@ class _InlineWarning extends StatelessWidget {
         children: <Widget>[
           const Padding(
             padding: EdgeInsets.only(top: 2),
-            child: Icon(
-              Icons.info_outline,
-              color: GteShellTheme.accentWarm,
-            ),
+            child: Icon(Icons.info_outline, color: GteShellTheme.accentWarm),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
           ),
         ],
       ),
@@ -1567,10 +1576,7 @@ class _HomeLoadingView extends StatelessWidget {
 }
 
 class _HomeReplayHubScreen extends StatelessWidget {
-  const _HomeReplayHubScreen({
-    required this.clubName,
-    required this.replays,
-  });
+  const _HomeReplayHubScreen({required this.clubName, required this.replays});
 
   final String clubName;
   final List<_HomeReplayEntry> replays;
@@ -1581,9 +1587,7 @@ class _HomeReplayHubScreen extends StatelessWidget {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Recent replays'),
-        ),
+        appBar: AppBar(title: const Text('Recent replays')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
           children: <Widget>[
@@ -1647,7 +1651,9 @@ class _HomeReplayHubScreen extends StatelessWidget {
                       ),
                       if (replay.highlights.isNotEmpty) ...<Widget>[
                         const SizedBox(height: 16),
-                        ...replay.highlights.take(3).map(
+                        ...replay.highlights
+                            .take(3)
+                            .map(
                               (String line) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: Text(
@@ -1670,10 +1676,7 @@ class _HomeReplayHubScreen extends StatelessWidget {
 }
 
 class _ReplayMetaChip extends StatelessWidget {
-  const _ReplayMetaChip({
-    required this.label,
-    required this.value,
-  });
+  const _ReplayMetaChip({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -1716,9 +1719,7 @@ class _HomeTacticsScreen extends StatelessWidget {
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Tactics'),
-        ),
+        appBar: AppBar(title: const Text('Tactics')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
           children: <Widget>[
@@ -1795,20 +1796,9 @@ class _HomeTacticsScreen extends StatelessWidget {
   }
 }
 
-enum _HomeLinkTarget {
-  competitions,
-  replays,
-  club,
-  trophies,
-  tactics,
-}
+enum _HomeLinkTarget { competitions, replays, club, trophies, tactics }
 
-enum _FeaturedEventType {
-  worldSuperCup,
-  championsLeague,
-  league,
-  fastCup,
-}
+enum _FeaturedEventType { worldSuperCup, championsLeague, league, fastCup }
 
 class _HomeIdentity {
   const _HomeIdentity({
@@ -1868,10 +1858,14 @@ class _HomeSnapshot {
   }) {
     final String resolvedClubName = clubData?.clubName ?? clubName;
     final DateTime now = DateTime.now().toUtc();
-    final CompetitionSummary? featuredLeague =
-        _pickCompetition(competitions, CompetitionFormat.league);
-    final CompetitionSummary? featuredCup =
-        _pickCompetition(competitions, CompetitionFormat.cup);
+    final CompetitionSummary? featuredLeague = _pickCompetition(
+      competitions,
+      CompetitionFormat.league,
+    );
+    final CompetitionSummary? featuredCup = _pickCompetition(
+      competitions,
+      CompetitionFormat.cup,
+    );
     final TrophyItemDto? worldSuperCup = _latestHonor(
       clubData?.trophyCabinet.recentHonors,
       (TrophyItemDto item) => item.isWorldSuperCup,
@@ -1933,18 +1927,20 @@ class _HomeSnapshot {
       replays: replays,
     );
     final int totalHonors = clubData?.trophyCabinet.totalHonorsCount ?? 0;
-    final int openCompetitionCount = competitions
-        .where(
-          (CompetitionSummary item) =>
-              item.status == CompetitionStatus.openForJoin,
-        )
-        .length;
+    final int openCompetitionCount =
+        competitions
+            .where(
+              (CompetitionSummary item) =>
+                  item.status == CompetitionStatus.openForJoin,
+            )
+            .length;
     final String prestigeLabel =
         clubData?.reputation.profile.currentPrestigeTier.label ?? 'Preview';
     return _HomeSnapshot(
-      heroTitle: isAuthenticated
-          ? '$userLabel, matchday is live.'
-          : '$resolvedClubName is matchday ready.',
+      heroTitle:
+          isAuthenticated
+              ? '$userLabel, matchday is live.'
+              : '$resolvedClubName is matchday ready.',
       heroSubtitle:
           'Next match, cups, replays, and club momentum are all live from Home.',
       prestigeLabel: prestigeLabel,
@@ -1963,7 +1959,9 @@ class _HomeSnapshot {
         accent: GteShellTheme.accent,
         stats: <MapEntry<String, String>>[
           MapEntry<String, String>(
-              'Kickoff', _formatDayTime(matchPreview.kickoff)),
+            'Kickoff',
+            _formatDayTime(matchPreview.kickoff),
+          ),
           MapEntry<String, String>('Venue', matchPreview.venueLabel),
           MapEntry<String, String>('Plan', matchPreview.planLabel),
         ],
@@ -1974,12 +1972,14 @@ class _HomeSnapshot {
       leagueSnapshot: _HomeCardData(
         eyebrow: 'League Snapshot',
         title: featuredLeague?.name ?? 'Domestic table pulse',
-        summary: latestSeason?.leagueFinish != null
-            ? '$resolvedClubName closed ${latestSeason!.seasonLabel} in ${_ordinal(latestSeason.leagueFinish!)} place.'
-            : 'League traction is building and the table is moving again.',
-        detail: featuredLeague == null
-            ? 'The league feed is still quiet, but Home is holding the table for the next climb.'
-            : '${featuredLeague.participantCount}/${featuredLeague.capacity} entries are live with ${_competitionStatusLabel(featuredLeague.status).toLowerCase()} status.',
+        summary:
+            latestSeason?.leagueFinish != null
+                ? '$resolvedClubName closed ${latestSeason!.seasonLabel} in ${_ordinal(latestSeason.leagueFinish!)} place.'
+                : 'League traction is building and the table is moving again.',
+        detail:
+            featuredLeague == null
+                ? 'The league feed is still quiet, but Home is holding the table for the next climb.'
+                : '${featuredLeague.participantCount}/${featuredLeague.capacity} entries are live with ${_competitionStatusLabel(featuredLeague.status).toLowerCase()} status.',
         icon: Icons.table_chart_outlined,
         accent: GteShellTheme.accentWarm,
         stats: <MapEntry<String, String>>[
@@ -2000,9 +2000,9 @@ class _HomeSnapshot {
             featuredLeague == null
                 ? '--'
                 : _formatCompetitionAmount(
-                    featuredLeague.entryFee,
-                    featuredLeague.currency,
-                  ),
+                  featuredLeague.entryFee,
+                  featuredLeague.currency,
+                ),
           ),
         ],
         highlights: <String>[
@@ -2018,22 +2018,22 @@ class _HomeSnapshot {
       ),
       championsLeagueStatus: _HomeCardData(
         eyebrow: 'Champions League Status',
-        title: championsLeague != null
-            ? 'Continental crown still visible'
-            : latestSeason?.topFourFinish == true
+        title:
+            championsLeague != null
+                ? 'Continental crown still visible'
+                : latestSeason?.topFourFinish == true
                 ? 'Qualification line protected'
                 : 'Continental push is live',
-        summary: championsLeague != null
-            ? championsLeague.finalResultSummary
-            : latestSeason?.championsLeagueTitle == true
+        summary:
+            championsLeague != null
+                ? championsLeague.finalResultSummary
+                : latestSeason?.championsLeagueTitle == true
                 ? 'Champions League silverware pushed the club into the elite conversation.'
                 : latestSeason?.topFourFinish == true
-                    ? 'League placement kept Champions League access alive for the next run.'
-                    : 'The next continental step still runs through league control and trophy nights.',
-        detail: _firstReason(
-              dynasty?.reasons,
-              'Champions League',
-            ) ??
+                ? 'League placement kept Champions League access alive for the next run.'
+                : 'The next continental step still runs through league control and trophy nights.',
+        detail:
+            _firstReason(dynasty?.reasons, 'Champions League') ??
             '${dynasty?.currentEraLabel.label ?? 'Club identity'} is driving the push for Europe.',
         icon: Icons.public_outlined,
         accent: GteShellTheme.accentWarm,
@@ -2043,8 +2043,8 @@ class _HomeSnapshot {
             championsLeague != null
                 ? 'Champion'
                 : latestSeason?.topFourFinish == true
-                    ? 'Qualified'
-                    : 'Chasing',
+                ? 'Qualified'
+                : 'Chasing',
           ),
           MapEntry<String, String>(
             'Era',
@@ -2074,9 +2074,10 @@ class _HomeSnapshot {
         title: 'Countdown ${_formatCountdown(fastCupStart.difference(now))}',
         summary:
             'The next Fast Cup kicks off ${_formatDayTime(fastCupStart)} and Home is keeping the bracket warm.',
-        detail: featuredCup == null
-            ? 'No cup feed is live yet, so Home is holding the next GTEX Fast Cup window from the shared schedule.'
-            : '${featuredCup.name} is the current cup reference with ${_spotsLabel(featuredCup)} still moving.',
+        detail:
+            featuredCup == null
+                ? 'No cup feed is live yet, so Home is holding the next GTEX Fast Cup window from the shared schedule.'
+                : '${featuredCup.name} is the current cup reference with ${_spotsLabel(featuredCup)} still moving.',
         icon: Icons.timer_outlined,
         accent: GteShellTheme.positive,
         stats: <MapEntry<String, String>>[
@@ -2109,7 +2110,9 @@ class _HomeSnapshot {
         accent: GteShellTheme.accent,
         stats: <MapEntry<String, String>>[
           MapEntry<String, String>(
-              'When', _formatDateLabel(replays.first.occurredAt)),
+            'When',
+            _formatDateLabel(replays.first.occurredAt),
+          ),
           MapEntry<String, String>('Track', replays.first.trackLabel),
           MapEntry<String, String>('Focus', replays.first.focusLabel),
         ],
@@ -2122,9 +2125,10 @@ class _HomeSnapshot {
         title: '${notifications.length} fresh signals',
         summary:
             'Club, competition, and replay updates are grouped into one Home queue so the next decision is immediate.',
-        detail: isAuthenticated
-            ? 'Signed in sessions keep the club pulse and competition pulse aligned.'
-            : 'Signed-out mode stays in preview, but the club pulse is still readable.',
+        detail:
+            isAuthenticated
+                ? 'Signed in sessions keep the club pulse and competition pulse aligned.'
+                : 'Signed-out mode stays in preview, but the club pulse is still readable.',
         icon: Icons.notifications_active_outlined,
         accent: GteShellTheme.positive,
         stats: <MapEntry<String, String>>[
@@ -2260,11 +2264,13 @@ _HomeBannerData _buildFeaturedBanner({
       type: _FeaturedEventType.worldSuperCup,
       label: 'World Super Cup Banner',
       title: 'World Super Cup pressure is back on $clubName.',
-      summary: worldSuperCup?.finalResultSummary ??
+      summary:
+          worldSuperCup?.finalResultSummary ??
           'The latest cycle kept the club in the rarest global conversation.',
-      body: worldSuperCup != null
-          ? '${worldSuperCup.seasonLabel} put the badge on the world stage again.'
-          : 'World Super Cup qualification sits above every other Home signal, so it moves straight to the top of the banner stack.',
+      body:
+          worldSuperCup != null
+              ? '${worldSuperCup.seasonLabel} put the badge on the world stage again.'
+              : 'World Super Cup qualification sits above every other Home signal, so it moves straight to the top of the banner stack.',
       icon: Icons.language_outlined,
       gradientColors: const <Color>[
         Color(0xFF302107),
@@ -2294,9 +2300,11 @@ _HomeBannerData _buildFeaturedBanner({
       type: _FeaturedEventType.championsLeague,
       label: 'Champions League Status',
       title: 'Champions League nights still define the crest.',
-      summary: championsLeague?.finalResultSummary ??
+      summary:
+          championsLeague?.finalResultSummary ??
           'Continental silverware is the strongest active story behind the club right now.',
-      body: _firstReason(dynasty?.reasons, 'Champions League') ??
+      body:
+          _firstReason(dynasty?.reasons, 'Champions League') ??
           'When no World Super Cup signal is active, Champions League momentum owns the Home banner.',
       icon: Icons.public_outlined,
       gradientColors: const <Color>[
@@ -2326,13 +2334,15 @@ _HomeBannerData _buildFeaturedBanner({
       type: _FeaturedEventType.league,
       label: 'League Snapshot',
       title: 'League form is carrying the Home page.',
-      summary: leagueHonor?.finalResultSummary ??
+      summary:
+          leagueHonor?.finalResultSummary ??
           (latestSeason?.leagueFinish != null
               ? 'Latest domestic finish landed at ${_ordinal(latestSeason!.leagueFinish!)}.'
               : 'The next league window is the strongest active route on the board.'),
-      body: featuredLeague == null
-          ? 'League momentum outranks Fast Cup promotion in the banner stack whenever the domestic signal is active.'
-          : '${featuredLeague.name} is the current league reference point with ${featuredLeague.participantCount}/${featuredLeague.capacity} entries already live.',
+      body:
+          featuredLeague == null
+              ? 'League momentum outranks Fast Cup promotion in the banner stack whenever the domestic signal is active.'
+              : '${featuredLeague.name} is the current league reference point with ${featuredLeague.participantCount}/${featuredLeague.capacity} entries already live.',
       icon: Icons.stadium_outlined,
       gradientColors: const <Color>[
         Color(0xFF0D2C20),
@@ -2365,11 +2375,13 @@ _HomeBannerData _buildFeaturedBanner({
     type: _FeaturedEventType.fastCup,
     label: 'Fast Cup Signal',
     title: 'Fast Cup countdown takes the banner slot.',
-    summary: fastCupHonor?.finalResultSummary ??
+    summary:
+        fastCupHonor?.finalResultSummary ??
         'No world, continental, or league headline is stronger right now, so the Fast Cup window moves to the top.',
-    body: featuredCup == null
-        ? 'The GTEX Fast Cup keeps Home alive when the rest of the trophy ladder is quiet.'
-        : '${featuredCup.name} is the cup traffic Home is leaning on until the next bigger event lands.',
+    body:
+        featuredCup == null
+            ? 'The GTEX Fast Cup keeps Home alive when the rest of the trophy ladder is quiet.'
+            : '${featuredCup.name} is the cup traffic Home is leaning on until the next bigger event lands.',
     icon: Icons.flash_on_outlined,
     gradientColors: const <Color>[
       Color(0xFF08242A),
@@ -2414,16 +2426,19 @@ _HomeMatchPreview _buildNextMatch({
     'Capital Terrace',
     'Meridian Bowl',
   ];
-  final int seed =
-      clubName.runes.fold<int>(0, (int sum, int rune) => sum + rune);
+  final int seed = clubName.runes.fold<int>(
+    0,
+    (int sum, int rune) => sum + rune,
+  );
   final DateTime kickoff = _nextKickoff(now, seed);
   final String planLabel = _tacticPlanLabel(dynasty?.currentEraLabel);
   final int matchday = 24 + (seed % 8);
   return _HomeMatchPreview(
     opponent: opponents[seed % opponents.length],
-    stageLabel: league == null
-        ? 'Club showcase fixture'
-        : '${league.name} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ Matchday $matchday',
+    stageLabel:
+        league == null
+            ? 'Club showcase fixture'
+            : '${league.name} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ Matchday $matchday',
     kickoff: kickoff,
     venueLabel: venues[seed % venues.length],
     planLabel: planLabel,
@@ -2436,17 +2451,19 @@ List<_HomeReplayEntry> _buildReplayEntries({
 }) {
   final List<_HomeReplayEntry> entries = <_HomeReplayEntry>[];
   if (clubData != null) {
-    for (final TrophyItemDto honor
-        in clubData.trophyCabinet.recentHonors.take(3)) {
+    for (final TrophyItemDto honor in clubData.trophyCabinet.recentHonors.take(
+      3,
+    )) {
       entries.add(
         _HomeReplayEntry(
           title: '${honor.trophyName} replay',
           summary: honor.finalResultSummary,
           caption:
               '${honor.seasonLabel} ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ ${honor.competitionRegion}',
-          trackLabel: honor.isWorldSuperCup
-              ? 'World stage'
-              : honor.trophyType == 'champions_league'
+          trackLabel:
+              honor.isWorldSuperCup
+                  ? 'World stage'
+                  : honor.trophyType == 'champions_league'
                   ? 'Continental'
                   : 'Club legacy',
           focusLabel: honor.prestigeLabel,
@@ -2460,8 +2477,8 @@ List<_HomeReplayEntry> _buildReplayEntries({
         ),
       );
     }
-    for (final ReputationEventDto event
-        in clubData.reputation.recentEvents.take(2)) {
+    for (final ReputationEventDto event in clubData.reputation.recentEvents
+        .take(2)) {
       entries.add(
         _HomeReplayEntry(
           title: '${event.title} replay',
@@ -2570,8 +2587,9 @@ CompetitionSummary? _pickCompetition(
     return null;
   }
   matches.sort((CompetitionSummary left, CompetitionSummary right) {
-    final int statusCompare = _competitionPriority(right.status)
-        .compareTo(_competitionPriority(left.status));
+    final int statusCompare = _competitionPriority(
+      right.status,
+    ).compareTo(_competitionPriority(left.status));
     if (statusCompare != 0) {
       return statusCompare;
     }
@@ -2611,8 +2629,9 @@ TrophyItemDto? _latestHonor(
   if (honors == null) {
     return null;
   }
-  final List<TrophyItemDto> matches =
-      honors.where(predicate).toList(growable: true);
+  final List<TrophyItemDto> matches = honors
+      .where(predicate)
+      .toList(growable: true);
   if (matches.isEmpty) {
     return null;
   }
@@ -2778,9 +2797,11 @@ String _formatCompetitionAmount(double value, String currency) {
 }
 
 String _competitionStatusLabel(CompetitionStatus status) {
-  return status.name.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
-    return '${match.group(1)} ${match.group(2)}';
-  }).replaceAll('_', ' ');
+  return status.name
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
+        return '${match.group(1)} ${match.group(2)}';
+      })
+      .replaceAll('_', ' ');
 }
 
 String _spotsLabel(CompetitionSummary competition) {
@@ -2927,10 +2948,7 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
 }
 
 class _HomeRouteGroup extends StatelessWidget {
-  const _HomeRouteGroup({
-    required this.title,
-    required this.actions,
-  });
+  const _HomeRouteGroup({required this.title, required this.actions});
 
   final String title;
   final List<Widget> actions;
@@ -2942,11 +2960,7 @@ class _HomeRouteGroup extends StatelessWidget {
       children: <Widget>[
         Text(title, style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: actions,
-        ),
+        Wrap(spacing: 12, runSpacing: 12, children: actions),
       ],
     );
   }

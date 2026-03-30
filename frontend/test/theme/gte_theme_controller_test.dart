@@ -16,14 +16,14 @@ void main() {
 
     test('restores a persisted theme id', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{
-        'gte_theme_id': 'minimal_carbon',
+        'gte_theme_id': 'menlo_night_blue',
       });
 
       final GteThemeController controller = await GteThemeController.bootstrap(
         store: await GteSharedPreferencesThemeStore.create(),
       );
 
-      expect(controller.activeThemeId, GteThemeId.minimalCarbon);
+      expect(controller.activeThemeId, GteThemeId.menloNightBlue);
     });
 
     test('writes the selected theme id to preferences', () async {
@@ -31,11 +31,11 @@ void main() {
         store: await GteSharedPreferencesThemeStore.create(),
       );
 
-      await controller.selectTheme(GteThemeId.neonVelocity);
+      await controller.selectTheme(GteThemeId.aiArenaCrimson);
 
       final SharedPreferences preferences =
           await SharedPreferences.getInstance();
-      expect(preferences.getString('gte_theme_id'), 'neon_velocity');
+      expect(preferences.getString('gte_theme_id'), 'ai_arena_crimson');
     });
 
     testWidgets('builds a renderable ThemeData for every registered theme', (

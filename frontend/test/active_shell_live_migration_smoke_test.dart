@@ -91,6 +91,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      await _scrollTo(tester, find.text('Player Shares'));
       expect(find.text('Player Shares'), findsOneWidget);
       expect(find.text('Kobbie Mainoo'), findsWidgets);
       expect(
@@ -128,6 +129,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await _scrollTo(tester, find.text('GTEX Spotlight Cup'));
     expect(find.text('GTEX Spotlight Cup'), findsOneWidget);
     expect(find.text('View detail'), findsOneWidget);
   });
@@ -181,7 +183,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await _scrollTo(tester, find.text('Ayo Akin'));
     expect(find.text('Ayo Akin'), findsOneWidget);
+    await _scrollTo(tester, find.text('West Africa Federation'));
     expect(find.text('West Africa Federation'), findsOneWidget);
   });
 
@@ -215,21 +219,12 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await _scrollTo(tester, find.text('Open 2D'));
     expect(find.text('Open 2D'), findsOneWidget);
     expect(find.text('Open Broadcast+'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('View coming soon note'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.text('View coming soon note'));
     expect(find.text('View coming soon note'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Open simulate'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.text('Open simulate'));
     expect(find.text('Open simulate'), findsOneWidget);
   });
 
@@ -268,9 +263,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await _scrollTo(tester, find.text('Daily challenges'));
     expect(find.text('Daily challenges'), findsOneWidget);
     expect(find.text('Login bonus'), findsOneWidget);
-    expect(find.text('Current streak 4'), findsOneWidget);
+    expect(find.text('CURRENT STREAK'), findsWidgets);
+    expect(find.text('4'), findsWidgets);
   });
 
   testWidgets('profile admin screen stays blocked for signed-out users', (
@@ -315,4 +312,13 @@ CompetitionSummary _sampleCompetition() {
     createdAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
   );
+}
+
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    240,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
 }

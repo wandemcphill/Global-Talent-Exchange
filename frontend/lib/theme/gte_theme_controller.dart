@@ -7,7 +7,7 @@ import 'gte_theme_store.dart';
 class GteThemeController extends ChangeNotifier {
   GteThemeController({
     GteThemeStore? store,
-    GteThemeId initialThemeId = GteThemeId.creatorGold,
+    GteThemeId initialThemeId = GteThemeId.foundersBlack,
   }) : _store = store ?? GteMemoryThemeStore(),
        _activeThemeId = initialThemeId;
 
@@ -20,7 +20,7 @@ class GteThemeController extends ChangeNotifier {
 
   static Future<GteThemeController> bootstrap({
     GteThemeStore? store,
-    GteThemeId initialThemeId = GteThemeId.creatorGold,
+    GteThemeId initialThemeId = GteThemeId.foundersBlack,
   }) async {
     final GteThemeStore resolvedStore =
         store ?? await GteSharedPreferencesThemeStore.create();

@@ -89,9 +89,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Market'), findsOneWidget);
+      await _scrollTo(tester, find.text('Wallet & Compliance'));
       expect(find.text('Wallet & Compliance'), findsOneWidget);
+      await _scrollTo(tester, find.text('Player Shares'));
       expect(find.text('Player Shares'), findsOneWidget);
+      await _scrollTo(tester, find.text('Transfer Listings'));
       expect(find.text('Transfer Listings'), findsOneWidget);
+      await _scrollTo(tester, find.text('Share Holdings'));
       expect(find.text('Share Holdings'), findsOneWidget);
       expect(find.text('Cole Palmer'), findsWidgets);
       expect(find.text('William Saliba'), findsOneWidget);
@@ -103,4 +107,13 @@ void main() {
       );
     },
   );
+}
+
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    240,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
 }

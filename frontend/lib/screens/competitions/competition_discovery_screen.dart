@@ -20,7 +20,7 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
     super.key,
     this.controller,
     this.baseUrl = 'http://127.0.0.1:8000',
-    this.backendMode = GteBackendMode.liveThenFixture,
+    this.backendMode = GteBackendMode.live,
     required this.currentUserId,
     this.currentUserName,
     this.isAuthenticated = false,
@@ -205,7 +205,9 @@ class _CompetitionDiscoveryScreenState
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: featured.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    separatorBuilder:
+                        (BuildContext context, int index) =>
+                            const SizedBox(width: 12),
                     itemBuilder: (BuildContext context, int index) {
                       final CompetitionSummary item = featured[index];
                       return SizedBox(

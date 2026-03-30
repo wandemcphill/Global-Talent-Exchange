@@ -54,11 +54,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await _scrollTo(tester, find.text('Derby Live'));
     expect(find.text('Derby Live'), findsOneWidget);
     expect(find.text('GTEX Prime'), findsOneWidget);
     expect(find.text('Open 2D'), findsOneWidget);
     expect(find.text('Open Broadcast+'), findsOneWidget);
     expect(find.text('Open 3D'), findsOneWidget);
+    await _scrollTo(tester, find.text('Open spectate probe'));
     expect(find.text('Open spectate probe'), findsOneWidget);
   });
 
@@ -102,9 +104,27 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Open spectate probe'), findsOneWidget);
+    await _scrollTo(tester, find.text('Broadcast home is unavailable.'));
+    expect(find.text('Matches are blocked'), findsOneWidget);
+    expect(find.text('Broadcast home is unavailable.'), findsOneWidget);
     expect(find.text('Derby Live'), findsNothing);
   });
+}
+
+Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
+  if (finder.evaluate().isNotEmpty) {
+    await tester.ensureVisible(finder.first);
+    await tester.pumpAndSettle();
+    return;
+  }
+  final Finder listView = find.byType(ListView, skipOffstage: false);
+  if (listView.evaluate().isEmpty) {
+    return;
+  }
+  for (int index = 0; index < 12 && finder.evaluate().isEmpty; index += 1) {
+    await tester.drag(listView.first, const Offset(0, -240));
+    await tester.pumpAndSettle();
+  }
 }
 
 class _FakeLiveMatchOverviewRepository implements LiveMatchOverviewRepository {

@@ -13,17 +13,17 @@ void main() {
           (GteThemeDefinition theme) => theme.metadata.label,
         ),
         orderedEquals(<String>[
-          'Neon Velocity',
-          'Midnight Glass',
-          'Aurora Intelligence',
-          'Creator Gold',
-          'Minimal Carbon',
+          'Founders Black',
+          'Palo Alto Glass',
+          'Sand Hill Gold',
+          'Menlo Night Blue',
+          'AI Arena Crimson',
         ]),
       );
     });
 
     test(
-      'exposes required palette keys, typography scale, and usage guidance',
+      'exposes required palette keys, typography scale, visuals, and usage guidance',
       () {
         for (final GteThemeDefinition definition in GteThemeRegistry.themes) {
           expect(
@@ -47,6 +47,8 @@ void main() {
               'label',
             ]),
           );
+          expect(definition.visuals.chartPalette, hasLength(5));
+          expect(definition.visuals.shellStyle, isNotEmpty);
           expect(definition.usage.feed, isNotEmpty);
           expect(definition.usage.dashboard, isNotEmpty);
           expect(definition.usage.profile, isNotEmpty);

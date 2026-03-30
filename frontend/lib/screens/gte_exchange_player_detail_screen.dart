@@ -118,7 +118,8 @@ class _GteExchangePlayerDetailScreenState
                   padding: const EdgeInsets.all(20),
                   child: GteStatePanel(
                     title: 'Player unavailable',
-                    message: widget.controller.playerError ??
+                    message:
+                        widget.controller.playerError ??
                         'Unable to load this player.',
                     actionLabel: 'Retry',
                     onAction: _refreshSnapshot,
@@ -129,12 +130,13 @@ class _GteExchangePlayerDetailScreenState
             }
 
             final PlayerProfile profile = _resolvedProfile(snapshot);
-            final GteOrderRecord? order =
-                widget.controller.orderForPlayer(widget.playerId);
+            final GteOrderRecord? order = widget.controller.orderForPlayer(
+              widget.playerId,
+            );
             return RefreshIndicator(
               onRefresh: _refreshSnapshot,
-              notificationPredicate: (ScrollNotification notification) =>
-                  notification.depth == 0,
+              notificationPredicate:
+                  (ScrollNotification notification) => notification.depth == 0,
               child: NestedScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 headerSliverBuilder: (
@@ -157,8 +159,9 @@ class _GteExchangePlayerDetailScreenState
                   controller: _tabController,
                   children: <Widget>[
                     _ProfileTabList(
-                      key:
-                          PageStorageKey<String>('overview-${widget.playerId}'),
+                      key: PageStorageKey<String>(
+                        'overview-${widget.playerId}',
+                      ),
                       children: _buildOverviewTab(snapshot, profile, order),
                     ),
                     _ProfileTabList(
@@ -209,7 +212,9 @@ class _GteExchangePlayerDetailScreenState
           child: _QuickInfoStrip(
             items: <_QuickInfoItem>[
               _QuickInfoItem(
-                  label: 'Age', value: snapshot.detail.identity.age.toString()),
+                label: 'Age',
+                value: snapshot.detail.identity.age.toString(),
+              ),
               _QuickInfoItem(
                 label: 'Height',
                 value: _heightLabel(snapshot.detail.identity),
@@ -233,12 +238,14 @@ class _GteExchangePlayerDetailScreenState
               _ProfileStatCardData(
                 label: 'Current value',
                 value: gteFormatNullableCredits(
-                    snapshot.detail.value.currentValueCredits),
+                  snapshot.detail.value.currentValueCredits,
+                ),
                 accent: GteShellTheme.accent,
               ),
               _ProfileStatCardData(
                 label: 'Trend score',
-                value: snapshot.detail.trend.trendScore?.toStringAsFixed(1) ??
+                value:
+                    snapshot.detail.trend.trendScore?.toStringAsFixed(1) ??
                     '--',
                 accent: const Color(0xFF8EE6C7),
               ),
@@ -246,15 +253,16 @@ class _GteExchangePlayerDetailScreenState
                 label: 'Average rating',
                 value:
                     snapshot.detail.trend.averageRating?.toStringAsFixed(1) ??
-                        '--',
+                    '--',
                 accent: const Color(0xFF89B6FF),
               ),
               _ProfileStatCardData(
                 label: 'Availability',
                 value: _availabilityFor(snapshot).label,
-                accent: _availabilityFor(snapshot).available
-                    ? GteShellTheme.positive
-                    : GteShellTheme.warning,
+                accent:
+                    _availabilityFor(snapshot).available
+                        ? GteShellTheme.positive
+                        : GteShellTheme.warning,
               ),
             ],
           ),
@@ -263,8 +271,9 @@ class _GteExchangePlayerDetailScreenState
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
           child: _ActionBar(
             isScouted: widget.controller.isPlayerScouted(widget.playerId),
-            isShortlisted:
-                widget.controller.isPlayerShortlisted(widget.playerId),
+            isShortlisted: widget.controller.isPlayerShortlisted(
+              widget.playerId,
+            ),
             onScoutPlayer: () => _handleScoutPlayer(snapshot),
             onToggleShortlist: _toggleShortlist,
             onContactAgent: () => _handleContactAgent(snapshot),
@@ -288,13 +297,13 @@ class _GteExchangePlayerDetailScreenState
         _StatusNotice(
           icon: Icons.warning_amber_rounded,
           message:
-              'Showing the latest confirmed profile while live data refresh completes. ${widget.controller.playerError!}',
+              'Player refresh did not complete. ${widget.controller.playerError!}',
         ),
       if (widget.controller.playerProfileError != null)
         _StatusNotice(
           icon: Icons.description_outlined,
           message:
-              'Career and scouting notes are using the latest available profile snapshot. ${widget.controller.playerProfileError!}',
+              'Career and scouting notes are unavailable right now. ${widget.controller.playerProfileError!}',
         ),
       _ProfileSectionCard(
         title: 'Scouting report',
@@ -339,9 +348,9 @@ class _GteExchangePlayerDetailScreenState
         child: Wrap(
           spacing: 10,
           runSpacing: 10,
-          children: _weaknessTags(snapshot)
-              .map((String item) => _TagChip(label: item))
-              .toList(growable: false),
+          children: _weaknessTags(
+            snapshot,
+          ).map((String item) => _TagChip(label: item)).toList(growable: false),
         ),
       ),
       _ProfileSectionCard(
@@ -360,9 +369,10 @@ class _GteExchangePlayerDetailScreenState
                 if (_transferStatusFor(snapshot).windowLabel != null)
                   _TagChip(label: _transferStatusFor(snapshot).windowLabel!),
                 _TagChip(
-                  label: _transferStatusFor(snapshot).eligible
-                      ? 'Transfer eligible'
-                      : 'Transfer locked',
+                  label:
+                      _transferStatusFor(snapshot).eligible
+                          ? 'Transfer eligible'
+                          : 'Transfer locked',
                   positive: _transferStatusFor(snapshot).eligible,
                 ),
                 if (_agencyFor(snapshot)?.transferStanceLabel != null)
@@ -416,7 +426,7 @@ class _GteExchangePlayerDetailScreenState
     final GteCareerTotals? totals = snapshot.overview?.careerSummary.totals;
     final List<GteSeasonProgression> seasons =
         snapshot.overview?.careerSummary.seasonalProgression ??
-            const <GteSeasonProgression>[];
+        const <GteSeasonProgression>[];
     final String position = _positionLabel(snapshot);
     return <Widget>[
       GteSurfacePanel(
@@ -470,8 +480,10 @@ class _GteExchangePlayerDetailScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Season output',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Season output',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 6),
             Text(
               'Core production indicators stay readable at a glance, with bar weight giving each metric some visual hierarchy.',
@@ -516,8 +528,10 @@ class _GteExchangePlayerDetailScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Season progression',
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Season progression',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 6),
             Text(
               'Recent seasons summarize usage, end product, and minutes without losing the profile feel.',
@@ -676,12 +690,11 @@ class _GteExchangePlayerDetailScreenState
               Text('Timeline', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
               ...entries.asMap().entries.map(
-                    (MapEntry<int, GteCareerEntry> entry) =>
-                        _CareerTimelineItem(
-                      item: entry.value,
-                      isLast: entry.key == entries.length - 1,
-                    ),
-                  ),
+                (MapEntry<int, GteCareerEntry> entry) => _CareerTimelineItem(
+                  item: entry.value,
+                  isLast: entry.key == entries.length - 1,
+                ),
+              ),
             ],
           ),
         ),
@@ -720,15 +733,20 @@ class _GteExchangePlayerDetailScreenState
             children: <Widget>[
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: widget.controller.isAuthenticated
-                      ? _openTicket
-                      : widget.onRequireLogin,
-                  icon: Icon(widget.controller.isAuthenticated
-                      ? Icons.candlestick_chart
-                      : Icons.login),
-                  label: Text(widget.controller.isAuthenticated
-                      ? 'Open order ticket'
-                      : 'Sign in to trade'),
+                  onPressed:
+                      widget.controller.isAuthenticated
+                          ? _openTicket
+                          : widget.onRequireLogin,
+                  icon: Icon(
+                    widget.controller.isAuthenticated
+                        ? Icons.candlestick_chart
+                        : Icons.login,
+                  ),
+                  label: Text(
+                    widget.controller.isAuthenticated
+                        ? 'Open order ticket'
+                        : 'Sign in to trade',
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -767,9 +785,7 @@ class _GteExchangePlayerDetailScreenState
     );
   }
 
-  Future<void> _handleContactAgent(
-    GtePlayerMarketSnapshot snapshot,
-  ) async {
+  Future<void> _handleContactAgent(GtePlayerMarketSnapshot snapshot) async {
     final GteMarketPlayerListItem? marketplaceListing =
         _marketplaceListingForCurrentPlayer();
     if (!widget.controller.isAuthenticated) {
@@ -807,20 +823,21 @@ class _GteExchangePlayerDetailScreenState
       }
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) => AgentConversationScreen(
-            api: _marketplaceApi(),
-            currentUserId: currentUserId,
-            initialDetail: detail,
-          ),
+          builder:
+              (BuildContext context) => AgentConversationScreen(
+                api: _marketplaceApi(),
+                currentUserId: currentUserId,
+                initialDetail: detail,
+              ),
         ),
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppFeedback.messageFor(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
     }
   }
 
@@ -856,8 +873,9 @@ class _GteExchangePlayerDetailScreenState
   }
 
   Future<void> _refreshOrder(GteOrderRecord order) async {
-    final GteOrderRecord? refreshed =
-        await widget.controller.refreshOrder(order.id);
+    final GteOrderRecord? refreshed = await widget.controller.refreshOrder(
+      order.id,
+    );
     if (!mounted || refreshed == null) {
       return;
     }
@@ -867,8 +885,9 @@ class _GteExchangePlayerDetailScreenState
   }
 
   Future<void> _cancelOrder(GteOrderRecord order) async {
-    final GteOrderRecord? cancelled =
-        await widget.controller.cancelOrder(order.id);
+    final GteOrderRecord? cancelled = await widget.controller.cancelOrder(
+      order.id,
+    );
     if (!mounted || cancelled == null) {
       return;
     }
@@ -878,9 +897,9 @@ class _GteExchangePlayerDetailScreenState
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   PlayerProfile _resolvedProfile(GtePlayerMarketSnapshot snapshot) {
@@ -924,14 +943,15 @@ class _GteExchangePlayerDetailScreenState
         isFollowed: widget.controller.isPlayerScouted(widget.playerId),
         isShortlisted: widget.controller.isPlayerShortlisted(widget.playerId),
       ),
-      gsiTrend: valueTrend.isEmpty
-          ? <TrendPoint>[
-              TrendPoint(
-                label: 'Now',
-                value: snapshot.detail.trend.globalScoutingIndex,
-              ),
-            ]
-          : valueTrend,
+      gsiTrend:
+          valueTrend.isEmpty
+              ? <TrendPoint>[
+                TrendPoint(
+                  label: 'Now',
+                  value: snapshot.detail.trend.globalScoutingIndex,
+                ),
+              ]
+              : valueTrend,
       awards: <String>[
         if (snapshot.overview?.careerSummary.currentCompetitionName != null)
           snapshot.overview!.careerSummary.currentCompetitionName!,
@@ -970,10 +990,7 @@ class _GteExchangePlayerDetailScreenState
   GteTransferStatusView _transferStatusFor(GtePlayerMarketSnapshot snapshot) {
     return snapshot.overview?.transferStatus ??
         snapshot.lifecycle?.transferStatus ??
-        const GteTransferStatusView(
-          windowOpen: false,
-          eligible: false,
-        );
+        const GteTransferStatusView(windowOpen: false, eligible: false);
   }
 
   GtePlayerAgencySummary? _agencyFor(GtePlayerMarketSnapshot snapshot) {
@@ -982,8 +999,9 @@ class _GteExchangePlayerDetailScreenState
   }
 
   List<GteCareerEntry> _careerEntries(GtePlayerMarketSnapshot snapshot) {
-    final List<GteCareerEntry> entries =
-        snapshot.careerEntries.toList(growable: false);
+    final List<GteCareerEntry> entries = snapshot.careerEntries.toList(
+      growable: false,
+    );
     if (entries.isNotEmpty) {
       return entries;
     }
@@ -994,26 +1012,30 @@ class _GteExchangePlayerDetailScreenState
     final GteMarketPlayerIdentity identity = snapshot.detail.identity;
     final GtePlayerOverview? overview = snapshot.overview;
     final GteTransferStatusView transferStatus = _transferStatusFor(snapshot);
-    final String competition = overview?.careerSummary.currentCompetitionName ??
+    final String competition =
+        overview?.careerSummary.currentCompetitionName ??
         identity.currentCompetitionName ??
         '';
     final String competitionText =
         competition.isEmpty ? '' : ' in $competition';
-    final String availabilityText = _availabilityFor(snapshot).available
-        ? 'Currently available for selection.'
-        : '${_availabilityFor(snapshot).label} at the moment.';
-    final String transferText = transferStatus.reason?.trim().isNotEmpty == true
-        ? transferStatus.reason!.trim()
-        : 'Transfer posture is still being clarified.';
+    final String availabilityText =
+        _availabilityFor(snapshot).available
+            ? 'Currently available for selection.'
+            : '${_availabilityFor(snapshot).label} at the moment.';
+    final String transferText =
+        transferStatus.reason?.trim().isNotEmpty == true
+            ? transferStatus.reason!.trim()
+            : 'Transfer posture is still being clarified.';
     return '${identity.playerName} is a ${_positionLabel(snapshot)} profile, aged ${identity.age}, operating from ${_clubLabel(snapshot)}$competitionText. $availabilityText $transferText';
   }
 
   String _playingStyleText(GtePlayerMarketSnapshot snapshot) {
     final String position = _positionLabel(snapshot).toUpperCase();
     final List<String> drivers = snapshot.detail.trend.drivers;
-    final String driverText = drivers.isEmpty
-        ? 'Recent scouting and market signals remain balanced.'
-        : 'Recent drivers point to ${drivers.take(2).join(' and ').toLowerCase()}.';
+    final String driverText =
+        drivers.isEmpty
+            ? 'Recent scouting and market signals remain balanced.'
+            : 'Recent drivers point to ${drivers.take(2).join(' and ').toLowerCase()}.';
     if (position.contains('GK')) {
       return 'Goalkeeper profile built around command of the box, clean handling, and keeping the defensive line calm under pressure. $driverText';
     }
@@ -1037,8 +1059,11 @@ class _GteExchangePlayerDetailScreenState
     final String position = _positionLabel(snapshot).toUpperCase();
     final List<String> tags = <String>[];
     if (position.contains('GK')) {
-      tags.addAll(
-          <String>['Shot stopping', 'Box command', 'Calm distribution']);
+      tags.addAll(<String>[
+        'Shot stopping',
+        'Box command',
+        'Calm distribution',
+      ]);
     } else if (position.contains('CB') ||
         position.contains('LB') ||
         position.contains('RB') ||
@@ -1049,11 +1074,17 @@ class _GteExchangePlayerDetailScreenState
         position.contains('AM') ||
         position.contains('LM') ||
         position.contains('RM')) {
-      tags.addAll(
-          <String>['Press resistance', 'Progressive carrying', 'Game control']);
+      tags.addAll(<String>[
+        'Press resistance',
+        'Progressive carrying',
+        'Game control',
+      ]);
     } else {
-      tags.addAll(
-          <String>['Box movement', 'Explosive running', 'Chance conversion']);
+      tags.addAll(<String>[
+        'Box movement',
+        'Explosive running',
+        'Chance conversion',
+      ]);
     }
     if ((snapshot.detail.value.movementPct ?? 0) > 0) {
       tags.add('Positive momentum');
@@ -1092,7 +1123,7 @@ class _GteExchangePlayerDetailScreenState
   String _clubLabel(GtePlayerMarketSnapshot snapshot) {
     final String? currentClub =
         snapshot.overview?.careerSummary.currentClubName ??
-            snapshot.detail.identity.currentClubName;
+        snapshot.detail.identity.currentClubName;
     if (currentClub != null && currentClub.trim().isNotEmpty) {
       return currentClub.trim();
     }
@@ -1253,12 +1284,14 @@ class _HeroSection extends StatelessWidget {
                     _HeroBadge(label: identity.position ?? 'Player'),
                     _HeroBadge(
                       label: availability.label,
-                      backgroundColor: availability.available
-                          ? GteShellTheme.positive.withValues(alpha: 0.18)
-                          : GteShellTheme.warning.withValues(alpha: 0.18),
-                      borderColor: availability.available
-                          ? GteShellTheme.positive.withValues(alpha: 0.3)
-                          : GteShellTheme.warning.withValues(alpha: 0.3),
+                      backgroundColor:
+                          availability.available
+                              ? GteShellTheme.positive.withValues(alpha: 0.18)
+                              : GteShellTheme.warning.withValues(alpha: 0.18),
+                      borderColor:
+                          availability.available
+                              ? GteShellTheme.positive.withValues(alpha: 0.3)
+                              : GteShellTheme.warning.withValues(alpha: 0.3),
                     ),
                   ],
                 ),
@@ -1266,16 +1299,16 @@ class _HeroSection extends StatelessWidget {
                 Text(
                   identity.playerName,
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        color: Colors.white,
-                        fontSize: 38,
-                      ),
+                    color: Colors.white,
+                    fontSize: 38,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   clubLabel,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.white.withValues(alpha: 0.86),
-                      ),
+                    color: Colors.white.withValues(alpha: 0.86),
+                  ),
                 ),
               ],
             ),
@@ -1287,10 +1320,7 @@ class _HeroSection extends StatelessWidget {
 }
 
 class _HeroMedia extends StatelessWidget {
-  const _HeroMedia({
-    required this.identity,
-    required this.avatar,
-  });
+  const _HeroMedia({required this.identity, required this.avatar});
 
   final GteMarketPlayerIdentity identity;
   final PlayerAvatar avatar;
@@ -1316,9 +1346,7 @@ class _HeroMedia extends StatelessWidget {
 }
 
 class _HeroAvatarFallback extends StatelessWidget {
-  const _HeroAvatarFallback({
-    required this.avatar,
-  });
+  const _HeroAvatarFallback({required this.avatar});
 
   final PlayerAvatar avatar;
 
@@ -1382,9 +1410,7 @@ class _HeroAvatarFallback extends StatelessWidget {
 }
 
 class _QuickInfoStrip extends StatelessWidget {
-  const _QuickInfoStrip({
-    required this.items,
-  });
+  const _QuickInfoStrip({required this.items});
 
   final List<_QuickInfoItem> items;
 
@@ -1404,9 +1430,7 @@ class _QuickInfoStrip extends StatelessWidget {
 }
 
 class _TopStatStrip extends StatelessWidget {
-  const _TopStatStrip({
-    required this.cards,
-  });
+  const _TopStatStrip({required this.cards});
 
   final List<_ProfileStatCardData> cards;
 
@@ -1432,13 +1456,14 @@ class _TopStatStrip extends StatelessWidget {
               .asMap()
               .entries
               .map((MapEntry<int, _ProfileStatCardData> entry) {
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(left: entry.key == 0 ? 0 : 12),
-                child: _ProfileStatCard(data: entry.value),
-              ),
-            );
-          }).toList(growable: false),
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: entry.key == 0 ? 0 : 12),
+                    child: _ProfileStatCard(data: entry.value),
+                  ),
+                );
+              })
+              .toList(growable: false),
         );
       },
     );
@@ -1468,9 +1493,7 @@ class _ActionBar extends StatelessWidget {
         final List<Widget> buttons = <Widget>[
           FilledButton.icon(
             onPressed: onScoutPlayer,
-            icon: Icon(
-              isScouted ? Icons.radar_rounded : Icons.search_rounded,
-            ),
+            icon: Icon(isScouted ? Icons.radar_rounded : Icons.search_rounded),
             label: Text(isScouted ? 'Scouting' : 'Scout Player'),
           ),
           OutlinedButton.icon(
@@ -1501,14 +1524,18 @@ class _ActionBar extends StatelessWidget {
         }
 
         return Row(
-          children: buttons.asMap().entries.map((MapEntry<int, Widget> entry) {
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(left: entry.key == 0 ? 0 : 12),
-                child: entry.value,
-              ),
-            );
-          }).toList(growable: false),
+          children: buttons
+              .asMap()
+              .entries
+              .map((MapEntry<int, Widget> entry) {
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: entry.key == 0 ? 0 : 12),
+                    child: entry.value,
+                  ),
+                );
+              })
+              .toList(growable: false),
         );
       },
     );
@@ -1516,9 +1543,7 @@ class _ActionBar extends StatelessWidget {
 }
 
 class _ProfileTabBar extends StatelessWidget {
-  const _ProfileTabBar({
-    required this.tabController,
-  });
+  const _ProfileTabBar({required this.tabController});
 
   final TabController tabController;
 
@@ -1560,10 +1585,7 @@ class _ProfileTabBar extends StatelessWidget {
 }
 
 class _ProfileTabList extends StatelessWidget {
-  const _ProfileTabList({
-    super.key,
-    required this.children,
-  });
+  const _ProfileTabList({super.key, required this.children});
 
   final List<Widget> children;
 
@@ -1573,18 +1595,15 @@ class _ProfileTabList extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
       itemBuilder: (BuildContext context, int index) => children[index],
-      separatorBuilder: (BuildContext context, int index) =>
-          const SizedBox(height: 16),
+      separatorBuilder:
+          (BuildContext context, int index) => const SizedBox(height: 16),
       itemCount: children.length,
     );
   }
 }
 
 class _ProfileSectionCard extends StatelessWidget {
-  const _ProfileSectionCard({
-    required this.title,
-    required this.child,
-  });
+  const _ProfileSectionCard({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -1633,10 +1652,9 @@ class _StatMeterCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               suffix == null ? '$value' : '$value $suffix',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: accent),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(color: accent),
             ),
             const SizedBox(height: 12),
             ClipRRect(
@@ -1656,10 +1674,7 @@ class _StatMeterCard extends StatelessWidget {
 }
 
 class _SeasonProgressRow extends StatelessWidget {
-  const _SeasonProgressRow({
-    required this.season,
-    required this.progress,
-  });
+  const _SeasonProgressRow({required this.season, required this.progress});
 
   final GteSeasonProgression season;
   final double progress;
@@ -1703,8 +1718,9 @@ class _SeasonProgressRow extends StatelessWidget {
               value: progress,
               minHeight: 7,
               backgroundColor: Colors.white.withValues(alpha: 0.06),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(GteShellTheme.accent),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                GteShellTheme.accent,
+              ),
             ),
           ),
         ],
@@ -1714,10 +1730,7 @@ class _SeasonProgressRow extends StatelessWidget {
 }
 
 class _CareerTimelineItem extends StatelessWidget {
-  const _CareerTimelineItem({
-    required this.item,
-    required this.isLast,
-  });
+  const _CareerTimelineItem({required this.item, required this.isLast});
 
   final GteCareerEntry item;
   final bool isLast;
@@ -1775,8 +1788,10 @@ class _CareerTimelineItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(item.clubName,
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    item.clubName,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   if (item.squadRole != null) ...<Widget>[
                     const SizedBox(height: 4),
                     Text(
@@ -1831,19 +1846,16 @@ class _HeroBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(color: Colors.white),
       ),
     );
   }
 }
 
 class _TagChip extends StatelessWidget {
-  const _TagChip({
-    required this.label,
-    this.positive = false,
-  });
+  const _TagChip({required this.label, this.positive = false});
 
   final String label;
   final bool positive;
@@ -1862,19 +1874,16 @@ class _TagChip extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: positive ? GteShellTheme.textPrimary : accent,
-              fontWeight: FontWeight.w700,
-            ),
+          color: positive ? GteShellTheme.textPrimary : accent,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
 }
 
 class _StatusNotice extends StatelessWidget {
-  const _StatusNotice({
-    required this.icon,
-    required this.message,
-  });
+  const _StatusNotice({required this.icon, required this.message});
 
   final IconData icon;
   final String message;
@@ -1898,10 +1907,7 @@ class _StatusNotice extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            child: Text(message, style: Theme.of(context).textTheme.bodySmall),
           ),
         ],
       ),
@@ -1910,9 +1916,7 @@ class _StatusNotice extends StatelessWidget {
 }
 
 class _ProfileStatCard extends StatelessWidget {
-  const _ProfileStatCard({
-    required this.data,
-  });
+  const _ProfileStatCard({required this.data});
 
   final _ProfileStatCardData data;
 
@@ -1928,10 +1932,9 @@ class _ProfileStatCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             data.value,
-            style: Theme.of(context)
-                .textTheme
-                .headlineSmall
-                ?.copyWith(color: data.accent),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(color: data.accent),
           ),
         ],
       ),
@@ -1940,9 +1943,7 @@ class _ProfileStatCard extends StatelessWidget {
 }
 
 class _QuickInfoCell extends StatelessWidget {
-  const _QuickInfoCell({
-    required this.item,
-  });
+  const _QuickInfoCell({required this.item});
 
   final _QuickInfoItem item;
 
@@ -1956,10 +1957,7 @@ class _QuickInfoCell extends StatelessWidget {
         children: <Widget>[
           Text(item.label, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 4),
-          Text(
-            item.value,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text(item.value, style: Theme.of(context).textTheme.titleMedium),
         ],
       ),
     );
@@ -1967,9 +1965,7 @@ class _QuickInfoCell extends StatelessWidget {
 }
 
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
-  const _StickyTabBarDelegate({
-    required this.child,
-  });
+  const _StickyTabBarDelegate({required this.child});
 
   final Widget child;
 
@@ -1995,10 +1991,7 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
 }
 
 class _QuickInfoItem {
-  const _QuickInfoItem({
-    required this.label,
-    required this.value,
-  });
+  const _QuickInfoItem({required this.label, required this.value});
 
   final String label;
   final String value;

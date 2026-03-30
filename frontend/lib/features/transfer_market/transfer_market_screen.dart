@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
-import '../../core/constants/app_spacing.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/auth_session.dart';
@@ -11,6 +10,8 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/gte_state_panel.dart';
 import 'live_market_provider.dart';
 
 class TransferMarketScreen extends ConsumerWidget {
@@ -21,10 +22,11 @@ class TransferMarketScreen extends ConsumerWidget {
     final AsyncValue<MarketDashboardData> marketValue = ref.watch(
       marketDashboardProvider,
     );
+    final MarketDashboardData? snapshot = marketValue.asData?.value;
     return AppPageLayout(
       title: 'Market',
       subtitle:
-          'Player shares, transfer listings, wallet state, and compliance are live-backed, with a dedicated transfer center route for listing detail and negotiation flows.',
+          'Premium live trading surface for player shares, transfer listings, wallet state, and compliance truth.',
       trailing: DataSourceBadge(
         status:
             marketValue.hasError
@@ -32,35 +34,85 @@ class TransferMarketScreen extends ConsumerWidget {
                 : DataSourceStatus.live,
       ),
       children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(spacingLG),
-            child: TextField(
-              onChanged:
-                  (String value) => ref
-                      .read(marketSearchQueryProvider.notifier)
-                      .setQuery(value),
-              decoration: const InputDecoration(
-                labelText: 'Search real players',
-                hintText: 'Search /players/real-universe',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+        GtexHeroPanel(
+          eyebrow: 'LIVE MARKET DESK',
+          title:
+              'Trade shares, inspect listings, and route negotiations cleanly.',
+          description:
+              'The active shell separates player-share discovery from transfer inventory, keeps wallet/compliance honest, and pushes deep listing flows into the dedicated transfer center.',
+          metrics: <Widget>[
+            GtexStatTile(
+              label: 'Share markets',
+              value:
+                  snapshot == null ? '...' : '${snapshot.playerShares.length}',
+              support: 'Real-player tradability inventory',
+              tone: GtexSurfaceTone.live,
+            ),
+            GtexStatTile(
+              label: 'Transfer listings',
+              value:
+                  snapshot == null
+                      ? '...'
+                      : '${snapshot.transferListings.length}',
+              support: 'Live bid inventory',
+              tone: GtexSurfaceTone.info,
+            ),
+            GtexStatTile(
+              label: 'Wallet',
+              value:
+                  snapshot?.wallet == null
+                      ? 'Blocked'
+                      : snapshot!.wallet!.totalEquity.toStringAsFixed(0),
+              support:
+                  snapshot?.wallet == null
+                      ? 'Sign in or compliance blocked'
+                      : snapshot!.wallet!.complianceMessage,
+              tone:
+                  snapshot?.wallet == null
+                      ? GtexSurfaceTone.warning
+                      : GtexSurfaceTone.success,
+            ),
+          ],
+          actions: <Widget>[
+            FilledButton.icon(
+              onPressed: () => context.push(AppRoutes.transferCenter),
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: const Text('Open transfer center'),
+            ),
+          ],
+        ),
+        GtexSectionPanel(
+          eyebrow: 'SEARCH',
+          title: 'Search real players',
+          subtitle:
+              'Discovery is backed by the real-player universe and does not invent tradable assets.',
+          child: TextField(
+            onChanged:
+                (String value) => ref
+                    .read(marketSearchQueryProvider.notifier)
+                    .setQuery(value),
+            decoration: const InputDecoration(
+              labelText: 'Search real players',
+              hintText: 'Search /players/real-universe',
+              prefixIcon: Icon(Icons.search_rounded),
             ),
           ),
         ),
         marketValue.when(
           data: (MarketDashboardData market) => _MarketBody(data: market),
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => GteStatePanel(
+                title: 'Loading market',
+                message:
+                    'The active shell is fetching player shares, transfer listings, and compliance state from live endpoints.',
+                isLoading: true,
               ),
           error:
-              (Object error, StackTrace stackTrace) => _BlockedCard(
+              (Object error, StackTrace stackTrace) => GteStatePanel(
                 title: 'Market is blocked',
                 message: AppFeedback.messageFor(error),
+                icon: Icons.error_outline_rounded,
+                accentColor: Theme.of(context).colorScheme.error,
               ),
         ),
       ],
@@ -79,28 +131,8 @@ class _MarketBody extends ConsumerWidget {
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     return Column(
       children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(spacingLG),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Transfer listings now also open in a dedicated transfer center route for live detail, bidders, and contract negotiation context.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-                const SizedBox(width: spacingMD),
-                FilledButton(
-                  onPressed: () => context.push(AppRoutes.transferCenter),
-                  child: const Text('Open transfer center'),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: spacingMD),
-        _SectionCard(
+        GtexSectionPanel(
+          eyebrow: 'WALLET + COMPLIANCE',
           title: 'Wallet & Compliance',
           subtitle:
               data.wallet == null
@@ -109,23 +141,26 @@ class _MarketBody extends ConsumerWidget {
                       : 'Sign in to load live wallet and compliance state.'
                   : data.wallet!.complianceMessage,
           child: Wrap(
-            spacing: spacingSM,
-            runSpacing: spacingSM,
+            spacing: 12,
+            runSpacing: 12,
             children: <Widget>[
-              _MetricChip(
+              GtexStatTile(
                 label: 'Coin balance',
                 value: data.wallet?.coinBalance.toStringAsFixed(2) ?? 'Blocked',
+                tone: GtexSurfaceTone.live,
               ),
-              _MetricChip(
+              GtexStatTile(
                 label: 'Credit balance',
                 value:
                     data.wallet?.creditBalance.toStringAsFixed(2) ?? 'Blocked',
+                tone: GtexSurfaceTone.info,
               ),
-              _MetricChip(
+              GtexStatTile(
                 label: 'Total equity',
                 value: data.wallet?.totalEquity.toStringAsFixed(2) ?? 'Blocked',
+                tone: GtexSurfaceTone.success,
               ),
-              _MetricChip(
+              GtexStatTile(
                 label: 'Trade',
                 value:
                     data.wallet == null
@@ -133,57 +168,86 @@ class _MarketBody extends ConsumerWidget {
                         : data.wallet!.canTradeMarket
                         ? 'Enabled'
                         : 'Blocked',
+                support:
+                    data.wallet == null
+                        ? 'No compliance state'
+                        : data.wallet!.complianceMessage,
+                tone:
+                    data.wallet?.canTradeMarket == true
+                        ? GtexSurfaceTone.success
+                        : GtexSurfaceTone.warning,
               ),
             ],
           ),
         ),
         if (data.warnings.isNotEmpty) ...<Widget>[
-          const SizedBox(height: spacingMD),
-          _BlockedCard(
+          const SizedBox(height: 24),
+          GteStatePanel(
             title: 'Live warnings',
             message: data.warnings.join('\n'),
+            icon: Icons.warning_amber_rounded,
+            accentColor: Theme.of(context).colorScheme.tertiary,
           ),
         ],
-        const SizedBox(height: spacingMD),
-        _SectionCard(
+        const SizedBox(height: 24),
+        GtexSectionPanel(
+          eyebrow: 'SHARES',
           title: 'Player Shares',
           subtitle:
               'Discovery is fed by /players/real-universe and tradability only appears when /players/{player_id}/shares/market exists.',
           child: Column(
             children: data.playerShares
                 .map(
-                  (PlayerShareSummary item) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(item.playerName),
-                    subtitle: Text(
-                      '${item.position ?? 'N/A'} | ${item.currentClubName ?? 'No club'} | ${item.marketMessage}',
-                    ),
-                    trailing: Wrap(
-                      spacing: spacingSM,
-                      children: <Widget>[
-                        TextButton(
-                          onPressed:
-                              () => _openPlayerDetail(context, ref, item),
-                          child: const Text('Detail'),
-                        ),
-                        FilledButton(
-                          onPressed:
-                              !authenticated
-                                  ? null
-                                  : item.isTradable
-                                  ? () => _buyShares(context, ref, item)
-                                  : null,
-                          child: const Text('Buy'),
-                        ),
-                      ],
+                  (PlayerShareSummary item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GtexListTile(
+                      title: item.playerName,
+                      subtitle:
+                          '${item.position ?? 'N/A'} | ${item.currentClubName ?? 'No club'} | ${item.marketMessage}',
+                      leadingIcon: Icons.person_search_rounded,
+                      tone:
+                          item.isTradable
+                              ? GtexSurfaceTone.live
+                              : GtexSurfaceTone.warning,
+                      trailing: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          GtexPill(
+                            label:
+                                item.sharePriceCoin == null
+                                    ? 'No issued market'
+                                    : '${item.sharePriceCoin!.toStringAsFixed(0)} coin',
+                            tone:
+                                item.isTradable
+                                    ? GtexSurfaceTone.live
+                                    : GtexSurfaceTone.warning,
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => _openPlayerDetail(context, ref, item),
+                            child: const Text('Detail'),
+                          ),
+                          FilledButton(
+                            onPressed:
+                                !authenticated
+                                    ? null
+                                    : item.isTradable
+                                    ? () => _buyShares(context, ref, item)
+                                    : null,
+                            child: const Text('Buy'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
                 .toList(growable: false),
           ),
         ),
-        const SizedBox(height: spacingMD),
-        _SectionCard(
+        const SizedBox(height: 24),
+        GtexSectionPanel(
+          eyebrow: 'TRANSFERS',
           title: 'Transfer Listings',
           subtitle:
               clubContext == null
@@ -192,49 +256,58 @@ class _MarketBody extends ConsumerWidget {
           child: Column(
             children: data.transferListings
                 .map(
-                  (TransferListingSummary listing) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(listing.playerName),
-                    subtitle: Text(
-                      '${listing.status} | bid ${listing.currentHighestBid.toStringAsFixed(0)} | watchlist ${listing.watchlistCount}',
-                    ),
-                    trailing: Wrap(
-                      spacing: spacingSM,
-                      children: <Widget>[
-                        OutlinedButton(
-                          onPressed:
-                              clubContext == null
-                                  ? null
-                                  : () => _watchlistListing(
-                                    context,
-                                    ref,
-                                    listing,
-                                    clubContext,
+                  (TransferListingSummary listing) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: GtexListTile(
+                      title: listing.playerName,
+                      subtitle:
+                          '${listing.status} | bid ${listing.currentHighestBid.toStringAsFixed(0)} | watchlist ${listing.watchlistCount}',
+                      leadingIcon: Icons.trending_up_rounded,
+                      tone: GtexSurfaceTone.info,
+                      trailing: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          GtexPill(
+                            label:
+                                'Base ${listing.basePrice.toStringAsFixed(0)}',
+                            tone: GtexSurfaceTone.warning,
+                          ),
+                          OutlinedButton(
+                            onPressed:
+                                clubContext == null
+                                    ? null
+                                    : () => _watchlistListing(
+                                      context,
+                                      ref,
+                                      listing,
+                                      clubContext,
+                                    ),
+                            child: const Text('Watchlist'),
+                          ),
+                          FilledButton(
+                            onPressed:
+                                () => context.push(
+                                  AppRoutes.transferCenterDetailLocation(
+                                    listing.id,
                                   ),
-                          child: const Text('Watchlist'),
-                        ),
-                        FilledButton(
-                          onPressed:
-                              () => context.push(
-                                AppRoutes.transferCenterDetailLocation(
-                                  listing.id,
                                 ),
-                              ),
-                          child: const Text('Detail'),
-                        ),
-                        FilledButton(
-                          onPressed:
-                              clubContext == null
-                                  ? null
-                                  : () => _placeBid(
-                                    context,
-                                    ref,
-                                    listing,
-                                    clubContext,
-                                  ),
-                          child: const Text('Bid'),
-                        ),
-                      ],
+                            child: const Text('Detail'),
+                          ),
+                          FilledButton(
+                            onPressed:
+                                clubContext == null
+                                    ? null
+                                    : () => _placeBid(
+                                      context,
+                                      ref,
+                                      listing,
+                                      clubContext,
+                                    ),
+                            child: const Text('Bid'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
@@ -242,18 +315,22 @@ class _MarketBody extends ConsumerWidget {
           ),
         ),
         if (data.holdings.isNotEmpty) ...<Widget>[
-          const SizedBox(height: spacingMD),
-          _SectionCard(
+          const SizedBox(height: 24),
+          GtexSectionPanel(
+            eyebrow: 'PORTFOLIO',
             title: 'Share Holdings',
             subtitle: 'Live holdings from /players/me/shares/holdings.',
             child: Column(
               children: data.holdings
                   .map(
-                    (PlayerShareHoldingSummary holding) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(holding.playerId),
-                      subtitle: Text(
-                        'Shares ${holding.shareCount} | Avg cost ${holding.averageCostCoin.toStringAsFixed(2)} | Dividends ${holding.dividendsEarnedCoin.toStringAsFixed(2)}',
+                    (PlayerShareHoldingSummary holding) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: GtexListTile(
+                        title: holding.playerId,
+                        subtitle:
+                            'Shares ${holding.shareCount} | Avg cost ${holding.averageCostCoin.toStringAsFixed(2)} | Dividends ${holding.dividendsEarnedCoin.toStringAsFixed(2)}',
+                        leadingIcon: Icons.account_balance_wallet_rounded,
+                        tone: GtexSurfaceTone.success,
                       ),
                     ),
                   )
@@ -275,7 +352,7 @@ class _MarketBody extends ConsumerWidget {
       isScrollControlled: true,
       builder: (BuildContext context) {
         return Padding(
-          padding: const EdgeInsets.all(spacingLG),
+          padding: const EdgeInsets.all(24),
           child: Consumer(
             builder: (BuildContext context, WidgetRef ref, Widget? child) {
               final AsyncValue<PlayerShareDetailData> detailValue = ref.watch(
@@ -292,7 +369,7 @@ class _MarketBody extends ConsumerWidget {
                             item.playerName,
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
-                          const SizedBox(height: spacingSM),
+                          const SizedBox(height: 12),
                           Text(
                             detail.playerDetail.entries
                                 .take(12)
@@ -302,35 +379,33 @@ class _MarketBody extends ConsumerWidget {
                                 )
                                 .join('\n'),
                           ),
-                          const SizedBox(height: spacingMD),
+                          const SizedBox(height: 16),
                           Text(
                             'Share events',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
-                          const SizedBox(height: spacingSM),
+                          const SizedBox(height: 12),
                           if (detail.events.isEmpty)
                             const Text('No share events returned yet.')
                           else
                             ...detail.events
                                 .take(8)
                                 .map(
-                                  (JsonMap event) => ListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(
-                                      stringValue(
+                                  (JsonMap event) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: GtexListTile(
+                                      title: stringValue(
                                         event['event_type'],
                                         fallback: 'Share event',
                                       ),
-                                    ),
-                                    subtitle: Text(
-                                      event.entries
+                                      subtitle: event.entries
                                           .take(4)
                                           .map(
                                             (MapEntry<String, Object?> entry) =>
                                                 '${entry.key}: ${entry.value}',
                                           )
                                           .join(' | '),
+                                      tone: GtexSurfaceTone.info,
                                     ),
                                   ),
                                 ),
@@ -503,72 +578,5 @@ class _MarketBody extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
       }
     }
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingXS),
-            Text(subtitle),
-            const SizedBox(height: spacingMD),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(label: Text('$label: $value'));
-  }
-}
-
-class _BlockedCard extends StatelessWidget {
-  const _BlockedCard({required this.title, required this.message});
-
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(message),
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -7,15 +7,12 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_api_repository.dart';
-import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_repository.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_dto.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_repository.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/data/jersey_variant_dto.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
-import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_dto.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
-import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 
@@ -43,7 +40,7 @@ class GteGuardResolution {
 class GteNavigationDependencies {
   const GteNavigationDependencies({
     required this.apiBaseUrl,
-    this.backendMode = GteBackendMode.liveThenFixture,
+    this.backendMode = GteBackendMode.live,
     String currentUserId = 'guest-user',
     String? currentUserName,
     String? currentUserRole,
@@ -74,16 +71,16 @@ class GteNavigationDependencies {
     this.hasApprovedCreatorAccessProvider,
     this.canHostCompetitionsProvider,
     this.match3dEntitlementProvider,
-  })  : _currentUserId = currentUserId,
-        _currentUserName = currentUserName,
-        _currentUserRole = currentUserRole,
-        _currentClubId = currentClubId,
-        _currentClubName = currentClubName,
-        _accessToken = accessToken,
-        _isAuthenticated = isAuthenticated,
-        _isCheckingCreatorAccess = isCheckingCreatorAccess,
-        _hasApprovedCreatorAccess = hasApprovedCreatorAccess,
-        _canHostCompetitions = canHostCompetitions;
+  }) : _currentUserId = currentUserId,
+       _currentUserName = currentUserName,
+       _currentUserRole = currentUserRole,
+       _currentClubId = currentClubId,
+       _currentClubName = currentClubName,
+       _accessToken = accessToken,
+       _isAuthenticated = isAuthenticated,
+       _isCheckingCreatorAccess = isCheckingCreatorAccess,
+       _hasApprovedCreatorAccess = hasApprovedCreatorAccess,
+       _canHostCompetitions = canHostCompetitions;
 
   final String apiBaseUrl;
   final GteBackendMode backendMode;
@@ -106,7 +103,7 @@ class GteNavigationDependencies {
   final ClubIdentityRepository? clubIdentityRepository;
   final FutureOr<String?> Function()? resolveWorldSuperCupCompetitionId;
   final FutureOr<bool> Function(String clubId, ClubIdentityDto? identity)?
-      hasIdentitySetup;
+  hasIdentitySetup;
   final String Function()? currentUserIdProvider;
   final String? Function()? currentUserNameProvider;
   final String? Function()? currentUserRoleProvider;
@@ -149,15 +146,46 @@ class GteNavigationDependencies {
   Match3dUserEntitlement? get match3dEntitlement =>
       match3dEntitlementProvider?.call();
 
-  bool get isAdminRole => <String>{'admin', 'super_admin'}
-      .contains((currentUserRole ?? '').trim().toLowerCase());
+  GteNavigationDependencies liveOnly() {
+    return GteNavigationDependencies(
+      apiBaseUrl: apiBaseUrl,
+      backendMode: GteBackendMode.live,
+      currentUserId: currentUserId,
+      currentUserName: currentUserName,
+      currentUserRole: currentUserRole,
+      currentClubId: currentClubId,
+      currentClubName: currentClubName,
+      accessToken: accessToken,
+      isAuthenticated: isAuthenticated,
+      isCheckingCreatorAccess: isCheckingCreatorAccess,
+      hasApprovedCreatorAccess: hasApprovedCreatorAccess,
+      canHostCompetitions: canHostCompetitions,
+      onOpenLogin: onOpenLogin,
+      onOpenCreatorAccessRequest: onOpenCreatorAccessRequest,
+      resolveWorldSuperCupCompetitionId: resolveWorldSuperCupCompetitionId,
+      hasIdentitySetup: hasIdentitySetup,
+      currentUserIdProvider: currentUserIdProvider,
+      currentUserNameProvider: currentUserNameProvider,
+      currentUserRoleProvider: currentUserRoleProvider,
+      currentClubIdProvider: currentClubIdProvider,
+      currentClubNameProvider: currentClubNameProvider,
+      accessTokenProvider: accessTokenProvider,
+      isAuthenticatedProvider: isAuthenticatedProvider,
+      isCheckingCreatorAccessProvider: isCheckingCreatorAccessProvider,
+      hasApprovedCreatorAccessProvider: hasApprovedCreatorAccessProvider,
+      canHostCompetitionsProvider: canHostCompetitionsProvider,
+      match3dEntitlementProvider: match3dEntitlementProvider,
+    );
+  }
+
+  bool get isAdminRole => <String>{
+    'admin',
+    'super_admin',
+  }.contains((currentUserRole ?? '').trim().toLowerCase());
 
   CompetitionApi createCompetitionApi() {
     return competitionApi ??
-        CompetitionApi.standard(
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        );
+        CompetitionApi.standard(baseUrl: apiBaseUrl, mode: backendMode);
   }
 
   TrophyCabinetRepository createTrophyCabinetRepository() {
@@ -166,10 +194,7 @@ class GteNavigationDependencies {
 
   DynastyRepository createDynastyRepository() {
     return dynastyRepository ??
-        DynastyApiRepository.standard(
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        );
+        DynastyApiRepository.standard(baseUrl: apiBaseUrl, mode: backendMode);
   }
 
   ReputationRepository createReputationRepository() {
@@ -188,14 +213,9 @@ class GteNavigationDependencies {
         );
   }
 
-  GteAuthedApi createAuthedApi({
-    String? overrideAccessToken,
-  }) {
+  GteAuthedApi createAuthedApi({String? overrideAccessToken}) {
     return GteAuthedApi(
-      config: GteRepositoryConfig(
-        baseUrl: apiBaseUrl,
-        mode: backendMode,
-      ),
+      config: GteRepositoryConfig(baseUrl: apiBaseUrl, mode: backendMode),
       transport: GteHttpTransport(),
       accessToken: overrideAccessToken ?? accessToken,
       mode: backendMode,
@@ -204,21 +224,13 @@ class GteNavigationDependencies {
 }
 
 class GteNavigationGuardResolver {
-  const GteNavigationGuardResolver({
-    required this.dependencies,
-  });
+  const GteNavigationGuardResolver({required this.dependencies});
 
   final GteNavigationDependencies dependencies;
 
   Future<GteGuardResolution> resolve(GteAppRouteData route) async {
     if (route is CompetitionWorldSuperCupRouteData) {
       return _resolveWorldSuperCup(route);
-    }
-    if (route is ClubTrophyTimelineRouteData) {
-      return _resolveTrophyTimeline(route);
-    }
-    if (route is ClubDynastyHistoryRouteData) {
-      return _resolveDynastyHistory(route);
     }
     if (route is ClubReplaysRouteData) {
       return _resolveReplayPreview(route);
@@ -244,13 +256,12 @@ class GteNavigationGuardResolver {
       final CompetitionListResponse response = await dependencies
           .createCompetitionApi()
           .fetchCompetitions(userId: dependencies.currentUserId);
-      final CompetitionSummary? competition =
-          _findWorldSuperCupCompetition(response.items);
+      final CompetitionSummary? competition = _findWorldSuperCupCompetition(
+        response.items,
+      );
       if (competition != null && _isWorldSuperCupActive(competition)) {
         return GteGuardResolution(
-          route: CompetitionDetailRouteData(
-            competitionId: competition.id,
-          ),
+          route: CompetitionDetailRouteData(competitionId: competition.id),
         );
       }
     } catch (_) {
@@ -259,62 +270,10 @@ class GteNavigationGuardResolver {
     }
 
     return const GteGuardResolution(
-      route: CompetitionsDiscoveryRouteData(
-        highlight: 'world-super-cup',
-      ),
+      route: CompetitionsDiscoveryRouteData(highlight: 'world-super-cup'),
       fallbackReason: GteNavigationFallbackReason.inactiveWorldSuperCup,
       message: 'World Super Cup is not active right now.',
     );
-  }
-
-  Future<GteGuardResolution> _resolveTrophyTimeline(
-    ClubTrophyTimelineRouteData route,
-  ) async {
-    try {
-      final TrophyCabinetDto cabinet =
-          await dependencies.createTrophyCabinetRepository().fetchTrophyCabinet(
-                clubId: route.clubId,
-                teamScope: route.filter.queryValue,
-              );
-      if (!cabinet.isEmpty) {
-        return GteGuardResolution(route: route);
-      }
-      return GteGuardResolution(
-        route: ClubTrophyCabinetRouteData(
-          clubId: route.clubId,
-          clubName: route.clubName ?? cabinet.clubName,
-          filter: route.filter,
-        ),
-        fallbackReason: GteNavigationFallbackReason.emptyTrophyCabinet,
-        message: 'Open the trophy cabinet first to unlock timeline navigation.',
-      );
-    } catch (_) {
-      return GteGuardResolution(route: route);
-    }
-  }
-
-  Future<GteGuardResolution> _resolveDynastyHistory(
-    ClubDynastyHistoryRouteData route,
-  ) async {
-    try {
-      final DynastyProfileDto profile =
-          await dependencies.createDynastyRepository().fetchDynastyProfile(
-                route.clubId,
-              );
-      if (profile.hasRecognizedDynasty) {
-        return GteGuardResolution(route: route);
-      }
-      return GteGuardResolution(
-        route: ClubDynastyOverviewRouteData(
-          clubId: route.clubId,
-          clubName: route.clubName ?? profile.clubName,
-        ),
-        fallbackReason: GteNavigationFallbackReason.noDynastyYet,
-        message: 'Dynasty history unlocks after the club establishes an era.',
-      );
-    } catch (_) {
-      return GteGuardResolution(route: route);
-    }
   }
 
   Future<GteGuardResolution> _resolveReplayPreview(
@@ -322,19 +281,16 @@ class GteNavigationGuardResolver {
   ) async {
     ClubIdentityDto? identity;
     try {
-      identity =
-          await dependencies.createClubIdentityRepository().fetchIdentity(
-                route.clubId,
-              );
+      identity = await dependencies
+          .createClubIdentityRepository()
+          .fetchIdentity(route.clubId);
     } catch (_) {
       return GteGuardResolution(route: route);
     }
 
-    final bool hasSetup = await (dependencies.hasIdentitySetup?.call(
-          route.clubId,
-          identity,
-        ) ??
-        _defaultHasIdentitySetup(identity));
+    final bool hasSetup =
+        await (dependencies.hasIdentitySetup?.call(route.clubId, identity) ??
+            _defaultHasIdentitySetup(identity));
     if (hasSetup) {
       return GteGuardResolution(route: route);
     }

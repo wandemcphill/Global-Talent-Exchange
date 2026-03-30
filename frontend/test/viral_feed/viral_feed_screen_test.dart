@@ -5,11 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/core/actions/action_pipeline.dart' as feed_actions;
 import 'package:gte_frontend/data/gte_api_contracts.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/core/theme/app_theme.dart';
 import 'package:gte_frontend/features/viral_feed/data/viral_feed_models.dart';
 import 'package:gte_frontend/features/viral_feed/data/viral_feed_repository.dart';
 import 'package:gte_frontend/features/viral_feed/presentation/viral_feed_screen.dart';
 import 'package:gte_frontend/services/reliability/reliable_event_queue.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -46,6 +46,34 @@ void main() {
         'The ranking engine pushed this clip because the pressure swing broke the match open.',
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('viral feed premium surface matches golden', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildHarness(
+        repository: _FakeViralFeedRepository(
+          _buildDeck(
+            durationSeconds: 12,
+            firstHook: "89' and the whole match flipped",
+            firstSummaryLine:
+                'The ranking engine pushed this clip because the pressure swing broke the match open.',
+          ),
+        ),
+        dispatcher: _RecordingActionDispatcher(),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('../goldens/viral_feed_premium_surface.png'),
     );
   });
 
@@ -369,9 +397,8 @@ void main() {
 
     expect(find.byKey(const Key('viral-hook-clip-001')), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.refresh_rounded));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byKey(const Key('viral-refresh-button')));
+    await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('viral-hook-clip-001')), findsOneWidget);
     expect(find.text('Contract mismatch during refresh.'), findsOneWidget);
@@ -384,7 +411,7 @@ Widget _buildHarness({
   ReliableEventQueue? eventQueue,
 }) {
   return MaterialApp(
-    theme: AppTheme.dark(),
+    theme: GteShellTheme.build(),
     home: ViralFeedScreen(
       currentUserId: 'user-feed-1',
       repository: repository,

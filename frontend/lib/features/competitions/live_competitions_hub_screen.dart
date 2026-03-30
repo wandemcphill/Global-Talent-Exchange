@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
-import '../../core/constants/app_spacing.dart';
 import '../../data/hosted_competition_api.dart';
 import '../../features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import '../../models/competition_models.dart';
@@ -14,6 +13,8 @@ import '../../shared/providers/auth_provider.dart';
 import '../../shared/providers/live_clients_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/gtex_premium_panels.dart';
+import '../../widgets/gte_state_panel.dart';
 import 'live_competitions_provider.dart';
 
 class LiveCompetitionsHubScreen extends ConsumerWidget {
@@ -26,11 +27,12 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
     final AsyncValue<CompetitionHubData> hubValue = ref.watch(
       competitionHubProvider,
     );
+    final CompetitionHubData? snapshot = hubValue.asData?.value;
     return AppPageLayout(
       title: family?.label ?? 'Competitions',
       subtitle:
           family == null
-              ? 'The active shell now routes three competition families separately and keeps their backend contracts distinct.'
+              ? 'Elite event platform for GTEX, hosted, and creator competition families.'
               : 'This family is sourced from one live backend flow. Deeper actions stay on dedicated detail screens.',
       trailing: DataSourceBadge(
         status:
@@ -39,6 +41,56 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
                 : DataSourceStatus.live,
       ),
       children: <Widget>[
+        GtexHeroPanel(
+          eyebrow: family == null ? 'EVENT PLATFORM' : 'COMPETITION FAMILY',
+          title:
+              family == null
+                  ? 'Discover live football competition families with clear event separation.'
+                  : '${family!.label} is isolated to one live backend contract.',
+          description:
+              family == null
+                  ? 'Platform-run, hosted, and creator events remain visually distinct so users can trust where authority, reward logic, and lifecycle controls come from.'
+                  : 'Actions and status changes only appear when the session and backend contract genuinely allow them.',
+          metrics: <Widget>[
+            GtexStatTile(
+              label: 'GTEX',
+              value:
+                  snapshot == null
+                      ? '...'
+                      : '${snapshot.gtexCompetitions.length}',
+              support: 'Platform-run football',
+              tone: GtexSurfaceTone.live,
+            ),
+            GtexStatTile(
+              label: 'Hosted',
+              value:
+                  snapshot == null
+                      ? '...'
+                      : '${snapshot.hostedCompetitions.length}',
+              support: 'User-hosted football',
+              tone: GtexSurfaceTone.info,
+            ),
+            GtexStatTile(
+              label: 'Creator',
+              value:
+                  snapshot == null
+                      ? '...'
+                      : '${snapshot.streamerTournaments.length}',
+              support: 'E-game tournaments',
+              tone: GtexSurfaceTone.warning,
+            ),
+          ],
+          actions:
+              family == null
+                  ? <Widget>[
+                    FilledButton.icon(
+                      onPressed: () => context.push(AppRoutes.streamerEngine),
+                      icon: const Icon(Icons.live_tv_rounded),
+                      label: const Text('Open streamer engine'),
+                    ),
+                  ]
+                  : const <Widget>[],
+        ),
         hubValue.when(
           data:
               (CompetitionHubData hub) =>
@@ -46,16 +98,18 @@ class LiveCompetitionsHubScreen extends ConsumerWidget {
                       ? _FamilyOverview(hub: hub)
                       : _FamilyList(family: family!, hub: hub),
           loading:
-              () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(spacingLG),
-                  child: CircularProgressIndicator(),
-                ),
+              () => GteStatePanel(
+                title: 'Loading competitions',
+                message:
+                    'The active shell is pulling live competition families.',
+                isLoading: true,
               ),
           error:
-              (Object error, StackTrace stackTrace) => _BlockedCard(
+              (Object error, StackTrace stackTrace) => GteStatePanel(
                 title: 'Competition discovery is blocked',
                 message: AppFeedback.messageFor(error),
+                icon: Icons.error_outline_rounded,
+                accentColor: Theme.of(context).colorScheme.error,
               ),
         ),
       ],
@@ -120,53 +174,52 @@ class _FamilyOverview extends StatelessWidget {
     ];
 
     return Wrap(
-      spacing: spacingMD,
-      runSpacing: spacingMD,
+      spacing: 16,
+      runSpacing: 16,
       children: cards
           .map(
             (_FamilyCardData card) => SizedBox(
               width: 360,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(spacingLG),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        card.family.label,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: spacingSM),
-                      Text(card.description),
-                      const SizedBox(height: spacingMD),
-                      Text(
-                        '${card.count} live item${card.count == 1 ? '' : 's'}',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: spacingMD),
-                      Wrap(
-                        spacing: spacingSM,
-                        runSpacing: spacingSM,
-                        children: <Widget>[
-                          FilledButton.icon(
+              child: GtexSectionPanel(
+                eyebrow: 'FAMILY',
+                title: card.family.label,
+                subtitle: card.description,
+                emphasized: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    GtexStatTile(
+                      label: 'Live items',
+                      value: '${card.count}',
+                      support:
+                          card.count == 1
+                              ? '1 active card'
+                              : 'family inventory',
+                      tone: GtexSurfaceTone.live,
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        FilledButton.icon(
+                          onPressed:
+                              () => context.push(
+                                '/competitions/${card.family.pathSegment}',
+                              ),
+                          icon: const Icon(Icons.open_in_new_rounded),
+                          label: const Text('Open family'),
+                        ),
+                        if (card.family == CompetitionFamilyRoute.streamer)
+                          OutlinedButton.icon(
                             onPressed:
-                                () => context.push(
-                                  '/competitions/${card.family.pathSegment}',
-                                ),
-                            icon: const Icon(Icons.open_in_new_rounded),
-                            label: const Text('Open family'),
+                                () => context.push(AppRoutes.streamerEngine),
+                            icon: const Icon(Icons.live_tv_rounded),
+                            label: const Text('Open full engine'),
                           ),
-                          if (card.family == CompetitionFamilyRoute.streamer)
-                            OutlinedButton.icon(
-                              onPressed:
-                                  () => context.push(AppRoutes.streamerEngine),
-                              icon: const Icon(Icons.live_tv_rounded),
-                              label: const Text('Open full engine'),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -194,6 +247,7 @@ class _FamilyList extends StatelessWidget {
                   '${item.creatorLabel} | ${item.status.name} | ${item.participantCount}/${item.capacity}',
               description: item.rulesSummary,
               path: '/competitions/${family.pathSegment}/${item.id}',
+              tone: GtexSurfaceTone.live,
             ),
           )
           .toList(growable: false),
@@ -209,6 +263,7 @@ class _FamilyList extends StatelessWidget {
                       ? 'Hosted football competition'
                       : item.description,
               path: '/competitions/${family.pathSegment}/${item.id}',
+              tone: GtexSurfaceTone.info,
             ),
           )
           .toList(growable: false),
@@ -222,6 +277,7 @@ class _FamilyList extends StatelessWidget {
               description:
                   item.description ?? 'Creator-hosted e-game tournament',
               path: '/competitions/${family.pathSegment}/${item.id}',
+              tone: GtexSurfaceTone.warning,
             ),
           )
           .toList(growable: false),
@@ -236,28 +292,29 @@ class _FamilyList extends StatelessWidget {
     required String subtitle,
     required String description,
     required String path,
+    required GtexSurfaceTone tone,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: spacingMD),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(spacingLG),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: spacingXS),
-              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: spacingSM),
-              Text(description),
-              const SizedBox(height: spacingMD),
-              FilledButton.icon(
-                onPressed: () => context.push(path),
-                icon: const Icon(Icons.open_in_new_rounded),
-                label: const Text('View detail'),
-              ),
-            ],
-          ),
+      padding: const EdgeInsets.only(bottom: 16),
+      child: GtexSectionPanel(
+        eyebrow: 'EVENT CARD',
+        title: title,
+        subtitle: subtitle,
+        accentColor:
+            tone == GtexSurfaceTone.warning
+                ? Theme.of(context).colorScheme.tertiary
+                : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(description),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => context.push(path),
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('View detail'),
+            ),
+          ],
         ),
       ),
     );
@@ -394,9 +451,11 @@ class _GtexDetail extends ConsumerWidget {
       },
       loading: _loading,
       error:
-          (Object error, StackTrace stackTrace) => _BlockedCard(
+          (Object error, StackTrace stackTrace) => GteStatePanel(
             title: 'GTEX competition detail is blocked',
             message: AppFeedback.messageFor(error),
+            icon: Icons.error_outline_rounded,
+            accentColor: Theme.of(context).colorScheme.error,
           ),
     );
   }
@@ -487,9 +546,11 @@ class _HostedDetail extends ConsumerWidget {
       },
       loading: _loading,
       error:
-          (Object error, StackTrace stackTrace) => _BlockedCard(
+          (Object error, StackTrace stackTrace) => GteStatePanel(
             title: 'Hosted competition detail is blocked',
             message: AppFeedback.messageFor(error),
+            icon: Icons.error_outline_rounded,
+            accentColor: Theme.of(context).colorScheme.error,
           ),
     );
   }
@@ -586,20 +647,21 @@ class _StreamerDetail extends ConsumerWidget {
       },
       loading: _loading,
       error:
-          (Object error, StackTrace stackTrace) => _BlockedCard(
+          (Object error, StackTrace stackTrace) => GteStatePanel(
             title: 'Streamer tournament detail is blocked',
             message: AppFeedback.messageFor(error),
+            icon: Icons.error_outline_rounded,
+            accentColor: Theme.of(context).colorScheme.error,
           ),
     );
   }
 }
 
 Widget _loading() {
-  return const Center(
-    child: Padding(
-      padding: EdgeInsets.all(spacingLG),
-      child: CircularProgressIndicator(),
-    ),
+  return const GteStatePanel(
+    title: 'Loading competition detail',
+    message: 'Live event detail is syncing.',
+    isLoading: true,
   );
 }
 
@@ -618,51 +680,27 @@ class _DetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: spacingSM),
-            Text(description),
-            const SizedBox(height: spacingMD),
-            Wrap(
-              spacing: spacingSM,
-              runSpacing: spacingSM,
-              children: metrics
-                  .map((String metric) => Chip(label: Text(metric)))
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: spacingMD),
-            Wrap(spacing: spacingSM, runSpacing: spacingSM, children: actions),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BlockedCard extends StatelessWidget {
-  const _BlockedCard({required this.title, required this.message});
-
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(spacingLG),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: spacingSM),
-            Text(message),
-          ],
-        ),
+    return GtexSectionPanel(
+      eyebrow: 'EVENT DETAIL',
+      title: title,
+      subtitle: description,
+      emphasized: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: metrics
+                .map(
+                  (String metric) =>
+                      GtexPill(label: metric, tone: GtexSurfaceTone.info),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 16),
+          Wrap(spacing: 8, runSpacing: 8, children: actions),
+        ],
       ),
     );
   }
