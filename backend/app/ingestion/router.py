@@ -5,6 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_session
+from app.ingestion.real_player_bulk_ops_schemas import (
+    RealPlayerBulkPublishJobTriggerRequest,
+    RealPlayerBulkPublishJobView,
+)
+from app.ingestion.real_player_bulk_ops_service import RealPlayerBulkImportOpsError
+from app.ingestion.real_player_bulk_publish_job_service import (
+    RealPlayerBulkPublishJobError,
+    RealPlayerBulkPublishJobRegistry,
+)
 from app.ingestion.real_player_import_ops_schemas import (
     RealPlayerImportBatchDetailView,
     RealPlayerImportBatchIssueView,
@@ -55,6 +64,18 @@ def get_real_player_import_ops_service(request: Request) -> RealPlayerImportOpsS
         database_url=str(request.app.state.db_engine.url),
         settings=request.app.state.settings,
     )
+
+
+def get_real_player_bulk_publish_job_registry(
+    request: Request,
+) -> RealPlayerBulkPublishJobRegistry:
+    registry = getattr(request.app.state, "real_player_bulk_publish_jobs", None)
+    if registry is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Real-player publish jobs are not configured on this backend.",
+        )
+    return registry
 
 
 def _require_manager_catalog_permission(request: Request, actor: User) -> None:
@@ -271,6 +292,50 @@ def get_real_player_import_status(
 ) -> RealPlayerImportStatusRead:
     _require_manager_catalog_permission(request, actor)
     return service.get_status(provider_name=provider_name, cursor_key=cursor_key)
+
+
+@router.post("/real-players/publish-jobs", response_model=RealPlayerBulkPublishJobView, status_code=status.HTTP_202_ACCEPTED)
+def trigger_real_player_publish_job(
+    payload: RealPlayerBulkPublishJobTriggerRequest,
+    request: Request,
+    actor: User = Depends(get_current_admin),
+    registry: RealPlayerBulkPublishJobRegistry = Depends(get_real_player_bulk_publish_job_registry),
+) -> RealPlayerBulkPublishJobView:
+    _require_manager_catalog_permission(request, actor)
+    try:
+        return registry.start_job(actor_user_id=actor.id, payload=payload)
+    except (RealPlayerBulkImportOpsError, RealPlayerBulkPublishJobError) as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.get("/real-players/publish-jobs", response_model=list[RealPlayerBulkPublishJobView])
+def list_real_player_publish_jobs(
+    request: Request,
+    run_id: str | None = Query(default=None),
+    active_only: bool = Query(default=False),
+    limit: int = Query(default=20, ge=1, le=100),
+    actor: User = Depends(get_current_admin),
+    registry: RealPlayerBulkPublishJobRegistry = Depends(get_real_player_bulk_publish_job_registry),
+) -> list[RealPlayerBulkPublishJobView]:
+    _require_manager_catalog_permission(request, actor)
+    try:
+        return registry.list_jobs(run_id=run_id, active_only=active_only, limit=limit)
+    except RealPlayerBulkPublishJobError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.get("/real-players/publish-jobs/{job_id}", response_model=RealPlayerBulkPublishJobView)
+def get_real_player_publish_job(
+    job_id: str,
+    request: Request,
+    actor: User = Depends(get_current_admin),
+    registry: RealPlayerBulkPublishJobRegistry = Depends(get_real_player_bulk_publish_job_registry),
+) -> RealPlayerBulkPublishJobView:
+    _require_manager_catalog_permission(request, actor)
+    try:
+        return registry.get_job(job_id=job_id)
+    except RealPlayerBulkPublishJobError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.get("/real-players/batches", response_model=list[RealPlayerImportBatchSummaryView])

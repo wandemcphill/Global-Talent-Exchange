@@ -19,6 +19,7 @@ from app.ingestion.real_player_import_models import (
     RealPlayerImportStagingRecord,
 )
 from app.models.base import Base
+from app.models.real_player_import_batch import RealPlayerImportBatch
 from app.models.real_player_reference_mapping import RealPlayerUnresolvedReference
 
 
@@ -576,7 +577,7 @@ def test_bulk_ops_can_publish_provider_shaped_staging_rows() -> None:
                         "nationality": "England",
                         "nationalityCode": "ENG",
                         "country": "England",
-                        "height": 183,
+                        "height": 0,
                         "provider_player_id": "37672209",
                         "currentClub": {"id": "fulham", "name": "Fulham"},
                         "currentCompetition": {"id": "premier-league", "name": "Premier League"},
@@ -699,5 +700,49 @@ def test_bulk_ops_priority_selector_supports_reason_based_publish_filters(tmp_pa
             priority = dict((record.metadata_json or {}).get("publish_priority") or {})
             assert "wonderkid" in set(priority.get("reasons") or [])
             assert "nigeria_priority" in set(priority.get("reasons") or [])
+    finally:
+        engine.dispose()
+
+
+def test_bulk_ops_publish_reuses_run_without_batch_identity_collisions(tmp_path: Path) -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            _seed_canonical_entities(session)
+
+        service = _service(session_factory)
+        import_path = _write_fixture_copy(tmp_path)
+        imported = service.import_file(
+            file_path=str(import_path),
+            provider_name="bulk-fixture",
+            batch_size=4,
+        )
+        assert imported.run is not None
+
+        first = service.publish_ready_players(
+            run_id=imported.run.id,
+            limit=1,
+            priority_bucket="all",
+        )
+        second = service.publish_ready_players(
+            run_id=imported.run.id,
+            limit=1,
+            priority_bucket="all",
+        )
+
+        assert first.details_json["published_now"] == 1
+        assert second.details_json["published_now"] == 1
+
+        with session_factory() as session:
+            batches = list(session.scalars(select(RealPlayerImportBatch).order_by(RealPlayerImportBatch.batch_key)))
+            assert len(batches) == 2
+            assert [batch.batch_key for batch in batches] == [
+                f"bulk-run-{imported.run.id[:8]}-p1",
+                f"bulk-run-{imported.run.id[:8]}-p2",
+            ]
+            assert [batch.provider_job_key for batch in batches] == [
+                f"bulk-import-run:{imported.run.id}:publish:1",
+                f"bulk-import-run:{imported.run.id}:publish:2",
+            ]
     finally:
         engine.dispose()

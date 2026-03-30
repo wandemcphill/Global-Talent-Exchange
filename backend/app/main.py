@@ -17,6 +17,7 @@ from app.core.container import (
     resolve_database_engine,
 )
 from app.core.module import DomainModule, run_module_hooks
+from app.ingestion.real_player_bulk_publish_job_service import RealPlayerBulkPublishJobRegistry
 from app.modules import DOMAIN_MODULES
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,10 @@ def create_app(
     app.state.domain_modules = tuple(module.name for module in modules)
     app.state.run_migration_check = run_migration_check
     app.state.deferred_startup_thread = None
+    app.state.real_player_bulk_publish_jobs = RealPlayerBulkPublishJobRegistry(
+        session_factory=context.database.session_factory,
+        settings=resolved_settings,
+    )
 
     register_core(app)
     register_modules(app, modules)
@@ -166,6 +171,9 @@ def register_core(app: FastAPI) -> None:
         startup_thread = getattr(app.state, "deferred_startup_thread", None)
         if startup_thread is not None and startup_thread.is_alive():
             startup_thread.join(timeout=1)
+        publish_jobs = getattr(app.state, "real_player_bulk_publish_jobs", None)
+        if publish_jobs is not None:
+            publish_jobs.shutdown(timeout=1.0)
         await shutdown_match_stream_websocket_gateway(app)
         run_module_hooks(app, runtime_context, module_specs, phase="shutdown")
         runtime_context.shutdown()
