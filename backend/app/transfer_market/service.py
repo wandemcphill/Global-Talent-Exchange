@@ -11,8 +11,10 @@ from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.access_control.service import AccessControlService
 from app.core.events import DomainEvent, EventPublisher
 from app.ingestion.models import Player
+from app.models.access_control import OrganizationRole, OrganizationType
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
 from app.models.player_agency_state import PlayerAgencyState
@@ -30,6 +32,7 @@ from app.models.transfer_market import (
     TransferListingBid,
     TransferNegotiation,
 )
+from app.models.user import User, UserRole
 from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
 from app.schemas.player_lifecycle import TransferBidAcceptRequest, TransferBidCreateRequest, TransferBidRejectRequest
 from app.services.player_agency_context_service import PlayerAgencyContextService, clamp, quantize_amount
@@ -69,6 +72,10 @@ ANTI_SNIPING_EXTENSION_SECONDS = 90
 LATE_HIJACK_WINDOW_SECONDS = 60
 PLAYER_DECISION_DELAY_HOURS = 12
 AGENT_COUNTER_DEADLINE_HOURS = 12
+TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
+TRANSFER_MARKET_WATCHLIST_ROLES = frozenset(
+    {OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT}
+)
 
 
 class TransferMarketError(Exception):
@@ -81,6 +88,10 @@ class TransferMarketNotFoundError(TransferMarketError):
 
 class TransferMarketValidationError(TransferMarketError):
     """Raised when transfer market validation fails."""
+
+
+class TransferMarketPermissionError(TransferMarketError):
+    """Raised when the authenticated actor lacks required access."""
 
 
 @dataclass(slots=True)
@@ -168,6 +179,112 @@ class TransferMarketService:
     def __post_init__(self) -> None:
         self.context_service = PlayerAgencyContextService(self.session)
 
+    def _access_control(self) -> AccessControlService:
+        return AccessControlService(self.session)
+
+    def _require_admin_actor(
+        self,
+        actor: User,
+        *,
+        forbidden_detail: str = "transfer_market_admin_access_required",
+    ) -> None:
+        if actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            raise TransferMarketPermissionError(forbidden_detail)
+
+    def _require_actor_club_access(
+        self,
+        actor: User,
+        club_id: str,
+        *,
+        allowed_roles: frozenset[OrganizationRole] = TRANSFER_MARKET_EXECUTION_ROLES,
+        forbidden_detail: str = "transfer_market_club_access_required",
+    ) -> ClubProfile:
+        try:
+            return self._access_control().require_club_access(
+                user=actor,
+                club_id=club_id,
+                allowed_roles=set(allowed_roles),
+                forbidden_detail=forbidden_detail,
+            )
+        except LookupError as exc:
+            raise TransferMarketNotFoundError(str(exc)) from exc
+        except PermissionError as exc:
+            raise TransferMarketPermissionError(str(exc)) from exc
+
+    def _resolve_actor_club_id(
+        self,
+        actor: User,
+        requested_club_id: str | None,
+        *,
+        allowed_roles: frozenset[OrganizationRole] = TRANSFER_MARKET_EXECUTION_ROLES,
+        forbidden_detail: str = "transfer_market_club_access_required",
+    ) -> str:
+        cleaned_club_id = (requested_club_id or "").strip()
+        if cleaned_club_id:
+            self._require_actor_club_access(
+                actor,
+                cleaned_club_id,
+                allowed_roles=allowed_roles,
+                forbidden_detail=forbidden_detail,
+            )
+            return cleaned_club_id
+
+        if actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            raise TransferMarketValidationError("Club identity must be specified for admin transfer-market actions.")
+
+        context = self._access_control().bind_user_access_context(actor)
+        eligible_club_ids = list(
+            dict.fromkeys(
+                membership.organization_id
+                for membership in context.memberships
+                if membership.organization_type == OrganizationType.CLUB and membership.role in allowed_roles
+            )
+        )
+        for owned_club_id in self.session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id)).all():
+            if owned_club_id not in eligible_club_ids:
+                eligible_club_ids.append(owned_club_id)
+        active_club_id = context.active_organization_id
+        if (
+            context.active_organization_type == OrganizationType.CLUB
+            and active_club_id is not None
+            and active_club_id in eligible_club_ids
+        ):
+            return active_club_id
+        if len(eligible_club_ids) == 1:
+            return eligible_club_ids[0]
+        if not eligible_club_ids:
+            raise TransferMarketPermissionError(forbidden_detail)
+        raise TransferMarketValidationError("Club identity must be specified when multiple club contexts are available.")
+
+    def _require_actor_any_club_access(
+        self,
+        actor: User,
+        club_ids: list[str],
+        *,
+        allowed_roles: frozenset[OrganizationRole] = TRANSFER_MARKET_EXECUTION_ROLES,
+        forbidden_detail: str = "transfer_market_club_access_required",
+    ) -> None:
+        unique_club_ids = list(dict.fromkeys(club_ids))
+        if not unique_club_ids:
+            raise TransferMarketPermissionError(forbidden_detail)
+        last_permission_error: TransferMarketPermissionError | None = None
+        for club_id in unique_club_ids:
+            try:
+                self._require_actor_club_access(
+                    actor,
+                    club_id,
+                    allowed_roles=allowed_roles,
+                    forbidden_detail=forbidden_detail,
+                )
+            except TransferMarketPermissionError as exc:
+                last_permission_error = exc
+                continue
+            else:
+                return
+        if last_permission_error is not None:
+            raise last_permission_error
+        raise TransferMarketPermissionError(forbidden_detail)
+
     def list_listings(
         self,
         *,
@@ -192,18 +309,32 @@ class TransferMarketService:
         listing = self._require_listing(listing_id)
         return self.to_listing_view(listing, reference_at=self._coerce_utc(reference_at or utcnow()))
 
+    def get_current_player_club(self, player_id: str, *, on_date: date | None = None) -> ClubProfile:
+        club_id = self._current_player_club_id(player_id, on_date=on_date or utcnow().date())
+        if club_id is None:
+            raise TransferMarketValidationError("Player is not currently assigned to a club.")
+        return self._require_club(club_id)
+
     def create_listing(
         self,
         payload: TransferListingCreateRequest,
         *,
+        actor: User,
+        selling_club_id: str | None = None,
         reference_at: datetime | None = None,
     ) -> TransferListingView:
         effective_at = self._coerce_utc(reference_at or utcnow())
         expires_at = self._coerce_utc(payload.expires_at)
         if expires_at <= effective_at:
             raise TransferMarketValidationError("Transfer listing expiry must be in the future.")
+        resolved_selling_club_id = self._resolve_actor_club_id(
+            actor,
+            selling_club_id or payload.selling_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
         player = self._require_player(payload.player_id)
-        seller = self._require_club(payload.selling_club_id)
+        seller = self._require_club(resolved_selling_club_id)
         existing = self.session.scalar(
             select(TransferListing).where(
                 TransferListing.player_id == payload.player_id,
@@ -246,21 +377,28 @@ class TransferMarketService:
         self,
         listing_id: str,
         *,
-        bidder_club_id: str,
+        actor: User,
+        bidder_club_id: str | None = None,
         amount: Decimal,
         activity_context: str | None = None,
         reference_at: datetime | None = None,
     ) -> TransferListingView:
         effective_at = self._coerce_utc(reference_at or utcnow())
+        resolved_bidder_club_id = self._resolve_actor_club_id(
+            actor,
+            bidder_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
         listing = self._require_listing(listing_id)
         if listing.status != "open":
             raise TransferMarketValidationError("Bids can only be placed on open transfer listings.")
         if effective_at >= self._coerce_utc(listing.expires_at):
-            self.finalize_listing(listing_id, reference_at=effective_at)
+            self._finalize_listing(listing_id, reference_at=effective_at)
             raise TransferMarketValidationError("This transfer auction has already expired.")
-        if bidder_club_id == listing.selling_club_id:
+        if resolved_bidder_club_id == listing.selling_club_id:
             raise TransferMarketValidationError("Selling club cannot bid on its own listing.")
-        self._require_club(bidder_club_id)
+        self._require_club(resolved_bidder_club_id)
         current_highest = listing.current_highest_bid or listing.base_price
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
@@ -269,14 +407,14 @@ class TransferMarketService:
         previous_amount = listing.current_highest_bid
         bid = TransferListingBid(
             listing_id=listing.id,
-            bidder_club_id=bidder_club_id,
+            bidder_club_id=resolved_bidder_club_id,
             amount=amount,
             timestamp=effective_at,
             metadata_json={"activity_context": activity_context or ""},
         )
         self.session.add(bid)
         listing.current_highest_bid = amount
-        listing.highest_bidder_id = bidder_club_id
+        listing.highest_bidder_id = resolved_bidder_club_id
         listing.bid_count += 1
         listing.last_bid_at = effective_at
         time_remaining = max(0, int((self._coerce_utc(listing.expires_at) - effective_at).total_seconds()))
@@ -285,7 +423,7 @@ class TransferMarketService:
             listing.expires_at = self._coerce_utc(listing.expires_at) + timedelta(seconds=ANTI_SNIPING_EXTENSION_SECONDS)
             listing.anti_sniping_extension_count += 1
             extended = True
-        if previous_bidder_id and previous_bidder_id != bidder_club_id and time_remaining <= LATE_HIJACK_WINDOW_SECONDS:
+        if previous_bidder_id and previous_bidder_id != resolved_bidder_club_id and time_remaining <= LATE_HIJACK_WINDOW_SECONDS:
             self._append_drama_event(
                 listing,
                 event_type="late_hijack",
@@ -293,7 +431,7 @@ class TransferMarketService:
                 effective_at=effective_at,
                 metadata={
                     "from_club_id": previous_bidder_id,
-                    "to_club_id": bidder_club_id,
+                    "to_club_id": resolved_bidder_club_id,
                     "amount": str(amount),
                 },
             )
@@ -303,7 +441,7 @@ class TransferMarketService:
 
         snapshot = self.to_listing_view(listing, reference_at=effective_at)
         self._sync_listing_snapshot(snapshot)
-        bidder = self._require_club(bidder_club_id)
+        bidder = self._require_club(resolved_bidder_club_id)
         player = self._require_player(listing.player_id)
         self._push_listing_event(
             listing.id,
@@ -311,7 +449,7 @@ class TransferMarketService:
             {
                 "listing_id": listing.id,
                 "bid_id": bid.id,
-                "bidder_club_id": bidder_club_id,
+                "bidder_club_id": resolved_bidder_club_id,
                 "bidder_club_name": bidder.club_name,
                 "amount": str(amount),
                 "time_remaining": snapshot.time_remaining,
@@ -323,7 +461,7 @@ class TransferMarketService:
             {
                 "listing_id": listing.id,
                 "activity": activity_context or "bid_placed",
-                "bidder_club_id": bidder_club_id,
+                "bidder_club_id": resolved_bidder_club_id,
                 "bidder_club_name": bidder.club_name,
             },
         )
@@ -344,9 +482,9 @@ class TransferMarketService:
             template_key="NEW_BID_PLACED",
             message=f"{bidder.club_name} bid {amount} for {player.full_name}.",
             resource_id=listing.id,
-            payload={"bid_id": bid.id, "amount": str(amount), "bidder_club_id": bidder_club_id},
+            payload={"bid_id": bid.id, "amount": str(amount), "bidder_club_id": resolved_bidder_club_id},
         )
-        if previous_bidder_id and previous_bidder_id != bidder_club_id:
+        if previous_bidder_id and previous_bidder_id != resolved_bidder_club_id:
             self._notify_club_owner(
                 club_id=previous_bidder_id,
                 event_name="transfer_market.outbid_alert",
@@ -356,21 +494,37 @@ class TransferMarketService:
                 payload={
                     "previous_amount": str(previous_amount),
                     "new_amount": str(amount),
-                    "new_bidder_club_id": bidder_club_id,
+                    "new_bidder_club_id": resolved_bidder_club_id,
                 },
             )
-        if previous_bidder_id and previous_bidder_id != bidder_club_id and time_remaining <= LATE_HIJACK_WINDOW_SECONDS:
+        if previous_bidder_id and previous_bidder_id != resolved_bidder_club_id and time_remaining <= LATE_HIJACK_WINDOW_SECONDS:
             self._notify_club_owner(
                 club_id=listing.selling_club_id,
                 event_name="transfer_market.transfer_hijack",
                 template_key="TRANSFER_HIJACK",
                 message=f"{bidder.club_name} launched a late hijack for {player.full_name}.",
                 resource_id=listing.id,
-                payload={"bid_id": bid.id, "amount": str(amount), "bidder_club_id": bidder_club_id},
+                payload={"bid_id": bid.id, "amount": str(amount), "bidder_club_id": resolved_bidder_club_id},
             )
         return snapshot
 
-    def finalize_listing(self, listing_id: str, *, reference_at: datetime | None = None) -> TransferListingView:
+    def finalize_listing(
+        self,
+        listing_id: str,
+        *,
+        actor: User,
+        reference_at: datetime | None = None,
+    ) -> TransferListingView:
+        listing = self._require_listing(listing_id)
+        self._require_actor_club_access(
+            actor,
+            listing.selling_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_listing_close_access_required",
+        )
+        return self._finalize_listing(listing_id, reference_at=reference_at)
+
+    def _finalize_listing(self, listing_id: str, *, reference_at: datetime | None = None) -> TransferListingView:
         effective_at = self._coerce_utc(reference_at or utcnow())
         listing = self._require_listing(listing_id)
         if listing.status in {"closed", "sold"}:
@@ -412,8 +566,14 @@ class TransferMarketService:
         )
         return snapshot
 
-    def get_negotiation(self, listing_id: str) -> TransferNegotiationView:
+    def get_negotiation(self, listing_id: str, *, actor: User) -> TransferNegotiationView:
         negotiation = self._require_negotiation_by_listing(listing_id)
+        self._require_actor_any_club_access(
+            actor,
+            [negotiation.selling_club_id, negotiation.bidder_club_id],
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_negotiation_access_required",
+        )
         return self.to_negotiation_view(negotiation)
 
     def submit_contract_offer(
@@ -421,19 +581,29 @@ class TransferMarketService:
         listing_id: str,
         payload: ContractOfferRequest,
         *,
+        actor: User,
+        bidder_club_id: str | None = None,
         reference_at: datetime | None = None,
     ) -> TransferNegotiationView:
         effective_at = self._coerce_utc(reference_at or utcnow())
         listing = self._require_listing(listing_id)
         if listing.status == "open":
             if effective_at >= self._coerce_utc(listing.expires_at):
-                self.finalize_listing(listing_id, reference_at=effective_at)
+                self._finalize_listing(listing_id, reference_at=effective_at)
                 listing = self._require_listing(listing_id)
             else:
                 raise TransferMarketValidationError("Auction must close before contract talks start.")
         negotiation = self._require_negotiation_by_listing(listing.id)
-        if payload.bidder_club_id != negotiation.bidder_club_id:
+        self._require_actor_club_access(
+            actor,
+            negotiation.bidder_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_contract_offer_access_required",
+        )
+        resolved_bidder_club_id = (bidder_club_id or payload.bidder_club_id or negotiation.bidder_club_id or "").strip()
+        if resolved_bidder_club_id != negotiation.bidder_club_id:
             raise TransferMarketValidationError("Only the auction winner can submit a contract offer.")
+        payload = payload.model_copy(update={"bidder_club_id": resolved_bidder_club_id})
 
         player = self._require_player(negotiation.player_id)
         negotiation.wage_offer_amount = payload.wage_offer_amount
@@ -451,7 +621,7 @@ class TransferMarketService:
 
         coach_opinion = self._evaluate_coach_opinion(
             player=player,
-            destination_club_id=payload.bidder_club_id,
+            destination_club_id=resolved_bidder_club_id,
         )
         player_decision = self._evaluate_player_decision(
             player=player,
@@ -485,7 +655,7 @@ class TransferMarketService:
             "bonus_terms": payload.bonus_terms or "",
         }
 
-        coach_profile = self._ensure_coach_profile(payload.bidder_club_id)
+        coach_profile = self._ensure_coach_profile(resolved_bidder_club_id)
         if coach_opinion.stance == "reject" and coach_profile.authority_level >= 70:
             negotiation.status = "coach_blocked"
             negotiation.resolved_at = effective_at
@@ -495,10 +665,10 @@ class TransferMarketService:
                 event_type="coach_disagreement",
                 headline="Coach disagreement",
                 effective_at=effective_at,
-                metadata={"reason": coach_opinion.reason, "bidder_club_id": payload.bidder_club_id},
+                metadata={"reason": coach_opinion.reason, "bidder_club_id": resolved_bidder_club_id},
             )
             self._notify_club_owner(
-                club_id=payload.bidder_club_id,
+                club_id=resolved_bidder_club_id,
                 event_name="transfer_market.coach_disagreement",
                 template_key="COACH_DISAGREEMENT",
                 message=f"Coach blocked the move for {player.full_name}.",
@@ -518,7 +688,7 @@ class TransferMarketService:
                 metadata={"reason": concerns[0] if concerns else "player_rejected"},
             )
             self._notify_club_owner(
-                club_id=payload.bidder_club_id,
+                club_id=resolved_bidder_club_id,
                 event_name="transfer_market.player_rejected_offer",
                 template_key="PLAYER_REJECTED_OFFER",
                 message=f"{player.full_name} rejected the contract offer.",
@@ -574,7 +744,7 @@ class TransferMarketService:
                     },
                 )
                 self._notify_club_owner(
-                    club_id=payload.bidder_club_id,
+                    club_id=resolved_bidder_club_id,
                     event_name="transfer_market.transfer_completed",
                     template_key="TRANSFER_COMPLETED",
                     message=f"{player.full_name} completed the transfer.",
@@ -587,7 +757,7 @@ class TransferMarketService:
                 self._apply_completion_effects(
                     player_id=player.id,
                     selling_club_id=listing.selling_club_id,
-                    destination_club_id=payload.bidder_club_id,
+                    destination_club_id=resolved_bidder_club_id,
                     coach_opinion=coach_opinion,
                 )
 
@@ -607,7 +777,8 @@ class TransferMarketService:
         )
         return self.to_negotiation_view(negotiation)
 
-    def run_background_jobs(self, *, reference_at: datetime | None = None) -> TransferMarketJobRunView:
+    def run_background_jobs(self, *, actor: User, reference_at: datetime | None = None) -> TransferMarketJobRunView:
+        self._require_admin_actor(actor)
         effective_at = self._coerce_utc(reference_at or utcnow())
         closed_auctions = 0
         completed_transfers = 0
@@ -623,7 +794,7 @@ class TransferMarketService:
             ).all()
         )
         for listing in open_listings:
-            self.finalize_listing(listing.id, reference_at=effective_at)
+            self._finalize_listing(listing.id, reference_at=effective_at)
             closed_auctions += 1
 
         delayed_negotiations = list(
@@ -725,7 +896,13 @@ class TransferMarketService:
         self.session.refresh(profile)
         return self._to_player_decision_profile_view(profile)
 
-    def upsert_coach_profile(self, club_id: str, payload: CoachProfileUpsertRequest) -> CoachProfileView:
+    def upsert_coach_profile(self, club_id: str, payload: CoachProfileUpsertRequest, *, actor: User) -> CoachProfileView:
+        self._require_actor_club_access(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_coach_profile_access_required",
+        )
         self._require_club(club_id)
         profile = self._ensure_coach_profile(club_id)
         for key, value in payload.model_dump().items():
@@ -734,7 +911,13 @@ class TransferMarketService:
         self.session.refresh(profile)
         return self._to_coach_profile_view(profile)
 
-    def create_coach_demand(self, club_id: str, payload) -> CoachDemandView:
+    def create_coach_demand(self, club_id: str, payload, *, actor: User) -> CoachDemandView:
+        self._require_actor_club_access(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_coach_demand_access_required",
+        )
         profile = self._ensure_coach_profile(club_id)
         demand = CoachDemand(
             coach_profile_id=profile.id,
@@ -749,7 +932,19 @@ class TransferMarketService:
         self.session.refresh(demand)
         return self._to_coach_demand_view(demand)
 
-    def upsert_team_dynamics(self, club_id: str, payload: TeamDynamicsUpsertRequest) -> ClubTeamDynamicsView:
+    def upsert_team_dynamics(
+        self,
+        club_id: str,
+        payload: TeamDynamicsUpsertRequest,
+        *,
+        actor: User,
+    ) -> ClubTeamDynamicsView:
+        self._require_actor_club_access(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_team_dynamics_access_required",
+        )
         self._require_club(club_id)
         dynamics = self._ensure_team_dynamics(club_id)
         for key, value in payload.model_dump().items():
@@ -758,17 +953,29 @@ class TransferMarketService:
         self.session.refresh(dynamics)
         return self._to_team_dynamics_view(dynamics)
 
-    def add_watchlist_entry(self, payload: WatchlistEntryCreateRequest) -> MarketWatchlistEntryView:
-        self._require_club(payload.club_id)
+    def add_watchlist_entry(
+        self,
+        payload: WatchlistEntryCreateRequest,
+        *,
+        actor: User,
+        club_id: str | None = None,
+    ) -> MarketWatchlistEntryView:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id or payload.club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        self._require_club(resolved_club_id)
         self._require_player(payload.player_id)
         entry = self.session.scalar(
             select(MarketWatchlistEntry).where(
-                MarketWatchlistEntry.club_id == payload.club_id,
+                MarketWatchlistEntry.club_id == resolved_club_id,
                 MarketWatchlistEntry.player_id == payload.player_id,
             )
         )
         if entry is None:
-            entry = MarketWatchlistEntry(club_id=payload.club_id, player_id=payload.player_id)
+            entry = MarketWatchlistEntry(club_id=resolved_club_id, player_id=payload.player_id)
             self.session.add(entry)
             self.session.flush()
         entry.source = payload.source
