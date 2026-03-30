@@ -157,6 +157,9 @@ def test_match_viewer_route_adds_presentation_package_from_replay_payload() -> N
     assert package["match_label"] == f"{base_view.home_team.team_name} vs {base_view.away_team.team_name}"
     assert package["home"]["starters"]
     assert package["away"]["starters"]
+    assert package["home"]["primary_color"] == base_view.home_team.primary_color
+    assert package["away"]["accent_color"] == base_view.away_team.accent_color
+    assert package["home"]["crest"]["initials"]
     assert package["context"]["competition_name"] == "GTEX Premier League"
     assert package["context"]["standings"][0]["team_name"] == base_view.home_team.team_name
     assert package["reactions"]

@@ -200,11 +200,25 @@ class MatchViewerPresentationPlayerView(CommonSchema):
     rating: float | None = Field(default=None, ge=0.0, le=10.0)
 
 
+class MatchViewerPresentationCrestView(CommonSchema):
+    image_url: str | None = None
+    shape: str | None = None
+    initials: str | None = None
+    primary_color: str | None = None
+    secondary_color: str | None = None
+    accent_color: str | None = None
+
+
 class MatchViewerPresentationTeamView(CommonSchema):
     team_id: str
     team_name: str
     short_name: str
     formation: str
+    crest: MatchViewerPresentationCrestView | None = None
+    primary_color: str | None = None
+    secondary_color: str | None = None
+    accent_color: str | None = None
+    goalkeeper_color: str | None = None
     coach_name: str | None = None
     recent_form: int | None = Field(default=None, ge=0, le=100)
     mentality: str | None = None

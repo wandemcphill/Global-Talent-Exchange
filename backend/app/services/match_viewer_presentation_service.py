@@ -8,6 +8,7 @@ from app.models.competition_match import CompetitionMatch
 from app.schemas.match_viewer import (
     MatchViewStateView,
     MatchViewerContextBoardView,
+    MatchViewerPresentationCrestView,
     MatchViewerPresentationPackageView,
     MatchViewerPresentationPlayerView,
     MatchViewerPresentationTeamView,
@@ -112,6 +113,18 @@ class MatchViewerPresentationService:
                 team_name=team_view.team_name,
                 short_name=team_view.short_name,
                 formation=team_stats.current_formation or team_stats.started_formation or team_view.formation,
+                crest=MatchViewerPresentationCrestView(
+                    image_url=identity.badge.badge_url,
+                    shape=identity.badge.shape,
+                    initials=identity.badge.initials,
+                    primary_color=identity.badge.primary_color,
+                    secondary_color=identity.badge.secondary_color,
+                    accent_color=identity.badge.accent_color,
+                ),
+                primary_color=team_view.primary_color,
+                secondary_color=team_view.secondary_color,
+                accent_color=team_view.accent_color,
+                goalkeeper_color=team_view.goalkeeper_color,
                 coach_name=self._coach_name(metadata, side=side),
                 recent_form=self._safe_percent(team_stats.strength.recent_form),
                 mentality=self._team_mentality(metadata, side=side),
@@ -133,6 +146,10 @@ class MatchViewerPresentationService:
             team_name=team_view.team_name,
             short_name=team_view.short_name,
             formation=team_view.formation,
+            primary_color=team_view.primary_color,
+            secondary_color=team_view.secondary_color,
+            accent_color=team_view.accent_color,
+            goalkeeper_color=team_view.goalkeeper_color,
             coach_name=self._coach_name(metadata, side=side),
             recent_form=None,
             mentality=self._team_mentality(metadata, side=side),
@@ -259,15 +276,6 @@ class MatchViewerPresentationService:
                     detail=notification.message,
                     sentiment=notification.severity,
                     tag=notification.notification_type,
-                )
-            )
-        if not cards:
-            cards.append(
-                MatchViewerReactionCardView(
-                    source="Match Desk",
-                    headline="Live contract only",
-                    detail=f"{view_state.home_team.team_name} and {view_state.away_team.team_name} are on air, but the reaction feed is not present on this session payload.",
-                    tag="reduced",
                 )
             )
         return cards

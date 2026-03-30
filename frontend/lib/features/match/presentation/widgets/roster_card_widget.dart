@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../broadcast_package_models.dart';
+import 'match_header_widget.dart';
 
 class RosterCardWidget extends StatelessWidget {
   const RosterCardWidget({super.key, required this.package});
@@ -16,7 +17,7 @@ class RosterCardWidget extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF102130), Color(0xFF0B141D)],
+          colors: <Color>[Color(0xFF101C29), Color(0xFF081019)],
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -26,23 +27,27 @@ class RosterCardWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Official Roster',
+              'Official Roster Card',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Text(
               package.matchLabel,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFFAFBED2)),
+              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFFB3C2D5)),
             ),
+            if (package.context.refereeName != null) ...<Widget>[
+              const SizedBox(height: 12),
+              _InfoPill(label: 'Referee', value: package.context.refereeName!),
+            ],
             const SizedBox(height: 18),
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
-                final bool compact = constraints.maxWidth < 780;
+                final bool compact = constraints.maxWidth < 860;
                 final List<Widget> columns = <Widget>[
                   _RosterColumn(team: package.home),
                   _RosterColumn(team: package.away),
@@ -84,46 +89,56 @@ class _RosterColumn extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              team.teamName,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
+            Row(
+              children: <Widget>[
+                TeamCrestWidget(team: team, size: 48),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        team.teamName,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 6,
+                        children: <Widget>[
+                          _MiniMeta(label: team.displayCode),
+                          _MiniMeta(label: team.formation),
+                          if (team.coachName != null)
+                            _MiniMeta(label: 'Mgr ${team.coachName!}'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              '${team.shortName} | ${team.formation}'
-              '${team.coachName == null ? '' : ' | Coach ${team.coachName}'}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: const Color(0xFFB7C6D9)),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             const _SectionLabel(label: 'Starting XI'),
             const SizedBox(height: 10),
             for (final MatchPresentationPlayer player in team.starters.take(11))
               _RosterLine(player: player),
-            const SizedBox(height: 14),
-            const _SectionLabel(label: 'Substitutes'),
-            const SizedBox(height: 10),
-            if (team.bench.isEmpty)
-              Text(
-                'Bench data unavailable on this match payload.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.white60),
-              )
-            else
-              for (final MatchPresentationPlayer player in team.bench.take(9))
+            if (team.hasBench) ...<Widget>[
+              const SizedBox(height: 16),
+              const _SectionLabel(label: 'Substitutes'),
+              const SizedBox(height: 10),
+              for (final MatchPresentationPlayer player in team.bench.take(12))
                 _RosterLine(player: player, compact: true),
+            ],
           ],
         ),
       ),
@@ -139,16 +154,18 @@ class _RosterLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String roleLabel =
+        (player.role ?? player.line ?? '').replaceAll('_', ' ').toUpperCase();
     return Padding(
       padding: EdgeInsets.symmetric(vertical: compact ? 4 : 5),
       child: Row(
         children: <Widget>[
           Container(
-            width: 28,
-            height: 28,
+            width: 30,
+            height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
+              shape: BoxShape.circle,
               color: Colors.white.withValues(alpha: 0.08),
             ),
             child: Text(
@@ -169,15 +186,58 @@ class _RosterLine extends StatelessWidget {
               ),
             ),
           ),
-          if (player.role != null)
+          if (roleLabel.isNotEmpty)
             Text(
-              player.role!.replaceAll('_', ' ').toUpperCase(),
+              roleLabel,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: const Color(0xFF8FA8C4),
+                color: const Color(0xFF8EA8C3),
                 fontWeight: FontWeight.w700,
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniMeta extends StatelessWidget {
+  const _MiniMeta({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+        color: const Color(0xFF9FB3C8),
+        fontWeight: FontWeight.w700,
       ),
     );
   }

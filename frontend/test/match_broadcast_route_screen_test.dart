@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
 import 'package:gte_frontend/features/match/match_broadcast_screen.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
@@ -26,9 +27,68 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Broadcast Package'), findsWidgets);
-    expect(find.text('Official Roster'), findsOneWidget);
+    expect(find.text('Official Roster Card'), findsOneWidget);
     expect(find.text('PSEUDO_3D'), findsOneWidget);
   });
+
+  testWidgets(
+    'broadcast route degrades cleanly when optional buckets are absent',
+    (WidgetTester tester) async {
+      final MatchPresentationPackage reducedPackage = MatchPresentationPackage(
+        matchLabel: 'Lagos Stars vs Abuja City',
+        home: const MatchPresentationTeam(
+          teamId: 'home',
+          teamName: 'Lagos Stars',
+          shortName: 'LAG',
+          formation: '4-3-3',
+          starters: <MatchPresentationPlayer>[
+            MatchPresentationPlayer(
+              playerId: 'home-1',
+              playerName: 'Adebayo',
+              shirtNumber: 1,
+              role: 'goalkeeper',
+              line: 'goalkeeper',
+              x: 90,
+              y: 50,
+            ),
+          ],
+        ),
+        away: const MatchPresentationTeam(
+          teamId: 'away',
+          teamName: 'Abuja City',
+          shortName: 'ABJ',
+          formation: '4-2-3-1',
+          starters: <MatchPresentationPlayer>[
+            MatchPresentationPlayer(
+              playerId: 'away-1',
+              playerName: 'Yusuf',
+              shirtNumber: 1,
+              role: 'goalkeeper',
+              line: 'goalkeeper',
+              x: 90,
+              y: 50,
+            ),
+          ],
+        ),
+      );
+
+      await tester.pumpWidget(
+        _buildWidget(
+          repository: _FakeViewerRepository(
+            viewState: buildBroadcastTestViewState(
+              presentationPackage: reducedPackage,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Broadcast Package'), findsWidgets);
+      expect(find.byKey(const Key('storyline-panel')), findsNothing);
+      expect(find.text('Standings snapshot'), findsNothing);
+    },
+  );
 
   testWidgets('broadcast route shows blocked state when bootstrap fails', (
     WidgetTester tester,
