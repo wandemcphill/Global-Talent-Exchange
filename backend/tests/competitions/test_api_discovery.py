@@ -292,6 +292,7 @@ def test_discovery_query_budget_is_batched(
     client,
     app_session_factory,
     competition_admin_headers,
+    auth_user_factory,
 ) -> None:
     creator_id = "discovery-query-budget"
     competition_ids = [
@@ -311,9 +312,11 @@ def test_discovery_query_budget_is_batched(
     ]
     for index, competition_id in enumerate(competition_ids):
         for join_index in range((index % 4) + 1):
+            user = auth_user_factory(suffix=f"batch-user-{index}-{join_index}")
             response = client.post(
                 f"/api/competitions/{competition_id}/join",
-                json={"user_id": f"batch-user-{index}-{join_index}"},
+                headers=user["headers"],
+                json={"user_id": user["user_id"]},
             )
             assert response.status_code == 200, response.text
 

@@ -1948,6 +1948,40 @@ class MatchTimelineService:
         }
         return mapping.get(event.event_type, MatchViewerEventType.NEUTRAL)
 
+    def _viewer_event_type_from_live_event(
+        self,
+        event: LiveMatchStreamEventView,
+        *,
+        raw_event_type: str,
+    ) -> MatchViewerEventType:
+        normalized_raw = (raw_event_type or "").strip().lower()
+        normalized_event = (event.event_type or "").strip().lower()
+        if normalized_event == "goal" or normalized_raw in {"goal", "penalty_goal", "penalty_scored"}:
+            return MatchViewerEventType.GOAL
+        if normalized_event in {"full_time", "fulltime"} or normalized_raw in {"full_time", "fulltime"}:
+            return MatchViewerEventType.FULLTIME
+        if normalized_event == "card" or normalized_raw in {"red_card", "yellow_card"}:
+            if normalized_raw == "red_card" or event.metadata.get("card_type") == "red":
+                return MatchViewerEventType.RED_CARD
+            return MatchViewerEventType.YELLOW_CARD
+        if normalized_event == "substitution" or normalized_raw == "substitution":
+            return MatchViewerEventType.SUBSTITUTION
+        if normalized_event == "offside" or normalized_raw == "offside":
+            return MatchViewerEventType.OFFSIDE
+        if normalized_event == "foul" or normalized_raw in {"foul", "tactical_foul"}:
+            return MatchViewerEventType.FOUL
+        if normalized_raw in {"goalkeeper_save", "double_save", "shot_on_target"}:
+            return MatchViewerEventType.SAVE
+        if normalized_raw in {"missed_chance", "missed_big_chance", "woodwork", "penalty_missed"}:
+            return MatchViewerEventType.MISS
+        if normalized_raw in {"free_kick", "corner"}:
+            return MatchViewerEventType.SET_PIECE
+        if normalized_raw == "penalty_awarded":
+            return MatchViewerEventType.PENALTY
+        if normalized_event == "shot":
+            return MatchViewerEventType.ATTACK
+        return MatchViewerEventType.NEUTRAL
+
     def _viewer_event_type_from_archive_event(self, event: ReplayMomentView) -> MatchViewerEventType:
         description = (event.description or "").lower()
         if event.event_type == "goals":
