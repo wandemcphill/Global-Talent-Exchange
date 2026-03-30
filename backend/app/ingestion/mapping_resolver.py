@@ -474,16 +474,31 @@ class MappingResolver:
         country_name = _country_lookup_key(context.country_name)
         competition_id = (context.competition_id or "").strip() or None
         country_id = (context.country_id or "").strip() or None
-        return tuple(
-            entry
-            for entry in candidates
-            if (
-                (competition_id and entry.competition_id == competition_id)
-                or (competition_name and entry.competition_name == competition_name)
-                or (country_id and entry.country_id == country_id)
-                or (country_name and entry.country_name == country_name)
+        if competition_id:
+            competition_id_matches = tuple(
+                entry for entry in candidates if entry.competition_id == competition_id
             )
-        )
+            if competition_id_matches:
+                return competition_id_matches
+        if competition_name:
+            competition_name_matches = tuple(
+                entry for entry in candidates if entry.competition_name == competition_name
+            )
+            if competition_name_matches:
+                return competition_name_matches
+        if country_id:
+            country_id_matches = tuple(
+                entry for entry in candidates if entry.country_id == country_id
+            )
+            if country_id_matches:
+                return country_id_matches
+        if country_name:
+            country_name_matches = tuple(
+                entry for entry in candidates if entry.country_name == country_name
+            )
+            if country_name_matches:
+                return country_name_matches
+        return ()
 
     def _select_club_from_candidates(
         self,
