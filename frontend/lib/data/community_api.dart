@@ -4,10 +4,7 @@ import 'gte_http_transport.dart';
 import '../models/community_models.dart';
 
 class CommunityApi {
-  CommunityApi({
-    required this.client,
-    required this.fixtures,
-  });
+  CommunityApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
   final _CommunityFixtures fixtures;
@@ -44,27 +41,48 @@ class CommunityApi {
   }
 
   Future<CommunityDigest> fetchDigest() {
-    return client.withFallback<CommunityDigest>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/community/digest');
-        return CommunityDigest.fromJson(payload);
+    return client.withFallback<CommunityDigest>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/community/digest',
+      );
+      return CommunityDigest.fromJson(payload);
+    }, fixtures.digest);
+  }
+
+  Future<bool> fetchCreatorClubFollowing({required String clubId}) async {
+    final Map<String, dynamic> payload = await client.getMap(
+      '/community/creator-clubs/$clubId/fan-state',
+    );
+    final Object? following = payload['following'];
+    if (following is bool) {
+      return following;
+    }
+    return following?.toString().trim().toLowerCase() == 'true';
+  }
+
+  Future<void> followCreatorClub({required String clubId}) async {
+    await client.request(
+      'POST',
+      '/community/creator-clubs/$clubId/follow',
+      body: const <String, Object?>{
+        'metadata_json': <String, Object?>{'source': 'active_shell'},
       },
-      fixtures.digest,
     );
   }
 
+  Future<void> unfollowCreatorClub({required String clubId}) async {
+    await client.request('DELETE', '/community/creator-clubs/$clubId/follow');
+  }
+
   Future<List<CommunityWatchlistItem>> listWatchlist() {
-    return client.withFallback<List<CommunityWatchlistItem>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/community/watchlist');
-        return payload
-            .map(CommunityWatchlistItem.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.watchlist,
-    );
+    return client.withFallback<List<CommunityWatchlistItem>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/community/watchlist',
+      );
+      return payload
+          .map(CommunityWatchlistItem.fromJson)
+          .toList(growable: false);
+    }, fixtures.watchlist);
   }
 
   Future<CommunityWatchlistItem> addWatchlist({
@@ -98,31 +116,22 @@ class CommunityApi {
   }
 
   Future<void> removeWatchlist(String competitionKey) {
-    return client.withFallback<void>(
-      () async {
-        await client.request(
-          'DELETE',
-          '/community/watchlist/$competitionKey',
-        );
-      },
-      () async => fixtures.removeWatchlist(competitionKey),
-    );
+    return client.withFallback<void>(() async {
+      await client.request('DELETE', '/community/watchlist/$competitionKey');
+    }, () async => fixtures.removeWatchlist(competitionKey));
   }
 
   Future<List<LiveThread>> listLiveThreads({String? competitionKey}) {
-    return client.withFallback<List<LiveThread>>(
-      () async {
-        final List<dynamic> payload = await client.getList(
-          '/community/live-threads',
-          query: <String, Object?>{
-            if (competitionKey != null && competitionKey.isNotEmpty)
-              'competition_key': competitionKey,
-          },
-        );
-        return payload.map(LiveThread.fromJson).toList(growable: false);
-      },
-      fixtures.liveThreads,
-    );
+    return client.withFallback<List<LiveThread>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/community/live-threads',
+        query: <String, Object?>{
+          if (competitionKey != null && competitionKey.isNotEmpty)
+            'competition_key': competitionKey,
+        },
+      );
+      return payload.map(LiveThread.fromJson).toList(growable: false);
+    }, fixtures.liveThreads);
   }
 
   Future<LiveThread> createLiveThread({
@@ -150,60 +159,47 @@ class CommunityApi {
   }
 
   Future<LiveThread> fetchLiveThread(String threadId) {
-    return client.withFallback<LiveThread>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/community/live-threads/$threadId');
-        return LiveThread.fromJson(payload);
-      },
-      () async => fixtures.getLiveThread(threadId),
-    );
+    return client.withFallback<LiveThread>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/community/live-threads/$threadId',
+      );
+      return LiveThread.fromJson(payload);
+    }, () async => fixtures.getLiveThread(threadId));
   }
 
   Future<List<LiveThreadMessage>> listLiveThreadMessages(String threadId) {
-    return client.withFallback<List<LiveThreadMessage>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/community/live-threads/$threadId/messages');
-        return payload
-            .map(LiveThreadMessage.fromJson)
-            .toList(growable: false);
-      },
-      () async => fixtures.liveThreadMessages(threadId),
-    );
+    return client.withFallback<List<LiveThreadMessage>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/community/live-threads/$threadId/messages',
+      );
+      return payload.map(LiveThreadMessage.fromJson).toList(growable: false);
+    }, () async => fixtures.liveThreadMessages(threadId));
   }
 
   Future<LiveThreadMessage> postLiveThreadMessage({
     required String threadId,
     required String body,
   }) {
-    return client.withFallback<LiveThreadMessage>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/community/live-threads/$threadId/messages',
-          body: <String, Object?>{
-            'body': body,
-            'metadata_json': <String, Object?>{},
-          },
-        );
-        return LiveThreadMessage.fromJson(payload);
-      },
-      () async => fixtures.postLiveThreadMessage(threadId, body),
-    );
+    return client.withFallback<LiveThreadMessage>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/community/live-threads/$threadId/messages',
+        body: <String, Object?>{
+          'body': body,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return LiveThreadMessage.fromJson(payload);
+    }, () async => fixtures.postLiveThreadMessage(threadId, body));
   }
 
   Future<List<PrivateMessageThread>> listPrivateThreads() {
-    return client.withFallback<List<PrivateMessageThread>>(
-      () async {
-        final List<dynamic> payload =
-            await client.getList('/community/private-messages/threads');
-        return payload
-            .map(PrivateMessageThread.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.privateThreads,
-    );
+    return client.withFallback<List<PrivateMessageThread>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/community/private-messages/threads',
+      );
+      return payload.map(PrivateMessageThread.fromJson).toList(growable: false);
+    }, fixtures.privateThreads);
   }
 
   Future<PrivateMessageThread> createPrivateThread({
@@ -211,65 +207,54 @@ class CommunityApi {
     required String initialMessage,
     String subject = '',
   }) {
-    return client.withFallback<PrivateMessageThread>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/community/private-messages/threads',
-          body: <String, Object?>{
-            'participant_user_ids': participantUserIds,
-            'subject': subject,
-            'initial_message': initialMessage,
-            'metadata_json': <String, Object?>{},
-          },
-        );
-        return PrivateMessageThread.fromJson(payload);
-      },
-      () async => fixtures.createPrivateThread(subject: subject),
-    );
+    return client.withFallback<PrivateMessageThread>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/community/private-messages/threads',
+        body: <String, Object?>{
+          'participant_user_ids': participantUserIds,
+          'subject': subject,
+          'initial_message': initialMessage,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return PrivateMessageThread.fromJson(payload);
+    }, () async => fixtures.createPrivateThread(subject: subject));
   }
 
   Future<PrivateMessageThread> fetchPrivateThread(String threadId) {
-    return client.withFallback<PrivateMessageThread>(
-      () async {
-        final Map<String, dynamic> payload =
-            await client.getMap('/community/private-messages/threads/$threadId');
-        return PrivateMessageThread.fromJson(payload);
-      },
-      () async => fixtures.getPrivateThread(threadId),
-    );
+    return client.withFallback<PrivateMessageThread>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/community/private-messages/threads/$threadId',
+      );
+      return PrivateMessageThread.fromJson(payload);
+    }, () async => fixtures.getPrivateThread(threadId));
   }
 
   Future<List<PrivateMessage>> listPrivateMessages(String threadId) {
-    return client.withFallback<List<PrivateMessage>>(
-      () async {
-        final List<dynamic> payload = await client.getList(
-          '/community/private-messages/threads/$threadId/messages',
-        );
-        return payload.map(PrivateMessage.fromJson).toList(growable: false);
-      },
-      () async => fixtures.privateMessages(threadId),
-    );
+    return client.withFallback<List<PrivateMessage>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/community/private-messages/threads/$threadId/messages',
+      );
+      return payload.map(PrivateMessage.fromJson).toList(growable: false);
+    }, () async => fixtures.privateMessages(threadId));
   }
 
   Future<PrivateMessage> postPrivateMessage({
     required String threadId,
     required String body,
   }) {
-    return client.withFallback<PrivateMessage>(
-      () async {
-        final Object? payload = await client.request(
-          'POST',
-          '/community/private-messages/threads/$threadId/messages',
-          body: <String, Object?>{
-            'body': body,
-            'metadata_json': <String, Object?>{},
-          },
-        );
-        return PrivateMessage.fromJson(payload);
-      },
-      () async => fixtures.postPrivateMessage(threadId, body),
-    );
+    return client.withFallback<PrivateMessage>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/community/private-messages/threads/$threadId/messages',
+        body: <String, Object?>{
+          'body': body,
+          'metadata_json': <String, Object?>{},
+        },
+      );
+      return PrivateMessage.fromJson(payload);
+    }, () async => fixtures.postPrivateMessage(threadId, body));
   }
 }
 
@@ -281,12 +266,12 @@ class _CommunityFixtures {
     required Map<String, List<LiveThreadMessage>> threadMessages,
     required List<PrivateMessageThread> privateThreads,
     required Map<String, List<PrivateMessage>> privateMessages,
-  })  : _digest = digest,
-        _watchlist = watchlist,
-        _liveThreads = liveThreads,
-        _threadMessages = threadMessages,
-        _privateThreads = privateThreads,
-        _privateMessages = privateMessages;
+  }) : _digest = digest,
+       _watchlist = watchlist,
+       _liveThreads = liveThreads,
+       _threadMessages = threadMessages,
+       _privateThreads = privateThreads,
+       _privateMessages = privateMessages;
 
   CommunityDigest _digest;
   final List<CommunityWatchlistItem> _watchlist;
@@ -326,20 +311,20 @@ class _CommunityFixtures {
     ];
     final Map<String, List<LiveThreadMessage>> messages =
         <String, List<LiveThreadMessage>>{
-      'thread-1': <LiveThreadMessage>[
-        LiveThreadMessage(
-          id: 'msg-1',
-          threadId: 'thread-1',
-          authorUserId: 'user-2',
-          body: 'Lineups just dropped. Expect a high press.',
-          visibility: 'public',
-          likeCount: 3,
-          replyCount: 0,
-          createdAt: DateTime.parse('2026-03-13T19:55:00Z'),
-          metadata: const <String, Object?>{},
-        ),
-      ],
-    };
+          'thread-1': <LiveThreadMessage>[
+            LiveThreadMessage(
+              id: 'msg-1',
+              threadId: 'thread-1',
+              authorUserId: 'user-2',
+              body: 'Lineups just dropped. Expect a high press.',
+              visibility: 'public',
+              likeCount: 3,
+              replyCount: 0,
+              createdAt: DateTime.parse('2026-03-13T19:55:00Z'),
+              metadata: const <String, Object?>{},
+            ),
+          ],
+        };
     final List<PrivateMessageThread> privateThreads = <PrivateMessageThread>[
       PrivateMessageThread(
         id: 'pm-1',
@@ -375,17 +360,17 @@ class _CommunityFixtures {
     ];
     final Map<String, List<PrivateMessage>> privateMessages =
         <String, List<PrivateMessage>>{
-      'pm-1': <PrivateMessage>[
-        PrivateMessage(
-          id: 'pm-msg-1',
-          threadId: 'pm-1',
-          senderUserId: 'user-3',
-          body: 'We should align on the next listing window.',
-          createdAt: DateTime.parse('2026-03-13T18:10:00Z'),
-          metadata: const <String, Object?>{},
-        ),
-      ],
-    };
+          'pm-1': <PrivateMessage>[
+            PrivateMessage(
+              id: 'pm-msg-1',
+              threadId: 'pm-1',
+              senderUserId: 'user-3',
+              body: 'We should align on the next listing window.',
+              createdAt: DateTime.parse('2026-03-13T18:10:00Z'),
+              metadata: const <String, Object?>{},
+            ),
+          ],
+        };
     final CommunityDigest digest = CommunityDigest(
       watchlistCount: watchlist.length,
       liveThreadCount: threads.length,
@@ -434,7 +419,8 @@ class _CommunityFixtures {
 
   Future<void> removeWatchlist(String competitionKey) async {
     _watchlist.removeWhere(
-        (CommunityWatchlistItem item) => item.competitionKey == competitionKey);
+      (CommunityWatchlistItem item) => item.competitionKey == competitionKey,
+    );
     _digest = CommunityDigest(
       watchlistCount: _watchlist.length,
       liveThreadCount: _digest.liveThreadCount,
@@ -471,10 +457,15 @@ class _CommunityFixtures {
       _liveThreads.firstWhere((LiveThread item) => item.id == threadId);
 
   Future<List<LiveThreadMessage>> liveThreadMessages(String threadId) async =>
-      List<LiveThreadMessage>.of(_threadMessages[threadId] ?? const <LiveThreadMessage>[], growable: false);
+      List<LiveThreadMessage>.of(
+        _threadMessages[threadId] ?? const <LiveThreadMessage>[],
+        growable: false,
+      );
 
   Future<LiveThreadMessage> postLiveThreadMessage(
-      String threadId, String body) async {
+    String threadId,
+    String body,
+  ) async {
     final LiveThreadMessage message = LiveThreadMessage(
       id: 'msg-${DateTime.now().millisecondsSinceEpoch}',
       threadId: threadId,
@@ -486,14 +477,18 @@ class _CommunityFixtures {
       createdAt: DateTime.now().toUtc(),
       metadata: const <String, Object?>{},
     );
-    _threadMessages.putIfAbsent(threadId, () => <LiveThreadMessage>[]).add(message);
+    _threadMessages
+        .putIfAbsent(threadId, () => <LiveThreadMessage>[])
+        .add(message);
     return message;
   }
 
   Future<List<PrivateMessageThread>> privateThreads() async =>
       List<PrivateMessageThread>.of(_privateThreads, growable: false);
 
-  Future<PrivateMessageThread> createPrivateThread({required String subject}) async {
+  Future<PrivateMessageThread> createPrivateThread({
+    required String subject,
+  }) async {
     final PrivateMessageThread thread = PrivateMessageThread(
       id: 'pm-${_privateThreads.length + 1}',
       threadKey: 'pm-${_privateThreads.length + 1}',
@@ -511,12 +506,20 @@ class _CommunityFixtures {
   }
 
   Future<PrivateMessageThread> getPrivateThread(String threadId) async =>
-      _privateThreads.firstWhere((PrivateMessageThread item) => item.id == threadId);
+      _privateThreads.firstWhere(
+        (PrivateMessageThread item) => item.id == threadId,
+      );
 
   Future<List<PrivateMessage>> privateMessages(String threadId) async =>
-      List<PrivateMessage>.of(_privateMessages[threadId] ?? const <PrivateMessage>[], growable: false);
+      List<PrivateMessage>.of(
+        _privateMessages[threadId] ?? const <PrivateMessage>[],
+        growable: false,
+      );
 
-  Future<PrivateMessage> postPrivateMessage(String threadId, String body) async {
+  Future<PrivateMessage> postPrivateMessage(
+    String threadId,
+    String body,
+  ) async {
     final PrivateMessage message = PrivateMessage(
       id: 'pm-msg-${DateTime.now().millisecondsSinceEpoch}',
       threadId: threadId,
@@ -525,7 +528,9 @@ class _CommunityFixtures {
       createdAt: DateTime.now().toUtc(),
       metadata: const <String, Object?>{},
     );
-    _privateMessages.putIfAbsent(threadId, () => <PrivateMessage>[]).add(message);
+    _privateMessages
+        .putIfAbsent(threadId, () => <PrivateMessage>[])
+        .add(message);
     return message;
   }
 }

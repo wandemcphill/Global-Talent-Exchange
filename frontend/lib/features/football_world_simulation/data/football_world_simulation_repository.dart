@@ -6,11 +6,11 @@ import 'football_world_simulation_models.dart';
 abstract class FootballWorldSimulationRepository {
   Future<List<FootballCulture>> listCultures(FootballCultureListQuery query);
 
+  Future<List<WorldFederation>> listFederations();
+
   Future<ClubWorldContext> fetchClubContext(String clubId);
 
-  Future<CompetitionWorldContext> fetchCompetitionContext(
-    String competitionId,
-  );
+  Future<CompetitionWorldContext> fetchCompetitionContext(String competitionId);
 
   Future<List<WorldNarrative>> listNarratives(WorldNarrativeListQuery query);
 
@@ -28,13 +28,17 @@ abstract class FootballWorldSimulationRepository {
     String narrativeSlug,
     WorldNarrativeUpsertRequest request,
   );
+
+  Future<WorldFederationMembership> joinFederation(
+    String federationId, {
+    required String clubId,
+  });
 }
 
 class FootballWorldSimulationApiRepository
     implements FootballWorldSimulationRepository {
-  FootballWorldSimulationApiRepository({
-    required GteAuthedApi client,
-  }) : _client = client;
+  FootballWorldSimulationApiRepository({required GteAuthedApi client})
+    : _client = client;
 
   factory FootballWorldSimulationApiRepository.standard({
     required String baseUrl,
@@ -54,12 +58,25 @@ class FootballWorldSimulationApiRepository
 
   @override
   Future<List<FootballCulture>> listCultures(
-      FootballCultureListQuery query) async {
+    FootballCultureListQuery query,
+  ) async {
     return parseList(
-      await _client.getList('/api/world/cultures',
-          query: query.toQuery(), auth: false),
+      await _client.getList(
+        '/api/world/cultures',
+        query: query.toQuery(),
+        auth: false,
+      ),
       FootballCulture.fromJson,
       label: 'football cultures',
+    );
+  }
+
+  @override
+  Future<List<WorldFederation>> listFederations() async {
+    return parseList(
+      await _client.getList('/federations', auth: false),
+      WorldFederation.fromJson,
+      label: 'world federations',
     );
   }
 
@@ -135,6 +152,26 @@ class FootballWorldSimulationApiRepository
         'PUT',
         '/admin/world/narratives/$narrativeSlug',
         body: request.toJson(),
+      ),
+    );
+  }
+
+  @override
+  Future<WorldFederationMembership> joinFederation(
+    String federationId, {
+    required String clubId,
+  }) async {
+    return WorldFederationMembership.fromJson(
+      await _client.request(
+        'POST',
+        '/federations/$federationId/memberships',
+        body: <String, Object?>{
+          'club_id': clubId,
+          'auto_activate': true,
+          'metadata_json': const <String, Object?>{
+            'source': 'football_world_simulation',
+          },
+        },
       ),
     );
   }

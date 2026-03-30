@@ -14,11 +14,11 @@ class FootballCultureListQuery {
   final int limit;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'country_code': countryCode,
-        'scope_type': scopeType,
-        'active_only': activeOnly,
-        'limit': limit,
-      });
+    'country_code': countryCode,
+    'scope_type': scopeType,
+    'active_only': activeOnly,
+    'limit': limit,
+  });
 }
 
 class WorldNarrativeListQuery {
@@ -33,10 +33,103 @@ class WorldNarrativeListQuery {
   final int limit;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'club_id': clubId,
-        'competition_id': competitionId,
-        'limit': limit,
-      });
+    'club_id': clubId,
+    'competition_id': competitionId,
+    'limit': limit,
+  });
+}
+
+class WorldFederationMembership {
+  const WorldFederationMembership._(this.raw);
+
+  final JsonMap raw;
+
+  factory WorldFederationMembership.fromJson(Object? value) {
+    return WorldFederationMembership._(
+      jsonMap(value, label: 'federation membership'),
+    );
+  }
+
+  String get id => stringValue(raw['id']);
+  String get federationId => stringValue(raw['federation_id']);
+  String get clubId => stringValue(raw['club_id']);
+  String? get userId => stringOrNullValue(raw['user_id']);
+  String get role => stringValue(raw['role'], fallback: 'member_club');
+  String get status => stringValue(raw['status'], fallback: 'pending');
+  JsonMap get metadata =>
+      jsonMap(raw['metadata_json'], fallback: const <String, Object?>{});
+}
+
+class WorldFederation {
+  const WorldFederation._(this.raw);
+
+  final JsonMap raw;
+
+  factory WorldFederation.fromJson(Object? value) {
+    return WorldFederation._(jsonMap(value, label: 'federation'));
+  }
+
+  String get id => stringValue(raw['id']);
+  String get name => stringValue(raw['name']);
+  double get rankingScore => numberValue(raw['ranking_score']);
+  double get reputationScore => numberValue(raw['reputation_score']);
+  bool get isPublic => boolValue(raw['is_public'], fallback: true);
+  JsonMap get structure =>
+      jsonMap(raw['structure_json'], fallback: const <String, Object?>{});
+  JsonMap get rules =>
+      jsonMap(raw['rules_json'], fallback: const <String, Object?>{});
+  JsonMap get metadata =>
+      jsonMap(raw['metadata_json'], fallback: const <String, Object?>{});
+  List<JsonMap> get competitions =>
+      jsonMapList(raw['competitions_json'], label: 'federation competitions');
+  List<JsonMap> get members =>
+      jsonMapList(raw['members_json'], label: 'federation members');
+
+  String get regionLabel {
+    return stringValue(
+      metadata['region_label'] ??
+          metadata['region_name'] ??
+          metadata['region'] ??
+          rules['region_label'] ??
+          rules['region_name'] ??
+          rules['region_code'],
+      fallback: 'Global federation',
+    );
+  }
+
+  int get memberClubCount {
+    final Set<String> clubIds = <String>{};
+    for (final JsonMap member in members) {
+      final String? clubId = stringOrNullValue(member['club_id']);
+      if (clubId != null) {
+        clubIds.add(clubId);
+      }
+    }
+    return clubIds.length;
+  }
+
+  int get competitionCount => competitions.length;
+
+  String? membershipStatusForClub(String? clubId) {
+    final String trimmedClubId = clubId?.trim() ?? '';
+    if (trimmedClubId.isEmpty) {
+      return null;
+    }
+    for (final JsonMap member in members) {
+      if (stringValue(member['club_id']) == trimmedClubId) {
+        return stringOrNullValue(member['status']) ?? 'pending';
+      }
+    }
+    return null;
+  }
+
+  bool isJoinedByClub(String? clubId) {
+    return membershipStatusForClub(clubId)?.toLowerCase() == 'active';
+  }
+
+  bool isPendingForClub(String? clubId) {
+    return membershipStatusForClub(clubId)?.toLowerCase() == 'pending';
+  }
 }
 
 class FootballCultureUpsertRequest {
@@ -69,19 +162,19 @@ class FootballCultureUpsertRequest {
   final JsonMap metadata;
 
   JsonMap toJson() => <String, Object?>{
-        'display_name': displayName,
-        'scope_type': scopeType,
-        if (countryCode != null) 'country_code': countryCode,
-        if (regionName != null) 'region_name': regionName,
-        if (cityName != null) 'city_name': cityName,
-        'play_style_summary': playStyleSummary,
-        'supporter_traits_json': supporterTraits,
-        'rivalry_themes_json': rivalryThemes,
-        'talent_archetypes_json': talentArchetypes,
-        'climate_notes': climateNotes,
-        'active': active,
-        'metadata_json': metadata,
-      };
+    'display_name': displayName,
+    'scope_type': scopeType,
+    if (countryCode != null) 'country_code': countryCode,
+    if (regionName != null) 'region_name': regionName,
+    if (cityName != null) 'city_name': cityName,
+    'play_style_summary': playStyleSummary,
+    'supporter_traits_json': supporterTraits,
+    'rivalry_themes_json': rivalryThemes,
+    'talent_archetypes_json': talentArchetypes,
+    'climate_notes': climateNotes,
+    'active': active,
+    'metadata_json': metadata,
+  };
 }
 
 class ClubWorldProfileUpsertRequest {
@@ -110,17 +203,17 @@ class ClubWorldProfileUpsertRequest {
   final JsonMap metadata;
 
   JsonMap toJson() => <String, Object?>{
-        if (cultureKey != null) 'culture_key': cultureKey,
-        'narrative_phase': narrativePhase,
-        'supporter_mood': supporterMood,
-        'derby_heat_score': derbyHeatScore,
-        'global_appeal_score': globalAppealScore,
-        'identity_keywords_json': identityKeywords,
-        'transfer_identity_tags_json': transferIdentityTags,
-        'fan_culture_tags_json': fanCultureTags,
-        'world_flags_json': worldFlags,
-        'metadata_json': metadata,
-      };
+    if (cultureKey != null) 'culture_key': cultureKey,
+    'narrative_phase': narrativePhase,
+    'supporter_mood': supporterMood,
+    'derby_heat_score': derbyHeatScore,
+    'global_appeal_score': globalAppealScore,
+    'identity_keywords_json': identityKeywords,
+    'transfer_identity_tags_json': transferIdentityTags,
+    'fan_culture_tags_json': fanCultureTags,
+    'world_flags_json': worldFlags,
+    'metadata_json': metadata,
+  };
 }
 
 class WorldNarrativeUpsertRequest {
@@ -157,21 +250,21 @@ class WorldNarrativeUpsertRequest {
   final JsonMap metadata;
 
   JsonMap toJson() => <String, Object?>{
-        if (clubId != null) 'club_id': clubId,
-        if (competitionId != null) 'competition_id': competitionId,
-        'arc_type': arcType,
-        'status': status,
-        'visibility': visibility,
-        'headline': headline,
-        'summary': summary,
-        'importance_score': importanceScore,
-        'simulation_horizon': simulationHorizon,
-        if (startAt != null) 'start_at': startAt!.toUtc().toIso8601String(),
-        if (endAt != null) 'end_at': endAt!.toUtc().toIso8601String(),
-        'tags_json': tags,
-        'impact_vectors_json': impactVectors,
-        'metadata_json': metadata,
-      };
+    if (clubId != null) 'club_id': clubId,
+    if (competitionId != null) 'competition_id': competitionId,
+    'arc_type': arcType,
+    'status': status,
+    'visibility': visibility,
+    'headline': headline,
+    'summary': summary,
+    'importance_score': importanceScore,
+    'simulation_horizon': simulationHorizon,
+    if (startAt != null) 'start_at': startAt!.toUtc().toIso8601String(),
+    if (endAt != null) 'end_at': endAt!.toUtc().toIso8601String(),
+    'tags_json': tags,
+    'impact_vectors_json': impactVectors,
+    'metadata_json': metadata,
+  };
 }
 
 class FootballCulture {
@@ -246,9 +339,9 @@ class CompetitionWorldContext {
   String get stage => stringValue(raw['stage']);
   int get participantCount => intValue(raw['participant_count']);
   List<JsonMap> get activeNarratives => jsonMapList(
-        raw['active_narratives'],
-        label: 'competition world narratives',
-      );
+    raw['active_narratives'],
+    label: 'competition world narratives',
+  );
   List<JsonMap> get simulationHooks =>
       jsonMapList(raw['simulation_hooks'], label: 'competition world hooks');
 }

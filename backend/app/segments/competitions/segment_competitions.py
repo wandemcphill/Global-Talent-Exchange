@@ -105,6 +105,7 @@ def _require_manage_competitions_or_creator(
 @router.post("", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 def create_competition(
     payload: CompetitionCreateRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     return _handle_competition_errors(lambda: orchestrator.create(payload))
@@ -122,6 +123,7 @@ def create_competition_alias(
 def update_competition(
     competition_id: str,
     payload: CompetitionUpdateRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     result = _handle_competition_errors(lambda: orchestrator.update(competition_id, payload))
@@ -261,6 +263,7 @@ def _join_competition_response(
 def leave_competition(
     competition_id: str,
     payload: CompetitionLeaveRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     result = _handle_competition_errors(lambda: orchestrator.leave(competition_id, user_id=payload.user_id))
@@ -273,6 +276,7 @@ def leave_competition(
 def create_competition_invite(
     competition_id: str,
     payload: CompetitionInviteCreateRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionInviteView:
     result = _handle_competition_errors(
@@ -304,6 +308,7 @@ def list_competition_invites(
 def accept_competition_invite(
     competition_id: str,
     payload: CompetitionInviteAcceptRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     result = _handle_competition_errors(lambda: orchestrator.accept_invite(competition_id, payload))
@@ -385,6 +390,7 @@ def get_competition_standings(
 def seed_competition(
     competition_id: str,
     payload: CompetitionSeedRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     result = _handle_competition_errors(lambda: orchestrator.seed_competition(competition_id, payload))
@@ -414,6 +420,7 @@ def launch_competition(
 def advance_competition(
     competition_id: str,
     payload: CompetitionAdvanceRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     result = _handle_competition_errors(lambda: orchestrator.advance_competition(competition_id, payload))
@@ -426,6 +433,7 @@ def advance_competition(
 def finalize_competition(
     competition_id: str,
     payload: CompetitionFinalizeRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     result = _handle_competition_errors(lambda: orchestrator.finalize_competition(competition_id, payload))
@@ -438,6 +446,7 @@ def finalize_competition(
 def preview_competition_schedule(
     competition_id: str,
     payload: CompetitionSchedulePreviewRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSchedulePreviewResponse:
     result = _handle_competition_errors(lambda: orchestrator.schedule_preview(competition_id, payload))
@@ -450,6 +459,7 @@ def preview_competition_schedule(
 def create_competition_schedule_job(
     competition_id: str,
     payload: CompetitionScheduleJobRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionScheduleJobView:
     result = _handle_competition_errors(lambda: orchestrator.create_schedule_job(competition_id, payload))
@@ -486,6 +496,7 @@ def record_match_event(
     competition_id: str,
     match_id: str,
     payload: CompetitionMatchEventRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionMatchEventView:
     result = _handle_competition_errors(lambda: orchestrator.record_match_event(competition_id, match_id, payload))
@@ -511,6 +522,7 @@ def complete_match(
     competition_id: str,
     match_id: str,
     payload: CompetitionMatchResultRequest,
+    _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionMatchView:
     result = _handle_competition_errors(lambda: orchestrator.complete_match(competition_id, match_id, payload))

@@ -193,9 +193,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   clubName: clubName,
                   userLabel: _displayUserLabel(),
                   title: '$clubName matchday lobby',
-                  subtitle: widget.exchangeController.isAuthenticated
-                      ? 'Your club, capital room, and next football story now live in one place.'
-                      : 'Preview the football universe first, then sign in to trade, fund, and manage the badge.',
+                  subtitle:
+                      widget.exchangeController.isAuthenticated
+                          ? 'Your club, capital room, and next football story now live in one place.'
+                          : 'Preview the football universe first, then sign in to trade, fund, and manage the badge.',
                   capitalLabel: _capitalMetricLabel(),
                   liveLabel: _livePulseLabel(snapshot),
                   isAuthenticated: widget.exchangeController.isAuthenticated,
@@ -219,8 +220,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                     GteMetricChip(
                       label: 'Orders',
-                      value: widget.exchangeController.openOrders.length
-                          .toString(),
+                      value:
+                          widget.exchangeController.openOrders.length
+                              .toString(),
                       positive: widget.exchangeController.openOrders.isNotEmpty,
                     ),
                   ],
@@ -539,10 +541,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }) async {
     final String? clubId = widget.navigationDependencies?.currentClubId?.trim();
     if (clubId == null || clubId.isEmpty) {
-      await _showRouteRequirementDialog(
-        title: title,
-        message: message,
-      );
+      await _showRouteRequirementDialog(title: title, message: message);
       return;
     }
     await _openFeatureRoute(
@@ -698,11 +697,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         .split(RegExp(r'[-_]+'))
         .where((String token) => token.isNotEmpty)
         .map((String token) {
-      if (token.length <= 3) {
-        return token.toUpperCase();
-      }
-      return '${token[0].toUpperCase()}${token.substring(1)}';
-    }).join(' ');
+          if (token.length <= 3) {
+            return token.toUpperCase();
+          }
+          return '${token[0].toUpperCase()}${token.substring(1)}';
+        })
+        .join(' ');
   }
 
   bool _hasClubScope(String? clubId, String? clubName) {
@@ -778,9 +778,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _HomeActionCard(
         eyebrow: 'STEP 1',
         title: 'Create Club',
-        detail: isAuthenticated
-            ? 'Club creation is not yet available from Home in this active shell. A dedicated create-club route is still required before this CTA can go live.'
-            : 'Sign in, then start your first club to unlock Home, trophies, and matchday stories.',
+        detail:
+            isAuthenticated
+                ? 'Club creation is not yet available from Home in this active shell. A dedicated create-club route is still required before this CTA can go live.'
+                : 'Sign in, then start your first club to unlock Home, trophies, and matchday stories.',
         icon: Icons.add_circle_outline,
         accent: GteShellTheme.accent,
         badge: 'Start',
@@ -791,9 +792,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _HomeActionCard(
         eyebrow: 'STEP 2',
         title: 'Join Club',
-        detail: isAuthenticated
-            ? 'Club linking is not yet available from Home in this active shell. A dedicated join-club route is still required before this CTA can go live.'
-            : 'Sign in to bring an existing club into Home and light up live matches, replays, and prestige.',
+        detail:
+            isAuthenticated
+                ? 'Club linking is not yet available from Home in this active shell. A dedicated join-club route is still required before this CTA can go live.'
+                : 'Sign in to bring an existing club into Home and light up live matches, replays, and prestige.',
         icon: Icons.group_add_outlined,
         accent: GteShellTheme.accentWarm,
         badge: 'Link',
@@ -828,9 +830,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 Text(
                   'HOME ONBOARDING',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: GteShellTheme.accent,
-                        letterSpacing: 1.1,
-                      ),
+                    color: GteShellTheme.accent,
+                    letterSpacing: 1.1,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -1091,9 +1093,9 @@ class _HomeHeroPanel extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             '$clubName • $userLabel',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: GteShellTheme.textMuted,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: GteShellTheme.textMuted),
           ),
           const SizedBox(height: 8),
           Text(title, style: Theme.of(context).textTheme.displaySmall),
@@ -1136,10 +1138,7 @@ class _HomeHeroPanel extends StatelessWidget {
 }
 
 class _HomeStatusPill extends StatelessWidget {
-  const _HomeStatusPill({
-    required this.label,
-    required this.color,
-  });
+  const _HomeStatusPill({required this.label, required this.color});
 
   final String label;
   final Color color;
@@ -1156,10 +1155,10 @@ class _HomeStatusPill extends StatelessWidget {
       child: Text(
         label.toUpperCase(),
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color,
-              letterSpacing: 1,
-              fontWeight: FontWeight.w800,
-            ),
+          color: color,
+          letterSpacing: 1,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1190,15 +1189,12 @@ class _HomeSignalCard extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: accent,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: accent),
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+          Text(value, style: Theme.of(context).textTheme.titleLarge),
         ],
       ),
     );
@@ -1228,15 +1224,16 @@ class _HomeQuickActionsStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columnCount = constraints.maxWidth >= 1220
-            ? 3
-            : constraints.maxWidth >= 760
+        final int columnCount =
+            constraints.maxWidth >= 1220
+                ? 3
+                : constraints.maxWidth >= 760
                 ? 2
                 : 1;
         final double spacing = 12;
         final double cardWidth =
             (constraints.maxWidth - (spacing * (columnCount - 1))) /
-                columnCount;
+            columnCount;
         final List<Widget> cards = <Widget>[
           _HomeActionCard(
             eyebrow: 'PLAY',
@@ -3252,9 +3249,11 @@ String _formatCompetitionAmount(double value, String currency) {
 }
 
 String _competitionStatusLabel(CompetitionStatus status) {
-  return status.name.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
-    return '${match.group(1)} ${match.group(2)}';
-  }).replaceAll('_', ' ');
+  return status.name
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
+        return '${match.group(1)} ${match.group(2)}';
+      })
+      .replaceAll('_', ' ');
 }
 
 String _spotsLabel(CompetitionSummary competition) {
@@ -3401,10 +3400,7 @@ class _HomeExpansionLanesPanel extends StatelessWidget {
 }
 
 class _HomeRouteGroup extends StatelessWidget {
-  const _HomeRouteGroup({
-    required this.title,
-    required this.actions,
-  });
+  const _HomeRouteGroup({required this.title, required this.actions});
 
   final String title;
   final List<Widget> actions;
@@ -3416,11 +3412,7 @@ class _HomeRouteGroup extends StatelessWidget {
       children: <Widget>[
         Text(title, style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: actions,
-        ),
+        Wrap(spacing: 12, runSpacing: 12, children: actions),
       ],
     );
   }

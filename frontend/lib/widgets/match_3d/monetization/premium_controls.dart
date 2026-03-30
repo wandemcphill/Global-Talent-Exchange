@@ -7,6 +7,7 @@ class PremiumControls extends StatelessWidget {
     required this.entitlement,
     required this.selectedRenderMode,
     required this.effectiveRenderMode,
+    required this.threeDAvailable,
     required this.availableCoins,
     required this.cameraPreset,
     required this.canUsePremiumCamera,
@@ -22,6 +23,7 @@ class PremiumControls extends StatelessWidget {
   final Match3dUserEntitlement entitlement;
   final RenderMode selectedRenderMode;
   final RenderMode effectiveRenderMode;
+  final bool threeDAvailable;
   final double availableCoins;
   final Match3dCameraPreset cameraPreset;
   final bool canUsePremiumCamera;

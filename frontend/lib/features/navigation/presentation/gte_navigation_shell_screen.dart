@@ -508,6 +508,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     final String? nextAccessToken = widget.controller.accessToken;
     if (nextAccessToken != _creatorAccessToken) {
       _creatorAccessToken = nextAccessToken;
+      _competitionController.dispose();
+      _competitionController = _buildCompetitionController();
+      _competitionController.bootstrap();
       _rebuildCreatorRuntimeControllers();
       _primeRouteData();
     }

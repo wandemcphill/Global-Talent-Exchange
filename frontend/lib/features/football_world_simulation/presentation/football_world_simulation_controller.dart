@@ -27,6 +27,7 @@ class FootballWorldSimulationController extends ChangeNotifier {
   final FootballWorldSimulationRepository _repository;
   final GteRequestGate _cultureGate = GteRequestGate();
   final GteRequestGate _contextGate = GteRequestGate();
+  final GteRequestGate _federationGate = GteRequestGate();
 
   FootballCultureListQuery currentCultureQuery =
       const FootballCultureListQuery();
@@ -34,18 +35,23 @@ class FootballWorldSimulationController extends ChangeNotifier {
       const WorldNarrativeListQuery();
 
   List<FootballCulture> cultures = const <FootballCulture>[];
+  List<WorldFederation> federations = const <WorldFederation>[];
   ClubWorldContext? clubContext;
   CompetitionWorldContext? competitionContext;
   List<WorldNarrative> narratives = const <WorldNarrative>[];
 
   bool isLoadingCultures = false;
   bool isLoadingContext = false;
+  bool isLoadingFederations = false;
   bool isUpsertingCulture = false;
   bool isUpsertingClubContext = false;
   bool isUpsertingNarrative = false;
+  bool isJoiningFederation = false;
+  String? joiningFederationId;
 
   String? cultureError;
   String? contextError;
+  String? federationError;
   String? actionError;
 
   Future<void> loadCultures({
@@ -58,8 +64,9 @@ class FootballWorldSimulationController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<FootballCulture> result =
-          await _repository.listCultures(query);
+      final List<FootballCulture> result = await _repository.listCultures(
+        query,
+      );
       if (!_cultureGate.isActive(requestId)) {
         return;
       }
@@ -90,11 +97,11 @@ class FootballWorldSimulationController extends ChangeNotifier {
     try {
       final List<Object?> payload =
           await Future.wait<Object?>(<Future<Object?>>[
-        if (clubId != null) _repository.fetchClubContext(clubId),
-        if (competitionId != null)
-          _repository.fetchCompetitionContext(competitionId),
-        _repository.listNarratives(narrativeQuery),
-      ]);
+            if (clubId != null) _repository.fetchClubContext(clubId),
+            if (competitionId != null)
+              _repository.fetchCompetitionContext(competitionId),
+            _repository.listNarratives(narrativeQuery),
+          ]);
       if (!_contextGate.isActive(requestId)) {
         return;
       }
@@ -113,6 +120,30 @@ class FootballWorldSimulationController extends ChangeNotifier {
     } finally {
       if (_contextGate.isActive(requestId)) {
         isLoadingContext = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadFederations() async {
+    final int requestId = _federationGate.begin();
+    federationError = null;
+    isLoadingFederations = true;
+    notifyListeners();
+
+    try {
+      final List<WorldFederation> result = await _repository.listFederations();
+      if (!_federationGate.isActive(requestId)) {
+        return;
+      }
+      federations = result;
+    } catch (error) {
+      if (_federationGate.isActive(requestId)) {
+        federationError = AppFeedback.messageFor(error);
+      }
+    } finally {
+      if (_federationGate.isActive(requestId)) {
+        isLoadingFederations = false;
         notifyListeners();
       }
     }
@@ -184,6 +215,32 @@ class FootballWorldSimulationController extends ChangeNotifier {
       actionError = AppFeedback.messageFor(error);
     } finally {
       isUpsertingNarrative = false;
+      notifyListeners();
+    }
+  }
+
+  Future<WorldFederationMembership?> joinFederation(
+    String federationId, {
+    required String clubId,
+  }) async {
+    if (isJoiningFederation) {
+      return null;
+    }
+    isJoiningFederation = true;
+    joiningFederationId = federationId;
+    actionError = null;
+    notifyListeners();
+    try {
+      final WorldFederationMembership membership = await _repository
+          .joinFederation(federationId, clubId: clubId);
+      await loadFederations();
+      return membership;
+    } catch (error) {
+      actionError = AppFeedback.messageFor(error);
+      return null;
+    } finally {
+      isJoiningFederation = false;
+      joiningFederationId = null;
       notifyListeners();
     }
   }

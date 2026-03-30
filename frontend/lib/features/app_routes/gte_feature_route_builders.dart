@@ -675,6 +675,8 @@ Widget _buildWorldOverviewScreen(
     backendMode: dependencies.backendMode,
     accessToken: dependencies.accessToken,
     currentUserRole: dependencies.currentUserRole,
+    clubId: dependencies.currentClubId,
+    clubName: dependencies.currentClubName,
   );
 }
 

@@ -259,6 +259,7 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competiti
 
     competition_response = client.post(
         "/api/competitions",
+        headers=admin_headers,
         json={
             "name": "Live Lock League",
             "format": "league",
