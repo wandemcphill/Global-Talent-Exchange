@@ -58,7 +58,15 @@ void main() {
         activeEvent: kickoff,
         packageSeconds: 15.0,
       ),
-      BroadcastPackageScene.reactions,
+      BroadcastPackageScene.storylinePanel,
+    );
+    expect(
+      MatchSceneDirector.resolveBroadcastScene(
+        frame: frame,
+        activeEvent: kickoff,
+        packageSeconds: 16.5,
+      ),
+      BroadcastPackageScene.kickoffTransition,
     );
     expect(
       MatchSceneDirector.resolveBroadcastScene(
@@ -66,7 +74,7 @@ void main() {
         activeEvent: kickoff,
         packageSeconds: 20.0,
       ),
-      BroadcastPackageScene.kickoffLive,
+      BroadcastPackageScene.liveMatch,
     );
   });
 

@@ -3,12 +3,21 @@ import 'package:flutter/material.dart';
 import '../broadcast_package_models.dart';
 
 class StandingsContextWidget extends StatelessWidget {
-  const StandingsContextWidget({super.key, required this.contextBoard});
+  const StandingsContextWidget({
+    super.key,
+    required this.contextBoard,
+    this.homeTeam,
+    this.awayTeam,
+  });
 
   final MatchContextBoard contextBoard;
+  final MatchPresentationTeam? homeTeam;
+  final MatchPresentationTeam? awayTeam;
 
   @override
   Widget build(BuildContext context) {
+    final String? standingsSummary = _standingsSummary();
+    final List<_FormPill> formPills = _formPills();
     return DecoratedBox(
       key: const Key('standings-context-board'),
       decoration: BoxDecoration(
@@ -16,7 +25,7 @@ class StandingsContextWidget extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF111B29), Color(0xFF0A1118)],
+          colors: <Color>[Color(0xFF0F1826), Color(0xFF081018)],
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
@@ -41,6 +50,8 @@ class StandingsContextWidget extends StatelessWidget {
                   _MetaChip(label: contextBoard.competitionName!),
                 if (contextBoard.competitionStage != null)
                   _MetaChip(label: contextBoard.competitionStage!),
+                if (contextBoard.competitionContext != null)
+                  _MetaChip(label: contextBoard.competitionContext!),
                 if (contextBoard.dateLabel != null)
                   _MetaChip(label: contextBoard.dateLabel!),
                 if (contextBoard.kickoffLabel != null)
@@ -51,67 +62,125 @@ class StandingsContextWidget extends StatelessWidget {
                   _MetaChip(label: 'Ref ${contextBoard.refereeName!}'),
               ],
             ),
-            if (contextBoard.matchSignificance != null) ...<Widget>[
+            if (standingsSummary != null) ...<Widget>[
               const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: const Color(0xFF102B3D),
-                  border: Border.all(
-                    color: const Color(0xFF7DD3FC).withValues(alpha: 0.32),
-                  ),
-                ),
-                child: Text(
-                  contextBoard.matchSignificance!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              _HighlightStrip(text: standingsSummary),
+            ],
+            if (contextBoard.matchSignificance != null) ...<Widget>[
+              const SizedBox(height: 12),
+              _HighlightStrip(
+                text: contextBoard.matchSignificance!,
+                accent: const Color(0xFFF59E0B),
               ),
             ],
-            const SizedBox(height: 16),
-            if (contextBoard.standings.isEmpty)
-              Text(
-                'League table context is not available on this live match payload.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-              )
-            else
-              Column(
-                children: contextBoard.standings
-                    .map(
-                      (MatchStandingsEntry entry) => _StandingRow(entry: entry),
-                    )
-                    .toList(growable: false),
-              ),
-            if (contextBoard.storylines.isNotEmpty) ...<Widget>[
+            if (formPills.isNotEmpty) ...<Widget>[
               const SizedBox(height: 16),
               Text(
-                'Storylines',
+                'Recent form',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 8),
-              for (final String storyline in contextBoard.storylines.take(4))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '- $storyline',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-                  ),
+              Wrap(spacing: 8, runSpacing: 8, children: formPills),
+            ],
+            if (contextBoard.standings.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 16),
+              Text(
+                'Standings snapshot',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
                 ),
+              ),
+              const SizedBox(height: 10),
+              Column(
+                children: contextBoard.standings
+                    .take(8)
+                    .map(
+                      (MatchStandingsEntry entry) => _StandingRow(entry: entry),
+                    )
+                    .toList(growable: false),
+              ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  String? _standingsSummary() {
+    if (contextBoard.standings.isEmpty ||
+        homeTeam == null ||
+        awayTeam == null) {
+      return null;
+    }
+    final MatchStandingsEntry? homeStanding = _entryForTeam(homeTeam!);
+    final MatchStandingsEntry? awayStanding = _entryForTeam(awayTeam!);
+    if (homeStanding == null || awayStanding == null) {
+      return null;
+    }
+    final String homeRank = _ordinal(homeStanding.position);
+    final String awayRank = _ordinal(awayStanding.position);
+    if (homeRank.isEmpty || awayRank.isEmpty) {
+      return null;
+    }
+    return '$homeRank versus $awayRank with ${homeStanding.points ?? '-'} and ${awayStanding.points ?? '-'} points on the board.';
+  }
+
+  MatchStandingsEntry? _entryForTeam(MatchPresentationTeam team) {
+    for (final MatchStandingsEntry entry in contextBoard.standings) {
+      if (entry.teamId != null && entry.teamId == team.teamId) {
+        return entry;
+      }
+      if (entry.teamName.trim().toLowerCase() ==
+          team.teamName.trim().toLowerCase()) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  List<_FormPill> _formPills() {
+    return <_FormPill>[
+      if (homeTeam != null &&
+          (homeTeam!.recentForm != null ||
+              _entryForTeam(homeTeam!)?.form != null))
+        _FormPill(
+          teamName: homeTeam!.teamName,
+          numericForm: homeTeam!.recentForm,
+          formGuide: _entryForTeam(homeTeam!)?.form,
+        ),
+      if (awayTeam != null &&
+          (awayTeam!.recentForm != null ||
+              _entryForTeam(awayTeam!)?.form != null))
+        _FormPill(
+          teamName: awayTeam!.teamName,
+          numericForm: awayTeam!.recentForm,
+          formGuide: _entryForTeam(awayTeam!)?.form,
+        ),
+    ];
+  }
+
+  String _ordinal(int? value) {
+    if (value == null) {
+      return '';
+    }
+    final int mod100 = value % 100;
+    if (mod100 >= 11 && mod100 <= 13) {
+      return '${value}th';
+    }
+    switch (value % 10) {
+      case 1:
+        return '${value}st';
+      case 2:
+        return '${value}nd';
+      case 3:
+        return '${value}rd';
+      default:
+        return '${value}th';
+    }
   }
 }
 
@@ -139,6 +208,36 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
+class _HighlightStrip extends StatelessWidget {
+  const _HighlightStrip({
+    required this.text,
+    this.accent = const Color(0xFF7DD3FC),
+  });
+
+  final String text;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: accent.withValues(alpha: 0.12),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _StandingRow extends StatelessWidget {
   const _StandingRow({required this.entry});
 
@@ -146,6 +245,14 @@ class _StandingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String pointsLabel =
+        entry.points == null ? '-- pts' : '${entry.points} pts';
+    final String playedLabel =
+        entry.played == null ? '' : ' | P ${entry.played}';
+    final String goalDifferenceLabel =
+        entry.goalDifference == null
+            ? ''
+            : ' | GD ${entry.goalDifference! >= 0 ? '+' : ''}${entry.goalDifference}';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -156,7 +263,7 @@ class _StandingRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           SizedBox(
-            width: 30,
+            width: 34,
             child: Text(
               entry.position?.toString() ?? '-',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -166,31 +273,78 @@ class _StandingRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Text(
-              entry.teamName,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  entry.teamName,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  '$pointsLabel$playedLabel$goalDifferenceLabel',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white60),
+                ),
+              ],
             ),
           ),
           if (entry.form != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                entry.form!,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: const Color(0xFF7DD3FC),
-                  fontWeight: FontWeight.w800,
-                ),
+            Text(
+              entry.form!,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: const Color(0xFF7DD3FC),
+                fontWeight: FontWeight.w800,
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormPill extends StatelessWidget {
+  const _FormPill({
+    required this.teamName,
+    required this.numericForm,
+    required this.formGuide,
+  });
+
+  final String teamName;
+  final int? numericForm;
+  final String? formGuide;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
           Text(
-            entry.points == null ? 'PTS --' : 'PTS ${entry.points}',
+            teamName,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white70,
-              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
             ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            [
+              if (numericForm != null) '${numericForm} / 100',
+              if (formGuide != null && formGuide!.trim().isNotEmpty) formGuide!,
+            ].join(' | '),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: const Color(0xFFB9C7D7)),
           ),
         ],
       ),
