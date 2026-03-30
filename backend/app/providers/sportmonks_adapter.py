@@ -210,39 +210,39 @@ class SportMonksAdapter(BaseFootballProvider):
         self._request_timeout_override = timeout_seconds
         self._request_rate_limit_override = rate_limit_per_minute
         try:
-            clubs = self._build_unique_club_directory(
-                timeout_seconds=timeout_seconds,
-                rate_limit_per_minute=rate_limit_per_minute,
+            state = self._decode_directory_cursor(cursor, batch_size=batch_size)
+            response = self._get(
+                "/players",
+                params={
+                    "page": state["page"],
+                    "per_page": state["per_page"],
+                    "include": "country;nationality;position;detailedPosition;teams.team;teams.team.country",
+                },
             )
-            state = self._decode_directory_cursor(cursor)
-            club_index = state["club_index"]
-            player_index = state["player_index"]
-            items: list[RealPlayerSourceItem] = []
-
-            while club_index < len(clubs) and len(items) < batch_size:
-                club_context = clubs[club_index]
-                squad = self.fetch_players(str(club_context["club_id"]))
-                while player_index < len(squad) and len(items) < batch_size:
-                    raw_player = squad[player_index]
-                    items.append(self._build_directory_item(raw_player, club_context=club_context))
-                    player_index += 1
-                if player_index < len(squad):
-                    return RealPlayerSourcePage(
-                        provider_name=self.name,
-                        items=tuple(items),
-                        next_cursor=self._encode_directory_cursor(club_index=club_index, player_index=player_index),
-                        exhausted=False,
-                        source_version="sportmonks-v3",
-                    )
-                club_index += 1
-                player_index = 0
+            pagination = response.get("pagination") or {}
+            items = tuple(
+                self._build_global_directory_item(item)
+                for item in response.get("data") or []
+            )
+            if pagination.get("has_more"):
+                next_cursor = self._encode_directory_cursor(
+                    page=state["page"] + 1,
+                    per_page=state["per_page"],
+                )
+                return RealPlayerSourcePage(
+                    provider_name=self.name,
+                    items=items,
+                    next_cursor=next_cursor,
+                    exhausted=False,
+                    source_version="sportmonks-v3-global-directory",
+                )
 
             return RealPlayerSourcePage(
                 provider_name=self.name,
-                items=tuple(items),
+                items=items,
                 next_cursor=None,
                 exhausted=True,
-                source_version="sportmonks-v3",
+                source_version="sportmonks-v3-global-directory",
             )
         finally:
             self._request_timeout_override = None
@@ -381,6 +381,62 @@ class SportMonksAdapter(BaseFootballProvider):
             current_season_id=club_context["season_id"],
             raw_payload=payload,
         )
+
+    def _build_global_directory_item(self, raw_player: dict[str, Any]) -> RealPlayerSourceItem:
+        team_context = self._select_directory_team_context(raw_player)
+        position = raw_player.get("position") or {}
+        detailed_position = raw_player.get("detailedposition") or raw_player.get("detailedPosition") or {}
+        nationality = raw_player.get("nationality") or {}
+        country = raw_player.get("country") or {}
+        payload = dict(raw_player)
+        provider_player_id = str(raw_player.get("id") or "").strip()
+        payload["provider_player_id"] = provider_player_id
+        if team_context is not None:
+            payload["currentClub"] = {
+                "id": team_context["club_id"],
+                "name": team_context["club_name"],
+            }
+        return RealPlayerSourceItem(
+            provider_player_id=provider_player_id,
+            full_name=self._clean_text(
+                raw_player.get("display_name") or raw_player.get("name") or raw_player.get("common_name")
+            )
+            or "Unknown Player",
+            first_name=self._clean_text(raw_player.get("firstname") or raw_player.get("first_name")),
+            last_name=self._clean_text(raw_player.get("lastname") or raw_player.get("last_name")),
+            short_name=self._clean_text(raw_player.get("common_name") or raw_player.get("display_name")),
+            display_position=self._clean_text(detailed_position.get("name") or position.get("name")),
+            nationality_name=self._clean_text(nationality.get("name") or country.get("name")),
+            nationality_code=self._clean_text(
+                nationality.get("iso2") or nationality.get("iso3") or country.get("iso2") or country.get("iso3")
+            ),
+            date_of_birth=self._parse_date(raw_player.get("date_of_birth") or raw_player.get("dateOfBirth")),
+            current_club_id=team_context["club_id"] if team_context is not None else None,
+            current_club_name=team_context["club_name"] if team_context is not None else None,
+            raw_payload=payload,
+        )
+
+    def _select_directory_team_context(self, raw_player: dict[str, Any]) -> dict[str, str | None] | None:
+        memberships = list(raw_player.get("teams") or [])
+        if not memberships:
+            return None
+        selected = max(
+            memberships,
+            key=lambda item: (
+                1 if item.get("end") in (None, "") else 0,
+                self._clean_text(((item.get("team") or {}).get("last_played_at"))) or "",
+                int(item.get("id") or 0),
+            ),
+        )
+        team = selected.get("team") or {}
+        club_id = str(team.get("id") or selected.get("team_id") or "").strip()
+        club_name = self._clean_text(team.get("name"))
+        if not club_id and not club_name:
+            return None
+        return {
+            "club_id": club_id or None,
+            "club_name": club_name,
+        }
 
     def _transform_country(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -654,17 +710,20 @@ class SportMonksAdapter(BaseFootballProvider):
             return None
         return " ".join(str(value).strip().split()) or None
 
-    def _decode_directory_cursor(self, cursor: str | None) -> dict[str, int]:
+    def _decode_directory_cursor(self, cursor: str | None, *, batch_size: int) -> dict[str, int]:
+        default_per_page = max(1, min(int(batch_size or 100), 100))
         if not cursor:
-            return {"club_index": 0, "player_index": 0}
+            return {"page": 1, "per_page": default_per_page}
         try:
             payload = json.loads(cursor)
         except json.JSONDecodeError:
-            return {"club_index": 0, "player_index": 0}
+            return {"page": 1, "per_page": default_per_page}
+        page = payload.get("page")
+        per_page = payload.get("per_page")
         return {
-            "club_index": max(0, int(payload.get("club_index", 0))),
-            "player_index": max(0, int(payload.get("player_index", 0))),
+            "page": max(1, int(page or 1)),
+            "per_page": max(1, min(int(per_page or default_per_page), 100)),
         }
 
-    def _encode_directory_cursor(self, *, club_index: int, player_index: int) -> str:
-        return json.dumps({"club_index": club_index, "player_index": player_index}, sort_keys=True)
+    def _encode_directory_cursor(self, *, page: int, per_page: int) -> str:
+        return json.dumps({"page": page, "per_page": per_page}, sort_keys=True)

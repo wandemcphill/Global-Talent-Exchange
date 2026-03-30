@@ -15,61 +15,74 @@ def _adapter() -> SportMonksAdapter:
     )
 
 
-def test_fetch_player_directory_page_uses_club_backed_cursor_flow(monkeypatch) -> None:
+def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch) -> None:
     adapter = _adapter()
-    monkeypatch.setattr(
-        adapter,
-        "_build_unique_club_directory",
-        lambda **kwargs: [
-            {
-                "club_id": "52",
-                "club_name": "AFC Bournemouth",
-                "competition_id": "8",
-                "competition_name": "Premier League",
-                "season_id": "21646",
+    def _fake_get(path: str, params: dict[str, object] | None = None, **kwargs):
+        assert path == "/players"
+        page = int((params or {}).get("page") or 1)
+        if page == 1:
+            return {
+                "data": [
+                    {
+                        "id": 4237168,
+                        "name": "Christos Mandas",
+                        "display_name": "Christos Mandas",
+                        "common_name": "C. Mandas",
+                        "firstname": "Christos",
+                        "lastname": "Mandas",
+                        "position": {"name": "Goalkeeper"},
+                        "detailedposition": {"name": "Goalkeeper"},
+                        "date_of_birth": "2001-09-17",
+                        "nationality": {"name": "Greece", "iso2": "GR"},
+                        "country": {"name": "Greece", "iso2": "GR"},
+                        "teams": [
+                            {
+                                "id": 1,
+                                "end": None,
+                                "team_id": 52,
+                                "team": {
+                                    "id": 52,
+                                    "name": "AFC Bournemouth",
+                                    "last_played_at": "2026-03-25 11:00:00",
+                                },
+                            }
+                        ],
+                    }
+                ],
+                "pagination": {"has_more": True},
             }
-        ],
-    )
-    monkeypatch.setattr(
-        adapter,
-        "fetch_players",
-        lambda club_id: [
-            {
-                "id": 4237168,
-                "name": "Christos Mandas",
-                "displayName": "Christos Mandas",
-                "commonName": "C. Mandas",
-                "firstName": "Christos",
-                "lastName": "Mandas",
-                "position": "Goalkeeper",
-                "detailedPosition": "Goalkeeper",
-                "dateOfBirth": "2001-09-17",
-                "nationality": "Greece",
-                "nationalityCode": "GR",
-                "country": "Greece",
-                "height": 189,
-                "weight": 83,
-                "shirtNumber": 29,
-            },
-            {
-                "id": 22169325,
-                "name": "James Hill",
-                "displayName": "James Hill",
-                "commonName": "J. Hill",
-                "firstName": "James",
-                "lastName": "Hill",
-                "position": "Defender",
-                "detailedPosition": "Centre Back",
-                "dateOfBirth": "2002-01-10",
-                "nationality": "England",
-                "nationalityCode": "EN",
-                "country": "England",
-                "height": 184,
-                "weight": 73,
-                "shirtNumber": 23,
-            },
-        ],
-    )
+        return {
+            "data": [
+                {
+                    "id": 22169325,
+                    "name": "James Hill",
+                    "display_name": "James Hill",
+                    "common_name": "J. Hill",
+                    "firstname": "James",
+                    "lastname": "Hill",
+                    "position": {"name": "Defender"},
+                    "detailedposition": {"name": "Centre Back"},
+                    "date_of_birth": "2002-01-10",
+                    "nationality": {"name": "England", "iso2": "EN"},
+                    "country": {"name": "England", "iso2": "EN"},
+                    "teams": [
+                        {
+                            "id": 2,
+                            "end": None,
+                            "team_id": 52,
+                            "team": {
+                                "id": 52,
+                                "name": "AFC Bournemouth",
+                                "last_played_at": "2026-03-25 11:00:00",
+                            },
+                        }
+                    ],
+                }
+            ],
+            "pagination": {"has_more": False},
+        }
+
+    monkeypatch.setattr(adapter, "_get", _fake_get)
 
     first_page = adapter.fetch_player_directory_page(batch_size=1)
     second_page = adapter.fetch_player_directory_page(cursor=first_page.next_cursor, batch_size=1)
@@ -77,8 +90,9 @@ def test_fetch_player_directory_page_uses_club_backed_cursor_flow(monkeypatch) -
     assert len(first_page.items) == 1
     assert first_page.items[0].provider_player_id == "4237168"
     assert first_page.items[0].current_club_name == "AFC Bournemouth"
-    assert first_page.items[0].current_competition_name == "Premier League"
+    assert first_page.items[0].current_competition_name is None
     assert first_page.exhausted is False
+    assert first_page.next_cursor == '{"page": 2, "per_page": 1}'
     assert second_page.items[0].provider_player_id == "22169325"
     assert second_page.exhausted is True
 
