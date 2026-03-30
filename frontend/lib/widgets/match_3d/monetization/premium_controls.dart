@@ -7,6 +7,7 @@ class PremiumControls extends StatelessWidget {
     required this.entitlement,
     required this.selectedRenderMode,
     required this.effectiveRenderMode,
+    required this.threeDAvailable,
     required this.availableCoins,
     required this.cameraPreset,
     required this.canUsePremiumCamera,
@@ -22,6 +23,7 @@ class PremiumControls extends StatelessWidget {
   final Match3dUserEntitlement entitlement;
   final RenderMode selectedRenderMode;
   final RenderMode effectiveRenderMode;
+  final bool threeDAvailable;
   final double availableCoins;
   final Match3dCameraPreset cameraPreset;
   final bool canUsePremiumCamera;
@@ -74,9 +76,7 @@ class PremiumControls extends StatelessWidget {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(999),
                           color: const Color(0x1FFDB022),
-                          border: Border.all(
-                            color: const Color(0x66FDB022),
-                          ),
+                          border: Border.all(color: const Color(0x66FDB022)),
                         ),
                         child: const Text(
                           'Pro Manager',
@@ -94,9 +94,7 @@ class PremiumControls extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             'Render mode',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white70,
-            ),
+            style: theme.textTheme.labelLarge?.copyWith(color: Colors.white70),
           ),
           const SizedBox(height: 8),
           SegmentedButton<RenderMode>(
@@ -124,17 +122,15 @@ class PremiumControls extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Live mode: ${effectiveRenderMode == RenderMode.threeD ? '3D' : '2D'} | Balance ${availableCoins.toStringAsFixed(2)} coin',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.white70,
-            ),
+            threeDAvailable
+                ? 'Live mode: ${effectiveRenderMode == RenderMode.threeD ? '3D' : '2D'} | Balance ${availableCoins.toStringAsFixed(2)} coin'
+                : 'Live mode: 2D | Native 3D bridge unavailable | Balance ${availableCoins.toStringAsFixed(2)} coin',
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
           const SizedBox(height: 12),
           Text(
             'Camera',
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white70,
-            ),
+            style: theme.textTheme.labelLarge?.copyWith(color: Colors.white70),
           ),
           const SizedBox(height: 8),
           if (canUsePremiumCamera)
@@ -185,9 +181,7 @@ class PremiumControls extends StatelessWidget {
             canUseFastReplay
                 ? 'Fast replay unlocked up to 6x.'
                 : 'Standard replay stays capped below premium speed.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.white70,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
         ],
       ),

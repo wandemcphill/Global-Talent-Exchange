@@ -8,26 +8,33 @@ import 'package:gte_frontend/models/competition_rule_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
 
 class CompetitionApi {
-  CompetitionApi({required this.config, required this.transport})
-    : _fixtureStore = _CompetitionFixtureStore.seed();
+  CompetitionApi({
+    required this.config,
+    required this.transport,
+    this.accessToken,
+  }) : _fixtureStore = _CompetitionFixtureStore.seed();
 
   CompetitionApi._({
     required this.config,
     required this.transport,
+    required this.accessToken,
     required _CompetitionFixtureStore fixtureStore,
   }) : _fixtureStore = fixtureStore;
 
   final GteRepositoryConfig config;
   final GteTransport transport;
+  final String? accessToken;
   final _CompetitionFixtureStore _fixtureStore;
 
   factory CompetitionApi.standard({
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.liveThenFixture,
+    String? accessToken,
   }) {
     return CompetitionApi(
       config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
       transport: GteHttpTransport(),
+      accessToken: accessToken,
     );
   }
 
@@ -38,6 +45,7 @@ class CompetitionApi {
         mode: GteBackendMode.fixture,
       ),
       transport: _UnsupportedCompetitionTransport(),
+      accessToken: null,
       fixtureStore: _CompetitionFixtureStore.seed(),
     );
   }
@@ -91,9 +99,12 @@ class CompetitionApi {
 
   Future<CompetitionSummary> createCompetition(CompetitionDraft draft) {
     return _withFallback<CompetitionSummary>(() async {
-      final Object? payload = await _sendBest('POST', const <String>[
-        '/api/competitions',
-      ], body: draft.toCreateRequestJson());
+      final Object? payload = await _sendBest(
+        'POST',
+        const <String>['/api/competitions'],
+        body: draft.toCreateRequestJson(),
+        auth: true,
+      );
       return CompetitionSummary.fromJson(payload);
     }, () async => _fixtureStore.create(draft));
   }
@@ -109,6 +120,7 @@ class CompetitionApi {
           'POST',
           <String>['/api/competitions/$competitionId/publish'],
           body: <String, Object?>{'open_for_join': openForJoin},
+          auth: true,
         );
         return CompetitionSummary.fromJson(payload);
       },
@@ -138,6 +150,7 @@ class CompetitionApi {
             if (inviteCode != null && inviteCode.trim().isNotEmpty)
               'invite_code': inviteCode.trim(),
           },
+          auth: true,
         );
         return CompetitionSummary.fromJson(payload);
       },
@@ -169,6 +182,7 @@ class CompetitionApi {
               'expires_at': expiresAt.toUtc().toIso8601String(),
             if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
           },
+          auth: true,
         );
         return CompetitionInviteView.fromJson(payload);
       },
@@ -214,11 +228,18 @@ class CompetitionApi {
     List<String> paths, {
     Map<String, Object?> query = const <String, Object?>{},
     Object? body,
+    bool auth = false,
   }) async {
     GteApiException? lastError;
     for (final String path in paths) {
       try {
-        return await _request(method, path, query: query, body: body);
+        return await _request(
+          method,
+          path,
+          query: query,
+          body: body,
+          auth: auth,
+        );
       } on GteApiException catch (error) {
         lastError = error;
         if (error.statusCode == 404 || error.statusCode == 405) {
@@ -239,11 +260,22 @@ class CompetitionApi {
     String path, {
     Map<String, Object?> query = const <String, Object?>{},
     Object? body,
+    bool auth = false,
   }) async {
     final Map<String, String> headers = <String, String>{
       'Accept': 'application/json',
       if (body != null) 'Content-Type': 'application/json',
     };
+    if (auth) {
+      final String token = accessToken?.trim() ?? '';
+      if (token.isEmpty) {
+        throw const GteApiException(
+          type: GteApiErrorType.unauthorized,
+          message: 'Authentication required for this action.',
+        );
+      }
+      headers['Authorization'] = 'Bearer $token';
+    }
     try {
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(

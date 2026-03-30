@@ -37,20 +37,35 @@ class FootballWorldSimulationScreen extends StatefulWidget {
 
 class _FootballWorldSimulationScreenState
     extends State<FootballWorldSimulationScreen> {
-  late final FootballWorldSimulationController _controller;
+  late FootballWorldSimulationController _controller;
 
-  bool get _isAdmin => <String>{'admin', 'super_admin'}
-      .contains((widget.currentUserRole ?? '').trim().toLowerCase());
+  bool get _isAdmin => <String>{
+    'admin',
+    'super_admin',
+  }.contains((widget.currentUserRole ?? '').trim().toLowerCase());
 
   @override
   void initState() {
     super.initState();
-    _controller = FootballWorldSimulationController.standard(
-      baseUrl: widget.baseUrl,
-      backendMode: widget.backendMode,
-      accessToken: widget.accessToken,
-    );
+    _controller = _buildController();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant FootballWorldSimulationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.baseUrl != widget.baseUrl ||
+        oldWidget.backendMode != widget.backendMode ||
+        oldWidget.accessToken != widget.accessToken) {
+      _controller.dispose();
+      _controller = _buildController();
+      _load();
+      return;
+    }
+    if (oldWidget.clubId != widget.clubId ||
+        oldWidget.competitionId != widget.competitionId) {
+      _load();
+    }
   }
 
   @override
@@ -59,19 +74,28 @@ class _FootballWorldSimulationScreenState
     super.dispose();
   }
 
-  Future<void> _load() async {
-    await _controller.loadCultures(
-      query: const FootballCultureListQuery(limit: 8),
+  FootballWorldSimulationController _buildController() {
+    return FootballWorldSimulationController.standard(
+      baseUrl: widget.baseUrl,
+      backendMode: widget.backendMode,
+      accessToken: widget.accessToken,
     );
-    await _controller.loadContext(
-      clubId: widget.clubId,
-      competitionId: widget.competitionId,
-      narrativeQuery: WorldNarrativeListQuery(
+  }
+
+  Future<void> _load() async {
+    await Future.wait<void>(<Future<void>>[
+      _controller.loadCultures(query: const FootballCultureListQuery(limit: 8)),
+      _controller.loadContext(
         clubId: widget.clubId,
         competitionId: widget.competitionId,
-        limit: 8,
+        narrativeQuery: WorldNarrativeListQuery(
+          clubId: widget.clubId,
+          competitionId: widget.competitionId,
+          limit: 8,
+        ),
       ),
-    );
+      _controller.loadFederations(),
+    ]);
   }
 
   Future<void> _run(Future<void> Function() action, String success) async {
@@ -165,6 +189,34 @@ class _FootballWorldSimulationScreenState
     );
   }
 
+  Future<void> _joinFederation(WorldFederation federation) async {
+    final String clubId = widget.clubId?.trim() ?? '';
+    if (clubId.isEmpty) {
+      AppFeedback.showError(
+        context,
+        'A club context is required before joining a federation.',
+      );
+      return;
+    }
+    final WorldFederationMembership? membership = await _controller
+        .joinFederation(federation.id, clubId: clubId);
+    if (!mounted) {
+      return;
+    }
+    if ((_controller.actionError ?? '').trim().isNotEmpty) {
+      AppFeedback.showError(context, _controller.actionError!);
+      return;
+    }
+    final bool pending =
+        (membership?.status ?? '').trim().toLowerCase() == 'pending';
+    AppFeedback.showSuccess(
+      context,
+      pending
+          ? 'Federation membership submitted for review.'
+          : 'Federation joined.',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -183,6 +235,9 @@ class _FootballWorldSimulationScreenState
             final ClubWorldContext? club = _controller.clubContext;
             final CompetitionWorldContext? competition =
                 _controller.competitionContext;
+            final bool canJoinFederations =
+                (widget.accessToken?.trim().isNotEmpty ?? false) &&
+                (widget.clubId?.trim().isNotEmpty ?? false);
             return RefreshIndicator(
               onRefresh: _load,
               child: ListView(
@@ -207,6 +262,10 @@ class _FootballWorldSimulationScreenState
                             GteMetricChip(
                               label: 'Cultures',
                               value: _controller.cultures.length.toString(),
+                            ),
+                            GteMetricChip(
+                              label: 'Federations',
+                              value: _controller.federations.length.toString(),
                             ),
                             GteMetricChip(
                               label: 'Narratives',
@@ -271,11 +330,131 @@ class _FootballWorldSimulationScreenState
                       ),
                     ),
                   const SizedBox(height: 18),
+                  GteSurfacePanel(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'World federations',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          canJoinFederations
+                              ? 'The world summary now submits live federation membership requests for the active club.'
+                              : 'Federation membership stays read-only until the active shell provides both a valid session and a club context.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 14),
+                        if (_controller.isLoadingFederations &&
+                            _controller.federations.isEmpty)
+                          const GteStatePanel(
+                            title: 'Loading federations',
+                            message:
+                                'Regional structures and member clubs are syncing.',
+                            icon: Icons.public_outlined,
+                            isLoading: true,
+                          )
+                        else if (_controller.federationError != null &&
+                            _controller.federations.isEmpty)
+                          GteStatePanel(
+                            title: 'Federations unavailable',
+                            message: _controller.federationError!,
+                            icon: Icons.error_outline,
+                          )
+                        else if (_controller.federations.isEmpty)
+                          const Text('No federations available right now.')
+                        else
+                          ..._controller.federations.take(6).map((
+                            WorldFederation federation,
+                          ) {
+                            final String? membershipStatus = federation
+                                .membershipStatusForClub(widget.clubId);
+                            final bool joined = federation.isJoinedByClub(
+                              widget.clubId,
+                            );
+                            final bool pending =
+                                membershipStatus?.toLowerCase() == 'pending';
+                            final bool isJoining =
+                                _controller.isJoiningFederation &&
+                                _controller.joiningFederationId ==
+                                    federation.id;
+                            final String buttonLabel =
+                                joined
+                                    ? 'Joined'
+                                    : pending
+                                    ? 'Pending'
+                                    : canJoinFederations
+                                    ? 'Join federation'
+                                    : 'Read only';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFF8ED8FF,
+                                    ).withValues(alpha: 0.20),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            federation.name,
+                                            style:
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.titleMedium,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            '${federation.regionLabel} • ${federation.memberClubCount} member clubs • ${federation.competitionCount} competitions',
+                                            style:
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.bodyMedium,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    FilledButton.tonal(
+                                      onPressed:
+                                          joined ||
+                                                  pending ||
+                                                  !canJoinFederations ||
+                                                  isJoining
+                                              ? null
+                                              : () =>
+                                                  _joinFederation(federation),
+                                      child: Text(
+                                        isJoining ? 'Joining...' : buttonLabel,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   _SimpleWorldListCard(
                     title: 'World narratives',
                     lines: _controller.narratives
-                        .map((WorldNarrative item) =>
-                            '${item.headline} • ${item.arcType} • ${item.status}')
+                        .map(
+                          (WorldNarrative item) =>
+                              '${item.headline} • ${item.arcType} • ${item.status}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingContext,
                     error: _controller.contextError,
@@ -284,8 +463,10 @@ class _FootballWorldSimulationScreenState
                   _SimpleWorldListCard(
                     title: 'Football cultures',
                     lines: _controller.cultures
-                        .map((FootballCulture item) =>
-                            '${item.displayName} • ${item.scopeType} • ${item.countryCode ?? 'GLOBAL'}')
+                        .map(
+                          (FootballCulture item) =>
+                              '${item.displayName} • ${item.scopeType} • ${item.countryCode ?? 'GLOBAL'}',
+                        )
                         .toList(growable: false),
                     loading: _controller.isLoadingCultures,
                     error: _controller.cultureError,
@@ -337,11 +518,15 @@ class _SimpleWorldListCard extends StatelessWidget {
           else if (lines.isEmpty)
             const Text('No records available.')
           else
-            ...lines.take(6).map(
+            ...lines
+                .take(6)
+                .map(
                   (String line) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(line,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    child: Text(
+                      line,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ),
                 ),
         ],

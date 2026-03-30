@@ -29,7 +29,7 @@ class GtexMatch3dScreen extends StatelessWidget {
       presentationMode: MatchViewerPresentationMode.replay,
       renderMode: RenderMode.threeD,
       entitlement: const Match3dUserEntitlement.proManager(),
-      titleOverride: '3D Match Viewer',
+      titleOverride: 'Match Viewer',
     );
   }
 }

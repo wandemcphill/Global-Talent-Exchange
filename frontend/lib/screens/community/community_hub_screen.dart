@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
+import '../../core/gte_session_identity.dart';
 import '../../data/community_api.dart';
 import '../../data/discovery_api.dart';
 import '../../data/dispute_engine_api.dart';
@@ -22,6 +23,7 @@ import '../../widgets/gte_metric_chip.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import '../../widgets/creator_club_follow_panel.dart';
 import '../../widgets/gtex_branding.dart';
 
 class CommunityHubScreen extends StatefulWidget {
@@ -122,51 +124,58 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final GteSessionIdentity identity =
+        GteSessionIdentity.fromExchangeController(widget.controller);
+    final String? currentClubId = identity.clubId;
+    final String? currentClubName = identity.clubName;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool isWide = constraints.maxWidth >= 1100;
-        final Widget sectionPicker = isWide
-            ? NavigationRail(
-                selectedIndex: CommunitySection.values.indexOf(_section),
-                onDestinationSelected: (int index) {
-                  _selectSection(CommunitySection.values[index]);
-                },
-                backgroundColor: Colors.transparent,
-                labelType: NavigationRailLabelType.all,
-                destinations: CommunitySection.values
-                    .map(
-                      (CommunitySection section) => NavigationRailDestination(
-                        icon: Icon(section.icon),
-                        selectedIcon: Icon(section.icon),
-                        label: Text(section.label),
-                      ),
-                    )
-                    .toList(growable: false),
-              )
-            : GteSurfacePanel(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<CommunitySection>(
-                    value: _section,
-                    isExpanded: true,
-                    onChanged: (CommunitySection? value) {
-                      if (value != null) {
-                        _selectSection(value);
-                      }
-                    },
-                    items: CommunitySection.values
-                        .map(
-                          (CommunitySection section) =>
-                              DropdownMenuItem<CommunitySection>(
-                            value: section,
-                            child: Text(section.label),
-                          ),
-                        )
-                        .toList(growable: false),
+        final Widget sectionPicker =
+            isWide
+                ? NavigationRail(
+                  selectedIndex: CommunitySection.values.indexOf(_section),
+                  onDestinationSelected: (int index) {
+                    _selectSection(CommunitySection.values[index]);
+                  },
+                  backgroundColor: Colors.transparent,
+                  labelType: NavigationRailLabelType.all,
+                  destinations: CommunitySection.values
+                      .map(
+                        (CommunitySection section) => NavigationRailDestination(
+                          icon: Icon(section.icon),
+                          selectedIcon: Icon(section.icon),
+                          label: Text(section.label),
+                        ),
+                      )
+                      .toList(growable: false),
+                )
+                : GteSurfacePanel(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
                   ),
-                ),
-              );
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<CommunitySection>(
+                      value: _section,
+                      isExpanded: true,
+                      onChanged: (CommunitySection? value) {
+                        if (value != null) {
+                          _selectSection(value);
+                        }
+                      },
+                      items: CommunitySection.values
+                          .map(
+                            (CommunitySection section) =>
+                                DropdownMenuItem<CommunitySection>(
+                                  value: section,
+                                  child: Text(section.label),
+                                ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ),
+                );
 
         final Widget content = _CommunitySectionHost(
           section: _section,
@@ -201,9 +210,10 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
                         GteMetricChip(label: 'Section', value: _section.label),
                         GteMetricChip(
                           label: 'Access',
-                          value: widget.controller.isAuthenticated
-                              ? 'SIGNED IN'
-                              : 'PREVIEW',
+                          value:
+                              widget.controller.isAuthenticated
+                                  ? 'SIGNED IN'
+                                  : 'PREVIEW',
                           positive: widget.controller.isAuthenticated,
                         ),
                         const GteMetricChip(
@@ -217,13 +227,26 @@ class _CommunityHubScreenState extends State<CommunityHubScreen> {
                             widget.onOpenAdmin != null)
                           FilledButton.tonalIcon(
                             onPressed: widget.onOpenAdmin,
-                            icon:
-                                const Icon(Icons.admin_panel_settings_outlined),
+                            icon: const Icon(
+                              Icons.admin_panel_settings_outlined,
+                            ),
                             label: const Text('Open admin ops'),
                           ),
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (currentClubId != null &&
+                        currentClubId.trim().isNotEmpty) ...<Widget>[
+                      CreatorClubFollowPanel(
+                        baseUrl: widget.baseUrl,
+                        backendMode: widget.backendMode,
+                        accessToken: widget.controller.accessToken,
+                        isAuthenticated: widget.controller.isAuthenticated,
+                        clubId: currentClubId,
+                        clubName: currentClubName,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (!isWide) sectionPicker,
                     const SizedBox(height: 16),
                     content,
@@ -476,8 +499,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Search the discovery rails',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Search the discovery rails',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _searchController,
@@ -495,9 +520,13 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
                   DropdownMenuItem(value: 'all', child: Text('All lanes')),
                   DropdownMenuItem(value: 'market', child: Text('Market')),
                   DropdownMenuItem(
-                      value: 'competition', child: Text('Competitions')),
+                    value: 'competition',
+                    child: Text('Competitions'),
+                  ),
                   DropdownMenuItem(
-                      value: 'community', child: Text('Community')),
+                    value: 'community',
+                    child: Text('Community'),
+                  ),
                 ],
                 onChanged: (String? value) {
                   if (value != null) {
@@ -545,15 +574,17 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _DiscoveryItemTile(item: item),
                   ),
-              ]
+              ],
             ],
           ),
         ),
         const SizedBox(height: 16),
         FutureBuilder<List<SavedSearch>>(
           future: _savedFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<SavedSearch>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<SavedSearch>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading saved searches...'),
@@ -564,8 +595,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Saved searches',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Saved searches',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   if (saved.isEmpty)
                     const Text('No saved searches yet.')
@@ -596,8 +629,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
         const SizedBox(height: 16),
         FutureBuilder<DiscoveryHome>(
           future: _homeFuture,
-          builder:
-              (BuildContext context, AsyncSnapshot<DiscoveryHome> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<DiscoveryHome> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading discovery rails...'),
@@ -606,9 +641,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
             if (!snapshot.hasData) {
               return GteStatePanel(
                 title: 'Discovery rails unavailable',
-                message: snapshot.error == null
-                    ? 'Unable to load discovery rails right now.'
-                    : AppFeedback.messageFor(snapshot.error!),
+                message:
+                    snapshot.error == null
+                        ? 'Unable to load discovery rails right now.'
+                        : AppFeedback.messageFor(snapshot.error!),
                 icon: Icons.warning_amber_outlined,
                 actionLabel: 'Retry',
                 onAction: () {
@@ -623,8 +659,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Discovery rails',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Discovery rails',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   for (final FeaturedRail rail in home.featuredRails)
                     Padding(
@@ -632,8 +670,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
                       child: _DiscoveryRailTile(rail: rail),
                     ),
                   const Divider(height: 24),
-                  Text('Featured items',
-                      style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    'Featured items',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 10),
                   if (home.featuredItems.isEmpty)
                     const Text('No featured items yet.')
@@ -642,13 +682,17 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
                       spacing: 12,
                       runSpacing: 12,
                       children: home.featuredItems
-                          .map((DiscoveryItem item) =>
-                              _DiscoveryItemChip(item: item))
+                          .map(
+                            (DiscoveryItem item) =>
+                                _DiscoveryItemChip(item: item),
+                          )
                           .toList(growable: false),
                     ),
                   const SizedBox(height: 16),
-                  Text('Live now',
-                      style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    'Live now',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 10),
                   if (home.liveNowItems.isEmpty)
                     const Text('No live items flagged yet.')
@@ -657,8 +701,10 @@ class _DiscoverySectionState extends State<_DiscoverySection> {
                       spacing: 12,
                       runSpacing: 12,
                       children: home.liveNowItems
-                          .map((DiscoveryItem item) =>
-                              _DiscoveryItemChip(item: item))
+                          .map(
+                            (DiscoveryItem item) =>
+                                _DiscoveryItemChip(item: item),
+                          )
                           .toList(growable: false),
                     ),
                 ],
@@ -693,8 +739,10 @@ class _DiscoveryRailTile extends StatelessWidget {
           Text(rail.subtitle, style: Theme.of(context).textTheme.bodySmall),
           if (rail.queryHint != null && rail.queryHint!.isNotEmpty) ...<Widget>[
             const SizedBox(height: 6),
-            Text('Hint: ${rail.queryHint}',
-                style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Hint: ${rail.queryHint}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ],
       ),
@@ -723,8 +771,10 @@ class _DiscoveryItemTile extends StatelessWidget {
           const SizedBox(height: 4),
           Text(item.subtitle, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text('Type: ${item.itemType}',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'Type: ${item.itemType}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
@@ -811,10 +861,10 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
     try {
       final List<dynamic> payload =
           await Future.wait<dynamic>(<Future<dynamic>>[
-        if (widget.isAuthenticated) _api.fetchPreferences(),
-        if (widget.isAuthenticated) _api.listSubscriptions(),
-        _api.listAnnouncements(),
-      ]);
+            if (widget.isAuthenticated) _api.fetchPreferences(),
+            if (widget.isAuthenticated) _api.listSubscriptions(),
+            _api.listAnnouncements(),
+          ]);
       if (!mounted) {
         return;
       }
@@ -851,8 +901,9 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
       _error = null;
     });
     try {
-      final NotificationPreference next =
-          await _api.updatePreferences(_preference!);
+      final NotificationPreference next = await _api.updatePreferences(
+        _preference!,
+      );
       if (!mounted) {
         return;
       }
@@ -876,7 +927,8 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
   }
 
   Future<void> _toggleSubscription(
-      NotificationSubscription subscription) async {
+    NotificationSubscription subscription,
+  ) async {
     try {
       final NotificationSubscription updated = await _api.upsertSubscription(
         subscriptionKey: subscription.subscriptionKey,
@@ -889,10 +941,13 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
       }
       setState(() {
         _subscriptions = _subscriptions
-            .map((NotificationSubscription item) => item.id == updated.id ||
-                    item.subscriptionKey == updated.subscriptionKey
-                ? updated
-                : item)
+            .map(
+              (NotificationSubscription item) =>
+                  item.id == updated.id ||
+                          item.subscriptionKey == updated.subscriptionKey
+                      ? updated
+                      : item,
+            )
             .toList(growable: false);
       });
     } catch (_) {
@@ -934,37 +989,49 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Preferences',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Preferences',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 SwitchListTile.adaptive(
                   value: _preference!.allowWallet,
-                  onChanged: (bool value) => _updatePreference(
-                      _preference!.copyWith(allowWallet: value)),
+                  onChanged:
+                      (bool value) => _updatePreference(
+                        _preference!.copyWith(allowWallet: value),
+                      ),
                   title: const Text('Wallet alerts'),
                 ),
                 SwitchListTile.adaptive(
                   value: _preference!.allowMarket,
-                  onChanged: (bool value) => _updatePreference(
-                      _preference!.copyWith(allowMarket: value)),
+                  onChanged:
+                      (bool value) => _updatePreference(
+                        _preference!.copyWith(allowMarket: value),
+                      ),
                   title: const Text('Market alerts'),
                 ),
                 SwitchListTile.adaptive(
                   value: _preference!.allowCompetition,
-                  onChanged: (bool value) => _updatePreference(
-                      _preference!.copyWith(allowCompetition: value)),
+                  onChanged:
+                      (bool value) => _updatePreference(
+                        _preference!.copyWith(allowCompetition: value),
+                      ),
                   title: const Text('Competition alerts'),
                 ),
                 SwitchListTile.adaptive(
                   value: _preference!.allowSocial,
-                  onChanged: (bool value) => _updatePreference(
-                      _preference!.copyWith(allowSocial: value)),
+                  onChanged:
+                      (bool value) => _updatePreference(
+                        _preference!.copyWith(allowSocial: value),
+                      ),
                   title: const Text('Social alerts'),
                 ),
                 SwitchListTile.adaptive(
                   value: _preference!.allowBroadcasts,
-                  onChanged: (bool value) => _updatePreference(
-                      _preference!.copyWith(allowBroadcasts: value)),
+                  onChanged:
+                      (bool value) => _updatePreference(
+                        _preference!.copyWith(allowBroadcasts: value),
+                      ),
                   title: const Text('Broadcast alerts'),
                 ),
                 const SizedBox(height: 12),
@@ -984,8 +1051,10 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Subscriptions',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Subscriptions',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 if (_subscriptions.isEmpty)
                   const Text('No subscriptions found.')
@@ -1015,8 +1084,10 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Announcements',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Announcements',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               if (_announcements.isEmpty)
                 const Text('No announcements published yet.')
@@ -1027,11 +1098,15 @@ class _NotificationsSectionState extends State<_NotificationsSection> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(announcement.title,
-                            style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          announcement.title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
-                        Text(announcement.body,
-                            style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          announcement.body,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           'Published ${gteFormatDateTime(announcement.publishedAt)}',
@@ -1124,17 +1199,22 @@ class _FeedSectionState extends State<_FeedSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Story digest',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Story digest',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   _StoryLane(title: 'Top stories', stories: digest.topStories),
                   const SizedBox(height: 12),
                   _StoryLane(
-                      title: 'Country spotlight',
-                      stories: digest.countrySpotlight),
+                    title: 'Country spotlight',
+                    stories: digest.countrySpotlight,
+                  ),
                   const SizedBox(height: 12),
                   _StoryLane(
-                      title: 'Feature stories', stories: digest.featureStories),
+                    title: 'Feature stories',
+                    stories: digest.featureStories,
+                  ),
                 ],
               ),
             );
@@ -1143,8 +1223,10 @@ class _FeedSectionState extends State<_FeedSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<StoryFeedItem>>(
           future: _feedFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<StoryFeedItem>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<StoryFeedItem>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading story feed...'),
@@ -1163,8 +1245,10 @@ class _FeedSectionState extends State<_FeedSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Story feed',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Story feed',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   for (final StoryFeedItem story in stories)
                     Padding(
@@ -1249,11 +1333,15 @@ class _StoryCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(story.body, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 6),
-          Text('Type: ${story.storyType}',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'Type: ${story.storyType}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 4),
-          Text('Published ${gteFormatDateTime(story.createdAt)}',
-              style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            'Published ${gteFormatDateTime(story.createdAt)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
@@ -1334,8 +1422,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
         const SizedBox(height: 16),
         FutureBuilder<CommunityDigest>(
           future: _digestFuture,
-          builder:
-              (BuildContext context, AsyncSnapshot<CommunityDigest> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<CommunityDigest> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading community digest...'),
@@ -1346,8 +1436,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Community digest',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Community digest',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
@@ -1379,8 +1471,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<LiveThread>>(
           future: _threadsFuture,
-          builder:
-              (BuildContext context, AsyncSnapshot<List<LiveThread>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<LiveThread>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading live threads...'),
@@ -1391,8 +1485,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Live threads',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Live threads',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   if (threads.isEmpty)
                     const Text('No live threads are active.')
@@ -1407,19 +1503,21 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
                               : 'Last message ${gteFormatDateTime(thread.lastMessageAt)}',
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: widget.isAuthenticated
-                            ? () {
-                                Navigator.of(context).push<void>(
-                                  MaterialPageRoute<void>(
-                                    builder: (BuildContext context) =>
-                                        LiveThreadDetailScreen(
-                                      api: _api,
-                                      thread: thread,
+                        onTap:
+                            widget.isAuthenticated
+                                ? () {
+                                  Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder:
+                                          (BuildContext context) =>
+                                              LiveThreadDetailScreen(
+                                                api: _api,
+                                                thread: thread,
+                                              ),
                                     ),
-                                  ),
-                                );
-                              }
-                            : null,
+                                  );
+                                }
+                                : null,
                       ),
                 ],
               ),
@@ -1429,12 +1527,12 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<CommunityWatchlistItem>>(
           future: _watchlistFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<CommunityWatchlistItem>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<CommunityWatchlistItem>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const GteSurfacePanel(
-                child: Text('Loading watchlist...'),
-              );
+              return const GteSurfacePanel(child: Text('Loading watchlist...'));
             }
             final List<CommunityWatchlistItem> items =
                 snapshot.data ?? <CommunityWatchlistItem>[];
@@ -1442,8 +1540,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Watchlist',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Watchlist',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   if (items.isEmpty)
                     const Text('No watchlist items yet.')
@@ -1474,8 +1574,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<PrivateMessageThread>>(
           future: _privateFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<PrivateMessageThread>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<PrivateMessageThread>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading private messages...'),
@@ -1487,8 +1589,10 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Private messages',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Private messages',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   if (threads.isEmpty)
                     const Text('No private message threads yet.')
@@ -1501,19 +1605,21 @@ class _CommunityThreadsSectionState extends State<_CommunityThreadsSection> {
                           'Updated ${gteFormatDateTime(thread.updatedAt)}',
                         ),
                         trailing: const Icon(Icons.chevron_right),
-                        onTap: widget.isAuthenticated
-                            ? () {
-                                Navigator.of(context).push<void>(
-                                  MaterialPageRoute<void>(
-                                    builder: (BuildContext context) =>
-                                        PrivateMessageThreadScreen(
-                                      api: _api,
-                                      thread: thread,
+                        onTap:
+                            widget.isAuthenticated
+                                ? () {
+                                  Navigator.of(context).push<void>(
+                                    MaterialPageRoute<void>(
+                                      builder:
+                                          (BuildContext context) =>
+                                              PrivateMessageThreadScreen(
+                                                api: _api,
+                                                thread: thread,
+                                              ),
                                     ),
-                                  ),
-                                );
-                              }
-                            : null,
+                                  );
+                                }
+                                : null,
                       ),
                 ],
               ),
@@ -1591,17 +1697,17 @@ class _LiveThreadDetailScreenState extends State<LiveThreadDetailScreen> {
           Expanded(
             child: FutureBuilder<List<LiveThreadMessage>>(
               future: _messagesFuture,
-              builder: (BuildContext context,
-                  AsyncSnapshot<List<LiveThreadMessage>> snapshot) {
+              builder: (
+                BuildContext context,
+                AsyncSnapshot<List<LiveThreadMessage>> snapshot,
+              ) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final List<LiveThreadMessage> messages =
                     snapshot.data ?? <LiveThreadMessage>[];
                 if (messages.isEmpty) {
-                  return const Center(
-                    child: Text('No messages yet.'),
-                  );
+                  return const Center(child: Text('No messages yet.'));
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.all(20),
@@ -1613,8 +1719,10 @@ class _LiveThreadDetailScreenState extends State<LiveThreadDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(message.body,
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          Text(
+                            message.body,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                           const SizedBox(height: 6),
                           Text(
                             'By ${message.authorUserId} • ${gteFormatDateTime(message.createdAt)}',
@@ -1635,9 +1743,7 @@ class _LiveThreadDetailScreenState extends State<LiveThreadDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    decoration: const InputDecoration(
-                      labelText: 'Message',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Message'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1716,16 +1822,16 @@ class _PrivateMessageThreadScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.thread.subject ?? 'Private messages'),
-      ),
+      appBar: AppBar(title: Text(widget.thread.subject ?? 'Private messages')),
       body: Column(
         children: <Widget>[
           Expanded(
             child: FutureBuilder<List<PrivateMessage>>(
               future: _messagesFuture,
-              builder: (BuildContext context,
-                  AsyncSnapshot<List<PrivateMessage>> snapshot) {
+              builder: (
+                BuildContext context,
+                AsyncSnapshot<List<PrivateMessage>> snapshot,
+              ) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -1744,8 +1850,10 @@ class _PrivateMessageThreadScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(message.body,
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          Text(
+                            message.body,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                           const SizedBox(height: 6),
                           Text(
                             'From ${message.senderUserId} • ${gteFormatDateTime(message.createdAt)}',
@@ -1766,9 +1874,7 @@ class _PrivateMessageThreadScreenState
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    decoration: const InputDecoration(
-                      labelText: 'Message',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Message'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1807,8 +1913,9 @@ class _ReportsSectionState extends State<_ReportsSection> {
   late Future<List<ModerationReport>> _reportsFuture;
   final TextEditingController _targetTypeController = TextEditingController();
   final TextEditingController _targetIdController = TextEditingController();
-  final TextEditingController _reasonController =
-      TextEditingController(text: 'abuse');
+  final TextEditingController _reasonController = TextEditingController(
+    text: 'abuse',
+  );
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _evidenceController = TextEditingController();
   bool _submitting = false;
@@ -1877,9 +1984,10 @@ class _ReportsSectionState extends State<_ReportsSection> {
         targetId: targetId,
         reasonCode: reason.isEmpty ? 'abuse' : reason,
         description: description,
-        evidenceUrl: _evidenceController.text.trim().isEmpty
-            ? null
-            : _evidenceController.text.trim(),
+        evidenceUrl:
+            _evidenceController.text.trim().isEmpty
+                ? null
+                : _evidenceController.text.trim(),
       );
       if (!mounted) {
         return;
@@ -1914,8 +2022,10 @@ class _ReportsSectionState extends State<_ReportsSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Submit a report',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Submit a report',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _targetTypeController,
@@ -1926,9 +2036,7 @@ class _ReportsSectionState extends State<_ReportsSection> {
               const SizedBox(height: 12),
               TextField(
                 controller: _targetIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Target id',
-                ),
+                decoration: const InputDecoration(labelText: 'Target id'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -1940,9 +2048,7 @@ class _ReportsSectionState extends State<_ReportsSection> {
               const SizedBox(height: 12),
               TextField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                ),
+                decoration: const InputDecoration(labelText: 'Description'),
                 maxLines: 3,
               ),
               const SizedBox(height: 12),
@@ -1974,8 +2080,10 @@ class _ReportsSectionState extends State<_ReportsSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<ModerationReport>>(
           future: _reportsFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<ModerationReport>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<ModerationReport>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading my reports...'),
@@ -1994,8 +2102,10 @@ class _ReportsSectionState extends State<_ReportsSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('My reports',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'My reports',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   for (final ModerationReport report in reports)
                     Padding(
@@ -2003,14 +2113,20 @@ class _ReportsSectionState extends State<_ReportsSection> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(report.reasonCode,
-                              style: Theme.of(context).textTheme.titleSmall),
+                          Text(
+                            report.reasonCode,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
                           const SizedBox(height: 4),
-                          Text(report.description,
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            report.description,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                           const SizedBox(height: 4),
-                          Text('Status: ${report.status}',
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text(
+                            'Status: ${report.status}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ],
                       ),
                     ),
@@ -2153,8 +2269,10 @@ class _DisputesSectionState extends State<_DisputesSection> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('Create dispute',
-                  style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Create dispute',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _resourceTypeController,
@@ -2165,16 +2283,12 @@ class _DisputesSectionState extends State<_DisputesSection> {
               const SizedBox(height: 12),
               TextField(
                 controller: _resourceIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Resource id',
-                ),
+                decoration: const InputDecoration(labelText: 'Resource id'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _referenceController,
-                decoration: const InputDecoration(
-                  labelText: 'Reference',
-                ),
+                decoration: const InputDecoration(labelText: 'Reference'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -2186,9 +2300,7 @@ class _DisputesSectionState extends State<_DisputesSection> {
               const SizedBox(height: 12),
               TextField(
                 controller: _messageController,
-                decoration: const InputDecoration(
-                  labelText: 'Message',
-                ),
+                decoration: const InputDecoration(labelText: 'Message'),
                 maxLines: 3,
               ),
               if (_error != null) ...<Widget>[
@@ -2213,12 +2325,12 @@ class _DisputesSectionState extends State<_DisputesSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<DisputeEngineCase>>(
           future: _disputesFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<DisputeEngineCase>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<DisputeEngineCase>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const GteSurfacePanel(
-                child: Text('Loading disputes...'),
-              );
+              return const GteSurfacePanel(child: Text('Loading disputes...'));
             }
             final List<DisputeEngineCase> disputes =
                 snapshot.data ?? <DisputeEngineCase>[];
@@ -2233,8 +2345,10 @@ class _DisputesSectionState extends State<_DisputesSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('My disputes',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'My disputes',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   for (final DisputeEngineCase dispute in disputes)
                     ListTile(
@@ -2245,11 +2359,11 @@ class _DisputesSectionState extends State<_DisputesSection> {
                       onTap: () {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (BuildContext context) =>
-                                DisputeDetailScreen(
-                              api: _api,
-                              disputeId: dispute.id,
-                            ),
+                            builder:
+                                (BuildContext context) => DisputeDetailScreen(
+                                  api: _api,
+                                  disputeId: dispute.id,
+                                ),
                           ),
                         );
                       },
@@ -2304,10 +2418,7 @@ class _DisputeDetailScreenState extends State<DisputeDetailScreen> {
       _sending = true;
     });
     try {
-      await widget.api.addMessage(
-        disputeId: widget.disputeId,
-        message: body,
-      );
+      await widget.api.addMessage(disputeId: widget.disputeId, message: body);
       _messageController.clear();
       setState(() {
         _detailFuture = widget.api.fetchDispute(widget.disputeId);
@@ -2330,8 +2441,10 @@ class _DisputeDetailScreenState extends State<DisputeDetailScreen> {
           Expanded(
             child: FutureBuilder<DisputeEngineDetail>(
               future: _detailFuture,
-              builder: (BuildContext context,
-                  AsyncSnapshot<DisputeEngineDetail> snapshot) {
+              builder: (
+                BuildContext context,
+                AsyncSnapshot<DisputeEngineDetail> snapshot,
+              ) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -2349,8 +2462,10 @@ class _DisputeDetailScreenState extends State<DisputeDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(message.message,
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          Text(
+                            message.message,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                           const SizedBox(height: 6),
                           Text(
                             '${message.senderRole.toUpperCase()} • ${gteFormatDateTime(message.createdAt)}',
@@ -2371,9 +2486,7 @@ class _DisputeDetailScreenState extends State<DisputeDetailScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    decoration: const InputDecoration(
-                      labelText: 'Message',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Message'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -2450,8 +2563,10 @@ class _GovernanceSectionState extends State<_GovernanceSection> {
       children: <Widget>[
         FutureBuilder<GovernanceOverview>(
           future: _overviewFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<GovernanceOverview> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<GovernanceOverview> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const GteSurfacePanel(
                 child: Text('Loading governance overview...'),
@@ -2469,8 +2584,10 @@ class _GovernanceSectionState extends State<_GovernanceSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('My governance overview',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'My governance overview',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
@@ -2502,12 +2619,12 @@ class _GovernanceSectionState extends State<_GovernanceSection> {
         const SizedBox(height: 16),
         FutureBuilder<List<GovernanceProposal>>(
           future: _proposalsFuture,
-          builder: (BuildContext context,
-              AsyncSnapshot<List<GovernanceProposal>> snapshot) {
+          builder: (
+            BuildContext context,
+            AsyncSnapshot<List<GovernanceProposal>> snapshot,
+          ) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const GteSurfacePanel(
-                child: Text('Loading proposals...'),
-              );
+              return const GteSurfacePanel(child: Text('Loading proposals...'));
             }
             final List<GovernanceProposal> proposals =
                 snapshot.data ?? <GovernanceProposal>[];
@@ -2522,8 +2639,10 @@ class _GovernanceSectionState extends State<_GovernanceSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Proposals',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Proposals',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   for (final GovernanceProposal proposal in proposals)
                     ListTile(
@@ -2534,11 +2653,12 @@ class _GovernanceSectionState extends State<_GovernanceSection> {
                       onTap: () {
                         Navigator.of(context).push<void>(
                           MaterialPageRoute<void>(
-                            builder: (BuildContext context) =>
-                                GovernanceProposalDetailScreen(
-                              api: _api,
-                              proposalId: proposal.id,
-                            ),
+                            builder:
+                                (BuildContext context) =>
+                                    GovernanceProposalDetailScreen(
+                                      api: _api,
+                                      proposalId: proposal.id,
+                                    ),
                           ),
                         );
                       },
@@ -2594,9 +2714,10 @@ class _GovernanceProposalDetailScreenState
       await widget.api.vote(
         proposalId: widget.proposalId,
         choice: choice,
-        comment: _commentController.text.trim().isEmpty
-            ? null
-            : _commentController.text.trim(),
+        comment:
+            _commentController.text.trim().isEmpty
+                ? null
+                : _commentController.text.trim(),
       );
       setState(() {
         _detailFuture = widget.api.fetchProposal(widget.proposalId);
@@ -2617,8 +2738,10 @@ class _GovernanceProposalDetailScreenState
       appBar: AppBar(title: const Text('Proposal detail')),
       body: FutureBuilder<GovernanceProposalDetail>(
         future: _detailFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<GovernanceProposalDetail> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<GovernanceProposalDetail> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -2636,17 +2759,25 @@ class _GovernanceProposalDetailScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(proposal.title,
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      proposal.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 6),
-                    Text(proposal.summary,
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                      proposal.summary,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                     const SizedBox(height: 12),
-                    Text('Status: ${proposal.status}',
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      'Status: ${proposal.status}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 6),
-                    Text('Voting ends ${proposal.votingEndsAtIso}',
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      'Voting ends ${proposal.votingEndsAtIso}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
@@ -2655,8 +2786,10 @@ class _GovernanceProposalDetailScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('Cast vote',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Cast vote',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _commentController,

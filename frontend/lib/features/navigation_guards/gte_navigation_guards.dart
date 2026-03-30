@@ -74,16 +74,16 @@ class GteNavigationDependencies {
     this.hasApprovedCreatorAccessProvider,
     this.canHostCompetitionsProvider,
     this.match3dEntitlementProvider,
-  })  : _currentUserId = currentUserId,
-        _currentUserName = currentUserName,
-        _currentUserRole = currentUserRole,
-        _currentClubId = currentClubId,
-        _currentClubName = currentClubName,
-        _accessToken = accessToken,
-        _isAuthenticated = isAuthenticated,
-        _isCheckingCreatorAccess = isCheckingCreatorAccess,
-        _hasApprovedCreatorAccess = hasApprovedCreatorAccess,
-        _canHostCompetitions = canHostCompetitions;
+  }) : _currentUserId = currentUserId,
+       _currentUserName = currentUserName,
+       _currentUserRole = currentUserRole,
+       _currentClubId = currentClubId,
+       _currentClubName = currentClubName,
+       _accessToken = accessToken,
+       _isAuthenticated = isAuthenticated,
+       _isCheckingCreatorAccess = isCheckingCreatorAccess,
+       _hasApprovedCreatorAccess = hasApprovedCreatorAccess,
+       _canHostCompetitions = canHostCompetitions;
 
   final String apiBaseUrl;
   final GteBackendMode backendMode;
@@ -106,7 +106,7 @@ class GteNavigationDependencies {
   final ClubIdentityRepository? clubIdentityRepository;
   final FutureOr<String?> Function()? resolveWorldSuperCupCompetitionId;
   final FutureOr<bool> Function(String clubId, ClubIdentityDto? identity)?
-      hasIdentitySetup;
+  hasIdentitySetup;
   final String Function()? currentUserIdProvider;
   final String? Function()? currentUserNameProvider;
   final String? Function()? currentUserRoleProvider;
@@ -149,14 +149,17 @@ class GteNavigationDependencies {
   Match3dUserEntitlement? get match3dEntitlement =>
       match3dEntitlementProvider?.call();
 
-  bool get isAdminRole => <String>{'admin', 'super_admin'}
-      .contains((currentUserRole ?? '').trim().toLowerCase());
+  bool get isAdminRole => <String>{
+    'admin',
+    'super_admin',
+  }.contains((currentUserRole ?? '').trim().toLowerCase());
 
   CompetitionApi createCompetitionApi() {
     return competitionApi ??
         CompetitionApi.standard(
           baseUrl: apiBaseUrl,
           mode: backendMode,
+          accessToken: accessToken,
         );
   }
 
@@ -166,10 +169,7 @@ class GteNavigationDependencies {
 
   DynastyRepository createDynastyRepository() {
     return dynastyRepository ??
-        DynastyApiRepository.standard(
-          baseUrl: apiBaseUrl,
-          mode: backendMode,
-        );
+        DynastyApiRepository.standard(baseUrl: apiBaseUrl, mode: backendMode);
   }
 
   ReputationRepository createReputationRepository() {
@@ -188,14 +188,9 @@ class GteNavigationDependencies {
         );
   }
 
-  GteAuthedApi createAuthedApi({
-    String? overrideAccessToken,
-  }) {
+  GteAuthedApi createAuthedApi({String? overrideAccessToken}) {
     return GteAuthedApi(
-      config: GteRepositoryConfig(
-        baseUrl: apiBaseUrl,
-        mode: backendMode,
-      ),
+      config: GteRepositoryConfig(baseUrl: apiBaseUrl, mode: backendMode),
       transport: GteHttpTransport(),
       accessToken: overrideAccessToken ?? accessToken,
       mode: backendMode,
@@ -204,9 +199,7 @@ class GteNavigationDependencies {
 }
 
 class GteNavigationGuardResolver {
-  const GteNavigationGuardResolver({
-    required this.dependencies,
-  });
+  const GteNavigationGuardResolver({required this.dependencies});
 
   final GteNavigationDependencies dependencies;
 
@@ -244,13 +237,12 @@ class GteNavigationGuardResolver {
       final CompetitionListResponse response = await dependencies
           .createCompetitionApi()
           .fetchCompetitions(userId: dependencies.currentUserId);
-      final CompetitionSummary? competition =
-          _findWorldSuperCupCompetition(response.items);
+      final CompetitionSummary? competition = _findWorldSuperCupCompetition(
+        response.items,
+      );
       if (competition != null && _isWorldSuperCupActive(competition)) {
         return GteGuardResolution(
-          route: CompetitionDetailRouteData(
-            competitionId: competition.id,
-          ),
+          route: CompetitionDetailRouteData(competitionId: competition.id),
         );
       }
     } catch (_) {
@@ -259,9 +251,7 @@ class GteNavigationGuardResolver {
     }
 
     return const GteGuardResolution(
-      route: CompetitionsDiscoveryRouteData(
-        highlight: 'world-super-cup',
-      ),
+      route: CompetitionsDiscoveryRouteData(highlight: 'world-super-cup'),
       fallbackReason: GteNavigationFallbackReason.inactiveWorldSuperCup,
       message: 'World Super Cup is not active right now.',
     );
@@ -271,11 +261,12 @@ class GteNavigationGuardResolver {
     ClubTrophyTimelineRouteData route,
   ) async {
     try {
-      final TrophyCabinetDto cabinet =
-          await dependencies.createTrophyCabinetRepository().fetchTrophyCabinet(
-                clubId: route.clubId,
-                teamScope: route.filter.queryValue,
-              );
+      final TrophyCabinetDto cabinet = await dependencies
+          .createTrophyCabinetRepository()
+          .fetchTrophyCabinet(
+            clubId: route.clubId,
+            teamScope: route.filter.queryValue,
+          );
       if (!cabinet.isEmpty) {
         return GteGuardResolution(route: route);
       }
@@ -297,10 +288,9 @@ class GteNavigationGuardResolver {
     ClubDynastyHistoryRouteData route,
   ) async {
     try {
-      final DynastyProfileDto profile =
-          await dependencies.createDynastyRepository().fetchDynastyProfile(
-                route.clubId,
-              );
+      final DynastyProfileDto profile = await dependencies
+          .createDynastyRepository()
+          .fetchDynastyProfile(route.clubId);
       if (profile.hasRecognizedDynasty) {
         return GteGuardResolution(route: route);
       }
@@ -322,19 +312,16 @@ class GteNavigationGuardResolver {
   ) async {
     ClubIdentityDto? identity;
     try {
-      identity =
-          await dependencies.createClubIdentityRepository().fetchIdentity(
-                route.clubId,
-              );
+      identity = await dependencies
+          .createClubIdentityRepository()
+          .fetchIdentity(route.clubId);
     } catch (_) {
       return GteGuardResolution(route: route);
     }
 
-    final bool hasSetup = await (dependencies.hasIdentitySetup?.call(
-          route.clubId,
-          identity,
-        ) ??
-        _defaultHasIdentitySetup(identity));
+    final bool hasSetup =
+        await (dependencies.hasIdentitySetup?.call(route.clubId, identity) ??
+            _defaultHasIdentitySetup(identity));
     if (hasSetup) {
       return GteGuardResolution(route: route);
     }

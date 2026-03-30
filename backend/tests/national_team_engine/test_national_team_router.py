@@ -257,6 +257,7 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed) -> None:
 
     competition_response = client.post(
         "/api/competitions",
+        headers=admin_headers,
         json={
             "name": "Live Lock League",
             "format": "league",
@@ -272,14 +273,29 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed) -> None:
     assert competition_response.status_code == 201, competition_response.text
     linked_competition_id = competition_response.json()["id"]
 
-    publish = client.post(f"/api/competitions/{linked_competition_id}/publish", json={"open_for_join": True})
+    publish = client.post(
+        f"/api/competitions/{linked_competition_id}/publish",
+        headers=admin_headers,
+        json={"open_for_join": True},
+    )
     assert publish.status_code == 200, publish.text
     for club_id in ("lock-club-a", "lock-club-b"):
-        joined = client.post(f"/api/competitions/{linked_competition_id}/join", json={"user_id": club_id})
+        joined = client.post(
+            f"/api/competitions/{linked_competition_id}/join",
+            headers=admin_headers,
+            json={"user_id": club_id},
+        )
         assert joined.status_code == 200, joined.text
-    seed = client.post(f"/api/competitions/{linked_competition_id}/seed", json={"seed_method": "random"})
+    seed = client.post(
+        f"/api/competitions/{linked_competition_id}/seed",
+        headers=admin_headers,
+        json={"seed_method": "random"},
+    )
     assert seed.status_code == 200, seed.text
-    launch = client.post(f"/api/competitions/{linked_competition_id}/launch")
+    launch = client.post(
+        f"/api/competitions/{linked_competition_id}/launch",
+        headers=admin_headers,
+    )
     assert launch.status_code == 200, launch.text
     assert launch.json()["status"] == "live"
 

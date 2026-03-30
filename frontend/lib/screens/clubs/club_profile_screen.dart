@@ -15,6 +15,7 @@ import 'package:gte_frontend/widgets/clubs/reputation_progress_card.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
+import 'package:gte_frontend/widgets/creator_club_follow_panel.dart';
 
 class ClubProfileScreen extends StatefulWidget {
   const ClubProfileScreen({
@@ -24,6 +25,7 @@ class ClubProfileScreen extends StatefulWidget {
     this.controller,
     this.baseUrl = 'http://127.0.0.1:8000',
     this.backendMode = GteBackendMode.liveThenFixture,
+    this.accessToken,
     this.isAuthenticated = true,
     this.onOpenLogin,
   });
@@ -33,6 +35,7 @@ class ClubProfileScreen extends StatefulWidget {
   final ClubController? controller;
   final String baseUrl;
   final GteBackendMode backendMode;
+  final String? accessToken;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
 
@@ -48,7 +51,8 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         ClubController.standard(
           clubId: widget.clubId,
           clubName: widget.clubName,
@@ -141,6 +145,16 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
                   _InlineNotice(message: _controller.noticeMessage!),
                 ],
                 const SizedBox(height: 18),
+                CreatorClubFollowPanel(
+                  baseUrl: widget.baseUrl,
+                  backendMode: widget.backendMode,
+                  accessToken: widget.accessToken,
+                  isAuthenticated: widget.isAuthenticated,
+                  clubId: widget.clubId,
+                  clubName: widget.clubName ?? data.clubName,
+                  onOpenLogin: widget.onOpenLogin,
+                ),
+                const SizedBox(height: 18),
                 ClubHeaderCard(data: data),
                 const SizedBox(height: 18),
                 _ActionGrid(
@@ -166,32 +180,35 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
                 Wrap(
                   spacing: 14,
                   runSpacing: 14,
-                  children: data.showcasePanels.map((ClubShowcasePanel panel) {
-                    return SizedBox(
-                      width: 240,
-                      child: GteSurfacePanel(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              panel.title,
-                              style: Theme.of(context).textTheme.titleLarge,
+                  children: data.showcasePanels
+                      .map((ClubShowcasePanel panel) {
+                        return SizedBox(
+                          width: 240,
+                          child: GteSurfacePanel(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  panel.title,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  panel.value,
+                                  style:
+                                      Theme.of(context).textTheme.headlineSmall,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  panel.caption,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              panel.value,
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              panel.caption,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(growable: false),
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ],
             ),
@@ -204,8 +221,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
   Future<void> _openReputation(BuildContext context) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            ClubReputationScreen(controller: _controller),
+        builder:
+            (BuildContext context) =>
+                ClubReputationScreen(controller: _controller),
       ),
     );
   }
@@ -213,8 +231,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
   Future<void> _openTrophies(BuildContext context) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            ClubTrophyCabinetScreen(controller: _controller),
+        builder:
+            (BuildContext context) =>
+                ClubTrophyCabinetScreen(controller: _controller),
       ),
     );
   }
@@ -222,8 +241,9 @@ class _ClubProfileScreenState extends State<ClubProfileScreen> {
   Future<void> _openIdentity(BuildContext context) {
     return Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            ClubBrandingScreen(controller: _controller),
+        builder:
+            (BuildContext context) =>
+                ClubBrandingScreen(controller: _controller),
       ),
     );
   }
@@ -249,75 +269,89 @@ class _ActionGrid extends StatelessWidget {
       runSpacing: 12,
       children: <Widget>[
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubReputationScreen(controller: controller),
-            ),
-          ),
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) =>
+                          ClubReputationScreen(controller: controller),
+                ),
+              ),
           icon: const Icon(Icons.stars_outlined),
           label: const Text('Open reputation'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubTrophyCabinetScreen(controller: controller),
-            ),
-          ),
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) =>
+                          ClubTrophyCabinetScreen(controller: controller),
+                ),
+              ),
           icon: const Icon(Icons.emoji_events_outlined),
           label: const Text('Open trophies'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubBrandingScreen(controller: controller),
-            ),
-          ),
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) =>
+                          ClubBrandingScreen(controller: controller),
+                ),
+              ),
           icon: const Icon(Icons.shield_outlined),
           label: const Text('Open identity'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) => ClubDynastyOverviewScreen(
-                clubId: clubId,
-                baseUrl: baseUrl,
-                backendMode: backendMode,
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) => ClubDynastyOverviewScreen(
+                        clubId: clubId,
+                        baseUrl: baseUrl,
+                        backendMode: backendMode,
+                      ),
+                ),
               ),
-            ),
-          ),
           icon: const Icon(Icons.timeline_outlined),
           label: const Text('Open dynasty'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubShowcaseScreen(controller: controller),
-            ),
-          ),
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) =>
+                          ClubShowcaseScreen(controller: controller),
+                ),
+              ),
           icon: const Icon(Icons.slideshow_outlined),
           label: const Text('Open showcase'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubCatalogScreen(controller: controller),
-            ),
-          ),
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) =>
+                          ClubCatalogScreen(controller: controller),
+                ),
+              ),
           icon: const Icon(Icons.storefront_outlined),
           label: const Text('Open catalog'),
         ),
         FilledButton.tonalIcon(
-          onPressed: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(
-              builder: (BuildContext context) =>
-                  ClubPurchaseHistoryScreen(controller: controller),
-            ),
-          ),
+          onPressed:
+              () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder:
+                      (BuildContext context) =>
+                          ClubPurchaseHistoryScreen(controller: controller),
+                ),
+              ),
           icon: const Icon(Icons.receipt_long_outlined),
           label: const Text('Purchase history'),
         ),
@@ -327,9 +361,7 @@ class _ActionGrid extends StatelessWidget {
 }
 
 class _InlineNotice extends StatelessWidget {
-  const _InlineNotice({
-    required this.message,
-  });
+  const _InlineNotice({required this.message});
 
   final String message;
 
@@ -347,10 +379,7 @@ class _InlineNotice extends StatelessWidget {
           const Icon(Icons.check_circle_outline, color: GteShellTheme.accent),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
           ),
         ],
       ),

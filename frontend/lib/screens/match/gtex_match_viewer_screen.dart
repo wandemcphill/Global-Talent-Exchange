@@ -578,6 +578,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       _monetization.selectRenderMode(RenderMode.twoD);
       return;
     }
+    if (mode == RenderMode.threeD && widget.engineBridge == null) {
+      _monetization.selectRenderMode(RenderMode.twoD);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('Native 3D is not available on this build yet.'),
+        ),
+      );
+      return;
+    }
     _monetization.selectRenderMode(mode);
     if (_monetization.needsThreeDUnlock(matchContext)) {
       await _openUpgradePrompt(matchContext, targetMode: mode);
@@ -749,8 +758,13 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
               ]),
               builder: (BuildContext context, Widget? child) {
                 _syncControllerSpeeds(controller, matchContext);
-                final RenderMode activeRenderMode = _monetization
+                final RenderMode monetizedRenderMode = _monetization
                     .effectiveRenderModeFor(matchContext);
+                final RenderMode activeRenderMode =
+                    monetizedRenderMode == RenderMode.threeD &&
+                            widget.engineBridge == null
+                        ? RenderMode.twoD
+                        : monetizedRenderMode;
                 final MatchEvent? activeEvent = controller.activeEvent;
                 final MatchBroadcastPresentationState presentation =
                     MatchBroadcastPresentationBuilder.build(
@@ -1087,8 +1101,13 @@ class _ReplayViewer extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
                   child: PremiumControls(
                     entitlement: monetization.effectiveEntitlement,
-                    selectedRenderMode: monetization.selectedRenderMode,
+                    selectedRenderMode:
+                        monetization.selectedRenderMode == RenderMode.threeD &&
+                                engineBridge == null
+                            ? RenderMode.twoD
+                            : monetization.selectedRenderMode,
                     effectiveRenderMode: activeRenderMode,
+                    threeDAvailable: engineBridge != null,
                     availableCoins: monetization.availableCoinBalance,
                     cameraPreset: monetization.cameraPreset,
                     canUsePremiumCamera: monetization.canUsePremiumCamera(
@@ -1355,9 +1374,9 @@ class _BroadcastViewer extends StatelessWidget {
                       child: Text(
                         'Pro Manager',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: const Color(0xFFFEC84B),
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: const Color(0xFFFEC84B),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
