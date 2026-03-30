@@ -382,6 +382,19 @@ def _normalize_row(
     )
 
 
+def normalize_import_source_row(
+    *,
+    provider_name: str,
+    raw_row: Mapping[str, Any],
+    row_number: int,
+) -> RealPlayerSourceItem:
+    return _normalize_row(
+        provider_name=provider_name,
+        raw_row=raw_row,
+        row_number=row_number,
+    )
+
+
 def _fallback_provider_player_id(
     *,
     provider_name: str,
@@ -526,6 +539,7 @@ def _parse_float(value: str | None) -> float | None:
 
 
 __all__ = [
+    "normalize_import_source_row",
     "RealPlayerImportRowFailure",
     "RealPlayerImportSourceBatch",
     "RealPlayerImportSourceError",

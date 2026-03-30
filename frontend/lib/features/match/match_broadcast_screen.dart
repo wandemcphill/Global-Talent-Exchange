@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_feedback.dart';
-import '../../models/match/gtex_match_render_mode.dart';
-import '../../models/match/gtex_match_view_type.dart';
-import '../../screens/match/gtex_match_broadcast_screen.dart';
 import 'live_match_viewer_route_support.dart';
 import 'match_viewer_capability.dart';
+import 'presentation/pre_match_package_screen.dart';
 
 class MatchBroadcastScreen extends ConsumerWidget {
   const MatchBroadcastScreen({super.key, required this.matchKey});
@@ -25,33 +23,25 @@ class MatchBroadcastScreen extends ConsumerWidget {
         );
         return MatchRouteCapabilityOverlay(
           capability: MatchViewerCapability.pseudo3d,
-          child: GtexMatchBroadcastScreen(
-            matchId: matchKey,
+          child: BroadcastPackageScreen(
+            matchKey: matchKey,
             competition: value.competition,
-            competitionId: value.competition.id,
-            initialMode: GtexMatchRenderMode.standard,
-            viewType: GtexMatchViewType.pseudo3D,
-            isPremiumUser: false,
-            spectatorMode: true,
-            auto3DEnabled: false,
-            titleOverride: 'Broadcast+ Viewer',
-            competitionLabel: value.competition.name,
             viewStateLoader: () => repository.loadViewState(matchKey),
           ),
         );
       },
       loading:
           () => const MatchRouteLoadingScreen(
-            title: 'Broadcast+ Viewer',
+            title: 'Broadcast Package',
             subtitle:
-                'Verifying the live match-viewer session before opening the shipped pseudo-3D broadcast surface.',
+                'Verifying the live match-viewer session before opening the match-day broadcast package.',
             capability: MatchViewerCapability.pseudo3d,
           ),
       error:
           (Object error, StackTrace stackTrace) => MatchRouteBlockedScreen(
-            title: 'Broadcast+ Viewer',
+            title: 'Broadcast Package',
             subtitle:
-                'The active shell will only open Broadcast+ when the live match-viewer backend responds.',
+                'The active shell will only open the broadcast package when the live match-viewer backend responds.',
             reason: AppFeedback.messageFor(error),
           ),
     );

@@ -185,7 +185,74 @@ class MatchViewStateView(CommonSchema):
     away_team: MatchViewerTeamView
     events: list[MatchViewerEventView] = Field(default_factory=list)
     frames: list[MatchTimelineFrameView] = Field(default_factory=list)
+    presentation_package: "MatchViewerPresentationPackageView | None" = None
     monetization: MatchViewerMonetizationView | None = None
+
+
+class MatchViewerPresentationPlayerView(CommonSchema):
+    player_id: str | None = None
+    player_name: str = Field(min_length=1)
+    shirt_number: int | None = Field(default=None, ge=1, le=99)
+    role: str | None = Field(default=None, min_length=1)
+    line: str | None = Field(default=None, min_length=1)
+    x: float | None = Field(default=None, ge=0.0, le=100.0)
+    y: float | None = Field(default=None, ge=0.0, le=100.0)
+    rating: float | None = Field(default=None, ge=0.0, le=10.0)
+
+
+class MatchViewerPresentationTeamView(CommonSchema):
+    team_id: str
+    team_name: str
+    short_name: str
+    formation: str
+    coach_name: str | None = None
+    recent_form: int | None = Field(default=None, ge=0, le=100)
+    mentality: str | None = None
+    instruction_summary: list[str] = Field(default_factory=list)
+    starters: list[MatchViewerPresentationPlayerView] = Field(default_factory=list)
+    bench: list[MatchViewerPresentationPlayerView] = Field(default_factory=list)
+
+
+class MatchViewerStandingsEntryView(CommonSchema):
+    team_id: str | None = None
+    team_name: str
+    position: int | None = Field(default=None, ge=1)
+    played: int | None = Field(default=None, ge=0)
+    points: int | None = Field(default=None, ge=0)
+    goal_difference: int | None = None
+    form: str | None = None
+
+
+class MatchViewerContextBoardView(CommonSchema):
+    competition_name: str | None = None
+    competition_stage: str | None = None
+    venue_name: str | None = None
+    kickoff_label: str | None = None
+    date_label: str | None = None
+    referee_name: str | None = None
+    match_significance: str | None = None
+    standings: list[MatchViewerStandingsEntryView] = Field(default_factory=list)
+    storylines: list[str] = Field(default_factory=list)
+
+
+class MatchViewerReactionCardView(CommonSchema):
+    source: str
+    headline: str
+    detail: str
+    sentiment: str | None = None
+    tag: str | None = None
+
+
+class MatchViewerPresentationPackageView(CommonSchema):
+    match_label: str
+    home: MatchViewerPresentationTeamView
+    away: MatchViewerPresentationTeamView
+    context: MatchViewerContextBoardView = Field(default_factory=MatchViewerContextBoardView)
+    reactions: list[MatchViewerReactionCardView] = Field(default_factory=list)
+    rating_leaders: list[MatchViewerPresentationPlayerView] = Field(default_factory=list)
+    momentum_notes: list[str] = Field(default_factory=list)
+    coach_notes: list[str] = Field(default_factory=list)
+    commentary_highlights: list[str] = Field(default_factory=list)
 
 
 class FairnessIndicatorStatus(StrEnum):

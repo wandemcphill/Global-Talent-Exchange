@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import json
 import os
 from pathlib import Path
@@ -521,6 +522,100 @@ def test_bulk_ops_repair_mappings_can_promote_partial_rows_to_publish_ready(tmp_
         assert report.run.publish_ready_rows == 4
         assert report.run.mapped_partial_rows == 0
         assert report.run.unresolved_rows == 0
+    finally:
+        engine.dispose()
+
+
+def test_bulk_ops_can_publish_provider_shaped_staging_rows() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            _seed_canonical_entities(session)
+            run = RealPlayerImportRun(
+                provider_name="sportmonks",
+                source_type="provider_sync",
+                source_reference="sportmonks:players",
+                configured_batch_size=100,
+                status="completed",
+            )
+            session.add(run)
+            session.flush()
+            session.add(
+                RealPlayerImportStagingRecord(
+                    provider_name="sportmonks",
+                    provider_player_id="37672209",
+                    import_run_id=run.id,
+                    import_batch_key=run.id,
+                    provider_club_id="fulham",
+                    provider_club_name="Fulham",
+                    provider_competition_id="premier-league",
+                    provider_competition_name="Premier League",
+                    provider_season_id="25583",
+                    full_name="Ezra Mayers",
+                    normalized_name="ezra mayers",
+                    first_name="Ezra",
+                    last_name="Mayers",
+                    short_name="E. Mayers",
+                    display_position="Defender",
+                    nationality_name="England",
+                    nationality_code="ENG",
+                    date_of_birth=date(2007, 1, 16),
+                    age=19,
+                    source_version="sportmonks:test",
+                    source_payload_hash="1" * 64,
+                    latest_payload_json={
+                        "id": 37672209,
+                        "name": "Ezra Mayers",
+                        "displayName": "Ezra Mayers",
+                        "commonName": "E. Mayers",
+                        "firstName": "Ezra",
+                        "lastName": "Mayers",
+                        "position": "Defender",
+                        "detailedPosition": "Centre Back",
+                        "dateOfBirth": "2007-01-16",
+                        "nationality": "England",
+                        "nationalityCode": "ENG",
+                        "country": "England",
+                        "height": 183,
+                        "provider_player_id": "37672209",
+                        "currentClub": {"id": "fulham", "name": "Fulham"},
+                        "currentCompetition": {"id": "premier-league", "name": "Premier League"},
+                        "season": {"id": "25583"},
+                    },
+                    metadata_json={
+                        "source_row_number": 1,
+                        "priority_bucket": "default",
+                    },
+                )
+            )
+            session.commit()
+            run_id = run.id
+
+        service = _service(session_factory)
+        repaired = service.repair_mappings(run_id=run_id)
+        assert repaired.details_json["transitioned_ready_rows"] == 1
+        assert repaired.details_json["remaining_unresolved_rows"] == 0
+
+        dry_run = service.publish_ready_players(
+            run_id=run_id,
+            limit=1,
+            priority_bucket="all",
+            dry_run=True,
+        )
+        assert dry_run.details_json["would_publish_rows"] == 1
+
+        published = service.publish_ready_players(
+            run_id=run_id,
+            limit=1,
+            priority_bucket="all",
+        )
+        assert published.details_json["published_now"] == 1
+
+        report = service.report_run(run_id=run_id)
+        assert report.run is not None
+        assert report.run.published_rows == 1
+        assert report.run.publish_ready_rows == 0
+        assert report.run.processing_state_distribution["published"] == 1
     finally:
         engine.dispose()
 

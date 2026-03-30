@@ -4,13 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/data/hosted_competition_api.dart';
+import 'package:gte_frontend/features/competitions/live_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/federations/live_federations_provider.dart';
+import 'package:gte_frontend/features/match/live_match_overview_provider.dart';
+import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
+import 'package:gte_frontend/features/match/match_3d_route_screen.dart';
 import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
 import 'package:gte_frontend/features/national_teams/national_teams_screen.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_center/live_transfer_center_provider.dart';
 import 'package:gte_frontend/features/transfer_center/transfer_center_screen.dart';
@@ -18,12 +24,18 @@ import 'package:gte_frontend/features/transfer_market/live_market_provider.dart'
 import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/hosted_competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
+import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/national_team_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/navigation/app_router.dart';
+import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
+import 'package:gte_frontend/shared/providers/live_clients_provider.dart';
+
+import 'support/gtex_match_broadcast_fixture.dart';
 
 typedef JsonMap = Map<String, Object?>;
 
@@ -33,8 +45,7 @@ void main() {
     (WidgetTester tester) async {
       final _FakeFederationsApi federationsApi = _FakeFederationsApi();
       final _FakeNationalTeamsApi nationalTeamsApi = _FakeNationalTeamsApi();
-      final _FakeTransferCenterApi transferCenterApi =
-          _FakeTransferCenterApi();
+      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
       final ProviderContainer container = _buildRouterContainer(
         session: _clubSession(),
         federationsApi: federationsApi,
@@ -81,7 +92,9 @@ void main() {
       expect(find.text('Live listings'), findsOneWidget);
 
       router.go(
-        AppRoutes.transferCenterDetailLocation(_FakeTransferCenterApi.listingId),
+        AppRoutes.transferCenterDetailLocation(
+          _FakeTransferCenterApi.listingId,
+        ),
       );
       await tester.pumpAndSettle();
       expect(find.text('Victor Osimhen'), findsOneWidget);
@@ -100,9 +113,7 @@ void main() {
             federationId: _FakeFederationsApi.id,
           ),
           session: _clubSession(),
-          overrides: [
-            federationsApiProvider.overrideWithValue(federationsApi),
-          ],
+          overrides: [federationsApiProvider.overrideWithValue(federationsApi)],
         ),
       );
       await tester.pumpAndSettle();
@@ -173,6 +184,277 @@ void main() {
       expect(find.text('Victor Osimhen added to watchlist.'), findsOneWidget);
     },
   );
+
+  testWidgets('hub open buttons navigate from live lists to deep routes', (
+    WidgetTester tester,
+  ) async {
+    _setLargeViewport(tester);
+    final _FakeFederationsApi federationsApi = _FakeFederationsApi();
+    final _FakeNationalTeamsApi nationalTeamsApi = _FakeNationalTeamsApi();
+    final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+    final ProviderContainer container = _buildRouterContainer(
+      session: _clubSession(),
+      federationsApi: federationsApi,
+      nationalTeamsApi: nationalTeamsApi,
+      transferCenterApi: transferCenterApi,
+    );
+    addTearDown(container.dispose);
+    final router = container.read(appRouterProvider);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    router.go(AppRoutes.federations);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Open').first);
+    await tester.tap(find.widgetWithText(FilledButton, 'Open').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Governance'), findsOneWidget);
+
+    router.go(AppRoutes.nationalTeams);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Open').first);
+    await tester.tap(find.widgetWithText(FilledButton, 'Open').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Build draft squad'), findsOneWidget);
+
+    router.go(AppRoutes.transferCenter);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Open').first);
+    await tester.tap(find.widgetWithText(FilledButton, 'Open').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Negotiation state'), findsOneWidget);
+  });
+
+  testWidgets(
+    'competition hub buttons route into hosted detail and streamer engine',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final _FakeFederationsApi federationsApi = _FakeFederationsApi();
+      final _FakeNationalTeamsApi nationalTeamsApi = _FakeNationalTeamsApi();
+      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+      final _FakeHostedCompetitionApi hostedCompetitionApi =
+          _FakeHostedCompetitionApi();
+      final _FakeStreamerTournamentRepository streamerRepository =
+          _FakeStreamerTournamentRepository();
+      final ProviderContainer container = _buildRouterContainer(
+        session: _hostSession(),
+        federationsApi: federationsApi,
+        nationalTeamsApi: nationalTeamsApi,
+        transferCenterApi: transferCenterApi,
+        competitionHub: CompetitionHubData(
+          gtexCompetitions: const <CompetitionSummary>[],
+          hostedCompetitions: <HostedCompetition>[
+            hostedCompetitionApi.currentCompetition,
+          ],
+          streamerTournaments: <StreamerTournament>[
+            streamerRepository.currentTournament,
+          ],
+        ),
+        hostedCompetitionApi: hostedCompetitionApi,
+        streamerRepository: streamerRepository,
+      );
+      addTearDown(container.dispose);
+      final router = container.read(appRouterProvider);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      router.go(AppRoutes.competitions);
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Open family').at(1),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Open family').at(1));
+      await tester.pumpAndSettle();
+      expect(find.text('View detail'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'View detail'));
+      await tester.pumpAndSettle();
+      expect(find.text('Participants 3/16'), findsOneWidget);
+
+      router.go(AppRoutes.competitions);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, 'Open full engine'),
+      );
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Open full engine'));
+      await tester.pumpAndSettle();
+      expect(find.text('Streamer Tournament Engine'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'hosted competition detail actions answer with visible feedback',
+    (WidgetTester tester) async {
+      final _FakeHostedCompetitionApi hostedCompetitionApi =
+          _FakeHostedCompetitionApi();
+
+      await tester.pumpWidget(
+        _screenHost(
+          child: const LiveCompetitionDetailScreen(
+            family: CompetitionFamilyRoute.hosted,
+            competitionId: _FakeHostedCompetitionApi.id,
+          ),
+          session: _hostSession(),
+          overrides: [
+            hostedCompetitionApiProvider.overrideWithValue(
+              hostedCompetitionApi,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      expect(hostedCompetitionApi.joinCalls, 1);
+      expect(find.text('Competition joined.'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Launch'));
+      await tester.pumpAndSettle();
+      expect(hostedCompetitionApi.launchCalls, 1);
+      expect(find.text('Competition launched.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'streamer competition detail actions answer with visible feedback',
+    (WidgetTester tester) async {
+      final _FakeStreamerTournamentRepository streamerRepository =
+          _FakeStreamerTournamentRepository();
+      await tester.pumpWidget(
+        _screenHost(
+          child: const LiveCompetitionDetailScreen(
+            family: CompetitionFamilyRoute.streamer,
+            competitionId: _FakeStreamerTournamentRepository.id,
+          ),
+          session: _hostSession(),
+          overrides: [
+            streamerTournamentRepositoryProvider.overrideWithValue(
+              streamerRepository,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Join'));
+      await tester.pumpAndSettle();
+      expect(streamerRepository.joinCalls, 1);
+      expect(find.text('Tournament joined.'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Publish'));
+      await tester.pumpAndSettle();
+      expect(streamerRepository.publishCalls, 1);
+      expect(find.text('Tournament published.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'match buttons route into the shipped viewers and disclosed tools',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final _FakeFederationsApi federationsApi = _FakeFederationsApi();
+      final _FakeNationalTeamsApi nationalTeamsApi = _FakeNationalTeamsApi();
+      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+      final _FakeLiveMatchViewerRepository matchViewerRepository =
+          _FakeLiveMatchViewerRepository(
+            competition: _buildViewerCompetition(
+              id: 'live-match-001',
+              name: 'Derby Live',
+            ),
+            viewState: buildBroadcastTestViewState(),
+          );
+      final ProviderContainer container = _buildRouterContainer(
+        session: _clubSession(),
+        federationsApi: federationsApi,
+        nationalTeamsApi: nationalTeamsApi,
+        transferCenterApi: transferCenterApi,
+        matchOverview: const LiveMatchOverview(
+          entries: <LiveMatchOverviewEntry>[
+            LiveMatchOverviewEntry(
+              matchKey: 'live-match-001',
+              title: 'Derby Live',
+              subtitle: 'Main event from the featured channel.',
+              channelLabel: 'GTEX Prime',
+              isFeatured: true,
+              isLive: true,
+            ),
+          ],
+          generatedAt: null,
+          sourcePath: '/api/broadcast/home',
+        ),
+        matchViewerRepository: matchViewerRepository,
+      );
+      addTearDown(container.dispose);
+      final router = container.read(appRouterProvider);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      router.go(AppRoutes.matches);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Open 2D'));
+      await tester.pumpAndSettle();
+      expect(find.text('2D Match Viewer'), findsWidgets);
+
+      router.go(AppRoutes.matches);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Open Broadcast+'));
+      await tester.pumpAndSettle();
+      expect(find.text('Broadcast Package'), findsWidgets);
+
+      router.go(AppRoutes.matches);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Open 3D'));
+      await tester.pumpAndSettle();
+      expect(find.text('3D Match Viewer'), findsWidgets);
+
+      router.go(AppRoutes.matches);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Open spectate probe'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('2D Viewer'), findsOneWidget);
+
+      router.go(AppRoutes.matches);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'View coming soon note'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Native 3D is coming soon'), findsOneWidget);
+
+      router.go(AppRoutes.matches);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Open simulate'));
+      await tester.pumpAndSettle();
+      expect(find.text('Launch simulation'), findsOneWidget);
+    },
+  );
 }
 
 ProviderContainer _buildRouterContainer({
@@ -180,6 +462,12 @@ ProviderContainer _buildRouterContainer({
   required _FakeFederationsApi federationsApi,
   required _FakeNationalTeamsApi nationalTeamsApi,
   required _FakeTransferCenterApi transferCenterApi,
+  CompetitionHubData? competitionHub,
+  HostedCompetitionApi? hostedCompetitionApi,
+  StreamerTournamentEngineRepository? streamerRepository,
+  LiveMatchOverview? matchOverview,
+  LiveMatchViewerRepository? matchViewerRepository,
+  Match3DBridge? match3dBridge,
 }) {
   const CompetitionHubData emptyHub = CompetitionHubData(
     gtexCompetitions: <CompetitionSummary>[],
@@ -194,6 +482,14 @@ ProviderContainer _buildRouterContainer({
     authenticated: false,
     warnings: <String>[],
   );
+  final CompetitionHubData seededHub = competitionHub ?? emptyHub;
+  final LiveMatchOverview seededMatchOverview =
+      matchOverview ??
+      const LiveMatchOverview(
+        entries: <LiveMatchOverviewEntry>[],
+        generatedAt: null,
+        sourcePath: '/api/broadcast/home',
+      );
 
   return ProviderContainer(
     overrides: [
@@ -206,10 +502,10 @@ ProviderContainer _buildRouterContainer({
       profileDataProvider.overrideWith(
         (Ref ref) async => const ProfileData.unauthenticated(),
       ),
-      competitionHubProvider.overrideWith((Ref ref) async => emptyHub),
+      competitionHubProvider.overrideWith((Ref ref) async => seededHub),
       marketDashboardProvider.overrideWith((Ref ref) async => emptyMarket),
       worldAggregateProvider.overrideWith((Ref ref) async {
-        return const WorldAggregateData(
+        return WorldAggregateData(
           risingStars: <Map<String, Object?>>[],
           scoutingFeed: <Map<String, Object?>>[],
           seasons: <Map<String, Object?>>[],
@@ -217,7 +513,7 @@ ProviderContainer _buildRouterContainer({
           hallOfFame: <Map<String, Object?>>[],
           federations: <Map<String, Object?>>[],
           tracking: <String, Object?>{'season_phase': 'live'},
-          competitions: emptyHub,
+          competitions: seededHub,
           federationJoinReason:
               'Dedicated federation and national-team routes now handle the live flows.',
         );
@@ -236,6 +532,29 @@ ProviderContainer _buildRouterContainer({
       federationsApiProvider.overrideWithValue(federationsApi),
       nationalTeamsApiProvider.overrideWithValue(nationalTeamsApi),
       transferCenterApiProvider.overrideWithValue(transferCenterApi),
+      hostedCompetitionApiProvider.overrideWithValue(
+        hostedCompetitionApi ?? _FakeHostedCompetitionApi(),
+      ),
+      streamerTournamentRepositoryProvider.overrideWithValue(
+        streamerRepository ?? _FakeStreamerTournamentRepository(),
+      ),
+      liveMatchOverviewProvider.overrideWith(
+        (Ref ref) async => seededMatchOverview,
+      ),
+      liveMatchViewerRepositoryProvider.overrideWithValue(
+        matchViewerRepository ??
+            _FakeLiveMatchViewerRepository(
+              competition: _buildViewerCompetition(
+                id: 'live-match-001',
+                name: 'Route Mount Derby',
+              ),
+              viewState: buildBroadcastTestViewState(),
+            ),
+      ),
+      match3dBridgeProvider.overrideWithValue(
+        match3dBridge ??
+            Match3DBridge(backend: const _FakeMatch3dBridgeBackend(false)),
+      ),
     ],
   );
 }
@@ -246,12 +565,18 @@ Widget _screenHost({
   List overrides = const [],
 }) {
   return ProviderScope(
-    overrides: [
-      authProvider.overrideWith((Ref ref) => session),
-      ...overrides,
-    ],
+    overrides: [authProvider.overrideWith((Ref ref) => session), ...overrides],
     child: MaterialApp(home: Scaffold(body: child)),
   );
+}
+
+void _setLargeViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1600, 2200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
 }
 
 AuthSession _clubSession() {
@@ -260,6 +585,17 @@ AuthSession _clubSession() {
     accessToken: 'token-1',
     sessionId: 'session-1',
     role: 'user',
+    clubId: 'ibadan-lions',
+    clubName: 'Ibadan Lions FC',
+  );
+}
+
+AuthSession _hostSession() {
+  return const AuthSession(
+    userId: 'host-user-1',
+    accessToken: 'host-token-1',
+    sessionId: 'host-session-1',
+    role: 'admin',
     clubId: 'ibadan-lions',
     clubName: 'Ibadan Lions FC',
   );
@@ -283,6 +619,485 @@ class _UnexpectedTransport implements GteTransport {
       'Unexpected transport call: ${request.method} ${request.uri}',
     );
   }
+}
+
+CompetitionSummary _buildViewerCompetition({
+  required String id,
+  required String name,
+}) {
+  return CompetitionSummary(
+    id: id,
+    name: name,
+    format: CompetitionFormat.league,
+    visibility: CompetitionVisibility.public,
+    status: CompetitionStatus.inProgress,
+    creatorId: 'gtex',
+    creatorName: 'GTEX',
+    participantCount: 2,
+    capacity: 2,
+    currency: 'coin',
+    entryFee: 0,
+    platformFeePct: 0,
+    hostFeePct: 0,
+    platformFeeAmount: 0,
+    hostFeeAmount: 0,
+    prizePool: 0,
+    payoutStructure: const <CompetitionPayoutBreakdown>[],
+    rulesSummary: 'Route interaction proof competition.',
+    matchType: MatchType.gtexHosted,
+    joinEligibility: const CompetitionJoinEligibility(eligible: false),
+    beginnerFriendly: true,
+    createdAt: DateTime.utc(2026, 1, 1),
+    updatedAt: DateTime.utc(2026, 1, 1),
+  );
+}
+
+class _FakeHostedCompetitionApi implements HostedCompetitionApi {
+  _FakeHostedCompetitionApi()
+    : _competition = HostedCompetition(
+        id: id,
+        templateId: templateId,
+        hostUserId: 'host-user-1',
+        title: title,
+        slug: 'lagos-night-cup',
+        description: 'Fast hosted competition with live actions.',
+        status: 'open',
+        visibility: 'public',
+        startsAt: DateTime.utc(2026, 3, 30, 18),
+        lockAt: DateTime.utc(2026, 3, 30, 17, 30),
+        maxParticipants: 16,
+        entryFeeFancoin: 5,
+        rewardPoolFancoin: 80,
+        platformFeeAmount: 6,
+        metadata: const <String, Object?>{},
+        createdAt: DateTime.utc(2026, 3, 28),
+        updatedAt: DateTime.utc(2026, 3, 29),
+      );
+
+  static const String id = 'hosted-live-1';
+  static const String title = 'Lagos Night Cup';
+  static const String templateId = 'hosted-template-1';
+
+  @override
+  final GteAuthedApi client = _unusedAuthedApi();
+
+  int joinCalls = 0;
+  int launchCalls = 0;
+  HostedCompetition _competition;
+
+  HostedCompetition get currentCompetition => _competition;
+
+  HostedCompetitionTemplate get _template => const HostedCompetitionTemplate(
+    id: templateId,
+    templateKey: 'creator-cup',
+    title: 'Creator Cup',
+    description: 'Invite-driven creator cup.',
+    competitionType: 'creator',
+    teamType: 'club',
+    ageGrade: 'senior',
+    cupOrLeague: 'cup',
+    participants: 16,
+    viewingMode: 'broadcast',
+    giftRules: <String, Object?>{'gift_multiplier': 1.2},
+    seedingMethod: 'balanced',
+    isUserHostable: true,
+    entryFeeFancoin: 5,
+    rewardPoolFancoin: 80,
+    platformFeeBps: 800,
+    metadata: <String, Object?>{},
+    active: true,
+  );
+
+  HostedCompetition _copyCompetition({required String status}) {
+    return HostedCompetition(
+      id: _competition.id,
+      templateId: _competition.templateId,
+      hostUserId: _competition.hostUserId,
+      title: _competition.title,
+      slug: _competition.slug,
+      description: _competition.description,
+      status: status,
+      visibility: _competition.visibility,
+      startsAt: _competition.startsAt,
+      lockAt: _competition.lockAt,
+      maxParticipants: _competition.maxParticipants,
+      entryFeeFancoin: _competition.entryFeeFancoin,
+      rewardPoolFancoin: _competition.rewardPoolFancoin,
+      platformFeeAmount: _competition.platformFeeAmount,
+      metadata: _competition.metadata,
+      createdAt: _competition.createdAt,
+      updatedAt: DateTime.utc(2026, 3, 30, 12),
+    );
+  }
+
+  @override
+  Future<List<HostedCompetitionTemplate>> listTemplates() async {
+    return <HostedCompetitionTemplate>[_template];
+  }
+
+  @override
+  Future<List<HostedCompetition>> listCompetitions() async {
+    return <HostedCompetition>[_competition];
+  }
+
+  @override
+  Future<List<HostedCompetition>> listMyCompetitions() async {
+    return <HostedCompetition>[_competition];
+  }
+
+  @override
+  Future<HostedCompetitionDetail> fetchDetail(String competitionId) async {
+    return HostedCompetitionDetail(
+      competition: _competition,
+      template: _template,
+      participants: <HostedCompetitionParticipant>[
+        HostedCompetitionParticipant(
+          id: 'participant-1',
+          competitionId: competitionId,
+          userId: 'host-user-1',
+          joinedAt: DateTime.utc(2026, 3, 29),
+          entryFeeFancoin: 5,
+          payoutEligible: true,
+          metadata: const <String, Object?>{},
+        ),
+      ],
+      currentParticipants: 3,
+      joinOpen: true,
+    );
+  }
+
+  @override
+  Future<HostedCompetition> createCompetition({
+    required String templateKey,
+    required String title,
+    String description = '',
+    String visibility = 'public',
+    int? maxParticipants,
+    double? entryFeeFancoin,
+    double? rewardPoolFancoin,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<HostedCompetition> joinCompetition(String competitionId) async {
+    joinCalls += 1;
+    return _competition;
+  }
+
+  @override
+  Future<List<HostedCompetitionStanding>> listStandings(
+    String competitionId,
+  ) async {
+    return <HostedCompetitionStanding>[
+      HostedCompetitionStanding(
+        id: 'standing-1',
+        competitionId: competitionId,
+        userId: 'host-user-1',
+        finalRank: 1,
+        points: 9,
+        wins: 3,
+        draws: 0,
+        losses: 0,
+        goalsFor: 8,
+        goalsAgainst: 2,
+        payoutAmount: 50,
+        metadata: const <String, Object?>{},
+        createdAt: DateTime.utc(2026, 3, 29),
+        updatedAt: DateTime.utc(2026, 3, 30),
+      ),
+    ];
+  }
+
+  @override
+  Future<HostedCompetitionFinance> fetchFinance(String competitionId) async {
+    return const HostedCompetitionFinance(
+      currency: 'FAN',
+      participantCount: 3,
+      entryFeeFancoin: 5,
+      grossCollected: 15,
+      projectedRewardPool: 80,
+      projectedPlatformFee: 6,
+      escrowBalance: 9,
+      settledPrizes: 0,
+      settledPlatformFee: 0,
+      status: 'open',
+    );
+  }
+
+  @override
+  Future<HostedCompetition> launchCompetition(String competitionId) async {
+    launchCalls += 1;
+    _competition = _copyCompetition(status: 'live');
+    return _competition;
+  }
+
+  @override
+  Future<List<HostedCompetitionTemplate>> seedTemplates() async {
+    return <HostedCompetitionTemplate>[_template];
+  }
+
+  @override
+  Future<HostedCompetition> finalizeCompetition({
+    required String competitionId,
+    required List<Map<String, Object?>> placements,
+    String note = '',
+  }) async {
+    _competition = _copyCompetition(status: 'completed');
+    return _competition;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeStreamerTournamentRepository
+    implements StreamerTournamentEngineRepository {
+  _FakeStreamerTournamentRepository()
+    : _tournament = StreamerTournament.fromJson(<String, Object?>{
+        'id': id,
+        'host_user_id': 'host-user-1',
+        'creator_profile_id': 'creator-1',
+        'creator_club_id': 'ibadan-lions',
+        'slug': 'creator-clash',
+        'title': title,
+        'description': 'Creator-hosted tournament with live actions.',
+        'tournament_type': 'ladder',
+        'status': 'draft',
+        'approval_status': 'draft',
+        'max_participants': 8,
+        'requires_admin_approval': false,
+        'high_reward_flag': false,
+        'entry_rules_json': <String, Object?>{},
+        'metadata_json': <String, Object?>{},
+        'rewards': <Map<String, Object?>>[],
+        'invites': <Map<String, Object?>>[],
+        'entries': <Map<String, Object?>>[
+          <String, Object?>{'user_id': 'entry-1'},
+        ],
+        'open_risk_signals': <Map<String, Object?>>[],
+      });
+
+  static const String id = 'streamer-1';
+  static const String title = 'Creator Clash';
+
+  int joinCalls = 0;
+  int publishCalls = 0;
+  StreamerTournament _tournament;
+
+  StreamerTournament get currentTournament => _tournament;
+
+  LeaderboardSeason get _season => LeaderboardSeason.fromJson(<String, Object?>{
+    'id': 'season-1',
+    'status': 'live',
+    'default_rating': 1000,
+    'k_factor': 32,
+    'reset_strategy': 'soft',
+    'soft_reset_factor': 0.85,
+    'duration_days': 30,
+    'days_remaining': 12,
+    'rank_tiers': <Map<String, Object?>>[],
+    'reward_tiers': <Map<String, Object?>>[],
+    'metadata_json': <String, Object?>{},
+  });
+
+  StreamerTournament _replaceTournament(Map<String, Object?> patch) {
+    return StreamerTournament.fromJson(<String, Object?>{
+      ..._tournament.raw,
+      ...patch,
+    });
+  }
+
+  @override
+  Future<StreamerTournamentList> listPublicTournaments() async {
+    return StreamerTournamentList(
+      tournaments: <StreamerTournament>[_tournament],
+    );
+  }
+
+  @override
+  Future<StreamerTournamentList> listMyTournaments() async {
+    return StreamerTournamentList(
+      tournaments: <StreamerTournament>[_tournament],
+    );
+  }
+
+  @override
+  Future<LeaderboardBoard> fetchGlobalLeaderboard({int limit = 12}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LeaderboardSeason> fetchCurrentSeason() async {
+    return _season;
+  }
+
+  @override
+  Future<LeaderboardSeasonHistory> fetchSeasonHistory({int limit = 4}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LeaderboardPlayerRanks> fetchPlayerRanks(String playerId) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournament> createTournament(
+    StreamerTournamentCreateRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournament> fetchTournament(String tournamentId) async {
+    return _tournament;
+  }
+
+  @override
+  Future<StreamerTournament> updateTournament(
+    String tournamentId,
+    StreamerTournamentUpdateRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournament> replaceRewardPlan(
+    String tournamentId,
+    StreamerTournamentRewardPlanReplaceRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournament> createInvite(
+    String tournamentId,
+    StreamerTournamentInviteCreateRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournament> joinTournament(
+    String tournamentId,
+    StreamerTournamentJoinRequest request,
+  ) async {
+    joinCalls += 1;
+    _tournament = _replaceTournament(<String, Object?>{
+      'entries': <Map<String, Object?>>[
+        ..._tournament.entries,
+        <String, Object?>{'user_id': 'host-user-1'},
+      ],
+    });
+    return _tournament;
+  }
+
+  @override
+  Future<StreamerTournament> publishTournament(
+    String tournamentId,
+    StreamerTournamentPublishRequest request,
+  ) async {
+    publishCalls += 1;
+    _tournament = _replaceTournament(<String, Object?>{
+      'status': 'published',
+      'approval_status': 'submitted',
+    });
+    return _tournament;
+  }
+
+  @override
+  Future<StreamerTournamentPolicy> fetchPolicy() async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournamentPolicy> upsertPolicy(
+    StreamerTournamentPolicyUpsertRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournament> reviewTournament(
+    String tournamentId,
+    StreamerTournamentReviewRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<StreamerTournamentRiskSignal>> listRiskSignals() async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournamentRiskSignal> reviewRiskSignal(
+    String signalId,
+    StreamerTournamentRiskReviewRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StreamerTournamentSettlement> settleTournament(
+    String tournamentId,
+    StreamerTournamentSettleRequest request,
+  ) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LeaderboardSeasonLifecycle> archiveSeason() async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LeaderboardSeasonLifecycle> resetSeason() async {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
+  const _FakeLiveMatchViewerRepository({
+    required this.competition,
+    required this.viewState,
+  });
+
+  final CompetitionSummary competition;
+  final MatchViewState viewState;
+
+  @override
+  Future<MatchViewState> loadViewState(
+    String matchKey, {
+    String? continuationToken,
+  }) async {
+    return viewState;
+  }
+
+  @override
+  Future<LiveMatchViewerBootstrap> resolveBootstrap(String matchKey) async {
+    return LiveMatchViewerBootstrap(
+      matchKey: matchKey,
+      viewer: <String, Object?>{'title': competition.name},
+      competition: competition,
+    );
+  }
+}
+
+class _FakeMatch3dBridgeBackend implements Match3dBridgeBackend {
+  const _FakeMatch3dBridgeBackend(this.available);
+
+  final bool available;
+
+  @override
+  Stream<dynamic> get events => const Stream<dynamic>.empty();
+
+  @override
+  Future<void> handleEvent(Map<String, dynamic> event) async {}
+
+  @override
+  Future<bool> isAvailable() async => available;
 }
 
 class _FakeFederationsApi extends FederationsApi {
@@ -348,10 +1163,7 @@ class _FakeFederationsApi extends FederationsApi {
           'season_label': '2030',
         },
       ],
-      'rules': <String, Object?>{
-        'salary_cap': 'enabled',
-        'foreign_limit': 5,
-      },
+      'rules': <String, Object?>{'salary_cap': 'enabled', 'foreign_limit': 5},
       'members': <Map<String, Object?>>[
         <String, Object?>{'club_id': 'ibadan-lions', 'status': 'active'},
       ],
@@ -587,31 +1399,32 @@ class _FakeTransferCenterApi extends TransferCenterApi {
 
   static const String listingId = 'listing-1';
 
-  static const TransferCenterListingRecord _listing = TransferCenterListingRecord(
-    id: listingId,
-    playerId: 'player-osimhen',
-    playerName: 'Victor Osimhen',
-    sellingClubId: 'napoli',
-    currentClubName: 'Napoli',
-    basePrice: 90000000,
-    currentHighestBid: 97000000,
-    highestBidderId: 'ibadan-lions',
-    status: 'open',
-    watchlistCount: 14,
-    bidCount: 3,
-    marketSignal: 'Premier clubs are circling.',
-    channel: 'transfer:listing-1',
-    timeRemaining: 5400,
-    negotiationId: 'negotiation-1',
-    bidders: <JsonMap>[
-      <String, Object?>{
-        'club_id': 'ibadan-lions',
-        'club_name': 'Ibadan Lions FC',
-        'amount': 97000000,
-        'is_highest': true,
-      },
-    ],
-  );
+  static const TransferCenterListingRecord _listing =
+      TransferCenterListingRecord(
+        id: listingId,
+        playerId: 'player-osimhen',
+        playerName: 'Victor Osimhen',
+        sellingClubId: 'napoli',
+        currentClubName: 'Napoli',
+        basePrice: 90000000,
+        currentHighestBid: 97000000,
+        highestBidderId: 'ibadan-lions',
+        status: 'open',
+        watchlistCount: 14,
+        bidCount: 3,
+        marketSignal: 'Premier clubs are circling.',
+        channel: 'transfer:listing-1',
+        timeRemaining: 5400,
+        negotiationId: 'negotiation-1',
+        bidders: <JsonMap>[
+          <String, Object?>{
+            'club_id': 'ibadan-lions',
+            'club_name': 'Ibadan Lions FC',
+            'amount': 97000000,
+            'is_highest': true,
+          },
+        ],
+      );
 
   int watchlistRequests = 0;
 

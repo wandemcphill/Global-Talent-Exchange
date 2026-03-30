@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth.dependencies import get_current_user
+from app.broadcast_network.router import router as broadcast_router
 from app.db import get_session
 from app.fairness.fairness_guard import FairnessGuard
 from app.fairness.match_integrity_service import MatchIntegrityService
@@ -27,6 +31,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
     app = FastAPI()
     app.include_router(match_viewer_router)
     app.include_router(match_viewer_router, prefix="/api")
+    app.include_router(broadcast_router)
 
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -41,6 +46,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
             yield session
 
     app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="viewer-1")
     return app, session_factory
 
 
@@ -103,6 +109,64 @@ def test_match_viewer_route_scales_archive_fallback_by_mode() -> None:
     assert 600 <= cinematic.json()["duration_seconds"] <= 900
 
 
+def test_match_viewer_route_adds_presentation_package_from_replay_payload() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=31))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+    _insert_match(
+        session_factory,
+        replay_payload.match_id,
+        metadata_json={
+            "match_viewer": base_view.model_dump(mode="json"),
+            "replay_payload": replay_payload.model_dump(mode="json"),
+            "competition_name": "GTEX Premier League",
+            "competition_stage": "Matchday 18",
+            "venue_name": "National Stadium",
+            "standings": [
+                {
+                    "team_id": "home",
+                    "team_name": base_view.home_team.team_name,
+                    "position": 3,
+                    "played": 17,
+                    "points": 32,
+                    "form": "WWDWL",
+                },
+                {
+                    "team_id": "away",
+                    "team_name": base_view.away_team.team_name,
+                    "position": 5,
+                    "played": 17,
+                    "points": 29,
+                    "form": "WDLWW",
+                },
+            ],
+            "storylines": [
+                "Top-four pressure on the night.",
+                "Both coaches hold their first-choice front line.",
+            ],
+        },
+    )
+
+    with TestClient(app) as client:
+        timeline = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        session = client.get(f"/api/match-viewer/{replay_payload.match_id}/session")
+
+    assert timeline.status_code == 200
+    timeline_payload = timeline.json()
+    package = timeline_payload["presentation_package"]
+    assert package["match_label"] == f"{base_view.home_team.team_name} vs {base_view.away_team.team_name}"
+    assert package["home"]["starters"]
+    assert package["away"]["starters"]
+    assert package["context"]["competition_name"] == "GTEX Premier League"
+    assert package["context"]["standings"][0]["team_name"] == base_view.home_team.team_name
+    assert package["reactions"]
+
+    assert session.status_code == 200
+    session_payload = session.json()
+    assert session_payload["presentation_package"]["home"]["formation"]
+    assert session_payload["presentation_package"]["context"]["venue_name"] == "National Stadium"
+
+
 def test_match_viewer_route_builds_live_hub_fallback_when_no_stored_metadata_exists() -> None:
     app, _ = _build_app()
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=35))
@@ -120,12 +184,40 @@ def test_match_viewer_route_builds_live_hub_fallback_when_no_stored_metadata_exi
     assert timeline_payload["home_team"]["team_name"]
     assert timeline_payload["away_team"]["team_name"]
     assert timeline_payload["frames"]
+    assert "presentation_package" in timeline_payload
+    assert timeline_payload["presentation_package"]["home"]["team_name"]
 
     assert session.status_code == 200
     session_payload = session.json()
     assert session_payload["match_id"] == replay_payload.match_id
     assert session_payload["source"] == "live_match_hub"
     assert session_payload["timeline_proof"]["status"] == "unverified"
+    assert "presentation_package" in session_payload
+    assert session_payload["presentation_package"]["away"]["team_name"]
+
+
+def test_broadcast_home_and_match_viewer_resolve_the_same_live_match_key() -> None:
+    app, _ = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=39))
+    hub = ensure_live_match_hub(app, step_interval_seconds=0.01)
+    hub.start_stream(replay_payload.match_id, replay_payload, target_runtime_seconds=0.2)
+
+    with TestClient(app) as client:
+        broadcast_home = client.get("/api/broadcast/home")
+
+        assert broadcast_home.status_code == 200
+        home_payload = broadcast_home.json()
+        live_channel = next(
+            channel for channel in home_payload["channels"] if channel["channel_id"] == "live"
+        )
+        assert live_channel["current_program"] is not None
+        match_key = live_channel["current_program"]["match_id"]
+
+        viewer = client.get(f"/api/match-viewer/{match_key}")
+
+    assert match_key == replay_payload.match_id
+    assert viewer.status_code == 200
+    assert viewer.json()["match_id"] == match_key
 
 
 def test_match_viewer_route_locks_fairness_protected_payloads_before_full_playback() -> None:

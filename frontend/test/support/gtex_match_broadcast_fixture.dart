@@ -1,3 +1,4 @@
+import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
@@ -6,6 +7,7 @@ import 'package:gte_frontend/models/match_view_state.dart';
 MatchViewState buildBroadcastTestViewState({
   bool scoreless = false,
   bool includeMonetization = false,
+  MatchPresentationPackage? presentationPackage,
 }) {
   const MatchViewerTeam homeTeam = MatchViewerTeam(
     teamId: 'home',
@@ -276,6 +278,232 @@ MatchViewState buildBroadcastTestViewState({
         includeMonetization
             ? _buildMonetization(events)
             : const MatchViewerMonetization(),
+    presentationPackage: presentationPackage ?? buildBroadcastTestPackage(),
+  );
+}
+
+MatchPresentationPackage buildBroadcastTestPackage() {
+  return MatchPresentationPackage(
+    matchLabel: 'Lagos Stars vs Abuja City',
+    home: MatchPresentationTeam(
+      teamId: 'home',
+      teamName: 'Lagos Stars',
+      shortName: 'LAG',
+      formation: '4-3-3',
+      coachName: 'S. Balogun',
+      recentForm: 82,
+      mentality: 'Positive',
+      instructionSummary: const <String>[
+        'High press 82',
+        'Tempo 74',
+        'Width 63',
+      ],
+      starters: const <MatchPresentationPlayer>[
+        MatchPresentationPlayer(
+          playerId: 'home-1',
+          playerName: 'Adebayo',
+          shirtNumber: 1,
+          role: 'goalkeeper',
+          line: 'goalkeeper',
+          x: 90,
+          y: 50,
+          rating: 7.1,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'home-4',
+          playerName: 'Okoro',
+          shirtNumber: 4,
+          role: 'defender',
+          line: 'defense',
+          x: 58,
+          y: 28,
+          rating: 7.3,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'home-6',
+          playerName: 'Lawal',
+          shirtNumber: 6,
+          role: 'defender',
+          line: 'defense',
+          x: 58,
+          y: 50,
+          rating: 7.0,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'home-8',
+          playerName: 'Bassey',
+          shirtNumber: 8,
+          role: 'midfielder',
+          line: 'midfield',
+          x: 40,
+          y: 42,
+          rating: 7.5,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'home-10',
+          playerName: 'Nnamdi',
+          shirtNumber: 10,
+          role: 'forward',
+          line: 'attack',
+          x: 24,
+          y: 50,
+          rating: 8.1,
+        ),
+      ],
+      bench: const <MatchPresentationPlayer>[
+        MatchPresentationPlayer(
+          playerId: 'home-b1',
+          playerName: 'Salisu',
+          shirtNumber: 12,
+          role: 'goalkeeper',
+        ),
+        MatchPresentationPlayer(
+          playerId: 'home-b2',
+          playerName: 'Emeka',
+          shirtNumber: 14,
+          role: 'midfielder',
+        ),
+      ],
+    ),
+    away: MatchPresentationTeam(
+      teamId: 'away',
+      teamName: 'Abuja City',
+      shortName: 'ABJ',
+      formation: '4-2-3-1',
+      coachName: 'T. Musa',
+      recentForm: 75,
+      mentality: 'Balanced',
+      instructionSummary: const <String>['Tempo 68', 'Defensive line 58'],
+      starters: const <MatchPresentationPlayer>[
+        MatchPresentationPlayer(
+          playerId: 'away-1',
+          playerName: 'Yusuf',
+          shirtNumber: 1,
+          role: 'goalkeeper',
+          line: 'goalkeeper',
+          x: 90,
+          y: 50,
+          rating: 6.9,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'away-5',
+          playerName: 'Ibe',
+          shirtNumber: 5,
+          role: 'defender',
+          line: 'defense',
+          x: 58,
+          y: 28,
+          rating: 6.8,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'away-7',
+          playerName: 'Afolabi',
+          shirtNumber: 7,
+          role: 'midfielder',
+          line: 'midfield',
+          x: 40,
+          y: 42,
+          rating: 7.2,
+        ),
+        MatchPresentationPlayer(
+          playerId: 'away-9',
+          playerName: 'Makanjuola',
+          shirtNumber: 9,
+          role: 'forward',
+          line: 'attack',
+          x: 24,
+          y: 50,
+          rating: 7.6,
+        ),
+      ],
+      bench: const <MatchPresentationPlayer>[
+        MatchPresentationPlayer(
+          playerId: 'away-b1',
+          playerName: 'Haruna',
+          shirtNumber: 12,
+          role: 'goalkeeper',
+        ),
+        MatchPresentationPlayer(
+          playerId: 'away-b2',
+          playerName: 'Bello',
+          shirtNumber: 16,
+          role: 'forward',
+        ),
+      ],
+    ),
+    context: const MatchContextBoard(
+      competitionName: 'GTEX Premier League',
+      competitionStage: 'Matchday 18',
+      venueName: 'National Stadium',
+      kickoffLabel: '19:30 UTC',
+      dateLabel: '30 Mar 2026',
+      refereeName: 'A. Garuba',
+      matchSignificance:
+          'Top-four pressure and title-race implications on the night.',
+      standings: <MatchStandingsEntry>[
+        MatchStandingsEntry(
+          teamId: 'home',
+          teamName: 'Lagos Stars',
+          position: 3,
+          played: 17,
+          points: 32,
+          goalDifference: 10,
+          form: 'WWDWL',
+        ),
+        MatchStandingsEntry(
+          teamId: 'away',
+          teamName: 'Abuja City',
+          position: 5,
+          played: 17,
+          points: 29,
+          goalDifference: 7,
+          form: 'WDLWW',
+        ),
+      ],
+      storylines: <String>[
+        'Lagos can move into the top two with a win.',
+        'Abuja arrive with momentum after back-to-back away victories.',
+      ],
+    ),
+    reactions: const <MatchReactionCard>[
+      MatchReactionCard(
+        source: 'Match Desk',
+        headline: 'Lineups confirmed',
+        detail: 'Both coaches keep faith with the same front three.',
+        tag: 'desk',
+      ),
+      MatchReactionCard(
+        source: 'Press',
+        headline: 'Title-race pressure',
+        detail:
+            'The desk expects a high-intensity first half because of the table pressure.',
+        tag: 'press',
+      ),
+    ],
+    ratingLeaders: const <MatchPresentationPlayer>[
+      MatchPresentationPlayer(
+        playerId: 'home-10',
+        playerName: 'Nnamdi',
+        rating: 8.1,
+      ),
+      MatchPresentationPlayer(
+        playerId: 'away-9',
+        playerName: 'Makanjuola',
+        rating: 7.6,
+      ),
+    ],
+    momentumNotes: const <String>[
+      'Lagos control the right flank in the opening spell.',
+      'Abuja are threatening on quick transitions.',
+    ],
+    coachNotes: const <String>[
+      'Balogun wants the front line pressing the first pass.',
+      'Musa is keeping the double pivot compact in front of the back four.',
+    ],
+    commentaryHighlights: const <String>[
+      'The atmosphere is building as kickoff approaches under the floodlights.',
+      'This fixture has a genuine top-four edge to it tonight.',
+    ],
   );
 }
 

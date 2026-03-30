@@ -184,3 +184,53 @@ def test_mapping_service_can_auto_create_missing_entities_when_enabled() -> None
             assert session.scalar(select(func.count()).select_from(RealPlayerUnresolvedReference)) == 0
     finally:
         engine.dispose()
+
+
+def test_mapping_service_reuses_inactive_reference_mapping() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        service = RealPlayerCanonicalMappingService(settings=_settings())
+        with session_factory() as session:
+            england = Country(
+                source_provider="seed",
+                provider_external_id="ENG",
+                name="England",
+                alpha3_code="ENG",
+                fifa_code="ENG",
+            )
+            session.add(england)
+            session.flush()
+            session.add(
+                RealPlayerReferenceMapping(
+                    source_name="sportmonks",
+                    entity_type="country",
+                    provider_external_id="EN",
+                    provider_reference_key="en",
+                    provider_label="England",
+                    normalized_label="England",
+                    canonical_country_id=england.id,
+                    mapping_status="resolved",
+                    resolution_method="country_name_exact",
+                    confidence_score=0.94,
+                    is_active=False,
+                    metadata_json={},
+                )
+            )
+            session.commit()
+
+            resolution = service.resolve_country(
+                session,
+                source_name="sportmonks",
+                provider_external_id="EN",
+                name="England",
+            )
+
+            assert resolution.status == "resolved"
+            mappings = list(session.scalars(select(RealPlayerReferenceMapping)))
+            assert len(mappings) == 1
+            assert mappings[0].provider_reference_key == "en"
+            assert mappings[0].provider_external_id == "EN"
+            assert mappings[0].is_active is True
+            assert mappings[0].canonical_country_id == england.id
+    finally:
+        engine.dispose()

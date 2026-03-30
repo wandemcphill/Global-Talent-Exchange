@@ -31,6 +31,7 @@ from app.ingestion.real_player_import_models import (
     RealPlayerImportStagingRecord,
 )
 from app.ingestion.real_player_import_repository import RealPlayerImportRepository
+from app.ingestion.real_player_import_sources import normalize_import_source_row
 from app.ingestion.real_player_ingestion_service import (
     RealPlayerBatchBlockedError,
     RealPlayerIngestionService,
@@ -1295,9 +1296,90 @@ class RealPlayerBulkImportOpsService:
         try:
             return RealPlayerSeedInput.model_validate(payload)
         except Exception as exc:
+            metadata = _dict_value(record.metadata_json)
+            try:
+                row_number = int(metadata.get("source_row_number") or 1)
+            except (TypeError, ValueError):
+                row_number = 1
+            fallback_error: Exception = exc
+            try:
+                source_item = normalize_import_source_row(
+                    provider_name=record.provider_name,
+                    raw_row=payload,
+                    row_number=row_number,
+                )
+                normalized_payload = self._seed_payload_from_source_item(
+                    record=record,
+                    source_item=source_item,
+                    raw_payload=payload,
+                )
+                return RealPlayerSeedInput.model_validate(normalized_payload)
+            except Exception as fallback_exc:
+                fallback_error = fallback_exc
             raise RealPlayerBulkImportOpsError(
-                f"Staging record '{record.provider_name}:{record.provider_player_id}' is invalid: {exc}"
-            ) from exc
+                f"Staging record '{record.provider_name}:{record.provider_player_id}' is invalid: {fallback_error}"
+            ) from fallback_error
+
+    def _seed_payload_from_source_item(
+        self,
+        *,
+        record: RealPlayerImportStagingRecord,
+        source_item: RealPlayerSourceItem,
+        raw_payload: dict[str, object],
+    ) -> dict[str, object]:
+        canonical_name = _required_text(source_item.full_name, label="canonical_name")
+        display_name = str(
+            source_item.short_name
+            or _first_value(raw_payload, "display_name", "displayName", "commonName")
+            or ""
+        ).strip() or None
+        known_aliases = _unique_text_values(
+            [
+                *_list_value(raw_payload.get("known_aliases")),
+                *_list_value(raw_payload.get("knownAliases")),
+                _first_value(raw_payload, "commonName"),
+                _first_value(raw_payload, "display_name", "displayName"),
+                record.short_name,
+            ],
+            excluded={canonical_name, display_name},
+        )
+        return {
+            "source_name": record.provider_name,
+            "source_player_key": record.provider_player_id,
+            "canonical_name": canonical_name,
+            "display_name": display_name,
+            "known_aliases": known_aliases,
+            "nationality": source_item.nationality_name,
+            "nationality_code": source_item.nationality_code,
+            "date_of_birth": source_item.date_of_birth,
+            "birth_year": _first_value(raw_payload, "birth_year", "birthYear"),
+            "age": source_item.age,
+            "dominant_foot": _first_value(raw_payload, "dominant_foot", "dominantFoot"),
+            "primary_position": source_item.display_position,
+            "secondary_positions": _unique_text_values(
+                [
+                    *_list_value(raw_payload.get("secondary_positions")),
+                    *_list_value(raw_payload.get("secondaryPositions")),
+                ]
+            ),
+            "current_real_world_club": source_item.current_club_name,
+            "current_real_world_club_key": source_item.current_club_id,
+            "current_real_world_league": source_item.current_competition_name,
+            "current_real_world_league_key": source_item.current_competition_id,
+            "competition_level": _first_value(raw_payload, "competition_level", "competitionLevel"),
+            "appearances": _first_value(raw_payload, "appearances"),
+            "minutes_played": _first_value(raw_payload, "minutes_played", "minutesPlayed"),
+            "goals": _first_value(raw_payload, "goals"),
+            "assists": _first_value(raw_payload, "assists"),
+            "clean_sheets": _first_value(raw_payload, "clean_sheets", "cleanSheets"),
+            "injury_status": _first_value(raw_payload, "injury_status", "injuryStatus"),
+            "height_cm": _first_value(raw_payload, "height_cm", "height"),
+            "weight_kg": _first_value(raw_payload, "weight_kg", "weight"),
+            "current_market_reference_value": source_item.rough_market_value,
+            "market_reference_currency": source_item.rough_market_value_currency or "EUR",
+            "source_last_refreshed_at": source_item.provider_last_updated_at,
+            "real_player_tier": _first_value(raw_payload, "real_player_tier", "realPlayerTier"),
+        }
 
     def _publish_request(
         self,
@@ -1494,6 +1576,30 @@ def _list_value(value: object) -> list[object]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _unique_text_values(
+    values: list[object],
+    *,
+    excluded: set[str | None] | None = None,
+) -> list[str]:
+    excluded_keys = {
+        str(value).strip().casefold()
+        for value in (excluded or set())
+        if str(value or "").strip()
+    }
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        key = text.casefold()
+        if key in excluded_keys or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(text)
+    return normalized
 
 
 def _dict_value(value: object) -> dict[str, object]:

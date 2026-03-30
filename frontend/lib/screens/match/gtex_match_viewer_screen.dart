@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:gte_frontend/controllers/match_3d_timeline_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
+import 'package:gte_frontend/features/match/presentation/match_scene_director.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/match_scorebar_widget.dart';
+import 'package:gte_frontend/features/match/presentation/widgets/tactical_hud_widget.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_monetization.dart';
@@ -971,6 +977,22 @@ class _ReplayViewer extends StatelessWidget {
         final bool wide = constraints.maxWidth >= 1040;
         final bool compactHeader = constraints.maxWidth < 860;
         final bool showPremiumControls = wide;
+        final BroadcastSceneSnapshot sceneSnapshot = MatchSceneDirector.resolve(
+          frame: controller.displayFrame,
+          activeEvent: activeEvent,
+          packageSeconds: controller.positionSeconds,
+        );
+        final MatchPresentationPackage package =
+            const BroadcastPackageRepository().resolve(viewState);
+        final bool premiumCameraAvailable = monetization.canUsePremiumCamera(
+          matchContext,
+        );
+        final Match3dCameraPreset resolvedCameraPreset =
+            _eventDrivenCameraPreset(
+              sceneSnapshot.cameraState,
+              selectedPreset: monetization.cameraPreset,
+              premiumCameraAvailable: premiumCameraAvailable,
+            );
         final Widget field = Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
           child: Stack(
@@ -983,7 +1005,7 @@ class _ReplayViewer extends StatelessWidget {
                     controller: controller,
                     viewState: viewState,
                     renderMode: activeRenderMode,
-                    cameraPreset: monetization.cameraPreset,
+                    cameraPreset: resolvedCameraPreset,
                     activeEvent: controller.activeEvent,
                     engineBridge: engineBridge,
                     broadcastMode: false,
@@ -991,48 +1013,72 @@ class _ReplayViewer extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                top: 12,
-                left: 12,
-                right: 12,
-                child:
-                    compactHeader
-                        ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            ScoreboardWidget(
-                              viewState: viewState,
-                              frame: controller.displayFrame,
-                              activeEvent: activeEvent,
-                            ),
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.topRight,
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 320,
-                                ),
-                                child: EventTickerWidget(event: activeEvent),
+              if (activeRenderMode == RenderMode.threeD) ...<Widget>[
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  child: MatchScorebarWidget(
+                    homeName: viewState.homeTeam.shortName,
+                    awayName: viewState.awayTeam.shortName,
+                    homeScore: controller.displayFrame.homeScore,
+                    awayScore: controller.displayFrame.awayScore,
+                    clockLabel: _sceneClockLabel(
+                      controller.displayFrame,
+                      activeEvent,
+                    ),
+                    statusLabel: _sceneStatusLabel(
+                      controller.displayFrame,
+                      activeEvent,
+                    ),
+                    cameraState: sceneSnapshot.cameraState,
+                  ),
+                ),
+                Positioned(
+                  top: compactHeader ? 78 : 86,
+                  right: 12,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: wide ? 320 : 280),
+                    child: TacticalHudWidget(package: package),
+                  ),
+                ),
+                Positioned(
+                  top: compactHeader ? 270 : 286,
+                  right: 12,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 260),
+                    child: EventTickerWidget(event: activeEvent),
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  right: wide ? 344 : 12,
+                  bottom: 18,
+                  child: CommentaryRibbonWidget(
+                    headline: _sceneHeadline(activeEvent, sceneSnapshot),
+                    detail: _sceneDetail(package, activeEvent),
+                    trailing:
+                        activeEvent?.clockLabel ??
+                        _sceneClockLabel(controller.displayFrame, activeEvent),
+                  ),
+                ),
+              ] else
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  child:
+                      compactHeader
+                          ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              ScoreboardWidget(
+                                viewState: viewState,
+                                frame: controller.displayFrame,
+                                activeEvent: activeEvent,
                               ),
-                            ),
-                          ],
-                        )
-                        : Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: ScoreboardWidget(
-                                  viewState: viewState,
-                                  frame: controller.displayFrame,
-                                  activeEvent: activeEvent,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              child: Align(
+                              const SizedBox(height: 10),
+                              Align(
                                 alignment: Alignment.topRight,
                                 child: ConstrainedBox(
                                   constraints: const BoxConstraints(
@@ -1041,10 +1087,38 @@ class _ReplayViewer extends StatelessWidget {
                                   child: EventTickerWidget(event: activeEvent),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-              ),
+                            ],
+                          )
+                          : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.topLeft,
+                                  child: ScoreboardWidget(
+                                    viewState: viewState,
+                                    frame: controller.displayFrame,
+                                    activeEvent: activeEvent,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                child: Align(
+                                  alignment: Alignment.topRight,
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 320,
+                                    ),
+                                    child: EventTickerWidget(
+                                      event: activeEvent,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                ),
               Positioned.fill(
                 child: IgnorePointer(
                   child: _PlaybackCueOverlay(
@@ -1355,9 +1429,9 @@ class _BroadcastViewer extends StatelessWidget {
                       child: Text(
                         'Pro Manager',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: const Color(0xFFFEC84B),
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: const Color(0xFFFEC84B),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ),
@@ -2281,6 +2355,92 @@ class _EventTile extends StatelessWidget {
       ),
     );
   }
+}
+
+Match3dCameraPreset _eventDrivenCameraPreset(
+  MatchSimCameraState state, {
+  required Match3dCameraPreset selectedPreset,
+  required bool premiumCameraAvailable,
+}) {
+  if (premiumCameraAvailable &&
+      selectedPreset != Match3dCameraPreset.broadcast) {
+    return selectedPreset;
+  }
+  switch (state) {
+    case MatchSimCameraState.tunnelOrWalkout:
+    case MatchSimCameraState.goalReplayAngle:
+      return Match3dCameraPreset.sideline;
+    case MatchSimCameraState.attackingThird:
+    case MatchSimCameraState.setPieceLeft:
+    case MatchSimCameraState.setPieceRight:
+      return Match3dCameraPreset.goalbox;
+    case MatchSimCameraState.stadiumWide:
+    case MatchSimCameraState.kickoffCenter:
+    case MatchSimCameraState.tacticalTop:
+    case MatchSimCameraState.halftimeBoard:
+    case MatchSimCameraState.fulltimeBoard:
+      return Match3dCameraPreset.broadcast;
+  }
+}
+
+String _sceneClockLabel(MatchTimelineFrame frame, MatchEvent? activeEvent) {
+  return activeEvent?.clockLabel ??
+      "${frame.clockMinute.clamp(0, 120).round()}'";
+}
+
+String _sceneStatusLabel(MatchTimelineFrame frame, MatchEvent? activeEvent) {
+  if (activeEvent != null) {
+    switch (activeEvent.type) {
+      case MatchViewerEventType.kickoff:
+        return 'Kickoff';
+      case MatchViewerEventType.halftime:
+        return 'Halftime';
+      case MatchViewerEventType.fulltime:
+        return 'Fulltime';
+      case MatchViewerEventType.substitution:
+        return 'Substitution';
+      case MatchViewerEventType.setPiece:
+      case MatchViewerEventType.penalty:
+        return 'Set piece';
+      default:
+        break;
+    }
+  }
+  switch (frame.phase) {
+    case MatchViewerPhase.kickoff:
+      return 'Walkout';
+    case MatchViewerPhase.halftime:
+      return 'Halftime';
+    case MatchViewerPhase.fulltime:
+      return 'Fulltime';
+    case MatchViewerPhase.setPiece:
+      return 'Set piece';
+    case MatchViewerPhase.openPlay:
+      return 'Open play';
+  }
+}
+
+String _sceneHeadline(
+  MatchEvent? activeEvent,
+  BroadcastSceneSnapshot sceneSnapshot,
+) {
+  if (activeEvent != null && activeEvent.bannerText.trim().isNotEmpty) {
+    return activeEvent.bannerText;
+  }
+  return sceneSnapshot.label;
+}
+
+String _sceneDetail(MatchPresentationPackage package, MatchEvent? activeEvent) {
+  if (activeEvent != null && activeEvent.commentary.trim().isNotEmpty) {
+    return activeEvent.commentary;
+  }
+  if (package.commentaryHighlights.isNotEmpty) {
+    return package.commentaryHighlights.first;
+  }
+  if (package.context.matchSignificance != null) {
+    return package.context.matchSignificance!;
+  }
+  return 'Live tactical and commentary insights are limited on this payload.';
 }
 
 Color _tileAccent(MatchViewerEventType type) {

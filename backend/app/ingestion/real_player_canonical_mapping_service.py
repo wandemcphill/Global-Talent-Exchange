@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -714,27 +715,29 @@ class RealPlayerCanonicalMappingService:
         self,
         session: Session,
         reference: CanonicalReferenceInput,
+        *,
+        include_inactive: bool = False,
     ) -> RealPlayerReferenceMapping | None:
-        mapping = session.scalar(
-            select(RealPlayerReferenceMapping).where(
-                RealPlayerReferenceMapping.source_name == reference.source_name,
-                RealPlayerReferenceMapping.entity_type == reference.entity_type,
-                RealPlayerReferenceMapping.provider_reference_key == reference.provider_reference_key,
-                RealPlayerReferenceMapping.is_active.is_(True),
-            )
+        statement = select(RealPlayerReferenceMapping).where(
+            RealPlayerReferenceMapping.source_name == reference.source_name,
+            RealPlayerReferenceMapping.entity_type == reference.entity_type,
+            RealPlayerReferenceMapping.provider_reference_key == reference.provider_reference_key,
         )
+        if not include_inactive:
+            statement = statement.where(RealPlayerReferenceMapping.is_active.is_(True))
+        mapping = session.scalar(statement)
         if mapping is not None:
             return mapping
         if not reference.provider_external_id:
             return None
-        return session.scalar(
-            select(RealPlayerReferenceMapping).where(
-                RealPlayerReferenceMapping.source_name == reference.source_name,
-                RealPlayerReferenceMapping.entity_type == reference.entity_type,
-                RealPlayerReferenceMapping.provider_external_id == reference.provider_external_id,
-                RealPlayerReferenceMapping.is_active.is_(True),
-            )
+        statement = select(RealPlayerReferenceMapping).where(
+            RealPlayerReferenceMapping.source_name == reference.source_name,
+            RealPlayerReferenceMapping.entity_type == reference.entity_type,
+            RealPlayerReferenceMapping.provider_external_id == reference.provider_external_id,
         )
+        if not include_inactive:
+            statement = statement.where(RealPlayerReferenceMapping.is_active.is_(True))
+        return session.scalar(statement)
 
     def _mapping_resolution(
         self,
@@ -850,33 +853,51 @@ class RealPlayerCanonicalMappingService:
         confidence_score: float,
         as_of: datetime,
     ) -> CanonicalReferenceResolution:
-        mapping = self._lookup_mapping(session, reference)
-        if mapping is None:
-            mapping = RealPlayerReferenceMapping(
-                source_name=reference.source_name,
-                entity_type=reference.entity_type,
-                provider_reference_key=reference.provider_reference_key,
-            )
-            session.add(mapping)
-        mapping.provider_external_id = reference.provider_external_id
-        mapping.provider_label = reference.display_name
-        mapping.normalized_label = reference.normalized_display_name
-        mapping.team_identity_kind = reference.team_identity_kind
-        mapping.mapping_status = mapping_status
-        mapping.resolution_method = resolution_method
-        mapping.confidence_score = confidence_score
-        mapping.is_active = True
-        mapping.metadata_json = {
-            "country_code": reference.country_code,
-            "country_name": reference.country_name,
-            "competition_external_id": reference.competition_external_id,
-            "competition_display_name": reference.competition_display_name,
-            **reference.metadata_json,
-        }
-        mapping.canonical_country_id = entity.id if isinstance(entity, Country) else None
-        mapping.canonical_competition_id = entity.id if isinstance(entity, Competition) else None
-        mapping.canonical_club_id = entity.id if isinstance(entity, Club) else None
-        session.flush()
+        mapping = self._lookup_mapping(session, reference) or self._lookup_mapping(
+            session,
+            reference,
+            include_inactive=True,
+        )
+
+        def _apply_mapping(target: RealPlayerReferenceMapping) -> None:
+            target.provider_reference_key = reference.provider_reference_key
+            target.provider_external_id = reference.provider_external_id
+            target.provider_label = reference.display_name
+            target.normalized_label = reference.normalized_display_name
+            target.team_identity_kind = reference.team_identity_kind
+            target.mapping_status = mapping_status
+            target.resolution_method = resolution_method
+            target.confidence_score = confidence_score
+            target.is_active = True
+            target.metadata_json = {
+                "country_code": reference.country_code,
+                "country_name": reference.country_name,
+                "competition_external_id": reference.competition_external_id,
+                "competition_display_name": reference.competition_display_name,
+                **reference.metadata_json,
+            }
+            target.canonical_country_id = entity.id if isinstance(entity, Country) else None
+            target.canonical_competition_id = entity.id if isinstance(entity, Competition) else None
+            target.canonical_club_id = entity.id if isinstance(entity, Club) else None
+
+        try:
+            with session.begin_nested():
+                if mapping is None:
+                    mapping = RealPlayerReferenceMapping(
+                        source_name=reference.source_name,
+                        entity_type=reference.entity_type,
+                        provider_reference_key=reference.provider_reference_key,
+                    )
+                    session.add(mapping)
+                _apply_mapping(mapping)
+                session.flush()
+        except IntegrityError:
+            mapping = self._lookup_mapping(session, reference, include_inactive=True)
+            if mapping is None:
+                raise
+            with session.begin_nested():
+                _apply_mapping(mapping)
+                session.flush()
         self._mark_unresolved_reference_resolved(session, reference, mapping=mapping, as_of=as_of)
         return CanonicalReferenceResolution(
             entity_type=reference.entity_type,

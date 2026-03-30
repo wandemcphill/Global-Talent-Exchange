@@ -57,7 +57,7 @@ void main() {
 
     router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
     await tester.pumpAndSettle();
-    expect(find.text('Broadcast+ Viewer'), findsWidgets);
+    expect(find.text('Broadcast Package'), findsWidgets);
 
     router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
     await tester.pumpAndSettle();

@@ -11,6 +11,7 @@ from app.models.competition_match import CompetitionMatch
 from app.replay_archive.service import ensure_replay_archive
 from app.schemas.match_viewer import MatchMode, MatchViewerSessionView, MatchViewStateView
 from app.services.ads.engine import AdDecisionEngine
+from app.services.match_viewer_presentation_service import MatchViewerPresentationService
 from app.services.match_viewer_scaling_service import MatchViewerScalingService
 from app.services.match_timeline_service import MatchTimelineService
 
@@ -31,6 +32,30 @@ def get_match_integrity_service() -> MatchIntegrityService:
 
 def get_ad_decision_engine() -> AdDecisionEngine:
     return AdDecisionEngine()
+
+
+def get_match_viewer_presentation_service() -> MatchViewerPresentationService:
+    return MatchViewerPresentationService()
+
+
+def _attach_presentation(
+    view_state: MatchViewStateView,
+    *,
+    match_key: str,
+    presentation_service: MatchViewerPresentationService,
+    metadata_json: dict[str, object] | None = None,
+    match: CompetitionMatch | None = None,
+) -> MatchViewStateView:
+    return view_state.model_copy(
+        update={
+            "presentation_package": presentation_service.build(
+                match_key=match_key,
+                view_state=view_state,
+                metadata_json=metadata_json,
+                match=match,
+            )
+        }
+    )
 
 
 def _attach_monetization(
@@ -138,6 +163,7 @@ def read_match_viewer_timeline(
     service: MatchTimelineService = Depends(get_match_timeline_service),
     scaling_service: MatchViewerScalingService = Depends(get_match_viewer_scaling_service),
     integrity_service: MatchIntegrityService = Depends(get_match_integrity_service),
+    presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
 ) -> MatchViewStateView:
     match = session.get(CompetitionMatch, match_key)
@@ -155,6 +181,13 @@ def read_match_viewer_timeline(
                         mode=mode,
                         canonical_view_state=base_view,
                     )
+                    secured = _attach_presentation(
+                        secured,
+                        match_key=match_key,
+                        presentation_service=presentation_service,
+                        metadata_json=match.metadata_json or {},
+                        match=match,
+                    )
                     return _attach_monetization(
                         secured,
                         match_key=match_key,
@@ -163,8 +196,15 @@ def read_match_viewer_timeline(
                     )
                 except MatchIntegrityViolation as exc:
                     raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
-            return _attach_monetization(
+            transformed = _attach_presentation(
                 scaling_service.transform(base_view, mode=mode),
+                match_key=match_key,
+                presentation_service=presentation_service,
+                metadata_json=match.metadata_json or {},
+                match=match,
+            )
+            return _attach_monetization(
+                transformed,
                 match_key=match_key,
                 ad_engine=ad_engine,
                 metadata_json=match.metadata_json or {},
@@ -174,8 +214,13 @@ def read_match_viewer_timeline(
     replay_key = match_key if match_key.startswith("replay:") else f"replay:{match_key}"
     record = replay_archive.repository.get_latest_record(replay_key)
     if record is not None:
-        return _attach_monetization(
+        transformed = _attach_presentation(
             scaling_service.transform(service.build_from_archive_record(record), mode=mode),
+            match_key=match_key,
+            presentation_service=presentation_service,
+        )
+        return _attach_monetization(
+            transformed,
             match_key=match_key,
             ad_engine=ad_engine,
         )
@@ -188,8 +233,15 @@ def read_match_viewer_timeline(
     )
     if live_view is not None:
         base_view, metadata_json = live_view
-        return _attach_monetization(
+        transformed = _attach_presentation(
             scaling_service.transform(base_view, mode=mode),
+            match_key=match_key,
+            presentation_service=presentation_service,
+            metadata_json=metadata_json,
+            match=match,
+        )
+        return _attach_monetization(
+            transformed,
             match_key=match_key,
             ad_engine=ad_engine,
             metadata_json=metadata_json,
@@ -211,6 +263,7 @@ def read_match_viewer_session(
     service: MatchTimelineService = Depends(get_match_timeline_service),
     scaling_service: MatchViewerScalingService = Depends(get_match_viewer_scaling_service),
     integrity_service: MatchIntegrityService = Depends(get_match_integrity_service),
+    presentation_service: MatchViewerPresentationService = Depends(get_match_viewer_presentation_service),
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
 ) -> MatchViewerSessionView:
     match = session.get(CompetitionMatch, match_key)
@@ -228,6 +281,13 @@ def read_match_viewer_session(
                     mode=mode,
                     continuation_token=token,
                     canonical_view_state=canonical_view,
+                )
+                secured = _attach_presentation(
+                    secured,
+                    match_key=match_key,
+                    presentation_service=presentation_service,
+                    metadata_json=match.metadata_json or {},
+                    match=match,
                 )
                 return MatchViewerSessionView.model_validate(
                     _attach_monetization(
@@ -252,6 +312,11 @@ def read_match_viewer_session(
                 fairness_metadata=None,
                 mode=mode,
                 continuation_token=token,
+            )
+            secured = _attach_presentation(
+                secured,
+                match_key=match_key,
+                presentation_service=presentation_service,
             )
             return MatchViewerSessionView.model_validate(
                 _attach_monetization(
@@ -278,6 +343,13 @@ def read_match_viewer_session(
             mode=mode,
             continuation_token=token,
         )
+        secured = _attach_presentation(
+            secured,
+            match_key=match_key,
+            presentation_service=presentation_service,
+            metadata_json=metadata_json,
+            match=match,
+        )
         return MatchViewerSessionView.model_validate(
             _attach_monetization(
                 secured,
@@ -296,6 +368,7 @@ def read_match_viewer_session(
 __all__ = [
     "get_ad_decision_engine",
     "get_match_integrity_service",
+    "get_match_viewer_presentation_service",
     "get_match_timeline_service",
     "get_match_viewer_scaling_service",
     "router",

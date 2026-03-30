@@ -437,11 +437,23 @@ class _HostedDetail extends ConsumerWidget {
                   userId == null || !value.detail.joinOpen
                       ? null
                       : () async {
-                        await api.joinCompetition(item.id);
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(
-                          hostedCompetitionDetailProvider(item.id),
-                        );
+                        try {
+                          await api.joinCompetition(item.id);
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            hostedCompetitionDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Competition joined.',
+                            );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       },
               child: const Text('Join'),
             ),
@@ -449,11 +461,23 @@ class _HostedDetail extends ConsumerWidget {
               onPressed:
                   userId == item.hostUserId || isAdmin
                       ? () async {
-                        await api.launchCompetition(item.id);
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(
-                          hostedCompetitionDetailProvider(item.id),
-                        );
+                        try {
+                          await api.launchCompetition(item.id);
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            hostedCompetitionDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Competition launched.',
+                            );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       }
                       : null,
               child: const Text('Launch'),
@@ -502,16 +526,28 @@ class _StreamerDetail extends ConsumerWidget {
                   userId == null
                       ? null
                       : () async {
-                        await ref
-                            .read(streamerTournamentRepositoryProvider)
-                            .joinTournament(
-                              item.id,
-                              const StreamerTournamentJoinRequest(),
+                        try {
+                          await ref
+                              .read(streamerTournamentRepositoryProvider)
+                              .joinTournament(
+                                item.id,
+                                const StreamerTournamentJoinRequest(),
+                              );
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            streamerTournamentDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Tournament joined.',
                             );
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(
-                          streamerTournamentDetailProvider(item.id),
-                        );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       },
               child: const Text('Join'),
             ),
@@ -519,16 +555,28 @@ class _StreamerDetail extends ConsumerWidget {
               onPressed:
                   userId == item.hostUserId || isAdmin
                       ? () async {
-                        await ref
-                            .read(streamerTournamentRepositoryProvider)
-                            .publishTournament(
-                              item.id,
-                              const StreamerTournamentPublishRequest(),
+                        try {
+                          await ref
+                              .read(streamerTournamentRepositoryProvider)
+                              .publishTournament(
+                                item.id,
+                                const StreamerTournamentPublishRequest(),
+                              );
+                          ref.invalidate(competitionHubProvider);
+                          ref.invalidate(
+                            streamerTournamentDetailProvider(item.id),
+                          );
+                          if (context.mounted) {
+                            AppFeedback.showSuccess(
+                              context,
+                              'Tournament published.',
                             );
-                        ref.invalidate(competitionHubProvider);
-                        ref.invalidate(
-                          streamerTournamentDetailProvider(item.id),
-                        );
+                          }
+                        } catch (error) {
+                          if (context.mounted) {
+                            AppFeedback.showError(context, error);
+                          }
+                        }
                       }
                       : null,
               child: const Text('Publish'),

@@ -30,8 +30,9 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
   late final ManagerAdminRepository _repository;
   late final CompetitionControlRepository _competitionRepository;
   final TextEditingController _username = TextEditingController();
-  final TextEditingController _password =
-      TextEditingController(text: 'AdminPass123!');
+  final TextEditingController _password = TextEditingController(
+    text: 'AdminPass123!',
+  );
   final TextEditingController _catalogSearch = TextEditingController();
 
   bool _loading = true;
@@ -105,23 +106,26 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
       setState(() {
         _competitions =
             (responses[0] as List<dynamic>).cast<Map<String, dynamic>>();
-        _catalog = (((responses[1] as Map<String, dynamic>)['items']
-                    as List<dynamic>? ??
-                <dynamic>[]))
-            .whereType<Map>()
-            .map((dynamic item) => Map<String, dynamic>.from(item as Map))
-            .toList();
+        _catalog =
+            (((responses[1] as Map<String, dynamic>)['items']
+                        as List<dynamic>? ??
+                    <dynamic>[]))
+                .whereType<Map>()
+                .map((dynamic item) => Map<String, dynamic>.from(item as Map))
+                .toList();
         _auditLog =
             (responses[2] as List<dynamic>).cast<Map<String, dynamic>>();
-        _admins = widget.role == 'super_admin'
-            ? (responses[3] as List<dynamic>).cast<Map<String, dynamic>>()
-            : <Map<String, dynamic>>[];
-        _permissionCatalog = widget.role == 'super_admin'
-            ? ((((responses[4] as Map<String, dynamic>)['permissions']
-                        as List<dynamic>? ??
-                    <dynamic>[])
-                .map((dynamic item) => item.toString())).toList())
-            : <String>[];
+        _admins =
+            widget.role == 'super_admin'
+                ? (responses[3] as List<dynamic>).cast<Map<String, dynamic>>()
+                : <Map<String, dynamic>>[];
+        _permissionCatalog =
+            widget.role == 'super_admin'
+                ? ((((responses[4] as Map<String, dynamic>)['permissions']
+                            as List<dynamic>? ??
+                        <dynamic>[])
+                    .map((dynamic item) => item.toString())).toList())
+                : <String>[];
         _editedPermissions.clear();
         _editedEnabled.clear();
         for (final Map<String, dynamic> admin in _admins) {
@@ -135,7 +139,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
       });
       if (_competitions.isNotEmpty) {
         await _loadOrchestrationPreview(
-            (_competitions.first['code'] ?? '').toString());
+          (_competitions.first['code'] ?? '').toString(),
+        );
       }
     } catch (error) {
       if (!mounted) {
@@ -158,8 +163,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
       return;
     }
     try {
-      final Map<String, dynamic> response =
-          await _competitionRepository.fetchOrchestrationPreview(code);
+      final Map<String, dynamic> response = await _competitionRepository
+          .fetchOrchestrationPreview(code);
       if (!mounted) {
         return;
       }
@@ -171,8 +176,10 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
     }
   }
 
-  Future<void> _runAdminAction(Future<void> Function() action,
-      {String? successMessage}) async {
+  Future<void> _runAdminAction(
+    Future<void> Function() action, {
+    String? successMessage,
+  }) async {
     if (mounted) {
       setState(() {
         _saving = true;
@@ -227,7 +234,9 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
         _username.text.trim().isEmpty ||
         _password.text.isEmpty) {
       AppFeedback.showError(
-          context, 'Email, username, and password are required.');
+        context,
+        'Email, username, and password are required.',
+      );
       return;
     }
     await _runAdminAction(() async {
@@ -249,8 +258,8 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
     await _runAdminAction(() async {
       await _repository.updateAdminPermissions(
         userId: userId,
-        permissions: (_editedPermissions[userId] ?? <String>{}).toList()
-          ..sort(),
+        permissions:
+            (_editedPermissions[userId] ?? <String>{}).toList()..sort(),
         isEnabled: _editedEnabled[userId] ?? true,
       );
       await _load();
@@ -285,25 +294,27 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
   }
 
   Widget _permissionWrap(Set<String> selected, ValueChanged<String> toggle) {
-    final List<String> options = _permissionCatalog.isEmpty
-        ? <String>[
-            'manage_manager_catalog',
-            'manage_competitions',
-            'manage_manager_supply',
-            'review_audit_log',
-          ]
-        : _permissionCatalog;
+    final List<String> options =
+        _permissionCatalog.isEmpty
+            ? <String>[
+              'manage_manager_catalog',
+              'manage_competitions',
+              'manage_manager_supply',
+              'review_audit_log',
+            ]
+            : _permissionCatalog;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: options.map((String permission) {
-        final bool active = selected.contains(permission);
-        return FilterChip(
-          selected: active,
-          label: Text(permission),
-          onSelected: (_) => toggle(permission),
-        );
-      }).toList(),
+      children:
+          options.map((String permission) {
+            final bool active = selected.contains(permission);
+            return FilterChip(
+              selected: active,
+              label: Text(permission),
+              onSelected: (_) => toggle(permission),
+            );
+          }).toList(),
     );
   }
 
@@ -330,363 +341,387 @@ class _ManagerAdminScreenState extends State<ManagerAdminScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Manager operations desk')),
-      body: _loading
-          ? const Padding(
-              padding: EdgeInsets.all(24),
-              child: GteStatePanel(
-                eyebrow: 'MANAGER OPERATIONS',
-                title: 'Loading manager operations desk',
-                message:
-                    'Preparing coach scarcity, competition orchestration, and admin control signals.',
-                icon: Icons.sports_outlined,
-                accentColor: Colors.orangeAccent,
-              ),
-            )
-          : _error != null
+      body:
+          _loading
+              ? const Padding(
+                padding: EdgeInsets.all(24),
+                child: GteStatePanel(
+                  eyebrow: 'MANAGER OPERATIONS',
+                  title: 'Loading manager operations desk',
+                  message:
+                      'Preparing manager scarcity, competition orchestration, and admin control signals.',
+                  icon: Icons.sports_outlined,
+                  accentColor: Colors.orangeAccent,
+                ),
+              )
+              : _error != null
               ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: _stateCard(
-                      icon: Icons.warning_amber_rounded,
-                      title: 'Admin data unavailable',
-                      message: _error!,
-                      actionLabel: 'Retry',
-                      onAction: _load,
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _stateCard(
+                    icon: Icons.warning_amber_rounded,
+                    title: 'Admin data unavailable',
+                    message: _error!,
+                    actionLabel: 'Retry',
+                    onAction: _load,
                   ),
-                )
+                ),
+              )
               : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: <Widget>[
-                      GtexHeroBanner(
-                        eyebrow: 'MANAGER OPERATIONS',
-                        title:
-                            'Run the scarce coach ecosystem with premium controls and clean market integrity.',
-                        description:
-                            'Supply, metadata, traits, tactics, competition orchestration, and audit review all live here. This surface should read like a premium control tower for coach scarcity, not an admin spreadsheet dump.',
-                        accent: Colors.orangeAccent,
-                        chips: <Widget>[
-                          Chip(label: Text('Catalog ${_catalog.length}')),
-                          Chip(label: Text('Admins ${_admins.length}')),
-                          Chip(
-                              label:
-                                  Text('Competitions ${_competitions.length}')),
-                        ],
-                      ),
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: <Widget>[
+                    GtexHeroBanner(
+                      eyebrow: 'MANAGER OPERATIONS',
+                      title:
+                          'Run the scarce manager ecosystem with premium controls and clean market integrity.',
+                      description:
+                          'Supply, metadata, traits, tactics, competition orchestration, and audit review all live here. This surface should read like a premium control tower for manager scarcity, not an admin spreadsheet dump.',
+                      accent: Colors.orangeAccent,
+                      chips: <Widget>[
+                        Chip(label: Text('Catalog ${_catalog.length}')),
+                        Chip(label: Text('Admins ${_admins.length}')),
+                        Chip(
+                          label: Text('Competitions ${_competitions.length}'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (_saving) ...<Widget>[
+                      const LinearProgressIndicator(),
                       const SizedBox(height: 16),
-                      if (_saving) ...<Widget>[
-                        const LinearProgressIndicator(),
-                        const SizedBox(height: 16),
-                      ],
-                      const _SectionHeading(
-                        eyebrow: 'MATCH GOVERNANCE',
-                        title: 'Competition controls',
-                        detail:
-                            'Keep creator and manager competitions live, stable, and orchestrated without breaking integrity.',
-                      ),
-                      const SizedBox(height: 8),
-                      if (_competitions.isEmpty)
-                        _stateCard(
-                          icon: Icons.emoji_events_outlined,
-                          title: 'No competitions configured',
-                          message:
-                              'Competition controls have not been seeded yet.',
-                        )
-                      else
-                        ..._competitions.map(
-                          (Map<String, dynamic> item) => SwitchListTile(
-                            value: (item['enabled'] ?? false) as bool,
-                            onChanged: _saving
-                                ? null
-                                : (bool value) =>
-                                    _toggleCompetition(item, value),
-                            secondary: IconButton(
-                              tooltip: 'Preview orchestration',
-                              onPressed: _saving
+                    ],
+                    const _SectionHeading(
+                      eyebrow: 'MATCH GOVERNANCE',
+                      title: 'Competition controls',
+                      detail:
+                          'Keep creator and manager competitions live, stable, and orchestrated without breaking integrity.',
+                    ),
+                    const SizedBox(height: 8),
+                    if (_competitions.isEmpty)
+                      _stateCard(
+                        icon: Icons.emoji_events_outlined,
+                        title: 'No competitions configured',
+                        message:
+                            'Competition controls have not been seeded yet.',
+                      )
+                    else
+                      ..._competitions.map(
+                        (Map<String, dynamic> item) => SwitchListTile(
+                          value: (item['enabled'] ?? false) as bool,
+                          onChanged:
+                              _saving
                                   ? null
-                                  : () => _loadOrchestrationPreview(
-                                      (item['code'] ?? '').toString()),
-                              icon: const Icon(Icons.visibility_outlined),
-                            ),
-                            title: Text((item['label'] ?? '').toString()),
-                            subtitle: Text(
-                              'Min participants: ${(item['minimum_viable_participants'] ?? '').toString()}'
-                              ' • fallback: ${(item['allow_fallback_fill'] ?? false) ? 'on' : 'off'}',
-                            ),
+                                  : (bool value) =>
+                                      _toggleCompetition(item, value),
+                          secondary: IconButton(
+                            tooltip: 'Preview orchestration',
+                            onPressed:
+                                _saving
+                                    ? null
+                                    : () => _loadOrchestrationPreview(
+                                      (item['code'] ?? '').toString(),
+                                    ),
+                            icon: const Icon(Icons.visibility_outlined),
+                          ),
+                          title: Text((item['label'] ?? '').toString()),
+                          subtitle: Text(
+                            'Min participants: ${(item['minimum_viable_participants'] ?? '').toString()}'
+                            ' • fallback: ${(item['allow_fallback_fill'] ?? false) ? 'on' : 'off'}',
                           ),
                         ),
-                      if (_orchestrationPreview != null) ...<Widget>[
-                        const SizedBox(height: 12),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                const Text('Competition orchestration preview',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                Text(
-                                    'Code: ${(_orchestrationPreview!['code'] ?? '').toString()} • Entrants: ${(_orchestrationPreview!['entrants'] ?? '').toString()} • Fallback: ${((_orchestrationPreview!['fallback_used'] ?? false) as bool) ? 'on' : 'off'}'),
-                                const SizedBox(height: 8),
-                                Text(((_orchestrationPreview!['notes']
-                                                as List<dynamic>? ??
-                                            <dynamic>[])
-                                        .join(' • '))
-                                    .toString()),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                      const Divider(height: 32),
-                      const _SectionHeading(
-                        eyebrow: 'SCARCITY CONTROL',
-                        title: 'Manager supply desk',
-                        detail:
-                            'Search the coach catalog, tune supply, and preserve rarity without muddying the market story.',
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _catalogSearch,
-                        decoration: const InputDecoration(
-                          labelText: 'Search coach catalog',
-                          hintText: 'Name, mentality, or rarity',
-                          prefixIcon: Icon(Icons.search),
-                        ),
-                      ),
+                    if (_orchestrationPreview != null) ...<Widget>[
                       const SizedBox(height: 12),
-                      if (visibleCatalog.isEmpty)
-                        _stateCard(
-                          icon: Icons.search_off,
-                          title: 'No coach rows matched this control view',
-                          message: _catalogSearch.text.trim().isEmpty
-                              ? 'Manager supply data is empty.'
-                              : 'Try a different name, mentality, or rarity signal.',
-                          actionLabel: _catalogSearch.text.trim().isEmpty
-                              ? null
-                              : 'Clear search',
-                          onAction: _catalogSearch.text.trim().isEmpty
-                              ? null
-                              : () {
-                                  _catalogSearch.clear();
-                                },
-                        )
-                      else
-                        ...visibleCatalog.map(
-                          (Map<String, dynamic> item) => ListTile(
-                            title:
-                                Text((item['display_name'] ?? '').toString()),
-                            subtitle: Text(
-                              '${(item['rarity'] ?? '').toString()} • total: ${(item['supply_total'] ?? '').toString()}'
-                              ' • available: ${(item['supply_available'] ?? '').toString()}',
-                            ),
-                            trailing: Wrap(
-                              spacing: 8,
-                              children: <Widget>[
-                                IconButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () => _bumpSupply(item, -1),
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                ),
-                                IconButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () => _bumpSupply(item, 1),
-                                  icon: const Icon(Icons.add_circle_outline),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      if (widget.role == 'super_admin') ...<Widget>[
-                        const Divider(height: 32),
-                        const Text(
-                          'Create admin',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _email,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _username,
-                          decoration:
-                              const InputDecoration(labelText: 'Username'),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _password,
-                          decoration:
-                              const InputDecoration(labelText: 'Password'),
-                        ),
-                        const SizedBox(height: 12),
-                        _permissionWrap(_newAdminPermissions,
-                            (String permission) {
-                          setState(() {
-                            if (_newAdminPermissions.contains(permission)) {
-                              _newAdminPermissions.remove(permission);
-                            } else {
-                              _newAdminPermissions.add(permission);
-                            }
-                          });
-                        }),
-                        const SizedBox(height: 8),
-                        FilledButton(
-                          onPressed: _saving ? null : _createAdmin,
-                          child: const Text('Create admin'),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Existing admins',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (_admins.isEmpty)
-                          _stateCard(
-                            icon: Icons.admin_panel_settings_outlined,
-                            title: 'No delegated admins yet',
-                            message:
-                                'Super admin can create scoped admin accounts from this desk.',
-                          )
-                        else
-                          ..._admins.map(
-                            (Map<String, dynamic> item) => Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: Text(
-                                            (item['email'] ?? '').toString(),
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                        Switch(
-                                          value: _editedEnabled[
-                                                  item['id'].toString()] ??
-                                              true,
-                                          onChanged: _saving
-                                              ? null
-                                              : (bool value) => setState(
-                                                    () => _editedEnabled[
-                                                            item['id']
-                                                                .toString()] =
-                                                        value,
-                                                  ),
-                                        ),
-                                      ],
-                                    ),
-                                    Text(
-                                      '${(item['role'] ?? '').toString()} • ${(item['username'] ?? '').toString()}',
-                                    ),
-                                    const SizedBox(height: 8),
-                                    _permissionWrap(
-                                      _editedPermissions[
-                                              item['id'].toString()] ??
-                                          <String>{},
-                                      (String permission) {
-                                        final Set<String> selected =
-                                            _editedPermissions[
-                                                    item['id'].toString()] ??
-                                                <String>{};
-                                        setState(() {
-                                          if (selected.contains(permission)) {
-                                            selected.remove(permission);
-                                          } else {
-                                            selected.add(permission);
-                                          }
-                                          _editedPermissions[
-                                              item['id'].toString()] = selected;
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: FilledButton.tonal(
-                                        onPressed: _saving
-                                            ? null
-                                            : () => _saveAdmin(item),
-                                        child: const Text('Save admin access'),
-                                      ),
-                                    ),
-                                  ],
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              const Text(
+                                'Competition orchestration preview',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Code: ${(_orchestrationPreview!['code'] ?? '').toString()} • Entrants: ${(_orchestrationPreview!['entrants'] ?? '').toString()} • Fallback: ${((_orchestrationPreview!['fallback_used'] ?? false) as bool) ? 'on' : 'off'}',
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                ((_orchestrationPreview!['notes']
+                                            as List<dynamic>? ??
+                                        <dynamic>[])
+                                    .join(' • ')).toString(),
+                              ),
+                            ],
                           ),
-                      ],
+                        ),
+                      ),
+                    ],
+                    const Divider(height: 32),
+                    const _SectionHeading(
+                      eyebrow: 'SCARCITY CONTROL',
+                      title: 'Manager supply desk',
+                      detail:
+                          'Search the manager catalog, tune supply, and preserve rarity without muddying the market story.',
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _catalogSearch,
+                      decoration: const InputDecoration(
+                        labelText: 'Search manager catalog',
+                        hintText: 'Name, mentality, or rarity',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (visibleCatalog.isEmpty)
+                      _stateCard(
+                        icon: Icons.search_off,
+                        title: 'No manager rows matched this control view',
+                        message:
+                            _catalogSearch.text.trim().isEmpty
+                                ? 'Manager supply data is empty.'
+                                : 'Try a different name, mentality, or rarity signal.',
+                        actionLabel:
+                            _catalogSearch.text.trim().isEmpty
+                                ? null
+                                : 'Clear search',
+                        onAction:
+                            _catalogSearch.text.trim().isEmpty
+                                ? null
+                                : () {
+                                  _catalogSearch.clear();
+                                },
+                      )
+                    else
+                      ...visibleCatalog.map(
+                        (Map<String, dynamic> item) => ListTile(
+                          title: Text((item['display_name'] ?? '').toString()),
+                          subtitle: Text(
+                            '${(item['rarity'] ?? '').toString()} • total: ${(item['supply_total'] ?? '').toString()}'
+                            ' • available: ${(item['supply_available'] ?? '').toString()}',
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            children: <Widget>[
+                              IconButton(
+                                onPressed:
+                                    _saving
+                                        ? null
+                                        : () => _bumpSupply(item, -1),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                              IconButton(
+                                onPressed:
+                                    _saving ? null : () => _bumpSupply(item, 1),
+                                icon: const Icon(Icons.add_circle_outline),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (widget.role == 'super_admin') ...<Widget>[
                       const Divider(height: 32),
                       const Text(
-                        'Recent audit log',
+                        'Create admin',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      if (_auditLog.isEmpty)
+                      TextField(
+                        controller: _email,
+                        decoration: const InputDecoration(labelText: 'Email'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _username,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _password,
+                        decoration: const InputDecoration(
+                          labelText: 'Password',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _permissionWrap(_newAdminPermissions, (
+                        String permission,
+                      ) {
+                        setState(() {
+                          if (_newAdminPermissions.contains(permission)) {
+                            _newAdminPermissions.remove(permission);
+                          } else {
+                            _newAdminPermissions.add(permission);
+                          }
+                        });
+                      }),
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: _saving ? null : _createAdmin,
+                        child: const Text('Create admin'),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Existing admins',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_admins.isEmpty)
                         _stateCard(
-                          icon: Icons.history_outlined,
-                          title: 'Audit log is empty',
+                          icon: Icons.admin_panel_settings_outlined,
+                          title: 'No delegated admins yet',
                           message:
-                              'Privileged coach-market actions, supply changes, and admin interventions will appear here once the control tower starts seeing traffic.',
+                              'Super admin can create scoped admin accounts from this desk.',
                         )
                       else
-                        ..._auditLog.take(30).map(
-                              (Map<String, dynamic> event) => ListTile(
-                                dense: true,
-                                title: Text(
-                                    (event['event_type'] ?? '').toString()),
-                                subtitle: Text(
-                                  '${(event['actor_email'] ?? '').toString()} • ${(event['created_at'] ?? '').toString()}\n'
-                                  '${(event['payload'] ?? const <String, dynamic>{}).toString()}',
-                                ),
+                        ..._admins.map(
+                          (Map<String, dynamic> item) => Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: Text(
+                                          (item['email'] ?? '').toString(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      Switch(
+                                        value:
+                                            _editedEnabled[item['id']
+                                                .toString()] ??
+                                            true,
+                                        onChanged:
+                                            _saving
+                                                ? null
+                                                : (bool value) => setState(
+                                                  () =>
+                                                      _editedEnabled[item['id']
+                                                              .toString()] =
+                                                          value,
+                                                ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    '${(item['role'] ?? '').toString()} • ${(item['username'] ?? '').toString()}',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _permissionWrap(
+                                    _editedPermissions[item['id'].toString()] ??
+                                        <String>{},
+                                    (String permission) {
+                                      final Set<String> selected =
+                                          _editedPermissions[item['id']
+                                              .toString()] ??
+                                          <String>{};
+                                      setState(() {
+                                        if (selected.contains(permission)) {
+                                          selected.remove(permission);
+                                        } else {
+                                          selected.add(permission);
+                                        }
+                                        _editedPermissions[item['id']
+                                                .toString()] =
+                                            selected;
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: FilledButton.tonal(
+                                      onPressed:
+                                          _saving
+                                              ? null
+                                              : () => _saveAdmin(item),
+                                      child: const Text('Save admin access'),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                          ),
+                        ),
                     ],
-                  ),
+                    const Divider(height: 32),
+                    const Text(
+                      'Recent audit log',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_auditLog.isEmpty)
+                      _stateCard(
+                        icon: Icons.history_outlined,
+                        title: 'Audit log is empty',
+                        message:
+                            'Privileged manager-market actions, supply changes, and admin interventions will appear here once the control tower starts seeing traffic.',
+                      )
+                    else
+                      ..._auditLog
+                          .take(30)
+                          .map(
+                            (Map<String, dynamic> event) => ListTile(
+                              dense: true,
+                              title: Text(
+                                (event['event_type'] ?? '').toString(),
+                              ),
+                              subtitle: Text(
+                                '${(event['actor_email'] ?? '').toString()} • ${(event['created_at'] ?? '').toString()}\n'
+                                '${(event['payload'] ?? const <String, dynamic>{}).toString()}',
+                              ),
+                            ),
+                          ),
+                  ],
                 ),
+              ),
     );
   }
 }
 
 class ManagerAdminRepository {
-  ManagerAdminRepository(
-      {required this.config,
-      required this.transport,
-      required this.accessToken})
-      : _managerRepository = ManagerMarketRepository(
-            config: config, transport: transport, accessToken: accessToken);
+  ManagerAdminRepository({
+    required this.config,
+    required this.transport,
+    required this.accessToken,
+  }) : _managerRepository = ManagerMarketRepository(
+         config: config,
+         transport: transport,
+         accessToken: accessToken,
+       );
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final String accessToken;
   final ManagerMarketRepository _managerRepository;
 
-  factory ManagerAdminRepository.standard(
-      {required String baseUrl,
-      required String accessToken,
-      GteBackendMode mode = GteBackendMode.liveThenFixture}) {
+  factory ManagerAdminRepository.standard({
+    required String baseUrl,
+    required String accessToken,
+    GteBackendMode mode = GteBackendMode.liveThenFixture,
+  }) {
     return ManagerAdminRepository(
       config: GteRepositoryConfig(baseUrl: baseUrl, mode: mode),
       transport: GteHttpTransport(),
@@ -703,39 +738,49 @@ class ManagerAdminRepository {
   Future<Map<String, dynamic>> fetchPermissionCatalog() =>
       _getMap('/api/admin/access/permissions');
   Future<void> updateManagerSupply(
-          String managerId, int supplyTotal, String reason) =>
-      _request('PUT', '/api/admin/managers/catalog/$managerId/supply',
-          body: <String, Object?>{
-            'supply_total': supplyTotal,
-            'reason': reason
-          });
-  Future<void> createAdmin(
-          {required String email,
-          required String username,
-          required String password,
-          required List<String> permissions}) =>
-      _request('POST', '/api/admin/access', body: <String, Object?>{
-        'email': email,
-        'username': username,
-        'password': password,
-        'permissions': permissions
-      });
-  Future<void> updateAdminPermissions(
-          {required String userId,
-          required List<String> permissions,
-          required bool isEnabled}) =>
-      _request('PUT', '/api/admin/access/$userId/permissions',
-          body: <String, Object?>{
-            'permissions': permissions,
-            'is_enabled': isEnabled
-          });
+    String managerId,
+    int supplyTotal,
+    String reason,
+  ) => _request(
+    'PUT',
+    '/api/admin/managers/catalog/$managerId/supply',
+    body: <String, Object?>{'supply_total': supplyTotal, 'reason': reason},
+  );
+  Future<void> createAdmin({
+    required String email,
+    required String username,
+    required String password,
+    required List<String> permissions,
+  }) => _request(
+    'POST',
+    '/api/admin/access',
+    body: <String, Object?>{
+      'email': email,
+      'username': username,
+      'password': password,
+      'permissions': permissions,
+    },
+  );
+  Future<void> updateAdminPermissions({
+    required String userId,
+    required List<String> permissions,
+    required bool isEnabled,
+  }) => _request(
+    'PUT',
+    '/api/admin/access/$userId/permissions',
+    body: <String, Object?>{
+      'permissions': permissions,
+      'is_enabled': isEnabled,
+    },
+  );
 
   Future<Map<String, dynamic>> _getMap(String path) async {
     final Object? body = await _request('GET', path);
     if (body is Map<String, dynamic>) return body;
     throw const GteApiException(
-        type: GteApiErrorType.parsing,
-        message: 'Unexpected admin response shape.');
+      type: GteApiErrorType.parsing,
+      message: 'Unexpected admin response shape.',
+    );
   }
 
   Future<List<Map<String, dynamic>>> _getList(String path) async {
@@ -747,8 +792,9 @@ class ManagerAdminRepository {
           .toList(growable: false);
     }
     throw const GteApiException(
-        type: GteApiErrorType.parsing,
-        message: 'Unexpected admin list response shape.');
+      type: GteApiErrorType.parsing,
+      message: 'Unexpected admin list response shape.',
+    );
   }
 
   Future<Object?> _request(String method, String path, {Object? body}) async {
@@ -778,9 +824,10 @@ class ManagerAdminRepository {
       message = body;
     }
     return GteApiException(
-        type: GteApiErrorType.unknown,
-        message: message,
-        statusCode: response.statusCode);
+      type: GteApiErrorType.unknown,
+      message: message,
+      statusCode: response.statusCode,
+    );
   }
 }
 
@@ -804,9 +851,9 @@ class _SectionHeading extends StatelessWidget {
           Text(
             eyebrow,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.orangeAccent,
-                  letterSpacing: 1.0,
-                ),
+              color: Colors.orangeAccent,
+              letterSpacing: 1.0,
+            ),
           ),
           const SizedBox(height: 8),
           Text(title, style: Theme.of(context).textTheme.titleLarge),

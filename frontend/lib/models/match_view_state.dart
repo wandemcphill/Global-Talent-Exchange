@@ -1,4 +1,5 @@
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
@@ -252,6 +253,7 @@ class MatchViewState {
     this.hasMoreSegments = false,
     this.nextSegmentToken,
     this.monetization = const MatchViewerMonetization(),
+    this.presentationPackage,
   });
 
   final String matchId;
@@ -272,6 +274,7 @@ class MatchViewState {
   final bool hasMoreSegments;
   final String? nextSegmentToken;
   final MatchViewerMonetization monetization;
+  final MatchPresentationPackage? presentationPackage;
 
   factory MatchViewState.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -350,6 +353,22 @@ class MatchViewState {
       monetization: MatchViewerMonetization.fromJson(
         GteJson.value(json, <String>['monetization']),
       ),
+      presentationPackage:
+          GteJson.value(
+                    json,
+                    <String>[
+                      'presentation_package',
+                      'presentationPackage',
+                    ],
+                  ) ==
+                  null
+              ? null
+              : MatchPresentationPackage.fromJson(
+                GteJson.value(
+                  json,
+                  <String>['presentation_package', 'presentationPackage'],
+                ),
+              ),
     );
   }
 
@@ -371,6 +390,7 @@ class MatchViewState {
     bool? hasMoreSegments,
     String? nextSegmentToken,
     MatchViewerMonetization? monetization,
+    Object? presentationPackage = _matchViewStateUnset,
   }) {
     return MatchViewState(
       matchId: matchId,
@@ -391,6 +411,10 @@ class MatchViewState {
       hasMoreSegments: hasMoreSegments ?? this.hasMoreSegments,
       nextSegmentToken: nextSegmentToken ?? this.nextSegmentToken,
       monetization: monetization ?? this.monetization,
+      presentationPackage:
+          identical(presentationPackage, _matchViewStateUnset)
+              ? this.presentationPackage
+              : presentationPackage as MatchPresentationPackage?,
     );
   }
 
@@ -414,3 +438,5 @@ class MatchViewState {
     return side == MatchViewerSide.home ? homeTeam : awayTeam;
   }
 }
+
+const Object _matchViewStateUnset = Object();
