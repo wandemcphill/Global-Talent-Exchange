@@ -17,6 +17,17 @@ def _adapter() -> SportMonksAdapter:
 
 def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch) -> None:
     adapter = _adapter()
+    monkeypatch.setattr(
+        adapter,
+        "_load_team_directory_context",
+        lambda club_id: {
+            "club_name": "AFC Bournemouth",
+            "competition_id": "8",
+            "competition_name": "Premier League",
+            "season_id": "21646",
+        },
+    )
+
     def _fake_get(path: str, params: dict[str, object] | None = None, **kwargs):
         assert path == "/players"
         page = int((params or {}).get("page") or 1)
@@ -90,7 +101,10 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
     assert len(first_page.items) == 1
     assert first_page.items[0].provider_player_id == "4237168"
     assert first_page.items[0].current_club_name == "AFC Bournemouth"
-    assert first_page.items[0].current_competition_name is None
+    assert first_page.items[0].current_competition_name == "Premier League"
+    assert first_page.items[0].raw_payload["position"] == "Goalkeeper"
+    assert first_page.items[0].raw_payload["nationality"] == "Greece"
+    assert first_page.items[0].raw_payload["currentCompetition"]["id"] == "8"
     assert first_page.exhausted is False
     assert first_page.next_cursor == '{"page": 2, "per_page": 25, "player_index": 0}'
     assert second_page.items[0].provider_player_id == "22169325"
@@ -99,6 +113,16 @@ def test_fetch_player_directory_page_uses_global_player_cursor_flow(monkeypatch)
 
 def test_fetch_player_directory_page_filters_non_current_or_overage_rows(monkeypatch) -> None:
     adapter = _adapter()
+    monkeypatch.setattr(
+        adapter,
+        "_load_team_directory_context",
+        lambda club_id: {
+            "club_name": "Espanyol" if club_id == "300" else "Active Veterans",
+            "competition_id": "140" if club_id == "300" else "999",
+            "competition_name": "La Liga" if club_id == "300" else "Legends League",
+            "season_id": "30001",
+        },
+    )
 
     monkeypatch.setattr(
         adapter,
@@ -181,6 +205,7 @@ def test_fetch_player_directory_page_filters_non_current_or_overage_rows(monkeyp
 
     assert [item.provider_player_id for item in page.items] == ["3"]
     assert page.items[0].current_club_name == "Espanyol"
+    assert page.items[0].current_competition_name == "La Liga"
     assert page.exhausted is True
 
 
