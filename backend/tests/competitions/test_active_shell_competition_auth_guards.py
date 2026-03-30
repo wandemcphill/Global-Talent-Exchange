@@ -102,6 +102,27 @@ def test_authenticated_join_rejects_payload_user_spoofing(client) -> None:
     }
 
 
+def test_anonymous_join_is_rejected(client, competition_admin_headers) -> None:
+    competition_id = _create_competition(client, name="join-anon-blocked")
+
+    publish = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
+    assert publish.status_code == 200, publish.text
+
+    response = client.post(
+        f"/api/competitions/{competition_id}/join",
+        json={"user_id": "anonymous-user"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Authentication credentials were not provided."
+    }
+
+
 def test_authenticated_scoped_admin_without_manage_competitions_cannot_publish_or_launch(
     client,
 ) -> None:
@@ -132,6 +153,20 @@ def test_authenticated_scoped_admin_without_manage_competitions_cannot_publish_o
     }
 
 
+def test_anonymous_publish_is_rejected(client) -> None:
+    competition_id = _create_competition(client, name="publish-anon-blocked")
+
+    response = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        json={"open_for_join": True},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Authentication credentials were not provided."
+    }
+
+
 def test_authenticated_scoped_admin_with_manage_competitions_can_publish(client) -> None:
     competition_id = _create_competition(client, name="publish-auth-live")
     headers = _create_scoped_admin_headers(
@@ -148,3 +183,37 @@ def test_authenticated_scoped_admin_with_manage_competitions_can_publish(client)
 
     assert publish.status_code == 200, publish.text
     assert publish.json()["status"] == "open"
+
+
+def test_anonymous_launch_is_rejected(client, competition_admin_headers, auth_user_factory) -> None:
+    competition_id = _create_competition(client, name="launch-anon-blocked")
+    entrant_a = auth_user_factory(suffix="launch-anon-a")
+    entrant_b = auth_user_factory(suffix="launch-anon-b")
+
+    publish = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
+    assert publish.status_code == 200, publish.text
+
+    for entrant in (entrant_a, entrant_b):
+        joined = client.post(
+            f"/api/competitions/{competition_id}/join",
+            headers=entrant["headers"],
+            json={"user_id": entrant["user_id"]},
+        )
+        assert joined.status_code == 200, joined.text
+
+    seed = client.post(
+        f"/api/competitions/{competition_id}/seed",
+        json={"seed_method": "random"},
+    )
+    assert seed.status_code == 200, seed.text
+
+    response = client.post(f"/api/competitions/{competition_id}/launch")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Authentication credentials were not provided."
+    }

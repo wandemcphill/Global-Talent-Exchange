@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.fairness.match_integrity_service import MatchIntegrityService, MatchIntegrityViolation
+from app.infinite_league.service import ensure_infinite_league_runtime
+from app.live_matches.service import ensure_live_match_hub
 from app.models.competition_match import CompetitionMatch
 from app.replay_archive.service import ensure_replay_archive
 from app.schemas.match_viewer import MatchMode, MatchViewerSessionView, MatchViewStateView
@@ -61,6 +63,72 @@ def _attach_monetization(
     )
 
 
+def _metadata_team_name(metadata_json: dict[str, object], *, side: str) -> str | None:
+    direct_key = f"{side}_team_name"
+    direct_value = metadata_json.get(direct_key)
+    if isinstance(direct_value, str) and direct_value.strip():
+        return direct_value
+    replay_payload = metadata_json.get("replay_payload")
+    if isinstance(replay_payload, dict):
+        summary = replay_payload.get("summary")
+        if isinstance(summary, dict):
+            stats = summary.get(f"{side}_stats")
+            if isinstance(stats, dict):
+                team_name = stats.get("team_name")
+                if isinstance(team_name, str) and team_name.strip():
+                    return team_name
+    return None
+
+
+def _resolve_live_view_state(
+    *,
+    match_key: str,
+    request: Request,
+    match: CompetitionMatch | None,
+    service: MatchTimelineService,
+) -> tuple[MatchViewStateView, dict[str, object]] | None:
+    metadata_json = dict(match.metadata_json or {}) if match is not None else {}
+    live_hub = ensure_live_match_hub(request.app)
+    live_state = live_hub.get_state(match_key)
+    if live_state is not None:
+        events, _ = live_hub.get_events_since(match_key, 0)
+        return (
+            service.build_from_live_stream(
+                match_id=match_key,
+                source="live_match_hub",
+                home_team_id=match.home_club_id if match is not None else None,
+                home_team_name=(
+                    _metadata_team_name(metadata_json, side="home")
+                    or (match.home_club_id if match is not None else None)
+                ),
+                away_team_id=match.away_club_id if match is not None else None,
+                away_team_name=(
+                    _metadata_team_name(metadata_json, side="away")
+                    or (match.away_club_id if match is not None else None)
+                ),
+                events=events,
+                live_state=live_state,
+            ),
+            metadata_json,
+        )
+    infinite_stream = ensure_infinite_league_runtime(request.app).live_stream(match_key)
+    if infinite_stream is not None:
+        return (
+            service.build_from_live_stream(
+                match_id=infinite_stream.match_id,
+                source="infinite_league_runtime",
+                home_team_id=infinite_stream.home_team_id,
+                home_team_name=infinite_stream.home_team_name,
+                away_team_id=infinite_stream.away_team_id,
+                away_team_name=infinite_stream.away_team_name,
+                events=list(infinite_stream.events),
+                live_state=None,
+            ),
+            metadata_json,
+        )
+    return None
+
+
 @router.get("/{match_key}", response_model=MatchViewStateView)
 def read_match_viewer_timeline(
     match_key: str,
@@ -110,6 +178,21 @@ def read_match_viewer_timeline(
             scaling_service.transform(service.build_from_archive_record(record), mode=mode),
             match_key=match_key,
             ad_engine=ad_engine,
+        )
+
+    live_view = _resolve_live_view_state(
+        match_key=match_key,
+        request=request,
+        match=match,
+        service=service,
+    )
+    if live_view is not None:
+        base_view, metadata_json = live_view
+        return _attach_monetization(
+            scaling_service.transform(base_view, mode=mode),
+            match_key=match_key,
+            ad_engine=ad_engine,
+            metadata_json=metadata_json,
         )
 
     raise HTTPException(
@@ -179,6 +262,30 @@ def read_match_viewer_session(
             )
         except MatchIntegrityViolation as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
+
+    live_view = _resolve_live_view_state(
+        match_key=match_key,
+        request=request,
+        match=match,
+        service=service,
+    )
+    if live_view is not None:
+        base_view, metadata_json = live_view
+        secured = integrity_service.build_viewer_session(
+            match_id=match_key,
+            view_state=scaling_service.transform(base_view, mode=mode),
+            fairness_metadata=None,
+            mode=mode,
+            continuation_token=token,
+        )
+        return MatchViewerSessionView.model_validate(
+            _attach_monetization(
+                secured,
+                match_key=match_key,
+                ad_engine=ad_engine,
+                metadata_json=metadata_json,
+            ).model_dump(mode="json")
+        )
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,

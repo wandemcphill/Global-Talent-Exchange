@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, JSON, String
+from sqlalchemy import DateTime, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.enums.competition_format import CompetitionFormat
@@ -15,6 +15,11 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_competitions"
+    __table_args__ = (
+        Index("ix_user_competitions_visibility_created_at", "visibility", "created_at"),
+        Index("ix_user_competitions_format_visibility_created_at", "format", "visibility", "created_at"),
+        Index("ix_user_competitions_host_user_id_created_at", "host_user_id", "created_at"),
+    )
 
     host_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)

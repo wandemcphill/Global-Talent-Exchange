@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import text
+
 
 def _create_fan_qualifier(api_client, *, methods: list[str], top_gifter_rank_limit: int | None = None, playoff_source_competition_id: str | None = None):
     response = api_client.post(
@@ -74,4 +76,72 @@ def test_fans_can_join_via_top_gifter_and_playoffs(api_client) -> None:
     assert playoff_join.status_code == 200, playoff_join.text
     playoff_entry = next(item for item in playoff_join.json()["entries"] if item["user_id"] == "playoff-fan")
     assert playoff_entry["qualification_source"] == "playoffs"
+
+
+def test_public_streamer_list_accepts_lowercase_persisted_statuses(api_client, session) -> None:
+    session.execute(
+        text(
+            """
+            INSERT INTO streamer_tournaments (
+                id,
+                host_user_id,
+                creator_profile_id,
+                creator_club_id,
+                slug,
+                title,
+                description,
+                tournament_type,
+                status,
+                approval_status,
+                max_participants,
+                requires_admin_approval,
+                high_reward_flag,
+                entry_rules_json,
+                metadata_json
+            )
+            VALUES (
+                :id,
+                :host_user_id,
+                :creator_profile_id,
+                :creator_club_id,
+                :slug,
+                :title,
+                :description,
+                :tournament_type,
+                :status,
+                :approval_status,
+                :max_participants,
+                :requires_admin_approval,
+                :high_reward_flag,
+                :entry_rules_json,
+                :metadata_json
+            )
+            """
+        ),
+        {
+            "id": "published-streamer-tournament",
+            "host_user_id": "creator-user",
+            "creator_profile_id": "creator-profile",
+            "creator_club_id": "creator-club",
+            "slug": "published-streamer-tournament",
+            "title": "Published Streamer Tournament",
+            "description": "Persisted directly with lowercase enum values.",
+            "tournament_type": "fan_qualifier",
+            "status": "published",
+            "approval_status": "approved",
+            "max_participants": 16,
+            "requires_admin_approval": 0,
+            "high_reward_flag": 0,
+            "entry_rules_json": "{}",
+            "metadata_json": "{}",
+        },
+    )
+    session.commit()
+
+    response = api_client.get("/streamer-tournaments")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["tournaments"][0]["id"] == "published-streamer-tournament"
+    assert payload["tournaments"][0]["status"] == "published"
 

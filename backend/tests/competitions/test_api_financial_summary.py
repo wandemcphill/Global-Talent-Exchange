@@ -7,7 +7,12 @@ from app.models.competition_reward import CompetitionReward
 from app.models.manager_market import ManagerTradeRecord
 
 
-def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(client, app_session_factory) -> None:
+def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(
+    client,
+    app_session_factory,
+    competition_admin_headers,
+    auth_user_factory,
+) -> None:
     with app_session_factory() as session:
         for participant in session.query(CompetitionParticipant).all():
             participant.joined_at = datetime.now(timezone.utc) - timedelta(minutes=10)
@@ -31,9 +36,21 @@ def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(client, app_session
         },
     ).json()
     competition_id = created["id"]
-    client.post(f"/api/competitions/{competition_id}/publish", json={"open_for_join": True})
-    client.post(f"/api/competitions/{competition_id}/join", json={"user_id": "club-jackpot-1"})
-    client.post(f"/api/competitions/{competition_id}/join", json={"user_id": "club-jackpot-2"})
+    jackpot_users = [
+        auth_user_factory(suffix=f"jackpot-{index}")
+        for index in range(1, 3)
+    ]
+    client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
+    for user in jackpot_users:
+        client.post(
+            f"/api/competitions/{competition_id}/join",
+            headers=user["headers"],
+            json={"user_id": user["user_id"]},
+        )
 
     rollover = client.post(
         "/api/competitions",
@@ -106,7 +123,11 @@ def test_gtex_financial_summary_exposes_dynamic_jackpot_pool(client, app_session
     assert detail_response.json()["dynamic_prize_pool"]["total_pool"] == "33.8000"
 
 
-def test_financial_summary_exposes_transparent_pool_breakdown(client) -> None:
+def test_financial_summary_exposes_transparent_pool_breakdown(
+    client,
+    competition_admin_headers,
+    auth_user_factory,
+) -> None:
     created = client.post(
         "/api/competitions",
         json={
@@ -127,9 +148,21 @@ def test_financial_summary_exposes_transparent_pool_breakdown(client) -> None:
         },
     ).json()
     competition_id = created["id"]
-    client.post(f"/api/competitions/{competition_id}/publish", json={"open_for_join": True})
-    client.post(f"/api/competitions/{competition_id}/join", json={"user_id": "club-1"})
-    client.post(f"/api/competitions/{competition_id}/join", json={"user_id": "club-2"})
+    entrants = [
+        auth_user_factory(suffix=f"financial-summary-{index}", funded_credit="100.0000")
+        for index in range(1, 3)
+    ]
+    client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
+    for user in entrants:
+        client.post(
+            f"/api/competitions/{competition_id}/join",
+            headers=user["headers"],
+            json={"user_id": user["user_id"]},
+        )
 
     financials_response = client.get(f"/api/competitions/{competition_id}/financials")
     assert financials_response.status_code == 200

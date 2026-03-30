@@ -68,6 +68,18 @@ class DynamicPrizePoolSnapshot:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class DynamicPrizePoolListContext:
+    active_users_5min: int
+    trade_volume_5min: Decimal
+    pending_rollover_minor_total: int
+    pending_rollover_minor_by_competition: dict[str, int]
+
+    def jackpot_rollover_for(self, competition_id: str) -> Decimal:
+        own_pending_minor = self.pending_rollover_minor_by_competition.get(competition_id, 0)
+        return _from_minor_units(max(self.pending_rollover_minor_total - own_pending_minor, 0))
+
+
 @dataclass(slots=True)
 class DynamicPrizePoolService:
     session: Session
@@ -80,15 +92,7 @@ class DynamicPrizePoolService:
         exclude_competition_id: str | None = None,
     ) -> DynamicPrizePoolSnapshot:
         if not self.is_enabled_for(competition):
-            return DynamicPrizePoolSnapshot(
-                enabled=False,
-                base_funding=Decimal("0.0000"),
-                activity_boost=Decimal("0.0000"),
-                jackpot_rollover=Decimal("0.0000"),
-                total_pool=Decimal("0.0000"),
-                active_users_5min=0,
-                trade_volume_5min=Decimal("0.0000"),
-            )
+            return self._disabled_snapshot()
 
         base_funding = self._base_funding(competition=competition, rule_set=rule_set)
         active_users = self._active_users_5min()
@@ -107,6 +111,59 @@ class DynamicPrizePoolService:
             total_pool=total_pool,
             active_users_5min=active_users,
             trade_volume_5min=trade_volume,
+        )
+
+    def build_list_context(self) -> DynamicPrizePoolListContext:
+        active_users = self._active_users_5min()
+        trade_volume = self._trade_volume_5min()
+        pending_rollover_minor_by_competition: dict[str, int] = {}
+        rows = self.session.execute(
+            select(
+                CompetitionReward.competition_id,
+                func.coalesce(func.sum(CompetitionReward.amount_minor), 0),
+            )
+            .join(Competition, Competition.id == CompetitionReward.competition_id)
+            .where(
+                Competition.source_type.is_not(None),
+                func.lower(Competition.source_type).in_(tuple(PLATFORM_SOURCE_TYPES)),
+                func.lower(CompetitionReward.status) != "settled",
+            )
+            .group_by(CompetitionReward.competition_id)
+        ).all()
+        for competition_id, pending_minor in rows:
+            if competition_id:
+                pending_rollover_minor_by_competition[str(competition_id)] = int(pending_minor or 0)
+        return DynamicPrizePoolListContext(
+            active_users_5min=active_users,
+            trade_volume_5min=trade_volume,
+            pending_rollover_minor_total=sum(pending_rollover_minor_by_competition.values()),
+            pending_rollover_minor_by_competition=pending_rollover_minor_by_competition,
+        )
+
+    def snapshot_from_list_context(
+        self,
+        *,
+        competition: Competition,
+        rule_set: CompetitionRuleSet,
+        context: DynamicPrizePoolListContext,
+    ) -> DynamicPrizePoolSnapshot:
+        if not self.is_enabled_for(competition):
+            return self._disabled_snapshot()
+        base_funding = self._base_funding(competition=competition, rule_set=rule_set)
+        activity_boost = _normalize_amount(
+            (Decimal(context.active_users_5min) * ACTIVE_USER_BOOST_MULTIPLIER)
+            + (context.trade_volume_5min * TRADE_VOLUME_BOOST_MULTIPLIER)
+        )
+        jackpot_rollover = context.jackpot_rollover_for(competition.id)
+        total_pool = _normalize_amount(base_funding + activity_boost + jackpot_rollover)
+        return DynamicPrizePoolSnapshot(
+            enabled=True,
+            base_funding=base_funding,
+            activity_boost=activity_boost,
+            jackpot_rollover=jackpot_rollover,
+            total_pool=total_pool,
+            active_users_5min=context.active_users_5min,
+            trade_volume_5min=context.trade_volume_5min,
         )
 
     def is_enabled_for(self, competition: Competition) -> bool:
@@ -205,6 +262,18 @@ class DynamicPrizePoolService:
         total_minor = sum(int(value or 0) for value in pending_minor)
         return _from_minor_units(max(total_minor, 0))
 
+    @staticmethod
+    def _disabled_snapshot() -> DynamicPrizePoolSnapshot:
+        return DynamicPrizePoolSnapshot(
+            enabled=False,
+            base_funding=Decimal("0.0000"),
+            activity_boost=Decimal("0.0000"),
+            jackpot_rollover=Decimal("0.0000"),
+            total_pool=Decimal("0.0000"),
+            active_users_5min=0,
+            trade_volume_5min=Decimal("0.0000"),
+        )
+
 
 def _normalize_amount(value: Decimal) -> Decimal:
     return Decimal(value).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
@@ -236,6 +305,7 @@ __all__ = [
     "ACTIVE_USER_BOOST_MULTIPLIER",
     "ACTIVITY_WINDOW",
     "DEFAULT_PLATFORM_BASE_FUNDING_PER_SLOT",
+    "DynamicPrizePoolListContext",
     "DynamicPrizePoolService",
     "DynamicPrizePoolSnapshot",
     "MIN_PLATFORM_BASE_FUNDING",

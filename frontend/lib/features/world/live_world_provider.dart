@@ -36,11 +36,11 @@ worldAggregateProvider = FutureProvider<WorldAggregateData>((Ref ref) async {
   final CompetitionHubData competitions = await ref.watch(
     competitionHubProvider.future,
   );
-  final List<dynamic> risingStarsPayload = await api.getList(
+  final JsonMap risingStarsPayload = await api.getMap(
     '/regen-universe/rising-stars',
     auth: false,
   );
-  final List<dynamic> scoutingPayload = await api.getList(
+  final JsonMap scoutingPayload = await api.getMap(
     '/regen-universe/scouting-feed',
     auth: false,
   );
@@ -66,12 +66,14 @@ worldAggregateProvider = FutureProvider<WorldAggregateData>((Ref ref) async {
   );
   final ClubContext? clubContext = ref.watch(clubContextProvider);
   return WorldAggregateData(
-    risingStars: risingStarsPayload
-        .map((dynamic item) => jsonMap(item, label: 'rising star'))
-        .toList(growable: false),
-    scoutingFeed: scoutingPayload
-        .map((dynamic item) => jsonMap(item, label: 'scouting item'))
-        .toList(growable: false),
+    risingStars: jsonMapList(
+      risingStarsPayload['entries'],
+      label: 'rising stars',
+    ),
+    scoutingFeed: jsonMapList(
+      scoutingPayload['items'],
+      label: 'scouting items',
+    ),
     seasons: seasonsPayload
         .map((dynamic item) => jsonMap(item, label: 'season'))
         .toList(growable: false),

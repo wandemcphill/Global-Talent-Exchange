@@ -47,7 +47,16 @@
     }
   ],
   "roles": {
-    "assignments": [],
+    "assignments": [
+      {
+        "subject_key": "competition-admin-cfb92501@example.com",
+        "role_name": "scoped_admin",
+        "permissions": [
+          "manage_competitions"
+        ],
+        "is_enabled": true
+      }
+    ],
     "available_roles": {
       "finance_admin": [
         "manage_commissions",
@@ -75,9 +84,10 @@
       "support_admin": [
         "manage_withdrawals",
         "view_audit_log"
-      ]
+      ],
+      "scoped_admin": []
     },
-    "default_admin_role": "god_mode"
+    "default_admin_role": "scoped_admin"
   },
   "treasury_withdrawals": [],
   "withdrawal_controls": {

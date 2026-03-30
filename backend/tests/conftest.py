@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from decimal import Decimal
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
 from app.core.config import load_settings
+from app.models.user import User
+from app.models.wallet import LedgerUnit
+from app.wallets.service import WalletService
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 DEFAULT_TEST_DATABASE_URL = (
@@ -90,3 +95,112 @@ def demo_auth_headers(client, demo_seed, demo_user_credentials):
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def bootstrap_admin_headers(client):
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"],
+            "password": os.environ["GTE_BOOTSTRAP_ADMIN_PASSWORD"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def competition_admin_headers(client, bootstrap_admin_headers):
+    suffix = f"competition-admin-{uuid4().hex[:8]}"
+    password = "SuperSecret1"
+    email = f"{suffix}@example.com"
+    username = suffix.replace("-", "_")
+    response = client.post(
+        "/api/admin/access",
+        headers=bootstrap_admin_headers,
+        json={
+            "email": email,
+            "username": username,
+            "password": password,
+            "display_name": f"Scoped {suffix}",
+            "permissions": ["manage_competitions"],
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    login = client.post(
+        "/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def auth_user_factory(client, app_session_factory):
+    def create_user(
+        *,
+        suffix: str | None = None,
+        funded_credit: Decimal | str | None = None,
+        funded_coin: Decimal | str | None = None,
+    ) -> dict[str, str]:
+        unique_suffix = suffix or uuid4().hex[:8]
+        email = f"{unique_suffix}@example.com"
+        username = unique_suffix.replace("-", "_")
+        password = "SuperSecret1"
+        response = client.post(
+            "/auth/register",
+            json={
+                "email": email,
+                "username": username,
+                "password": password,
+                "full_name": f"User {unique_suffix}",
+                "phone_number": "1234567890",
+                "is_over_18": True,
+                "region_code": "NG",
+            },
+        )
+        assert response.status_code == 201, response.text
+        payload = response.json()
+        user_id = payload["user"]["id"]
+
+        if funded_credit is not None or funded_coin is not None:
+            wallet_service = WalletService()
+            with app_session_factory() as session:
+                user = session.get(User, user_id)
+                assert user is not None
+                if funded_credit is not None:
+                    wallet_service.credit_trade_proceeds(
+                        session,
+                        user=user,
+                        amount=Decimal(str(funded_credit)),
+                        reference=f"seed:credit:{user_id}",
+                        description="Competition test credit funding",
+                        external_reference=f"seed:credit:{user_id}",
+                        unit=LedgerUnit.CREDIT,
+                    )
+                if funded_coin is not None:
+                    wallet_service.credit_trade_proceeds(
+                        session,
+                        user=user,
+                        amount=Decimal(str(funded_coin)),
+                        reference=f"seed:coin:{user_id}",
+                        description="Competition test coin funding",
+                        external_reference=f"seed:coin:{user_id}",
+                        unit=LedgerUnit.COIN,
+                    )
+                session.commit()
+
+        return {
+            "email": email,
+            "password": password,
+            "headers": {"Authorization": f"Bearer {payload['access_token']}"},
+            "user_id": user_id,
+            "username": payload["user"]["username"],
+            "display_name": payload["user"].get("display_name") or payload["user"]["username"],
+        }
+
+    return create_user

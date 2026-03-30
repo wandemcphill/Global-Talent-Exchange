@@ -11,6 +11,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 
+def _enum_values(enum_type: type[StrEnum]) -> list[str]:
+    return [member.value for member in enum_type]
+
+
 class SeasonStatus(StrEnum):
     ACTIVE = "active"
     ENDED = "ended"
@@ -36,7 +40,13 @@ class LeaderboardSeason(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     status: Mapped[SeasonStatus] = mapped_column(
-        Enum(SeasonStatus, name="leaderboard_season_status", native_enum=False),
+        Enum(
+            SeasonStatus,
+            name="leaderboard_season_status",
+            native_enum=False,
+            values_callable=_enum_values,
+            validate_strings=True,
+        ),
         nullable=False,
         default=SeasonStatus.ACTIVE,
         server_default=SeasonStatus.ACTIVE.value,
@@ -44,7 +54,13 @@ class LeaderboardSeason(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     default_rating: Mapped[int] = mapped_column(Integer, nullable=False, default=1200, server_default="1200")
     k_factor: Mapped[int] = mapped_column(Integer, nullable=False, default=32, server_default="32")
     reset_strategy: Mapped[ResetStrategy] = mapped_column(
-        Enum(ResetStrategy, name="leaderboard_reset_strategy", native_enum=False),
+        Enum(
+            ResetStrategy,
+            name="leaderboard_reset_strategy",
+            native_enum=False,
+            values_callable=_enum_values,
+            validate_strings=True,
+        ),
         nullable=False,
         default=ResetStrategy.SOFT,
         server_default=ResetStrategy.SOFT.value,
@@ -165,7 +181,13 @@ class LeaderboardSeasonReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     trophies: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     badges_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[RewardDeliveryStatus] = mapped_column(
-        Enum(RewardDeliveryStatus, name="leaderboard_reward_delivery_status", native_enum=False),
+        Enum(
+            RewardDeliveryStatus,
+            name="leaderboard_reward_delivery_status",
+            native_enum=False,
+            values_callable=_enum_values,
+            validate_strings=True,
+        ),
         nullable=False,
         default=RewardDeliveryStatus.PENDING,
         server_default=RewardDeliveryStatus.PENDING.value,

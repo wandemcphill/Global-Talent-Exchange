@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db import get_session
 from app.fairness.fairness_guard import FairnessGuard
 from app.fairness.match_integrity_service import MatchIntegrityService
+from app.live_matches.service import ensure_live_match_hub
 from app.models.base import Base
 from app.models.competition_match import CompetitionMatch
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
@@ -100,6 +101,31 @@ def test_match_viewer_route_scales_archive_fallback_by_mode() -> None:
     assert cinematic.status_code == 200
     assert cinematic.json()["match_mode"] == MatchMode.CINEMATIC.value
     assert 600 <= cinematic.json()["duration_seconds"] <= 900
+
+
+def test_match_viewer_route_builds_live_hub_fallback_when_no_stored_metadata_exists() -> None:
+    app, _ = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=35))
+    hub = ensure_live_match_hub(app, step_interval_seconds=0.01)
+    hub.start_stream(replay_payload.match_id, replay_payload, target_runtime_seconds=0.2)
+
+    with TestClient(app) as client:
+        timeline = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+        session = client.get(f"/api/match-viewer/{replay_payload.match_id}/session")
+
+    assert timeline.status_code == 200
+    timeline_payload = timeline.json()
+    assert timeline_payload["match_id"] == replay_payload.match_id
+    assert timeline_payload["source"] == "live_match_hub"
+    assert timeline_payload["home_team"]["team_name"]
+    assert timeline_payload["away_team"]["team_name"]
+    assert timeline_payload["frames"]
+
+    assert session.status_code == 200
+    session_payload = session.json()
+    assert session_payload["match_id"] == replay_payload.match_id
+    assert session_payload["source"] == "live_match_hub"
+    assert session_payload["timeline_proof"]["status"] == "unverified"
 
 
 def test_match_viewer_route_locks_fairness_protected_payloads_before_full_playback() -> None:

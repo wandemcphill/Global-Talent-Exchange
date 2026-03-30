@@ -12,8 +12,21 @@ from app.core.module import DomainModule, register_domain_modules
 
 logger = logging.getLogger(__name__)
 CORE_BOOT_PATHS = frozenset({"/health", "/ready", "/version", "/diagnostics", "/metrics"})
-AUTH_LAZY_LOAD_BYPASS_PREFIXES = ("/auth", "/api/auth")
-EAGER_MODULE_NAMES = frozenset({"auth", "realtime"})
+LAZY_HYDRATION_BYPASS_PREFIXES = (
+    "/auth",
+    "/api/auth",
+    "/api/competitions",
+    "/hosted-competitions",
+)
+EAGER_MODULE_NAMES = frozenset(
+    {
+        "auth",
+        "realtime",
+        "competitions",
+        "hosted_competition_engine",
+        "hosted_competition_engine_admin",
+    }
+)
 
 
 def _path_matches_prefix(path: str, prefix: str) -> bool:
@@ -21,7 +34,7 @@ def _path_matches_prefix(path: str, prefix: str) -> bool:
 
 
 def _should_bypass_lazy_hydration(path: str) -> bool:
-    return any(_path_matches_prefix(path, prefix) for prefix in AUTH_LAZY_LOAD_BYPASS_PREFIXES)
+    return any(_path_matches_prefix(path, prefix) for prefix in LAZY_HYDRATION_BYPASS_PREFIXES)
 
 
 def _with_api_alias(router: APIRouter) -> APIRouter:

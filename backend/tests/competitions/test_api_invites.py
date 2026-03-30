@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-def test_invite_generation_listing_and_join_flow(client) -> None:
+def test_invite_generation_listing_and_join_flow(client, competition_admin_headers, auth_user_factory) -> None:
+    blocked_user = auth_user_factory(suffix="invite-blocked")
+    invited_user = auth_user_factory(suffix="invite-accepted", funded_credit="100.0000")
     created = client.post(
         "/api/competitions",
         json={
@@ -16,7 +18,11 @@ def test_invite_generation_listing_and_join_flow(client) -> None:
         },
     ).json()
     competition_id = created["id"]
-    client.post(f"/api/competitions/{competition_id}/publish", json={"open_for_join": True})
+    client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
 
     invite_response = client.post(
         f"/api/competitions/{competition_id}/invites",
@@ -43,14 +49,15 @@ def test_invite_generation_listing_and_join_flow(client) -> None:
 
     blocked_join = client.post(
         f"/api/competitions/{competition_id}/join",
-        json={"user_id": "club-x"},
+        headers=blocked_user["headers"],
+        json={"user_id": blocked_user["user_id"]},
     )
     assert blocked_join.status_code == 409
     assert blocked_join.json() == {"detail": "invite_required"}
 
     detail_response = client.get(
         f"/api/competitions/{competition_id}",
-        params={"viewer_id": "club-y", "invite_code": invite_code},
+        params={"viewer_id": invited_user["user_id"], "invite_code": invite_code},
     )
     assert detail_response.status_code == 200
     detail = detail_response.json()
@@ -62,7 +69,8 @@ def test_invite_generation_listing_and_join_flow(client) -> None:
 
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
-        json={"user_id": "club-y", "invite_code": invite_code},
+        headers=invited_user["headers"],
+        json={"user_id": invited_user["user_id"], "invite_code": invite_code},
     )
     assert join_response.status_code == 200
     joined = join_response.json()

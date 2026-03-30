@@ -60,3 +60,24 @@ def test_discovery_home_includes_broadcast_network(client, app, demo_auth_header
     assert payload["broadcast_items"]
     assert payload["match_of_the_moment"] is not None
     assert payload["match_of_the_moment"]["item_type"] == "broadcast_match"
+
+
+def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoints(client, app, demo_auth_headers) -> None:
+    _ensure_live_match(app, seed=31)
+
+    home_response = client.get("/api/broadcast/home", headers=demo_auth_headers)
+
+    assert home_response.status_code == 200
+    home_payload = home_response.json()
+    current_program = home_payload["match_of_the_moment"]
+    assert current_program is not None
+    match_key = current_program["match_id"]
+    assert match_key
+
+    timeline_response = client.get(f"/api/match-viewer/{match_key}")
+    session_response = client.get(f"/api/match-viewer/{match_key}/session")
+
+    assert timeline_response.status_code == 200
+    assert session_response.status_code == 200
+    assert timeline_response.json()["match_id"] == match_key
+    assert session_response.json()["match_id"] == match_key

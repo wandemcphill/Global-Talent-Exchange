@@ -279,11 +279,21 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
         connection.execute(text("DROP TABLE player_share_events"))
         connection.execute(text("DROP TABLE player_share_holdings"))
         connection.execute(text("DROP TABLE player_share_markets"))
+        connection.execute(text("DROP TABLE leaderboard_season_rewards"))
+        connection.execute(text("DROP TABLE leaderboard_season_snapshots"))
+        connection.execute(text("DROP TABLE leaderboard_match_results"))
+        connection.execute(text("DROP TABLE leaderboard_player_ratings"))
+        connection.execute(text("DROP TABLE leaderboard_seasons"))
 
     inspector = inspect(engine)
     assert not inspector.has_table("player_share_markets")
     assert not inspector.has_table("player_share_holdings")
     assert not inspector.has_table("player_share_events")
+    assert not inspector.has_table("leaderboard_seasons")
+    assert not inspector.has_table("leaderboard_player_ratings")
+    assert not inspector.has_table("leaderboard_match_results")
+    assert not inspector.has_table("leaderboard_season_snapshots")
+    assert not inspector.has_table("leaderboard_season_rewards")
 
     command.upgrade(config, "head")
 
@@ -291,6 +301,11 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
     assert repaired_inspector.has_table("player_share_markets")
     assert repaired_inspector.has_table("player_share_holdings")
     assert repaired_inspector.has_table("player_share_events")
+    assert repaired_inspector.has_table("leaderboard_seasons")
+    assert repaired_inspector.has_table("leaderboard_player_ratings")
+    assert repaired_inspector.has_table("leaderboard_match_results")
+    assert repaired_inspector.has_table("leaderboard_season_snapshots")
+    assert repaired_inspector.has_table("leaderboard_season_rewards")
 
     with engine.connect() as connection:
         assert connection.execute(
@@ -927,5 +942,32 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
     target_heads = _migration_graph_heads()
     assert len(versions) == 1
     assert set(versions) == target_heads
+
+    engine.dispose()
+
+
+def test_regen_tracking_repair_migration_restores_missing_national_seed_table(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'regen-tracking-repair.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    config = build_alembic_config(database_url)
+
+    command.upgrade(config, "20260330_0074_player_share_market_schema_repair")
+
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE national_regen_seeds"))
+
+    inspector = inspect(engine)
+    assert not inspector.has_table("national_regen_seeds")
+
+    command.upgrade(config, "head")
+
+    repaired_inspector = inspect(engine)
+    assert repaired_inspector.has_table("national_regen_seeds")
+    assert {
+        "ix_national_regen_seeds_country_code",
+        "ix_national_regen_seeds_seed_type",
+        "ix_national_regen_seeds_rarity_tier",
+        "ix_national_regen_seeds_status",
+    } <= {index["name"] for index in repaired_inspector.get_indexes("national_regen_seeds")}
 
     engine.dispose()

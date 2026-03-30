@@ -25,21 +25,33 @@ def _create_competition(client, *, name: str, format: str, capacity: int) -> str
     return response.json()["id"]
 
 
-def _publish_and_join(client, competition_id: str, club_ids: list[str]) -> None:
-    publish = client.post(f"/api/competitions/{competition_id}/publish", json={"open_for_join": True})
+def _publish_and_join(client, competition_id: str, admin_headers: dict[str, str], entrants: list[dict[str, str]]) -> None:
+    publish = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=admin_headers,
+        json={"open_for_join": True},
+    )
     assert publish.status_code == 200
-    for club_id in club_ids:
-        join = client.post(f"/api/competitions/{competition_id}/join", json={"user_id": club_id})
+    for entrant in entrants:
+        join = client.post(
+            f"/api/competitions/{competition_id}/join",
+            headers=entrant["headers"],
+            json={"user_id": entrant["user_id"]},
+        )
         assert join.status_code == 200
 
 
-def test_league_round_and_fixture_generation(client) -> None:
+def test_league_round_and_fixture_generation(client, competition_admin_headers, auth_user_factory) -> None:
     competition_id = _create_competition(client, name="League Fixtures", format="league", capacity=4)
-    _publish_and_join(client, competition_id, ["club-a", "club-b", "club-c", "club-d"])
+    entrants = [auth_user_factory(suffix=f"league-fixture-{index}") for index in range(1, 5)]
+    _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
     seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
     assert seed.status_code == 200
-    launch = client.post(f"/api/competitions/{competition_id}/launch")
+    launch = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    )
     assert launch.status_code == 200
 
     rounds = client.get(f"/api/competitions/{competition_id}/rounds").json()
@@ -50,13 +62,17 @@ def test_league_round_and_fixture_generation(client) -> None:
     assert {match["stage"] for match in fixtures} == {"league"}
 
 
-def test_standings_update_after_match_completion(client) -> None:
+def test_standings_update_after_match_completion(client, competition_admin_headers, auth_user_factory) -> None:
     competition_id = _create_competition(client, name="League Standings", format="league", capacity=2)
-    _publish_and_join(client, competition_id, ["club-e", "club-f"])
+    entrants = [auth_user_factory(suffix=f"league-standings-{index}") for index in range(1, 3)]
+    _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
     seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
     assert seed.status_code == 200
-    launch = client.post(f"/api/competitions/{competition_id}/launch")
+    launch = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    )
     assert launch.status_code == 200
 
     fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
@@ -82,14 +98,18 @@ def test_standings_update_after_match_completion(client) -> None:
     assert leader["wins"] == 1
 
 
-def test_cup_playoff_progression_and_settlement(client) -> None:
+def test_cup_playoff_progression_and_settlement(client, competition_admin_headers, auth_user_factory) -> None:
     competition_id = _create_competition(client, name="Cup Progression", format="cup", capacity=4)
-    _publish_and_join(client, competition_id, ["club-g", "club-h", "club-i", "club-j"])
+    entrants = [auth_user_factory(suffix=f"cup-progression-{index}") for index in range(1, 5)]
+    _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
     seeded = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"}).json()
     assert seeded["status"] == "seeded"
 
-    launched = client.post(f"/api/competitions/{competition_id}/launch").json()
+    launched = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    ).json()
     assert launched["status"] == "live"
 
     fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
@@ -149,13 +169,22 @@ def test_schedule_blackout_avoids_exclusive_window(client, app_session_factory) 
     assert blocked_date.isoformat() not in payload["assigned_dates"]
 
 
-def test_launch_applies_tournament_lock_metadata(client, app_session_factory) -> None:
+def test_launch_applies_tournament_lock_metadata(
+    client,
+    app_session_factory,
+    competition_admin_headers,
+    auth_user_factory,
+) -> None:
     competition_id = _create_competition(client, name="Locked League", format="league", capacity=4)
-    _publish_and_join(client, competition_id, ["club-lock-a", "club-lock-b", "club-lock-c", "club-lock-d"])
+    entrants = [auth_user_factory(suffix=f"locked-league-{index}") for index in range(1, 5)]
+    _publish_and_join(client, competition_id, competition_admin_headers, entrants)
 
     seed = client.post(f"/api/competitions/{competition_id}/seed", json={"seed_method": "random"})
     assert seed.status_code == 200
-    launch = client.post(f"/api/competitions/{competition_id}/launch")
+    launch = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    )
     assert launch.status_code == 200
 
     with app_session_factory() as session:

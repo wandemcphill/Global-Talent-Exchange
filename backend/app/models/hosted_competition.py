@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, Index, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -54,6 +54,10 @@ class CompetitionTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 class UserHostedCompetition(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "user_hosted_competitions"
+    __table_args__ = (
+        Index("ix_user_hosted_competitions_visibility_created_at", "visibility", "created_at"),
+        Index("ix_user_hosted_competitions_host_user_id_created_at", "host_user_id", "created_at"),
+    )
 
     template_id: Mapped[str] = mapped_column(ForeignKey("competition_templates.id", ondelete="RESTRICT"), nullable=False, index=True)
     host_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

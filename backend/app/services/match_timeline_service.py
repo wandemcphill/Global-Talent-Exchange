@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from hashlib import md5
 from typing import Any
 
-from app.match_engine.schemas import MatchEventView, MatchReplayPayloadView, MatchTeamVisualIdentityView
+from app.live_matches.schemas import LiveMatchStateView, LiveMatchStreamEventView
+from app.match_engine.schemas import (
+    MatchBadgeVisualView,
+    MatchEventView,
+    MatchKitVisualView,
+    MatchPlayerVisualView,
+    MatchReplayPayloadView,
+    MatchTeamVisualIdentityView,
+)
 from app.match_engine.simulation.models import MatchEventType, PlayerRole
 from app.replay_archive.schemas import ReplayArchiveRecord, ReplayMomentView
 from app.schemas.match_viewer import (
@@ -143,6 +151,109 @@ class MatchTimelineService:
             home_team=home_team,
             away_team=away_team,
             events=[item.view for item in events],
+            frames=frames,
+        )
+
+    def build_from_live_stream(
+        self,
+        *,
+        match_id: str,
+        source: str,
+        home_team_id: str | None,
+        home_team_name: str | None,
+        away_team_id: str | None,
+        away_team_name: str | None,
+        events: list[LiveMatchStreamEventView],
+        live_state: LiveMatchStateView | None = None,
+    ) -> MatchViewStateView:
+        ordered_events = sorted(
+            events,
+            key=lambda item: (
+                self._live_event_time_seconds(item),
+                int(item.sequence_id or item.sequence or 0),
+                item.event_id or "",
+            ),
+        )
+        resolved_home_team_id = home_team_id or self._team_id_from_live_events(ordered_events, side=MatchViewerSide.HOME)
+        resolved_away_team_id = away_team_id or self._team_id_from_live_events(ordered_events, side=MatchViewerSide.AWAY)
+        resolved_home_team_id = resolved_home_team_id or f"{match_id}:home"
+        resolved_away_team_id = resolved_away_team_id or f"{match_id}:away"
+        resolved_home_team_name = home_team_name or self._team_name_from_live_events(
+            ordered_events,
+            team_id=resolved_home_team_id,
+            side=MatchViewerSide.HOME,
+        )
+        resolved_away_team_name = away_team_name or self._team_name_from_live_events(
+            ordered_events,
+            team_id=resolved_away_team_id,
+            side=MatchViewerSide.AWAY,
+        )
+        resolved_home_team_name = resolved_home_team_name or "Home"
+        resolved_away_team_name = resolved_away_team_name or "Away"
+
+        home_identity = self._synthetic_team_identity(
+            match_id=match_id,
+            team_id=resolved_home_team_id,
+            team_name=resolved_home_team_name,
+            side=MatchViewerSide.HOME,
+            events=ordered_events,
+        )
+        away_identity = self._synthetic_team_identity(
+            match_id=match_id,
+            team_id=resolved_away_team_id,
+            team_name=resolved_away_team_name,
+            side=MatchViewerSide.AWAY,
+            events=ordered_events,
+        )
+        home_team = self._team_view(home_identity, side=MatchViewerSide.HOME, formation="4-3-3")
+        away_team = self._team_view(away_identity, side=MatchViewerSide.AWAY, formation="4-3-3")
+        home_runtime = self._team_runtime(home_identity, home_team)
+        away_runtime = self._team_runtime(away_identity, away_team)
+
+        contexts = [
+            self._context_from_live_event(
+                event,
+                home_team_id=resolved_home_team_id,
+                home_team_name=resolved_home_team_name,
+                away_team_id=resolved_away_team_id,
+                away_team_name=resolved_away_team_name,
+            )
+            for event in ordered_events
+        ]
+        current_minute = int(live_state.snapshot.current_minute) if live_state is not None else (
+            max((item.minute for item in ordered_events), default=0)
+        )
+        duration_seconds = max(
+            max((self._live_event_time_seconds(item) for item in ordered_events), default=0.0),
+            float(current_minute * 60),
+            90.0,
+        )
+        final_home_score, final_away_score = self._live_scoreline(ordered_events, live_state=live_state)
+        contexts = self._ensure_control_events(
+            match_id=match_id,
+            events=contexts,
+            duration_seconds=duration_seconds,
+            final_home_score=final_home_score,
+            final_away_score=final_away_score,
+            include_halftime=current_minute >= 45,
+            include_fulltime=self._live_stream_is_complete(ordered_events, live_state=live_state),
+        )
+        frames = self._build_frames(
+            match_id=match_id,
+            home_runtime=home_runtime,
+            away_runtime=away_runtime,
+            events=contexts,
+            duration_seconds=duration_seconds,
+        )
+        return MatchViewStateView(
+            match_id=match_id,
+            source=source,
+            supports_offside=any(item.view.event_type is MatchViewerEventType.OFFSIDE for item in contexts),
+            deterministic_seed=None,
+            duration_seconds=max(int(round(duration_seconds)), int(frames[-1].time_seconds) if frames else 0),
+            home_team=home_team,
+            away_team=away_team,
+            events=[item.view for item in contexts],
             frames=frames,
         )
 
@@ -302,6 +413,86 @@ class MatchTimelineService:
             render_contract=None,
         )
 
+    def _context_from_live_event(
+        self,
+        event: LiveMatchStreamEventView,
+        *,
+        home_team_id: str,
+        home_team_name: str,
+        away_team_id: str,
+        away_team_name: str,
+    ) -> _ViewerEventContext:
+        raw_event_type = (
+            self._optional_text(event.source_event_type)
+            or self._optional_text(event.metadata.get("raw_event_type"))
+            or event.event_type
+        )
+        viewer_type = self._viewer_event_type_from_live_event(event, raw_event_type=raw_event_type)
+        team_side = self._live_team_side(
+            event,
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
+        )
+        primary_player_name = event.player or self._optional_text(event.metadata.get("player_name"))
+        secondary_player_name = event.secondary_player or self._optional_text(event.metadata.get("secondary_player_name"))
+        primary_player_id = self._live_actor_id(
+            player_id=event.player_id,
+            player_name=primary_player_name,
+            side=team_side,
+        )
+        secondary_player_id = self._live_actor_id(
+            player_id=event.secondary_player_id,
+            player_name=secondary_player_name,
+            side=team_side,
+        )
+        commentary = event.commentary or self._optional_text(event.metadata.get("description")) or self._banner_text(raw_event_type, raw_event_type)
+        team_id = event.team_id or (home_team_id if team_side is MatchViewerSide.HOME else away_team_id if team_side is MatchViewerSide.AWAY else None)
+        team_name = event.team or self._optional_text(event.metadata.get("team_name"))
+        if not team_name:
+            if team_side is MatchViewerSide.HOME:
+                team_name = home_team_name
+            elif team_side is MatchViewerSide.AWAY:
+                team_name = away_team_name
+        return _ViewerEventContext(
+            view=MatchViewerEventView(
+                event_id=event.event_id or f"{event.match_id or 'live'}:{raw_event_type}:{int(self._live_event_time_seconds(event))}",
+                sequence=int(event.sequence_id or event.sequence or 0),
+                event_type=viewer_type,
+                minute=event.minute,
+                added_time=0,
+                clock_label=event.clock_label or f"{event.minute}'",
+                time_seconds=self._live_event_time_seconds(event),
+                team_id=team_id,
+                team_name=team_name,
+                primary_player_id=primary_player_id,
+                primary_player_name=primary_player_name,
+                secondary_player_id=secondary_player_id,
+                secondary_player_name=secondary_player_name,
+                home_score=int(event.home_score or event.metadata.get("home_score") or 0),
+                away_score=int(event.away_score or event.metadata.get("away_score") or 0),
+                banner_text=self._banner_text(commentary, raw_event_type),
+                commentary=commentary,
+                emphasis_level=self._emphasis_level(viewer_type),
+                highlighted_player_ids=[
+                    player_id
+                    for player_id in (primary_player_id, secondary_player_id)
+                    if player_id is not None
+                ],
+                flags=[],
+                playback_profile=self._optional_text(event.meta.get("chance_family")) or (
+                    "build_up" if viewer_type is MatchViewerEventType.ATTACK else "neutral"
+                ),
+                miss_variant="wide" if viewer_type is MatchViewerEventType.MISS else None,
+                reviewable=bool(event.meta.get("reviewable", False)),
+                review_reason=self._optional_text(event.meta.get("review_reason")),
+                review_decision=self._optional_text(event.meta.get("review_decision")),
+                score_commit="immediate",
+            ),
+            source_type=raw_event_type,
+            team_side=team_side,
+            render_contract=self._live_render_contract(event),
+        )
+
     def _ensure_control_events(
         self,
         *,
@@ -310,6 +501,8 @@ class MatchTimelineService:
         duration_seconds: float,
         final_home_score: int,
         final_away_score: int,
+        include_halftime: bool = True,
+        include_fulltime: bool = True,
     ) -> list[_ViewerEventContext]:
         ordered = sorted(events, key=lambda item: (item.view.time_seconds, item.view.sequence, item.view.event_id))
         has_kickoff = any(item.view.event_type is MatchViewerEventType.KICKOFF for item in ordered)
@@ -346,7 +539,7 @@ class MatchTimelineService:
                     team_side=None,
                 )
             )
-        if not has_halftime:
+        if include_halftime and not has_halftime:
             halftime_score = self._score_before_minute(ordered, 45)
             synthetic.append(
                 _ViewerEventContext(
@@ -376,7 +569,7 @@ class MatchTimelineService:
                     team_side=None,
                 )
             )
-        if not has_fulltime:
+        if include_fulltime and not has_fulltime:
             synthetic.append(
                 _ViewerEventContext(
                     view=MatchViewerEventView(
@@ -411,6 +604,376 @@ class MatchTimelineService:
         for index, item in enumerate(ordered):
             item.view.sequence = index
         return ordered
+
+    def _synthetic_team_identity(
+        self,
+        *,
+        match_id: str,
+        team_id: str,
+        team_name: str,
+        side: MatchViewerSide,
+        events: list[LiveMatchStreamEventView],
+    ) -> MatchTeamVisualIdentityView:
+        player_visuals = self._synthetic_player_visuals(
+            match_id=match_id,
+            team_id=team_id,
+            team_name=team_name,
+            side=side,
+            events=events,
+        )
+        colors = (
+            {
+                "primary": "#103A7A",
+                "secondary": "#F7F9FC",
+                "accent": "#E8B647",
+                "goalkeeper": "#157F3B",
+            }
+            if side is MatchViewerSide.HOME
+            else {
+                "primary": "#8B1E3F",
+                "secondary": "#FFF6EA",
+                "accent": "#F0A202",
+                "goalkeeper": "#16697A",
+            }
+        )
+        return MatchTeamVisualIdentityView(
+            team_id=team_id,
+            team_name=team_name,
+            short_club_code=self._short_club_code(team_name, fallback=side.value[:3].upper()),
+            badge=MatchBadgeVisualView(
+                shape="shield",
+                initials=self._short_club_code(team_name, fallback=side.value[:3].upper()),
+                primary_color=colors["primary"],
+                secondary_color=colors["secondary"],
+                accent_color=colors["accent"],
+            ),
+            selected_kit=MatchKitVisualView(
+                kit_type="home" if side is MatchViewerSide.HOME else "away",
+                primary_color=colors["primary"],
+                secondary_color=colors["secondary"],
+                accent_color=colors["accent"],
+                shorts_color=colors["primary"],
+                socks_color=colors["secondary"],
+                pattern_type="solid",
+                collar_style="crew",
+                sleeve_style="short",
+                badge_placement="left_chest",
+                front_text=None,
+            ),
+            alternate_kit=MatchKitVisualView(
+                kit_type="alternate",
+                primary_color=colors["secondary"],
+                secondary_color=colors["primary"],
+                accent_color=colors["accent"],
+                shorts_color=colors["secondary"],
+                socks_color=colors["primary"],
+                pattern_type="solid",
+                collar_style="crew",
+                sleeve_style="short",
+                badge_placement="left_chest",
+                front_text=None,
+            ),
+            goalkeeper_kit=MatchKitVisualView(
+                kit_type="goalkeeper",
+                primary_color=colors["goalkeeper"],
+                secondary_color="#091F14",
+                accent_color=colors["secondary"],
+                shorts_color=colors["goalkeeper"],
+                socks_color="#091F14",
+                pattern_type="solid",
+                collar_style="crew",
+                sleeve_style="short",
+                badge_placement="left_chest",
+                front_text=None,
+            ),
+            player_visuals=player_visuals,
+            clash_adjusted=False,
+        )
+
+    def _synthetic_player_visuals(
+        self,
+        *,
+        match_id: str,
+        team_id: str,
+        team_name: str,
+        side: MatchViewerSide,
+        events: list[LiveMatchStreamEventView],
+    ) -> list[MatchPlayerVisualView]:
+        observed = self._observed_live_players(events=events, team_id=team_id, side=side)
+        defenders = observed[6:10]
+        midfielders = observed[3:6]
+        forwards = observed[:3]
+        bench = observed[10:]
+        starter_roles = (
+            (PlayerRole.GOALKEEPER, 1, None),
+            (PlayerRole.DEFENDER, 2, defenders[0] if len(defenders) > 0 else None),
+            (PlayerRole.DEFENDER, 4, defenders[1] if len(defenders) > 1 else None),
+            (PlayerRole.DEFENDER, 5, defenders[2] if len(defenders) > 2 else None),
+            (PlayerRole.DEFENDER, 3, defenders[3] if len(defenders) > 3 else None),
+            (PlayerRole.MIDFIELDER, 6, midfielders[0] if len(midfielders) > 0 else None),
+            (PlayerRole.MIDFIELDER, 8, midfielders[1] if len(midfielders) > 1 else None),
+            (PlayerRole.MIDFIELDER, 10, midfielders[2] if len(midfielders) > 2 else None),
+            (PlayerRole.FORWARD, 7, forwards[0] if len(forwards) > 0 else None),
+            (PlayerRole.FORWARD, 9, forwards[1] if len(forwards) > 1 else None),
+            (PlayerRole.FORWARD, 11, forwards[2] if len(forwards) > 2 else None),
+        )
+        players = [
+            self._build_synthetic_player_visual(
+                match_id=match_id,
+                team_id=team_id,
+                team_name=team_name,
+                side=side,
+                role=role,
+                shirt_number=shirt_number,
+                actor=actor,
+            )
+            for role, shirt_number, actor in starter_roles
+        ]
+        bench_roles = (PlayerRole.DEFENDER, PlayerRole.MIDFIELDER, PlayerRole.FORWARD)
+        for index, actor in enumerate(bench[:7], start=1):
+            role = bench_roles[(index - 1) % len(bench_roles)]
+            players.append(
+                self._build_synthetic_player_visual(
+                    match_id=match_id,
+                    team_id=team_id,
+                    team_name=team_name,
+                    side=side,
+                    role=role,
+                    shirt_number=20 + index,
+                    actor=actor,
+                )
+            )
+        return players
+
+    def _build_synthetic_player_visual(
+        self,
+        *,
+        match_id: str,
+        team_id: str,
+        team_name: str,
+        side: MatchViewerSide,
+        role: PlayerRole,
+        shirt_number: int,
+        actor: dict[str, Any] | None,
+    ) -> MatchPlayerVisualView:
+        if actor is not None:
+            player_id = str(actor["player_id"])
+            display_name = str(actor["player_name"])
+        else:
+            role_label = {
+                PlayerRole.GOALKEEPER: "Goalkeeper",
+                PlayerRole.DEFENDER: "Defender",
+                PlayerRole.MIDFIELDER: "Midfielder",
+                PlayerRole.FORWARD: "Forward",
+            }[role]
+            display_name = f"{team_name} {role_label} {shirt_number}"
+            player_id = f"{match_id}:{side.value}:{role.value}:{shirt_number}"
+        return MatchPlayerVisualView(
+            player_id=player_id,
+            display_name=display_name,
+            shirt_name=self._shirt_name(display_name),
+            shirt_number=shirt_number,
+            role=role,
+        )
+
+    def _observed_live_players(
+        self,
+        *,
+        events: list[LiveMatchStreamEventView],
+        team_id: str,
+        side: MatchViewerSide,
+    ) -> list[dict[str, Any]]:
+        observed: dict[str, dict[str, Any]] = {}
+        for index, event in enumerate(events):
+            event_side = self._live_team_side(event, home_team_id=team_id if side is MatchViewerSide.HOME else "", away_team_id=team_id if side is MatchViewerSide.AWAY else "")
+            if event_side is not None and event_side is not side:
+                continue
+            if event_side is None and event.team_id != team_id:
+                continue
+            weight = float(event.importance_score or 0.0) + (12.0 if event.event_type == "goal" else 4.0)
+            primary_name = event.player or self._optional_text(event.metadata.get("player_name"))
+            primary_id = self._live_actor_id(player_id=event.player_id, player_name=primary_name, side=side)
+            self._remember_live_player(observed, player_id=primary_id, player_name=primary_name, weight=weight + (len(events) - index))
+            if event.event_type == "substitution":
+                secondary_name = event.secondary_player or self._optional_text(event.metadata.get("secondary_player_name"))
+                secondary_id = self._live_actor_id(player_id=event.secondary_player_id, player_name=secondary_name, side=side)
+                self._remember_live_player(
+                    observed,
+                    player_id=secondary_id,
+                    player_name=secondary_name,
+                    weight=max(weight - 1.0, 1.0),
+                )
+        return sorted(observed.values(), key=lambda item: (-float(item["weight"]), str(item["player_name"])))
+
+    def _remember_live_player(
+        self,
+        observed: dict[str, dict[str, Any]],
+        *,
+        player_id: str | None,
+        player_name: str | None,
+        weight: float,
+    ) -> None:
+        if player_id is None or player_name is None:
+            return
+        current = observed.get(player_id)
+        if current is None:
+            observed[player_id] = {
+                "player_id": player_id,
+                "player_name": player_name,
+                "weight": weight,
+            }
+            return
+        current["weight"] = max(float(current["weight"]), weight)
+
+    def _short_club_code(self, team_name: str, *, fallback: str) -> str:
+        tokens = [token for token in team_name.replace("-", " ").split() if token]
+        initials = "".join(token[0] for token in tokens[:3]).upper()
+        if len(initials) >= 2:
+            return initials[:4]
+        letters = "".join(character for character in team_name.upper() if character.isalpha())
+        return (letters[:4] or fallback).upper()
+
+    def _shirt_name(self, display_name: str) -> str:
+        token = display_name.split()[-1] if display_name.split() else display_name
+        return token[:16].upper()
+
+    def _team_id_from_live_events(
+        self,
+        events: list[LiveMatchStreamEventView],
+        *,
+        side: MatchViewerSide,
+    ) -> str | None:
+        for event in events:
+            event_side = self._parse_live_side(event.team_side)
+            if event_side is side and event.team_id:
+                return event.team_id
+        return None
+
+    def _team_name_from_live_events(
+        self,
+        events: list[LiveMatchStreamEventView],
+        *,
+        team_id: str,
+        side: MatchViewerSide,
+    ) -> str | None:
+        for event in events:
+            event_side = self._live_team_side(event, home_team_id=team_id if side is MatchViewerSide.HOME else "", away_team_id=team_id if side is MatchViewerSide.AWAY else "")
+            if event_side is not None and event_side is not side:
+                continue
+            if event.team_id == team_id and event.team:
+                return event.team
+            metadata_team_name = self._optional_text(event.metadata.get("team_name"))
+            if event.team_id == team_id and metadata_team_name:
+                return metadata_team_name
+        return None
+
+    def _live_scoreline(
+        self,
+        events: list[LiveMatchStreamEventView],
+        *,
+        live_state: LiveMatchStateView | None,
+    ) -> tuple[int, int]:
+        if live_state is not None:
+            return int(live_state.snapshot.score.home), int(live_state.snapshot.score.away)
+        if not events:
+            return 0, 0
+        last = events[-1]
+        return (
+            int(last.home_score or last.metadata.get("home_score") or 0),
+            int(last.away_score or last.metadata.get("away_score") or 0),
+        )
+
+    def _live_stream_is_complete(
+        self,
+        events: list[LiveMatchStreamEventView],
+        *,
+        live_state: LiveMatchStateView | None,
+    ) -> bool:
+        if any(self._viewer_event_type_from_live_event(item, raw_event_type=self._optional_text(item.metadata.get("raw_event_type")) or item.event_type) is MatchViewerEventType.FULLTIME for item in events):
+            return True
+        if live_state is None:
+            return False
+        return not live_state.is_live or str(live_state.snapshot.status).lower() in {"completed", "full_time", "finished"}
+
+    def _live_event_time_seconds(self, event: LiveMatchStreamEventView) -> float:
+        if event.presentation_second is not None:
+            return float(event.presentation_second)
+        meta_second = event.meta.get("presentation_second")
+        if meta_second is not None:
+            return float(meta_second)
+        if event.tick is not None:
+            return float(event.tick)
+        return float(max(0, event.minute * 60))
+
+    def _live_team_side(
+        self,
+        event: LiveMatchStreamEventView,
+        *,
+        home_team_id: str,
+        away_team_id: str,
+    ) -> MatchViewerSide | None:
+        parsed = self._parse_live_side(event.team_side)
+        if parsed is not None:
+            return parsed
+        if home_team_id and event.team_id == home_team_id:
+            return MatchViewerSide.HOME
+        if away_team_id and event.team_id == away_team_id:
+            return MatchViewerSide.AWAY
+        return None
+
+    def _parse_live_side(self, value: str | None) -> MatchViewerSide | None:
+        if value == "home":
+            return MatchViewerSide.HOME
+        if value == "away":
+            return MatchViewerSide.AWAY
+        return None
+
+    def _live_actor_id(
+        self,
+        *,
+        player_id: str | None,
+        player_name: str | None,
+        side: MatchViewerSide | None,
+    ) -> str | None:
+        if player_id:
+            return player_id
+        if not player_name:
+            return None
+        normalized = "".join(character.lower() if character.isalnum() else "-" for character in player_name).strip("-")
+        if not normalized:
+            normalized = md5(player_name.encode("utf-8")).hexdigest()[:10]
+        prefix = "neutral" if side is None else side.value
+        return f"{prefix}:{normalized}"
+
+    def _live_render_contract(self, event: LiveMatchStreamEventView) -> dict[str, Any] | None:
+        payload: dict[str, Any] = {}
+        if event.position is not None:
+            payload["origin"] = event.position.model_dump(mode="json")
+        if event.target_position is not None:
+            payload["target"] = event.target_position.model_dump(mode="json")
+        camera_mode = self._optional_text(event.meta.get("camera_mode"))
+        if camera_mode:
+            payload["camera"] = {"mode": camera_mode}
+        ball_contract = {
+            key: event.meta.get(key)
+            for key in ("ball_motion", "ball_height", "ball_speed")
+            if event.meta.get(key) is not None
+        }
+        if ball_contract:
+            payload["ball"] = {
+                "motion": ball_contract.get("ball_motion"),
+                "height": ball_contract.get("ball_height"),
+                "speed": ball_contract.get("ball_speed"),
+            }
+        replay_eligible = event.meta.get("replay_eligible")
+        replay_speed = event.meta.get("replay_speed")
+        if replay_eligible is not None or replay_speed is not None:
+            payload["replay"] = {}
+            if replay_eligible is not None:
+                payload["replay"]["eligible"] = bool(replay_eligible)
+            if replay_speed is not None:
+                payload["replay"]["speed"] = float(replay_speed)
+        return payload or None
 
     def _build_frames(
         self,

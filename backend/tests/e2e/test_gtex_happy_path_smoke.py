@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from tempfile import mkdtemp
 from datetime import date, timedelta
 
 from fastapi import FastAPI
@@ -93,17 +96,64 @@ def test_gtex_happy_path_smoke() -> None:
             password_hash="x",
             role=UserRole.USER,
             kyc_status=KycStatus.FULLY_VERIFIED,
-        )
+        ),
+        User(
+            id="user-admin",
+            email="admin@example.com",
+            username="admin",
+            display_name="Admin",
+            password_hash="x",
+            role=UserRole.SUPER_ADMIN,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        ),
+        User(
+            id="user-away",
+            email="away@example.com",
+            username="away",
+            display_name="Away",
+            password_hash="x",
+            role=UserRole.USER,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        ),
     )
     session.commit()
 
     app = FastAPI()
+    config_root = Path(mkdtemp(prefix="gtex-happy-path-smoke-"))
+    (config_root / "admin_god_mode.json").write_text(
+        json.dumps(
+            {
+                "roles": {
+                    "default_admin_role": "scoped_admin",
+                    "available_roles": {
+                        "god_mode": [
+                            "manage_admin_roles",
+                            "manage_commissions",
+                            "manage_payment_rails",
+                            "manage_withdrawals",
+                            "manage_treasury_withdrawals",
+                            "manage_liquidity_desk",
+                            "view_audit_log",
+                            "pause_payments",
+                            "view_integrity_controls",
+                            "manage_competitions",
+                        ],
+                        "scoped_admin": [],
+                    },
+                    "assignments": [],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    app.state.settings = type("Settings", (), {"config_root": config_root})()
     app.include_router(clubs_router)
     app.include_router(competitions_router)
     orchestrator = CompetitionOrchestrator(session)
     app.dependency_overrides[get_competition_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_session] = lambda: session
-    app.dependency_overrides[get_current_user] = lambda: session.get(User, "user-owner")
+    current_user_id = {"value": "user-owner"}
+    app.dependency_overrides[get_current_user] = lambda: session.get(User, current_user_id["value"])
 
     with TestClient(app) as client:
         home = client.post(
@@ -152,12 +202,14 @@ def test_gtex_happy_path_smoke() -> None:
         assert created.status_code == 201, created.text
         competition_id = created.json()["id"]
 
+        current_user_id["value"] = "user-admin"
         published = client.post(f"/api/competitions/{competition_id}/publish", json={"open_for_join": True})
         assert published.status_code == 200, published.text
 
+        current_user_id["value"] = "user-away"
         joined = client.post(
             f"/api/competitions/{competition_id}/join",
-            json={"user_id": away_id, "user_name": "River FC"},
+            json={"user_id": "user-away", "user_name": "River FC"},
         )
         assert joined.status_code == 200, joined.text
 

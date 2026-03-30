@@ -22,6 +22,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
+def _enum_values(enum_type: type[Enum]) -> list[str]:
+    return [member.value for member in enum_type]
+
+
+def _streamer_enum(enum_type: type[Enum], *, name: str) -> SqlEnum:
+    return SqlEnum(
+        enum_type,
+        name=name,
+        values_callable=_enum_values,
+        validate_strings=True,
+    )
+
+
 class StreamerTournamentType(str, Enum):
     CREATOR_INVITATION = "creator_invitation"
     FAN_QUALIFIER = "fan_qualifier"
@@ -155,17 +168,17 @@ class StreamerTournament(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tournament_type: Mapped[StreamerTournamentType] = mapped_column(
-        SqlEnum(StreamerTournamentType, name="streamertournamenttype"),
+        _streamer_enum(StreamerTournamentType, name="streamertournamenttype"),
         nullable=False,
     )
     status: Mapped[StreamerTournamentStatus] = mapped_column(
-        SqlEnum(StreamerTournamentStatus, name="streamertournamentstatus"),
+        _streamer_enum(StreamerTournamentStatus, name="streamertournamentstatus"),
         nullable=False,
         default=StreamerTournamentStatus.DRAFT,
         server_default=StreamerTournamentStatus.DRAFT.value,
     )
     approval_status: Mapped[StreamerTournamentApprovalStatus] = mapped_column(
-        SqlEnum(StreamerTournamentApprovalStatus, name="streamertournamentapprovalstatus"),
+        _streamer_enum(StreamerTournamentApprovalStatus, name="streamertournamentapprovalstatus"),
         nullable=False,
         default=StreamerTournamentApprovalStatus.NOT_REQUIRED,
         server_default=StreamerTournamentApprovalStatus.NOT_REQUIRED.value,
@@ -220,7 +233,7 @@ class StreamerTournamentInvite(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     status: Mapped[StreamerTournamentInviteStatus] = mapped_column(
-        SqlEnum(StreamerTournamentInviteStatus, name="streamertournamentinvitestatus"),
+        _streamer_enum(StreamerTournamentInviteStatus, name="streamertournamentinvitestatus"),
         nullable=False,
         default=StreamerTournamentInviteStatus.PENDING,
         server_default=StreamerTournamentInviteStatus.PENDING.value,
@@ -256,12 +269,12 @@ class StreamerTournamentEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     entry_role: Mapped[str] = mapped_column(String(32), nullable=False, default="participant", server_default="participant")
     qualification_source: Mapped[StreamerTournamentQualificationType] = mapped_column(
-        SqlEnum(StreamerTournamentQualificationType, name="streamertournamentqualificationtype"),
+        _streamer_enum(StreamerTournamentQualificationType, name="streamertournamentqualificationtype"),
         nullable=False,
     )
     qualification_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[StreamerTournamentEntryStatus] = mapped_column(
-        SqlEnum(StreamerTournamentEntryStatus, name="streamertournamententrystatus"),
+        _streamer_enum(StreamerTournamentEntryStatus, name="streamertournamententrystatus"),
         nullable=False,
         default=StreamerTournamentEntryStatus.CONFIRMED,
         server_default=StreamerTournamentEntryStatus.CONFIRMED.value,
@@ -283,7 +296,7 @@ class StreamerTournamentReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     reward_type: Mapped[StreamerTournamentRewardType] = mapped_column(
-        SqlEnum(StreamerTournamentRewardType, name="streamertournamentrewardtype"),
+        _streamer_enum(StreamerTournamentRewardType, name="streamertournamentrewardtype"),
         nullable=False,
     )
     placement_start: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -308,7 +321,7 @@ class StreamerTournamentRiskSignal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     signal_key: Mapped[str] = mapped_column(String(64), nullable=False)
     severity: Mapped[str] = mapped_column(String(16), nullable=False, default="low", server_default="low")
     status: Mapped[StreamerTournamentRiskStatus] = mapped_column(
-        SqlEnum(StreamerTournamentRiskStatus, name="streamertournamentriskstatus"),
+        _streamer_enum(StreamerTournamentRiskStatus, name="streamertournamentriskstatus"),
         nullable=False,
         default=StreamerTournamentRiskStatus.OPEN,
         server_default=StreamerTournamentRiskStatus.OPEN.value,
@@ -354,13 +367,13 @@ class StreamerTournamentRewardGrant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     placement: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reward_type: Mapped[StreamerTournamentRewardType] = mapped_column(
-        SqlEnum(StreamerTournamentRewardType, name="streamertournamentrewardtype"),
+        _streamer_enum(StreamerTournamentRewardType, name="streamertournamentrewardtype"),
         nullable=False,
     )
     amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     cosmetic_sku: Mapped[str | None] = mapped_column(String(120), nullable=True)
     settlement_status: Mapped[StreamerTournamentRewardGrantStatus] = mapped_column(
-        SqlEnum(StreamerTournamentRewardGrantStatus, name="streamertournamentrewardgrantstatus"),
+        _streamer_enum(StreamerTournamentRewardGrantStatus, name="streamertournamentrewardgrantstatus"),
         nullable=False,
         default=StreamerTournamentRewardGrantStatus.PENDING,
         server_default=StreamerTournamentRewardGrantStatus.PENDING.value,

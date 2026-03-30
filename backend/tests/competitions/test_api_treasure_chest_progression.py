@@ -25,11 +25,25 @@ def _register_user(session, *, suffix: str, funded: bool) -> User:
             description="Competition API treasure chest funding",
             external_reference=f"seed:{user.id}",
             unit=LedgerUnit.CREDIT,
-        )
+    )
     return user
 
 
-def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(client, app_session_factory) -> None:
+def _login(client, *, email: str) -> dict[str, str]:
+    response = client.post(
+        "/auth/login",
+        json={"email": email, "password": "SuperSecret1"},
+    )
+    assert response.status_code == 200, response.text
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
+    client,
+    app_session_factory,
+    competition_admin_headers,
+) -> None:
     suffix = uuid4().hex[:8]
     with app_session_factory() as session:
         host = _register_user(session, suffix=f"{suffix}-host", funded=False)
@@ -43,6 +57,7 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(cli
         host_id = host.id
         host_username = host.username
         entrant_ids = [user.id for user in entrants]
+        entrant_emails = [user.email for user in entrants]
         winner_id = entrants[0].id
         winner_username = entrants[0].username
 
@@ -72,13 +87,16 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(cli
 
     publish_response = client.post(
         f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
         json={"open_for_join": True},
     )
     assert publish_response.status_code == 200
 
-    for index, entrant_id in enumerate(entrant_ids, start=1):
+    entrant_headers = [_login(client, email=email) for email in entrant_emails]
+    for index, (entrant_id, headers) in enumerate(zip(entrant_ids, entrant_headers, strict=True), start=1):
         join_response = client.post(
             f"/api/competitions/{competition_id}/join",
+            headers=headers,
             json={"user_id": entrant_id, "user_name": f"Entrant {index}"},
         )
         assert join_response.status_code == 200
@@ -89,7 +107,10 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(cli
     )
     assert seed_response.status_code == 200
 
-    launch_response = client.post(f"/api/competitions/{competition_id}/launch")
+    launch_response = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    )
     assert launch_response.status_code == 200
 
     fixtures_response = client.get(f"/api/competitions/{competition_id}/fixtures")

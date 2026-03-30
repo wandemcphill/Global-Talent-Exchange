@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-def test_create_patch_publish_join_leave_flow(client) -> None:
+def test_create_patch_publish_join_leave_flow(client, competition_admin_headers, auth_user_factory) -> None:
+    entrant = auth_user_factory(suffix="create-publish-join-leave")
     create_response = client.post(
         "/api/competitions",
         json={
@@ -56,6 +57,7 @@ def test_create_patch_publish_join_leave_flow(client) -> None:
 
     publish_response = client.post(
         f"/api/competitions/{competition_id}/publish",
+        headers=competition_admin_headers,
         json={"open_for_join": True},
     )
     assert publish_response.status_code == 200
@@ -64,7 +66,8 @@ def test_create_patch_publish_join_leave_flow(client) -> None:
 
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
-        json={"user_id": "club-22", "user_name": "Club 22"},
+        headers=entrant["headers"],
+        json={"user_id": entrant["user_id"], "user_name": "Club 22"},
     )
     assert join_response.status_code == 200
     joined = join_response.json()
@@ -91,7 +94,7 @@ def test_create_patch_publish_join_leave_flow(client) -> None:
 
     leave_response = client.post(
         f"/api/competitions/{competition_id}/leave",
-        json={"user_id": "club-22"},
+        json={"user_id": entrant["user_id"]},
     )
     assert leave_response.status_code == 200
     left = leave_response.json()
@@ -99,7 +102,8 @@ def test_create_patch_publish_join_leave_flow(client) -> None:
     assert left["status"] == "open"
 
 
-def test_join_returns_conflict_before_publish(client) -> None:
+def test_join_returns_conflict_before_publish(client, auth_user_factory) -> None:
+    entrant = auth_user_factory(suffix="join-before-publish")
     create_response = client.post(
         "/api/competitions",
         json={
@@ -121,7 +125,8 @@ def test_join_returns_conflict_before_publish(client) -> None:
 
     join_response = client.post(
         f"/api/competitions/{competition_id}/join",
-        json={"user_id": "club-9"},
+        headers=entrant["headers"],
+        json={"user_id": entrant["user_id"]},
     )
     assert join_response.status_code == 409
     assert join_response.json() == {"detail": "competition_not_open"}

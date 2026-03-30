@@ -250,10 +250,12 @@ def test_admin_can_upsert_squad_and_user_can_view_history(client, demo_seed) -> 
     assert len(history["squad_memberships"]) >= 1
 
 
-def test_live_linked_competition_blocks_new_rentals(client, demo_seed) -> None:
+def test_live_linked_competition_blocks_new_rentals(client, demo_seed, competition_admin_headers) -> None:
     admin_headers = _login(client, email="vidvimedialtd@gmail.com", password="NewPass1234!")
     manager = demo_seed.demo_users[0]
     manager_headers = _login(client, email=manager.email, password=manager.password)
+    second_manager = demo_seed.demo_users[1]
+    second_manager_headers = _login(client, email=second_manager.email, password=second_manager.password)
 
     competition_response = client.post(
         "/api/competitions",
@@ -272,14 +274,30 @@ def test_live_linked_competition_blocks_new_rentals(client, demo_seed) -> None:
     assert competition_response.status_code == 201, competition_response.text
     linked_competition_id = competition_response.json()["id"]
 
-    publish = client.post(f"/api/competitions/{linked_competition_id}/publish", json={"open_for_join": True})
+    publish = client.post(
+        f"/api/competitions/{linked_competition_id}/publish",
+        headers=competition_admin_headers,
+        json={"open_for_join": True},
+    )
     assert publish.status_code == 200, publish.text
-    for club_id in ("lock-club-a", "lock-club-b"):
-        joined = client.post(f"/api/competitions/{linked_competition_id}/join", json={"user_id": club_id})
-        assert joined.status_code == 200, joined.text
+    joined = client.post(
+        f"/api/competitions/{linked_competition_id}/join",
+        headers=manager_headers,
+        json={"user_id": manager.user_id},
+    )
+    assert joined.status_code == 200, joined.text
+    joined = client.post(
+        f"/api/competitions/{linked_competition_id}/join",
+        headers=second_manager_headers,
+        json={"user_id": second_manager.user_id},
+    )
+    assert joined.status_code == 200, joined.text
     seed = client.post(f"/api/competitions/{linked_competition_id}/seed", json={"seed_method": "random"})
     assert seed.status_code == 200, seed.text
-    launch = client.post(f"/api/competitions/{linked_competition_id}/launch")
+    launch = client.post(
+        f"/api/competitions/{linked_competition_id}/launch",
+        headers=competition_admin_headers,
+    )
     assert launch.status_code == 200, launch.text
     assert launch.json()["status"] == "live"
 

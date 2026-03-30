@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -86,7 +87,7 @@ from app.services.competition_rules_engine import CompetitionRulesEngine
 from app.services.competition_validation_service import CompetitionValidationService
 from app.services.competition_visibility_service import CompetitionVisibilityService
 from app.services.competition_wallet_service import CompetitionWalletService
-from app.services.dynamic_prize_pool_service import DynamicPrizePoolService
+from app.services.dynamic_prize_pool_service import DynamicPrizePoolListContext, DynamicPrizePoolService
 from app.wallets.service import InsufficientBalanceError
 
 _DEFAULT_RULES = (
@@ -96,6 +97,7 @@ _DEFAULT_RULES = (
 _DISCOVERY_SKIP_REASONS = frozenset({"invalid_summary_state", "rules_missing"})
 _TWO_PLACES = Decimal("0.01")
 _FOUR_PLACES = Decimal("0.0001")
+_DYNAMIC_PRIZE_POOL_UNSET = object()
 
 
 class CompetitionActionError(ValueError):
@@ -112,6 +114,15 @@ class _CompetitionSummaryContext:
     invite_code: str | None = None
     league_id: str | None = None
     season_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _CompetitionListQueryContext:
+    participant_counts: dict[str, int]
+    rule_sets: dict[str, CompetitionRuleSet]
+    prize_rules: dict[str, CompetitionPrizeRule]
+    visibility_rules: dict[str, tuple[CompetitionVisibilityRule, ...]]
+    dynamic_prize_pool_context: DynamicPrizePoolListContext | None = None
 
 
 @dataclass(slots=True)
@@ -347,17 +358,41 @@ class CompetitionOrchestrator:
             stmt = stmt.where(Competition.format == format.value)
         if creator_id is not None:
             stmt = stmt.where(Competition.host_user_id == creator_id)
+        if fee_filter == "free":
+            stmt = stmt.where(Competition.entry_fee_minor == 0)
+        elif fee_filter == "paid":
+            stmt = stmt.where(Competition.entry_fee_minor > 0)
+        if sort == "new":
+            stmt = stmt.order_by(Competition.created_at.desc())
         competitions = list(self.session.scalars(stmt).all())
+        list_context = self._list_query_context(competitions)
+        dynamic_prize_pool_service = (
+            DynamicPrizePoolService(self.session)
+            if list_context.dynamic_prize_pool_context is not None
+            else None
+        )
 
         items: list[CompetitionSummaryView] = []
         for item in competitions:
-            summary = self._safe_list_summary(item)
+            preloaded_rule_set = list_context.rule_sets.get(item.id)
+            dynamic_prize_pool = None
+            if dynamic_prize_pool_service is not None and preloaded_rule_set is not None:
+                snapshot = dynamic_prize_pool_service.snapshot_from_list_context(
+                    competition=item,
+                    rule_set=preloaded_rule_set,
+                    context=list_context.dynamic_prize_pool_context,
+                )
+                dynamic_prize_pool = snapshot if snapshot.enabled else None
+            summary = self._safe_list_summary(
+                item,
+                participant_count=list_context.participant_counts.get(item.id, 0),
+                rule_set=preloaded_rule_set,
+                prize_rule=list_context.prize_rules.get(item.id),
+                visibility_rules=list_context.visibility_rules.get(item.id, ()),
+                dynamic_prize_pool=dynamic_prize_pool,
+            )
             if summary is not None:
                 items.append(summary)
-        if fee_filter == "free":
-            items = [item for item in items if item.entry_fee <= 0]
-        elif fee_filter == "paid":
-            items = [item for item in items if item.entry_fee > 0]
         if beginner_friendly is not None:
             items = [item for item in items if item.beginner_friendly == beginner_friendly]
 
@@ -945,13 +980,26 @@ class CompetitionOrchestrator:
         *,
         user_id: str | None = None,
         invite_code: str | None = None,
+        participant_count: int | None = None,
+        rule_set: CompetitionRuleSet | None = None,
+        prize_rule: CompetitionPrizeRule | None = None,
+        visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
+        dynamic_prize_pool: object = _DYNAMIC_PRIZE_POOL_UNSET,
     ) -> CompetitionSummaryView:
-        participant_count = self._participant_count(competition.id)
-        rule_set = self._rule_set(competition.id)
+        participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
+        rule_set = rule_set or self._rule_set(competition.id)
         fees = self._fees_for(competition, participant_count=participant_count)
-        dynamic_prize_pool = self._dynamic_prize_pool(competition, rule_set=rule_set)
-        prize_pool = dynamic_prize_pool.total_pool if dynamic_prize_pool is not None else fees.prize_pool
-        payout_structure = self._payout_breakdown(competition=competition, prize_pool=prize_pool)
+        resolved_dynamic_prize_pool = (
+            self._dynamic_prize_pool(competition, rule_set=rule_set)
+            if dynamic_prize_pool is _DYNAMIC_PRIZE_POOL_UNSET
+            else dynamic_prize_pool
+        )
+        prize_pool = resolved_dynamic_prize_pool.total_pool if resolved_dynamic_prize_pool is not None else fees.prize_pool
+        payout_structure = self._payout_breakdown(
+            competition=competition,
+            prize_pool=prize_pool,
+            prize_rule=prize_rule,
+        )
         metadata = self._summary_metadata(competition)
         context = self._summary_context(
             competition,
@@ -965,6 +1013,8 @@ class CompetitionOrchestrator:
             user_id=context.viewer_user_id,
             invite_code=context.invite_code,
             participant_count=participant_count,
+            rule_set=rule_set,
+            visibility_rules=visibility_rules,
         )
         return CompetitionSummaryView(
             id=competition.id,
@@ -990,15 +1040,31 @@ class CompetitionOrchestrator:
                 reason=join_decision.reason,
                 requires_invite=join_decision.requires_invite,
             ),
-            dynamic_prize_pool=self._dynamic_prize_pool_view(dynamic_prize_pool),
+            dynamic_prize_pool=self._dynamic_prize_pool_view(resolved_dynamic_prize_pool),
             beginner_friendly=metadata.get("beginner_friendly"),
             created_at=competition.created_at,
             updated_at=competition.updated_at,
         )
 
-    def _safe_list_summary(self, competition: Competition) -> CompetitionSummaryView | None:
+    def _safe_list_summary(
+        self,
+        competition: Competition,
+        *,
+        participant_count: int | None = None,
+        rule_set: CompetitionRuleSet | None = None,
+        prize_rule: CompetitionPrizeRule | None = None,
+        visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
+        dynamic_prize_pool: object = _DYNAMIC_PRIZE_POOL_UNSET,
+    ) -> CompetitionSummaryView | None:
         try:
-            return self._to_summary(competition)
+            return self._to_summary(
+                competition,
+                participant_count=participant_count,
+                rule_set=rule_set,
+                prize_rule=prize_rule,
+                visibility_rules=visibility_rules,
+                dynamic_prize_pool=dynamic_prize_pool,
+            )
         except CompetitionActionError as exc:
             if exc.reason in _DISCOVERY_SKIP_REASONS:
                 return None
@@ -1037,8 +1103,9 @@ class CompetitionOrchestrator:
         *,
         competition: Competition,
         prize_pool: Decimal,
+        prize_rule: CompetitionPrizeRule | None = None,
     ) -> tuple:
-        prize_rule = self._prize_rule(competition.id)
+        prize_rule = prize_rule or self._prize_rule(competition.id)
         payouts = [
             (index + 1, (Decimal(percent) / Decimal("100")).quantize(_TWO_PLACES, rounding=ROUND_HALF_UP))
             for index, percent in enumerate(prize_rule.payout_percentages or [])
@@ -1233,8 +1300,10 @@ class CompetitionOrchestrator:
         invite_code: str | None = None,
         participant_count: int | None = None,
         already_joined: bool | None = None,
+        rule_set: CompetitionRuleSet | None = None,
+        visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
     ) -> JoinDecision:
-        rule_set = self._rule_set(competition.id)
+        rule_set = rule_set or self._rule_set(competition.id)
         user_id = self._normalized_string(user_id)
         invite_code = self._normalized_string(invite_code)
         participant_count = participant_count if participant_count is not None else self._participant_count(competition.id)
@@ -1251,10 +1320,14 @@ class CompetitionOrchestrator:
             invite_valid=invite_valid,
         )
         if join_decision.eligible and not already_joined:
-            rules = list(
-                self.session.scalars(
-                    select(CompetitionVisibilityRule).where(CompetitionVisibilityRule.competition_id == competition.id)
-                ).all()
+            rules = (
+                list(visibility_rules)
+                if visibility_rules is not None
+                else list(
+                    self.session.scalars(
+                        select(CompetitionVisibilityRule).where(CompetitionVisibilityRule.competition_id == competition.id)
+                    ).all()
+                )
             )
             visibility_decision = self.visibility_service.evaluate(
                 competition,
@@ -1270,6 +1343,66 @@ class CompetitionOrchestrator:
                     requires_invite=visibility_decision.requires_invite,
                 )
         return join_decision
+
+    def _list_query_context(self, competitions: list[Competition]) -> _CompetitionListQueryContext:
+        if not competitions:
+            return _CompetitionListQueryContext(
+                participant_counts={},
+                rule_sets={},
+                prize_rules={},
+                visibility_rules={},
+            )
+        competition_ids = tuple(competition.id for competition in competitions)
+        participant_counts = {
+            str(competition_id): int(count or 0)
+            for competition_id, count in self.session.execute(
+                select(
+                    CompetitionParticipant.competition_id,
+                    func.count(CompetitionParticipant.id),
+                )
+                .where(CompetitionParticipant.competition_id.in_(competition_ids))
+                .group_by(CompetitionParticipant.competition_id)
+            ).all()
+        }
+        rule_sets = {
+            item.competition_id: item
+            for item in self.session.scalars(
+                select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id.in_(competition_ids))
+            ).all()
+        }
+        prize_rules = {
+            item.competition_id: item
+            for item in self.session.scalars(
+                select(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id.in_(competition_ids))
+            ).all()
+        }
+        grouped_visibility_rules: defaultdict[str, list[CompetitionVisibilityRule]] = defaultdict(list)
+        for item in self.session.scalars(
+            select(CompetitionVisibilityRule)
+            .where(CompetitionVisibilityRule.competition_id.in_(competition_ids))
+            .order_by(
+                CompetitionVisibilityRule.competition_id.asc(),
+                CompetitionVisibilityRule.priority.asc(),
+                CompetitionVisibilityRule.created_at.asc(),
+            )
+        ).all():
+            grouped_visibility_rules[item.competition_id].append(item)
+        dynamic_service = DynamicPrizePoolService(self.session)
+        dynamic_prize_pool_context = (
+            dynamic_service.build_list_context()
+            if any(dynamic_service.is_enabled_for(competition) for competition in competitions)
+            else None
+        )
+        return _CompetitionListQueryContext(
+            participant_counts=participant_counts,
+            rule_sets=rule_sets,
+            prize_rules=prize_rules,
+            visibility_rules={
+                competition_id: tuple(items)
+                for competition_id, items in grouped_visibility_rules.items()
+            },
+            dynamic_prize_pool_context=dynamic_prize_pool_context,
+        )
 
     def _summary_context(
         self,

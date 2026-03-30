@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
-from app.auth.dependencies import get_optional_current_user
+from app.auth.dependencies import get_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
 from app.models.user import User, UserRole
@@ -100,11 +100,10 @@ def publish_competition(
     competition_id: str,
     payload: CompetitionPublishRequest,
     request: Request,
-    actor: User | None = Depends(get_optional_current_user),
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    if actor is not None:
-        _require_manage_competitions_permission(request, actor)
+    _require_manage_competitions_permission(request, actor)
     result = orchestrator.publish(competition_id, open_for_join=payload.open_for_join)
     if result is None:
         raise _not_found(competition_id)
@@ -162,23 +161,20 @@ def list_competitions(
 def join_competition(
     competition_id: str,
     payload: CompetitionJoinRequest,
-    current_user: User | None = Depends(get_optional_current_user),
+    current_user: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    resolved_user_id = payload.user_id
-    resolved_user_name = payload.user_name
-    if current_user is not None:
-        if payload.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Authenticated user does not match competition join payload.",
-            )
-        resolved_user_id = current_user.id
-        resolved_user_name = (
-            payload.user_name
-            or current_user.display_name
-            or current_user.username
+    if payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated user does not match competition join payload.",
         )
+    resolved_user_id = current_user.id
+    resolved_user_name = (
+        payload.user_name
+        or current_user.display_name
+        or current_user.username
+    )
     result = _handle_competition_errors(
         lambda: orchestrator.join(
             competition_id,
@@ -334,11 +330,10 @@ def seed_competition(
 def launch_competition(
     competition_id: str,
     request: Request,
-    actor: User | None = Depends(get_optional_current_user),
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    if actor is not None:
-        _require_manage_competitions_permission(request, actor)
+    _require_manage_competitions_permission(request, actor)
     result = _handle_competition_errors(lambda: orchestrator.launch_competition(competition_id))
     if result is None:
         raise _not_found(competition_id)
