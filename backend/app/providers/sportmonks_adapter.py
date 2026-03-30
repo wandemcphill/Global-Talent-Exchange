@@ -62,6 +62,7 @@ class SportMonksAdapter(BaseFootballProvider):
         self._last_request_started_at = 0.0
         self._request_timeout_override: int | None = None
         self._request_rate_limit_override: int | None = None
+        self._team_directory_context_cache: dict[str, dict[str, str | None]] = {}
 
     def healthcheck(self) -> ProviderHealthSnapshot:
         if not self.api_token:
@@ -424,14 +425,39 @@ class SportMonksAdapter(BaseFootballProvider):
         detailed_position = raw_player.get("detailedposition") or raw_player.get("detailedPosition") or {}
         nationality = raw_player.get("nationality") or {}
         country = raw_player.get("country") or {}
-        payload = dict(raw_player)
         provider_player_id = str(raw_player.get("id") or "").strip()
-        payload["provider_player_id"] = provider_player_id
+        payload = {
+            "id": raw_player.get("id"),
+            "provider_player_id": provider_player_id,
+            "name": self._clean_text(raw_player.get("name")),
+            "displayName": self._clean_text(raw_player.get("display_name") or raw_player.get("displayName")),
+            "commonName": self._clean_text(raw_player.get("common_name") or raw_player.get("commonName")),
+            "firstName": self._clean_text(raw_player.get("firstname") or raw_player.get("firstName")),
+            "lastName": self._clean_text(raw_player.get("lastname") or raw_player.get("lastName")),
+            "position": self._clean_text(position.get("name")),
+            "detailedPosition": self._clean_text(detailed_position.get("name")),
+            "dateOfBirth": raw_player.get("date_of_birth") or raw_player.get("dateOfBirth"),
+            "nationality": self._clean_text(nationality.get("name") or country.get("name")),
+            "nationalityCode": self._clean_text(
+                nationality.get("iso2") or nationality.get("iso3") or country.get("iso2") or country.get("iso3")
+            ),
+            "country": self._clean_text(country.get("name")),
+            "height": raw_player.get("height"),
+            "weight": raw_player.get("weight"),
+            "type_id": raw_player.get("type_id"),
+        }
         if team_context is not None:
             payload["currentClub"] = {
                 "id": team_context["club_id"],
                 "name": team_context["club_name"],
             }
+            if team_context.get("competition_id") or team_context.get("competition_name"):
+                payload["currentCompetition"] = {
+                    "id": team_context.get("competition_id"),
+                    "name": team_context.get("competition_name"),
+                }
+            if team_context.get("season_id"):
+                payload["season"] = {"id": team_context["season_id"]}
         return RealPlayerSourceItem(
             provider_player_id=provider_player_id,
             full_name=self._clean_text(
@@ -449,6 +475,9 @@ class SportMonksAdapter(BaseFootballProvider):
             date_of_birth=self._parse_date(raw_player.get("date_of_birth") or raw_player.get("dateOfBirth")),
             current_club_id=team_context["club_id"] if team_context is not None else None,
             current_club_name=team_context["club_name"] if team_context is not None else None,
+            current_competition_id=team_context["competition_id"] if team_context is not None else None,
+            current_competition_name=team_context["competition_name"] if team_context is not None else None,
+            current_season_id=team_context["season_id"] if team_context is not None else None,
             raw_payload=payload,
         )
 
@@ -492,11 +521,75 @@ class SportMonksAdapter(BaseFootballProvider):
         team = selected.get("team") or {}
         club_id = str(team.get("id") or selected.get("team_id") or "").strip()
         club_name = self._clean_text(team.get("name"))
+        team_context = self._load_team_directory_context(club_id)
         if not club_id and not club_name:
             return None
         return {
             "club_id": club_id or None,
-            "club_name": club_name,
+            "club_name": club_name or team_context.get("club_name"),
+            "competition_id": team_context.get("competition_id"),
+            "competition_name": team_context.get("competition_name"),
+            "season_id": team_context.get("season_id"),
+        }
+
+    def _load_team_directory_context(self, club_id: str | None) -> dict[str, str | None]:
+        if not club_id:
+            return {
+                "club_name": None,
+                "competition_id": None,
+                "competition_name": None,
+                "season_id": None,
+            }
+        cached = self._team_directory_context_cache.get(club_id)
+        if cached is not None:
+            return cached
+        context = {
+            "club_name": None,
+            "competition_id": None,
+            "competition_name": None,
+            "season_id": None,
+        }
+        try:
+            response = self._get(
+                f"/teams/{club_id}",
+                params={"include": "country;latest;latest.league;latest.league.country"},
+            )
+        except Exception:
+            self._team_directory_context_cache[club_id] = context
+            return context
+        team = response.get("data") or {}
+        context["club_name"] = self._clean_text(team.get("name"))
+        latest_fixtures = list(team.get("latest") or [])
+        selected_competition = self._select_team_competition(latest_fixtures)
+        if selected_competition is not None:
+            context["competition_id"] = selected_competition.get("competition_id")
+            context["competition_name"] = selected_competition.get("competition_name")
+            context["season_id"] = selected_competition.get("season_id")
+        self._team_directory_context_cache[club_id] = context
+        return context
+
+    def _select_team_competition(self, fixtures: list[dict[str, Any]]) -> dict[str, str | None] | None:
+        if not fixtures:
+            return None
+        selected = sorted(
+            fixtures,
+            key=lambda item: (
+                0 if str(((item.get("league") or {}).get("sub_type") or "")).strip().lower() == "domestic" else 1,
+                0 if str(((item.get("league") or {}).get("type") or "")).strip().lower() == "league" else 1,
+                self._clean_text(item.get("starting_at")) or "",
+            ),
+            reverse=False,
+        )[0]
+        league = selected.get("league") or {}
+        competition_id = str(league.get("id") or selected.get("league_id") or "").strip() or None
+        competition_name = self._clean_text(league.get("name"))
+        season_id = str(selected.get("season_id") or "").strip() or None
+        if competition_id is None and competition_name is None:
+            return None
+        return {
+            "competition_id": competition_id,
+            "competition_name": competition_name,
+            "season_id": season_id,
         }
 
     def _membership_is_current(self, membership: dict[str, Any]) -> bool:
