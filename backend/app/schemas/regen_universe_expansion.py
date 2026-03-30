@@ -168,6 +168,7 @@ class NationalRegenSeedView(CommonSchema):
     id: str
     seed_key: str
     display_name: str
+    age: int | None = None
     country_code: str
     country_name: str
     confederation_code: str | None = None
@@ -187,7 +188,9 @@ class NationalRegenSeedView(CommonSchema):
 
 class NationalRegenPreseedRequest(CommonSchema):
     country_codes: list[str] = Field(default_factory=list, max_length=64)
-    seeds_per_country: int = Field(default=10, ge=4, le=22)
+    seeds_per_country: int = Field(default=10, ge=4, le=40)
+    age_min: int = Field(default=17, ge=14, le=21)
+    age_max: int = Field(default=20, ge=14, le=21)
     include_legendary_regens: bool = True
     preseed_batch: str = Field(default="system_start", min_length=3, max_length=64)
 

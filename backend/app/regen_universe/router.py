@@ -269,6 +269,8 @@ def preseed_national_regens(
         items = service.seed_preseeded_national_regens(
             country_codes=payload.country_codes,
             seeds_per_country=payload.seeds_per_country,
+            age_min=payload.age_min,
+            age_max=payload.age_max,
             include_legendary_regens=payload.include_legendary_regens,
             preseed_batch=payload.preseed_batch,
         )

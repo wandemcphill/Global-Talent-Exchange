@@ -68,14 +68,18 @@ def _normalized_country_code(value: str | None) -> str | None:
     return normalized[:8]
 
 
+def _hashed_national_seed_country_code(country: Country) -> str:
+    digest = sha1(str(country.id).encode("utf-8")).hexdigest().upper()
+    return f"C{digest[:7]}"
+
+
 def _national_seed_country_code(country: Country) -> str:
     for candidate in (country.alpha2_code, country.fifa_code, country.alpha3_code):
         normalized = _normalized_country_code(candidate)
         if normalized:
             return normalized
     if country.id:
-        digest = sha1(str(country.id).encode("utf-8")).hexdigest().upper()
-        return f"C{digest[:7]}"
+        return _hashed_national_seed_country_code(country)
     return "UNKNOWN"
 
 
@@ -176,16 +180,75 @@ class RegenUniverseExpansionService:
         self.session = session
         self.match_service = MatchSimulationService()
 
-    def _existing_national_seed_country_code(self, country: Country) -> str | None:
-        return self.session.scalar(
+    def _existing_national_seed_country_code(self, country: Country, *, batch: str) -> str | None:
+        batch_code = self.session.scalar(
             select(NationalRegenSeed.country_code)
-            .where(NationalRegenSeed.country_name == country.name)
+            .where(
+                NationalRegenSeed.country_name == country.name,
+                NationalRegenSeed.preseed_batch == batch,
+            )
             .order_by(NationalRegenSeed.created_at.asc())
             .limit(1)
         )
+        if batch_code:
+            return batch_code
+        historical_codes = list(
+            self.session.scalars(
+                select(NationalRegenSeed.country_code)
+                .where(NationalRegenSeed.country_name == country.name)
+                .distinct()
+            ).all()
+        )
+        for code in historical_codes:
+            owner_count = self.session.scalar(
+                select(func.count(func.distinct(NationalRegenSeed.country_name)))
+                .where(NationalRegenSeed.country_code == code)
+            )
+            if owner_count == 1:
+                return code
+        return None
 
-    def _national_seed_country_code(self, country: Country) -> str:
-        return self._existing_national_seed_country_code(country) or _national_seed_country_code(country)
+    def _country_code_claimed_by_other_country(self, code: str, country_name: str) -> bool:
+        claimed_by_other = self.session.scalar(
+            select(NationalRegenSeed.country_name)
+            .where(
+                NationalRegenSeed.country_code == code,
+                NationalRegenSeed.country_name != country_name,
+            )
+            .limit(1)
+        )
+        return claimed_by_other is not None
+
+    def _national_seed_country_code(self, country: Country, *, batch: str) -> str:
+        existing = self._existing_national_seed_country_code(country, batch=batch)
+        if existing is not None:
+            return existing
+        candidate = _national_seed_country_code(country)
+        if self._country_code_claimed_by_other_country(candidate, country.name):
+            return _hashed_national_seed_country_code(country)
+        return candidate
+
+    @staticmethod
+    def _national_seed_age_for_slot(*, slot_index: int, age_min: int, age_max: int) -> int:
+        span = max(1, (age_max - age_min) + 1)
+        return age_min + (slot_index % span)
+
+    @staticmethod
+    def _national_seed_gsi_for_age(*, age: int, slot_index: int, rarity_bonus: int) -> int:
+        base_gsi = 68 + (slot_index % 5) + rarity_bonus
+        youth_penalty = max(0, 17 - age) * 2
+        return _clamp_int(base_gsi - youth_penalty, 56, 95)
+
+    @staticmethod
+    def _legacy_national_seed_age(seed: NationalRegenSeed) -> int | None:
+        metadata = dict(seed.metadata_json or {})
+        explicit_age = metadata.get("age")
+        if isinstance(explicit_age, int):
+            return explicit_age
+        position_slot = metadata.get("position_slot")
+        if seed.preseed_batch == "system_start" and isinstance(position_slot, int) and position_slot >= 1:
+            return 17 + ((position_slot - 1) % 4)
+        return None
 
     def get_player_story(self, player_id: str) -> dict[str, Any]:
         story = self.session.scalar(select(PlayerStory).where(PlayerStory.player_id == player_id))
@@ -1344,11 +1407,15 @@ class RegenUniverseExpansionService:
         *,
         country_codes: list[str] | None = None,
         seeds_per_country: int = 10,
+        age_min: int = 17,
+        age_max: int = 20,
         include_legendary_regens: bool = True,
         preseed_batch: str = "system_start",
     ) -> list[dict[str, Any]]:
         if seeds_per_country < 4:
             raise RegenUniverseExpansionValidationError("preseed_requires_four_or_more_slots")
+        if age_min > age_max:
+            raise RegenUniverseExpansionValidationError("preseed_invalid_age_range")
         normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
         stmt = select(Country).where(Country.is_enabled_for_universe.is_(True)).order_by(Country.name.asc(), Country.id.asc())
         countries = [
@@ -1358,6 +1425,7 @@ class RegenUniverseExpansionService:
             or (country.alpha2_code or "").upper() in normalized_codes
             or (country.alpha3_code or "").upper() in normalized_codes
             or (country.fifa_code or "").upper() in normalized_codes
+            or str(country.id).upper() in normalized_codes
         ]
         if not countries:
             raise RegenUniverseExpansionValidationError("preseed_countries_not_found")
@@ -1378,7 +1446,7 @@ class RegenUniverseExpansionService:
             "ST": ["AM", "RW"],
         }
         for country_index, country in enumerate(countries):
-            country_code = self._national_seed_country_code(country)
+            country_code = self._national_seed_country_code(country, batch=batch)
             country_profile = _NAMING_PROFILES.get(
                 country_code,
                 _NAMING_PROFILES[get_settings().regen_generation.default_country_code],
@@ -1422,14 +1490,15 @@ class RegenUniverseExpansionService:
                     include_legendary_regens=include_legendary_regens,
                 )
                 rarity_bonus = {"common": 0, "rare": 3, "elite": 6, "legendary": 10}.get(rarity_tier, 0)
+                age = self._national_seed_age_for_slot(slot_index=slot_index, age_min=age_min, age_max=age_max)
                 regen_view = generation_engine._build_regen(
                     club_id=f"national-pool-{country_code.lower()}",
                     generation_source="national_pool",
                     club_context=context,
-                    age=17 + (slot_index % 4),
+                    age=age,
                     used_names=used_names,
                     rng=rng,
-                    current_gsi_override=68 + (slot_index % 5) + rarity_bonus,
+                    current_gsi_override=self._national_seed_gsi_for_age(age=age, slot_index=slot_index, rarity_bonus=rarity_bonus),
                 )
                 current_rating = _clamp_int((regen_view.current_rating or regen_view.current_gsi) + rarity_bonus, 62, 92)
                 potential_rating = _clamp_int(max(regen_view.potential or current_rating + 6, current_rating + 5) + rarity_bonus, 74, 99)
@@ -1463,9 +1532,11 @@ class RegenUniverseExpansionService:
                     metadata_json={
                         "nationality": country_code,
                         "country_name": country.name,
-                        "source_generation": "preseeded_system_start",
+                        "source_generation": f"preseeded_{batch}",
                         "position_slot": slot_index + 1,
                         "rarity_weight": rarity_bonus,
+                        "age": age,
+                        "age_band": f"{age_min}-{age_max}",
                     },
                 )
                 self.session.add(seed)
@@ -1650,6 +1721,7 @@ class RegenUniverseExpansionService:
             "id": seed.id,
             "seed_key": seed.seed_key,
             "display_name": seed.display_name,
+            "age": self._legacy_national_seed_age(seed),
             "country_code": seed.country_code,
             "country_name": seed.country_name,
             "confederation_code": seed.confederation_code,
