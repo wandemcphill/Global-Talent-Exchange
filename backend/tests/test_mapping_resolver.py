@@ -322,3 +322,75 @@ def test_resolve_club_uses_context_to_break_exact_name_ties() -> None:
             assert with_context.canonical_id is not None
     finally:
         engine.dispose()
+
+
+def test_resolve_club_prefers_competition_context_over_same_country_collisions() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        resolver = MappingResolver()
+        with session_factory() as session:
+            portugal = Country(source_provider="seed", provider_external_id="PT", name="Portugal", alpha2_code="PT")
+            liga_portugal = Competition(
+                source_provider="seed",
+                provider_external_id="pt1",
+                country=portugal,
+                name="Liga Portugal",
+                slug="liga-portugal",
+                competition_type="league",
+                format_type="real_world",
+                is_major=True,
+                is_tradable=True,
+            )
+            legacy_liga_portugal = Competition(
+                source_provider="seed",
+                provider_external_id="pt1-legacy",
+                country=portugal,
+                name="liga-portugal-bwin",
+                slug="liga-portugal-bwin",
+                competition_type="league",
+                format_type="real_world",
+                is_major=True,
+                is_tradable=True,
+            )
+            session.add_all(
+                [
+                    portugal,
+                    liga_portugal,
+                    legacy_liga_portugal,
+                    Club(
+                        source_provider="sportmonks",
+                        provider_external_id="1085",
+                        country=portugal,
+                        current_competition=liga_portugal,
+                        name="Moreirense",
+                        slug="moreirense",
+                        short_name="Moreirense",
+                        is_tradable=True,
+                    ),
+                    Club(
+                        source_provider="transfermarkt_2nd_zip",
+                        provider_external_id="979",
+                        country=portugal,
+                        current_competition=legacy_liga_portugal,
+                        name="Moreirense Futebol Clube",
+                        slug="moreirense-fc",
+                        short_name="Moreirense",
+                        is_tradable=True,
+                    ),
+                ]
+            )
+            session.commit()
+
+        with session_factory() as session:
+            resolution = resolver.resolve_club(
+                session,
+                raw_name="Moreirense",
+                context=ClubResolutionContext(
+                    competition_name="Liga Portugal",
+                    country_name="Portugal",
+                ),
+            )
+            assert resolution.status == "resolved"
+            assert resolution.canonical_name == "Moreirense"
+    finally:
+        engine.dispose()
