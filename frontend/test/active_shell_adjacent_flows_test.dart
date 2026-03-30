@@ -8,6 +8,7 @@ import 'package:gte_frontend/data/gte_mock_api.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_withdrawal_flow_screen.dart';
@@ -15,230 +16,319 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
   testWidgets(
-      'active shell keeps creator community hidden for non-creators while preserving adjacent flows',
-      (WidgetTester tester) async {
-    _setLargeViewport(tester);
+    'active shell keeps creator community hidden for non-creators while preserving adjacent flows',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
 
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'user-ibadan',
-      userName: 'Ibadan Owner',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'user-ibadan',
+        userName: 'Ibadan Owner',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteNavigationShellScreen(
-          controller: controller,
-          apiBaseUrl: 'http://127.0.0.1:8000',
-          backendMode: GteBackendMode.fixture,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Community').last);
-    await tester.tap(find.text('Community').last);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Notifications').last);
-    await tester.tap(find.text('Notifications').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Wallet alerts'), findsOneWidget);
-    expect(find.text('Announcements'), findsOneWidget);
-    final Finder marketOpenAlerts =
-        find.widgetWithText(SwitchListTile, 'Market open alerts');
-    expect(
-      tester.widget<SwitchListTile>(marketOpenAlerts).value,
-      isTrue,
-    );
-    await tester.tap(find.text('Market open alerts'));
-    await _pumpUntilSwitchValue(tester, marketOpenAlerts, false);
-    expect(
-      tester.widget<SwitchListTile>(marketOpenAlerts).value,
-      isFalse,
-    );
-
-    await tester.ensureVisible(find.text('Wallet').last);
-    await tester.tap(find.text('Wallet').last);
-    await _pumpUntilText(tester, 'Wallet actions');
-    expect(find.text('Wallet actions'), findsOneWidget);
-    expect(find.text('Fund wallet'), findsOneWidget);
-
-    expect(find.byTooltip('Creator community'), findsNothing);
-
-    await tester.tap(find.byTooltip('Creator access request'));
-    await tester.pumpAndSettle();
-    expect(find.text('Creator access request'), findsOneWidget);
-  });
-
-  testWidgets(
-      'portfolio wallet actions open overview, funding, withdrawals, and notifications',
-      (WidgetTester tester) async {
-    _setLargeViewport(tester);
-
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'user-ibadan',
-      userName: 'Ibadan Owner',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: AnimatedBuilder(
-          animation: controller,
-          builder: (BuildContext context, Widget? child) => GtePortfolioScreen(
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteNavigationShellScreen(
             controller: controller,
-            onOpenPlayer: (_) {},
-            onOpenLogin: () {},
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
           ),
         ),
-      ),
-    );
-    controller.refreshAccount();
-    await _pumpUntilText(tester, 'Wallet actions');
+      );
+      await tester.pumpAndSettle();
 
-    final Finder walletOverviewButton =
-        find.widgetWithText(FilledButton, 'Wallet overview');
-    await tester.ensureVisible(walletOverviewButton);
-    await tester.tap(walletOverviewButton);
-    await _pumpUntilText(tester, 'Wallet hub');
-    expect(find.text('Wallet hub'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await _pumpUntilText(tester, 'Wallet actions');
+      await tester.ensureVisible(find.text('Hub').last);
+      await tester.tap(find.text('Hub').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Notifications').last);
+      await tester.tap(find.text('Notifications').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Wallet alerts'), findsOneWidget);
+      expect(find.text('Announcements'), findsOneWidget);
+      final Finder marketOpenAlerts = find.widgetWithText(
+        SwitchListTile,
+        'Market open alerts',
+      );
+      expect(tester.widget<SwitchListTile>(marketOpenAlerts).value, isTrue);
+      await tester.tap(find.text('Market open alerts'));
+      await _pumpUntilSwitchValue(tester, marketOpenAlerts, false);
+      expect(tester.widget<SwitchListTile>(marketOpenAlerts).value, isFalse);
 
-    final Finder fundWalletButton =
-        find.widgetWithText(OutlinedButton, 'Fund wallet');
-    await tester.ensureVisible(fundWalletButton);
-    await tester.tap(fundWalletButton);
-    await _pumpUntilText(tester, 'Create a deposit request');
-    expect(find.text('Create a deposit request'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await _pumpUntilText(tester, 'Wallet actions');
+      await tester.ensureVisible(find.text('Portfolio').last);
+      await tester.tap(find.text('Portfolio').last);
+      await _pumpUntilText(tester, 'Wallet actions');
+      expect(find.text('Wallet actions'), findsOneWidget);
+      expect(find.text('Fund wallet'), findsOneWidget);
 
-    final Finder withdrawButton =
-        find.widgetWithText(OutlinedButton, 'Withdraw');
-    await tester.ensureVisible(withdrawButton);
-    await tester.tap(withdrawButton);
-    await _pumpUntilText(tester, 'Request withdrawal');
-    expect(find.text('Request withdrawal'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await _pumpUntilText(tester, 'Wallet actions');
+      expect(find.byTooltip('Creator community'), findsNothing);
 
-    final Finder notificationsButton =
-        find.widgetWithText(OutlinedButton, 'Notifications');
-    await tester.ensureVisible(notificationsButton);
-    await tester.tap(notificationsButton);
-    await _pumpUntilText(tester, 'Mark all read');
-    expect(find.text('Mark all read'), findsOneWidget);
-  });
+      await tester.tap(find.byTooltip('Creator access request'));
+      await tester.pumpAndSettle();
+      expect(find.text('Creator access request'), findsOneWidget);
+    },
+  );
 
   testWidgets(
-      'wallet actions disable manual funding when compliance blocks deposits',
-      (WidgetTester tester) async {
-    _setLargeViewport(tester);
+    'live shell keeps portfolio visible in primary nav and preserves wallet deep links',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
 
-    final GteExchangeController controller = GteExchangeController(
-      api: _fixtureClient(
-        _BlockedComplianceApi(
-          latency: const Duration(milliseconds: 10),
-        ),
-      ),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'fixture-user',
-      userName: 'Ayo Martins',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'user-ibadan',
+        userName: 'Ibadan Owner',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: AnimatedBuilder(
-          animation: controller,
-          builder: (BuildContext context, Widget? child) => GtePortfolioScreen(
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteExchangeShellScreen.fromPath(
             controller: controller,
-            onOpenPlayer: (_) {},
-            onOpenLogin: () {},
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+            initialPath: '/app/wallet',
           ),
         ),
-      ),
-    );
-    controller.refreshAccount();
+      );
+      await _pumpUntilText(tester, 'Wallet actions');
 
-    await _pumpUntil(
-      tester,
-      () =>
-          controller.complianceStatus != null &&
-          controller.complianceStatus!.canDeposit == false &&
-          !controller.isLoadingCompliance,
-    );
-    await _pumpUntilText(tester, 'Wallet actions');
+      expect(find.text('Capital Room'), findsOneWidget);
+      final Finder portfolioNavChip = find.text('Portfolio').last;
+      expect(portfolioNavChip, findsOneWidget);
 
-    final Finder fundWalletButton =
-        find.widgetWithText(OutlinedButton, 'Fund wallet');
-    expect(
-      tester.widget<OutlinedButton>(fundWalletButton).onPressed,
-      isNull,
-    );
-    expect(
-      find.text(
-        'Funding is locked until compliance review completes. Open Wallet overview for the current restriction and next steps.',
-      ),
-      findsOneWidget,
-    );
-  });
+      await tester.tap(find.text('Home').last);
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(FilledButton, 'Enter club'), findsOneWidget);
+
+      await tester.ensureVisible(portfolioNavChip);
+      await tester.tap(portfolioNavChip);
+      await _pumpUntilText(tester, 'Wallet actions');
+      expect(find.text('Fund wallet'), findsOneWidget);
+    },
+  );
 
   testWidgets(
-      'notifications refresh read state after opening an unread inbox item',
-      (WidgetTester tester) async {
-    _setLargeViewport(tester);
+    'portfolio wallet actions open overview, funding, withdrawals, history, notifications, and disputes',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
 
-    final GteExchangeController controller = GteExchangeController(
-      api: GteExchangeApiClient.fixture(),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'fixture-user',
-      userName: 'Ayo Martins',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'user-ibadan',
+        userName: 'Ibadan Owner',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteNotificationsScreen(controller: controller),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: AnimatedBuilder(
+            animation: controller,
+            builder:
+                (BuildContext context, Widget? child) => GtePortfolioScreen(
+                  controller: controller,
+                  onOpenPlayer: (_) {},
+                  onOpenLogin: () {},
+                ),
+          ),
+        ),
+      );
+      controller.refreshAccount();
+      await _pumpUntilText(tester, 'Wallet actions');
 
-    expect(find.text('Unread'), findsOneWidget);
+      final Finder walletOverviewButton = find.widgetWithText(
+        FilledButton,
+        'Wallet overview',
+      );
+      await tester.ensureVisible(walletOverviewButton);
+      await tester.tap(walletOverviewButton);
+      await _pumpUntilText(tester, 'Club Wallet');
+      expect(find.text('Club Wallet'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilText(tester, 'Wallet actions');
 
-    await tester.tap(find.text('Deposit DEP-1001 submitted. Pending review.'));
-    await tester.pumpAndSettle();
-    expect(find.text('Deposit history'), findsOneWidget);
+      final Finder fundWalletButton = find.widgetWithText(
+        OutlinedButton,
+        'Fund wallet',
+      );
+      await tester.ensureVisible(fundWalletButton);
+      await tester.tap(fundWalletButton);
+      await _pumpUntilText(tester, 'Top Up Wallet');
+      expect(find.text('Top up by bank transfer'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilText(tester, 'Wallet actions');
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+      final Finder withdrawButton = find.widgetWithText(
+        OutlinedButton,
+        'Withdraw',
+      );
+      await tester.ensureVisible(withdrawButton);
+      await tester.tap(withdrawButton);
+      await _pumpUntilText(tester, 'Request withdrawal');
+      expect(find.text('Request withdrawal'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilText(tester, 'Wallet actions');
 
-    expect(find.text('Unread'), findsNothing);
-    expect(find.text('Read'), findsNWidgets(2));
-  });
+      final Finder depositHistoryButton = find.widgetWithText(
+        OutlinedButton,
+        'Deposit history',
+      );
+      await tester.ensureVisible(depositHistoryButton);
+      await tester.tap(depositHistoryButton);
+      await _pumpUntilText(tester, 'Top Up History');
+      expect(find.text('DEP-1001'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilText(tester, 'Wallet actions');
 
-  testWidgets('withdrawal notifications route into the withdrawal workspace',
-      (WidgetTester tester) async {
+      final Finder notificationsButton = find.widgetWithText(
+        OutlinedButton,
+        'Notifications',
+      );
+      await tester.ensureVisible(notificationsButton);
+      await tester.tap(notificationsButton);
+      await _pumpUntilText(tester, 'Mark all read');
+      expect(find.text('Mark all read'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilText(tester, 'Wallet actions');
+
+      final Finder supportButton = find.widgetWithText(
+        OutlinedButton,
+        'Support',
+      );
+      await tester.ensureVisible(supportButton);
+      await tester.tap(supportButton);
+      await _pumpUntilText(tester, 'Support & disputes');
+      expect(find.text('DEP-1001'), findsOneWidget);
+
+      final Finder openThreadButton = find.widgetWithText(
+        OutlinedButton,
+        'Open thread',
+      );
+      await tester.ensureVisible(openThreadButton);
+      await tester.tap(openThreadButton);
+      await _pumpUntilText(tester, 'Deposit still pending');
+      expect(find.text('Deposit still pending'), findsOneWidget);
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'wallet actions disable manual funding when compliance blocks deposits',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+
+      final GteExchangeController controller = GteExchangeController(
+        api: _fixtureClient(
+          _BlockedComplianceApi(latency: const Duration(milliseconds: 10)),
+        ),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'fixture-user',
+        userName: 'Ayo Martins',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: AnimatedBuilder(
+            animation: controller,
+            builder:
+                (BuildContext context, Widget? child) => GtePortfolioScreen(
+                  controller: controller,
+                  onOpenPlayer: (_) {},
+                  onOpenLogin: () {},
+                ),
+          ),
+        ),
+      );
+      controller.refreshAccount();
+
+      await _pumpUntil(
+        tester,
+        () =>
+            controller.complianceStatus != null &&
+            controller.complianceStatus!.canDeposit == false &&
+            !controller.isLoadingCompliance,
+      );
+      await _pumpUntilText(tester, 'Wallet actions');
+
+      final Finder fundWalletButton = find.widgetWithText(
+        OutlinedButton,
+        'Fund wallet',
+      );
+      expect(tester.widget<OutlinedButton>(fundWalletButton).onPressed, isNull);
+      expect(
+        find.text(
+          'Funding is locked until compliance review completes. Open Wallet overview for the current restriction and next steps.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'notifications refresh read state after opening an unread inbox item',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'fixture-user',
+        userName: 'Ayo Martins',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteNotificationsScreen(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unread'), findsOneWidget);
+
+      await tester.tap(
+        find.text('Deposit DEP-1001 submitted. Pending review.'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Top Up History'), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unread'), findsNothing);
+      expect(find.text('Read'), findsNWidgets(2));
+    },
+  );
+
+  testWidgets('withdrawal notifications route into the withdrawal workspace', (
+    WidgetTester tester,
+  ) async {
     _setLargeViewport(tester);
 
     final GteMockApi repository = GteMockApi(latency: Duration.zero);
@@ -246,9 +336,7 @@ void main() {
       await repository.acceptPolicyDocument('privacy_policy', 'v1.0');
       await repository.acceptPolicyDocument('withdrawal_policy', 'v1.0');
       await repository.createWithdrawalRequest(
-        const GteWithdrawalCreateRequest(
-          amountCoin: 25,
-        ),
+        const GteWithdrawalCreateRequest(amountCoin: 25),
       );
     });
     final GteExchangeController controller = GteExchangeController(
@@ -269,8 +357,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final Finder withdrawalNotification =
-        find.textContaining('Withdrawal WDR-');
+    final Finder withdrawalNotification = find.textContaining(
+      'Withdrawal WDR-',
+    );
     expect(withdrawalNotification, findsOneWidget);
 
     await tester.tap(withdrawalNotification);
@@ -281,40 +370,40 @@ void main() {
   });
 
   testWidgets(
-      'withdrawal workspace disables request initiation when blockers are already known',
-      (WidgetTester tester) async {
-    _setLargeViewport(tester);
+    'withdrawal workspace disables request initiation when blockers are already known',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
 
-    final GteExchangeController controller = GteExchangeController(
-      api: _fixtureClient(_BlockedWithdrawalApi()),
-    );
-    controller.session = _authenticatedSession(
-      userId: 'user-ibadan',
-      userName: 'Ibadan Owner',
-      clubId: 'ibadan-lions',
-      clubName: 'Ibadan Lions FC',
-    );
+      final GteExchangeController controller = GteExchangeController(
+        api: _fixtureClient(_BlockedWithdrawalApi()),
+      );
+      controller.session = _authenticatedSession(
+        userId: 'user-ibadan',
+        userName: 'Ibadan Owner',
+        clubId: 'ibadan-lions',
+        clubName: 'Ibadan Lions FC',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteWithdrawalEligibilityScreen(controller: controller),
-      ),
-    );
-    await _pumpUntilText(tester, 'Withdrawals');
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteWithdrawalEligibilityScreen(controller: controller),
+        ),
+      );
+      await _pumpUntilText(tester, 'Withdrawals');
 
-    final Finder requestButton =
-        find.widgetWithText(FilledButton, 'Request withdrawal');
-    expect(
-      tester.widget<FilledButton>(requestButton).onPressed,
-      isNull,
-    );
-    expect(find.text('Withdrawal request unavailable'), findsOneWidget);
-    expect(
-      find.text('Policy acceptance required before withdrawal is enabled.'),
-      findsOneWidget,
-    );
-  });
+      final Finder requestButton = find.widgetWithText(
+        FilledButton,
+        'Request withdrawal',
+      );
+      expect(tester.widget<FilledButton>(requestButton).onPressed, isNull);
+      expect(find.text('Withdrawal request unavailable'), findsOneWidget);
+      expect(
+        find.text('Policy acceptance required before withdrawal is enabled.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 void _setLargeViewport(WidgetTester tester) {
@@ -332,24 +421,23 @@ GteAuthSession _authenticatedSession({
   String? clubId,
   String? clubName,
 }) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'token_type': 'bearer',
-      'expires_in': 3600,
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'session_id': 'session-$userId',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    if (clubId != null) 'current_club_id': clubId,
+    if (clubName != null) 'current_club_name': clubName,
+    'user': <String, Object?>{
+      'id': userId,
+      'email': '$userId@gtex.test',
+      'username': userId,
+      'display_name': userName,
+      'role': 'user',
       if (clubId != null) 'current_club_id': clubId,
       if (clubName != null) 'current_club_name': clubName,
-      'user': <String, Object?>{
-        'id': userId,
-        'email': '$userId@gtex.test',
-        'username': userId,
-        'display_name': userName,
-        'role': 'user',
-        if (clubId != null) 'current_club_id': clubId,
-        if (clubName != null) 'current_club_name': clubName,
-      },
     },
-  );
+  });
 }
 
 GteExchangeApiClient _fixtureClient(GteMockApi repository) {
@@ -396,17 +484,15 @@ Future<void> _pumpUntilSwitchValue(
 }
 
 class _BlockedComplianceApi extends GteMockApi {
-  _BlockedComplianceApi({
-    super.latency = Duration.zero,
-  });
+  _BlockedComplianceApi({super.latency = Duration.zero});
 
   static const GtePolicyRequirementSummary _missingRequirement =
       GtePolicyRequirementSummary(
-    documentKey: 'wallet-policy',
-    title: 'Wallet policy acceptance',
-    versionLabel: 'v2',
-    isMandatory: true,
-  );
+        documentKey: 'wallet-policy',
+        title: 'Wallet policy acceptance',
+        versionLabel: 'v2',
+        isMandatory: true,
+      );
 
   static const List<GtePolicyRequirementSummary> _missingRequirements =
       <GtePolicyRequirementSummary>[_missingRequirement];
@@ -436,9 +522,7 @@ class _BlockedComplianceApi extends GteMockApi {
 }
 
 class _BlockedWithdrawalApi extends GteMockApi {
-  _BlockedWithdrawalApi({
-    super.latency = Duration.zero,
-  });
+  _BlockedWithdrawalApi({super.latency = Duration.zero});
 
   @override
   Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() async {
