@@ -1373,8 +1373,16 @@ class RealPlayerBulkImportOpsService:
             "assists": _first_value(raw_payload, "assists"),
             "clean_sheets": _first_value(raw_payload, "clean_sheets", "cleanSheets"),
             "injury_status": _first_value(raw_payload, "injury_status", "injuryStatus"),
-            "height_cm": _first_value(raw_payload, "height_cm", "height"),
-            "weight_kg": _first_value(raw_payload, "weight_kg", "weight"),
+            "height_cm": _bounded_int_value(
+                _first_value(raw_payload, "height_cm", "height"),
+                minimum=100,
+                maximum=250,
+            ),
+            "weight_kg": _bounded_int_value(
+                _first_value(raw_payload, "weight_kg", "weight"),
+                minimum=40,
+                maximum=150,
+            ),
             "current_market_reference_value": source_item.rough_market_value,
             "market_reference_currency": source_item.rough_market_value_currency or "EUR",
             "source_last_refreshed_at": source_item.provider_last_updated_at,
@@ -1392,7 +1400,7 @@ class RealPlayerBulkImportOpsService:
             {
                 "mode": RealPlayerIngestionMode.BATCH_IMPORT.value,
                 "ingestion_batch_id": _publish_batch_id(run_id=run_id, sequence=sequence),
-                "ingestion_source_version": f"bulk-import-run:{run_id}",
+                "ingestion_source_version": f"bulk-import-run:{run_id}:publish:{sequence}",
                 "as_of": utcnow().isoformat(),
                 "players": [payload.model_dump(mode="json") for payload in payloads],
             }
@@ -1576,6 +1584,25 @@ def _list_value(value: object) -> list[object]:
     if isinstance(value, list):
         return value
     return [value]
+
+
+def _bounded_int_value(
+    value: object,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int | None:
+    if value is None:
+        return None
+    try:
+        normalized = int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
+    if minimum is not None and normalized < minimum:
+        return None
+    if maximum is not None and normalized > maximum:
+        return None
+    return normalized
 
 
 def _unique_text_values(
