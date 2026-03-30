@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from hashlib import sha1
 from itertools import combinations
 from random import Random
 from typing import Any
@@ -56,6 +57,26 @@ def _clamp_int(value: int, minimum: int, maximum: int) -> int:
 
 def _clamp_float(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
+
+
+def _normalized_country_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = "".join(character for character in str(value).upper() if character.isalnum())
+    if not normalized:
+        return None
+    return normalized[:8]
+
+
+def _national_seed_country_code(country: Country) -> str:
+    for candidate in (country.alpha2_code, country.fifa_code, country.alpha3_code):
+        normalized = _normalized_country_code(candidate)
+        if normalized:
+            return normalized
+    if country.id:
+        digest = sha1(str(country.id).encode("utf-8")).hexdigest().upper()
+        return f"C{digest[:7]}"
+    return "UNKNOWN"
 
 
 def _position_text(player: Player | None, regen: RegenProfile | None = None) -> str:
@@ -154,6 +175,17 @@ class RegenUniverseExpansionService:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.match_service = MatchSimulationService()
+
+    def _existing_national_seed_country_code(self, country: Country) -> str | None:
+        return self.session.scalar(
+            select(NationalRegenSeed.country_code)
+            .where(NationalRegenSeed.country_name == country.name)
+            .order_by(NationalRegenSeed.created_at.asc())
+            .limit(1)
+        )
+
+    def _national_seed_country_code(self, country: Country) -> str:
+        return self._existing_national_seed_country_code(country) or _national_seed_country_code(country)
 
     def get_player_story(self, player_id: str) -> dict[str, Any]:
         story = self.session.scalar(select(PlayerStory).where(PlayerStory.player_id == player_id))
@@ -1346,7 +1378,7 @@ class RegenUniverseExpansionService:
             "ST": ["AM", "RW"],
         }
         for country_index, country in enumerate(countries):
-            country_code = str(country.alpha2_code or country.fifa_code or country.alpha3_code or country.id).upper()
+            country_code = self._national_seed_country_code(country)
             country_profile = _NAMING_PROFILES.get(
                 country_code,
                 _NAMING_PROFILES[get_settings().regen_generation.default_country_code],
@@ -1357,7 +1389,6 @@ class RegenUniverseExpansionService:
                     .where(
                         NationalRegenSeed.country_code == country_code,
                         NationalRegenSeed.preseed_batch == batch,
-                        NationalRegenSeed.seed_type == "preseeded_national_pool",
                     )
                 )
                 or 0

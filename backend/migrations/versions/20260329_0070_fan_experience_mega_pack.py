@@ -60,7 +60,7 @@ def upgrade() -> None:
         sa.Column("seat_label", sa.String(length=64), nullable=True),
         sa.Column("price_coin", sa.Numeric(18, 4), nullable=False, server_default="0.0000"),
         sa.Column("discount_bps", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("priority_stream", sa.Boolean(), nullable=False, server_default="0"),
+        sa.Column("priority_stream", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("exclusive_commentary_lines_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
         sa.Column("loyalty_bonus", sa.Float(), nullable=False, server_default="0"),
         sa.Column("reputation_bonus", sa.Float(), nullable=False, server_default="0"),

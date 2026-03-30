@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("weekly_top_creator_bonus_credit", sa.Numeric(18, 4), nullable=False, server_default="0.0000"),
         sa.Column("creator_payout_credit", sa.Numeric(18, 4), nullable=False, server_default="0.0000"),
         sa.Column("growth_pool_retained_credit", sa.Numeric(18, 4), nullable=False, server_default="0.0000"),
-        sa.Column("is_viral", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_viral", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("wallet_reference", sa.String(length=128), nullable=True),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("id", sa.String(length=36), nullable=False),

@@ -118,10 +118,14 @@ def _build_token_response(
     user_public = service.build_user_public(session, user)
     telemetry.mark("service.build_user_public_ms", user_public_started_at)
     permissions_started_at = perf_counter()
-    permissions = service.resolve_user_permissions(request, user, session=session) if request is not None else []
+    permissions = service.resolve_user_permissions(request.app, user, session=session) if request is not None else []
     telemetry.mark("service.resolve_permissions_ms", permissions_started_at)
     landing_route_started_at = perf_counter()
-    landing_route = service.resolve_landing_route(user, session=session)
+    landing_route = service.resolve_landing_route(
+        user,
+        permissions=permissions,
+        session=session,
+    )
     telemetry.mark("service.resolve_landing_route_ms", landing_route_started_at)
     return TokenResponse(
         access_token=token,

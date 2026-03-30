@@ -55,7 +55,7 @@ def upgrade() -> None:
         sa.Column("player_id", sa.String(length=36), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="entered"),
         sa.Column("performance_score", sa.Float(), nullable=False, server_default="0.0"),
-        sa.Column("title_awarded", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("title_awarded", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.ForeignKeyConstraint(["competition_id"], ["ingestion_competitions.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["player_id"], ["ingestion_players.id"], ondelete="CASCADE"),
@@ -131,9 +131,9 @@ def upgrade() -> None:
         sa.Column("performance_threshold", sa.Float(), nullable=False, server_default="80.0"),
         sa.Column("title_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("current_gsi", sa.Integer(), nullable=True),
-        sa.Column("is_tradable", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("is_unique", sa.Boolean(), nullable=False, server_default=sa.text("0")),
-        sa.Column("hall_of_fame", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_tradable", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("is_unique", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("hall_of_fame", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("last_evolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.ForeignKeyConstraint(["player_id"], ["ingestion_players.id"], ondelete="CASCADE"),
@@ -171,4 +171,3 @@ def downgrade() -> None:
 
     op.drop_index("ix_player_history_player_id", table_name="player_history")
     op.drop_table("player_history")
-

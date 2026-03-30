@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 AuthTimingRecorder = Callable[[str, float], None]
 
 USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,64}$")
+PROFILE_ADMIN_ROUTE = "/profile/admin"
+PROFILE_GOD_MODE_ROUTE = "/profile/admin/god-mode"
+GOD_MODE_LANDING_PERMISSIONS = frozenset({"view_audit_log", "review_audit_log"})
 PROFILE_MUTABLE_FIELDS = (
     "display_name",
     "avatar_url",
@@ -255,12 +258,26 @@ class AuthService:
             return membership_permissions
 
     @staticmethod
-    def resolve_landing_route(user: User, *, session: Session | None = None) -> str:
+    def resolve_landing_route(
+        user: User,
+        *,
+        permissions: list[str] | tuple[str, ...] = (),
+        session: Session | None = None,
+    ) -> str:
         effective_role = user.role
         if session is not None:
             effective_role = AccessControlService(session).bind_user_access_context(user).effective_role
-        if effective_role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
-            return "/admin/god-mode"
+        normalized_permissions = {
+            permission.strip().lower()
+            for permission in permissions
+            if permission and permission.strip()
+        }
+        if effective_role == UserRole.SUPER_ADMIN:
+            return PROFILE_GOD_MODE_ROUTE
+        if effective_role == UserRole.ADMIN:
+            if normalized_permissions & GOD_MODE_LANDING_PERMISSIONS:
+                return PROFILE_GOD_MODE_ROUTE
+            return PROFILE_ADMIN_ROUTE
         return "/"
 
     def build_user_public(self, session: Session, user: User) -> UserPublic:

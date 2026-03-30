@@ -33,7 +33,7 @@ def upgrade() -> None:
         sa.Column("total_watch_time_seconds", sa.Float(), nullable=False, server_default="0"),
         sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
         sa.Column("end_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("clip_payload_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("id", sa.String(length=36), nullable=False),

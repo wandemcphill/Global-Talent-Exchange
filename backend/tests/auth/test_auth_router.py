@@ -1,21 +1,26 @@
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import time
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import BACKEND_ROOT, load_settings
+from app.core.database import load_model_modules
 from app.auth.router import login_user, register_user
 from app.auth.security import decode_access_token
 from app.auth.schemas import LoginRequest, RegisterRequest
 from app.auth.service import AuthService
 from app.main import create_app
 from app.models import Base
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.users.router import read_current_user
 
 
@@ -35,10 +40,49 @@ def session():
 @pytest.fixture()
 def app_client(tmp_path):
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'auth_router.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    app = create_app(engine=engine, run_migration_check=True)
+    media_root = tmp_path / "media"
+    config_root = tmp_path / "config"
+    shutil.copytree(BACKEND_ROOT / "config", config_root)
+    settings = load_settings(
+        environ={
+            **os.environ,
+            "GTE_DATABASE_URL": database_url,
+            "GTE_DATABASE_READ_URL": database_url,
+            "GTE_MEDIA_STORAGE_ROOT": str(media_root),
+            "GTE_CONFIG_DIR": str(config_root),
+        }
+    )
+    engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
+    load_model_modules()
+    Base.metadata.create_all(engine)
+    app = create_app(settings=settings, engine=engine, run_migration_check=False)
     with TestClient(app) as client:
         yield app, client
+
+
+def _bootstrap_admin_login(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"],
+            "password": os.environ["GTE_BOOTSTRAP_ADMIN_PASSWORD"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _ensure_bootstrap_admin(app, *, timeout_seconds: float = 20.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        with app.state.session_factory() as session:
+            user = session.scalar(
+                select(User).where(User.email == os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"])
+            )
+            if user is not None and user.role == UserRole.SUPER_ADMIN:
+                return
+        time.sleep(0.25)
+    raise AssertionError("Bootstrap admin was not created before timeout.")
 
 
 def _create_authenticated_user(app):
@@ -295,3 +339,52 @@ def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptur
     assert any("auth.request.route_entry flow=login" in message for message in caplog.messages)
     assert any("auth.request.failed flow=login status_code=401" in message for message in caplog.messages)
     assert any("db.rollback_ms" in message for message in caplog.messages)
+
+
+def test_super_admin_login_includes_catalog_permissions_and_god_mode_route(app_client) -> None:
+    app, client = app_client
+    _ensure_bootstrap_admin(app)
+
+    payload = _bootstrap_admin_login(client)
+
+    assert "manage_manager_catalog" in payload["permissions"]
+    assert payload["landing_route"] == "/profile/admin/god-mode"
+
+
+def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_client) -> None:
+    app, client = app_client
+    _ensure_bootstrap_admin(app)
+
+    super_payload = _bootstrap_admin_login(client)
+    super_headers = {"Authorization": f"Bearer {super_payload['access_token']}"}
+    scoped_email = "scoped-auth-router@example.com"
+    scoped_password = "SuperSecret1"
+    create_response = client.post(
+        "/api/admin/access",
+        headers=super_headers,
+        json={
+            "email": scoped_email,
+            "username": "scoped_auth_router",
+            "password": scoped_password,
+            "display_name": "Scoped Auth Router",
+            "permissions": ["manage_manager_catalog"],
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+
+    login_response = client.post(
+        "/auth/login",
+        json={"email": scoped_email, "password": scoped_password},
+    )
+
+    assert login_response.status_code == 200, login_response.text
+    payload = login_response.json()
+    assert payload["permissions"] == ["manage_manager_catalog"]
+    assert payload["landing_route"] == "/profile/admin"
+
+    me_response = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {payload['access_token']}"},
+    )
+    assert me_response.status_code == 200, me_response.text
+    assert me_response.json()["permissions"] == ["manage_manager_catalog"]

@@ -183,7 +183,7 @@ def upgrade() -> None:
         sa.Column("decision_type", sa.String(length=24), nullable=False),
         sa.Column("from_value", sa.String(length=160), nullable=True),
         sa.Column("to_value", sa.String(length=160), nullable=True),
-        sa.Column("accepted", sa.Boolean(), nullable=False, server_default="1"),
+        sa.Column("accepted", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("decision_payload_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.ForeignKeyConstraint(["career_player_id"], ["career_players.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_career_decisions"),
