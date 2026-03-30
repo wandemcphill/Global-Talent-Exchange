@@ -104,9 +104,10 @@ None on the shipped active path. The intentionally local `Matches > Simulate` ro
 ## Remaining Risks And Real Blockers
 
 - Real-player import still depends on backend configuration:
-  - `API_SPORTS_BASE_URL=https://v3.football.api-sports.io`
-  - `API_SPORTS_API_KEY`
-  - optional explicit `GTE_REAL_PLAYER_IMPORT_PROVIDER=api_sports` when overriding the default import provider
+  - `SPORTMONKS_BASE_URL=https://api.sportmonks.com/v3/football`
+  - `SPORTMONKS_API_TOKEN`
+  - `GTE_REAL_PLAYER_IMPORT_PROVIDER=sportmonks` for the primary import lane
+  - optional secondary fallback: `API_SPORTS_BASE_URL=https://v3.football.api-sports.io`, `API_SPORTS_API_KEY`, and `GTE_REAL_PLAYER_IMPORT_PROVIDER=api_sports`
   - valid admin credentials
 - Real-player trading still depends on environment state:
   - imported player must exist in discovery endpoints

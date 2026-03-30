@@ -50,7 +50,7 @@ def test_real_player_import_config_honors_overrides_and_clamps_invalid_values() 
     assert settings.real_player_import.cursor_key == "real-player-directory"
 
 
-def test_real_player_import_defaults_to_api_sports_when_key_is_present() -> None:
+def test_real_player_import_defaults_to_api_sports_when_only_api_sports_key_is_present() -> None:
     settings = load_settings(
         environ={
             "DATABASE_URL": "sqlite+pysqlite:///:memory:",
@@ -64,3 +64,20 @@ def test_real_player_import_defaults_to_api_sports_when_key_is_present() -> None
     assert settings.api_sports_api_key == "test-api-sports-key"
     assert settings.api_sports_base_url == "https://v3.football.api-sports.io"
     assert settings.real_player_import.provider_name == "api_sports"
+
+
+def test_real_player_import_defaults_to_sportmonks_when_token_is_present() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_INGESTION_PROVIDER": "mock",
+            "SPORTMONKS_API_TOKEN": "test-sportmonks-token",
+            "SPORTMONKS_BASE_URL": "https://api.sportmonks.com/v3/football",
+            "API_SPORTS_API_KEY": "test-api-sports-key",
+        },
+        config_root=CONFIG_ROOT,
+    )
+
+    assert settings.sportmonks_api_token == "test-sportmonks-token"
+    assert settings.sportmonks_base_url == "https://api.sportmonks.com/v3/football"
+    assert settings.real_player_import.provider_name == "sportmonks"

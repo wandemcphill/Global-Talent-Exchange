@@ -7,6 +7,7 @@ from .api_sports_adapter import ApiSportsAdapter
 from .base import BaseFootballProvider
 from .football_data_adapter import FootballDataAdapter
 from .mock_provider import MockFootballProvider
+from .sportmonks_adapter import SportMonksAdapter
 
 if TYPE_CHECKING:
     from app.core.config import Settings
@@ -22,6 +23,7 @@ class ProviderRegistry:
             "api_sports": ApiSportsAdapter,
             "mock": MockFootballProvider,
             "football_data": FootballDataAdapter,
+            "sportmonks": SportMonksAdapter,
         }
     )
 
@@ -46,4 +48,7 @@ class ProviderRegistry:
         return sorted(self.factories)
 
     def _normalize_provider_name(self, provider_name: str) -> str:
-        return provider_name.strip().lower().replace("-", "_")
+        normalized = provider_name.strip().lower().replace("-", "_")
+        if normalized == "sport_monks":
+            return "sportmonks"
+        return normalized

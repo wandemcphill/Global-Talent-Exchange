@@ -258,3 +258,24 @@ def test_streamer_tournaments_route_does_not_force_global_lazy_hydration(mounted
 
     assert response.status_code == 200
     assert mounted_app.state.modules_hydrated is False
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_status"),
+    (
+        ("/api/broadcast/home", 401),
+        ("/api/match-viewer/nonexistent", 404),
+    ),
+)
+def test_live_broadcast_and_match_viewer_routes_do_not_force_global_lazy_hydration(
+    mounted_app,
+    path: str,
+    expected_status: int,
+) -> None:
+    assert mounted_app.state.modules_hydrated is False
+
+    with TestClient(mounted_app) as client:
+        response = client.get(path)
+
+    assert response.status_code == expected_status
+    assert mounted_app.state.modules_hydrated is False

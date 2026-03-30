@@ -3,6 +3,7 @@ from .base import BaseFootballProvider, ProviderConfigurationError
 from .football_data_adapter import FootballDataAdapter
 from .mock_provider import MockFootballProvider
 from .provider_registry import ProviderRegistry
+from .sportmonks_adapter import SportMonksAdapter
 
 __all__ = [
     "ApiSportsAdapter",
@@ -11,4 +12,5 @@ __all__ = [
     "MockFootballProvider",
     "ProviderConfigurationError",
     "ProviderRegistry",
+    "SportMonksAdapter",
 ]

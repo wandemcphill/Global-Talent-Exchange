@@ -353,29 +353,11 @@ class BroadcastNetworkRuntime:
 
     def _live_candidates(self) -> list[_ProgramCandidate]:
         hub = ensure_live_match_hub(self.app)
-        print(
-            "DEBUG _live_candidates",
-            {
-                "app_id": id(self.app),
-                "hub_id": id(hub),
-                "state_hub_id": id(getattr(self.app.state, "live_match_hub", None)),
-                "active_before": hub.list_active_matches(),
-                "match_keys": list(getattr(hub, "_matches", {}).keys()),
-                "runtimes": [
-                    {
-                        "match_id": runtime.match_id,
-                        "live": runtime.live,
-                        "completed_at": runtime.completed_at,
-                        "has_snapshot": runtime.last_snapshot is not None,
-                        "published_events": len(runtime.published_events),
-                    }
-                    for runtime in getattr(hub, "_matches", {}).values()
-                ],
-            },
-        )
         active_match_ids = set(hub.list_active_matches())
         with hub._lock:
             for runtime in hub._matches.values():
+                if runtime.match_id in hub._halted_matches:
+                    continue
                 if runtime.last_snapshot is None:
                     continue
                 if runtime.live or runtime.completed_at is None:
@@ -398,7 +380,6 @@ class BroadcastNetworkRuntime:
         candidates: list[_ProgramCandidate] = []
         for match_id in sorted(active_match_ids):
             state = hub.get_state(match_id)
-            print("DEBUG _live_candidates.state", match_id, state)
             if state is None:
                 continue
             snapshot = state.snapshot
@@ -454,7 +435,6 @@ class BroadcastNetworkRuntime:
                 },
             )
             candidates.append(replace(candidate, score=self.director_service.score(candidate)))
-        print("DEBUG _live_candidates.result", [candidate.match_id for candidate in candidates])
         return candidates
 
     def _ai_candidates(self) -> list[_ProgramCandidate]:
@@ -790,18 +770,16 @@ class BroadcastNetworkRuntime:
         return bool(context.get("is_final")) if isinstance(context, dict) else False
 
     def _home_payload_is_current(self, payload: BroadcastHomeView) -> bool:
-        current_program = payload.match_of_the_moment
-        if current_program is not None and current_program.match_id is not None:
-            return True
-        if payload.channels:
-            live_channel = next((channel for channel in payload.channels if channel.channel_id == "live"), None)
-            if live_channel is not None and live_channel.current_program is not None and live_channel.current_program.match_id is not None:
-                return True
-        return not any(
-            candidate.match_id
-            for candidate in self._ranked_candidates()
-            if not bool(candidate.metadata.get("ai_match"))
+        live_channel = next((channel for channel in payload.channels if channel.channel_id == "live"), None)
+        payload_live_match_id = (
+            live_channel.current_program.match_id
+            if live_channel is not None and live_channel.current_program is not None
+            else None
         )
+        current_live_match_ids = {candidate.match_id for candidate in self._live_candidates()}
+        if current_live_match_ids:
+            return payload_live_match_id in current_live_match_ids
+        return payload_live_match_id is None
 
 
 def ensure_broadcast_network_runtime(app: FastAPI) -> BroadcastNetworkRuntime:

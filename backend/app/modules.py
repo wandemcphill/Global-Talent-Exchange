@@ -15,16 +15,26 @@ CORE_BOOT_PATHS = frozenset({"/health", "/ready", "/version", "/diagnostics", "/
 LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/auth",
     "/api/auth",
+    "/api/broadcast",
     "/api/competitions",
+    "/api/match",
+    "/api/match-viewer",
+    "/api/matches",
     "/hosted-competitions",
+    "/match",
+    "/match-viewer",
+    "/matches",
     "/streamer-tournaments",
 )
 EAGER_MODULE_NAMES = frozenset(
     {
         "auth",
+        "broadcast_network",
         "realtime",
         "competitions",
         "hosted_competition_engine",
+        "live_matches",
+        "match_viewer",
         "hosted_competition_engine_admin",
         "streamer_tournament_engine",
     }

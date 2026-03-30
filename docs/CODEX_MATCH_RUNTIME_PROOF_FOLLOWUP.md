@@ -17,6 +17,13 @@ Follow up on the March 29, 2026 blocker in [`Docs/CODEX_RUNTIME_PROOF_REPORT.md`
 - `backend/app/services/match_timeline_service.py` now synthesizes a valid `MatchViewStateView` from:
   - active `LiveMatchHub` streams
   - `InfiniteLeagueRuntime.live_stream(...)` payloads
+- `backend/app/modules.py` now keeps the live broadcast and viewer surfaces off the global lazy-hydration critical path:
+  - `broadcast_network`, `live_matches`, and `match_viewer` are eager modules
+  - `/api/broadcast`, `/api/matches`, `/api/match`, `/api/match-viewer`, `/matches`, `/match`, and `/match-viewer` bypass global lazy hydration
+- `backend/app/broadcast_network/service.py` now:
+  - rebuilds live-channel sessions from current live candidates instead of stale cached fallback slots
+  - excludes explicitly halted matches from live-channel continuity
+  - validates cached `/api/broadcast/home` payloads against current live-channel match ids before reusing them
 - That means a current match published by broadcast discovery can now resolve:
   - `GET /api/match-viewer/{matchKey}`
   - `GET /api/match-viewer/{matchKey}/session`
@@ -29,14 +36,19 @@ Backend proof:
 - `python -m pytest backend/tests/test_match_viewer_route.py -q`
   - Result: `5 passed`
   - Includes live-hub fallback proof with no stored `match_viewer` metadata row.
-- `python -m pytest backend/tests/broadcast_network/test_router.py::test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoints -q -s`
-  - Result: `1 passed`
-  - Proves the path:
+- `python -m pytest backend/tests/broadcast_network/test_router.py -q`
+  - Result: `4 passed`
+  - Proves:
     - real auth login in the test runtime
     - `GET /api/broadcast/home`
     - extract current `match_id`
     - `GET /api/match-viewer/{matchKey}`
     - `GET /api/match-viewer/{matchKey}/session`
+    - `POST /api/broadcast/channels/live/join` returns a real `current_program.match_id`
+    - cached fallback home slots refresh once a live match starts
+- `python -m pytest backend/tests/app/test_module_registration.py -k live_broadcast_and_match_viewer_routes_do_not_force_global_lazy_hydration -q`
+  - Result: `2 passed`
+  - Proves `/api/broadcast/home` and `/api/match-viewer/{matchKey}` stay reachable without forcing global lazy hydration on the first hit.
 
 Frontend proof:
 
@@ -76,6 +88,7 @@ After auth is repaired in the real shipped runtime, use a real user and verify t
   - Current broadcast-discovery matches can now fall back to live-hub or infinite-league viewer synthesis.
 - `3. Confirm runtime proof for 2D viewer / pseudo-3D viewer / Flutter 3D viewer`
   - Backend proof path is complete locally.
+  - Cold-start lazy hydration no longer causes the first broadcast/viewer request to miss the live match window in the local runtime.
   - Frontend truth tests are green for Flutter 3D fallback and native-blocked disclosure.
   - Real shipped-runtime click-through with a real authenticated user is still pending step 1 above.
 - `4. Keep native 3D blocked unless real platform handlers exist`
@@ -91,7 +104,9 @@ After auth is repaired in the real shipped runtime, use a real user and verify t
 
 ## Residual Risk
 
-- A broader existing broadcast-network test still fails outside this proof path:
-  - `backend/tests/broadcast_network/test_router.py::test_broadcast_network_join_and_stream_channel`
-  - Observed failure: the live channel can return a cached fallback slot with `current_program.match_id == null`
-- That issue is separate from the match-viewer runtime-proof path added here, but it is worth fixing before relying on the live-channel join flow as proof evidence.
+- The local backend proof path is green, but the external real-user/runtime proof is still pending:
+  - authenticate against the target shipped runtime
+  - open `/api/broadcast/home`
+  - confirm one real current `match_id`
+  - confirm `/api/match-viewer/{matchKey}` and `/session` return `200` for that same match
+- Native 3D remains intentionally blocked until a real platform bridge for `match_3d` and `match_3d/events` is mounted.
