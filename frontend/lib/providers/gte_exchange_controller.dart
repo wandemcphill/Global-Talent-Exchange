@@ -366,13 +366,13 @@ class GteExchangeController extends ChangeNotifier {
         sessionContext: nextSession,
         dedupeKey: 'session:${nextSession.accessToken}:signed_in',
       );
-      await Future.wait<void>(<Future<void>>[
+      unawaited(
         _refreshTradingState(
           playerId: selectedPlayer?.detail.playerId,
           refreshPlayer: selectedPlayer != null,
         ),
-        refreshCompliance(),
-      ]);
+      );
+      unawaited(refreshCompliance());
     } catch (error) {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
@@ -391,6 +391,7 @@ class GteExchangeController extends ChangeNotifier {
     required String email,
     required String password,
     required bool isOver18,
+    String regionCode = 'GLOBAL',
     String? username,
   }) async {
     final int requestId = _authGate.begin();
@@ -405,6 +406,7 @@ class GteExchangeController extends ChangeNotifier {
         email: email,
         password: password,
         isOver18: isOver18,
+        regionCode: regionCode,
         username: username,
       );
       if (!_authGate.isActive(requestId)) {
@@ -418,7 +420,7 @@ class GteExchangeController extends ChangeNotifier {
         sessionContext: nextSession,
         dedupeKey: 'session:${nextSession.accessToken}:registered',
       );
-      await refreshAccount();
+      unawaited(refreshAccount());
     } catch (error) {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);

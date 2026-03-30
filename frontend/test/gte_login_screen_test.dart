@@ -139,6 +139,7 @@ GteAuthSession _authenticatedSession({
   return GteAuthSession.fromJson(
     <String, Object?>{
       'access_token': 'test-token',
+      'session_id': 'test-session',
       'token_type': 'bearer',
       'expires_in': 3600,
       if (clubId != null) 'current_club_id': clubId,

@@ -96,6 +96,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       email: email,
       password: password,
       isOver18: _isOver18,
+      regionCode: _resolveRegionCode(context),
     );
     if (!mounted) {
       return;
@@ -141,6 +142,15 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
     }
     await _trackAnalyticsEventSafely('signup_completed');
     Navigator.of(context).pop(true);
+  }
+
+  String _resolveRegionCode(BuildContext context) {
+    final String? countryCode =
+        Localizations.maybeLocaleOf(context)?.countryCode?.trim().toUpperCase();
+    if (countryCode == null || countryCode.isEmpty) {
+      return 'GLOBAL';
+    }
+    return countryCode;
   }
 
   @override

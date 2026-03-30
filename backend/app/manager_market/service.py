@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 import json
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI
@@ -53,6 +54,8 @@ from .seed_catalog import build_seed_catalog_entries
 
 LEGACY_STATE_FILE = "manager_market_state.json"
 SEED_INSERT_BATCH_SIZE = 40
+BOOTSTRAP_COMPLETE_STATE_KEY = "manager_market_bootstrap_complete"
+BOOTSTRAP_LOCK_STATE_KEY = "manager_market_bootstrap_lock"
 
 
 class ManagerMarketError(ValueError):
@@ -834,18 +837,36 @@ class ManagerMarketService:
             raise ManagerMarketError("This manager trade has already been settled and cannot be processed again.")
 
     def _bootstrap_db(self, app: FastAPI, session: Session) -> None:
-        legacy_path = self._legacy_state_path(app)
-        counts = self._catalog_counts(session)
-        changed = False
-        if counts.total_count == 0 and legacy_path.exists():
-            self._import_legacy_state(session, legacy_path)
-            changed = True
-        else:
-            changed = self.seed_catalog_entries(session).inserted_count > 0
-        changed = self._seed_default_competitions(session) > 0 or changed
-        session.flush()
-        if changed:
-            session.commit()
+        if getattr(app.state, BOOTSTRAP_COMPLETE_STATE_KEY, False):
+            return
+
+        bootstrap_lock = getattr(app.state, BOOTSTRAP_LOCK_STATE_KEY, None)
+        if bootstrap_lock is None:
+            bootstrap_lock = Lock()
+            setattr(app.state, BOOTSTRAP_LOCK_STATE_KEY, bootstrap_lock)
+
+        with bootstrap_lock:
+            if getattr(app.state, BOOTSTRAP_COMPLETE_STATE_KEY, False):
+                return
+
+            try:
+                legacy_path = self._legacy_state_path(app)
+                counts = self._catalog_counts(session)
+                changed = False
+                if counts.total_count == 0 and legacy_path.exists():
+                    self._import_legacy_state(session, legacy_path)
+                    changed = True
+                else:
+                    changed = self.seed_catalog_entries(session).inserted_count > 0
+                changed = self._seed_default_competitions(session) > 0 or changed
+                session.flush()
+                if changed:
+                    session.commit()
+            except Exception:
+                session.rollback()
+                raise
+
+            setattr(app.state, BOOTSTRAP_COMPLETE_STATE_KEY, True)
 
     def _default_competitions(self) -> list[dict[str, Any]]:
         return [

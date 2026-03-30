@@ -58,17 +58,14 @@ def update_admin_competition(
     payload: CompetitionAdminUpdateRequest,
     request: Request,
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_admin),
 ) -> CompetitionAdminView:
     result = _manager_market_service().update_competition(
         request.app,
         session,
-        code=code,
-        enabled=payload.enabled,
-        minimum_viable_participants=payload.minimum_viable_participants,
-        geo_locked_regions=payload.geo_locked_regions,
-        allow_fallback_fill=payload.allow_fallback_fill,
-        fallback_source_regions=payload.fallback_source_regions,
+        actor,
+        code,
+        payload,
     )
     session.commit()
     return result

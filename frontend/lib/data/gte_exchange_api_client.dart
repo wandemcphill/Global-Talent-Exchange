@@ -78,6 +78,7 @@ class GteExchangeApiClient {
     required String email,
     required String password,
     required bool isOver18,
+    String regionCode = 'GLOBAL',
     String? username,
   }) {
     return repository.register(
@@ -86,6 +87,7 @@ class GteExchangeApiClient {
         fullName: fullName,
         phoneNumber: phoneNumber,
         isOver18: isOver18,
+        regionCode: regionCode,
         username: username,
         password: password,
       ),
