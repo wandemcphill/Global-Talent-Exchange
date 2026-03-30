@@ -358,8 +358,8 @@ class GteExchangeController extends ChangeNotifier {
           playerId: selectedPlayer?.detail.playerId,
           refreshPlayer: selectedPlayer != null,
         ),
-        refreshCompliance(),
-      ]);
+      );
+      unawaited(refreshCompliance());
     } catch (error) {
       if (_authGate.isActive(requestId)) {
         authError = AppFeedback.messageFor(error);
@@ -434,6 +434,7 @@ class GteExchangeController extends ChangeNotifier {
         email: email,
         password: password,
         isOver18: isOver18,
+        regionCode: regionCode,
         username: username,
       );
       if (!_authGate.isActive(requestId)) {

@@ -140,6 +140,15 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
     Navigator.of(context).pop(true);
   }
 
+  String _resolveRegionCode(BuildContext context) {
+    final String? countryCode =
+        Localizations.maybeLocaleOf(context)?.countryCode?.trim().toUpperCase();
+    if (countryCode == null || countryCode.isEmpty) {
+      return 'GLOBAL';
+    }
+    return countryCode;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
