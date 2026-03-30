@@ -55,39 +55,77 @@ class HomeScreen extends ConsumerWidget {
               spacing: spacingSM,
               runSpacing: spacingSM,
               children: <Widget>[
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.matches)!,
                   onPressed: () => context.go(AppRoutes.matches),
-                  child: const Text('Matches'),
                 ),
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.market)!,
                   onPressed: () => context.go(AppRoutes.market),
-                  child: const Text('Market'),
                 ),
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.competitions)!,
                   onPressed: () => context.push(AppRoutes.competitions),
-                  child: const Text('Competitions'),
                 ),
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.streamerEngine)!,
                   onPressed: () => context.push(AppRoutes.streamerEngine),
-                  child: const Text('Streamer Engine'),
                 ),
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.world)!,
                   onPressed: () => context.go(AppRoutes.world),
-                  child: const Text('World'),
                 ),
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.tasks)!,
                   onPressed: () => context.push(AppRoutes.tasks),
-                  child: const Text('Tasks'),
                 ),
-                FilledButton(
+                _QuickRouteButton(
+                  surface: appRouteSurfaceFor(AppRoutes.clips)!,
                   onPressed: () => context.push(AppRoutes.clips),
-                  child: const Text('Clips'),
                 ),
                 if (!authenticated)
                   OutlinedButton(
                     onPressed: () => context.push(AppRoutes.profileLogin),
                     child: const Text('Sign in'),
                   ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: spacingMD),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(spacingLG),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Wave 1 modules',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: spacingXS),
+                const Text(
+                  'Federations, national teams, and transfer center now have explicit entry points instead of staying buried behind summary cards.',
+                ),
+                const SizedBox(height: spacingMD),
+                Wrap(
+                  spacing: spacingSM,
+                  runSpacing: spacingSM,
+                  children: <Widget>[
+                    _QuickRouteButton(
+                      surface: appRouteSurfaceFor(AppRoutes.federations)!,
+                      onPressed: () => context.push(AppRoutes.federations),
+                    ),
+                    _QuickRouteButton(
+                      surface: appRouteSurfaceFor(AppRoutes.nationalTeams)!,
+                      onPressed: () => context.push(AppRoutes.nationalTeams),
+                    ),
+                    _QuickRouteButton(
+                      surface: appRouteSurfaceFor(AppRoutes.transferCenter)!,
+                      onPressed: () => context.push(AppRoutes.transferCenter),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -171,6 +209,40 @@ class HomeScreen extends ConsumerWidget {
       runSpacing: spacingSM,
       children: labels.map((String item) => Chip(label: Text(item))).toList(),
     );
+  }
+}
+
+class _QuickRouteButton extends StatelessWidget {
+  const _QuickRouteButton({required this.surface, required this.onPressed});
+
+  final AppRouteSurface surface;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final String label = switch (surface.state) {
+      AppRouteSurfaceState.partiallyWired =>
+        '${surface.label} ${surface.state.disclosureLabel}',
+      AppRouteSurfaceState.placeholder =>
+        '${surface.label} ${surface.state.disclosureLabel}',
+      _ => surface.label,
+    };
+
+    return switch (surface.state) {
+      AppRouteSurfaceState.live => FilledButton(
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+      AppRouteSurfaceState.partiallyWired => OutlinedButton(
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+      AppRouteSurfaceState.placeholder => OutlinedButton(
+        onPressed: null,
+        child: Text(label),
+      ),
+      AppRouteSurfaceState.hidden => const SizedBox.shrink(),
+    };
   }
 }
 

@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from alembic import command
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import BACKEND_ROOT
-from app.core.database import ensure_database_schema_current
+from app.core.database import build_alembic_config, ensure_database_schema_current
+from app.ingestion.models import Player
+from app.models.real_player_profile import RealPlayerProfile
+from app.models.real_player_source_link import RealPlayerSourceLink
 
 
 def _migration_graph_heads() -> set[str]:
@@ -218,6 +223,89 @@ def test_persistence_migrations_create_expected_tables(tmp_path) -> None:
     assert inspector.has_table("agent_learning_state")
     assert inspector.has_table("agent_wallets")
     assert inspector.has_table("agent_performance_logs")
+
+
+def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'player-share-repair.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    config = build_alembic_config(database_url)
+
+    command.upgrade(config, "20260329_0073_social_warfare_layer")
+
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with SessionLocal() as session:
+        player = Player(
+            id="repair-real-player",
+            source_provider="transfermarkt_2nd_zip",
+            provider_external_id="repair-real-player",
+            full_name="Repair Proof Player",
+            canonical_display_name="Repair Proof Player",
+            is_real_player=True,
+            current_market_reference_value=95_000_000.0,
+            market_reference_currency="EUR",
+        )
+        session.add(player)
+        session.flush()
+
+        source_link = RealPlayerSourceLink(
+            id="repair-source-link",
+            gtex_player_id=player.id,
+            source_name="transfermarkt_2nd_zip",
+            source_player_key="repair-real-player",
+            canonical_name=player.full_name,
+            identity_confidence_score=0.99,
+            is_verified_real_player=True,
+            verification_state="verified",
+        )
+        session.add(source_link)
+        session.flush()
+
+        session.add(
+            RealPlayerProfile(
+                id="repair-profile",
+                gtex_player_id=player.id,
+                source_link_id=source_link.id,
+                source_name="transfermarkt_2nd_zip",
+                source_player_key="repair-real-player",
+                canonical_name=player.full_name,
+                current_market_reference_value=95_000_000.0,
+                market_reference_currency="EUR",
+                ingestion_batch_id="repair-batch",
+            )
+        )
+        session.commit()
+
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE player_share_events"))
+        connection.execute(text("DROP TABLE player_share_holdings"))
+        connection.execute(text("DROP TABLE player_share_markets"))
+
+    inspector = inspect(engine)
+    assert not inspector.has_table("player_share_markets")
+    assert not inspector.has_table("player_share_holdings")
+    assert not inspector.has_table("player_share_events")
+
+    command.upgrade(config, "head")
+
+    repaired_inspector = inspect(engine)
+    assert repaired_inspector.has_table("player_share_markets")
+    assert repaired_inspector.has_table("player_share_holdings")
+    assert repaired_inspector.has_table("player_share_events")
+
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT COUNT(*) FROM player_share_markets WHERE player_id = :player_id"),
+            {"player_id": "repair-real-player"},
+        ).scalar_one() == 1
+        assert connection.execute(
+            text(
+                "SELECT COUNT(*) FROM player_share_events "
+                "WHERE player_id = :player_id AND event_type = 'issue'"
+            ),
+            {"player_id": "repair-real-player"},
+        ).scalar_one() == 1
+
+    inspector = repaired_inspector
 
     creator_league_config_columns = {column["name"] for column in inspector.get_columns("creator_league_configs")}
     assert {

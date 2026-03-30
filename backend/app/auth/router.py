@@ -43,6 +43,15 @@ class _AuthRouteTelemetry:
     def mark(self, step: str, started_at: float) -> None:
         self.capture(step, (perf_counter() - started_at) * 1000)
 
+    def log_entry(self, *, method: str, path: str, modules_hydrated: bool | None) -> None:
+        logger.info(
+            "auth.request.route_entry flow=%s method=%s path=%s modules_hydrated=%s",
+            self.flow,
+            method,
+            path,
+            modules_hydrated,
+        )
+
     def log_success(self, *, status_code: int, user_id: str | None) -> None:
         logger.info(
             "auth.request.completed flow=%s status_code=%s user_id=%s duration_ms=%.2f steps=%s",
@@ -88,6 +97,42 @@ def _log_email_dispatch_exception(*, flow: str, recipient: str | None, exc: Exce
     )
 
 
+def _rollback_with_telemetry(session: Session, telemetry: _AuthRouteTelemetry) -> None:
+    rollback_started_at = perf_counter()
+    session.rollback()
+    telemetry.mark("db.rollback_ms", rollback_started_at)
+
+
+def _build_token_response(
+    *,
+    service: AuthService,
+    session: Session,
+    request: Request | None,
+    telemetry: _AuthRouteTelemetry,
+    user: User,
+    token: str,
+    session_id: str,
+    expires_in: int,
+) -> TokenResponse:
+    user_public_started_at = perf_counter()
+    user_public = service.build_user_public(session, user)
+    telemetry.mark("service.build_user_public_ms", user_public_started_at)
+    permissions_started_at = perf_counter()
+    permissions = service.resolve_user_permissions(request, user, session=session) if request is not None else []
+    telemetry.mark("service.resolve_permissions_ms", permissions_started_at)
+    landing_route_started_at = perf_counter()
+    landing_route = service.resolve_landing_route(user, session=session)
+    telemetry.mark("service.resolve_landing_route_ms", landing_route_started_at)
+    return TokenResponse(
+        access_token=token,
+        session_id=session_id,
+        expires_in=expires_in,
+        user=user_public,
+        permissions=permissions,
+        landing_route=landing_route,
+    )
+
+
 @legacy_router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register_user(
     payload: RegisterRequest,
@@ -99,6 +144,11 @@ def register_user(
     confirmation_code: str | None = None
     telemetry = _AuthRouteTelemetry("register")
     user: User | None = None
+    telemetry.log_entry(
+        method=request.method if request is not None else "POST",
+        path=str(request.url.path) if request is not None else "/auth/register",
+        modules_hydrated=getattr(request.app.state, "modules_hydrated", None) if request is not None else None,
+    )
     try:
         analytics_started_at = perf_counter()
         analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email})
@@ -129,7 +179,11 @@ def register_user(
         analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={})
         telemetry.mark("analytics.signup_completed_ms", analytics_completed_started_at)
         token_started_at = perf_counter()
-        token, expires_in, session_id = service.issue_access_token_with_session(user, session=session)
+        token, expires_in, session_id = service.issue_access_token_with_session(
+            user,
+            session=session,
+            timing_recorder=telemetry.capture,
+        )
         telemetry.mark("service.issue_access_token_ms", token_started_at)
         commit_started_at = perf_counter()
         session.commit()
@@ -138,15 +192,15 @@ def register_user(
         session.refresh(user)
         telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except DuplicateUserError as exc:
-        session.rollback()
+        _rollback_with_telemetry(session, telemetry)
         telemetry.log_failure(status_code=status.HTTP_409_CONFLICT, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except AuthError as exc:
-        session.rollback()
+        _rollback_with_telemetry(session, telemetry)
         telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        session.rollback()
+        _rollback_with_telemetry(session, telemetry)
         telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
         raise
     else:
@@ -159,13 +213,15 @@ def register_user(
                 _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
         telemetry.log_success(status_code=status.HTTP_201_CREATED, user_id=user.id)
 
-    return TokenResponse(
-        access_token=token,
+    return _build_token_response(
+        service=service,
+        session=session,
+        request=request,
+        telemetry=telemetry,
+        user=user,
+        token=token,
         session_id=session_id,
         expires_in=expires_in,
-        user=service.build_user_public(session, user),
-        permissions=service.resolve_user_permissions(request, user, session=session) if request is not None else [],
-        landing_route=service.resolve_landing_route(user, session=session),
     )
 
 
@@ -179,6 +235,11 @@ def login_user(
     analytics = AnalyticsService()
     telemetry = _AuthRouteTelemetry("login")
     user: User | None = None
+    telemetry.log_entry(
+        method=request.method if request is not None else "POST",
+        path=str(request.url.path) if request is not None else "/auth/login",
+        modules_hydrated=getattr(request.app.state, "modules_hydrated", None) if request is not None else None,
+    )
     try:
         login_started_at = perf_counter()
         user = service.authenticate_user(
@@ -192,7 +253,11 @@ def login_user(
         analytics.track_event(session, name="login_success", user_id=user.id, metadata={})
         telemetry.mark("analytics.login_success_ms", analytics_success_started_at)
         token_started_at = perf_counter()
-        token, expires_in, session_id = service.issue_access_token_with_session(user, session=session)
+        token, expires_in, session_id = service.issue_access_token_with_session(
+            user,
+            session=session,
+            timing_recorder=telemetry.capture,
+        )
         telemetry.mark("service.issue_access_token_ms", token_started_at)
         commit_started_at = perf_counter()
         session.commit()
@@ -204,29 +269,31 @@ def login_user(
         analytics_failure_started_at = perf_counter()
         analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
-        session.rollback()
+        _rollback_with_telemetry(session, telemetry)
         telemetry.log_failure(status_code=status.HTTP_401_UNAUTHORIZED, user_id=None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AuthError as exc:
         analytics_failure_started_at = perf_counter()
         analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
-        session.rollback()
+        _rollback_with_telemetry(session, telemetry)
         telemetry.log_failure(status_code=status.HTTP_400_BAD_REQUEST, user_id=user.id if user is not None else None, error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        session.rollback()
+        _rollback_with_telemetry(session, telemetry)
         telemetry.log_failure(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, user_id=user.id if user is not None else None, error=str(exc))
         raise
     telemetry.log_success(status_code=status.HTTP_200_OK, user_id=user.id)
 
-    return TokenResponse(
-        access_token=token,
+    return _build_token_response(
+        service=service,
+        session=session,
+        request=request,
+        telemetry=telemetry,
+        user=user,
+        token=token,
         session_id=session_id,
         expires_in=expires_in,
-        user=service.build_user_public(session, user),
-        permissions=service.resolve_user_permissions(request, user, session=session) if request is not None else [],
-        landing_route=service.resolve_landing_route(user, session=session),
     )
 
 

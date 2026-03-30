@@ -6,9 +6,11 @@ import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../features/competitions/live_competitions_provider.dart';
 import '../../features/shared/data/gte_feature_support.dart';
+import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../shared/widgets/route_surface_badge.dart';
 import 'live_world_provider.dart';
 
 class WorldScreen extends ConsumerWidget {
@@ -19,17 +21,26 @@ class WorldScreen extends ConsumerWidget {
     final AsyncValue<WorldAggregateData> worldValue = ref.watch(
       worldAggregateProvider,
     );
+    final AppRouteSurface worldSurface = appRouteSurfaceFor(AppRoutes.world)!;
     return AppPageLayout(
       title: 'World',
       subtitle:
-          'The active shell now reads live regen, history, federation, and competition summary data instead of local demo lists.',
-      trailing: DataSourceBadge(
-        status:
-            worldValue.hasError
-                ? DataSourceStatus.blocked
-                : DataSourceStatus.live,
+          'World remains the discovery layer, but federations and national teams now route into live backend-backed module screens instead of stopping at placeholder cards.',
+      trailing: Wrap(
+        spacing: spacingSM,
+        runSpacing: spacingSM,
+        children: <Widget>[
+          DataSourceBadge(
+            status:
+                worldValue.hasError
+                    ? DataSourceStatus.blocked
+                    : DataSourceStatus.live,
+          ),
+          RouteSurfaceBadge(state: worldSurface.state),
+        ],
       ),
       children: <Widget>[
+        _WorldSurfaceDisclosure(surface: worldSurface),
         worldValue.when(
           data:
               (WorldAggregateData world) => Column(
@@ -65,6 +76,26 @@ class WorldScreen extends ConsumerWidget {
                               () => context.push(
                                 '/competitions/${CompetitionFamilyRoute.streamer.pathSegment}',
                               ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: spacingMD),
+                  _SectionCard(
+                    title: 'World hubs',
+                    subtitle:
+                        'High-value world modules now open dedicated live routes from this screen.',
+                    child: Wrap(
+                      spacing: spacingSM,
+                      runSpacing: spacingSM,
+                      children: <Widget>[
+                        _FamilyButton(
+                          label: 'Federations hub',
+                          onTap: () => context.push(AppRoutes.federations),
+                        ),
+                        _FamilyButton(
+                          label: 'National teams',
+                          onTap: () => context.push(AppRoutes.nationalTeams),
                         ),
                       ],
                     ),
@@ -157,7 +188,8 @@ class WorldScreen extends ConsumerWidget {
                   const SizedBox(height: spacingMD),
                   _SectionCard(
                     title: 'Federations',
-                    subtitle: world.federationJoinReason,
+                    subtitle:
+                        'The world summary now links each federation into a live detail route. ${world.federationJoinReason}',
                     child: Column(
                       children: world.federations
                           .take(8)
@@ -179,9 +211,14 @@ class WorldScreen extends ConsumerWidget {
                                     )
                                     .join(' | '),
                               ),
-                              trailing: OutlinedButton(
-                                onPressed: null,
-                                child: const Text('Join blocked'),
+                              trailing: FilledButton(
+                                onPressed:
+                                    () => context.push(
+                                      AppRoutes.federationDetailLocation(
+                                        stringValue(item['id']),
+                                      ),
+                                    ),
+                                child: const Text('Open'),
                               ),
                             ),
                           )
@@ -204,6 +241,40 @@ class WorldScreen extends ConsumerWidget {
               ),
         ),
       ],
+    );
+  }
+}
+
+class _WorldSurfaceDisclosure extends StatelessWidget {
+  const _WorldSurfaceDisclosure({required this.surface});
+
+  final AppRouteSurface surface;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(spacingLG),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Wrap(
+              spacing: spacingSM,
+              runSpacing: spacingSM,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                Text(
+                  '${surface.label} route',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                RouteSurfaceBadge(state: surface.state),
+              ],
+            ),
+            const SizedBox(height: spacingSM),
+            Text(surface.summary),
+          ],
+        ),
+      ),
     );
   }
 }

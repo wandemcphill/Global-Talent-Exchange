@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from decimal import Decimal
-from enum import Enum
+from datetime import datetime
 from threading import Lock
-from typing import Any, Callable
-from uuid import UUID
+from typing import TYPE_CHECKING, Any, Callable
 
-from pydantic import BaseModel
 from sqlalchemy import event as sqlalchemy_event
 from sqlalchemy.orm import Session
 
-from app.models.event_backbone import EventOutbox
+from app.core.serialization import make_json_safe
+
+if TYPE_CHECKING:
+    from app.models.event_backbone import EventOutbox
 
 _POST_COMMIT_EVENTS_KEY = "gtex.post_commit_events"
 _POST_COMMIT_CALLBACKS_KEY = "gtex.post_commit_callbacks"
@@ -20,31 +19,9 @@ _LISTENER_LOCK = Lock()
 _LISTENERS_REGISTERED = False
 
 
-def make_json_safe(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, Decimal):
-        return float(value)
-    if isinstance(value, UUID):
-        return str(value)
-    if isinstance(value, Enum):
-        return make_json_safe(value.value)
-    if isinstance(value, BaseModel):
-        return make_json_safe(value.model_dump(mode="json"))
-    if isinstance(value, dict):
-        return {str(key): make_json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [make_json_safe(item) for item in value]
-    if hasattr(value, "model_dump"):
-        return make_json_safe(value.model_dump(mode="json"))
-    return str(value)
-
-
 def build_outbox_event(*, domain_event: Any) -> EventOutbox:
+    from app.models.event_backbone import EventOutbox
+
     if hasattr(domain_event, "envelope"):
         envelope = domain_event.envelope()
     else:

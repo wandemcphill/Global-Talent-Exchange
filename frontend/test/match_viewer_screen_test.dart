@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
@@ -272,7 +273,7 @@ void main() {
     expect(find.text('0:00'), findsOneWidget);
     expect(find.text('--'), findsNWidgets(2));
     expect(find.textContaining('Gift'), findsNothing);
-    expect(find.text('Pro Manager'), findsNothing);
+    expect(find.text('Pro Manager'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Match starting...'), findsOneWidget);
@@ -532,6 +533,7 @@ CompetitionSummary _buildCompetition({
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: 'Replay validation fixture',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),

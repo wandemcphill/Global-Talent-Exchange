@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../features/shared/data/gte_feature_support.dart';
+import '../../navigation/app_destinations.dart';
 import '../../shared/models/auth_session.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -22,7 +24,7 @@ class TransferMarketScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Market',
       subtitle:
-          'Player shares, transfer listings, wallet state, and compliance are segmented and live-backed. No local market ticker is left on the shipped path.',
+          'Player shares, transfer listings, wallet state, and compliance are live-backed, with a dedicated transfer center route for listing detail and negotiation flows.',
       trailing: DataSourceBadge(
         status:
             marketValue.hasError
@@ -77,6 +79,27 @@ class _MarketBody extends ConsumerWidget {
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     return Column(
       children: <Widget>[
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(spacingLG),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Transfer listings now also open in a dedicated transfer center route for live detail, bidders, and contract negotiation context.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                const SizedBox(width: spacingMD),
+                FilledButton(
+                  onPressed: () => context.push(AppRoutes.transferCenter),
+                  child: const Text('Open transfer center'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: spacingMD),
         _SectionCard(
           title: 'Wallet & Compliance',
           subtitle:
@@ -189,6 +212,15 @@ class _MarketBody extends ConsumerWidget {
                                     clubContext,
                                   ),
                           child: const Text('Watchlist'),
+                        ),
+                        FilledButton(
+                          onPressed:
+                              () => context.push(
+                                AppRoutes.transferCenterDetailLocation(
+                                  listing.id,
+                                ),
+                              ),
+                          child: const Text('Detail'),
                         ),
                         FilledButton(
                           onPressed:

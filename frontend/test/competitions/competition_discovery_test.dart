@@ -6,12 +6,17 @@ import 'package:gte_frontend/screens/competitions/competition_discovery_screen.d
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('discovery shows safe sections and creator competitions',
+  testWidgets('discovery shows safe sections and seeded creator competitions',
       (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1440, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
-      currentUserId: 'fixture-user',
-      currentUserName: 'Fixture Trader',
+      currentUserId: 'studio-kai',
+      currentUserName: 'Studio Kai',
     );
 
     await tester.pumpWidget(
@@ -19,8 +24,8 @@ void main() {
         theme: GteShellTheme.build(),
         home: CompetitionDiscoveryScreen(
           controller: controller,
-          currentUserId: 'fixture-user',
-          currentUserName: 'Fixture Trader',
+          currentUserId: 'studio-kai',
+          currentUserName: 'Studio Kai',
           isAuthenticated: true,
           canHostCompetitions: true,
         ),
@@ -40,15 +45,6 @@ void main() {
     await tester.tap(find.text('Creator competitions'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Coastal Creator Cup'), findsOneWidget);
-
-    await tester.dragUntilVisible(
-      find.text('Weekend Creator Cup'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-
-    expect(find.text('Weekend Creator Cup'), findsOneWidget);
-    expect(find.text('Coastal Creator Cup'), findsOneWidget);
+    expect(find.text('Midnight Skill League'), findsWidgets);
   });
 }

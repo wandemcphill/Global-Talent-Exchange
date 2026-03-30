@@ -16,16 +16,19 @@ import '../features/match/match_screen.dart';
 import '../features/match/match_simulate_screen.dart';
 import '../features/match/match_spectate_screen.dart';
 import '../features/match/match_viewer_route_screen.dart';
+import '../features/national_teams/national_teams_screen.dart';
 import '../features/profile/profile_admin_screen.dart';
 import '../features/profile/profile_god_mode_screen.dart';
 import '../features/profile/profile_login_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/profile_signup_screen.dart';
 import '../features/tasks/tasks_screen.dart';
+import '../features/transfer_center/transfer_center_screen.dart';
 import '../features/transfer_market/transfer_market_screen.dart';
 import '../features/viral_feed/data/viral_feed_repository.dart';
 import '../features/viral_feed/presentation/clips_blocked_screen.dart';
 import '../features/viral_feed/presentation/viral_feed_screen.dart';
+import '../features/federations/federations_hub_screen.dart';
 import '../features/world/world_screen.dart';
 import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
@@ -121,6 +124,67 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.transferCenter,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const TransferCenterScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.transferCenterDetail,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String listingId = state.pathParameters['listingId'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: TransferCenterDetailScreen(listingId: listingId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.federations,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const FederationsHubScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.federationDetail,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String federationId =
+              state.pathParameters['federationId'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: FederationDetailScreen(federationId: federationId),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.nationalTeams,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                AppMotion.slidePage<void>(
+                  state: state,
+                  child: const NationalTeamsScreen(),
+                ),
+      ),
+      GoRoute(
+        path: AppRoutes.nationalTeamDetail,
+        pageBuilder: (BuildContext context, GoRouterState state) {
+          final String competitionId =
+              state.pathParameters['competitionId'] ?? '';
+          return AppMotion.slidePage<void>(
+            state: state,
+            child: NationalTeamCompetitionDetailScreen(
+              competitionId: competitionId,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.tasks,

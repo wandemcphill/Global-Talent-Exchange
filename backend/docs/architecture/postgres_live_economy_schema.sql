@@ -296,6 +296,26 @@ CREATE TABLE IF NOT EXISTS player_share_holdings (
 CREATE INDEX IF NOT EXISTS ix_player_share_holdings_user_player
     ON player_share_holdings (user_id, player_id);
 
+CREATE TABLE IF NOT EXISTS player_share_events (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id uuid NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    actor_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+    event_type text NOT NULL,
+    share_delta integer NOT NULL DEFAULT 0,
+    price_per_share_minor bigint NOT NULL DEFAULT 0 CHECK (price_per_share_minor >= 0),
+    gross_amount_minor bigint NOT NULL DEFAULT 0 CHECK (gross_amount_minor >= 0),
+    metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_player_share_events_player_created_at
+    ON player_share_events (player_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_player_share_events_user_created_at
+    ON player_share_events (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_player_share_events_event_type_created_at
+    ON player_share_events (event_type, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS player_orders (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     market_id uuid NOT NULL REFERENCES player_share_markets(id) ON DELETE CASCADE,

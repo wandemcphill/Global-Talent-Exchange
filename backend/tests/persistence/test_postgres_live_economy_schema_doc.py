@@ -16,6 +16,7 @@ def test_postgres_live_economy_schema_covers_thread_a_core_tables() -> None:
         "CREATE TABLE IF NOT EXISTS match_participants (",
         "CREATE TABLE IF NOT EXISTS player_share_markets (",
         "CREATE TABLE IF NOT EXISTS player_share_holdings (",
+        "CREATE TABLE IF NOT EXISTS player_share_events (",
         "CREATE TABLE IF NOT EXISTS player_orders (",
         "CREATE TABLE IF NOT EXISTS player_order_fills (",
         "CREATE TABLE IF NOT EXISTS club_share_markets (",

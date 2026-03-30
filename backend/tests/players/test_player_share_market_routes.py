@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from decimal import Decimal
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.core.database import load_model_modules
+from app.ingestion.models import Player
+from app.models.base import Base
+from app.models.player_token_market import PlayerShareHolding
+from app.models.real_player_profile import RealPlayerProfile
+from app.models.real_player_source_link import RealPlayerSourceLink
+from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.players import router as players_router_module
+from app.players.router import router as players_router
+from app.wallets.service import LedgerPosting, WalletService
+
+
+def _build_session() -> tuple[object, Session]:
+    load_model_modules()
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    return engine, session_factory()
+
+
+def _create_user(session: Session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
+    user = User(
+        id=user_id,
+        email=f"{user_id}@example.com",
+        username=user_id.replace("-", "_"),
+        password_hash="hashed",
+        role=role,
+    )
+    session.add(user)
+    session.flush()
+    WalletService().ensure_default_accounts(session, user)
+    session.flush()
+    return user
+
+
+def _seed_imported_real_player(session: Session, *, player_id: str) -> Player:
+    player = Player(
+        id=player_id,
+        source_provider="transfermarkt_2nd_zip",
+        provider_external_id=f"transfermarkt:{player_id}",
+        full_name="Victor Osimhen",
+        canonical_display_name="Victor Osimhen",
+        position="Striker",
+        normalized_position="striker",
+        date_of_birth=date(1998, 12, 29),
+        preferred_foot="right",
+        is_real_player=True,
+        real_player_tier="featured",
+        identity_confidence_score=0.99,
+        source_last_refreshed_at=datetime(2026, 3, 29, 12, 0, tzinfo=timezone.utc),
+        real_world_club_name="Galactic FC",
+        real_world_league_name="Global Elite League",
+        current_market_reference_value=120_000_000.0,
+        market_reference_currency="EUR",
+        normalization_profile_version="real_player_v1",
+    )
+    session.add(player)
+    session.flush()
+
+    source_link = RealPlayerSourceLink(
+        id=f"source-link-{player_id}",
+        gtex_player_id=player.id,
+        source_name="transfermarkt_2nd_zip",
+        source_player_key=f"transfermarkt:{player_id}",
+        canonical_name=player.full_name,
+        known_aliases_json=["Osimhen"],
+        nationality="Nigeria",
+        date_of_birth=player.date_of_birth,
+        birth_year=1998,
+        primary_position="Striker",
+        current_real_world_club=player.real_world_club_name,
+        identity_confidence_score=0.99,
+        is_verified_real_player=True,
+        verification_state="verified",
+    )
+    session.add(source_link)
+    session.flush()
+
+    session.add(
+        RealPlayerProfile(
+            id=f"profile-{player_id}",
+            gtex_player_id=player.id,
+            source_link_id=source_link.id,
+            source_name="transfermarkt_2nd_zip",
+            source_player_key=source_link.source_player_key,
+            canonical_name=player.full_name,
+            known_aliases_json=["Osimhen"],
+            nationality="Nigeria",
+            birth_year=1998,
+            date_of_birth=player.date_of_birth,
+            dominant_foot="right",
+            primary_position="Striker",
+            secondary_positions_json=["Forward"],
+            current_club_name=player.real_world_club_name,
+            current_league_name=player.real_world_league_name,
+            competition_level="elite",
+            appearances=31,
+            minutes_played=2460,
+            goals=24,
+            assists=5,
+            clean_sheets=0,
+            injury_status="fit",
+            current_market_reference_value=120_000_000.0,
+            market_reference_currency="EUR",
+            source_last_refreshed_at=player.source_last_refreshed_at,
+            normalization_profile_version="real_player_v1",
+            normalized_signals_json={"competition_level": "elite"},
+            ingestion_batch_id="2nd-zip-proof-batch",
+            ingestion_source_version="2026-03-29",
+            pricing_snapshot_id=f"snapshot-{player_id}",
+            metadata_json={"proof": "player_share_market"},
+        )
+    )
+    session.flush()
+    return player
+
+
+def _seed_coin_balance(session: Session, *, user: User, amount: Decimal) -> None:
+    wallet = WalletService()
+    user_account = wallet.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = wallet.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=amount),
+            LedgerPosting(account=platform_account, amount=-amount),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+        reference=f"seed:{user.id}",
+        actor=user,
+    )
+
+
+def _build_client(
+    session: Session,
+    *,
+    admin_user: User,
+    current_user: User,
+    monkeypatch,
+) -> tuple[TestClient, dict[str, User]]:
+    app = FastAPI()
+    app.include_router(players_router)
+
+    auth_context = {"admin": admin_user, "user": current_user}
+
+    def _session_override():
+        return session
+
+    app.dependency_overrides[get_session] = _session_override
+    app.dependency_overrides[get_current_admin] = lambda: auth_context["admin"]
+    app.dependency_overrides[get_current_user] = lambda: auth_context["user"]
+    monkeypatch.setattr(players_router_module, "_require_manager_supply_permission", lambda request, actor: None)
+
+    return TestClient(app), auth_context
+
+
+def test_issue_player_share_market_for_imported_real_player_records_issue_event(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-1")
+        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            response = client.post(
+                f"/players/{player.id}/shares/issue",
+                json={"total_shares": 1500, "share_price_coin": "0.7500", "status": "active"},
+            )
+            events_response = client.get(f"/players/{player.id}/shares/events")
+
+        assert response.status_code == 200, response.text
+        assert events_response.status_code == 200, events_response.text
+
+        payload = response.json()
+        events = events_response.json()
+
+        assert payload["player_id"] == player.id
+        assert payload["total_shares"] == 1500
+        assert payload["share_price_coin"] == "0.7500"
+        assert payload["status"] == "active"
+        assert payload["metadata_json"]["is_real_player"] is True
+        assert events[0]["event_type"] == "issue"
+        assert events[0]["metadata_json"]["market_id"] == payload["id"]
+        assert events[0]["metadata_json"]["is_real_player"] is True
+        assert events[0]["metadata_json"]["total_shares"] == 1500
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-read-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-read-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-2")
+        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            issue_response = client.post(
+                f"/players/{player.id}/shares/issue",
+                json={"total_shares": 1000, "share_price_coin": "1.2500", "status": "active"},
+            )
+            market_response = client.get(f"/players/{player.id}/shares/market")
+            events_response = client.get(f"/players/{player.id}/shares/events")
+
+        assert issue_response.status_code == 200, issue_response.text
+        assert market_response.status_code == 200, market_response.text
+        assert events_response.status_code == 200, events_response.text
+
+        market_payload = market_response.json()
+        event_payload = events_response.json()
+
+        assert market_payload["player_id"] == player.id
+        assert market_payload["total_shares"] == 1000
+        assert market_payload["circulating_shares"] == 0
+        assert market_payload["share_price_coin"] == "1.2500"
+        assert market_payload["metadata_json"]["player_name"] == "Victor Osimhen"
+        assert market_payload["metadata_json"]["is_real_player"] is True
+        assert [item["event_type"] for item in event_payload] == ["issue"]
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-buy-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-buy-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-3")
+        _seed_coin_balance(session, user=fan, amount=Decimal("50.0000"))
+        client, auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            issue_response = client.post(
+                f"/players/{player.id}/shares/issue",
+                json={"total_shares": 1000, "share_price_coin": "0.5000", "status": "active"},
+            )
+            auth["user"] = fan
+            buy_response = client.post(
+                f"/players/{player.id}/shares/buy",
+                json={"share_count": 10},
+            )
+            events_response = client.get(f"/players/{player.id}/shares/events")
+
+        assert issue_response.status_code == 200, issue_response.text
+        assert buy_response.status_code == 201, buy_response.text
+        assert events_response.status_code == 200, events_response.text
+
+        payload = buy_response.json()
+        holding = session.query(PlayerShareHolding).filter_by(user_id=fan.id, player_id=player.id).one()
+        events = events_response.json()
+
+        assert payload["gross_amount_coin"] == "5.0000"
+        assert payload["transaction_id"]
+        assert payload["market"]["circulating_shares"] == 10
+        assert payload["holding"]["share_count"] == 10
+        assert payload["holding"]["average_cost_coin"] == "0.5000"
+        assert holding.share_count == 10
+        assert holding.average_cost_coin == Decimal("0.5000")
+        assert [item["event_type"] for item in events] == ["buy", "issue"]
+        assert events[0]["metadata_json"]["transaction_id"] == payload["transaction_id"]
+        assert events[0]["metadata_json"]["circulating_shares"] == 10
+    finally:
+        session.close()
+        engine.dispose()

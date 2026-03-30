@@ -5,6 +5,7 @@ import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 class _SeededCompetitionController extends CompetitionController {
@@ -61,7 +62,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Live fixture desk'), findsOneWidget);
-    expect(find.text('Coastal Creator Cup'), findsWidgets);
+    expect(find.text('GTEX Spotlight Cup'), findsWidgets);
 
     await tester.dragUntilVisible(
       find.text('User-hosted competitions'),
@@ -272,6 +273,7 @@ CompetitionSummary _competition({
     ],
     rulesSummary:
         'Verified fixtures, transparent payout logic, and stable replay handoff for the Arena happy path.',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: false,
     createdAt: updatedAt.subtract(const Duration(days: 1)),

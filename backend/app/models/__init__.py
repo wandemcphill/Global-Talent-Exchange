@@ -271,6 +271,7 @@ from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, P
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_personality import PlayerPersonality
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.prestige_rating import PrestigeRating
 from app.models.news_article import NewsArticle
 from app.models.real_world_hub import (
@@ -856,6 +857,9 @@ __all__ = [
     "PlayerInjuryCase",
     "PlayerLifecycleEvent",
     "PlayerPersonality",
+    "PlayerShareEvent",
+    "PlayerShareHolding",
+    "PlayerShareMarket",
     "PrestigeRating",
     "NewsArticle",
     "PlayerAlias",

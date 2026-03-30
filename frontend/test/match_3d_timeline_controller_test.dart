@@ -4,6 +4,7 @@ import 'package:gte_frontend/controllers/match_3d_timeline_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
@@ -132,6 +133,7 @@ CompetitionSummary _buildCompetition({required String id}) {
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: 'Replay validation fixture',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/screens/match/gtex_match_3d_screen.dart';
+import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/match/scoreboard_widget.dart';
@@ -29,6 +31,7 @@ void main() {
           matchKey: competition.id,
           fallbackSnapshot: snapshot,
           preferFallback: true,
+          entitlement: const Match3dUserEntitlement.proManager(),
         ),
       ),
     );
@@ -125,6 +128,7 @@ CompetitionSummary _buildCompetition({required String id}) {
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: '3D replay validation fixture',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.ingestion.models import Player
     from app.models.user import User
 
 
@@ -39,6 +40,8 @@ class PlayerShareMarket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
+    player: Mapped["Player"] = relationship("Player", back_populates="share_market")
+
 
 class PlayerShareHolding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "player_share_holdings"
@@ -66,6 +69,7 @@ class PlayerShareHolding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
+    player: Mapped["Player"] = relationship("Player", back_populates="share_holdings")
     user: Mapped["User"] = relationship("User")
 
 
@@ -96,6 +100,7 @@ class PlayerShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
+    player: Mapped["Player"] = relationship("Player", back_populates="share_events")
     user: Mapped["User | None"] = relationship("User", foreign_keys=[user_id])
     actor_user: Mapped["User | None"] = relationship("User", foreign_keys=[actor_user_id])
 

@@ -85,11 +85,11 @@ class MatchScreen extends ConsumerWidget {
           onPrimaryTap: () => context.push(AppRoutes.matchesSpectate),
         ),
         _ActionCard(
-          title: 'Native 3D status',
+          title: 'Native 3D preview',
           description:
-              'Truth label for the native bridge path. The active shell keeps native 3D blocked until the platform bridge is actually present.',
-          chips: const <String>['BLOCKED', 'NATIVE_3D'],
-          primaryLabel: 'See native 3D status',
+              'Product visibility only. The active shell keeps native 3D unshipped until a verified platform bridge is present.',
+          chips: const <String>['COMING SOON', 'NATIVE_3D'],
+          primaryLabel: 'View coming soon note',
           onPrimaryTap: () => context.push(AppRoutes.matchesNativeThreeD),
         ),
         _ActionCard(

@@ -175,8 +175,18 @@ class AuthService:
         _record_timing(timing_recorder, "db.flush_last_login_ms", flush_started_at)
         return user
 
-    def issue_access_token(self, user: User, *, session: Session | None = None) -> tuple[str, int]:
-        token, expires_in, _session_id = self.issue_access_token_with_session(user, session=session)
+    def issue_access_token(
+        self,
+        user: User,
+        *,
+        session: Session | None = None,
+        timing_recorder: AuthTimingRecorder | None = None,
+    ) -> tuple[str, int]:
+        token, expires_in, _session_id = self.issue_access_token_with_session(
+            user,
+            session=session,
+            timing_recorder=timing_recorder,
+        )
         return token, expires_in
 
     def issue_access_token_with_session(
@@ -185,14 +195,20 @@ class AuthService:
         *,
         session: Session | None = None,
         session_id: str | None = None,
+        timing_recorder: AuthTimingRecorder | None = None,
     ) -> tuple[str, int, str]:
         effective_role = user.role
         active_org_id: str | None = None
         if session is not None:
+            access_context_started_at = perf_counter()
             access_context = AccessControlService(session).bind_user_access_context(user)
+            _record_timing(timing_recorder, "auth.bind_access_context_ms", access_context_started_at)
             effective_role = access_context.effective_role
             active_org_id = access_context.active_organization_id
+        session_id_started_at = perf_counter()
         resolved_session_id = (session_id or str(uuid4())).strip()
+        _record_timing(timing_recorder, "auth.create_session_id_ms", session_id_started_at)
+        token_started_at = perf_counter()
         token = create_access_token(
             user.id,
             claims={
@@ -202,6 +218,7 @@ class AuthService:
                 "sid": resolved_session_id,
             },
         )
+        _record_timing(timing_recorder, "auth.create_access_token_ms", token_started_at)
         return token, ACCESS_TOKEN_TTL_SECONDS, resolved_session_id
 
     def resolve_user_permissions(self, app, user: User, *, session: Session | None = None) -> list[str]:

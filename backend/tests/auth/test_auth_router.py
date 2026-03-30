@@ -97,6 +97,27 @@ def test_duplicate_registration_returns_conflict(session) -> None:
     assert exc_info.value.status_code == 409
 
 
+def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
+    register_user(
+        RegisterRequest(
+            email="fan@example.com",
+            username="fanuser",
+            password="SuperSecret1",
+            full_name="Fan User",
+            region_code="NG",
+        ),
+        session,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        login_user(
+            LoginRequest(email="fan@example.com", password="WrongPassword1"),
+            session,
+        )
+
+    assert exc_info.value.status_code == 401
+
+
 def test_api_auth_me_returns_authenticated_user(app_client) -> None:
     app, client = app_client
     user_id, token = _create_authenticated_user(app)
@@ -218,7 +239,9 @@ def test_register_user_logs_completion(session, caplog: pytest.LogCaptureFixture
         )
 
     assert response.user.email == "telemetry-register@example.com"
+    assert any("auth.request.route_entry flow=register" in message for message in caplog.messages)
     assert any("auth.request.completed flow=register status_code=201" in message for message in caplog.messages)
+    assert any("auth.create_access_token_ms" in message for message in caplog.messages)
     assert any("db.commit_ms" in message for message in caplog.messages)
 
 
@@ -242,5 +265,33 @@ def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -
         )
 
     assert response.user.email == "telemetry-login@example.com"
+    assert any("auth.request.route_entry flow=login" in message for message in caplog.messages)
     assert any("auth.request.completed flow=login status_code=200" in message for message in caplog.messages)
+    assert any("auth.create_access_token_ms" in message for message in caplog.messages)
     assert any("service.authenticate_user_ms" in message for message in caplog.messages)
+
+
+def test_login_user_logs_failure_with_rollback(session, caplog: pytest.LogCaptureFixture) -> None:
+    register_user(
+        RegisterRequest(
+            email="telemetry-login-failure@example.com",
+            username="telemetryloginfailure",
+            password="SuperSecret1",
+            full_name="Telemetry Login Failure",
+            region_code="NG",
+        ),
+        session,
+    )
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        with pytest.raises(HTTPException) as exc_info:
+            login_user(
+                LoginRequest(email="telemetry-login-failure@example.com", password="WrongPassword1"),
+                session,
+            )
+
+    assert exc_info.value.status_code == 401
+    assert any("auth.request.route_entry flow=login" in message for message in caplog.messages)
+    assert any("auth.request.failed flow=login status_code=401" in message for message in caplog.messages)
+    assert any("db.rollback_ms" in message for message in caplog.messages)

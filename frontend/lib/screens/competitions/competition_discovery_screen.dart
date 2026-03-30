@@ -201,7 +201,7 @@ class _CompetitionDiscoveryScreenState
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
-                  height: 320,
+                  height: 540,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: featured.length,
@@ -209,7 +209,7 @@ class _CompetitionDiscoveryScreenState
                     itemBuilder: (BuildContext context, int index) {
                       final CompetitionSummary item = featured[index];
                       return SizedBox(
-                        width: 320,
+                        width: 360,
                         child: _FeaturedArenaCard(
                           competition: item,
                           onOpen: () => _openCompetition(item.id),
@@ -495,11 +495,18 @@ class _FeaturedArenaCard extends StatelessWidget {
               CompetitionVisibilityChip(visibility: competition.visibility),
             ],
           ),
-          const Spacer(),
-          Text(competition.name, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 16),
+          Text(
+            competition.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 8),
           Text(
             competition.hostSummary,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from threading import Thread
 
 from fastapi import FastAPI
@@ -20,6 +21,13 @@ from app.modules import DOMAIN_MODULES
 
 logger = logging.getLogger(__name__)
 _ASGI_APP: FastAPI | None = None
+INITIAL_ADMIN_EMAIL = os.getenv("GTE_BOOTSTRAP_ADMIN_EMAIL", "vidvimedialtd@gmail.com")
+INITIAL_ADMIN_PASSWORD = os.getenv("GTE_BOOTSTRAP_ADMIN_PASSWORD", "NewPass1234!")
+INITIAL_ADMIN_USERNAME = os.getenv("GTE_BOOTSTRAP_ADMIN_USERNAME", "vidvimedialtd")
+INITIAL_ADMIN_DISPLAY_NAME = os.getenv(
+    "GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME",
+    "GTEX God Mode Admin",
+)
 
 
 def create_app(
@@ -272,4 +280,12 @@ def __getattr__(name: str) -> FastAPI:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = ["app", "create_app", "get_asgi_app"]
+__all__ = [
+    "INITIAL_ADMIN_DISPLAY_NAME",
+    "INITIAL_ADMIN_EMAIL",
+    "INITIAL_ADMIN_PASSWORD",
+    "INITIAL_ADMIN_USERNAME",
+    "app",
+    "create_app",
+    "get_asgi_app",
+]

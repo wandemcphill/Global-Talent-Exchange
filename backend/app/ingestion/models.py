@@ -13,6 +13,8 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 if TYPE_CHECKING:
     from typing import Sequence
 
+    from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
+
 
 def _match_model() -> type["Match"]:
     return Match
@@ -461,6 +463,22 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     season_stats: Mapped[list["PlayerSeasonStat"]] = relationship(back_populates="player")
     injury_statuses: Mapped[list["InjuryStatus"]] = relationship(back_populates="player")
     market_signals: Mapped[list["MarketSignal"]] = relationship(back_populates="player")
+    share_market: Mapped["PlayerShareMarket | None"] = relationship(
+        "PlayerShareMarket",
+        back_populates="player",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    share_holdings: Mapped[list["PlayerShareHolding"]] = relationship(
+        "PlayerShareHolding",
+        back_populates="player",
+        cascade="all, delete-orphan",
+    )
+    share_events: Mapped[list["PlayerShareEvent"]] = relationship(
+        "PlayerShareEvent",
+        back_populates="player",
+        cascade="all, delete-orphan",
+    )
     verification: Mapped["PlayerVerification | None"] = relationship(
         back_populates="player",
         uselist=False,

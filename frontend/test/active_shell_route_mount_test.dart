@@ -65,7 +65,7 @@ void main() {
 
     router.go(AppRoutes.matchesNativeThreeD);
     await tester.pumpAndSettle();
-    expect(find.text('Native 3D is blocked'), findsOneWidget);
+    expect(find.text('Native 3D is coming soon'), findsOneWidget);
 
     router.go(AppRoutes.streamerEngine);
     await tester.pumpAndSettle();

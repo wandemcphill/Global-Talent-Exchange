@@ -218,12 +218,12 @@ void main() {
     expect(find.text('Open 2D'), findsOneWidget);
     expect(find.text('Open Broadcast+'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('See native 3D status'),
+      find.text('View coming soon note'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('See native 3D status'), findsOneWidget);
+    expect(find.text('View coming soon note'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Open simulate'),
       300,

@@ -52,7 +52,7 @@ def _season_view(season) -> SeasonView:
     duration_days = int(metadata.get("duration_days", 30) or 30)
     days_remaining = 0
     if getattr(season, "status", None) and str(season.status) == "active":
-        delta = season.end_date - SeasonService._now()
+        delta = SeasonService._normalize_timestamp(season.end_date) - SeasonService._now()
         days_remaining = max(0, int(delta.total_seconds() // 86400))
     return SeasonView(
         id=season.id,

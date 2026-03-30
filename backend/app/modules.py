@@ -12,7 +12,16 @@ from app.core.module import DomainModule, register_domain_modules
 
 logger = logging.getLogger(__name__)
 CORE_BOOT_PATHS = frozenset({"/health", "/ready", "/version", "/diagnostics", "/metrics"})
-EAGER_MODULE_NAMES = frozenset({"realtime"})
+AUTH_LAZY_LOAD_BYPASS_PREFIXES = ("/auth", "/api/auth")
+EAGER_MODULE_NAMES = frozenset({"auth", "realtime"})
+
+
+def _path_matches_prefix(path: str, prefix: str) -> bool:
+    return path == prefix or path.startswith(f"{prefix}/")
+
+
+def _should_bypass_lazy_hydration(path: str) -> bool:
+    return any(_path_matches_prefix(path, prefix) for prefix in AUTH_LAZY_LOAD_BYPASS_PREFIXES)
 
 
 def _with_api_alias(router: APIRouter) -> APIRouter:
@@ -118,7 +127,15 @@ def _install_lazy_dependency_overrides(app: FastAPI) -> None:
 
 class LazyModuleMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path not in CORE_BOOT_PATHS and not request.url.path.startswith("/tts"):
+        path = request.url.path
+        if _should_bypass_lazy_hydration(path):
+            logger.info(
+                "auth.request.entry method=%s path=%s modules_hydrated=%s lazy_hydration_bypassed=true",
+                request.method,
+                path,
+                getattr(request.app.state, "modules_hydrated", False),
+            )
+        elif path not in CORE_BOOT_PATHS and not path.startswith("/tts"):
             ensure_modules_loaded(request.app)
         return await call_next(request)
 

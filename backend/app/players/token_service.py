@@ -15,6 +15,7 @@ from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransact
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+VALID_PLAYER_SHARE_MARKET_STATUSES = frozenset({"active", "paused", "closed"})
 
 
 class PlayerTokenMarketError(ValueError):
@@ -45,6 +46,7 @@ class PlayerTokenMarketService:
         normalized_price = self._amount(share_price_coin)
         if normalized_price <= Decimal("0.0000"):
             raise PlayerTokenMarketError("Share price must be greater than zero.", reason="share_price_invalid")
+        normalized_status = self._normalize_market_status(status)
         market = self.session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id))
         if market is None:
             market = PlayerShareMarket(player_id=player.id)
@@ -56,12 +58,15 @@ class PlayerTokenMarketService:
             )
         market.total_shares = int(total_shares)
         market.share_price_coin = normalized_price
-        market.status = status.strip().lower() or "active"
+        market.status = normalized_status
         market.metadata_json = {
             **(market.metadata_json or {}),
             "player_name": player.canonical_display_name or player.full_name,
             "issued_by_user_id": actor.id,
+            "is_real_player": bool(player.is_real_player),
+            "real_player_tier": player.real_player_tier,
         }
+        self.session.flush()
         self._record_event(
             player_id=player.id,
             actor_user_id=actor.id,
@@ -69,7 +74,12 @@ class PlayerTokenMarketService:
             share_delta=0,
             price_per_share_coin=normalized_price,
             gross_amount_coin=Decimal("0.0000"),
-            metadata_json={"total_shares": int(total_shares), "status": market.status},
+            metadata_json={
+                "market_id": market.id,
+                "total_shares": int(total_shares),
+                "status": market.status,
+                "is_real_player": bool(player.is_real_player),
+            },
         )
         self.session.flush()
         return market
@@ -85,7 +95,7 @@ class PlayerTokenMarketService:
             self.session.scalars(
                 select(PlayerShareEvent)
                 .where(PlayerShareEvent.player_id == player_id)
-                .order_by(PlayerShareEvent.created_at.desc())
+                .order_by(PlayerShareEvent.created_at.desc(), PlayerShareEvent.id.desc())
                 .limit(limit)
             ).all()
         )
@@ -173,7 +183,12 @@ class PlayerTokenMarketService:
             share_delta=int(share_count),
             price_per_share_coin=self._amount(market.share_price_coin),
             gross_amount_coin=gross_amount,
-            metadata_json={"transaction_id": entries[0].transaction_id},
+            metadata_json={
+                "market_id": market.id,
+                "transaction_id": entries[0].transaction_id,
+                "circulating_shares": int(market.circulating_shares or 0),
+                "total_shares": int(market.total_shares or 0),
+            },
         )
         self.session.flush()
         return {
@@ -337,6 +352,15 @@ class PlayerTokenMarketService:
         if player is None:
             raise PlayerTokenMarketError("Player was not found.", reason="player_not_found")
         return player
+
+    def _normalize_market_status(self, status: str | None) -> str:
+        normalized_status = str(status or "active").strip().lower() or "active"
+        if normalized_status not in VALID_PLAYER_SHARE_MARKET_STATUSES:
+            raise PlayerTokenMarketError(
+                "Player share market status must be active, paused, or closed.",
+                reason="market_status_invalid",
+            )
+        return normalized_status
 
     @staticmethod
     def _amount(value: Decimal | str | int | float | None) -> Decimal:

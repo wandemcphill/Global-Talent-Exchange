@@ -6,7 +6,7 @@ from threading import RLock
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
-from app.core.event_backbone import make_json_safe
+from app.core.serialization import make_json_safe
 try:
     from app.observability.tracing import enrich_trace_headers
 except Exception:  # pragma: no cover - optional observability dependency

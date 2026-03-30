@@ -102,6 +102,7 @@ def raise_player_token_market_http_exception(exc: PlayerTokenMarketError) -> Nev
         "admin_required",
         "total_shares_invalid",
         "share_price_invalid",
+        "market_status_invalid",
         "share_count_invalid",
         "market_inactive",
         "share_supply_insufficient",

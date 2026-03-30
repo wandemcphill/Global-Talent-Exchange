@@ -4,6 +4,7 @@ import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/data/match/match_simulation_engine.dart';
 import 'package:gte_frontend/data/match/match_simulation_models.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/screens/match/gtex_match_simulation_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
@@ -62,6 +63,7 @@ CompetitionSummary _competition() {
     prizePool: 0,
     payoutStructure: const <CompetitionPayoutBreakdown>[],
     rulesSummary: 'Simulation screen fixture',
+    matchType: MatchType.gtexHosted,
     joinEligibility: const CompetitionJoinEligibility(eligible: true),
     beginnerFriendly: true,
     createdAt: DateTime.utc(2026, 1, 1),
