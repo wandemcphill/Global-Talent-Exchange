@@ -2,6 +2,8 @@
 
 Verified on March 30, 2026 against the repaired shipped runtime at `http://127.0.0.1:8000` using the current shipped `gte_backend.db` and the active `backend.app.asgi:app` boot path. Proof-only admin role state was isolated with a copied config directory; the app code and shipped database under test were the live workspace runtime.
 
+Note: items 12 and 21 in this file are the earlier `2026-03-30T08:04:07Z` pre-fix snapshot from `.codex_tmp/runtime_proof_rerun_results.json`. Their final reconciled state is recorded in [Docs/CODEX_RUNTIME_CONFLICT_PROOF_PASS.md](C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\Docs\CODEX_RUNTIME_CONFLICT_PROOF_PASS.md).
+
 Primary evidence:
 
 - Boot: `/health` `200`, `/ready` `200` with `database=ok` and `schema=ok`, `/version` `200`, `/diagnostics` `200`

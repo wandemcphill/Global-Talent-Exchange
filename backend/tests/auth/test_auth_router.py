@@ -55,6 +55,17 @@ def app_client(tmp_path):
     engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
     load_model_modules()
     Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        for ddl in (
+            "ALTER TABLE users ADD COLUMN avatar_url VARCHAR(2048)",
+            "ALTER TABLE users ADD COLUMN favourite_club VARCHAR(160)",
+            "ALTER TABLE users ADD COLUMN nationality VARCHAR(160)",
+            "ALTER TABLE users ADD COLUMN preferred_position VARCHAR(120)",
+        ):
+            try:
+                connection.exec_driver_sql(ddl)
+            except Exception:
+                pass
     app = create_app(settings=settings, engine=engine, run_migration_check=False)
     with TestClient(app) as client:
         yield app, client
