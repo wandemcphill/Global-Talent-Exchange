@@ -361,6 +361,16 @@ class BroadcastNetworkRuntime:
                 "state_hub_id": id(getattr(self.app.state, "live_match_hub", None)),
                 "active_before": hub.list_active_matches(),
                 "match_keys": list(getattr(hub, "_matches", {}).keys()),
+                "runtimes": [
+                    {
+                        "match_id": runtime.match_id,
+                        "live": runtime.live,
+                        "completed_at": runtime.completed_at,
+                        "has_snapshot": runtime.last_snapshot is not None,
+                        "published_events": len(runtime.published_events),
+                    }
+                    for runtime in getattr(hub, "_matches", {}).values()
+                ],
             },
         )
         active_match_ids = set(hub.list_active_matches())

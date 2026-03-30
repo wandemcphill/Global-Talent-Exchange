@@ -48,3 +48,19 @@ def test_real_player_import_config_honors_overrides_and_clamps_invalid_values() 
     assert settings.real_player_import.rate_limit_per_minute == 1
     assert settings.real_player_import.timeout_seconds == 1
     assert settings.real_player_import.cursor_key == "real-player-directory"
+
+
+def test_real_player_import_defaults_to_api_sports_when_key_is_present() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_INGESTION_PROVIDER": "mock",
+            "API_SPORTS_API_KEY": "test-api-sports-key",
+            "API_SPORTS_BASE_URL": "https://v3.football.api-sports.io",
+        },
+        config_root=CONFIG_ROOT,
+    )
+
+    assert settings.api_sports_api_key == "test-api-sports-key"
+    assert settings.api_sports_base_url == "https://v3.football.api-sports.io"
+    assert settings.real_player_import.provider_name == "api_sports"
