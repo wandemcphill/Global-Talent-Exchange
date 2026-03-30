@@ -35,6 +35,13 @@ _STAT_CODE_ALIASES = {
     "rating": ("rating",),
 }
 
+_GLOBAL_DIRECTORY_PAGE_SIZE = 25
+_GLOBAL_DIRECTORY_MAX_SOURCE_PAGES_PER_BATCH = 20
+_GLOBAL_DIRECTORY_MAX_AGE_YEARS = 40
+_GLOBAL_DIRECTORY_MIN_AGE_YEARS = 15
+_GLOBAL_DIRECTORY_RECENT_ACTIVITY_DAYS = 730
+_GLOBAL_DIRECTORY_PLAYER_TYPE_IDS = {24, 25, 26, 27}
+
 
 class SportMonksAdapter(BaseFootballProvider):
     name = "sportmonks"
@@ -211,37 +218,66 @@ class SportMonksAdapter(BaseFootballProvider):
         self._request_rate_limit_override = rate_limit_per_minute
         try:
             state = self._decode_directory_cursor(cursor, batch_size=batch_size)
-            response = self._get(
-                "/players",
-                params={
-                    "page": state["page"],
-                    "per_page": state["per_page"],
-                    "include": "country;nationality;position;detailedPosition;teams.team;teams.team.country",
-                },
-            )
-            pagination = response.get("pagination") or {}
-            items = tuple(
-                self._build_global_directory_item(item)
-                for item in response.get("data") or []
-            )
-            if pagination.get("has_more"):
-                next_cursor = self._encode_directory_cursor(
-                    page=state["page"] + 1,
-                    per_page=state["per_page"],
+            page_number = state["page"]
+            per_page = state["per_page"]
+            player_index = state["player_index"]
+            source_pages_scanned = 0
+            items: list[RealPlayerSourceItem] = []
+
+            while len(items) < batch_size and source_pages_scanned < _GLOBAL_DIRECTORY_MAX_SOURCE_PAGES_PER_BATCH:
+                response = self._get(
+                    "/players",
+                    params={
+                        "page": page_number,
+                        "per_page": per_page,
+                        "include": "country;nationality;position;detailedPosition;teams.team;teams.team.country",
+                    },
                 )
-                return RealPlayerSourcePage(
-                    provider_name=self.name,
-                    items=items,
-                    next_cursor=next_cursor,
-                    exhausted=False,
-                    source_version="sportmonks-v3-global-directory",
-                )
+                pagination = response.get("pagination") or {}
+                raw_players = list(response.get("data") or [])
+                current_index = player_index
+                while current_index < len(raw_players) and len(items) < batch_size:
+                    raw_player = raw_players[current_index]
+                    current_index += 1
+                    if not self._is_global_directory_candidate(raw_player):
+                        continue
+                    items.append(self._build_global_directory_item(raw_player))
+
+                if current_index < len(raw_players):
+                    return RealPlayerSourcePage(
+                        provider_name=self.name,
+                        items=tuple(items),
+                        next_cursor=self._encode_directory_cursor(
+                            page=page_number,
+                            per_page=per_page,
+                            player_index=current_index,
+                        ),
+                        exhausted=False,
+                        source_version="sportmonks-v3-global-directory",
+                    )
+
+                if not pagination.get("has_more"):
+                    return RealPlayerSourcePage(
+                        provider_name=self.name,
+                        items=tuple(items),
+                        next_cursor=None,
+                        exhausted=True,
+                        source_version="sportmonks-v3-global-directory",
+                    )
+
+                page_number += 1
+                player_index = 0
+                source_pages_scanned += 1
 
             return RealPlayerSourcePage(
                 provider_name=self.name,
-                items=items,
-                next_cursor=None,
-                exhausted=True,
+                items=tuple(items),
+                next_cursor=self._encode_directory_cursor(
+                    page=page_number,
+                    per_page=per_page,
+                    player_index=0,
+                ),
+                exhausted=False,
                 source_version="sportmonks-v3-global-directory",
             )
         finally:
@@ -416,8 +452,33 @@ class SportMonksAdapter(BaseFootballProvider):
             raw_payload=payload,
         )
 
+    def _is_global_directory_candidate(self, raw_player: dict[str, Any]) -> bool:
+        if self._select_directory_team_context(raw_player) is None:
+            return False
+
+        player_type_id = self._int_value(raw_player.get("type_id"))
+        position_name = self._clean_text(
+            ((raw_player.get("detailedposition") or raw_player.get("detailedPosition") or {}).get("name"))
+            or ((raw_player.get("position") or {}).get("name"))
+        )
+        if player_type_id not in _GLOBAL_DIRECTORY_PLAYER_TYPE_IDS and not position_name:
+            return False
+
+        date_of_birth = self._parse_date(raw_player.get("date_of_birth") or raw_player.get("dateOfBirth"))
+        if date_of_birth is None:
+            return False
+        age_years = self._age_on(date_of_birth)
+        if age_years is None or age_years < _GLOBAL_DIRECTORY_MIN_AGE_YEARS or age_years > _GLOBAL_DIRECTORY_MAX_AGE_YEARS:
+            return False
+
+        return True
+
     def _select_directory_team_context(self, raw_player: dict[str, Any]) -> dict[str, str | None] | None:
-        memberships = list(raw_player.get("teams") or [])
+        memberships = [
+            item
+            for item in (raw_player.get("teams") or [])
+            if self._membership_is_current(item) and self._membership_has_recent_activity(item)
+        ]
         if not memberships:
             return None
         selected = max(
@@ -437,6 +498,26 @@ class SportMonksAdapter(BaseFootballProvider):
             "club_id": club_id or None,
             "club_name": club_name,
         }
+
+    def _membership_is_current(self, membership: dict[str, Any]) -> bool:
+        end_date = self._parse_date(membership.get("end"))
+        if end_date is None:
+            return True
+        return end_date >= datetime.now(timezone.utc).date()
+
+    def _membership_has_recent_activity(self, membership: dict[str, Any]) -> bool:
+        team = membership.get("team") or {}
+        last_played_at = self._parse_date(team.get("last_played_at"))
+        if last_played_at is None:
+            return False
+        return (datetime.now(timezone.utc).date() - last_played_at).days <= _GLOBAL_DIRECTORY_RECENT_ACTIVITY_DAYS
+
+    def _age_on(self, date_of_birth):
+        reference_date = datetime.now(timezone.utc).date()
+        years = reference_date.year - date_of_birth.year
+        if (reference_date.month, reference_date.day) < (date_of_birth.month, date_of_birth.day):
+            years -= 1
+        return years
 
     def _transform_country(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -711,19 +792,29 @@ class SportMonksAdapter(BaseFootballProvider):
         return " ".join(str(value).strip().split()) or None
 
     def _decode_directory_cursor(self, cursor: str | None, *, batch_size: int) -> dict[str, int]:
-        default_per_page = max(1, min(int(batch_size or 100), 100))
+        default_per_page = _GLOBAL_DIRECTORY_PAGE_SIZE
         if not cursor:
-            return {"page": 1, "per_page": default_per_page}
+            return {"page": 1, "per_page": default_per_page, "player_index": 0}
         try:
             payload = json.loads(cursor)
         except json.JSONDecodeError:
-            return {"page": 1, "per_page": default_per_page}
+            return {"page": 1, "per_page": default_per_page, "player_index": 0}
         page = payload.get("page")
         per_page = payload.get("per_page")
+        player_index = payload.get("player_index")
         return {
             "page": max(1, int(page or 1)),
-            "per_page": max(1, min(int(per_page or default_per_page), 100)),
+            "per_page": max(1, min(int(per_page or default_per_page), _GLOBAL_DIRECTORY_PAGE_SIZE)),
+            "player_index": max(0, int(player_index or 0)),
         }
 
-    def _encode_directory_cursor(self, *, page: int, per_page: int) -> str:
-        return json.dumps({"page": page, "per_page": per_page}, sort_keys=True)
+    def _encode_directory_cursor(self, *, page: int, per_page: int, player_index: int) -> str:
+        return json.dumps({"page": page, "per_page": per_page, "player_index": player_index}, sort_keys=True)
+
+    def _int_value(self, value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
