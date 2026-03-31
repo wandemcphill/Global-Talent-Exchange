@@ -124,6 +124,108 @@ void main() {
     },
   );
 
+  test('register sends region code in auth payload', () async {
+    final _RecordingTransport transport = _RecordingTransport(
+      <GteTransportResponse>[
+        GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            'access_token': 'live-token',
+            'session_id': 'live-session',
+            'token_type': 'bearer',
+            'expires_in': 3600,
+            'user': <String, Object?>{
+              'id': 'user-1',
+              'email': 'qa@example.com',
+              'username': 'qa_user',
+              'display_name': 'QA User',
+              'role': 'user',
+            },
+          },
+        ),
+      ],
+    );
+    final GteReliableApiRepository repository = GteReliableApiRepository(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.live,
+      ),
+      transport: transport,
+      fixtures: GteMockApi(latency: Duration.zero),
+    );
+
+    await repository.register(
+      const GteAuthRegisterRequest(
+        email: 'qa@example.com',
+        fullName: 'QA User',
+        phoneNumber: '08000000000',
+        isOver18: true,
+        regionCode: 'ng',
+        password: 'DemoPass123',
+      ),
+    );
+
+    expect(transport.requests, hasLength(1));
+    expect(transport.requests.single.uri.path, '/auth/register');
+    expect(transport.requests.single.body, <String, Object?>{
+      'email': 'qa@example.com',
+      'full_name': 'QA User',
+      'phone_number': '08000000000',
+      'is_over_18': true,
+      'region_code': 'NG',
+      'password': 'DemoPass123',
+    });
+  });
+
+  test('register surfaces FastAPI validation detail lists', () async {
+    final GteReliableApiRepository repository = GteReliableApiRepository(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.live,
+      ),
+      transport: _RecordingTransport(<GteTransportResponse>[
+        const GteTransportResponse(
+          statusCode: 422,
+          body: <String, Object?>{
+            'detail': <Map<String, Object?>>[
+              <String, Object?>{
+                'loc': <Object?>['body', 'region_code'],
+                'msg': 'Field required',
+              },
+            ],
+          },
+        ),
+      ]),
+      fixtures: GteMockApi(latency: Duration.zero),
+    );
+
+    expect(
+      () => repository.register(
+        const GteAuthRegisterRequest(
+          email: 'qa@example.com',
+          fullName: 'QA User',
+          phoneNumber: '08000000000',
+          isOver18: true,
+          regionCode: 'NG',
+          password: 'DemoPass123',
+        ),
+      ),
+      throwsA(
+        isA<GteApiException>()
+            .having(
+              (GteApiException error) => error.type,
+              'type',
+              GteApiErrorType.validation,
+            )
+            .having(
+              (GteApiException error) => error.message,
+              'message',
+              'region code: Field required',
+            ),
+      ),
+    );
+  });
+
   test(
     'fetch current user does not fall back to fixture auth on transport failure',
     () async {

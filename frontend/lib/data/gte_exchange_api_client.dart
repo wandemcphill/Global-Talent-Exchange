@@ -1224,19 +1224,3 @@ String _errorMessage(Object? payload) {
     fallback: 'The backend returned an unexpected response.',
   );
 }
-
-String gteApiErrorMessage(
-  Object? payload, {
-  required String fallback,
-}) {
-  if (payload is String && payload.trim().isNotEmpty) {
-    return payload;
-  }
-  if (payload is Map) {
-    final Object? detail = payload['detail'] ?? payload['message'];
-    if (detail is String && detail.trim().isNotEmpty) {
-      return detail;
-    }
-  }
-  return fallback;
-}

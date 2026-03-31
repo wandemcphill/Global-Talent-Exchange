@@ -1818,19 +1818,91 @@ class GteReliableApiRepository implements GteApiRepository {
   }
 
   String _errorMessage(Object? body) {
-    if (body is Map) {
-      final Map<String, Object?> json = GteJson.map(body);
-      final String? detail = GteJson.stringOrNull(json, <String>[
-        'detail',
-        'message',
-        'error',
-      ]);
-      if (detail != null) {
-        return detail;
-      }
-    }
-    return 'Backend request failed.';
+    return gteApiErrorMessage(body, fallback: 'Backend request failed.');
   }
+}
+
+String gteApiErrorMessage(Object? payload, {required String fallback}) {
+  return _extractApiErrorMessage(payload) ?? fallback;
+}
+
+String? _extractApiErrorMessage(Object? payload) {
+  if (payload is String) {
+    final String message = payload.trim();
+    return message.isEmpty ? null : message;
+  }
+
+  if (payload is List) {
+    final List<String> messages = payload
+        .map(_extractApiErrorMessage)
+        .whereType<String>()
+        .where((String message) => message.trim().isNotEmpty)
+        .toList(growable: false);
+    if (messages.isEmpty) {
+      return null;
+    }
+    return messages.join('; ');
+  }
+
+  if (payload is! Map) {
+    return null;
+  }
+
+  final Map<String, Object?> json = GteJson.map(
+    payload,
+    fallback: const <String, Object?>{},
+  );
+  final Object? detail = GteJson.value(json, <String>[
+    'detail',
+    'message',
+    'error',
+  ]);
+  if (detail != null) {
+    final String? detailMessage = _extractApiErrorMessage(detail);
+    if (detailMessage != null) {
+      return detailMessage;
+    }
+  }
+
+  final String? message = GteJson.stringOrNull(json, <String>['msg']);
+  if (message != null) {
+    final String trimmedMessage = message.trim();
+    if (trimmedMessage.isNotEmpty) {
+      final String? location = _formatApiErrorLocation(json['loc']);
+      if (location != null) {
+        return '$location: $trimmedMessage';
+      }
+      return trimmedMessage;
+    }
+  }
+
+  return null;
+}
+
+String? _formatApiErrorLocation(Object? location) {
+  if (location is! List) {
+    return null;
+  }
+
+  final List<String> parts = location
+      .map((Object? part) => part?.toString().trim() ?? '')
+      .where((String part) => part.isNotEmpty)
+      .where(
+        (String part) =>
+            !const <String>{
+              'body',
+              'query',
+              'path',
+              'response',
+              'header',
+            }.contains(part.toLowerCase()),
+      )
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return null;
+  }
+
+  return parts.last.replaceAll('_', ' ');
 }
 
 String _orderStatusQueryValue(GteOrderStatus status) {

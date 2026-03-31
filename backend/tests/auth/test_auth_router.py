@@ -173,6 +173,32 @@ def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
     assert exc_info.value.status_code == 401
 
 
+def test_register_without_region_code_defaults_to_global(app_client) -> None:
+    _app, client = app_client
+
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "email": "noregion@example.com",
+            "full_name": "No Region",
+            "phone_number": "08000000000",
+            "password": "SuperSecret1",
+            "is_over_18": True,
+        },
+    )
+
+    assert register_response.status_code == 201, register_response.text
+
+    access_token = register_response.json()["access_token"]
+    me_response = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert me_response.status_code == 200, me_response.text
+    assert me_response.json()["region_code"] == "GLOBAL"
+
+
 def test_api_auth_me_returns_authenticated_user(app_client) -> None:
     app, client = app_client
     user_id, token = _create_authenticated_user(app)
