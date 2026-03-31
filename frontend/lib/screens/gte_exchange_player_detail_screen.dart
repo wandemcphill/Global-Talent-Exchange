@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_feedback.dart';
 import '../data/agent_marketplace_api.dart';
 import '../data/agent_marketplace_models.dart';
+import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
 import '../models/player_avatar.dart';
@@ -903,10 +904,12 @@ class _GteExchangePlayerDetailScreenState
   }
 
   PlayerProfile _resolvedProfile(GtePlayerMarketSnapshot snapshot) {
-    final PlayerProfile? selectedProfile = widget.controller.selectedProfile;
-    if (selectedProfile != null &&
-        selectedProfile.snapshot.id == snapshot.detail.playerId) {
-      return selectedProfile;
+    if (widget.controller.api.config.mode != GteBackendMode.live) {
+      final PlayerProfile? selectedProfile = widget.controller.selectedProfile;
+      if (selectedProfile != null &&
+          selectedProfile.snapshot.id == snapshot.detail.playerId) {
+        return selectedProfile;
+      }
     }
 
     final List<TrendPoint> valueTrend = snapshot.candles.candles

@@ -5,15 +5,13 @@ import '../data/gte_mock_api.dart';
 import '../data/gte_models.dart';
 
 @Deprecated(
-    'Use GteFrontendApp and GteExchangeController for the canonical MVP app.')
+  'Use GteFrontendApp and GteExchangeController for the canonical MVP app.',
+)
 class GteAppController extends ChangeNotifier {
-  GteAppController({
-    GteApiRepository? api,
-  }) : _api = api ?? GteMockApi();
+  GteAppController({GteApiRepository? api}) : _api = api ?? GteMockApi();
 
   final GteApiRepository _api;
   final GteRequestGate _bootstrapGate = GteRequestGate();
-  final GteRequestGate _playerGate = GteRequestGate();
   final GteRequestGate _marketGate = GteRequestGate();
   final GteRequestGate _authGate = GteRequestGate();
   final GteRequestGate _traderGate = GteRequestGate();
@@ -28,7 +26,6 @@ class GteAppController extends ChangeNotifier {
 
   List<PlayerSnapshot> players = <PlayerSnapshot>[];
   MarketPulse? marketPulse;
-  PlayerProfile? selectedProfile;
   GteAuthSession? session;
   GteWalletSummary? walletSummary;
   GteWalletLedgerPage? walletLedger;
@@ -61,11 +58,9 @@ class GteAppController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<dynamic> payload =
-          await Future.wait<dynamic>(<Future<dynamic>>[
-        _api.fetchPlayers(),
-        _api.fetchMarketPulse(),
-      ]);
+      final List<dynamic> payload = await Future.wait<dynamic>(
+        <Future<dynamic>>[_api.fetchPlayers(), _api.fetchMarketPulse()],
+      );
       if (!_bootstrapGate.isActive(requestId)) {
         return;
       }
@@ -90,32 +85,6 @@ class GteAppController extends ChangeNotifier {
     }
 
     currentTabIndex = index;
-    notifyListeners();
-  }
-
-  Future<void> openPlayer(String playerId) async {
-    final int requestId = _playerGate.begin();
-    try {
-      final PlayerProfile profile = await _api.fetchPlayerProfile(playerId);
-      if (!_playerGate.isActive(requestId)) {
-        return;
-      }
-      selectedProfile = _mergeProfileWithPlayerState(profile);
-      notifyListeners();
-    } catch (error) {
-      if (_playerGate.isActive(requestId)) {
-        errorMessage = error.toString();
-        notifyListeners();
-      }
-    }
-  }
-
-  void closePlayer() {
-    if (selectedProfile == null) {
-      return;
-    }
-
-    selectedProfile = null;
     notifyListeners();
   }
 
@@ -146,10 +115,7 @@ class GteAppController extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     if (isAuthenticating) {
       return;
     }
@@ -161,10 +127,7 @@ class GteAppController extends ChangeNotifier {
 
     try {
       session = await _api.login(
-        GteAuthLoginRequest(
-          email: email,
-          password: password,
-        ),
+        GteAuthLoginRequest(email: email, password: password),
       );
       if (!_authGate.isActive(requestId)) {
         return;
@@ -194,12 +157,12 @@ class GteAppController extends ChangeNotifier {
     try {
       final List<dynamic> payload =
           await Future.wait<dynamic>(<Future<dynamic>>[
-        _api.fetchWalletSummary(),
-        _api.fetchWalletLedger(page: 1, pageSize: 5),
-        _api.fetchPortfolio(),
-        _api.fetchPortfolioSummary(),
-        _api.listOrders(limit: 10, offset: 0),
-      ]);
+            _api.fetchWalletSummary(),
+            _api.fetchWalletLedger(page: 1, pageSize: 5),
+            _api.fetchPortfolio(),
+            _api.fetchPortfolioSummary(),
+            _api.listOrders(limit: 10, offset: 0),
+          ]);
       if (!_traderGate.isActive(requestId)) {
         return;
       }
@@ -272,30 +235,24 @@ class GteAppController extends ChangeNotifier {
   }
 
   void toggleShortlist(String playerId) {
-    _updatePlayer(
-      playerId,
-      (PlayerSnapshot player) {
-        final bool nextShortlist = !player.isShortlisted;
-        return player.copyWith(
-          isShortlisted: nextShortlist,
-          isWatchlisted: nextShortlist ? true : player.isWatchlisted,
-        );
-      },
-    );
+    _updatePlayer(playerId, (PlayerSnapshot player) {
+      final bool nextShortlist = !player.isShortlisted;
+      return player.copyWith(
+        isShortlisted: nextShortlist,
+        isWatchlisted: nextShortlist ? true : player.isWatchlisted,
+      );
+    });
   }
 
   void toggleTransferRoom(String playerId) {
-    _updatePlayer(
-      playerId,
-      (PlayerSnapshot player) {
-        final bool nextTransferRoom = !player.inTransferRoom;
-        return player.copyWith(
-          inTransferRoom: nextTransferRoom,
-          isShortlisted: nextTransferRoom ? true : player.isShortlisted,
-          isWatchlisted: nextTransferRoom ? true : player.isWatchlisted,
-        );
-      },
-    );
+    _updatePlayer(playerId, (PlayerSnapshot player) {
+      final bool nextTransferRoom = !player.inTransferRoom;
+      return player.copyWith(
+        inTransferRoom: nextTransferRoom,
+        isShortlisted: nextTransferRoom ? true : player.isShortlisted,
+        isWatchlisted: nextTransferRoom ? true : player.isWatchlisted,
+      );
+    });
   }
 
   void cycleNotificationIntensity(String playerId) {
@@ -313,34 +270,20 @@ class GteAppController extends ChangeNotifier {
     String playerId,
     PlayerSnapshot Function(PlayerSnapshot player) transform,
   ) {
-    players = players.map((PlayerSnapshot player) {
-      if (player.id != playerId) {
-        return player;
-      }
-      return transform(player);
-    }).toList(growable: false);
-
-    if (selectedProfile != null && selectedProfile!.snapshot.id == playerId) {
-      final PlayerSnapshot snapshot = players.firstWhere(
-        (PlayerSnapshot player) => player.id == playerId,
-      );
-      selectedProfile = selectedProfile!.copyWith(snapshot: snapshot);
-    }
+    players = players
+        .map((PlayerSnapshot player) {
+          if (player.id != playerId) {
+            return player;
+          }
+          return transform(player);
+        })
+        .toList(growable: false);
 
     if (marketPulse != null) {
       marketPulse = _decorateMarketPulse(marketPulse!);
     }
 
     notifyListeners();
-  }
-
-  PlayerProfile _mergeProfileWithPlayerState(PlayerProfile profile) {
-    final PlayerSnapshot player = players.firstWhere(
-      (PlayerSnapshot snapshot) => snapshot.id == profile.snapshot.id,
-      orElse: () => profile.snapshot,
-    );
-
-    return profile.copyWith(snapshot: player);
   }
 
   MarketPulse _decorateMarketPulse(MarketPulse pulse) {

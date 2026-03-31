@@ -4,6 +4,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_exchange_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
+import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 
 void main() {
@@ -70,6 +71,20 @@ void main() {
       expect(snapshot.candles.candles, hasLength(1));
       expect(snapshot.orderBook.bids, isEmpty);
       expect(snapshot.orderBook.asks, isNotEmpty);
+    },
+  );
+
+  test(
+    'fixture client exposes lifecycle snapshot data from fixture builders',
+    () async {
+      final GteExchangeApiClient client = GteExchangeApiClient.fixture();
+
+      final GtePlayerLifecycleSnapshot? snapshot = await client
+          .fetchPlayerLifecycleSnapshot('lamine-yamal');
+
+      expect(snapshot, isNotNull);
+      expect(snapshot?.playerId, 'lamine-yamal');
+      expect(snapshot?.availabilityBadge.available, isTrue);
     },
   );
 
@@ -157,6 +172,58 @@ void main() {
       );
     },
   );
+
+  test(
+    'live client fails closed for public player surfaces without consulting fixture builders',
+    () async {
+      await _expectPlayerSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.live,
+      );
+    },
+  );
+
+  test(
+    'liveThenFixture client no longer catches public player surfaces into fixture builders',
+    () async {
+      await _expectPlayerSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.liveThenFixture,
+      );
+    },
+  );
+}
+
+Future<void> _expectPlayerSurfaceFailuresWithoutFixtureFallback(
+  GteBackendMode mode,
+) async {
+  final _CountingFixtureRepository fixtures = _CountingFixtureRepository();
+  final GteExchangeApiClient client = GteExchangeApiClient(
+    config: GteRepositoryConfig(baseUrl: 'https://example.test', mode: mode),
+    transport: _ThrowingTransport(),
+    repository: fixtures,
+  );
+
+  Future<void> expectNetworkError(Future<Object?> Function() action) async {
+    await expectLater(
+      action(),
+      throwsA(
+        isA<GteApiException>().having(
+          (GteApiException error) => error.type,
+          'type',
+          GteApiErrorType.network,
+        ),
+      ),
+    );
+  }
+
+  await expectNetworkError(() => client.fetchPlayers());
+  await expectNetworkError(() => client.fetchPlayerDetail('lamine-yamal'));
+  await expectNetworkError(() => client.fetchPlayerOverview('lamine-yamal'));
+  await expectNetworkError(() => client.fetchPlayerCareer('lamine-yamal'));
+  await expectNetworkError(
+    () => client.fetchPlayerLifecycleSnapshot('lamine-yamal'),
+  );
+
+  expect(fixtures.fetchPlayersCalls, 0);
 }
 
 class _RecordingTransport implements GteTransport {
@@ -210,5 +277,24 @@ class _RecordingTransport implements GteTransport {
         'frames': <Object?>[],
       },
     );
+  }
+}
+
+class _ThrowingTransport implements GteTransport {
+  @override
+  Future<GteTransportResponse> send(GteTransportRequest request) {
+    throw Exception('network down');
+  }
+}
+
+class _CountingFixtureRepository extends GteMockApi {
+  _CountingFixtureRepository() : super(latency: Duration.zero);
+
+  int fetchPlayersCalls = 0;
+
+  @override
+  Future<List<PlayerSnapshot>> fetchPlayers({int limit = 20}) {
+    fetchPlayersCalls += 1;
+    return super.fetchPlayers(limit: limit);
   }
 }

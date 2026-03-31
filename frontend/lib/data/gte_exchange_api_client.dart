@@ -23,8 +23,10 @@ class GteExchangeApiClient {
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
   }) {
-    final GteRepositoryConfig config =
-        GteRepositoryConfig(baseUrl: baseUrl, mode: mode);
+    final GteRepositoryConfig config = GteRepositoryConfig(
+      baseUrl: baseUrl,
+      mode: mode,
+    );
     final GteTransport transport = GteHttpTransport();
     final GteApiRepository fixtures = GteMockApi();
     return GteExchangeApiClient(
@@ -39,9 +41,7 @@ class GteExchangeApiClient {
     );
   }
 
-  factory GteExchangeApiClient.fixture({
-    Duration latency = Duration.zero,
-  }) {
+  factory GteExchangeApiClient.fixture({Duration latency = Duration.zero}) {
     final GteRepositoryConfig config = const GteRepositoryConfig(
       baseUrl: 'http://127.0.0.1:8000',
       mode: GteBackendMode.fixture,
@@ -65,10 +65,7 @@ class GteExchangeApiClient {
     required String password,
   }) {
     return repository.login(
-      GteAuthLoginRequest(
-        email: email,
-        password: password,
-      ),
+      GteAuthLoginRequest(email: email, password: password),
     );
   }
 
@@ -104,8 +101,10 @@ class GteExchangeApiClient {
     String documentKey, {
     String? versionLabel,
   }) {
-    return repository.fetchPolicyDocument(documentKey,
-        versionLabel: versionLabel);
+    return repository.fetchPolicyDocument(
+      documentKey,
+      versionLabel: versionLabel,
+    );
   }
 
   Future<GteComplianceStatus> fetchComplianceStatus() {
@@ -146,12 +145,15 @@ class GteExchangeApiClient {
   }
 
   Future<GteDepositRequest> createDepositRequest(
-      GteDepositCreateRequest request) {
+    GteDepositCreateRequest request,
+  ) {
     return repository.createDepositRequest(request);
   }
 
   Future<GteDepositRequest> submitDepositRequest(
-      String depositId, GteDepositSubmitRequest request) {
+    String depositId,
+    GteDepositSubmitRequest request,
+  ) {
     return repository.submitDepositRequest(depositId, request);
   }
 
@@ -160,7 +162,8 @@ class GteExchangeApiClient {
   }
 
   Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
-      GteWithdrawalCreateRequest request) {
+    GteWithdrawalCreateRequest request,
+  ) {
     return repository.createWithdrawalRequest(request);
   }
 
@@ -181,12 +184,15 @@ class GteExchangeApiClient {
   }
 
   Future<GteUserBankAccount> createUserBankAccount(
-      GteUserBankAccountCreate request) {
+    GteUserBankAccountCreate request,
+  ) {
     return repository.createUserBankAccount(request);
   }
 
   Future<GteUserBankAccount> updateUserBankAccount(
-      String bankAccountId, GteUserBankAccountUpdate request) {
+    String bankAccountId,
+    GteUserBankAccountUpdate request,
+  ) {
     return repository.updateUserBankAccount(bankAccountId, request);
   }
 
@@ -203,7 +209,9 @@ class GteExchangeApiClient {
   }
 
   Future<GteDisputeMessage> sendDisputeMessage(
-      String disputeId, GteDisputeMessageRequest request) {
+    String disputeId,
+    GteDisputeMessageRequest request,
+  ) {
     return repository.sendDisputeMessage(disputeId, request);
   }
 
@@ -224,8 +232,11 @@ class GteExchangeApiClient {
     List<int> bytes, {
     String? contentType,
   }) {
-    return repository.uploadAttachment(filename, bytes,
-        contentType: contentType);
+    return repository.uploadAttachment(
+      filename,
+      bytes,
+      contentType: contentType,
+    );
   }
 
   Future<GteAnalyticsEvent> trackAnalyticsEvent(
@@ -252,7 +263,8 @@ class GteExchangeApiClient {
   }
 
   Future<GteTreasurySettings> updateTreasurySettings(
-      GteTreasurySettingsUpdate request) {
+    GteTreasurySettingsUpdate request,
+  ) {
     return repository.updateTreasurySettings(request);
   }
 
@@ -261,12 +273,15 @@ class GteExchangeApiClient {
   }
 
   Future<GteTreasuryBankAccount> createTreasuryBankAccount(
-      GteTreasuryBankAccountCreate request) {
+    GteTreasuryBankAccountCreate request,
+  ) {
     return repository.createTreasuryBankAccount(request);
   }
 
   Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
-      String accountId, GteTreasuryBankAccountUpdate request) {
+    String accountId,
+    GteTreasuryBankAccountUpdate request,
+  ) {
     return repository.updateTreasuryBankAccount(accountId, request);
   }
 
@@ -284,18 +299,24 @@ class GteExchangeApiClient {
     );
   }
 
-  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
-      {String? adminNotes}) {
+  Future<GteDepositRequest> adminConfirmDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) {
     return repository.adminConfirmDeposit(depositId, adminNotes: adminNotes);
   }
 
-  Future<GteDepositRequest> adminRejectDeposit(String depositId,
-      {String? adminNotes}) {
+  Future<GteDepositRequest> adminRejectDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) {
     return repository.adminRejectDeposit(depositId, adminNotes: adminNotes);
   }
 
-  Future<GteDepositRequest> adminReviewDeposit(String depositId,
-      {String? adminNotes}) {
+  Future<GteDepositRequest> adminReviewDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) {
     return repository.adminReviewDeposit(depositId, adminNotes: adminNotes);
   }
 
@@ -318,8 +339,11 @@ class GteExchangeApiClient {
     required GteWithdrawalStatus status,
     String? adminNotes,
   }) {
-    return repository.adminUpdateWithdrawalStatus(withdrawalId,
-        status: status, adminNotes: adminNotes);
+    return repository.adminUpdateWithdrawalStatus(
+      withdrawalId,
+      status: status,
+      adminNotes: adminNotes,
+    );
   }
 
   Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
@@ -337,7 +361,9 @@ class GteExchangeApiClient {
   }
 
   Future<GteKycProfile> adminReviewKyc(
-      String profileId, GteKycReviewRequest request) {
+    String profileId,
+    GteKycReviewRequest request,
+  ) {
     return repository.adminReviewKyc(profileId, request);
   }
 
@@ -360,7 +386,9 @@ class GteExchangeApiClient {
   }
 
   Future<GteDisputeMessage> adminSendDisputeMessage(
-      String disputeId, GteDisputeMessageRequest request) {
+    String disputeId,
+    GteDisputeMessageRequest request,
+  ) {
     return repository.adminSendDisputeMessage(disputeId, request);
   }
 
@@ -370,75 +398,47 @@ class GteExchangeApiClient {
     if (config.mode == GteBackendMode.fixture) {
       return _fallbackPlayers(query);
     }
-
-    try {
-      return GteMarketPlayerListView.fromJson(
-        await _sendPublicGet(
-          '/marketplace/players',
-          query: query.toQueryParameters(),
-        ),
-      );
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        return _fallbackPlayers(query);
-      }
-      rethrow;
-    }
+    return GteMarketPlayerListView.fromJson(
+      await _sendPublicGet(
+        '/marketplace/players',
+        query: query.toQueryParameters(),
+      ),
+    );
   }
 
   Future<GteMarketPlayerDetailView> fetchPlayerDetail(String playerId) async {
     if (config.mode == GteBackendMode.fixture) {
       return _fallbackPlayerDetail(playerId);
     }
-
-    try {
-      return GteMarketPlayerDetailView.fromJson(
-        await _sendPublicGet('/api/market/players/$playerId'),
-      );
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        return _fallbackPlayerDetail(playerId);
-      }
-      rethrow;
-    }
+    return GteMarketPlayerDetailView.fromJson(
+      await _sendPublicGet('/api/market/players/$playerId'),
+    );
   }
 
   Future<GtePlayerOverview> fetchPlayerOverview(String playerId) async {
     if (config.mode == GteBackendMode.fixture) {
       return _fallbackPlayerOverview(playerId);
     }
-
-    try {
-      return GtePlayerOverview.fromJson(
-        await _sendPublicGet('/api/players/$playerId/overview'),
-      );
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        return _fallbackPlayerOverview(playerId);
-      }
-      rethrow;
-    }
+    return GtePlayerOverview.fromJson(
+      await _sendPublicGet('/api/players/$playerId/overview'),
+    );
   }
 
   Future<List<GteCareerEntry>> fetchPlayerCareer(String playerId) async {
     if (config.mode == GteBackendMode.fixture) {
       return _fallbackPlayerCareer(playerId);
     }
-
-    try {
-      final Object? raw = await _sendPublicGet('/api/players/$playerId/career');
-      return GteJson.list(raw, label: 'player career')
-          .map(GteCareerEntry.fromJson)
-          .toList(growable: false);
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        return _fallbackPlayerCareer(playerId);
-      }
-      rethrow;
-    }
+    final Object? raw = await _sendPublicGet('/api/players/$playerId/career');
+    return GteJson.list(
+      raw,
+      label: 'player career',
+    ).map(GteCareerEntry.fromJson).toList(growable: false);
   }
 
   Future<PlayerProfile> fetchPlayerProfile(String playerId) {
+    // Maintained live player detail uses fetchPlayerMarket(). This repository
+    // surface remains for fixture-native callers and tests that still request
+    // a PlayerProfile directly.
     return repository.fetchPlayerProfile(playerId);
   }
 
@@ -468,25 +468,17 @@ class GteExchangeApiClient {
   }
 
   Future<GtePlayerLifecycleSnapshot?> fetchPlayerLifecycleSnapshot(
-      String playerId) async {
+    String playerId,
+  ) async {
     if (config.mode == GteBackendMode.fixture) {
-      final GtePlayerOverview overview =
-          await _fallbackPlayerOverview(playerId);
+      final GtePlayerOverview overview = await _fallbackPlayerOverview(
+        playerId,
+      );
       return GtePlayerLifecycleSnapshot.fromOverview(overview);
     }
-
-    try {
-      return GtePlayerLifecycleSnapshot.fromJson(
-        await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
-      );
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        final GtePlayerOverview overview =
-            await _fallbackPlayerOverview(playerId);
-        return GtePlayerLifecycleSnapshot.fromOverview(overview);
-      }
-      rethrow;
-    }
+    return GtePlayerLifecycleSnapshot.fromJson(
+      await _sendPublicGet('/api/players/$playerId/lifecycle-snapshot'),
+    );
   }
 
   Future<Map<String, Object?>> fetchMatchLiveFeed(String matchKey) async {
@@ -664,7 +656,8 @@ class GteExchangeApiClient {
       'joined_at': DateTime.now().toUtc().toIso8601String(),
       'read_only': true,
       'channel': 'match:$matchKey:events',
-      'websocket_path': '/api/matches/$matchKey/stream?session_id=fixture-spectator-$matchKey',
+      'websocket_path':
+          '/api/matches/$matchKey/stream?session_id=fixture-spectator-$matchKey',
       'commentary_websocket_path':
           '/api/matches/$matchKey/commentary/stream?session_id=fixture-spectator-$matchKey',
       'presence_channel': 'match:$matchKey:events',
@@ -697,16 +690,9 @@ class GteExchangeApiClient {
     };
   }
 
-  bool _shouldFallback(Object error) {
-    if (config.mode != GteBackendMode.liveThenFixture) {
-      return false;
-    }
-    return (error is GteApiException && error.supportsFixtureFallback) ||
-        error is GteParsingException;
-  }
-
   Future<GteMarketPlayerListView> _fallbackPlayers(
-      GteMarketPlayersQuery query) async {
+    GteMarketPlayersQuery query,
+  ) async {
     final int startOffset = _fallbackCursorOffset(query);
     final int minimumWindow = startOffset + query.limit;
     final List<PlayerSnapshot> base = await repository.fetchPlayers(
@@ -716,41 +702,45 @@ class GteExchangeApiClient {
     final String? position = query.position?.trim().toLowerCase();
     final String? country = query.country?.trim().toLowerCase();
     final String? availability = query.availability?.trim().toLowerCase();
-    final List<PlayerSnapshot> filtered = base.where((PlayerSnapshot player) {
-      if (searchTerm.isNotEmpty) {
-        final String haystack = <String>[
-          player.name,
-          player.club,
-          player.nation,
-          player.position,
-        ].join(' ').toLowerCase();
-        if (!haystack.contains(searchTerm)) {
-          return false;
-        }
-      }
-      if (position != null &&
-          !player.position.toLowerCase().contains(position)) {
-        return false;
-      }
-      if (country != null && !player.nation.toLowerCase().contains(country)) {
-        return false;
-      }
-      if (query.minAge != null && player.age < query.minAge!) {
-        return false;
-      }
-      if (query.maxAge != null && player.age > query.maxAge!) {
-        return false;
-      }
-      if (availability == 'free_agent' &&
-          player.club.trim().toLowerCase() != 'free agent') {
-        return false;
-      }
-      return true;
-    }).toList(growable: false);
-    final List<PlayerSnapshot> page =
-        filtered.skip(startOffset).take(query.limit).toList(
-              growable: false,
-            );
+    final List<PlayerSnapshot> filtered = base
+        .where((PlayerSnapshot player) {
+          if (searchTerm.isNotEmpty) {
+            final String haystack =
+                <String>[
+                  player.name,
+                  player.club,
+                  player.nation,
+                  player.position,
+                ].join(' ').toLowerCase();
+            if (!haystack.contains(searchTerm)) {
+              return false;
+            }
+          }
+          if (position != null &&
+              !player.position.toLowerCase().contains(position)) {
+            return false;
+          }
+          if (country != null &&
+              !player.nation.toLowerCase().contains(country)) {
+            return false;
+          }
+          if (query.minAge != null && player.age < query.minAge!) {
+            return false;
+          }
+          if (query.maxAge != null && player.age > query.maxAge!) {
+            return false;
+          }
+          if (availability == 'free_agent' &&
+              player.club.trim().toLowerCase() != 'free agent') {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
+    final List<PlayerSnapshot> page = filtered
+        .skip(startOffset)
+        .take(query.limit)
+        .toList(growable: false);
     final bool hasMore = startOffset + page.length < filtered.length;
     return GteMarketPlayerListView(
       items: page.map(_mapSnapshotToListItem).toList(growable: false),
@@ -764,32 +754,36 @@ class GteExchangeApiClient {
   }
 
   Future<GteMarketPlayerDetailView> _fallbackPlayerDetail(
-      String playerId) async {
-    final PlayerProfile profile = await _fallbackProfile(playerId);
-    final double normalizedMovement =
-        _normalizeMovement(profile.snapshot.valueDeltaPct);
-    final double previousValue = normalizedMovement.abs() < 0.0001
-        ? profile.snapshot.marketCredits.toDouble()
-        : profile.snapshot.marketCredits / (1 + normalizedMovement);
+    String playerId,
+  ) async {
+    final PlayerSnapshot snapshot = await _loadFixturePlayerSnapshot(playerId);
+    final List<String> drivers = _fixtureTrendDrivers(snapshot);
+    final double normalizedMovement = _normalizeMovement(
+      snapshot.valueDeltaPct,
+    );
+    final double previousValue =
+        normalizedMovement.abs() < 0.0001
+            ? snapshot.marketCredits.toDouble()
+            : snapshot.marketCredits / (1 + normalizedMovement);
     return GteMarketPlayerDetailView(
-      playerId: profile.snapshot.id,
+      playerId: snapshot.id,
       identity: GteMarketPlayerIdentity(
-        playerName: profile.snapshot.name,
-        firstName: _splitName(profile.snapshot.name, 0),
-        lastName: _splitName(profile.snapshot.name, 1),
+        playerName: snapshot.name,
+        firstName: _splitName(snapshot.name, 0),
+        lastName: _splitName(snapshot.name, 1),
         shortName: null,
-        position: profile.snapshot.position,
-        normalizedPosition: profile.snapshot.position.toLowerCase(),
-        nationality: profile.snapshot.nation,
+        position: snapshot.position,
+        normalizedPosition: snapshot.position.toLowerCase(),
+        nationality: snapshot.nation,
         nationalityCode: null,
-        age: profile.snapshot.age,
+        age: snapshot.age,
         dateOfBirth: null,
         preferredFoot: null,
         shirtNumber: null,
         heightCm: null,
         weightKg: null,
         currentClubId: null,
-        currentClubName: profile.snapshot.club,
+        currentClubName: snapshot.club,
         currentCompetitionId: null,
         currentCompetitionName: null,
         imageUrl: null,
@@ -810,39 +804,41 @@ class GteExchangeApiClient {
       value: GteMarketPlayerValue(
         lastSnapshotId: null,
         lastSnapshotAt: null,
-        currentValueCredits: profile.snapshot.marketCredits.toDouble(),
+        currentValueCredits: snapshot.marketCredits.toDouble(),
         previousValueCredits: previousValue,
         movementPct: normalizedMovement,
-        footballTruthValueCredits: profile.snapshot.marketCredits.toDouble(),
-        marketSignalValueCredits: profile.snapshot.marketCredits.toDouble(),
-        publishedCardValueCredits: profile.snapshot.marketCredits.toDouble(),
+        footballTruthValueCredits: snapshot.marketCredits.toDouble(),
+        marketSignalValueCredits: snapshot.marketCredits.toDouble(),
+        publishedCardValueCredits: snapshot.marketCredits.toDouble(),
         scoutingSignalValueCredits: null,
         egameSignalValueCredits: null,
         confidenceScore: null,
         confidenceTier: null,
         trend7dPct: normalizedMovement,
         trend30dPct: null,
-        trendDirection: normalizedMovement > 0
-            ? 'up'
-            : normalizedMovement < 0
+        trendDirection:
+            normalizedMovement > 0
+                ? 'up'
+                : normalizedMovement < 0
                 ? 'down'
                 : 'flat',
         trendConfidence: null,
         movementTags: const <String>[],
       ),
       trend: GteMarketPlayerTrend(
-        trendScore: profile.snapshot.gsi.toDouble(),
-        marketInterestScore: profile.snapshot.recentHighlights.length * 10,
-        averageRating: profile.snapshot.formRating,
-        globalScoutingIndex: profile.snapshot.gsi.toDouble(),
+        trendScore: snapshot.gsi.toDouble(),
+        marketInterestScore: drivers.length * 10,
+        averageRating: snapshot.formRating,
+        globalScoutingIndex: snapshot.gsi.toDouble(),
         previousGlobalScoutingIndex: null,
         globalScoutingIndexMovementPct: null,
-        drivers: List<String>.from(profile.snapshot.recentHighlights),
+        drivers: drivers,
         trend7dPct: normalizedMovement,
         trend30dPct: null,
-        trendDirection: normalizedMovement > 0
-            ? 'up'
-            : normalizedMovement < 0
+        trendDirection:
+            normalizedMovement > 0
+                ? 'up'
+                : normalizedMovement < 0
                 ? 'down'
                 : 'flat',
         trendConfidence: null,
@@ -853,40 +849,27 @@ class GteExchangeApiClient {
   }
 
   Future<GtePlayerOverview> _fallbackPlayerOverview(String playerId) async {
-    final PlayerProfile profile = await _fallbackProfile(playerId);
-    final PlayerSnapshot snapshot = profile.snapshot;
+    final PlayerSnapshot snapshot = await _loadFixturePlayerSnapshot(playerId);
     final DateTime now = DateTime.now().toUtc();
     final DateTime generatedOn = DateTime.utc(now.year, now.month, now.day);
     final GteCareerTotals totals = _fallbackCareerTotals(snapshot);
     final List<GteSeasonProgression> seasonalProgression =
         _fallbackSeasonalProgression(snapshot, totals);
     final bool freeAgent = snapshot.club.trim().toLowerCase() == 'free agent';
-    final String transferSignal = profile.transferSignal.trim();
-    final List<GteLifecycleEventItem> events = profile.awards.isNotEmpty
-        ? profile.awards
-            .take(3)
-            .toList(growable: false)
-            .asMap()
-            .entries
-            .map((MapEntry<int, String> entry) {
-            return GteLifecycleEventItem(
-              eventType: 'career_highlight',
-              summary: entry.value,
-              occurredOn: DateTime.utc(now.year - entry.key, 6, 1),
-            );
-          }).toList(growable: false)
-        : snapshot.recentHighlights
-            .take(3)
-            .toList(growable: false)
-            .asMap()
-            .entries
-            .map((MapEntry<int, String> entry) {
-            return GteLifecycleEventItem(
-              eventType: 'market_signal',
-              summary: entry.value,
-              occurredOn: generatedOn.subtract(Duration(days: entry.key)),
-            );
-          }).toList(growable: false);
+    final String transferSignal = _fixtureTransferSignal(snapshot);
+    final List<GteLifecycleEventItem> events = snapshot.recentHighlights
+        .take(3)
+        .toList(growable: false)
+        .asMap()
+        .entries
+        .map((MapEntry<int, String> entry) {
+          return GteLifecycleEventItem(
+            eventType: 'market_signal',
+            summary: entry.value,
+            occurredOn: generatedOn.subtract(Duration(days: entry.key)),
+          );
+        })
+        .toList(growable: false);
 
     return GtePlayerOverview(
       playerId: snapshot.id,
@@ -928,41 +911,48 @@ class GteExchangeApiClient {
   }
 
   Future<List<GteCareerEntry>> _fallbackPlayerCareer(String playerId) async {
-    final PlayerProfile profile = await _fallbackProfile(playerId);
-    final PlayerSnapshot snapshot = profile.snapshot;
+    final PlayerSnapshot snapshot = await _loadFixturePlayerSnapshot(playerId);
     final GteCareerTotals totals = _fallbackCareerTotals(snapshot);
-    final List<GteSeasonProgression> progression =
-        _fallbackSeasonalProgression(snapshot, totals);
+    final List<GteSeasonProgression> progression = _fallbackSeasonalProgression(
+      snapshot,
+      totals,
+    );
     final DateTime now = DateTime.now().toUtc();
     final List<GteCareerEntry> entries = progression.reversed
         .toList(growable: false)
         .asMap()
         .entries
         .map((MapEntry<int, GteSeasonProgression> entry) {
-      final GteSeasonProgression season = entry.value;
-      final String clubName = season.clubName ??
-          (snapshot.club.trim().isEmpty ? 'Independent' : snapshot.club);
-      return GteCareerEntry(
-        id: '${snapshot.id}-${season.seasonLabel}',
-        playerId: snapshot.id,
-        clubId: season.clubId,
-        clubName: clubName,
-        seasonLabel: season.seasonLabel,
-        squadRole: entry.key == 0 ? 'Breakthrough' : 'First team',
-        appearances: season.appearances,
-        goals: season.goals,
-        assists: season.assists,
-        averageRating: season.averageRating?.round(),
-        notes: profile.awards.isEmpty
-            ? null
-            : profile.awards[entry.key % profile.awards.length],
-        startOn: DateTime.utc(now.year - (2 - entry.key), 7, 1),
-        endOn: DateTime.utc(now.year - (1 - entry.key), 6, 30),
-        updatedAt: now,
-      );
-    }).toList(growable: false);
-    entries.sort((GteCareerEntry left, GteCareerEntry right) =>
-        right.timelineAnchor.compareTo(left.timelineAnchor));
+          final GteSeasonProgression season = entry.value;
+          final String clubName =
+              season.clubName ??
+              (snapshot.club.trim().isEmpty ? 'Independent' : snapshot.club);
+          return GteCareerEntry(
+            id: '${snapshot.id}-${season.seasonLabel}',
+            playerId: snapshot.id,
+            clubId: season.clubId,
+            clubName: clubName,
+            seasonLabel: season.seasonLabel,
+            squadRole: entry.key == 0 ? 'Breakthrough' : 'First team',
+            appearances: season.appearances,
+            goals: season.goals,
+            assists: season.assists,
+            averageRating: season.averageRating?.round(),
+            notes:
+                snapshot.recentHighlights.isEmpty
+                    ? null
+                    : snapshot.recentHighlights[entry.key %
+                        snapshot.recentHighlights.length],
+            startOn: DateTime.utc(now.year - (2 - entry.key), 7, 1),
+            endOn: DateTime.utc(now.year - (1 - entry.key), 6, 30),
+            updatedAt: now,
+          );
+        })
+        .toList(growable: false);
+    entries.sort(
+      (GteCareerEntry left, GteCareerEntry right) =>
+          right.timelineAnchor.compareTo(left.timelineAnchor),
+    );
     return entries;
   }
 
@@ -984,14 +974,41 @@ class GteExchangeApiClient {
       askingType: player.inTransferRoom ? 'transfer' : 'trial',
       agentUserId: 'fixture-agent-${player.id}',
       agentName: '${player.club} representation',
-      marketplaceNote: player.recentHighlights.isEmpty
-          ? null
-          : player.recentHighlights.first,
+      marketplaceNote:
+          player.recentHighlights.isEmpty
+              ? null
+              : player.recentHighlights.first,
     );
   }
 
-  Future<PlayerProfile> _fallbackProfile(String playerId) {
-    return repository.fetchPlayerProfile(playerId);
+  Future<PlayerSnapshot> _loadFixturePlayerSnapshot(String playerId) async {
+    final List<PlayerSnapshot> players = await repository.fetchPlayers(
+      limit: 200,
+    );
+    return players.firstWhere(
+      (PlayerSnapshot player) => player.id == playerId,
+      orElse: () => throw StateError('Unknown player id: $playerId'),
+    );
+  }
+
+  List<String> _fixtureTrendDrivers(PlayerSnapshot snapshot) {
+    if (snapshot.recentHighlights.isNotEmpty) {
+      return List<String>.from(snapshot.recentHighlights);
+    }
+    return <String>[
+      '${snapshot.position} market profile',
+      'Fixture snapshot-only fallback',
+    ];
+  }
+
+  String _fixtureTransferSignal(PlayerSnapshot snapshot) {
+    if (snapshot.club.trim().toLowerCase() == 'free agent') {
+      return 'Available immediately as a free agent in fixture mode.';
+    }
+    if (snapshot.inTransferRoom) {
+      return 'Transfer room interest is active in fixture mode.';
+    }
+    return 'Fixture market snapshot generated from seeded player data.';
   }
 
   GteCareerTotals _fallbackCareerTotals(PlayerSnapshot snapshot) {
@@ -1000,10 +1017,11 @@ class GteExchangeApiClient {
         (24 + (snapshot.gsi / 5).round() + (snapshot.age % 6))
             .clamp(18, 48)
             .toInt();
-    final int starts = (appearances * (0.72 + (snapshot.formRating / 25)))
-        .round()
-        .clamp(12, appearances)
-        .toInt();
+    final int starts =
+        (appearances * (0.72 + (snapshot.formRating / 25)))
+            .round()
+            .clamp(12, appearances)
+            .toInt();
     final int minutes =
         (starts * (position == 'GK' ? 90 : 79)).clamp(1200, 4320).toInt();
     if (_isGoalkeeper(position)) {
@@ -1078,9 +1096,10 @@ class GteExchangeApiClient {
         cleanSheets: cleanSheets[index],
         saves: saves[index],
         minutes: minutes[index],
-        averageRating: (snapshot.formRating - (0.4 - (index * 0.2)))
-            .clamp(6.4, 9.2)
-            .toDouble(),
+        averageRating:
+            (snapshot.formRating - (0.4 - (index * 0.2)))
+                .clamp(6.4, 9.2)
+                .toDouble(),
       );
     }).reversed.toList(growable: false);
   }
@@ -1107,9 +1126,11 @@ class GteExchangeApiClient {
       return query.offset < 0 ? 0 : query.offset;
     }
     try {
-      final Map<String, dynamic> payload = jsonDecode(
-        utf8.decode(base64Url.decode(base64Url.normalize(rawCursor))),
-      ) as Map<String, dynamic>;
+      final Map<String, dynamic> payload =
+          jsonDecode(
+                utf8.decode(base64Url.decode(base64Url.normalize(rawCursor))),
+              )
+              as Map<String, dynamic>;
       final Object? offset = payload['offset'];
       if (offset is int && offset >= 0) {
         return offset;
@@ -1125,9 +1146,7 @@ class GteExchangeApiClient {
 
   String _encodeFallbackCursor(int offset) {
     return base64Url.encode(
-      utf8.encode(
-        jsonEncode(<String, int>{'offset': offset}),
-      ),
+      utf8.encode(jsonEncode(<String, int>{'offset': offset})),
     );
   }
 

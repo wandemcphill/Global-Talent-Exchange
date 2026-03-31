@@ -568,7 +568,10 @@ class GteReliableApiRepository implements GteApiRepository {
         ),
         label: 'market players',
       );
-      final Map<String, PlayerSnapshot> fixtureById = {
+      // Legacy live-then-fixture callers still seed a few non-critical player
+      // display fields from fixtures. The active shell uses /marketplace/players
+      // instead of this repository surface in live mode.
+      final Map<String, PlayerSnapshot> legacyFixtureById = {
         for (final PlayerSnapshot player in await fixtures.fetchPlayers(
           limit: limit,
         ))
@@ -580,7 +583,7 @@ class GteReliableApiRepository implements GteApiRepository {
           label: 'market player item',
         );
         final String playerId = GteJson.string(item, <String>['player_id']);
-        return _mapPlayerSnapshot(item, fixtureById[playerId]);
+        return _mapPlayerSnapshot(item, legacyFixtureById[playerId]);
       });
     }, () => fixtures.fetchPlayers(limit: limit));
   }
@@ -588,9 +591,6 @@ class GteReliableApiRepository implements GteApiRepository {
   @override
   Future<PlayerProfile> fetchPlayerProfile(String playerId) {
     return _withFallback<PlayerProfile>(() async {
-      final PlayerProfile? fixtureProfile = await _safeFixture<PlayerProfile?>(
-        () => fixtures.fetchPlayerProfile(playerId),
-      );
       final Map<String, Object?> detail = GteJson.map(
         await _request('GET', '/api/market/players/$playerId'),
         label: 'market player detail',
@@ -598,24 +598,20 @@ class GteReliableApiRepository implements GteApiRepository {
       final GteMarketTicker ticker = await fetchTicker(playerId);
       final GteMarketCandles candles = await fetchCandles(playerId, limit: 6);
       final GteOrderBook orderBook = await fetchOrderBook(playerId);
-      return _mapPlayerProfile(
-        detail,
-        ticker,
-        candles,
-        orderBook,
-        fixtureProfile,
-      );
+      return _mapPlayerProfile(detail, ticker, candles, orderBook);
     }, () => fixtures.fetchPlayerProfile(playerId));
   }
 
   @override
   Future<MarketPulse> fetchMarketPulse() {
     return _withFallback<MarketPulse>(() async {
-      final MarketPulse fixturePulse = await fixtures.fetchMarketPulse();
+      // Legacy controller-only aggregate surface still borrows seeded pulse
+      // copy. The active shell does not route through this method.
+      final MarketPulse legacyFixturePulse = await fixtures.fetchMarketPulse();
       final List<PlayerSnapshot> players = await fetchPlayers(limit: 6);
       final double marketMomentum =
           players.isEmpty
-              ? fixturePulse.marketMomentum
+              ? legacyFixturePulse.marketMomentum
               : players.fold<double>(
                     0,
                     (double sum, PlayerSnapshot player) =>
@@ -642,10 +638,10 @@ class GteReliableApiRepository implements GteApiRepository {
                     .length *
                 73 +
             131,
-        liveDeals: fixturePulse.transferRoom.length,
-        hottestLeague: fixturePulse.hottestLeague,
-        tickers: tickers.isEmpty ? fixturePulse.tickers : tickers,
-        transferRoom: fixturePulse.transferRoom,
+        liveDeals: legacyFixturePulse.transferRoom.length,
+        hottestLeague: legacyFixturePulse.hottestLeague,
+        tickers: tickers.isEmpty ? legacyFixturePulse.tickers : tickers,
+        transferRoom: legacyFixturePulse.transferRoom,
       );
     }, fixtures.fetchMarketPulse);
   }
@@ -1584,6 +1580,9 @@ class GteReliableApiRepository implements GteApiRepository {
     Future<T> Function() fixtureCall, {
     bool allowFixtureFallback = true,
   }) async {
+    // Shipped active-shell providers clamp this repository to live mode. The
+    // fixture branches below remain for explicit fixture and legacy-only
+    // live-then-fixture callers.
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
@@ -1596,14 +1595,6 @@ class GteReliableApiRepository implements GteApiRepository {
         return fixtureCall();
       }
       rethrow;
-    }
-  }
-
-  Future<T?> _safeFixture<T>(Future<T> Function() callback) async {
-    try {
-      return await callback();
-    } catch (_) {
-      return null;
     }
   }
 
@@ -1700,7 +1691,6 @@ class GteReliableApiRepository implements GteApiRepository {
     GteMarketTicker ticker,
     GteMarketCandles candles,
     GteOrderBook orderBook,
-    PlayerProfile? fixture,
   ) {
     final Map<String, Object?> identity = GteJson.map(
       GteJson.value(json, <String>['identity']) ?? const <String, Object?>{},
@@ -1718,28 +1708,26 @@ class GteReliableApiRepository implements GteApiRepository {
       'player_id': GteJson.string(json, <String>['player_id']),
       'player_name': GteJson.string(identity, <String>[
         'player_name',
-      ], fallback: fixture?.snapshot.name ?? 'Unknown player'),
+      ], fallback: 'Unknown player'),
       'current_club_name': GteJson.stringOrNull(identity, <String>[
         'current_club_name',
       ]),
       'nationality': GteJson.stringOrNull(identity, <String>['nationality']),
       'position': GteJson.stringOrNull(identity, <String>['position']),
-      'age': GteJson.integer(identity, <String>[
-        'age',
-      ], fallback: fixture?.snapshot.age ?? 0),
+      'age': GteJson.integer(identity, <String>['age'], fallback: 0),
       'current_value_credits': GteJson.number(value, <String>[
         'current_value_credits',
-      ], fallback: fixture?.snapshot.marketCredits.toDouble() ?? 0.0),
+      ], fallback: 0.0),
       'movement_pct': GteJson.number(value, <String>[
         'movement_pct',
-      ], fallback: fixture?.snapshot.valueDeltaPct ?? 0.0),
+      ], fallback: 0.0),
       'trend_score': GteJson.number(trend, <String>[
         'global_scouting_index',
-      ], fallback: fixture?.snapshot.gsi.toDouble() ?? 0.0),
+      ], fallback: 0.0),
       'average_rating': GteJson.number(trend, <String>[
         'average_rating',
-      ], fallback: fixture?.snapshot.formRating ?? 0.0),
-    }, fixture?.snapshot).copyWith(
+      ], fallback: 0.0),
+    }, null).copyWith(
       valueTrend: candles.candles
           .map(
             (GteMarketCandle candle) => TrendPoint(
@@ -1748,30 +1736,23 @@ class GteReliableApiRepository implements GteApiRepository {
             ),
           )
           .toList(growable: false),
-      recentHighlights:
-          fixture?.snapshot.recentHighlights ??
-          <String>[
-            'Last price ${ticker.lastPrice?.toStringAsFixed(1) ?? 'n/a'} credits',
-            '24h volume ${ticker.volume24h.toStringAsFixed(1)}',
-            'Spread ${ticker.spread?.toStringAsFixed(1) ?? 'n/a'}',
-          ],
+      recentHighlights: <String>[
+        'Last price ${ticker.lastPrice?.toStringAsFixed(1) ?? 'n/a'} credits',
+        '24h volume ${ticker.volume24h.toStringAsFixed(1)}',
+        'Spread ${ticker.spread?.toStringAsFixed(1) ?? 'n/a'}',
+      ],
     );
-    return (fixture ??
-            PlayerProfile(
-              snapshot: snapshot,
-              gsiTrend: snapshot.valueTrend,
-              awards: const <String>[],
-              statBlocks: const <String>[],
-              scoutingReport: 'Live market-backed profile.',
-              transferSignal: 'Market detail sourced from the backend.',
-            ))
-        .copyWith(
-          snapshot: snapshot,
-          gsiTrend: snapshot.valueTrend,
-          ticker: ticker,
-          orderBook: orderBook,
-          candles: candles,
-        );
+    return PlayerProfile(
+      snapshot: snapshot,
+      gsiTrend: snapshot.valueTrend,
+      awards: const <String>[],
+      statBlocks: const <String>[],
+      scoutingReport: 'Live market-backed profile.',
+      transferSignal: 'Market detail sourced from the backend.',
+      ticker: ticker,
+      orderBook: orderBook,
+      candles: candles,
+    );
   }
 
   PlayerSnapshot _generatedPlayerSnapshot(String playerId, String playerName) {

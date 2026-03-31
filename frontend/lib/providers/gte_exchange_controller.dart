@@ -265,21 +265,11 @@ class GteExchangeController extends ChangeNotifier {
     selectedCandleInterval = interval;
     playerError = null;
     playerProfileError = null;
+    selectedProfile = null;
     isLoadingPlayer = true;
     notifyListeners();
 
     try {
-      final Future<_PlayerProfileLoadResult> profileFuture = _api
-          .fetchPlayerProfile(playerId)
-          .then<_PlayerProfileLoadResult>(
-            (PlayerProfile profile) =>
-                _PlayerProfileLoadResult(profile: profile),
-          )
-          .catchError((Object error) {
-            return _PlayerProfileLoadResult(
-              errorMessage: AppFeedback.messageFor(error),
-            );
-          });
       final GtePlayerMarketSnapshot snapshot = await _api.fetchPlayerMarket(
         playerId,
         interval: interval,
@@ -289,15 +279,6 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       selectedPlayer = snapshot;
-      final _PlayerProfileLoadResult profileResult = await profileFuture;
-      if (!_playerGate.isActive(requestId)) {
-        return;
-      }
-      if (profileResult.profile != null) {
-        selectedProfile = _applyEngagementToProfile(profileResult.profile!);
-      } else {
-        playerProfileError = profileResult.errorMessage;
-      }
       playerSyncedAt = DateTime.now().toUtc();
     } catch (error) {
       if (_playerGate.isActive(requestId)) {
@@ -446,6 +427,7 @@ class GteExchangeController extends ChangeNotifier {
     orderError = null;
     complianceError = null;
     playerProfileError = null;
+    selectedProfile = null;
     recentOrderTotal = 0;
     openOrderTotal = 0;
     _recentOrderIds.clear();
@@ -759,7 +741,6 @@ class GteExchangeController extends ChangeNotifier {
     final _PlayerEngagementState current = _engagementStateFor(playerId);
     final bool nextValue = !current.isScouted;
     _playerEngagement[playerId] = current.copyWith(isScouted: nextValue);
-    _syncSelectedProfileEngagement(playerId);
     _queueMajorInteraction(
       action: nextValue ? 'follow_player' : 'unfollow_player',
       payload: <String, Object?>{
@@ -775,7 +756,6 @@ class GteExchangeController extends ChangeNotifier {
     final _PlayerEngagementState current = _engagementStateFor(playerId);
     final bool nextValue = !current.isShortlisted;
     _playerEngagement[playerId] = current.copyWith(isShortlisted: nextValue);
-    _syncSelectedProfileEngagement(playerId);
     _queueMajorInteraction(
       action: 'toggle_shortlist',
       payload: <String, Object?>{
@@ -841,44 +821,12 @@ class GteExchangeController extends ChangeNotifier {
     }
   }
 
-  _PlayerEngagementState _engagementStateFor(
-    String playerId, {
-    PlayerProfile? profile,
-  }) {
+  _PlayerEngagementState _engagementStateFor(String playerId) {
     final _PlayerEngagementState? existing = _playerEngagement[playerId];
     if (existing != null) {
       return existing;
     }
-    final PlayerSnapshot? snapshot =
-        profile?.snapshot ??
-        (selectedProfile?.snapshot.id == playerId
-            ? selectedProfile?.snapshot
-            : null);
-    return _PlayerEngagementState(
-      isScouted: snapshot?.isFollowed ?? false,
-      isShortlisted: snapshot?.isShortlisted ?? false,
-    );
-  }
-
-  PlayerProfile _applyEngagementToProfile(PlayerProfile profile) {
-    final _PlayerEngagementState engagement = _engagementStateFor(
-      profile.snapshot.id,
-      profile: profile,
-    );
-    return profile.copyWith(
-      snapshot: profile.snapshot.copyWith(
-        isFollowed: engagement.isScouted,
-        isShortlisted: engagement.isShortlisted,
-      ),
-    );
-  }
-
-  void _syncSelectedProfileEngagement(String playerId) {
-    final PlayerProfile? profile = selectedProfile;
-    if (profile == null || profile.snapshot.id != playerId) {
-      return;
-    }
-    selectedProfile = _applyEngagementToProfile(profile);
+    return const _PlayerEngagementState(isScouted: false, isShortlisted: false);
   }
 
   void _queueSessionRefreshEvent({
@@ -921,13 +869,6 @@ class GteExchangeController extends ChangeNotifier {
       ),
     );
   }
-}
-
-class _PlayerProfileLoadResult {
-  const _PlayerProfileLoadResult({this.profile, this.errorMessage});
-
-  final PlayerProfile? profile;
-  final String? errorMessage;
 }
 
 class _PlayerEngagementState {
