@@ -27,6 +27,80 @@ void main() {
   );
 
   test(
+    'fetch players in live mode maps live payload without borrowing fixture snapshots',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'items': <Map<String, Object?>>[
+                <String, Object?>{
+                  'player_id': 'live-player',
+                  'player_name': 'Live Prospect',
+                  'current_value_credits': 640,
+                  'trend_score': 76,
+                  'movement_pct': 5.5,
+                },
+              ],
+            },
+          ),
+        ],
+      );
+      final _RecordingPlayersFixtureApi fixtures =
+          _RecordingPlayersFixtureApi();
+      final GteReliableApiRepository repository = GteReliableApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        fixtures: fixtures,
+      );
+
+      final List<PlayerSnapshot> players = await repository.fetchPlayers();
+
+      expect(fixtures.fetchPlayersCalls, 0);
+      expect(players, hasLength(1));
+      expect(players.single.id, 'live-player');
+      expect(players.single.name, 'Live Prospect');
+      expect(players.single.club, 'Unknown club');
+      expect(players.single.nation, 'Unknown nation');
+      expect(players.single.position, 'N/A');
+      expect(players.single.age, 0);
+      expect(players.single.marketCredits, 640);
+      expect(players.single.gsi, 76);
+      expect(players.single.formRating, 0);
+      expect(players.single.valueDeltaPct, 5.5);
+      expect(players.single.recentHighlights, isEmpty);
+      expect(players.single.inTransferRoom, isFalse);
+    },
+  );
+
+  test(
+    'fetch players in fixture mode still returns fixture snapshots',
+    () async {
+      final _RecordingPlayersFixtureApi fixtures =
+          _RecordingPlayersFixtureApi();
+      final GteReliableApiRepository repository = GteReliableApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.fixture,
+        ),
+        transport: _ThrowingTransport(),
+        fixtures: fixtures,
+      );
+
+      final List<PlayerSnapshot> players = await repository.fetchPlayers();
+
+      expect(fixtures.fetchPlayersCalls, 1);
+      expect(players, hasLength(1));
+      expect(players.single.id, 'fixture-player');
+      expect(players.single.club, 'Fixture FC');
+    },
+  );
+
+  test(
     'login does not fall back to fixture auth on transport failure',
     () async {
       final GteReliableApiRepository repository = GteReliableApiRepository(
@@ -66,6 +140,91 @@ void main() {
       );
 
       expect(repository.fetchCurrentUser, throwsA(isA<GteApiException>()));
+    },
+  );
+
+  test(
+    'fetch market pulse in live mode derives pulse from live players without borrowing fixture pulse data',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'items': <Map<String, Object?>>[
+                <String, Object?>{
+                  'player_id': 'victor-osimhen',
+                  'player_name': 'Victor Osimhen',
+                  'current_club_name': 'Galatasaray',
+                  'nationality': 'Nigeria',
+                  'position': 'ST',
+                  'age': 27,
+                  'current_value_credits': 920,
+                  'trend_score': 84,
+                  'average_rating': 7.3,
+                  'movement_pct': 6.1,
+                },
+                <String, Object?>{
+                  'player_id': 'lamine-yamal',
+                  'player_name': 'Lamine Yamal',
+                  'current_club_name': 'Barcelona',
+                  'nationality': 'Spain',
+                  'position': 'RW',
+                  'age': 18,
+                  'current_value_credits': 1180,
+                  'trend_score': 93,
+                  'average_rating': 7.8,
+                  'movement_pct': 7.8,
+                },
+              ],
+            },
+          ),
+        ],
+      );
+      final _RecordingPulseFixtureApi fixtures = _RecordingPulseFixtureApi();
+      final GteReliableApiRepository repository = GteReliableApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        fixtures: fixtures,
+      );
+
+      final MarketPulse pulse = await repository.fetchMarketPulse();
+
+      expect(fixtures.fetchMarketPulseCalls, 0);
+      expect(pulse.marketMomentum, closeTo(6.95, 0.001));
+      expect(pulse.dailyVolumeCredits, 2100);
+      expect(pulse.liveDeals, 0);
+      expect(pulse.hottestLeague, 'Global Exchange');
+      expect(pulse.tickers, <String>[
+        'Victor Osimhen +6.1%',
+        'Lamine Yamal +7.8%',
+      ]);
+      expect(pulse.transferRoom, isEmpty);
+    },
+  );
+
+  test(
+    'fetch market pulse in fixture mode still returns fixture pulse',
+    () async {
+      final _RecordingPulseFixtureApi fixtures = _RecordingPulseFixtureApi();
+      final GteReliableApiRepository repository = GteReliableApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.fixture,
+        ),
+        transport: _ThrowingTransport(),
+        fixtures: fixtures,
+      );
+
+      final MarketPulse pulse = await repository.fetchMarketPulse();
+
+      expect(fixtures.fetchMarketPulseCalls, 1);
+      expect(pulse.hottestLeague, 'Fixture Borrowed League');
+      expect(pulse.transferRoom, hasLength(1));
+      expect(pulse.transferRoom.single.id, 'fixture-pulse-entry');
     },
   );
 
@@ -471,5 +630,63 @@ class _RecordingProfileFixtureApi extends GteMockApi {
   Future<PlayerProfile> fetchPlayerProfile(String playerId) {
     fetchPlayerProfileCalls += 1;
     return super.fetchPlayerProfile(playerId);
+  }
+}
+
+class _RecordingPlayersFixtureApi extends GteMockApi {
+  _RecordingPlayersFixtureApi() : super(latency: Duration.zero);
+
+  int fetchPlayersCalls = 0;
+
+  @override
+  Future<List<PlayerSnapshot>> fetchPlayers({int limit = 20}) async {
+    fetchPlayersCalls += 1;
+    return <PlayerSnapshot>[
+      const PlayerSnapshot(
+        id: 'fixture-player',
+        name: 'Fixture Prospect',
+        club: 'Fixture FC',
+        nation: 'Fixture Nation',
+        position: 'CB',
+        age: 22,
+        marketCredits: 777,
+        gsi: 88,
+        formRating: 7.7,
+        valueDeltaPct: 3.3,
+        valueTrend: <TrendPoint>[],
+        recentHighlights: <String>['Fixture seeded highlight'],
+        isWatchlisted: true,
+        inTransferRoom: true,
+      ),
+    ];
+  }
+}
+
+class _RecordingPulseFixtureApi extends GteMockApi {
+  _RecordingPulseFixtureApi() : super(latency: Duration.zero);
+
+  int fetchMarketPulseCalls = 0;
+
+  @override
+  Future<MarketPulse> fetchMarketPulse() async {
+    fetchMarketPulseCalls += 1;
+    return MarketPulse(
+      marketMomentum: 99,
+      dailyVolumeCredits: 99999,
+      activeWatchers: 999,
+      liveDeals: 99,
+      hottestLeague: 'Fixture Borrowed League',
+      tickers: const <String>['Fixture pulse ticker'],
+      transferRoom: <TransferRoomEntry>[
+        TransferRoomEntry(
+          id: 'fixture-pulse-entry',
+          headline: 'Fixture pulse headline',
+          lane: 'Fixture lane',
+          marketCredits: 999,
+          activity: 'Fixture pulse activity',
+          timestamp: DateTime.utc(2026, 3, 31, 12),
+        ),
+      ],
+    );
   }
 }

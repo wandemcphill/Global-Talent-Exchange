@@ -1,10 +1,7 @@
 import '../data/gte_api_repository.dart';
 
 class GteAppConfig {
-  const GteAppConfig({
-    required this.apiBaseUrl,
-    required this.backendMode,
-  });
+  const GteAppConfig({required this.apiBaseUrl, required this.backendMode});
 
   final String apiBaseUrl;
   final GteBackendMode backendMode;
@@ -33,6 +30,8 @@ GteBackendMode _parseBackendMode(String rawMode) {
       return GteBackendMode.live;
     case 'livethenfixture':
     default:
+      // Preserved for legacy/dev/test wiring. Shipped active-shell providers
+      // clamp this back to live before building critical clients.
       return GteBackendMode.liveThenFixture;
   }
 }

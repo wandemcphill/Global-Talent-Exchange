@@ -23,6 +23,9 @@ class GteExchangeApiClient {
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
   }) {
+    // Shipped exchange clients prefer live mode. Explicit demo/test data should
+    // come from GteExchangeApiClient.fixture(); any remaining shared
+    // live-then-fixture behavior lives inside the repository as legacy debt.
     final GteRepositoryConfig config = GteRepositoryConfig(
       baseUrl: baseUrl,
       mode: mode,
