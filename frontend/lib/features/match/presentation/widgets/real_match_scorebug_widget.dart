@@ -12,6 +12,10 @@ class RealMatchScorebugWidget extends StatelessWidget {
     required this.stateLabel,
     required this.cameraLabel,
     this.eventLabel,
+    this.competitionLabel,
+    this.detailLabel,
+    this.homeAccent = const Color(0xFF53B1FD),
+    this.awayAccent = const Color(0xFFF97316),
   });
 
   final String homeName;
@@ -23,37 +27,71 @@ class RealMatchScorebugWidget extends StatelessWidget {
   final String stateLabel;
   final String cameraLabel;
   final String? eventLabel;
+  final String? competitionLabel;
+  final String? detailLabel;
+  final Color homeAccent;
+  final Color awayAccent;
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> topChips = <Widget>[
+      if (competitionLabel != null && competitionLabel!.trim().isNotEmpty)
+        _HeaderChip(
+          label: competitionLabel!,
+          accent: const Color(0xFF53B1FD),
+          filled: false,
+        ),
+      _HeaderChip(
+        label: phaseLabel.toUpperCase(),
+        accent: const Color(0xFFFDB022),
+      ),
+      if (detailLabel != null && detailLabel!.trim().isNotEmpty)
+        _HeaderChip(label: detailLabel!, accent: Colors.white54, filled: false),
+    ];
+
     return DecoratedBox(
       key: const Key('real-match-scorebug'),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         gradient: const LinearGradient(
-          colors: <Color>[Color(0xF40A121C), Color(0xF4132232)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xF50A121A), Color(0xF2132231)],
         ),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 22,
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 24,
             offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            if (topChips.isNotEmpty) ...<Widget>[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(spacing: 8, runSpacing: 8, children: topChips),
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _TeamBlock(name: homeName, score: homeScore),
-                const SizedBox(width: 12),
                 Expanded(
+                  child: _TeamBlock(
+                    name: homeName,
+                    score: homeScore,
+                    accent: homeAccent,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       Text(
                         clockLabel,
@@ -64,38 +102,36 @@ class RealMatchScorebugWidget extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        phaseLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: const Color(0xFFFDB022),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                        ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 32,
+                        height: 2,
+                        color: Colors.white.withValues(alpha: 0.14),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                _TeamBlock(name: awayName, score: awayScore, alignEnd: true),
+                Expanded(
+                  child: _TeamBlock(
+                    name: awayName,
+                    score: awayScore,
+                    accent: awayAccent,
+                    alignEnd: true,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
-            Row(
+            const SizedBox(height: 12),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: <Widget>[
-                Expanded(
-                  child: _MetaChip(
-                    label: stateLabel.toUpperCase(),
-                    accent: const Color(0xFF17B26A),
-                  ),
+                _MetaChip(
+                  label: stateLabel.toUpperCase(),
+                  accent: const Color(0xFF17B26A),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _MetaChip(
-                    label: cameraLabel,
-                    accent: const Color(0xFF53B1FD),
-                  ),
-                ),
+                _MetaChip(label: cameraLabel, accent: const Color(0xFF53B1FD)),
               ],
             ),
             if (eventLabel != null &&
@@ -104,12 +140,15 @@ class RealMatchScorebugWidget extends StatelessWidget {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
+                  horizontal: 12,
+                  vertical: 9,
                 ),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                   color: Colors.white.withValues(alpha: 0.05),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
                 ),
                 child: Text(
                   eventLabel!,
@@ -118,7 +157,7 @@ class RealMatchScorebugWidget extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -134,38 +173,110 @@ class _TeamBlock extends StatelessWidget {
   const _TeamBlock({
     required this.name,
     required this.score,
+    required this.accent,
     this.alignEnd = false,
   });
 
   final String name;
   final int score;
+  final Color accent;
   final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 100,
-      child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            name.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white70,
-              fontWeight: FontWeight.w700,
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          mainAxisAlignment:
+              alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (!alignEnd)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent,
+                ),
+              ),
+            if (!alignEnd) const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                name.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: alignEnd ? TextAlign.right : TextAlign.left,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ),
+            if (alignEnd) const SizedBox(width: 8),
+            if (alignEnd)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$score',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
           ),
-          Text(
-            '$score',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  const _HeaderChip({
+    required this.label,
+    required this.accent,
+    this.filled = true,
+  });
+
+  final String label;
+  final Color accent;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color:
+            filled
+                ? accent.withValues(alpha: 0.16)
+                : Colors.white.withValues(alpha: 0.04),
+        border: Border.all(
+          color:
+              filled
+                  ? accent.withValues(alpha: 0.34)
+                  : Colors.white.withValues(alpha: 0.10),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: filled ? Colors.white : Colors.white70,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -194,7 +305,7 @@ class _MetaChip extends StatelessWidget {
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.w800,
-          letterSpacing: 0.6,
+          letterSpacing: 0.5,
         ),
       ),
     );

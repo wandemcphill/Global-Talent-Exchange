@@ -31,7 +31,7 @@ class MatchScreen extends ConsumerWidget {
     return AppPageLayout(
       title: 'Matches',
       subtitle:
-          'Premium live match hub for viewer launch, broadcast package entry, and honest separation between live and simulated routes.',
+          'Premium live match hub for viewer launch, broadcast package entry, and honest separation between live, gated 3D, and simulated routes.',
       trailing: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -50,7 +50,7 @@ class MatchScreen extends ConsumerWidget {
                   ? 'Launch the right viewer lane with broadcast-grade clarity.'
                   : 'Sign in before the live broadcast desk can mount match programs.',
           description:
-              'The shipped Matches tab reads /api/broadcast/home for live discovery, then routes cleanly into 2D, Broadcast+, and 3D viewers without masking blocked backend truth.',
+              'The shipped Matches tab reads /api/broadcast/home for live discovery, then routes cleanly into 2D, Broadcast+, and the entitlement-gated Flutter 3D lane without masking blocked backend truth.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Programs',
@@ -69,8 +69,9 @@ class MatchScreen extends ConsumerWidget {
             ),
             GtexStatTile(
               label: 'Capability',
-              value: '2D + Broadcast+ + 3D',
-              support: 'Viewer lanes remain separate',
+              value: '2D + Broadcast+ + gated 3D',
+              support:
+                  'Flutter 3D only opens when live session and entitlement qualify',
               tone: GtexSurfaceTone.warning,
             ),
           ],

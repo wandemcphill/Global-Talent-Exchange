@@ -30,6 +30,16 @@ class LiveMatchViewerBootstrap {
   final CompetitionSummary competition;
 }
 
+class LiveMatchViewerQualifiedRoute {
+  const LiveMatchViewerQualifiedRoute({
+    required this.bootstrap,
+    required this.initialViewState,
+  });
+
+  final LiveMatchViewerBootstrap bootstrap;
+  final MatchViewState initialViewState;
+}
+
 abstract class LiveMatchViewerRepository {
   Future<LiveMatchViewerBootstrap> resolveBootstrap(String matchKey);
 
@@ -108,6 +118,28 @@ final liveMatchViewerBootstrapProvider = FutureProvider.autoDispose
           .resolveBootstrap(matchKey);
     });
 
+final liveMatchViewerQualifiedRouteProvider = FutureProvider.autoDispose
+    .family<LiveMatchViewerQualifiedRoute, String>((
+      Ref ref,
+      String matchKey,
+    ) async {
+      final LiveMatchViewerRepository repository = ref.watch(
+        liveMatchViewerRepositoryProvider,
+      );
+      final LiveMatchViewerBootstrap bootstrap = await repository
+          .resolveBootstrap(matchKey);
+      final MatchViewState initialViewState = await repository.loadViewState(
+        matchKey,
+      );
+      return LiveMatchViewerQualifiedRoute(
+        bootstrap: bootstrap,
+        initialViewState: qualifyLiveMatchViewerState(
+          matchKey: matchKey,
+          state: initialViewState,
+        ),
+      );
+    });
+
 Future<LiveMatchViewerBootstrap> resolveLiveMatchViewerBootstrap(
   WidgetRef ref,
   String matchKey,
@@ -123,6 +155,59 @@ Future<MatchViewState> loadLiveMatchViewState(
   return ref
       .read(liveMatchViewerRepositoryProvider)
       .loadViewState(matchKey, continuationToken: continuationToken);
+}
+
+MatchViewState qualifyLiveMatchViewerState({
+  required String matchKey,
+  required MatchViewState state,
+}) {
+  final String normalizedMatchKey = matchKey.trim();
+  final String resolvedMatchId = state.matchId.trim();
+  if (resolvedMatchId.isEmpty || resolvedMatchId != normalizedMatchKey) {
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message: 'This Flutter 3D session is unavailable for the selected match.',
+    );
+  }
+  if (state.frames.isEmpty) {
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message:
+          'This Flutter 3D session is unavailable because the live timeline was incomplete.',
+    );
+  }
+  final int lastFrameSecond = state.frames.last.timeSeconds.ceil();
+  if (state.segmentEndSeconds < state.segmentStartSeconds) {
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message:
+          'This Flutter 3D session is unavailable because the live segment timing was inconsistent.',
+    );
+  }
+  if (state.durationSeconds < state.segmentEndSeconds) {
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message:
+          'This Flutter 3D session is unavailable because the verified timeline ended unexpectedly.',
+    );
+  }
+  if (state.durationSeconds < lastFrameSecond ||
+      state.segmentEndSeconds < lastFrameSecond) {
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message:
+          'This Flutter 3D session is unavailable because the live segment did not verify cleanly.',
+    );
+  }
+  if (state.hasMoreSegments &&
+      (state.nextSegmentToken?.trim().isEmpty ?? true)) {
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message:
+          'This Flutter 3D session is unavailable because the next live segment could not be verified.',
+    );
+  }
+  return state;
 }
 
 CompetitionSummary buildLiveViewerCompetition(String matchKey, JsonMap viewer) {
@@ -220,11 +305,18 @@ class MatchRouteBlockedScreen extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.reason,
+    this.detailTitle = 'Viewer contract unavailable',
+    this.detailSubtitle =
+        'This route stays visibly blocked until the mounted runtime can answer with real match-viewer data.',
+    this.supplementalPanels = const <Widget>[],
   });
 
   final String title;
   final String subtitle;
   final String reason;
+  final String detailTitle;
+  final String detailSubtitle;
+  final List<Widget> supplementalPanels;
 
   @override
   Widget build(BuildContext context) {
@@ -249,15 +341,15 @@ class MatchRouteBlockedScreen extends StatelessWidget {
         GtexSectionPanel(
           eyebrow: 'BLOCKED DETAIL',
           title: 'Blocked detail',
-          subtitle:
-              'This route stays visibly blocked until the mounted runtime can answer with real match-viewer data.',
+          subtitle: detailSubtitle,
           child: GteStatePanel(
-            title: 'Viewer contract unavailable',
+            title: detailTitle,
             message: reason,
             icon: Icons.error_outline_rounded,
             accentColor: Theme.of(context).colorScheme.error,
           ),
         ),
+        ...supplementalPanels,
       ],
     );
   }

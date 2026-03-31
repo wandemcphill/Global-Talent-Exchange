@@ -553,9 +553,23 @@ class RealMatchSceneDirector {
     required MatchTimelineFrame frame,
     required MatchSceneEventMapping eventMapping,
   }) {
+    if (eventMapping == MatchSceneEventMapping.possession_phase) {
+      return switch (frame.possessionPhase) {
+        MatchPossessionPhase.restart => 'Restart shape',
+        MatchPossessionPhase.control => 'Settled possession',
+        MatchPossessionPhase.buildUp => 'Build-up shape',
+        MatchPossessionPhase.attack => 'Final-third circulation',
+        MatchPossessionPhase.recovery => 'Defensive recovery',
+        MatchPossessionPhase.stoppage => 'Transition pause',
+        null => 'Settled possession',
+      };
+    }
+    if (eventMapping == MatchSceneEventMapping.chance_creation) {
+      return 'Chance creation';
+    }
     return switch (eventMapping) {
       MatchSceneEventMapping.kickoff => 'Kickoff',
-      MatchSceneEventMapping.possession_phase => 'Possession',
+      MatchSceneEventMapping.possession_phase => 'Settled possession',
       MatchSceneEventMapping.chance_creation => 'Chance creation',
       MatchSceneEventMapping.shot => 'Shot phase',
       MatchSceneEventMapping.save => 'Save phase',
@@ -575,14 +589,23 @@ class RealMatchSceneDirector {
     required MatchTimelineFrame frame,
     required MatchSceneEventMapping eventMapping,
   }) {
+    if (frame.possessionPhase == MatchPossessionPhase.control) {
+      return 'Shape control';
+    }
     if (frame.possessionPhase == MatchPossessionPhase.recovery) {
-      return 'Transition';
+      return 'Defensive recovery';
     }
     if (frame.possessionPhase == MatchPossessionPhase.buildUp) {
-      return 'Build-up';
+      return 'Build-up phase';
     }
     if (frame.possessionPhase == MatchPossessionPhase.attack) {
-      return 'Attacking phase';
+      return 'Overload building';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.restart) {
+      return 'Restart ready';
+    }
+    if (frame.possessionPhase == MatchPossessionPhase.stoppage) {
+      return 'Transition pause';
     }
     return switch (eventMapping) {
       MatchSceneEventMapping.kickoff => 'Restart',
@@ -625,14 +648,14 @@ class RealMatchSceneDirector {
       MatchEngineCameraPreset.stadium_wide => 'WIDE',
       MatchEngineCameraPreset.kickoff_center => 'KICKOFF',
       MatchEngineCameraPreset.tactical_high => 'TACTICAL',
-      MatchEngineCameraPreset.attacking_third_left => 'ATTACK L',
-      MatchEngineCameraPreset.attacking_third_right => 'ATTACK R',
-      MatchEngineCameraPreset.defensive_block => 'BLOCK',
-      MatchEngineCameraPreset.set_piece_left => 'SET L',
-      MatchEngineCameraPreset.set_piece_right => 'SET R',
-      MatchEngineCameraPreset.goal_replay => 'REPLAY',
-      MatchEngineCameraPreset.halftime_board => 'HALF',
-      MatchEngineCameraPreset.fulltime_board => 'FULL',
+      MatchEngineCameraPreset.attacking_third_left => 'FINAL THIRD',
+      MatchEngineCameraPreset.attacking_third_right => 'FINAL THIRD',
+      MatchEngineCameraPreset.defensive_block => 'ANALYST',
+      MatchEngineCameraPreset.set_piece_left => 'SET PIECE',
+      MatchEngineCameraPreset.set_piece_right => 'SET PIECE',
+      MatchEngineCameraPreset.goal_replay => 'EVENT FOCUS',
+      MatchEngineCameraPreset.halftime_board => 'HALFTIME',
+      MatchEngineCameraPreset.fulltime_board => 'FULL-TIME',
     };
   }
 

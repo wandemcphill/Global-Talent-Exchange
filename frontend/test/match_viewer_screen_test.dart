@@ -77,61 +77,66 @@ void main() {
     expect(late.players.first.position.x, 78);
   });
 
-  test('fallback viewer preserves live player references when available',
-      () async {
-    final CompetitionSummary competition = _buildCompetition(
-      id: 'match-viewer-player-refs',
-    );
-    final LiveMatchSnapshot baseSnapshot = LiveMatchFixtures.buildSnapshot(
-      competition,
-    );
-    final List<LiveMatchLineupPlayer> homeLineup =
-        List<LiveMatchLineupPlayer>.from(baseSnapshot.homeLineup);
-    homeLineup[0] = const LiveMatchLineupPlayer(
-      playerId: 'player-9',
-      name: 'Canonical Forward',
-      position: 'ST',
-      rating: 7.4,
-      avatarSeedToken: 'canonical-forward-seed',
-    );
-    final LiveMatchSnapshot snapshot = LiveMatchSnapshot(
-      matchId: baseSnapshot.matchId,
-      halftimeAnalyticsAvailable: baseSnapshot.halftimeAnalyticsAvailable,
-      highlightsAvailable: baseSnapshot.highlightsAvailable,
-      keyMomentsAvailable: baseSnapshot.keyMomentsAvailable,
-      homeTeam: baseSnapshot.homeTeam,
-      awayTeam: baseSnapshot.awayTeam,
-      homeScore: baseSnapshot.homeScore,
-      awayScore: baseSnapshot.awayScore,
-      minute: baseSnapshot.minute,
-      phase: baseSnapshot.phase,
-      momentum: baseSnapshot.momentum,
-      commentary: baseSnapshot.commentary,
-      homeLineup: homeLineup,
-      awayLineup: baseSnapshot.awayLineup,
-      substitutions: baseSnapshot.substitutions,
-      cards: baseSnapshot.cards,
-      tacticalSuggestions: baseSnapshot.tacticalSuggestions,
-      keyMoments: baseSnapshot.keyMoments,
-      highlights: baseSnapshot.highlights,
-      standardHighlightExpiresAt: baseSnapshot.standardHighlightExpiresAt,
-      premiumHighlightExpiresAt: baseSnapshot.premiumHighlightExpiresAt,
-    );
+  test(
+    'fallback viewer preserves live player references when available',
+    () async {
+      final CompetitionSummary competition = _buildCompetition(
+        id: 'match-viewer-player-refs',
+      );
+      final LiveMatchSnapshot baseSnapshot = LiveMatchFixtures.buildSnapshot(
+        competition,
+      );
+      final List<LiveMatchLineupPlayer> homeLineup =
+          List<LiveMatchLineupPlayer>.from(baseSnapshot.homeLineup);
+      homeLineup[0] = const LiveMatchLineupPlayer(
+        playerId: 'player-9',
+        name: 'Canonical Forward',
+        position: 'ST',
+        rating: 7.4,
+        avatarSeedToken: 'canonical-forward-seed',
+      );
+      final LiveMatchSnapshot snapshot = LiveMatchSnapshot(
+        matchId: baseSnapshot.matchId,
+        halftimeAnalyticsAvailable: baseSnapshot.halftimeAnalyticsAvailable,
+        highlightsAvailable: baseSnapshot.highlightsAvailable,
+        keyMomentsAvailable: baseSnapshot.keyMomentsAvailable,
+        homeTeam: baseSnapshot.homeTeam,
+        awayTeam: baseSnapshot.awayTeam,
+        homeScore: baseSnapshot.homeScore,
+        awayScore: baseSnapshot.awayScore,
+        minute: baseSnapshot.minute,
+        phase: baseSnapshot.phase,
+        momentum: baseSnapshot.momentum,
+        commentary: baseSnapshot.commentary,
+        homeLineup: homeLineup,
+        awayLineup: baseSnapshot.awayLineup,
+        substitutions: baseSnapshot.substitutions,
+        cards: baseSnapshot.cards,
+        tacticalSuggestions: baseSnapshot.tacticalSuggestions,
+        keyMoments: baseSnapshot.keyMoments,
+        highlights: baseSnapshot.highlights,
+        standardHighlightExpiresAt: baseSnapshot.standardHighlightExpiresAt,
+        premiumHighlightExpiresAt: baseSnapshot.premiumHighlightExpiresAt,
+      );
 
-    final MatchViewState viewState = await MatchViewerMapper.load(
-      competition: competition,
-      matchKey: competition.id,
-      fallbackSnapshot: snapshot,
-      preferFallback: true,
-    );
-    final MatchViewerPlayerFrame homePlayer = viewState.firstFrame.players
-        .firstWhere((MatchViewerPlayerFrame player) => player.teamId == 'home');
+      final MatchViewState viewState = await MatchViewerMapper.load(
+        competition: competition,
+        matchKey: competition.id,
+        fallbackSnapshot: snapshot,
+        preferFallback: true,
+      );
+      final MatchViewerPlayerFrame homePlayer = viewState.firstFrame.players
+          .firstWhere(
+            (MatchViewerPlayerFrame player) => player.teamId == 'home',
+          );
 
-    expect(homePlayer.playerId, 'player-9');
-  });
+      expect(homePlayer.playerId, 'player-9');
+    },
+  );
 
-  testWidgets('replay viewer renders controls and replay rail',
-      (WidgetTester tester) async {
+  testWidgets('replay viewer renders controls and replay rail', (
+    WidgetTester tester,
+  ) async {
     final CompetitionSummary competition = _buildCompetition(
       id: 'match-viewer-test',
     );
@@ -202,8 +207,9 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('replay viewer pauses and resumes safely across app lifecycle',
-      (WidgetTester tester) async {
+  testWidgets('replay viewer pauses and resumes safely across app lifecycle', (
+    WidgetTester tester,
+  ) async {
     final CompetitionSummary competition = _buildCompetition(
       id: 'match-viewer-lifecycle-test',
     );
@@ -247,86 +253,87 @@ void main() {
   });
 
   testWidgets(
-      'broadcast viewer shows intro, live clock, masked score, and commentary',
-      (WidgetTester tester) async {
-    final MatchViewState viewState = _buildBroadcastViewState();
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexMatchViewerScreen(
-          competition: _buildCompetition(
-            id: 'broadcast-match-viewer',
-            status: CompetitionStatus.inProgress,
+    'broadcast viewer shows intro, live clock, masked score, and commentary',
+    (WidgetTester tester) async {
+      final MatchViewState viewState = _buildBroadcastViewState();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GtexMatchViewerScreen(
+            competition: _buildCompetition(
+              id: 'broadcast-match-viewer',
+              status: CompetitionStatus.inProgress,
+            ),
+            matchKey: 'broadcast-match-viewer',
+            presentationMode: MatchViewerPresentationMode.broadcast,
+            entitlement: const Match3dUserEntitlement(isPremiumUser: true),
+            viewStateLoader: () async => viewState,
           ),
-          matchKey: 'broadcast-match-viewer',
-          presentationMode: MatchViewerPresentationMode.broadcast,
-          entitlement: const Match3dUserEntitlement(isPremiumUser: true),
-          viewStateLoader: () async => viewState,
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 64));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 64));
 
-    expect(find.text('Live broadcast'), findsOneWidget);
-    expect(find.text('0:00'), findsOneWidget);
-    expect(find.text('--'), findsNWidgets(2));
-    expect(find.textContaining('Gift'), findsNothing);
-    expect(find.text('Pro Manager'), findsOneWidget);
+      expect(find.text('Live broadcast'), findsOneWidget);
+      expect(find.text('0:00'), findsOneWidget);
+      expect(find.text('--'), findsNWidgets(2));
+      expect(find.textContaining('Gift'), findsNothing);
+      expect(find.text('Pro Manager'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Match starting...'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Match starting...'), findsOneWidget);
 
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Formation 4-3-3'), findsNWidgets(2));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Formation 4-3-3'), findsNWidgets(2));
 
-    await tester.pump(const Duration(milliseconds: 3800));
-    expect(find.text('Match starting...'), findsNothing);
-    expect(find.text('Formation 4-3-3'), findsNothing);
-    expect(find.text('--'), findsNWidgets(2));
+      await tester.pump(const Duration(milliseconds: 3800));
+      expect(find.text('Match starting...'), findsNothing);
+      expect(find.text('Formation 4-3-3'), findsNothing);
+      expect(find.text('--'), findsNWidgets(2));
 
-    await _pumpUntilVisible(tester, find.text('VAR checking...'));
-    expect(find.text('--'), findsNWidgets(2));
+      await _pumpUntilVisible(tester, find.text('VAR checking...'));
+      expect(find.text('--'), findsNWidgets(2));
 
-    await _pumpUntilVisible(tester, find.text('Goal!'));
-    expect(find.text('--'), findsNothing);
+      await _pumpUntilVisible(tester, find.text('Goal!'));
+      expect(find.text('--'), findsNothing);
 
-    await tester.pump(const Duration(milliseconds: 700));
-    await _pumpUntilVisible(
-      tester,
-      find.text('VAR checking...'),
-      timeout: const Duration(seconds: 2),
-    );
+      await tester.pump(const Duration(milliseconds: 700));
+      await _pumpUntilVisible(
+        tester,
+        find.text('VAR checking...'),
+        timeout: const Duration(seconds: 2),
+      );
 
-    await _pumpUntilVisible(tester, find.text('Offside!'));
+      await _pumpUntilVisible(tester, find.text('Offside!'));
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
 
   test('scoreless broadcast state stays masked until full time', () {
     final MatchViewState viewState = _buildScorelessBroadcastViewState();
     final MatchBroadcastPresentationState early =
         MatchBroadcastPresentationBuilder.fromPlayback(
-      viewState: viewState,
-      positionSeconds: 0,
-      displayFrame: viewState.frames.first,
-      leftFrame: viewState.frames.first,
-      rightFrame: viewState.frames[1],
-      interpolationT: 0,
-      activeEvent: viewState.eventById('kickoff'),
-    );
+          viewState: viewState,
+          positionSeconds: 0,
+          displayFrame: viewState.frames.first,
+          leftFrame: viewState.frames.first,
+          rightFrame: viewState.frames[1],
+          interpolationT: 0,
+          activeEvent: viewState.eventById('kickoff'),
+        );
     final MatchBroadcastPresentationState late =
         MatchBroadcastPresentationBuilder.fromPlayback(
-      viewState: viewState,
-      positionSeconds: 8,
-      displayFrame: viewState.frames.last,
-      leftFrame: viewState.frames[1],
-      rightFrame: viewState.frames.last,
-      interpolationT: 1,
-      activeEvent: viewState.eventById('fulltime'),
-    );
+          viewState: viewState,
+          positionSeconds: 8,
+          displayFrame: viewState.frames.last,
+          leftFrame: viewState.frames[1],
+          rightFrame: viewState.frames.last,
+          interpolationT: 1,
+          activeEvent: viewState.eventById('fulltime'),
+        );
 
     expect(early.scoreMasked, isTrue);
     expect(late.scoreMasked, isFalse);
@@ -335,41 +342,48 @@ void main() {
   });
 
   test(
-      'broadcast presentation camera and movement variation are deterministic and bounded',
-      () {
-    final MatchViewState viewState = _buildBroadcastViewState();
-    final MatchTimelineFrame leftFrame = viewState.frames[2];
-    final MatchTimelineFrame rightFrame = viewState.frames[3];
-    final MatchTimelineFrame displayFrame = leftFrame.interpolate(
-      rightFrame,
-      0.5,
-    );
-    final MatchBroadcastPresentationState presentation =
-        MatchBroadcastPresentationBuilder.fromPlayback(
-      viewState: viewState,
-      positionSeconds: 7.25,
-      displayFrame: displayFrame,
-      leftFrame: leftFrame,
-      rightFrame: rightFrame,
-      interpolationT: 0.5,
-      activeEvent: viewState.eventById('goal-1'),
-    );
+    'broadcast presentation camera and movement variation are deterministic and bounded',
+    () {
+      final MatchViewState viewState = _buildBroadcastViewState();
+      final MatchTimelineFrame leftFrame = viewState.frames[2];
+      final MatchTimelineFrame rightFrame = viewState.frames[3];
+      final MatchTimelineFrame displayFrame = leftFrame.interpolate(
+        rightFrame,
+        0.5,
+      );
+      final MatchBroadcastPresentationState presentation =
+          MatchBroadcastPresentationBuilder.fromPlayback(
+            viewState: viewState,
+            positionSeconds: 7.25,
+            displayFrame: displayFrame,
+            leftFrame: leftFrame,
+            rightFrame: rightFrame,
+            interpolationT: 0.5,
+            activeEvent: viewState.eventById('goal-1'),
+          );
 
-    final MatchViewerPoint varied = presentation.pitchPresentation
-        .resolvePlayerPosition(displayFrame.players.first);
-    final double distance = math.sqrt(
-      math.pow(varied.x - displayFrame.players.first.position.x, 2) +
-          math.pow(varied.y - displayFrame.players.first.position.y, 2),
-    );
+      final MatchViewerPoint varied = presentation.pitchPresentation
+          .resolvePlayerPosition(displayFrame.players.first);
+      final double distance = math.sqrt(
+        math.pow(varied.x - displayFrame.players.first.position.x, 2) +
+            math.pow(varied.y - displayFrame.players.first.position.y, 2),
+      );
 
-    expect(
-      presentation.pitchPresentation.cameraPreset,
-      BroadcastCameraPreset.replayCamera,
-    );
-    expect(distance, lessThanOrEqualTo(1.5));
-    expect(presentation.pitchPresentation.panX.abs(), lessThanOrEqualTo(0.12));
-    expect(presentation.pitchPresentation.panY.abs(), lessThanOrEqualTo(0.08));
-  });
+      expect(
+        presentation.pitchPresentation.cameraPreset,
+        BroadcastCameraPreset.replayCamera,
+      );
+      expect(distance, lessThanOrEqualTo(1.5));
+      expect(
+        presentation.pitchPresentation.panX.abs(),
+        lessThanOrEqualTo(0.12),
+      );
+      expect(
+        presentation.pitchPresentation.panY.abs(),
+        lessThanOrEqualTo(0.08),
+      );
+    },
+  );
 
   testWidgets('continuation retries once after a delayed chunk failure', (
     WidgetTester tester,
@@ -418,21 +432,93 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1200));
     expect(continuationCalls, 1);
-    expect(find.text('Segment delayed. Retrying playback...'), findsOneWidget);
+    expect(
+      find.text(
+        'Live updates paused. Waiting for the next verified segment...',
+      ),
+      findsOneWidget,
+    );
 
     await tester.pump(const Duration(milliseconds: 1200));
     await tester.pump();
 
     expect(continuationCalls, 2);
     expect(find.textContaining('Duration: 2s'), findsOneWidget);
-    expect(find.text('Segment delayed. Retrying playback...'), findsNothing);
+    expect(
+      find.text(
+        'Live updates paused. Waiting for the next verified segment...',
+      ),
+      findsNothing,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
 
-  testWidgets('viewer remains stable across back-to-back replay loads',
-      (WidgetTester tester) async {
+  testWidgets(
+    'continuation contract failure does not fabricate progression after a stale segment',
+    (WidgetTester tester) async {
+      int continuationCalls = 0;
+      final MatchViewState initialState = _buildSegmentedReplayState(
+        durationSeconds: 1,
+        source: 'segment-1',
+        hasMoreSegments: true,
+        nextSegmentToken: 'segment-2-token',
+        finalPhase: MatchViewerPhase.openPlay,
+      );
+      final MatchViewState staleState = _buildSegmentedReplayState(
+        durationSeconds: 1,
+        source: 'segment-1',
+        hasMoreSegments: true,
+        nextSegmentToken: 'segment-2-token',
+        finalPhase: MatchViewerPhase.openPlay,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GtexMatchViewerScreen(
+            competition: _buildCompetition(id: 'stale-continuation'),
+            matchKey: 'stale-continuation',
+            renderMode: RenderMode.twoD,
+            viewStateLoader: () async => initialState,
+            continuationLoader: ({
+              required String matchKey,
+              required String continuationToken,
+            }) async {
+              continuationCalls += 1;
+              return staleState;
+            },
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 64));
+      await _pumpUntilVisible(tester, find.textContaining('Duration: 1s'));
+
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+
+      expect(continuationCalls, 1);
+      expect(find.text('Live updates unavailable'), findsOneWidget);
+      expect(
+        find.textContaining('verified session did not advance'),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump();
+      expect(continuationCalls, 1);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    },
+  );
+
+  testWidgets('viewer remains stable across back-to-back replay loads', (
+    WidgetTester tester,
+  ) async {
     final CompetitionSummary firstCompetition = _buildCompetition(
       id: 'match-viewer-first',
     );
@@ -1059,9 +1145,10 @@ List<MatchViewerPlayerFrame> _buildPlayers({
       label: '$shirtNumber',
       role: roles[index],
       line: lines[index],
-      state: shirtNumber >= 9
-          ? MatchViewerPlayerState.attacking
-          : MatchViewerPlayerState.moving,
+      state:
+          shirtNumber >= 9
+              ? MatchViewerPlayerState.attacking
+              : MatchViewerPlayerState.moving,
       active: true,
       highlighted: shirtNumber == 9,
       position: MatchViewerPoint(x: x.toDouble(), y: y.toDouble()),

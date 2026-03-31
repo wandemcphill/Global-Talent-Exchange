@@ -287,7 +287,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesThreeD,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Deep 3D viewer route that now resolves to an explicit blocked surface.',
+        'Deep Flutter-rendered 3D viewer route that opens only when live match-viewer sessions and real 3D entitlement qualify together.',
   ),
   AppRouteSurface(
     label: 'Native 3D',

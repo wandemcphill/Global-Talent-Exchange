@@ -26,7 +26,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts blocked viewer routes, live broadcast, and admin redirect',
+    'router mounts blocked 2D routes, live broadcast, gated Flutter 3D, and admin redirect',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
@@ -34,6 +34,7 @@ void main() {
           accessToken: 'token-1',
           sessionId: 'session-1',
           role: 'admin',
+          permissions: <String>['match_3d_premium'],
         ),
       );
       addTearDown(container.dispose);
@@ -59,7 +60,8 @@ void main() {
       router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
       await tester.pumpAndSettle();
       expect(find.text('3D Match Viewer'), findsWidgets);
-      expect(find.text('Route blocked'), findsOneWidget);
+      expect(find.text('Route blocked'), findsNothing);
+      expect(find.text('FLUTTER_3D'), findsOneWidget);
 
       router.go(AppRoutes.matchesNativeThreeD);
       await tester.pumpAndSettle();
@@ -117,6 +119,12 @@ void main() {
       expect(find.text('Sign in'), findsOneWidget);
     },
   );
+}
+
+Future<void> _pumpViewerRoute(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 64));
+  await tester.pump(const Duration(milliseconds: 64));
 }
 
 ProviderContainer _buildContainer({AuthSession? session}) {
@@ -206,7 +214,7 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
     String matchKey, {
     String? continuationToken,
   }) async {
-    return viewState;
+    return _routeQualifiedViewState(matchKey, viewState);
   }
 
   @override
@@ -217,6 +225,40 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
       competition: competition,
     );
   }
+}
+
+MatchViewState _routeQualifiedViewState(String matchKey, MatchViewState state) {
+  final int lastFrameSecond =
+      state.frames.isEmpty ? 0 : state.frames.last.timeSeconds.ceil();
+  final int segmentEndSeconds =
+      state.segmentEndSeconds < lastFrameSecond
+          ? lastFrameSecond
+          : state.segmentEndSeconds;
+  final int durationSeconds =
+      state.durationSeconds < segmentEndSeconds
+          ? segmentEndSeconds
+          : state.durationSeconds;
+  return MatchViewState(
+    matchId: matchKey,
+    source: state.source,
+    supportsOffside: state.supportsOffside,
+    deterministicSeed: state.deterministicSeed,
+    matchMode: state.matchMode,
+    durationSeconds: durationSeconds,
+    homeTeam: state.homeTeam,
+    awayTeam: state.awayTeam,
+    events: state.events,
+    frames: state.frames,
+    fairnessIndicator: state.fairnessIndicator,
+    timelineProof: state.timelineProof,
+    scoreRevealLocked: state.scoreRevealLocked,
+    segmentStartSeconds: state.segmentStartSeconds,
+    segmentEndSeconds: segmentEndSeconds,
+    hasMoreSegments: state.hasMoreSegments,
+    nextSegmentToken: state.nextSegmentToken,
+    monetization: state.monetization,
+    presentationPackage: state.presentationPackage,
+  );
 }
 
 CompetitionSummary _buildCompetition({

@@ -41,9 +41,9 @@ class PremiumControls extends StatelessWidget {
         final bool stackedActions = constraints.maxWidth < 400;
         return Container(
           constraints: const BoxConstraints(maxWidth: 360),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(24),
             color: const Color(0xD7101B2A),
             border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
@@ -55,10 +55,10 @@ class PremiumControls extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     child: Text(
-                      'Match controls',
+                      'Lane controls',
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -96,7 +96,7 @@ class PremiumControls extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Render mode',
+                'Render lane',
                 style: theme.textTheme.labelLarge?.copyWith(
                   color: Colors.white70,
                 ),
@@ -113,12 +113,12 @@ class PremiumControls extends StatelessWidget {
                     ),
                     ButtonSegment<RenderMode>(
                       value: RenderMode.twoD,
-                      label: Text('2D'),
+                      label: Text('2D map'),
                       icon: Icon(Icons.map_outlined),
                     ),
                     ButtonSegment<RenderMode>(
                       value: RenderMode.threeD,
-                      label: Text('3D'),
+                      label: Text('3D lane'),
                       icon: Icon(Icons.view_in_ar_outlined),
                     ),
                   ],
@@ -130,7 +130,7 @@ class PremiumControls extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Live mode: ${effectiveRenderMode == RenderMode.threeD ? '3D' : '2D'} | Balance ${availableCoins.toStringAsFixed(2)} coin',
+                'Lane render: ${effectiveRenderMode == RenderMode.threeD ? 'Flutter 3D' : '2D tactical'} | Wallet ${availableCoins.toStringAsFixed(2)} coin',
                 softWrap: true,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: Colors.white70,
@@ -138,7 +138,7 @@ class PremiumControls extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'Camera',
+                'Camera plan',
                 style: theme.textTheme.labelLarge?.copyWith(
                   color: Colors.white70,
                 ),
@@ -162,10 +162,17 @@ class PremiumControls extends StatelessWidget {
                 _ActionButton(
                   expanded: stackedActions,
                   icon: Icons.videocam_outlined,
-                  label: 'Unlock alternate camera 0.02 coin',
+                  label: 'Unlock analyst and event cameras 0.02 coin',
                   onPressed: onUnlockAlternateCamera,
                 ),
               const SizedBox(height: 12),
+              Text(
+                'Replay tools',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 8),
               if (stackedActions)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -173,14 +180,14 @@ class PremiumControls extends StatelessWidget {
                     _ActionButton(
                       expanded: true,
                       icon: Icons.slow_motion_video_outlined,
-                      label: 'Slow mo 0.05 coin',
+                      label: 'Slow motion 0.05 coin',
                       onPressed: onUnlockSlowMotion,
                     ),
                     const SizedBox(height: 8),
                     _ActionButton(
                       expanded: true,
                       icon: Icons.flash_on_outlined,
-                      label: 'Highlight attack 0.05 coin',
+                      label: 'Highlight next attack 0.05 coin',
                       onPressed: onUnlockHighlightAttack,
                     ),
                     if (onUpgradeTournament != null) ...<Widget>[
@@ -201,12 +208,12 @@ class PremiumControls extends StatelessWidget {
                   children: <Widget>[
                     _ActionButton(
                       icon: Icons.slow_motion_video_outlined,
-                      label: 'Slow mo 0.05 coin',
+                      label: 'Slow motion 0.05 coin',
                       onPressed: onUnlockSlowMotion,
                     ),
                     _ActionButton(
                       icon: Icons.flash_on_outlined,
-                      label: 'Highlight attack 0.05 coin',
+                      label: 'Highlight next attack 0.05 coin',
                       onPressed: onUnlockHighlightAttack,
                     ),
                     if (onUpgradeTournament != null)
@@ -220,8 +227,8 @@ class PremiumControls extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 canUseFastReplay
-                    ? 'Fast replay unlocked up to 6x.'
-                    : 'Standard replay stays capped below premium speed.',
+                    ? 'Fast replay unlocked up to 6x for analyst review.'
+                    : 'Standard replay stays capped below premium review speed.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: Colors.white70,
                 ),
@@ -236,11 +243,11 @@ class PremiumControls extends StatelessWidget {
   String _cameraLabel(Match3dCameraPreset preset) {
     switch (preset) {
       case Match3dCameraPreset.broadcast:
-        return 'Broadcast';
+        return 'Tactical';
       case Match3dCameraPreset.sideline:
-        return 'Sideline';
+        return 'Analyst';
       case Match3dCameraPreset.goalbox:
-        return 'Goalbox';
+        return 'Event focus';
     }
   }
 }

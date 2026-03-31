@@ -34,7 +34,7 @@ void main() {
     );
 
     expect(find.byKey(const Key('real-match-scorebug')), findsOneWidget);
-    expect(find.text('Goal moment'), findsOneWidget);
+    expect(find.text('GOAL MOMENT'), findsOneWidget);
     expect(find.text('HIGHLIGHT REPLAY'), findsOneWidget);
     expect(find.text('REPLAY'), findsOneWidget);
     expect(find.text('Lagos score'), findsOneWidget);
@@ -81,7 +81,8 @@ void main() {
     expect(find.text('ABJ'), findsOneWidget);
     expect(find.textContaining('Possession focus: Nnamdi'), findsOneWidget);
     expect(find.byKey(const Key('player-ratings-strip')), findsOneWidget);
-    expect(find.textContaining('Nnamdi 8.1'), findsOneWidget);
+    expect(find.text('Nnamdi'), findsOneWidget);
+    expect(find.text('8.1'), findsOneWidget);
   });
 
   testWidgets('moment banner and commentary ribbon render event context', (
@@ -149,7 +150,7 @@ Widget _wrap(Widget child) {
   return MaterialApp(
     home: Scaffold(
       backgroundColor: const Color(0xFF060A10),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
           child: ConstrainedBox(

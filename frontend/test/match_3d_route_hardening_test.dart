@@ -5,8 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
 import 'package:gte_frontend/features/match/match_3d_route_screen.dart';
 import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -14,7 +16,7 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
-  testWidgets('3D route labels Flutter 3D honestly when live and entitled', (
+  testWidgets('entitled live route exposes the Flutter 3D lane', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -24,42 +26,132 @@ void main() {
         ),
       ),
     );
+
     await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
 
     expect(find.text('3D Match Viewer'), findsWidgets);
     expect(find.text('FLUTTER_3D'), findsOneWidget);
-    expect(find.text('NATIVE_3D'), findsNothing);
     expect(find.text('Route blocked'), findsNothing);
   });
 
-  testWidgets('3D route blocks honestly when entitlement is missing', (
+  testWidgets(
+    'non-entitled route blocks before the live viewer contract bootstraps',
+    (WidgetTester tester) async {
+      final _FakeViewerRepository repository = _FakeViewerRepository(
+        viewState: _routeViewState(matchId: 'live-match-001'),
+      );
+
+      await tester.pumpWidget(
+        _buildWidget(
+          repository: repository,
+          session: const AuthSession(
+            userId: 'basic-user',
+            accessToken: 'token-1',
+            sessionId: 'session-1',
+            role: 'user',
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('3D Match Viewer'), findsWidgets);
+      expect(find.text('Route blocked'), findsOneWidget);
+      expect(find.text('FLUTTER_3D'), findsNothing);
+      expect(repository.bootstrapCalls, 0);
+      expect(repository.viewStateCalls, 0);
+    },
+  );
+
+  testWidgets('incomplete live payload fails closed without mounting 3D', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
       _buildWidget(
         repository: _FakeViewerRepository(
-          viewState: _routeViewState(matchId: 'live-match-001'),
-        ),
-        session: const AuthSession(
-          userId: 'basic-user',
-          accessToken: 'token-2',
-          sessionId: 'session-2',
-          role: 'user',
+          viewState: _routeViewState(
+            matchId: 'live-match-001',
+            frames: const <MatchTimelineFrame>[],
+          ),
         ),
       ),
     );
+
     await tester.pumpAndSettle();
 
     expect(find.text('3D Match Viewer'), findsWidgets);
     expect(find.text('Route blocked'), findsOneWidget);
-    expect(find.text('3D access unavailable'), findsOneWidget);
-    expect(
-      find.textContaining('does not include Flutter 3D access'),
-      findsOneWidget,
-    );
     expect(find.text('FLUTTER_3D'), findsNothing);
-    expect(find.text('NATIVE_3D'), findsNothing);
   });
+
+  testWidgets('claim loss while on route tears the lane down safely', (
+    WidgetTester tester,
+  ) async {
+    final _FakeViewerRepository repository = _FakeViewerRepository(
+      viewState: _routeViewState(matchId: 'live-match-001'),
+    );
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+        initialAuthSessionProvider.overrideWithValue(_premiumSession()),
+        liveMatchViewerRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: GteShellTheme.build(),
+          home: const Match3dRouteScreen(matchKey: 'live-match-001'),
+        ),
+      ),
+    );
+
+    await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
+    expect(find.text('Route blocked'), findsNothing);
+
+    await container
+        .read(appSessionControllerProvider.notifier)
+        .updateSession(
+          const AuthSession(
+            userId: 'basic-user',
+            accessToken: 'token-2',
+            sessionId: 'session-2',
+            role: 'user',
+          ),
+        );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Route blocked'), findsOneWidget);
+    expect(find.text('FLUTTER_3D'), findsNothing);
+  });
+
+  testWidgets(
+    're-entering the same match remounts through the live qualified session path',
+    (WidgetTester tester) async {
+      final _FakeViewerRepository repository = _FakeViewerRepository(
+        viewState: _routeViewState(matchId: 'live-match-001'),
+      );
+
+      await tester.pumpWidget(_buildWidget(repository: repository));
+      await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
+
+      expect(repository.bootstrapCalls, 1);
+      expect(repository.viewStateCalls, 1);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      await tester.pumpWidget(_buildWidget(repository: repository));
+      await _pumpUntilVisible(tester, find.text('FLUTTER_3D'));
+
+      expect(repository.bootstrapCalls, 2);
+      expect(repository.viewStateCalls, 2);
+    },
+  );
 }
 
 Widget _buildWidget({
@@ -100,24 +192,40 @@ Future<void> _pumpUntilVisible(
   expect(finder, findsOneWidget);
 }
 
-MatchViewState _routeViewState({required String matchId}) {
+AuthSession _premiumSession() {
+  return const AuthSession(
+    userId: 'premium-user',
+    accessToken: 'token-1',
+    sessionId: 'session-1',
+    role: 'user',
+    permissions: <String>['match_3d_premium'],
+  );
+}
+
+MatchViewState _routeViewState({
+  required String matchId,
+  List<MatchTimelineFrame>? frames,
+}) {
   final MatchViewState base = buildBroadcastTestViewState();
+  final List<MatchTimelineFrame> resolvedFrames = frames ?? base.frames;
+  final int segmentEndSeconds =
+      resolvedFrames.isEmpty ? 0 : resolvedFrames.last.timeSeconds.ceil();
   return MatchViewState(
     matchId: matchId,
     source: base.source,
     supportsOffside: base.supportsOffside,
     deterministicSeed: base.deterministicSeed,
     matchMode: base.matchMode,
-    durationSeconds: base.durationSeconds,
+    durationSeconds: resolvedFrames.isEmpty ? 0 : base.durationSeconds,
     homeTeam: base.homeTeam,
     awayTeam: base.awayTeam,
     events: base.events,
-    frames: base.frames,
+    frames: resolvedFrames,
     fairnessIndicator: base.fairnessIndicator,
     timelineProof: base.timelineProof,
     scoreRevealLocked: base.scoreRevealLocked,
     segmentStartSeconds: base.segmentStartSeconds,
-    segmentEndSeconds: base.frames.last.timeSeconds.ceil(),
+    segmentEndSeconds: segmentEndSeconds,
     hasMoreSegments: false,
     nextSegmentToken: null,
     monetization: base.monetization,
@@ -126,20 +234,24 @@ MatchViewState _routeViewState({required String matchId}) {
 }
 
 class _FakeViewerRepository implements LiveMatchViewerRepository {
-  const _FakeViewerRepository({required this.viewState});
+  _FakeViewerRepository({this.viewState});
 
-  final MatchViewState viewState;
+  final MatchViewState? viewState;
+  int bootstrapCalls = 0;
+  int viewStateCalls = 0;
 
   @override
   Future<MatchViewState> loadViewState(
     String matchKey, {
     String? continuationToken,
   }) async {
-    return viewState;
+    viewStateCalls += 1;
+    return viewState!;
   }
 
   @override
   Future<LiveMatchViewerBootstrap> resolveBootstrap(String matchKey) async {
+    bootstrapCalls += 1;
     return LiveMatchViewerBootstrap(
       matchKey: matchKey,
       viewer: const <String, Object?>{'title': '3D route fixture'},
@@ -161,7 +273,7 @@ class _FakeViewerRepository implements LiveMatchViewerRepository {
         hostFeeAmount: 0,
         prizePool: 0,
         payoutStructure: const <CompetitionPayoutBreakdown>[],
-        rulesSummary: '3D route truth test fixture.',
+        rulesSummary: '3D route test fixture.',
         matchType: MatchType.gtexHosted,
         joinEligibility: const CompetitionJoinEligibility(eligible: false),
         beginnerFriendly: true,

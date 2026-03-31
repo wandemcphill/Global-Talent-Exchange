@@ -510,8 +510,8 @@ void main() {
       await tester.tap(find.widgetWithText(OutlinedButton, 'Open 3D'));
       await tester.pumpAndSettle();
       expect(find.text('3D Match Viewer'), findsWidgets);
-      expect(find.text('Viewer contract unavailable'), findsOneWidget);
-      expect(find.text('Route blocked'), findsOneWidget);
+      expect(find.text('Route blocked'), findsNothing);
+      expect(find.text('FLUTTER_3D'), findsOneWidget);
 
       router.go(AppRoutes.matches);
       await tester.pumpAndSettle();
@@ -537,6 +537,12 @@ void main() {
       expect(find.text('Launch simulation'), findsOneWidget);
     },
   );
+}
+
+Future<void> _pumpViewerRoute(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 64));
+  await tester.pump(const Duration(milliseconds: 64));
 }
 
 ProviderContainer _buildRouterContainer({
@@ -662,6 +668,7 @@ AuthSession _clubSession() {
     accessToken: 'token-1',
     sessionId: 'session-1',
     role: 'user',
+    permissions: <String>['match_3d_premium'],
     clubId: 'ibadan-lions',
     clubName: 'Ibadan Lions FC',
   );
@@ -673,6 +680,7 @@ AuthSession _hostSession() {
     accessToken: 'host-token-1',
     sessionId: 'host-session-1',
     role: 'admin',
+    permissions: <String>['match_3d_premium'],
     clubId: 'ibadan-lions',
     clubName: 'Ibadan Lions FC',
   );
@@ -1149,7 +1157,7 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
     String matchKey, {
     String? continuationToken,
   }) async {
-    return viewState;
+    return _routeQualifiedViewState(matchKey, viewState);
   }
 
   @override
@@ -1160,6 +1168,40 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
       competition: competition,
     );
   }
+}
+
+MatchViewState _routeQualifiedViewState(String matchKey, MatchViewState state) {
+  final int lastFrameSecond =
+      state.frames.isEmpty ? 0 : state.frames.last.timeSeconds.ceil();
+  final int segmentEndSeconds =
+      state.segmentEndSeconds < lastFrameSecond
+          ? lastFrameSecond
+          : state.segmentEndSeconds;
+  final int durationSeconds =
+      state.durationSeconds < segmentEndSeconds
+          ? segmentEndSeconds
+          : state.durationSeconds;
+  return MatchViewState(
+    matchId: matchKey,
+    source: state.source,
+    supportsOffside: state.supportsOffside,
+    deterministicSeed: state.deterministicSeed,
+    matchMode: state.matchMode,
+    durationSeconds: durationSeconds,
+    homeTeam: state.homeTeam,
+    awayTeam: state.awayTeam,
+    events: state.events,
+    frames: state.frames,
+    fairnessIndicator: state.fairnessIndicator,
+    timelineProof: state.timelineProof,
+    scoreRevealLocked: state.scoreRevealLocked,
+    segmentStartSeconds: state.segmentStartSeconds,
+    segmentEndSeconds: segmentEndSeconds,
+    hasMoreSegments: state.hasMoreSegments,
+    nextSegmentToken: state.nextSegmentToken,
+    monetization: state.monetization,
+    presentationPackage: state.presentationPackage,
+  );
 }
 
 class _FakeFederationsApi extends FederationsApi {

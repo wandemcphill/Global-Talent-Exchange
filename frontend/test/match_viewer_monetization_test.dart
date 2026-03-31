@@ -46,7 +46,8 @@ void main() {
 
     expect(find.byType(Pitch2dWidget), findsOneWidget);
 
-    await tester.tap(find.text('3D').last);
+    await tester.ensureVisible(find.text('3D lane').last);
+    await tester.tap(find.text('3D lane').last);
     await _pumpForOverlayTransition(tester);
 
     expect(find.text('Watch in Cinematic Mode 🎬'), findsOneWidget);
@@ -57,7 +58,8 @@ void main() {
     expect(find.byType(Pitch2dWidget), findsOneWidget);
     expect(find.byType(Gtex3dScene), findsNothing);
 
-    await tester.tap(find.text('3D').last);
+    await tester.ensureVisible(find.text('3D lane').last);
+    await tester.tap(find.text('3D lane').last);
     await _pumpForOverlayTransition(tester);
     await tester.tap(find.text('Unlock & Watch'));
     await _pumpForOverlayTransition(tester);

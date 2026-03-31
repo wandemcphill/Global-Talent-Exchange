@@ -34,6 +34,20 @@ void main() {
     );
   });
 
+  test(
+    'Flutter 3D inventory stays truthful about gating and rendering mode',
+    () {
+      final AppRouteSurface? threeD = appRouteSurfaceFor(
+        AppRoutes.matchesThreeD,
+      );
+
+      expect(threeD, isNotNull);
+      expect(threeD!.summary, contains('Flutter-rendered'));
+      expect(threeD.summary, contains('entitlement'));
+      expect(threeD.summary.toLowerCase(), isNot(contains('native 3d')));
+    },
+  );
+
   testWidgets('home quick actions surface live world routing honestly', (
     WidgetTester tester,
   ) async {
