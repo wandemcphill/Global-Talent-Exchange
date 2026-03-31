@@ -8,6 +8,7 @@ import os
 from uuid import uuid4
 
 from alembic.script import ScriptDirectory
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, text
@@ -366,6 +367,38 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
 
     target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
     assert revision == target_head
+
+
+@pytest.mark.parametrize(
+    ("path", "method"),
+    (
+        ("/auth/register", "POST"),
+        ("/national-team-engine/competitions", "GET"),
+    ),
+)
+def test_global_cors_middleware_handles_browser_preflight(path: str, method: str) -> None:
+    class _CorsSettings:
+        cors_allowed_origins = ("https://gtex-web.onrender.com",)
+        cors_allow_origin_regex = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
+        cors_allow_credentials = False
+
+    app = FastAPI()
+    main_module._configure_cors(app, _CorsSettings())
+
+    with TestClient(app) as client:
+        response = client.options(
+            path,
+            headers={
+                "Origin": "http://127.0.0.1:3000",
+                "Access-Control-Request-Method": method,
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:3000"
+    assert "authorization" in response.headers["access-control-allow-headers"].lower()
+    assert method in response.headers["access-control-allow-methods"].upper()
 
 
 def test_ready_returns_service_unavailable_when_database_check_fails(app_and_engine, monkeypatch) -> None:

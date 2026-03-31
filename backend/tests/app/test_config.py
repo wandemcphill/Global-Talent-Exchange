@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import textwrap
 
-from app.core.config import DEFAULT_DATABASE_URL, load_settings
+from app.core.config import (
+    DEFAULT_CORS_ALLOWED_ORIGINS,
+    DEFAULT_CORS_ALLOW_ORIGIN_REGEX,
+    DEFAULT_DATABASE_URL,
+    load_settings,
+)
 from app.core.database import get_target_metadata
 from app.value_engine.scoring import ValueEngine
 
@@ -282,6 +287,36 @@ def test_load_settings_reads_run_startup_seeding_env_override() -> None:
     )
 
     assert settings.run_startup_seeding is False
+
+
+def test_load_settings_reads_cors_env_overrides() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_CORS_ALLOW_ORIGINS": "https://frontend.example.com, https://preview.example.com",
+            "GTE_CORS_ALLOW_ORIGIN_REGEX": "https://.*\\.vercel\\.app",
+            "GTE_CORS_ALLOW_CREDENTIALS": "true",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.cors_allowed_origins == (
+        "https://frontend.example.com",
+        "https://preview.example.com",
+    )
+    assert settings.cors_allow_origin_regex == "https://.*\\.vercel\\.app"
+    assert settings.cors_allow_credentials is True
+
+
+def test_load_settings_provides_default_cors_origins_and_regex() -> None:
+    settings = load_settings(
+        environ={"DATABASE_URL": "sqlite+pysqlite:///:memory:"},
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.cors_allowed_origins == DEFAULT_CORS_ALLOWED_ORIGINS
+    assert settings.cors_allow_origin_regex == DEFAULT_CORS_ALLOW_ORIGIN_REGEX
+    assert settings.cors_allow_credentials is False
 
 
 def test_load_settings_reads_real_player_import_env_overrides() -> None:

@@ -37,6 +37,8 @@ MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 REGEN_GENERATION_FILE = "regen_generation.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
+DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web.onrender.com",)
+DEFAULT_CORS_ALLOW_ORIGIN_REGEX = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
 
 
 class SettingsSource(BaseSettings):
@@ -176,6 +178,15 @@ class SettingsSource(BaseSettings):
         validation_alias="GTE_OTEL_TRACES_SAMPLER_RATIO",
     )
     observability_service_name: str | None = Field(default=None, validation_alias="GTE_OTEL_SERVICE_NAME")
+    cors_allowed_origins: tuple[str, ...] = Field(
+        default=DEFAULT_CORS_ALLOWED_ORIGINS,
+        validation_alias="GTE_CORS_ALLOW_ORIGINS",
+    )
+    cors_allow_origin_regex: str | None = Field(
+        default=DEFAULT_CORS_ALLOW_ORIGIN_REGEX,
+        validation_alias="GTE_CORS_ALLOW_ORIGIN_REGEX",
+    )
+    cors_allow_credentials: bool = Field(default=False, validation_alias="GTE_CORS_ALLOW_CREDENTIALS")
     live_commentary_llm_enabled: bool = Field(
         default=False,
         validation_alias="GTE_LIVE_COMMENTARY_LLM_ENABLED",
@@ -213,9 +224,9 @@ class SettingsSource(BaseSettings):
         validation_alias="GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS",
     )
 
-    @field_validator("kafka_brokers", mode="before")
+    @field_validator("kafka_brokers", "cors_allowed_origins", mode="before")
     @classmethod
-    def _parse_kafka_brokers(cls, value: object) -> tuple[str, ...]:
+    def _parse_csv_tuple(cls, value: object) -> tuple[str, ...]:
         if value is None or value == "":
             return ()
         if isinstance(value, str):
@@ -725,6 +736,9 @@ class Settings:
     observability_otlp_traces_endpoint: str | None
     observability_trace_sample_ratio: float
     observability_service_name: str | None
+    cors_allowed_origins: tuple[str, ...]
+    cors_allow_origin_regex: str | None
+    cors_allow_credentials: bool
     email: EmailConfig
     real_player_import: RealPlayerImportConfig
     player_universe_weighting: PlayerUniverseWeightingConfig
@@ -1888,6 +1902,9 @@ def load_settings(
         observability_otlp_traces_endpoint=source.observability_otlp_traces_endpoint,
         observability_trace_sample_ratio=source.observability_trace_sample_ratio,
         observability_service_name=source.observability_service_name,
+        cors_allowed_origins=source.cors_allowed_origins,
+        cors_allow_origin_regex=_normalized_optional_setting(source.cors_allow_origin_regex),
+        cors_allow_credentials=source.cors_allow_credentials,
         email=load_email_config(resolved_environ),
         real_player_import=load_real_player_import_config(
             resolved_environ,

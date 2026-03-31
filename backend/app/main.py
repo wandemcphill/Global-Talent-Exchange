@@ -5,6 +5,7 @@ import os
 from threading import Thread
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -22,6 +23,12 @@ from app.modules import DOMAIN_MODULES
 
 logger = logging.getLogger(__name__)
 _ASGI_APP: FastAPI | None = None
+_CORS_EXPOSE_HEADERS = (
+    "Retry-After",
+    "X-RateLimit-Limit",
+    "X-RateLimit-Remaining",
+    "X-RateLimit-Scope",
+)
 INITIAL_ADMIN_EMAIL = os.getenv("GTE_BOOTSTRAP_ADMIN_EMAIL", "vidvimedialtd@gmail.com")
 INITIAL_ADMIN_PASSWORD = os.getenv("GTE_BOOTSTRAP_ADMIN_PASSWORD", "NewPass1234!")
 INITIAL_ADMIN_USERNAME = os.getenv("GTE_BOOTSTRAP_ADMIN_USERNAME", "vidvimedialtd")
@@ -100,6 +107,7 @@ def create_app(
             app=app,
             engine=context.database.engine,
         )
+    _configure_cors(app, resolved_settings)
     return app
 
 
@@ -195,6 +203,18 @@ def check_redis(app: FastAPI) -> None:
 
 def _default_asgi_run_migration_check(settings: Settings) -> bool:
     return settings.run_migration_check if settings.app_env.lower() != "production" else False
+
+
+def _configure_cors(app: FastAPI, settings: Settings) -> None:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_allowed_origins),
+        allow_origin_regex=settings.cors_allow_origin_regex,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=list(_CORS_EXPOSE_HEADERS),
+    )
 
 
 def _mount_tts_app(app: FastAPI) -> None:

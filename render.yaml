@@ -41,6 +41,12 @@ services:
         value: Global Talent Exchange API
       - key: GTE_APP_VERSION
         value: 0.1.0
+      - key: GTE_CORS_ALLOW_ORIGINS
+        value: https://gtex-web.onrender.com
+      - key: GTE_CORS_ALLOW_ORIGIN_REGEX
+        value: https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$
+      - key: GTE_CORS_ALLOW_CREDENTIALS
+        value: "false"
       - key: GTE_PHASE_MARKER
         value: phase-8
       - key: GTE_CONFIG_DIR
