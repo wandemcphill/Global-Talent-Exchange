@@ -176,17 +176,15 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
       await Future.wait<PlayerShareSummary>(
         playerItems.map((JsonMap item) async {
           final String playerId = stringValue(item['player_id']);
-          JsonMap? market;
-          try {
-            market = await api.getMap(
-              '/players/$playerId/shares/market',
-              auth: false,
-            );
-          } on GteApiException catch (error) {
-            if (error.type != GteApiErrorType.notFound) {
-              rethrow;
-            }
-          }
+          final JsonMap market = await api.getMap(
+            '/players/$playerId/shares/market',
+            auth: false,
+          );
+          final bool marketIssued = boolValue(market['market_issued']);
+          final String marketStatus = stringValue(
+            market['status'],
+            fallback: marketIssued ? 'blocked' : 'unissued',
+          );
           return PlayerShareSummary(
             playerId: playerId,
             playerName: stringValue(item['player_name']),
@@ -202,17 +200,17 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
                 item['market_interest_score'] == null
                     ? null
                     : intValue(item['market_interest_score']),
-            marketStatus: stringValue(market?['status'], fallback: 'blocked'),
+            marketStatus: marketStatus,
             marketMessage:
-                market == null
+                !marketIssued
                     ? 'Not tradable yet: no issued share market.'
                     : 'Share market is live.',
             sharePriceCoin:
-                market == null ? null : numberValue(market['share_price_coin']),
+                !marketIssued ? null : numberValue(market['share_price_coin']),
             totalShares:
-                market == null ? null : intValue(market['total_shares']),
+                !marketIssued ? null : intValue(market['total_shares']),
             circulatingShares:
-                market == null ? null : intValue(market['circulating_shares']),
+                !marketIssued ? null : intValue(market['circulating_shares']),
           );
         }),
       );

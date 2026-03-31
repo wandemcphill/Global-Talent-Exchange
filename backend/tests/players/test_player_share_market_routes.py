@@ -242,6 +242,31 @@ def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
         engine.dispose()
 
 
+def test_read_player_share_market_returns_unissued_payload_before_issue(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-unissued-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-unissued-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-unissued")
+        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            market_response = client.get(f"/players/{player.id}/shares/market")
+
+        assert market_response.status_code == 200, market_response.text
+        payload = market_response.json()
+        assert payload["player_id"] == player.id
+        assert payload["status"] == "unissued"
+        assert payload["market_issued"] is False
+        assert payload["total_shares"] == 0
+        assert payload["circulating_shares"] == 0
+        assert payload["share_price_coin"] == "0.0000"
+        assert payload["metadata_json"]["market_issued"] is False
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> None:
     engine, session = _build_session()
     try:

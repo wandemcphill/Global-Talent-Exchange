@@ -83,6 +83,17 @@ def test_authenticated_broadcast_home_current_match_resolves_match_viewer_endpoi
     assert session_response.json()["match_id"] == match_key
 
 
+def test_public_broadcast_home_works_without_auth(client, app) -> None:
+    _ensure_live_match(app, seed=33)
+
+    response = client.get("/api/broadcast/home")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["channels"]
+    assert payload["featured_channel"] is not None
+
+
 def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_starts(client, app, demo_auth_headers) -> None:
     hub = ensure_live_match_hub(app)
     with hub._lock:
