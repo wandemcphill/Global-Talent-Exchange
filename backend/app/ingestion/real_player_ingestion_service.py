@@ -577,6 +577,7 @@ class RealPlayerIngestionService:
             as_of=as_of,
             sample_payload=sample_payload,
             competition=competition,
+            normalized=normalized,
         )
         club = club_resolution.entity if isinstance(club_resolution.entity, Club) else None
         if competition is None and club is not None and club.current_competition_id:
@@ -597,8 +598,8 @@ class RealPlayerIngestionService:
             "club": club_resolution.metadata(),
         }
 
-        country_blocked = country_resolution.status != "resolved"
-        club_blocked = club_resolution.status != "resolved"
+        country_blocked = not self._resolution_persists_canonical_data(country_resolution)
+        club_blocked = not self._resolution_persists_canonical_data(club_resolution)
         if country_resolution.status == "unresolved" or club_resolution.status == "unresolved":
             unresolved_logger.record(
                 raw_club_name=payload.current_real_world_club,
@@ -1076,6 +1077,12 @@ class RealPlayerIngestionService:
             "current_real_world_league_key": payload.current_real_world_league_key,
         }
 
+    @staticmethod
+    def _resolution_persists_canonical_data(
+        resolution: CanonicalReferenceResolution | MappingResolution,
+    ) -> bool:
+        return resolution.status in {"resolved", "auto_created"}
+
     def _mapping_issue(
         self,
         *,
@@ -1083,7 +1090,9 @@ class RealPlayerIngestionService:
         entity_label: str,
         resolution: CanonicalReferenceResolution | MappingResolution,
     ) -> RealPlayerBatchIssue | None:
-        if resolution.status == "resolved" or (entity_label == "competition" and resolution.status == "skipped"):
+        if self._resolution_persists_canonical_data(resolution) or (
+            entity_label == "competition" and resolution.status == "skipped"
+        ):
             return None
         reference_label = (
             getattr(resolution, "provider_label", None)
@@ -1212,8 +1221,13 @@ class RealPlayerIngestionService:
         as_of: datetime,
         sample_payload: dict[str, object],
         competition: Competition | None,
+        normalized: RealPlayerNormalizedProfile,
     ) -> CanonicalReferenceResolution:
-        if self.mapping_resolver is None or self.strict_canonical_mapping_service is None:
+        if (
+            self.mapping_resolver is None
+            or self.strict_canonical_mapping_service is None
+            or self.canonical_mapping_service is None
+        ):
             raise RealPlayerIngestionError("Mapping resolver is not configured.")
         resolver_resolution = self.mapping_resolver.resolve_club(
             session,
@@ -1260,6 +1274,32 @@ class RealPlayerIngestionService:
                     confidence_score=1.0,
                     as_of=as_of,
                 )
+        if (
+            resolver_resolution.status == "unresolved"
+            and self.settings.real_player_mapping_auto_create_missing_entities
+        ):
+            fallback_resolution = self.canonical_mapping_service.resolve_club(
+                session,
+                source_name=payload.source_name,
+                provider_external_id=payload.current_real_world_club_key,
+                name=payload.current_real_world_club,
+                country=competition.country if competition is not None else None,
+                country_code=None,
+                country_name=None,
+                competition=competition,
+                competition_external_id=payload.current_real_world_league_key,
+                competition_name=payload.current_real_world_league,
+                as_of=as_of,
+                sample_payload=sample_payload,
+                auto_create_values={
+                    "short_name": (payload.current_real_world_club or "")[:80] or None,
+                    "popularity_score": normalized.club_strength_score,
+                    "is_tradable": True,
+                    "last_synced_at": as_of,
+                },
+            )
+            if fallback_resolution.status != "unresolved":
+                return fallback_resolution
         return self._persist_mapping_resolution(
             session=session,
             reference=reference,

@@ -523,6 +523,84 @@ def test_real_player_ingestion_surfaces_and_persists_unresolved_mappings_without
         engine.dispose()
 
 
+def test_real_player_ingestion_auto_creates_safe_club_mapping_when_enabled() -> None:
+    engine, session_factory = _session_factory()
+    try:
+        with session_factory() as session:
+            turkey = Country(
+                source_provider="football_data",
+                provider_external_id="TR",
+                name="Turkey",
+                alpha2_code="TR",
+            )
+            super_lig = Competition(
+                source_provider="football_data",
+                provider_external_id="super-lig",
+                country=turkey,
+                name="Super Lig",
+                slug="super-lig",
+                competition_type="league",
+                format_type="real_world",
+                is_major=True,
+                is_tradable=True,
+            )
+            session.add_all([turkey, super_lig])
+            session.commit()
+
+        request = RealPlayerIngestionRequest.model_validate(
+            {
+                "mode": "curated_seed",
+                "as_of": "2026-03-22T12:00:00+00:00",
+                "players": [
+                    {
+                        "source_name": "sportmonks",
+                        "source_player_key": "galatasaray-auto-create-001",
+                        "canonical_name": "Auto Create Example",
+                        "nationality": "Turkey",
+                        "nationality_code": "TR",
+                        "date_of_birth": "1998-12-29",
+                        "primary_position": "Striker",
+                        "current_real_world_club": "Galatasaray",
+                        "current_real_world_league": "Super Lig",
+                        "current_real_world_league_key": "super-lig",
+                        "competition_level": "top_flight",
+                        "appearances": 31,
+                        "minutes_played": 2410,
+                        "goals": 19,
+                        "assists": 4,
+                        "current_market_reference_value": 60000000,
+                        "market_reference_currency": "EUR",
+                    }
+                ],
+            }
+        )
+
+        service = RealPlayerIngestionService(
+            session_factory=session_factory,
+            settings=_settings(auto_create_mappings=True),
+        )
+        report = service.write_batch(request)
+
+        assert report.players_processed == 1
+        assert report.players_created == 1
+
+        with session_factory() as session:
+            player = session.scalar(select(Player).where(Player.full_name == "Auto Create Example"))
+            profile = session.scalar(
+                select(RealPlayerProfile).where(RealPlayerProfile.canonical_name == "Auto Create Example")
+            )
+            club = session.scalar(select(Club).where(Club.name == "Galatasaray"))
+
+            assert player is not None
+            assert profile is not None
+            assert club is not None
+            assert player.current_club_id == club.id
+            assert profile.metadata_json["canonical_mapping"]["club"]["status"] == "auto_created"
+            assert session.scalar(select(func.count()).select_from(RealPlayerUnresolvedReference)) == 0
+    finally:
+        engine.dispose()
+
+
 def test_real_player_ingestion_resolves_aliases_without_breaking_idempotency() -> None:
     engine, session_factory = _session_factory()
     try:
