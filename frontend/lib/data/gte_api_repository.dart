@@ -31,6 +31,8 @@ class GteApiException implements Exception {
   final int? statusCode;
   final Object? cause;
 
+  // Shared recoverable-error gate for legacy fixture fallback. Shipped active
+  // runtime clamps critical repositories to live before this is consulted.
   bool get supportsFixtureFallback =>
       type == GteApiErrorType.network ||
       type == GteApiErrorType.unavailable ||
@@ -99,6 +101,8 @@ abstract class GteTransport {
 class GteRepositoryConfig {
   const GteRepositoryConfig({
     required this.baseUrl,
+    // Legacy/dev/test compatibility default. Shipped active-shell providers
+    // clamp critical clients back to live before constructing them.
     this.mode = GteBackendMode.liveThenFixture,
   });
 
@@ -382,6 +386,8 @@ class GteReliableApiRepository implements GteApiRepository {
 
   final GteRepositoryConfig config;
   final GteTransport transport;
+  // Retained for explicit fixture mode and the remaining shared
+  // live-then-fixture debt that is still being retired incrementally.
   final GteApiRepository fixtures;
   final GteTokenStore tokenStore;
   final AuthSessionStore? _authSessionStore;
@@ -568,22 +574,12 @@ class GteReliableApiRepository implements GteApiRepository {
         ),
         label: 'market players',
       );
-      // Legacy live-then-fixture callers still seed a few non-critical player
-      // display fields from fixtures. The active shell uses /marketplace/players
-      // instead of this repository surface in live mode.
-      final Map<String, PlayerSnapshot> legacyFixtureById = {
-        for (final PlayerSnapshot player in await fixtures.fetchPlayers(
-          limit: limit,
-        ))
-          player.id: player,
-      };
       return GteJson.typedList(payload, <String>['items'], (Object? value) {
         final Map<String, Object?> item = GteJson.map(
           value,
           label: 'market player item',
         );
-        final String playerId = GteJson.string(item, <String>['player_id']);
-        return _mapPlayerSnapshot(item, legacyFixtureById[playerId]);
+        return _mapPlayerSnapshot(item);
       });
     }, () => fixtures.fetchPlayers(limit: limit));
   }
@@ -605,13 +601,10 @@ class GteReliableApiRepository implements GteApiRepository {
   @override
   Future<MarketPulse> fetchMarketPulse() {
     return _withFallback<MarketPulse>(() async {
-      // Legacy controller-only aggregate surface still borrows seeded pulse
-      // copy. The active shell does not route through this method.
-      final MarketPulse legacyFixturePulse = await fixtures.fetchMarketPulse();
       final List<PlayerSnapshot> players = await fetchPlayers(limit: 6);
       final double marketMomentum =
           players.isEmpty
-              ? legacyFixturePulse.marketMomentum
+              ? 0
               : players.fold<double>(
                     0,
                     (double sum, PlayerSnapshot player) =>
@@ -629,6 +622,30 @@ class GteReliableApiRepository implements GteApiRepository {
             return '${player.name} $sign${player.valueDeltaPct.toStringAsFixed(1)}%';
           })
           .toList(growable: false);
+      final DateTime transferRoomTimestamp = DateTime.utc(2026, 1, 1, 12);
+      final List<TransferRoomEntry> transferRoom = players
+          .where((PlayerSnapshot player) => player.inTransferRoom)
+          .take(3)
+          .toList(growable: false)
+          .asMap()
+          .entries
+          .map((MapEntry<int, PlayerSnapshot> entry) {
+            final PlayerSnapshot player = entry.value;
+            return TransferRoomEntry(
+              id: 'live-transfer-room-${player.id}',
+              headline: '${player.name} market interest is active',
+              lane: 'Live market',
+              marketCredits: player.marketCredits,
+              activity:
+                  player.recentHighlights.isNotEmpty
+                      ? player.recentHighlights.first
+                      : '${player.club} ${player.position} activity',
+              timestamp: transferRoomTimestamp.subtract(
+                Duration(minutes: entry.key * 5),
+              ),
+            );
+          })
+          .toList(growable: false);
       return MarketPulse(
         marketMomentum: marketMomentum,
         dailyVolumeCredits: volume,
@@ -638,10 +655,10 @@ class GteReliableApiRepository implements GteApiRepository {
                     .length *
                 73 +
             131,
-        liveDeals: legacyFixturePulse.transferRoom.length,
-        hottestLeague: legacyFixturePulse.hottestLeague,
-        tickers: tickers.isEmpty ? legacyFixturePulse.tickers : tickers,
-        transferRoom: legacyFixturePulse.transferRoom,
+        liveDeals: transferRoom.length,
+        hottestLeague: 'Global Exchange',
+        tickers: tickers,
+        transferRoom: transferRoom,
       );
     }, fixtures.fetchMarketPulse);
   }
@@ -1580,22 +1597,33 @@ class GteReliableApiRepository implements GteApiRepository {
     Future<T> Function() fixtureCall, {
     bool allowFixtureFallback = true,
   }) async {
-    // Shipped active-shell providers clamp this repository to live mode. The
-    // fixture branches below remain for explicit fixture and legacy-only
-    // live-then-fixture callers.
+    // Shipped active-shell providers clamp this repository to live mode. This
+    // shared helper remains only for explicit fixture mode plus the broader
+    // legacy/dev/test live-then-fixture policy that still covers market,
+    // policy/compliance, wallet/order/portfolio, and admin surfaces.
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
     try {
       return await liveCall();
     } on GteApiException catch (error) {
-      if (allowFixtureFallback &&
-          config.mode == GteBackendMode.liveThenFixture &&
-          error.supportsFixtureFallback) {
+      if (_shouldUseLegacyFixtureFallback(
+        error,
+        allowFixtureFallback: allowFixtureFallback,
+      )) {
         return fixtureCall();
       }
       rethrow;
     }
+  }
+
+  bool _shouldUseLegacyFixtureFallback(
+    GteApiException error, {
+    required bool allowFixtureFallback,
+  }) {
+    return allowFixtureFallback &&
+        config.mode == GteBackendMode.liveThenFixture &&
+        error.supportsFixtureFallback;
   }
 
   Future<Object?> _request(
@@ -1653,35 +1681,27 @@ class GteReliableApiRepository implements GteApiRepository {
     }
   }
 
-  PlayerSnapshot _mapPlayerSnapshot(
-    Map<String, Object?> json,
-    PlayerSnapshot? fixture,
-  ) {
+  PlayerSnapshot _mapPlayerSnapshot(Map<String, Object?> json) {
     final String playerId = GteJson.string(json, <String>['player_id']);
     final String playerName = GteJson.string(json, <String>['player_name']);
     final double movement = GteJson.number(json, <String>['movement_pct']);
-    return (fixture ?? _generatedPlayerSnapshot(playerId, playerName)).copyWith(
+    return _generatedPlayerSnapshot(playerId, playerName).copyWith(
       id: playerId,
       name: playerName,
       club:
           GteJson.stringOrNull(json, <String>['current_club_name']) ??
-          fixture?.club ??
           'Unknown club',
       nation:
           GteJson.stringOrNull(json, <String>['nationality']) ??
-          fixture?.nation ??
           'Unknown nation',
-      position:
-          GteJson.stringOrNull(json, <String>['position']) ??
-          fixture?.position ??
-          'N/A',
-      age: GteJson.integer(json, <String>['age'], fallback: fixture?.age ?? 0),
+      position: GteJson.stringOrNull(json, <String>['position']) ?? 'N/A',
+      age: GteJson.integer(json, <String>['age'], fallback: 0),
       marketCredits:
           GteJson.number(json, <String>['current_value_credits']).round(),
       gsi: GteJson.number(json, <String>['trend_score']).round(),
       formRating: GteJson.number(json, <String>[
         'average_rating',
-      ], fallback: fixture?.formRating ?? 0.0),
+      ], fallback: 0.0),
       valueDeltaPct: movement,
     );
   }
@@ -1727,7 +1747,7 @@ class GteReliableApiRepository implements GteApiRepository {
       'average_rating': GteJson.number(trend, <String>[
         'average_rating',
       ], fallback: 0.0),
-    }, null).copyWith(
+    }).copyWith(
       valueTrend: candles.candles
           .map(
             (GteMarketCandle candle) => TrendPoint(
