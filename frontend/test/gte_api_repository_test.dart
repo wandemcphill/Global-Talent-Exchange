@@ -144,6 +144,104 @@ void main() {
   );
 
   test(
+    'policy document reads fail closed in live mode without consulting fixtures',
+    () async {
+      await _expectPolicyDocumentSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.live,
+      );
+    },
+  );
+
+  test(
+    'policy document reads no longer fall back to fixtures in live-then-fixture mode',
+    () async {
+      await _expectPolicyDocumentSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.liveThenFixture,
+      );
+    },
+  );
+
+  test(
+    'policy document reads still resolve from fixtures in explicit fixture mode',
+    () async {
+      final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
+      final GteReliableApiRepository repository = GteReliableApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.fixture,
+        ),
+        transport: _ThrowingTransport(),
+        fixtures: fixtures,
+      );
+
+      final List<GtePolicyDocumentSummary> documents = await repository
+          .fetchPolicyDocuments(mandatoryOnly: true);
+      final GtePolicyDocumentDetail detail = await repository
+          .fetchPolicyDocument('terms_and_conditions');
+
+      expect(fixtures.fetchPolicyDocumentsCalls, 1);
+      expect(fixtures.fetchPolicyDocumentCalls, 1);
+      expect(documents, isNotEmpty);
+      expect(
+        documents.every((GtePolicyDocumentSummary doc) => doc.isMandatory),
+        isTrue,
+      );
+      expect(
+        documents.any(
+          (GtePolicyDocumentSummary doc) =>
+              doc.documentKey == 'terms_and_conditions',
+        ),
+        isTrue,
+      );
+      expect(detail.documentKey, 'terms_and_conditions');
+      expect(detail.title, 'Terms & Conditions');
+    },
+  );
+
+  test(
+    'policy acceptance reads fail closed in live mode without consulting fixtures',
+    () async {
+      await _expectPolicyAcceptanceSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.live,
+      );
+    },
+  );
+
+  test(
+    'policy acceptance reads no longer fall back to fixtures in live-then-fixture mode',
+    () async {
+      await _expectPolicyAcceptanceSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.liveThenFixture,
+      );
+    },
+  );
+
+  test(
+    'policy acceptance reads still resolve from fixtures in explicit fixture mode',
+    () async {
+      final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
+      final GteReliableApiRepository repository = GteReliableApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.fixture,
+        ),
+        transport: _ThrowingTransport(),
+        fixtures: fixtures,
+      );
+
+      final List<GtePolicyAcceptanceSummary> acceptances =
+          await repository.fetchMyPolicyAcceptances();
+
+      expect(fixtures.fetchMyPolicyAcceptancesCalls, 1);
+      expect(acceptances, isNotEmpty);
+      expect(acceptances.single.documentKey, 'terms_and_conditions');
+      expect(acceptances.single.title, 'Terms & Conditions');
+      expect(acceptances.single.versionLabel, 'v1.0');
+      expect(acceptances.single.acceptedAt, DateTime.utc(2026, 3, 2, 10));
+    },
+  );
+
+  test(
     'fetch market pulse in live mode derives pulse from live players without borrowing fixture pulse data',
     () async {
       final _RecordingTransport transport = _RecordingTransport(
@@ -592,6 +690,62 @@ void main() {
   );
 }
 
+Future<void> _expectPolicyDocumentSurfaceFailuresWithoutFixtureFallback(
+  GteBackendMode mode,
+) async {
+  final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
+  final GteReliableApiRepository repository = GteReliableApiRepository(
+    config: GteRepositoryConfig(baseUrl: 'http://127.0.0.1:8000', mode: mode),
+    transport: _ThrowingTransport(),
+    fixtures: fixtures,
+  );
+
+  Future<void> expectNetworkError(Future<Object?> Function() action) async {
+    await expectLater(
+      action(),
+      throwsA(
+        isA<GteApiException>().having(
+          (GteApiException error) => error.type,
+          'type',
+          GteApiErrorType.network,
+        ),
+      ),
+    );
+  }
+
+  await expectNetworkError(() => repository.fetchPolicyDocuments());
+  await expectNetworkError(
+    () => repository.fetchPolicyDocument('terms_and_conditions'),
+  );
+
+  expect(fixtures.fetchPolicyDocumentsCalls, 0);
+  expect(fixtures.fetchPolicyDocumentCalls, 0);
+}
+
+Future<void> _expectPolicyAcceptanceSurfaceFailuresWithoutFixtureFallback(
+  GteBackendMode mode,
+) async {
+  final _RecordingPolicyFixtureApi fixtures = _RecordingPolicyFixtureApi();
+  final GteReliableApiRepository repository = GteReliableApiRepository(
+    config: GteRepositoryConfig(baseUrl: 'http://127.0.0.1:8000', mode: mode),
+    transport: _ThrowingTransport(),
+    fixtures: fixtures,
+  );
+
+  await expectLater(
+    repository.fetchMyPolicyAcceptances(),
+    throwsA(
+      isA<GteApiException>().having(
+        (GteApiException error) => error.type,
+        'type',
+        GteApiErrorType.network,
+      ),
+    ),
+  );
+
+  expect(fixtures.fetchMyPolicyAcceptancesCalls, 0);
+}
+
 class _ThrowingTransport implements GteTransport {
   @override
   Future<GteTransportResponse> send(GteTransportRequest request) {
@@ -630,6 +784,37 @@ class _RecordingProfileFixtureApi extends GteMockApi {
   Future<PlayerProfile> fetchPlayerProfile(String playerId) {
     fetchPlayerProfileCalls += 1;
     return super.fetchPlayerProfile(playerId);
+  }
+}
+
+class _RecordingPolicyFixtureApi extends GteMockApi {
+  _RecordingPolicyFixtureApi() : super(latency: Duration.zero);
+
+  int fetchPolicyDocumentsCalls = 0;
+  int fetchPolicyDocumentCalls = 0;
+  int fetchMyPolicyAcceptancesCalls = 0;
+
+  @override
+  Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
+    bool mandatoryOnly = false,
+  }) async {
+    fetchPolicyDocumentsCalls += 1;
+    return super.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly);
+  }
+
+  @override
+  Future<GtePolicyDocumentDetail> fetchPolicyDocument(
+    String documentKey, {
+    String? versionLabel,
+  }) async {
+    fetchPolicyDocumentCalls += 1;
+    return super.fetchPolicyDocument(documentKey, versionLabel: versionLabel);
+  }
+
+  @override
+  Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() async {
+    fetchMyPolicyAcceptancesCalls += 1;
+    return super.fetchMyPolicyAcceptances();
   }
 }
 

@@ -532,6 +532,7 @@ class GteAuthRegisterRequest {
     required this.fullName,
     required this.phoneNumber,
     required this.isOver18,
+    required this.regionCode,
     this.username,
     required this.password,
   });
@@ -540,6 +541,7 @@ class GteAuthRegisterRequest {
   final String fullName;
   final String phoneNumber;
   final bool isOver18;
+  final String regionCode;
   final String? username;
   final String password;
 
@@ -548,6 +550,7 @@ class GteAuthRegisterRequest {
         'full_name': fullName,
         'phone_number': phoneNumber,
         'is_over_18': isOver18,
+        'region_code': regionCode.trim().toUpperCase(),
         if (username != null) 'username': username,
         'password': password,
       };

@@ -456,19 +456,23 @@ class GteReliableApiRepository implements GteApiRepository {
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
     bool mandatoryOnly = false,
   }) {
-    return _withFallback<List<GtePolicyDocumentSummary>>(() async {
-      final List<Object?> payload = GteJson.list(
-        await _request(
-          'GET',
-          '/policies/documents',
-          query: <String, Object?>{'mandatory_only': mandatoryOnly},
-        ),
-        label: 'policy documents',
-      );
-      return payload
-          .map(GtePolicyDocumentSummary.fromJson)
-          .toList(growable: false);
-    }, () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly));
+    return _withFallback<List<GtePolicyDocumentSummary>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request(
+            'GET',
+            '/policies/documents',
+            query: <String, Object?>{'mandatory_only': mandatoryOnly},
+          ),
+          label: 'policy documents',
+        );
+        return payload
+            .map(GtePolicyDocumentSummary.fromJson)
+            .toList(growable: false);
+      },
+      () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly),
+      allowFixtureFallback: false,
+    );
   }
 
   @override
@@ -488,6 +492,7 @@ class GteReliableApiRepository implements GteApiRepository {
       ),
       () =>
           fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
+      allowFixtureFallback: false,
     );
   }
 
@@ -516,15 +521,19 @@ class GteReliableApiRepository implements GteApiRepository {
 
   @override
   Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() {
-    return _withFallback<List<GtePolicyAcceptanceSummary>>(() async {
-      final List<Object?> payload = GteJson.list(
-        await _request('GET', '/policies/me/acceptances', requiresAuth: true),
-        label: 'policy acceptances',
-      );
-      return payload
-          .map(GtePolicyAcceptanceSummary.fromJson)
-          .toList(growable: false);
-    }, fixtures.fetchMyPolicyAcceptances);
+    return _withFallback<List<GtePolicyAcceptanceSummary>>(
+      () async {
+        final List<Object?> payload = GteJson.list(
+          await _request('GET', '/policies/me/acceptances', requiresAuth: true),
+          label: 'policy acceptances',
+        );
+        return payload
+            .map(GtePolicyAcceptanceSummary.fromJson)
+            .toList(growable: false);
+      },
+      fixtures.fetchMyPolicyAcceptances,
+      allowFixtureFallback: false,
+    );
   }
 
   @override

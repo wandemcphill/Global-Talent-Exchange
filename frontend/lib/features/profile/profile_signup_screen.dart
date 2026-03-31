@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/utils/region_code_resolver.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/auth_session.dart';
 import '../../shared/models/data_source_status.dart';
@@ -149,6 +150,7 @@ class _ProfileSignupScreenState extends ConsumerState<ProfileSignupScreen> {
             email: _emailController.text.trim(),
             password: _passwordController.text,
             isOver18: _isOver18,
+            regionCode: resolveRegionCodeForContext(context),
           );
       final AuthSession? session =
           await ref.read(authSessionStoreProvider).readSession();

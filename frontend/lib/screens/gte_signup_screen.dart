@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_feedback.dart';
+import '../core/utils/region_code_resolver.dart';
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_shell_theme.dart';
@@ -96,6 +97,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       email: email,
       password: password,
       isOver18: _isOver18,
+      regionCode: resolveRegionCodeForContext(context),
     );
     if (!mounted) {
       return;

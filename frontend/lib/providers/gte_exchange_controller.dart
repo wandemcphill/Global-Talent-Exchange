@@ -372,6 +372,7 @@ class GteExchangeController extends ChangeNotifier {
     required String email,
     required String password,
     required bool isOver18,
+    required String regionCode,
     String? username,
   }) async {
     final int requestId = _authGate.begin();
@@ -386,6 +387,7 @@ class GteExchangeController extends ChangeNotifier {
         email: email,
         password: password,
         isOver18: isOver18,
+        regionCode: regionCode,
         username: username,
       );
       if (!_authGate.isActive(requestId)) {

@@ -6,7 +6,6 @@ import textwrap
 from app.core.config import (
     DEFAULT_CORS_ALLOWED_ORIGINS,
     DEFAULT_CORS_ALLOW_ORIGIN_REGEX,
-    DEFAULT_DATABASE_URL,
     load_settings,
 )
 from app.core.database import get_target_metadata
@@ -240,10 +239,11 @@ def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None
         """,
     )
 
-    settings = load_settings(environ={}, config_root=tmp_path)
+    database_url = f"sqlite:///{(tmp_path / 'test_settings.db').as_posix()}"
+    settings = load_settings(environ={"DATABASE_URL": database_url}, config_root=tmp_path)
 
     assert settings.config_root == tmp_path.resolve()
-    assert settings.database_url == DEFAULT_DATABASE_URL
+    assert settings.database_url == database_url
     assert settings.player_universe_weighting.rebalance_interval_hours == 12
     assert settings.player_universe_weighting.weights["performance"] == 0.40
     assert settings.supply_tiers.tiers[0].code == "elite"

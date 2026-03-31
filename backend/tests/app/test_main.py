@@ -526,7 +526,7 @@ def test_main_module_exposes_lazy_asgi_app(monkeypatch) -> None:
     sentinel = object()
     call_count = 0
 
-    def _build_app():
+    def _build_app(**kwargs):
         nonlocal call_count
         call_count += 1
         return sentinel

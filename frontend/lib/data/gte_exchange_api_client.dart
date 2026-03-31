@@ -78,6 +78,7 @@ class GteExchangeApiClient {
     required String email,
     required String password,
     required bool isOver18,
+    required String regionCode,
     String? username,
   }) {
     return repository.register(
@@ -86,6 +87,7 @@ class GteExchangeApiClient {
         fullName: fullName,
         phoneNumber: phoneNumber,
         isOver18: isOver18,
+        regionCode: regionCode,
         username: username,
         password: password,
       ),
@@ -1217,6 +1219,16 @@ GteApiErrorType _errorTypeFromStatus(int statusCode) {
 }
 
 String _errorMessage(Object? payload) {
+  return gteApiErrorMessage(
+    payload,
+    fallback: 'The backend returned an unexpected response.',
+  );
+}
+
+String gteApiErrorMessage(
+  Object? payload, {
+  required String fallback,
+}) {
   if (payload is String && payload.trim().isNotEmpty) {
     return payload;
   }
@@ -1226,5 +1238,5 @@ String _errorMessage(Object? payload) {
       return detail;
     }
   }
-  return 'The backend returned an unexpected response.';
+  return fallback;
 }
