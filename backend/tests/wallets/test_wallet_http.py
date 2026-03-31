@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -18,6 +19,7 @@ import app.orders.models  # noqa: F401
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
+from app.models.policy import CountryFeaturePolicy
 from app.models.base import Base
 from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
@@ -416,6 +418,21 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
     labels = {item["label"]: item["value"] for item in payload["insights"]}
     assert labels["Withdrawal rail"] == "Bank transfer"
     assert labels["E-game cash-out"] == "Enabled"
+
+
+def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:
+    client, session, current_user = api_context
+    policy_service = PolicyService(session)
+    profile = policy_service.ensure_user_region_profile(user=current_user, region_code="US")
+    profile.region_code = "US"
+    session.execute(delete(CountryFeaturePolicy))
+    session.commit()
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert Decimal(str(payload["withdrawable_now"])) == Decimal("0.0000")
 
 
 def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None:

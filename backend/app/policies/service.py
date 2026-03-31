@@ -255,6 +255,39 @@ class PolicyService:
         )
         return list(self.session.scalars(statement).all())
 
+    def _get_active_country_policy_record(self, country_code: str) -> CountryFeaturePolicy | None:
+        return self.session.scalar(
+            select(CountryFeaturePolicy)
+            .where(CountryFeaturePolicy.country_code == country_code, CountryFeaturePolicy.active.is_(True))
+            .order_by(CountryFeaturePolicy.bucket_type.asc())
+        )
+
+    @classmethod
+    def _default_country_policy_payload(cls, country_code: str) -> dict[str, object]:
+        normalized = cls.normalize_country_code(country_code)
+        for item in DEFAULT_COUNTRY_POLICIES:
+            if str(item["country_code"]) == normalized:
+                return dict(item)
+        for item in DEFAULT_COUNTRY_POLICIES:
+            if str(item["country_code"]) == "GLOBAL":
+                return dict(item)
+        return {
+            "country_code": "GLOBAL",
+            "bucket_type": "default",
+            "deposits_enabled": False,
+            "market_trading_enabled": True,
+            "platform_reward_withdrawals_enabled": False,
+            "user_hosted_gift_withdrawals_enabled": False,
+            "gtex_competition_gift_withdrawals_enabled": False,
+            "national_reward_withdrawals_enabled": False,
+            "one_time_region_change_after_days": REGION_CHANGE_LOCK_DAYS,
+            "active": True,
+        }
+
+    @classmethod
+    def _build_default_country_policy(cls, country_code: str) -> CountryFeaturePolicy:
+        return CountryFeaturePolicy(**cls._default_country_policy_payload(country_code))
+
     def upsert_country_policy(self, *, payload) -> CountryFeaturePolicy:
         normalized_country_code = self.normalize_country_code(payload.country_code)
         policy = self.session.scalar(
@@ -282,22 +315,14 @@ class PolicyService:
         return policy
 
     def get_country_policy(self, country_code: str) -> CountryFeaturePolicy:
-        normalized = country_code.strip().upper()
-        policy = self.session.scalar(
-            select(CountryFeaturePolicy)
-            .where(CountryFeaturePolicy.country_code == normalized, CountryFeaturePolicy.active.is_(True))
-            .order_by(CountryFeaturePolicy.bucket_type.asc())
-        )
+        normalized = self.normalize_country_code(country_code)
+        policy = self._get_active_country_policy_record(normalized)
         if policy is not None:
             return policy
-        fallback = self.session.scalar(
-            select(CountryFeaturePolicy)
-            .where(CountryFeaturePolicy.country_code == "GLOBAL", CountryFeaturePolicy.active.is_(True))
-            .order_by(CountryFeaturePolicy.bucket_type.asc())
-        )
-        if fallback is None:
-            raise LookupError(f"Country feature policy '{normalized}' could not be found.")
-        return fallback
+        fallback = self._get_active_country_policy_record("GLOBAL")
+        if fallback is not None:
+            return fallback
+        return self._build_default_country_policy(normalized)
 
 
     def list_missing_acceptances(self, *, user_id: str) -> list[PolicyDocumentVersion]:
