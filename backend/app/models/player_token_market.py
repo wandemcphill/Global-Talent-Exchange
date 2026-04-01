@@ -3,10 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint, event
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.players.token_market_defaults import resolve_player_share_market_config
 
 if TYPE_CHECKING:
     from app.ingestion.models import Player
@@ -41,6 +42,11 @@ class PlayerShareMarket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     player: Mapped["Player"] = relationship("Player", back_populates="share_market")
+
+    @property
+    def liquidity_coin(self) -> Decimal:
+        raw_value = (self.metadata_json or {}).get("liquidity_coin", "0.0000")
+        return Decimal(str(raw_value or "0.0000")).quantize(Decimal("0.0001"))
 
 
 class PlayerShareHolding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -106,3 +112,30 @@ class PlayerShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 
 __all__ = ["PlayerShareEvent", "PlayerShareHolding", "PlayerShareMarket"]
+
+
+@event.listens_for(Session, "before_flush")
+def _auto_initialize_player_share_markets(session: Session, _flush_context, _instances) -> None:
+    from app.ingestion.models import Player
+
+    for pending in tuple(session.new):
+        if not isinstance(pending, Player):
+            continue
+        if pending.share_market is not None:
+            continue
+
+        config = resolve_player_share_market_config(pending)
+        pending.share_market = PlayerShareMarket(
+            total_shares=config.total_shares,
+            share_price_coin=config.share_price_coin,
+            status=config.status,
+            metadata_json={
+                "player_name": pending.canonical_display_name or pending.full_name,
+                "is_real_player": bool(pending.is_real_player),
+                "real_player_tier": pending.real_player_tier,
+                "market_issued": True,
+                "auto_initialized": True,
+                "liquidity_coin": str(config.liquidity_coin),
+                "initial_liquidity_coin": str(config.liquidity_coin),
+            },
+        )

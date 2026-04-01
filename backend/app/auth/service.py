@@ -38,6 +38,7 @@ from app.services.club_trophy_service import ClubTrophyService
 from app.services.email import EmailSendResult, EmailService
 from app.services.regen_bootstrap_service import RegenBootstrapService
 from app.users.schemas import UserPublic
+from app.wallets.funding_service import WalletFundingService
 from app.wallets.service import WalletService
 
 logger = logging.getLogger(__name__)
@@ -181,6 +182,7 @@ class AuthService:
         _record_timing(timing_recorder, "db.flush_user_ms", initial_flush_started_at)
         wallet_started_at = perf_counter()
         self.wallet_service.ensure_default_accounts(session, user)
+        WalletFundingService(wallet_service=self.wallet_service).ensure_wallet(session, user)
         _record_timing(timing_recorder, "db.ensure_default_wallets_ms", wallet_started_at)
         region_started_at = perf_counter()
         PolicyService(session).ensure_user_region_profile(user=user, region_code=region_code)
