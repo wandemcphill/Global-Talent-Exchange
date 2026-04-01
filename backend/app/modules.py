@@ -35,6 +35,7 @@ EAGER_MODULE_NAMES = frozenset(
         "competitions",
         "hosted_competition_engine",
         "live_matches",
+        "manager_market",
         "match_viewer",
         "hosted_competition_engine_admin",
         "streamer_tournament_engine",
@@ -170,6 +171,24 @@ def _initialize_replay_archive(app, _context) -> None:
     from app.replay_archive.service import ensure_replay_archive
 
     ensure_replay_archive(app)
+
+
+def _initialize_manager_market(app, context) -> None:
+    from app.manager_market.seed_catalog import CATALOG_VERSION as MANAGER_MARKET_CATALOG_VERSION
+    from app.manager_market.service import ManagerMarketService
+    from app.wallets.service import WalletService
+
+    if not context.settings.run_startup_seeding:
+        logger.info("app.startup.seed.skipped seed=%s reason=disabled", "manager_market_catalog")
+        return
+
+    logger.info("app.startup.seed.begin seed=%s", "manager_market_catalog")
+    service = ManagerMarketService(wallet_service=WalletService())
+    with context.database.session_factory() as session:
+        service._bootstrap_db(app, session)
+        session.commit()
+    app.state.manager_market_catalog_version = MANAGER_MARKET_CATALOG_VERSION
+    logger.info("app.startup.seed.complete seed=%s", "manager_market_catalog")
 
 
 def _run_startup_seed(context, *, seed_name: str, seed_action) -> None:
@@ -616,7 +635,11 @@ DOMAIN_MODULES = (
     _module("market", router_path="app.market.router:router"),
     _module("marketplace", router_path="app.marketplace.router:router"),
     _module("manager_duels", router_path="app.manager_duels.router:router"),
-    _module("manager_market", router_path="app.manager_market.router:router"),
+    _module(
+        "manager_market",
+        router_path="app.manager_market.router:router",
+        on_startup=(_initialize_manager_market,),
+    ),
     _module("manager_marketplace", router_path="app.manager_marketplace.router:router"),
     _module("player_cards", router_path="app.player_cards.router:router"),
     _module("ingestion", router_path="app.ingestion.router:router"),

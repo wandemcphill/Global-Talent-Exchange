@@ -11,6 +11,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.auth.security import hash_password
 from app.auth.service import AuthService
 from app.core.events import EventPublisher, InMemoryEventPublisher
+from app.ingestion.demo_discoverability import (
+    CANONICAL_ILLIQUID_PLAYER_COUNT,
+    CANONICAL_LIQUID_PLAYER_COUNT,
+)
 from app.ingestion.models import Player
 from app.ledger.models import LedgerEventRecord
 from app.market.service import MarketEngine

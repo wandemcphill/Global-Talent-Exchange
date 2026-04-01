@@ -11,9 +11,11 @@ from app.auth.dependencies import get_session
 from app.core.config import Settings, get_settings
 from app.core.container import ApplicationContext, build_application_context
 from app.core.module import DomainModule, register_domain_modules, run_module_hooks
+from app.ingestion.demo_discoverability import CANONICAL_DEMO_PLAYER_COUNT
 from app.main import _bind_application_state, _resolve_database_engine
 from app.modules import DOMAIN_MODULES
 from app.simulation.runtime import seed_demo_simulation_for_app
+from app.simulation.service import DEFAULT_ILLIQUID_PLAYER_COUNT, DEFAULT_LIQUID_PLAYER_COUNT
 
 
 def create_demo_simulation_app(

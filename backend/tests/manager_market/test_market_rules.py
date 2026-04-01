@@ -26,6 +26,10 @@ def _catalog_by_id(client) -> dict[str, dict[str, object]]:
 
 
 def test_manager_catalog_is_seeded_during_app_startup(app, client) -> None:
+    startup_thread = getattr(app.state, "deferred_startup_thread", None)
+    if startup_thread is not None:
+        startup_thread.join(timeout=5)
+
     with app.state.session_factory() as session:
         total = session.scalar(select(func.count()).select_from(ManagerCatalogEntry))
         ferguson = session.scalar(

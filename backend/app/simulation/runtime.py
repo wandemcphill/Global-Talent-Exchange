@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from app.ingestion.demo_bootstrap import DemoBootstrapService
+from app.ingestion.demo_discoverability import CANONICAL_DEMO_PLAYER_COUNT
 from app.market.projections import MarketSummaryProjector
 from app.market.repositories import InMemoryMarketRepository
 from app.market.service import MarketEngine

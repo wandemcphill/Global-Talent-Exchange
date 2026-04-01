@@ -16,7 +16,7 @@ from app.auth.service import AuthService
 from app.core.config import DEFAULT_DATABASE_URL, Settings, load_settings
 from app.core.database import create_database_engine, create_session_factory, ensure_database_schema_current
 from app.core.events import EventPublisher, InMemoryEventPublisher
-from app.ingestion.models import MarketSignal, Player
+from app.ingestion.models import LiquidityBand, MarketSignal, Player, SupplyTier
 from app.market.service import MarketEngine
 from app.models.user import User, UserRole
 from app.models.wallet import (
@@ -40,11 +40,15 @@ from app.wallets.service import LedgerPosting, WalletService
 
 from .demo_discoverability import (
     CANONICAL_DEMO_PLAYER_COUNT,
+    CANONICAL_INITIAL_VISIBLE_PLAYERS,
     CANONICAL_ILLIQUID_PLAYER_COUNT,
     CANONICAL_LIQUID_PLAYER_COUNT,
     CanonicalDemoPlayerProfile,
     CanonicalDemoSeedPlan,
     DEMO_SUPPLY_BANDS,
+    EUR_QUANTUM as DEMO_EUR_QUANTUM,
+    MOVEMENT_PATTERN as DEMO_MOVEMENT_PATTERN,
+    PRICE_QUANTUM as DEMO_VALUE_QUANTUM,
     build_canonical_demo_seed_plan,
     liquidity_band_code_for_market_value_eur,
 )
@@ -791,7 +795,7 @@ class DemoBootstrapService:
                 select(LiquidityBand).where(
                     LiquidityBand.code.in_(
                         tuple({
-                            liquidity_band_code_for_market_value_eur(profile.market_value_eur)
+                            liquidity_band_code_for_canonical_demo_band(profile.band.code)
                             for profile in seed_plan.player_profiles
                         })
                     )
@@ -807,7 +811,7 @@ class DemoBootstrapService:
             player.is_tradable = True
             player.supply_tier_id = supply_tiers[profile.band.code].id
             liquidity_band = liquidity_bands.get(
-                liquidity_band_code_for_market_value_eur(profile.market_value_eur)
+                liquidity_band_code_for_canonical_demo_band(profile.band.code)
             )
             if liquidity_band is not None:
                 player.liquidity_band_id = liquidity_band.id

@@ -23,7 +23,7 @@ from app.ingestion.demo_bootstrap import (
     canonical_band_counts_for_player_count,
     DemoBootstrapService,
 )
-from app.ingestion.models import MarketSignal, Player
+from app.ingestion.models import LiquidityBand, MarketSignal, Player
 from app.matching.models import TradeExecution
 from app.models.base import Base
 from app.models.user import User

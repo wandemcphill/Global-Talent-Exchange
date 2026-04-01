@@ -2097,7 +2097,6 @@ def load_settings(
         regen_generation=load_regen_generation_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
         player_card_market_integrity=load_player_card_market_integrity_config(resolved_config_root),
-        admin_buyback=load_admin_buyback_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
         live_commentary_llm_enabled=source.live_commentary_llm_enabled,
         live_commentary_llm_endpoint_url=source.live_commentary_llm_endpoint_url,
