@@ -144,6 +144,68 @@ class UniverseStore:
                     str(payload["fixture_id"]),
                 ),
             )
+            connection.execute(
+                """
+                DELETE FROM player_performances
+                WHERE match_id = ?
+                """,
+                (str(payload["match_id"]),),
+            )
+            for performance in tuple(payload.get("player_performances") or ()):
+                connection.execute(
+                    """
+                    INSERT INTO player_performances (
+                        match_id,
+                        player_id,
+                        team_id,
+                        team_name,
+                        player_name,
+                        position,
+                        minutes,
+                        rating,
+                        goals,
+                        assists,
+                        shots,
+                        shots_on_target,
+                        xg,
+                        key_passes,
+                        passes_completed,
+                        tackles_won,
+                        fouls_committed,
+                        yellow_cards,
+                        red_card,
+                        saves,
+                        clean_sheet,
+                        payload_json,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(payload["match_id"]),
+                        str(performance["player_id"]),
+                        str(performance["team_id"]),
+                        str(performance["team_name"]),
+                        str(performance["player_name"]),
+                        str(performance["position"]),
+                        int(performance["minutes"]),
+                        float(performance["rating"]),
+                        int(performance["goals"]),
+                        int(performance["assists"]),
+                        int(performance["shots"]),
+                        int(performance["shots_on_target"]),
+                        float(performance["xg"]),
+                        int(performance["key_passes"]),
+                        int(performance["passes_completed"]),
+                        int(performance["tackles_won"]),
+                        int(performance["fouls_committed"]),
+                        int(performance["yellow_cards"]),
+                        int(bool(performance["red_card"])),
+                        int(performance["saves"]),
+                        int(bool(performance["clean_sheet"])),
+                        json.dumps(performance, ensure_ascii=True, sort_keys=True),
+                        _utcnow(),
+                    ),
+                )
 
     def list_fixtures(
         self,
@@ -196,6 +258,26 @@ class UniverseStore:
             ).fetchall()
         return [json.loads(str(row["payload_json"])) for row in rows]
 
+    def player_performances(self, *, match_id: str, limit: int = 50) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT match_id, payload_json
+                FROM player_performances
+                WHERE match_id = ?
+                ORDER BY rating DESC, goals DESC, assists DESC, player_name ASC
+                LIMIT ?
+                """,
+                (match_id, max(limit, 1)),
+            ).fetchall()
+        return [
+            {
+                "match_id": str(row["match_id"]),
+                **json.loads(str(row["payload_json"])),
+            }
+            for row in rows
+        ]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.executescript(
@@ -234,6 +316,33 @@ class UniverseStore:
                     away_goals INTEGER NOT NULL,
                     payload_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS player_performances (
+                    match_id TEXT NOT NULL,
+                    player_id TEXT NOT NULL,
+                    team_id TEXT NOT NULL,
+                    team_name TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    position TEXT NOT NULL,
+                    minutes INTEGER NOT NULL,
+                    rating REAL NOT NULL,
+                    goals INTEGER NOT NULL,
+                    assists INTEGER NOT NULL,
+                    shots INTEGER NOT NULL,
+                    shots_on_target INTEGER NOT NULL,
+                    xg REAL NOT NULL,
+                    key_passes INTEGER NOT NULL,
+                    passes_completed INTEGER NOT NULL,
+                    tackles_won INTEGER NOT NULL,
+                    fouls_committed INTEGER NOT NULL,
+                    yellow_cards INTEGER NOT NULL,
+                    red_card INTEGER NOT NULL,
+                    saves INTEGER NOT NULL,
+                    clean_sheet INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (match_id, player_id)
                 );
                 """
             )
