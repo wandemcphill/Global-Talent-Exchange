@@ -40,6 +40,18 @@ void main() {
                     totalShares: 1000,
                     circulatingShares: 700,
                   ),
+                  PlayerShareSummary(
+                    playerId: 'player-3',
+                    playerName: 'Lamine Yamal',
+                    position: 'RW',
+                    nationality: 'Spain',
+                    currentClubName: 'Barcelona',
+                    age: 18,
+                    currentValueCredits: 1325,
+                    marketInterestScore: 98,
+                    marketStatus: 'unissued',
+                    marketMessage: 'Not tradable yet: no issued share market.',
+                  ),
                 ],
                 holdings: <PlayerShareHoldingSummary>[
                   PlayerShareHoldingSummary(
@@ -93,20 +105,82 @@ void main() {
       expect(find.text('Wallet & Compliance'), findsOneWidget);
       await _scrollTo(tester, find.text('Player Shares'));
       expect(find.text('Player Shares'), findsOneWidget);
+      expect(find.text('Upcoming share markets'), findsOneWidget);
       await _scrollTo(tester, find.text('Transfer Listings'));
       expect(find.text('Transfer Listings'), findsOneWidget);
       await _scrollTo(tester, find.text('Share Holdings'));
       expect(find.text('Share Holdings'), findsOneWidget);
       expect(find.text('Cole Palmer'), findsWidgets);
+      expect(find.text('Lamine Yamal'), findsWidgets);
       expect(find.text('William Saliba'), findsOneWidget);
       expect(
-        find.text(
-          'Bidding and watchlisting are blocked because this session has no verified club context.',
-        ),
+        find.text('Verified club context required for transfer actions'),
         findsOneWidget,
       );
+      expect(find.widgetWithText(FilledButton, 'Buy'), findsOneWidget);
     },
   );
+
+  testWidgets('market screen exposes sign-in recovery in preview mode', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authProvider.overrideWith((Ref ref) => null),
+          marketDashboardProvider.overrideWith((Ref ref) async {
+            return const MarketDashboardData(
+              playerShares: <PlayerShareSummary>[
+                PlayerShareSummary(
+                  playerId: 'player-1',
+                  playerName: 'Jude Bellingham',
+                  position: 'CM',
+                  nationality: 'England',
+                  currentClubName: 'Real Madrid',
+                  age: 22,
+                  currentValueCredits: 1500,
+                  marketInterestScore: 96,
+                  marketStatus: 'active',
+                  marketMessage: 'Share market is live.',
+                  sharePriceCoin: 22,
+                  totalShares: 1000,
+                  circulatingShares: 810,
+                ),
+              ],
+              holdings: <PlayerShareHoldingSummary>[],
+              transferListings: <TransferListingSummary>[
+                TransferListingSummary(
+                  id: 'listing-1',
+                  playerId: 'player-2',
+                  playerName: 'Victor Osimhen',
+                  currentClubName: 'Napoli',
+                  currentHighestBid: 95,
+                  basePrice: 84,
+                  status: 'open',
+                  watchlistCount: 6,
+                  bidCount: 3,
+                  marketSignal: 'Live transfer listing',
+                  channel: 'market:listing-1',
+                  timeRemaining: 900,
+                ),
+              ],
+              wallet: null,
+              authenticated: false,
+              warnings: <String>[],
+            );
+          }),
+        ],
+        child: const MaterialApp(home: Scaffold(body: TransferMarketScreen())),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Resolve market access'), findsOneWidget);
+    expect(find.text('Sign in to unlock market access'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsWidgets);
+    expect(find.text('Sign in to bid on transfer listings'), findsOneWidget);
+  });
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {

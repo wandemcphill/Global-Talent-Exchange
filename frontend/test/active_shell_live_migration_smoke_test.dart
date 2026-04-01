@@ -95,9 +95,7 @@ void main() {
       expect(find.text('Player Shares'), findsOneWidget);
       expect(find.text('Kobbie Mainoo'), findsWidgets);
       expect(
-        find.text(
-          'Bidding and watchlisting are blocked because this session has no verified club context.',
-        ),
+        find.text('Verified club context required for transfer actions'),
         findsOneWidget,
       );
     },

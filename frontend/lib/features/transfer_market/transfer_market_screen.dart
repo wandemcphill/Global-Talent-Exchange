@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
+import '../../data/gte_api_repository.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../navigation/app_destinations.dart';
+import '../../providers/gte_exchange_controller.dart';
+import '../../screens/wallet/gte_policy_compliance_center_screen.dart';
 import '../../shared/models/auth_session.dart';
 import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
+import '../../shared/providers/live_clients_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
@@ -23,6 +27,30 @@ class TransferMarketScreen extends ConsumerWidget {
       marketDashboardProvider,
     );
     final MarketDashboardData? snapshot = marketValue.asData?.value;
+    final String walletMetricValue;
+    final String walletMetricSupport;
+    final GtexSurfaceTone walletMetricTone;
+    if (snapshot == null) {
+      walletMetricValue = '...';
+      walletMetricSupport = 'Checking wallet and compliance state';
+      walletMetricTone = GtexSurfaceTone.info;
+    } else if (!snapshot.authenticated) {
+      walletMetricValue = 'Sign in';
+      walletMetricSupport = 'Preview mode only';
+      walletMetricTone = GtexSurfaceTone.warning;
+    } else if (snapshot.wallet == null) {
+      walletMetricValue = 'Retry';
+      walletMetricSupport = 'Wallet and compliance checks did not complete';
+      walletMetricTone = GtexSurfaceTone.warning;
+    } else if (!snapshot.wallet!.canTradeMarket) {
+      walletMetricValue = 'Compliance';
+      walletMetricSupport = snapshot.wallet!.complianceMessage;
+      walletMetricTone = GtexSurfaceTone.warning;
+    } else {
+      walletMetricValue = snapshot.wallet!.totalEquity.toStringAsFixed(0);
+      walletMetricSupport = snapshot.wallet!.complianceMessage;
+      walletMetricTone = GtexSurfaceTone.success;
+    }
     return AppPageLayout(
       title: 'Market',
       subtitle:
@@ -44,8 +72,15 @@ class TransferMarketScreen extends ConsumerWidget {
             GtexStatTile(
               label: 'Share markets',
               value:
-                  snapshot == null ? '...' : '${snapshot.playerShares.length}',
-              support: 'Real-player tradability inventory',
+                  snapshot == null
+                      ? '...'
+                      : '${snapshot.tradablePlayerShares.length}',
+              support:
+                  snapshot == null
+                      ? 'Tradable inventory loading'
+                      : snapshot.upcomingPlayerShares.isEmpty
+                      ? 'Issued player-share markets'
+                      : '${snapshot.upcomingPlayerShares.length} upcoming markets parked separately',
               tone: GtexSurfaceTone.live,
             ),
             GtexStatTile(
@@ -59,18 +94,9 @@ class TransferMarketScreen extends ConsumerWidget {
             ),
             GtexStatTile(
               label: 'Wallet',
-              value:
-                  snapshot?.wallet == null
-                      ? 'Blocked'
-                      : snapshot!.wallet!.totalEquity.toStringAsFixed(0),
-              support:
-                  snapshot?.wallet == null
-                      ? 'Sign in or compliance blocked'
-                      : snapshot!.wallet!.complianceMessage,
-              tone:
-                  snapshot?.wallet == null
-                      ? GtexSurfaceTone.warning
-                      : GtexSurfaceTone.success,
+              value: walletMetricValue,
+              support: walletMetricSupport,
+              tone: walletMetricTone,
             ),
           ],
           actions: <Widget>[
@@ -129,62 +155,133 @@ class _MarketBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ClubContext? clubContext = ref.watch(clubContextProvider);
     final bool authenticated = ref.watch(isAuthenticatedProvider);
+    final List<PlayerShareSummary> tradableShares = data.tradablePlayerShares;
+    final List<PlayerShareSummary> upcomingShares = data.upcomingPlayerShares;
+    final bool walletUnavailable = authenticated && data.wallet == null;
+    final bool canTradeMarket = data.wallet?.canTradeMarket == true;
+    final bool showAccessPanel =
+        !authenticated ||
+        walletUnavailable ||
+        data.wallet?.canTradeMarket == false;
+    final List<String> supplementalWarnings = data.warnings
+        .where(
+          (String warning) =>
+              !warning.startsWith('Wallet/compliance unavailable:'),
+        )
+        .toList(growable: false);
     return Column(
       children: <Widget>[
+        if (showAccessPanel) ...<Widget>[
+          _MarketAccessPanel(
+            authenticated: authenticated,
+            data: data,
+            onSignIn: () => context.push(AppRoutes.profileLogin),
+            onRetry: () => ref.invalidate(marketDashboardProvider),
+            onOpenComplianceCenter: () => _openComplianceCenter(context, ref),
+          ),
+          const SizedBox(height: 24),
+        ],
         GtexSectionPanel(
           eyebrow: 'WALLET + COMPLIANCE',
           title: 'Wallet & Compliance',
           subtitle:
-              data.wallet == null
-                  ? authenticated
-                      ? 'Wallet or compliance endpoints are blocked for this session.'
-                      : 'Sign in to load live wallet and compliance state.'
-                  : data.wallet!.complianceMessage,
+              !authenticated
+                  ? 'Preview mode is active. Sign in to load live wallet and compliance state.'
+                  : data.wallet == null
+                  ? 'Live wallet and compliance checks did not complete. Retry the market desk or re-authenticate.'
+                  : data.wallet!.canTradeMarket
+                  ? data.wallet!.complianceMessage
+                  : 'Trading is paused until compliance clears this account.',
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
               GtexStatTile(
                 label: 'Coin balance',
-                value: data.wallet?.coinBalance.toStringAsFixed(2) ?? 'Blocked',
-                tone: GtexSurfaceTone.live,
+                value:
+                    !authenticated
+                        ? 'Sign in'
+                        : data.wallet == null
+                        ? 'Unavailable'
+                        : data.wallet!.coinBalance.toStringAsFixed(2),
+                support:
+                    !authenticated
+                        ? 'Guest preview'
+                        : data.wallet == null
+                        ? 'Live wallet feed missing'
+                        : 'Spendable market coin',
+                tone:
+                    !authenticated || data.wallet == null
+                        ? GtexSurfaceTone.warning
+                        : GtexSurfaceTone.live,
               ),
               GtexStatTile(
                 label: 'Credit balance',
                 value:
-                    data.wallet?.creditBalance.toStringAsFixed(2) ?? 'Blocked',
-                tone: GtexSurfaceTone.info,
+                    !authenticated
+                        ? 'Sign in'
+                        : data.wallet == null
+                        ? 'Unavailable'
+                        : data.wallet!.creditBalance.toStringAsFixed(2),
+                support:
+                    !authenticated
+                        ? 'Guest preview'
+                        : data.wallet == null
+                        ? 'Live wallet feed missing'
+                        : 'Available account credit',
+                tone:
+                    !authenticated || data.wallet == null
+                        ? GtexSurfaceTone.warning
+                        : GtexSurfaceTone.info,
               ),
               GtexStatTile(
                 label: 'Total equity',
-                value: data.wallet?.totalEquity.toStringAsFixed(2) ?? 'Blocked',
-                tone: GtexSurfaceTone.success,
+                value:
+                    !authenticated
+                        ? 'Sign in'
+                        : data.wallet == null
+                        ? 'Unavailable'
+                        : data.wallet!.totalEquity.toStringAsFixed(2),
+                support:
+                    !authenticated
+                        ? 'Authentication required'
+                        : data.wallet == null
+                        ? 'Live wallet feed missing'
+                        : 'Live wallet equity',
+                tone:
+                    !authenticated || data.wallet == null
+                        ? GtexSurfaceTone.warning
+                        : GtexSurfaceTone.success,
               ),
               GtexStatTile(
                 label: 'Trade',
                 value:
-                    data.wallet == null
-                        ? 'Blocked'
+                    !authenticated
+                        ? 'Sign in'
+                        : data.wallet == null
+                        ? 'Retry desk'
                         : data.wallet!.canTradeMarket
                         ? 'Enabled'
-                        : 'Blocked',
+                        : 'Compliance required',
                 support:
-                    data.wallet == null
-                        ? 'No compliance state'
+                    !authenticated
+                        ? 'Authentication required'
+                        : data.wallet == null
+                        ? 'No live compliance result'
                         : data.wallet!.complianceMessage,
                 tone:
-                    data.wallet?.canTradeMarket == true
+                    canTradeMarket
                         ? GtexSurfaceTone.success
                         : GtexSurfaceTone.warning,
               ),
             ],
           ),
         ),
-        if (data.warnings.isNotEmpty) ...<Widget>[
+        if (supplementalWarnings.isNotEmpty) ...<Widget>[
           const SizedBox(height: 24),
           GteStatePanel(
-            title: 'Live warnings',
-            message: data.warnings.join('\n'),
+            title: 'Additional live warnings',
+            message: supplementalWarnings.join('\n'),
             icon: Icons.warning_amber_rounded,
             accentColor: Theme.of(context).colorScheme.tertiary,
           ),
@@ -194,68 +291,80 @@ class _MarketBody extends ConsumerWidget {
           eyebrow: 'SHARES',
           title: 'Player Shares',
           subtitle:
-              'Discovery is fed by /players/real-universe and tradability only appears when /players/{player_id}/shares/market is issued.',
+              'Tradable share markets appear first. Real players without an issued share market are separated below as upcoming inventory.',
           child: Column(
-            children: data.playerShares
-                .map(
-                  (PlayerShareSummary item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: GtexListTile(
-                      title: item.playerName,
-                      subtitle:
-                          '${item.position ?? 'N/A'} | ${item.currentClubName ?? 'No club'} | ${item.marketMessage}',
-                      leadingIcon: Icons.person_search_rounded,
-                      tone:
-                          item.isTradable
-                              ? GtexSurfaceTone.live
-                              : GtexSurfaceTone.warning,
-                      trailing: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: <Widget>[
-                          GtexPill(
-                            label:
-                                item.sharePriceCoin == null
-                                    ? 'No issued market'
-                                    : '${item.sharePriceCoin!.toStringAsFixed(0)} coin',
-                            tone:
-                                item.isTradable
-                                    ? GtexSurfaceTone.live
-                                    : GtexSurfaceTone.warning,
-                          ),
-                          TextButton(
-                            onPressed:
-                                () => _openPlayerDetail(context, ref, item),
-                            child: const Text('Detail'),
-                          ),
-                          FilledButton(
-                            onPressed:
-                                !authenticated
-                                    ? null
-                                    : item.isTradable
-                                    ? () => _buyShares(context, ref, item)
-                                    : null,
-                            child: const Text('Buy'),
-                          ),
-                        ],
+            children:
+                tradableShares.isEmpty
+                    ? const <Widget>[
+                      _MarketEmptyState(
+                        title: 'No tradable share markets are live yet',
+                        message:
+                            'The market desk is connected, but none of the surfaced players currently have an issued share market.',
+                        icon: Icons.candlestick_chart_rounded,
                       ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
+                    ]
+                    : tradableShares
+                        .map(
+                          (PlayerShareSummary item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildTradableShareTile(
+                              context,
+                              ref,
+                              item,
+                              authenticated: authenticated,
+                              canTradeMarket: canTradeMarket,
+                            ),
+                          ),
+                        )
+                        .toList(growable: false),
           ),
         ),
+        if (upcomingShares.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 24),
+          GtexSectionPanel(
+            eyebrow: 'UPCOMING',
+            title: 'Upcoming share markets',
+            subtitle:
+                'Real players discovered from the live universe before a share market has been issued.',
+            child: Column(
+              children: upcomingShares
+                  .map(
+                    (PlayerShareSummary item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildUpcomingShareTile(context, ref, item),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
         GtexSectionPanel(
           eyebrow: 'TRANSFERS',
           title: 'Transfer Listings',
           subtitle:
               clubContext == null
-                  ? 'Bidding and watchlisting are blocked because this session has no verified club context.'
+                  ? 'Live listings stay readable while transfer actions remain gated to verified club sessions.'
                   : 'Transfer listings are live. Actions use the club context carried by the active session.',
           child: Column(
-            children: data.transferListings
-                .map(
+            children: <Widget>[
+              if (clubContext == null) ...<Widget>[
+                _TransferActionGate(
+                  authenticated: authenticated,
+                  onSignIn: () => context.push(AppRoutes.profileLogin),
+                  onOpenProfile: () => context.push(AppRoutes.profile),
+                ),
+                const SizedBox(height: 16),
+              ],
+              if (data.transferListings.isEmpty)
+                const _MarketEmptyState(
+                  title: 'No live transfer listings are open right now',
+                  message:
+                      'The transfer desk is mounted, but there are no active listings to inspect yet.',
+                  icon: Icons.swap_horiz_rounded,
+                )
+              else
+                ...data.transferListings.map(
                   (TransferListingSummary listing) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: GtexListTile(
@@ -310,8 +419,8 @@ class _MarketBody extends ConsumerWidget {
                       ),
                     ),
                   ),
-                )
-                .toList(growable: false),
+                ),
+            ],
           ),
         ),
         if (data.holdings.isNotEmpty) ...<Widget>[
@@ -339,6 +448,71 @@ class _MarketBody extends ConsumerWidget {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildTradableShareTile(
+    BuildContext context,
+    WidgetRef ref,
+    PlayerShareSummary item, {
+    required bool authenticated,
+    required bool canTradeMarket,
+  }) {
+    return GtexListTile(
+      title: item.playerName,
+      subtitle:
+          '${item.position ?? 'N/A'} | ${item.currentClubName ?? 'No club'} | ${item.marketMessage}',
+      leadingIcon: Icons.person_search_rounded,
+      tone: GtexSurfaceTone.live,
+      trailing: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: <Widget>[
+          GtexPill(
+            label: '${item.sharePriceCoin!.toStringAsFixed(0)} coin',
+            tone: GtexSurfaceTone.live,
+          ),
+          TextButton(
+            onPressed: () => _openPlayerDetail(context, ref, item),
+            child: const Text('Detail'),
+          ),
+          FilledButton(
+            onPressed:
+                authenticated && canTradeMarket
+                    ? () => _buyShares(context, ref, item)
+                    : null,
+            child: const Text('Buy'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpcomingShareTile(
+    BuildContext context,
+    WidgetRef ref,
+    PlayerShareSummary item,
+  ) {
+    return GtexListTile(
+      title: item.playerName,
+      subtitle:
+          '${item.position ?? 'N/A'} | ${item.currentClubName ?? 'No club'} | ${item.marketMessage}',
+      leadingIcon: Icons.schedule_rounded,
+      tone: GtexSurfaceTone.warning,
+      trailing: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: <Widget>[
+          const GtexPill(
+            label: 'Awaiting issuance',
+            tone: GtexSurfaceTone.warning,
+          ),
+          TextButton(
+            onPressed: () => _openPlayerDetail(context, ref, item),
+            child: const Text('Detail'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -475,11 +649,7 @@ class _MarketBody extends ConsumerWidget {
         );
       }
     } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
-      }
+      await _handleProtectedActionError(context, ref, error);
     }
   }
 
@@ -509,11 +679,7 @@ class _MarketBody extends ConsumerWidget {
         );
       }
     } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
-      }
+      await _handleProtectedActionError(context, ref, error);
     }
   }
 
@@ -572,11 +738,209 @@ class _MarketBody extends ConsumerWidget {
         );
       }
     } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
-      }
+      await _handleProtectedActionError(context, ref, error);
     }
   }
+
+  Future<void> _openComplianceCenter(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final GteExchangeController controller = GteExchangeController(
+      api: ref.read(exchangeApiClientProvider),
+    );
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => GtePolicyComplianceCenterScreen(controller: controller),
+      ),
+    );
+    ref.invalidate(marketDashboardProvider);
+  }
+
+  Future<void> _handleProtectedActionError(
+    BuildContext context,
+    WidgetRef ref,
+    Object error,
+  ) async {
+    if (error is GteApiException &&
+        error.type == GteApiErrorType.unauthorized) {
+      await ref.read(exchangeApiClientProvider).logout();
+      await ref.read(appSessionControllerProvider.notifier).clear();
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your session expired. Sign in again to continue.'),
+        ),
+      );
+      context.push(AppRoutes.profileLogin);
+      return;
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(AppFeedback.messageFor(error))));
+    }
+  }
+}
+
+class _MarketAccessPanel extends StatelessWidget {
+  const _MarketAccessPanel({
+    required this.authenticated,
+    required this.data,
+    required this.onSignIn,
+    required this.onRetry,
+    required this.onOpenComplianceCenter,
+  });
+
+  final bool authenticated;
+  final MarketDashboardData data;
+  final VoidCallback onSignIn;
+  final VoidCallback onRetry;
+  final VoidCallback onOpenComplianceCenter;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_MarketAccessIssue> issues = <_MarketAccessIssue>[
+      if (!authenticated)
+        const _MarketAccessIssue(
+          title: 'Sign in to unlock market access',
+          message:
+              'Guest preview mode keeps discovery and listing browsing open, but wallet state, holdings, and executable trades stay locked until authentication succeeds.',
+          icon: Icons.login_rounded,
+          tone: GtexSurfaceTone.warning,
+        ),
+      if (authenticated && data.wallet == null)
+        const _MarketAccessIssue(
+          title: 'Wallet and compliance checks need attention',
+          message:
+              'This session is authenticated, but the live wallet and compliance calls did not complete. Retry the desk before attempting protected actions.',
+          icon: Icons.sync_problem_rounded,
+          tone: GtexSurfaceTone.warning,
+        ),
+      if (data.wallet != null && !data.wallet!.canTradeMarket)
+        _MarketAccessIssue(
+          title: 'Compliance action required before trading',
+          message: data.wallet!.complianceMessage,
+          icon: Icons.verified_user_rounded,
+          tone: GtexSurfaceTone.warning,
+        ),
+    ];
+
+    return GtexSectionPanel(
+      eyebrow: 'ACCESS CHECK',
+      title: 'Resolve market access',
+      subtitle:
+          'The market desk now surfaces blocked prerequisites before order actions are exposed.',
+      child: Column(
+        children: <Widget>[
+          ...issues.map(
+            (_MarketAccessIssue issue) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: GtexListTile(
+                title: issue.title,
+                subtitle: issue.message,
+                leadingIcon: issue.icon,
+                tone: issue.tone,
+              ),
+            ),
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              if (!authenticated)
+                FilledButton.icon(
+                  onPressed: onSignIn,
+                  icon: const Icon(Icons.login_rounded),
+                  label: const Text('Sign in'),
+                ),
+              if (authenticated && data.wallet == null)
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry market'),
+                ),
+              if (data.wallet != null && !data.wallet!.canTradeMarket)
+                FilledButton.icon(
+                  onPressed: onOpenComplianceCenter,
+                  icon: const Icon(Icons.shield_outlined),
+                  label: const Text('Open compliance center'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TransferActionGate extends StatelessWidget {
+  const _TransferActionGate({
+    required this.authenticated,
+    required this.onSignIn,
+    required this.onOpenProfile,
+  });
+
+  final bool authenticated;
+  final VoidCallback onSignIn;
+  final VoidCallback onOpenProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return GteStatePanel(
+      title:
+          authenticated
+              ? 'Verified club context required for transfer actions'
+              : 'Sign in to bid on transfer listings',
+      message:
+          authenticated
+              ? 'This session is authenticated but carries no verified club. Listings remain visible, but bid and watchlist actions stay disabled until a club-backed session is active.'
+              : 'Guest sessions can inspect live transfer listings, but bidding and watchlisting unlock only after sign-in with a club-backed account.',
+      actionLabel: authenticated ? 'Open profile' : 'Sign in',
+      onAction: authenticated ? onOpenProfile : onSignIn,
+      icon: authenticated ? Icons.account_balance_rounded : Icons.login_rounded,
+      accentColor:
+          authenticated
+              ? Theme.of(context).colorScheme.tertiary
+              : Theme.of(context).colorScheme.primary,
+    );
+  }
+}
+
+class _MarketEmptyState extends StatelessWidget {
+  const _MarketEmptyState({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexListTile(
+      title: title,
+      subtitle: message,
+      leadingIcon: icon,
+      tone: GtexSurfaceTone.neutral,
+    );
+  }
+}
+
+class _MarketAccessIssue {
+  const _MarketAccessIssue({
+    required this.title,
+    required this.message,
+    required this.icon,
+    required this.tone,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final GtexSurfaceTone tone;
 }

@@ -132,6 +132,14 @@ class MarketDashboardData {
   final MarketWalletSnapshot? wallet;
   final bool authenticated;
   final List<String> warnings;
+
+  List<PlayerShareSummary> get tradablePlayerShares => playerShares
+      .where((PlayerShareSummary item) => item.isTradable)
+      .toList(growable: false);
+
+  List<PlayerShareSummary> get upcomingPlayerShares => playerShares
+      .where((PlayerShareSummary item) => !item.isTradable)
+      .toList(growable: false);
 }
 
 class PlayerShareDetailData {
@@ -157,7 +165,7 @@ marketSearchQueryProvider =
 final FutureProvider<MarketDashboardData>
 marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
   final GteAuthedApi api = ref.watch(authedApiProvider);
-  final bool authenticated = ref.watch(isAuthenticatedProvider);
+  bool authenticated = ref.watch(isAuthenticatedProvider);
   final String query = ref.watch(marketSearchQueryProvider).trim();
   final JsonMap playerPayload = await api.getMap(
     query.isEmpty ? '/players/real-universe' : '/players/real-universe/search',
@@ -235,45 +243,58 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
           )
           .toList(growable: false);
     } catch (error) {
-      warnings.add(
-        'Share holdings unavailable: ${AppFeedback.messageFor(error)}',
-      );
+      if (await _expireProtectedMarketSession(ref, error)) {
+        authenticated = false;
+        holdings = const <PlayerShareHoldingSummary>[];
+      } else {
+        warnings.add(
+          'Share holdings unavailable: ${AppFeedback.messageFor(error)}',
+        );
+      }
     }
 
-    try {
-      final GteExchangeApiClient exchangeApi = ref.read(
-        exchangeApiClientProvider,
-      );
-      final GteWalletSummary summary = await exchangeApi.fetchWalletSummary();
-      final GteWalletOverview overview =
-          await exchangeApi.fetchWalletOverview();
-      final GteComplianceStatus compliance =
-          await exchangeApi.fetchComplianceStatus();
-      wallet = MarketWalletSnapshot(
-        coinBalance:
-            summary.currency == GteLedgerUnit.coin
-                ? summary.availableBalance
-                : 0,
-        creditBalance:
-            summary.currency == GteLedgerUnit.credit
-                ? summary.availableBalance
-                : 0,
-        totalEquity: summary.totalBalance,
-        canTradeMarket: compliance.canTradeMarket,
-        canDeposit: compliance.canDeposit,
-        canWithdraw: compliance.canWithdrawPlatformRewards,
-        complianceMessage:
-            overview.policyBlocked
-                ? overview.policyBlockReason ??
-                    'Policy restrictions are blocking wallet actions.'
-                : compliance.hasMissingRequiredPolicies
-                ? 'Compliance action required before full trading is enabled.'
-                : 'Wallet and compliance state loaded from live backend.',
-      );
-    } catch (error) {
-      warnings.add(
-        'Wallet/compliance unavailable: ${AppFeedback.messageFor(error)}',
-      );
+    if (authenticated) {
+      try {
+        final GteExchangeApiClient exchangeApi = ref.read(
+          exchangeApiClientProvider,
+        );
+        final GteWalletSummary summary = await exchangeApi.fetchWalletSummary();
+        final GteWalletOverview overview =
+            await exchangeApi.fetchWalletOverview();
+        final GteComplianceStatus compliance =
+            await exchangeApi.fetchComplianceStatus();
+        wallet = MarketWalletSnapshot(
+          coinBalance:
+              summary.currency == GteLedgerUnit.coin
+                  ? summary.availableBalance
+                  : 0,
+          creditBalance:
+              summary.currency == GteLedgerUnit.credit
+                  ? summary.availableBalance
+                  : 0,
+          totalEquity: summary.totalBalance,
+          canTradeMarket: compliance.canTradeMarket,
+          canDeposit: compliance.canDeposit,
+          canWithdraw: compliance.canWithdrawPlatformRewards,
+          complianceMessage:
+              overview.policyBlocked
+                  ? overview.policyBlockReason ??
+                      'Policy restrictions are blocking wallet actions.'
+                  : compliance.hasMissingRequiredPolicies
+                  ? 'Compliance action required before full trading is enabled.'
+                  : 'Wallet and compliance state loaded from live backend.',
+        );
+      } catch (error) {
+        if (await _expireProtectedMarketSession(ref, error)) {
+          authenticated = false;
+          holdings = const <PlayerShareHoldingSummary>[];
+          wallet = null;
+        } else {
+          warnings.add(
+            'Wallet/compliance unavailable: ${AppFeedback.messageFor(error)}',
+          );
+        }
+      }
     }
   }
 
@@ -295,6 +316,15 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
     warnings: warnings,
   );
 });
+
+Future<bool> _expireProtectedMarketSession(Ref ref, Object error) async {
+  if (error is! GteApiException || error.type != GteApiErrorType.unauthorized) {
+    return false;
+  }
+  await ref.read(exchangeApiClientProvider).logout();
+  await ref.read(appSessionControllerProvider.notifier).clear();
+  return true;
+}
 
 final playerShareDetailProvider =
     FutureProvider.family<PlayerShareDetailData, PlayerShareSummary>((
