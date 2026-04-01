@@ -40,6 +40,7 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
     final AsyncValue<List<TransferCenterListingRecord>> value = ref.watch(
       transferCenterListingsProvider,
     );
+    final bool authenticated = ref.watch(isAuthenticatedProvider);
     return AppPageLayout(
       title: 'Transfer Center',
       subtitle:
@@ -67,7 +68,10 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
                     ),
                     _MetricChip(
                       label: 'Club actions',
-                      value: clubContext == null ? 'Blocked' : 'Enabled',
+                      value:
+                          clubContext == null
+                              ? (authenticated ? 'Syncing' : 'Login required')
+                              : 'Enabled',
                       tone:
                           clubContext == null
                               ? GtexSurfaceTone.danger

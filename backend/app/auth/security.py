@@ -13,9 +13,12 @@ from app.core.config import get_settings
 
 PBKDF2_DIGEST = "sha256"
 PBKDF2_ITERATIONS = 390000
-ACCESS_TOKEN_TTL_SECONDS = 3600
+ACCESS_TOKEN_TTL_SECONDS = 15 * 60
+REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
 AUTH_SECRET_ENV = "GTE_AUTH_SECRET"
 DEFAULT_AUTH_SECRET = "gte-dev-secret-change-me"
+ACCESS_TOKEN_TYPE = "access"
+REFRESH_TOKEN_TYPE = "refresh"
 
 
 class TokenError(ValueError):
@@ -60,9 +63,10 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return hmac.compare_digest(candidate_digest, expected_digest)
 
 
-def create_access_token(
+def _create_token(
     subject: str,
     *,
+    token_type: str,
     expires_delta: timedelta | None = None,
     claims: dict[str, Any] | None = None,
     secret: str | None = None,
@@ -73,6 +77,8 @@ def create_access_token(
         "sub": subject,
         "iat": issued_at,
         "exp": issued_at + int(ttl.total_seconds()),
+        "token_type": token_type,
+        "jti": _urlsafe_b64encode(os.urandom(12)),
     }
     if claims:
         payload.update(claims)
@@ -86,21 +92,87 @@ def create_access_token(
     return f"{encoded_header}.{encoded_payload}.{encoded_signature}"
 
 
-def decode_access_token(token: str, *, secret: str | None = None) -> dict[str, Any]:
+def create_access_token(
+    subject: str,
+    *,
+    expires_delta: timedelta | None = None,
+    claims: dict[str, Any] | None = None,
+    secret: str | None = None,
+) -> str:
+    return _create_token(
+        subject,
+        token_type=ACCESS_TOKEN_TYPE,
+        expires_delta=expires_delta or timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS),
+        claims=claims,
+        secret=secret,
+    )
+
+
+def create_refresh_token(
+    subject: str,
+    *,
+    expires_delta: timedelta | None = None,
+    claims: dict[str, Any] | None = None,
+    secret: str | None = None,
+) -> str:
+    return _create_token(
+        subject,
+        token_type=REFRESH_TOKEN_TYPE,
+        expires_delta=expires_delta or timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
+        claims=claims,
+        secret=secret,
+    )
+
+
+def _decode_token(
+    token: str,
+    *,
+    expected_token_type: str,
+    expired_message: str,
+    malformed_message: str,
+    invalid_signature_message: str,
+    secret: str | None = None,
+) -> dict[str, Any]:
     try:
         encoded_header, encoded_payload, encoded_signature = token.split(".", maxsplit=2)
     except ValueError as exc:
-        raise TokenError("Malformed access token.") from exc
+        raise TokenError(malformed_message) from exc
 
     signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
     expected_signature = hmac.new(_auth_secret(secret), signing_input, hashlib.sha256).digest()
     signature = _urlsafe_b64decode(encoded_signature)
     if not hmac.compare_digest(signature, expected_signature):
-        raise TokenError("Invalid access token signature.")
+        raise TokenError(invalid_signature_message)
 
     payload = json.loads(_urlsafe_b64decode(encoded_payload))
     expires_at = int(payload.get("exp", 0))
     if expires_at <= int(time.time()):
-        raise TokenError("Access token has expired.")
+        raise TokenError(expired_message)
+
+    token_type = payload.get("token_type") or ACCESS_TOKEN_TYPE
+    if token_type != expected_token_type:
+        raise TokenError("Unexpected token type.")
 
     return payload
+
+
+def decode_access_token(token: str, *, secret: str | None = None) -> dict[str, Any]:
+    return _decode_token(
+        token,
+        expected_token_type=ACCESS_TOKEN_TYPE,
+        expired_message="Access token has expired.",
+        malformed_message="Malformed access token.",
+        invalid_signature_message="Invalid access token signature.",
+        secret=secret,
+    )
+
+
+def decode_refresh_token(token: str, *, secret: str | None = None) -> dict[str, Any]:
+    return _decode_token(
+        token,
+        expected_token_type=REFRESH_TOKEN_TYPE,
+        expired_message="Refresh token has expired.",
+        malformed_message="Malformed refresh token.",
+        invalid_signature_message="Invalid refresh token signature.",
+        secret=secret,
+    )

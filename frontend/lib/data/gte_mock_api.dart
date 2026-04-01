@@ -119,9 +119,11 @@ class GteMockApi implements GteApiRepository {
     final DateTime now = _nextTimestamp();
     return GteAuthSession(
       accessToken: 'fixture-$fallbackUsername-token',
+      refreshToken: 'fixture-$fallbackUsername-refresh-token',
       sessionId: 'fixture-$fallbackUsername-session',
       tokenType: 'bearer',
       expiresIn: 3600,
+      refreshExpiresIn: 2592000,
       user: GteCurrentUser(
         id: 'fixture-$fallbackUsername',
         email: request.email,
@@ -2564,9 +2566,11 @@ final List<GtePolicyAcceptanceSummary> _seedPolicyAcceptances =
 
 final GteAuthSession _fixtureSession = GteAuthSession(
   accessToken: 'fixture-session-token',
+  refreshToken: 'fixture-session-refresh-token',
   sessionId: 'fixture-session-id',
   tokenType: 'bearer',
   expiresIn: 3600,
+  refreshExpiresIn: 2592000,
   user: GteCurrentUser(
     id: 'fixture-user',
     email: 'fixture.trader@gte.local',

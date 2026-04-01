@@ -22,6 +22,7 @@ class GteExchangeApiClient {
   factory GteExchangeApiClient.standard({
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
+    AuthSessionStore? authSessionStore,
   }) {
     final GteRepositoryConfig config = GteRepositoryConfig(
       baseUrl: baseUrl,
@@ -36,7 +37,7 @@ class GteExchangeApiClient {
         config: config,
         transport: transport,
         fixtures: fixtures,
-        authSessionStore: SecureAuthSessionStore(),
+        authSessionStore: authSessionStore ?? SecureAuthSessionStore(),
       ),
     );
   }

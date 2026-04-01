@@ -12,6 +12,7 @@ final Provider<GteExchangeApiClient> exchangeApiClientProvider =
       return GteExchangeApiClient.standard(
         baseUrl: ref.watch(apiBaseUrlProvider),
         mode: ref.watch(criticalBackendModeProvider),
+        authSessionStore: ref.watch(authSessionStoreProvider),
       );
     });
 

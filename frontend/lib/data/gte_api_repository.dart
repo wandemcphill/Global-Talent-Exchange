@@ -370,8 +370,7 @@ class GteReliableApiRepository implements GteApiRepository {
       () => fixtures.login(request),
       allowFixtureFallback: false,
     );
-    await tokenStore.writeToken(session.accessToken);
-    await _persistAuthSession(session);
+    await _persistAuthSession(session, bootstrap: config.mode != GteBackendMode.fixture);
     return session;
   }
 
@@ -384,8 +383,7 @@ class GteReliableApiRepository implements GteApiRepository {
       () => fixtures.register(request),
       allowFixtureFallback: false,
     );
-    await tokenStore.writeToken(session.accessToken);
-    await _persistAuthSession(session);
+    await _persistAuthSession(session, bootstrap: config.mode != GteBackendMode.fixture);
     return session;
   }
 
@@ -401,23 +399,40 @@ class GteReliableApiRepository implements GteApiRepository {
 
   @override
   Future<void> logout() async {
+    try {
+      await _request('POST', '/auth/logout', requiresAuth: true);
+    } catch (_) {
+      // Clear local state even if the remote logout cannot complete.
+    }
     await tokenStore.writeToken(null);
     await _authSessionStore?.writeSession(null);
   }
 
-  Future<void> _persistAuthSession(GteAuthSession session) {
-    return _authSessionStore?.writeSession(
-          AuthSession.fromTokenPayload(<String, Object?>{
-            ...session.rawJson,
-            'access_token': session.accessToken,
-            'session_id': session.sessionId,
-            'permissions': session.permissions,
-            'user': session.user.rawJson,
-            if (session.landingRoute != null)
-              'landing_route': session.landingRoute,
-          }),
-        ) ??
-        Future<void>.value();
+  Future<void> _persistAuthSession(
+    GteAuthSession session, {
+    bool bootstrap = false,
+  }) async {
+    AuthSession persisted = AuthSession.fromTokenPayload(<String, Object?>{
+      ...session.rawJson,
+      'access_token': session.accessToken,
+      'refresh_token': session.refreshToken,
+      'session_id': session.sessionId,
+      'refresh_expires_in': session.refreshExpiresIn,
+      'permissions': session.permissions,
+      'user': session.user.rawJson,
+      if (session.landingRoute != null) 'landing_route': session.landingRoute,
+    });
+    await _writePersistedSession(persisted);
+    if (!bootstrap || _authSessionStore == null) {
+      return;
+    }
+    final Map<String, Object?> bootstrapPayload = await requestJson(
+      'GET',
+      '/api/session/bootstrap',
+      requiresAuth: true,
+    );
+    persisted = persisted.mergeProfile(bootstrapPayload);
+    await _writePersistedSession(persisted);
   }
 
   @override
@@ -1524,20 +1539,74 @@ class GteReliableApiRepository implements GteApiRepository {
     }
   }
 
+  Future<AuthSession?> _readPersistedSession() async {
+    return _authSessionStore?.readSession();
+  }
+
+  Future<void> _writePersistedSession(AuthSession session) async {
+    await tokenStore.writeToken(session.accessToken);
+    await _authSessionStore?.writeSession(session);
+  }
+
+  Future<bool> _attemptTokenRefresh() async {
+    final AuthSession? session = await _readPersistedSession();
+    if (session == null || session.refreshToken.trim().isEmpty) {
+      return false;
+    }
+    final Map<String, String> headers = <String, String>{
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'X-Device-Id': 'app-client',
+    };
+    try {
+      final GteTransportResponse response = await transport.send(
+        GteTransportRequest(
+          method: 'POST',
+          uri: config.uriFor('/auth/refresh'),
+          headers: headers,
+          body: <String, Object?>{'refresh_token': session.refreshToken},
+        ),
+      );
+      if (response.statusCode >= 400) {
+        await tokenStore.writeToken(null);
+        await _authSessionStore?.writeSession(null);
+        return false;
+      }
+      final GteAuthSession refreshed = GteAuthSession.fromJson(response.body);
+      await _persistAuthSession(refreshed, bootstrap: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<Object?> _request(
     String method,
     String path, {
     Map<String, Object?> query = const <String, Object?>{},
     Object? body,
     bool requiresAuth = false,
+    bool allowRefresh = true,
   }) async {
     final Map<String, String> headers = <String, String>{
       'Accept': 'application/json'
     };
     if (requiresAuth) {
-      final String? token = await tokenStore.readToken();
-      if (token != null && token.isNotEmpty) {
+      final AuthSession? persistedSession = await _readPersistedSession();
+      final String? storedToken = await tokenStore.readToken();
+      final String token =
+          (storedToken != null && storedToken.isNotEmpty)
+              ? storedToken
+              : persistedSession?.accessToken ?? '';
+      if (token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
+      }
+      final String userId = persistedSession?.userId.trim() ?? '';
+      final String sessionId = persistedSession?.sessionId.trim() ?? '';
+      if (userId.isNotEmpty && sessionId.isNotEmpty) {
+        headers['X-User-Id'] = userId;
+        headers['X-Session-Id'] = sessionId;
+        headers['X-Device-Id'] = 'app-client';
       }
     }
     if (body != null) {
@@ -1553,6 +1622,19 @@ class GteReliableApiRepository implements GteApiRepository {
           body: body,
         ),
       );
+      if (response.statusCode == 401 &&
+          requiresAuth &&
+          allowRefresh &&
+          await _attemptTokenRefresh()) {
+        return _request(
+          method,
+          path,
+          query: query,
+          body: body,
+          requiresAuth: requiresAuth,
+          allowRefresh: false,
+        );
+      }
       if (response.statusCode >= 400) {
         throw GteApiException(
           type: _errorTypeFromStatusCode(response.statusCode),

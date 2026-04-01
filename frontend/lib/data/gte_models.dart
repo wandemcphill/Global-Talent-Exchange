@@ -608,9 +608,11 @@ class GteCurrentUser {
 class GteAuthSession {
   const GteAuthSession({
     required this.accessToken,
+    required this.refreshToken,
     required this.sessionId,
     required this.tokenType,
     required this.expiresIn,
+    required this.refreshExpiresIn,
     required this.user,
     this.permissions = const <String>[],
     this.landingRoute,
@@ -618,9 +620,11 @@ class GteAuthSession {
   });
 
   final String accessToken;
+  final String refreshToken;
   final String sessionId;
   final String tokenType;
   final int expiresIn;
+  final int refreshExpiresIn;
   final GteCurrentUser user;
   final List<String> permissions;
   final String? landingRoute;
@@ -631,11 +635,21 @@ class GteAuthSession {
     return GteAuthSession(
       accessToken:
           GteJson.string(json, <String>['access_token', 'accessToken']),
+      refreshToken: GteJson.string(
+        json,
+        <String>['refresh_token', 'refreshToken'],
+        fallback: '',
+      ),
       sessionId: GteJson.string(json, <String>['session_id', 'sessionId']),
       tokenType: GteJson.string(json, <String>['token_type', 'tokenType'],
           fallback: 'bearer'),
       expiresIn: GteJson.integer(json, <String>['expires_in', 'expiresIn'],
           fallback: 0),
+      refreshExpiresIn: GteJson.integer(
+        json,
+        <String>['refresh_expires_in', 'refreshExpiresIn'],
+        fallback: 0,
+      ),
       user: GteCurrentUser.fromJson(GteJson.value(json, <String>['user'])),
       permissions: GteJson.typedList<String>(
           json, <String>['permissions'], (Object? value) => value.toString()),

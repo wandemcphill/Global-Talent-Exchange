@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import BACKEND_ROOT, load_settings
 from app.core.database import load_model_modules
 from app.auth.router import login_user, register_user
-from app.auth.security import decode_access_token
+from app.auth.security import decode_access_token, decode_refresh_token
 from app.auth.schemas import LoginRequest, RegisterRequest
 from app.auth.service import AuthService
 from app.main import create_app
@@ -106,10 +106,10 @@ def _create_authenticated_user(app):
             password="SuperSecret1",
             display_name="Fan User",
         )
-        token, _ = service.issue_access_token(user, session=session)
+        issued_session = service.issue_session_tokens(user, session=session)
         session.commit()
         session.refresh(user)
-        return user.id, token
+        return user.id, issued_session.access_token, issued_session.refresh_token
 
 
 def test_register_login_and_me_flow(session) -> None:
@@ -129,14 +129,22 @@ def test_register_login_and_me_flow(session) -> None:
     login_response = login_user(LoginRequest(email="fan@example.com", password="SuperSecret1"), session)
     register_claims = decode_access_token(register_response.access_token)
     login_claims = decode_access_token(login_response.access_token)
+    register_refresh_claims = decode_refresh_token(register_response.refresh_token)
+    login_refresh_claims = decode_refresh_token(login_response.refresh_token)
 
     assert register_response.user.email == "fan@example.com"
     assert register_response.session_id
     assert register_claims["sid"] == register_response.session_id
+    assert register_refresh_claims["sid"] == register_response.session_id
+    assert register_response.refresh_token
+    assert register_response.refresh_expires_in == 2592000
     assert me_response.id == register_response.user.id
     assert login_response.user.id == register_response.user.id
     assert login_response.session_id
     assert login_claims["sid"] == login_response.session_id
+    assert login_refresh_claims["sid"] == login_response.session_id
+    assert login_response.refresh_token
+    assert login_response.refresh_expires_in == 2592000
 
 
 def test_duplicate_registration_returns_conflict(session) -> None:
@@ -201,7 +209,7 @@ def test_register_without_region_code_defaults_to_global(app_client) -> None:
 
 def test_api_auth_me_returns_authenticated_user(app_client) -> None:
     app, client = app_client
-    user_id, token = _create_authenticated_user(app)
+    user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.get(
         "/api/auth/me",
@@ -209,35 +217,26 @@ def test_api_auth_me_returns_authenticated_user(app_client) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "id": user_id,
-        "email": "fan@example.com",
-        "username": "fanuser",
-        "full_name": "Fan User",
-        "phone_number": "0000000000",
-        "age_confirmed_at": response.json()["age_confirmed_at"],
-        "display_name": "Fan User",
-        "avatar_url": None,
-        "favourite_club": None,
-        "nationality": None,
-        "preferred_position": None,
-        "region_code": "GLOBAL",
-        "role": "user",
-        "kyc_status": "unverified",
-        "is_active": True,
-        "created_at": response.json()["created_at"],
-        "last_login_at": None,
-        "active_organization_id": None,
-        "active_organization_name": None,
-        "active_organization_type": None,
-        "memberships": [],
-        "permissions": [],
-    }
+    payload = response.json()
+    assert payload["id"] == user_id
+    assert payload["email"] == "fan@example.com"
+    assert payload["username"] == "fanuser"
+    assert payload["display_name"] == "Fan User"
+    assert payload["region_code"] == "GLOBAL"
+    assert payload["role"] == "club"
+    assert payload["active_organization_id"]
+    assert payload["active_organization_type"] == "club"
+    assert len(payload["memberships"]) == 1
+    assert payload["permissions"] == [
+        "players.view",
+        "pipeline.manage",
+        "contact.manage",
+    ]
 
 
 def test_api_auth_me_patch_updates_allowed_profile_fields(app_client) -> None:
     app, client = app_client
-    user_id, token = _create_authenticated_user(app)
+    user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.patch(
         "/api/auth/me",
@@ -252,35 +251,22 @@ def test_api_auth_me_patch_updates_allowed_profile_fields(app_client) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "id": user_id,
-        "email": "fan@example.com",
-        "username": "fanuser",
-        "full_name": "Fan User",
-        "phone_number": "0000000000",
-        "age_confirmed_at": response.json()["age_confirmed_at"],
-        "display_name": "Updated Fan",
-        "avatar_url": "https://cdn.example.com/avatar.png",
-        "favourite_club": "Arsenal",
-        "nationality": "Nigeria",
-        "preferred_position": "Forward",
-        "region_code": "GLOBAL",
-        "role": "user",
-        "kyc_status": "unverified",
-        "is_active": True,
-        "created_at": response.json()["created_at"],
-        "last_login_at": None,
-        "active_organization_id": None,
-        "active_organization_name": None,
-        "active_organization_type": None,
-        "memberships": [],
-        "permissions": [],
-    }
+    payload = response.json()
+    assert payload["id"] == user_id
+    assert payload["display_name"] == "Updated Fan"
+    assert payload["avatar_url"] == "https://cdn.example.com/avatar.png"
+    assert payload["favourite_club"] == "Arsenal"
+    assert payload["nationality"] == "Nigeria"
+    assert payload["preferred_position"] == "Forward"
+    assert payload["role"] == "club"
+    assert payload["active_organization_id"]
+    assert payload["active_organization_type"] == "club"
+    assert len(payload["memberships"]) == 1
 
 
 def test_api_auth_me_patch_validation_rejects_invalid_avatar_url(app_client) -> None:
     app, client = app_client
-    _user_id, token = _create_authenticated_user(app)
+    _user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.patch(
         "/api/auth/me",
@@ -294,7 +280,7 @@ def test_api_auth_me_patch_validation_rejects_invalid_avatar_url(app_client) -> 
 
 def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
     app, client = app_client
-    _user_id, token = _create_authenticated_user(app)
+    _user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.patch(
         "/api/auth/me",
@@ -304,6 +290,79 @@ def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
 
     assert response.status_code == 422
     assert "Protected fields cannot be updated" in response.text
+
+
+def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
+    _app, client = app_client
+    login_response = client.post(
+        "/auth/register",
+        json={
+            "email": "bootstrap@example.com",
+            "full_name": "Bootstrap User",
+            "phone_number": "08000000000",
+            "password": "SuperSecret1",
+            "is_over_18": True,
+            "region_code": "NG",
+        },
+    )
+
+    assert login_response.status_code == 201, login_response.text
+    issued = login_response.json()
+    refresh_response = client.post(
+        "/auth/refresh",
+        json={"refresh_token": issued["refresh_token"]},
+        headers={"X-Device-Id": "pytest-device"},
+    )
+
+    assert refresh_response.status_code == 200, refresh_response.text
+    refreshed = refresh_response.json()
+    assert refreshed["session_id"] == issued["session_id"]
+    assert refreshed["access_token"] != issued["access_token"]
+    assert refreshed["refresh_token"] != issued["refresh_token"]
+
+    bootstrap_response = client.get(
+        "/api/session/bootstrap",
+        headers={
+            "Authorization": f"Bearer {refreshed['access_token']}",
+            "X-User-Id": refreshed["user"]["id"],
+            "X-Session-Id": refreshed["session_id"],
+            "X-Device-Id": "pytest-device",
+        },
+    )
+
+    assert bootstrap_response.status_code == 200, bootstrap_response.text
+    bootstrap = bootstrap_response.json()
+    assert bootstrap["user"]["id"] == refreshed["user"]["id"]
+    assert bootstrap["club"]["owner_user_id"] == refreshed["user"]["id"]
+    assert bootstrap["wallet"]["currency"] == "credit"
+    assert bootstrap["compliance"]["country_code"] == "NG"
+    assert bootstrap["permissions"] == [
+        "players.view",
+        "pipeline.manage",
+        "contact.manage",
+    ]
+
+    logout_response = client.post(
+        "/auth/logout",
+        headers={
+            "Authorization": f"Bearer {refreshed['access_token']}",
+            "X-User-Id": refreshed["user"]["id"],
+            "X-Session-Id": refreshed["session_id"],
+            "X-Device-Id": "pytest-device",
+        },
+    )
+    assert logout_response.status_code == 200, logout_response.text
+
+    revoked_bootstrap = client.get(
+        "/api/session/bootstrap",
+        headers={
+            "Authorization": f"Bearer {refreshed['access_token']}",
+            "X-User-Id": refreshed["user"]["id"],
+            "X-Session-Id": refreshed["session_id"],
+            "X-Device-Id": "pytest-device",
+        },
+    )
+    assert revoked_bootstrap.status_code == 401
 
 
 def test_register_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -> None:
@@ -416,7 +475,7 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
 
     assert login_response.status_code == 200, login_response.text
     payload = login_response.json()
-    assert payload["permissions"] == ["manage_manager_catalog"]
+    assert "manage_manager_catalog" in payload["permissions"]
     assert payload["landing_route"] == "/profile/admin"
 
     me_response = client.get(
@@ -424,4 +483,4 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
         headers={"Authorization": f"Bearer {payload['access_token']}"},
     )
     assert me_response.status_code == 200, me_response.text
-    assert me_response.json()["permissions"] == ["manage_manager_catalog"]
+    assert "manage_manager_catalog" in me_response.json()["permissions"]

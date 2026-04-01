@@ -20,6 +20,7 @@ from app.models.access_control import (
     PlayerOwnership,
 )
 from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
+from app.models.auth_session import AuthSession
 from app.models.agent_marketplace import (
     AgentAskingType,
     AgentMarketplaceListing,
@@ -385,6 +386,7 @@ from app.models.treasury import (
 )
 from app.models.follow import Follow
 from app.models.user import KycStatus, User, UserRole
+from app.models.user_wallet import UserWallet, WalletTransactionRecord
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user_region import UserRegionProfile
 from app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
@@ -845,6 +847,8 @@ __all__ = [
     "PaymentStatus",
     "PayoutRequest",
     "PayoutStatus",
+    "UserWallet",
+    "WalletTransactionRecord",
     "MarketTopup",
     "MarketTopupStatus",
     "WithdrawalReview",

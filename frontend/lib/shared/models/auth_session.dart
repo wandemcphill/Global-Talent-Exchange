@@ -2,8 +2,10 @@ class AuthSession {
   const AuthSession({
     required this.userId,
     required this.accessToken,
+    required this.refreshToken,
     required this.sessionId,
     this.role = 'guest',
+    this.refreshExpiresIn = 0,
     this.permissions = const <String>[],
     this.userName,
     this.displayName,
@@ -16,8 +18,10 @@ class AuthSession {
 
   final String userId;
   final String accessToken;
+  final String refreshToken;
   final String sessionId;
   final String role;
+  final int refreshExpiresIn;
   final List<String> permissions;
   final String? userName;
   final String? displayName;
@@ -109,6 +113,12 @@ class AuthSession {
             'accessToken',
           ]) ??
           '',
+      refreshToken:
+          _firstString(mergedRaw, const <String>[
+            'refresh_token',
+            'refreshToken',
+          ]) ??
+          '',
       sessionId:
           _firstString(mergedRaw, const <String>['session_id', 'sessionId']) ??
           '',
@@ -116,6 +126,9 @@ class AuthSession {
           _firstString(mergedRaw, const <String>['role']) ??
           _firstString(user, const <String>['role']) ??
           'guest',
+      refreshExpiresIn: _intValue(
+        mergedRaw['refresh_expires_in'] ?? mergedRaw['refreshExpiresIn'],
+      ),
       permissions: _stringList(mergedRaw['permissions'] ?? user['permissions']),
       userName:
           _firstString(mergedRaw, const <String>[
@@ -152,7 +165,9 @@ class AuthSession {
       ...rawJson,
       ...profileJson,
       'access_token': accessToken,
+      'refresh_token': refreshToken,
       'session_id': sessionId,
+      'refresh_expires_in': refreshExpiresIn,
     };
     if (_firstString(nextRaw, const <String>['role']) == null &&
         role.trim().isNotEmpty) {
@@ -178,8 +193,10 @@ class AuthSession {
   AuthSession copyWith({
     String? userId,
     String? accessToken,
+    String? refreshToken,
     String? sessionId,
     String? role,
+    int? refreshExpiresIn,
     List<String>? permissions,
     String? userName,
     String? displayName,
@@ -192,8 +209,10 @@ class AuthSession {
     return AuthSession(
       userId: userId ?? this.userId,
       accessToken: accessToken ?? this.accessToken,
+      refreshToken: refreshToken ?? this.refreshToken,
       sessionId: sessionId ?? this.sessionId,
       role: role ?? this.role,
+      refreshExpiresIn: refreshExpiresIn ?? this.refreshExpiresIn,
       permissions: permissions ?? this.permissions,
       userName: userName ?? this.userName,
       displayName: displayName ?? this.displayName,
@@ -209,8 +228,10 @@ class AuthSession {
     return <String, Object?>{
       'user_id': userId,
       'access_token': accessToken,
+      'refresh_token': refreshToken,
       'session_id': sessionId,
       'role': role,
+      'refresh_expires_in': refreshExpiresIn,
       'permissions': permissions,
       if (userName != null) 'username': userName,
       if (displayName != null) 'display_name': displayName,
@@ -279,6 +300,16 @@ List<String> _stringList(Object? value) {
       .map((Object? item) => item?.toString().trim() ?? '')
       .where((String item) => item.isNotEmpty)
       .toList(growable: false);
+}
+
+int _intValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 _ResolvedClub? _resolveClub(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
@@ -15,12 +16,27 @@ from sqlalchemy.orm import Session
 from app.access_control.service import AccessControlService, MembershipAccessContext
 from app.admin_godmode.service import AdminGodModeService, SUPER_ADMIN_EXTRA_PERMISSIONS
 from app.auth.schemas import ChangePasswordRequest, CurrentUserResponse, CurrentUserUpdateRequest
-from app.auth.security import ACCESS_TOKEN_TTL_SECONDS, create_access_token, hash_password, verify_password
+from app.auth.security import (
+    ACCESS_TOKEN_TTL_SECONDS,
+    REFRESH_TOKEN_TTL_SECONDS,
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
+from app.models.access_control import Organization, OrganizationMembership
 from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
+from app.models.auth_session import AuthSession
 from app.models.base import generate_uuid, utcnow
+from app.models.club_profile import ClubProfile
 from app.models.user import User, UserRole
 from app.policies.service import PolicyService
+from app.services.club_dynasty_service import ClubDynastyService
+from app.services.club_reputation_service import ClubReputationService
+from app.services.club_trophy_service import ClubTrophyService
 from app.services.email import EmailSendResult, EmailService
+from app.services.regen_bootstrap_service import RegenBootstrapService
 from app.users.schemas import UserPublic
 from app.wallets.service import WalletService
 
@@ -56,6 +72,30 @@ class DuplicateUserError(AuthError):
 
 class InvalidCredentialsError(AuthError):
     pass
+
+
+class InvalidRefreshTokenError(AuthError):
+    pass
+
+
+class InvalidSessionError(AuthError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedAuthSession:
+    access_token: str
+    refresh_token: str
+    session_id: str
+    expires_in: int
+    refresh_expires_in: int
+
+
+@dataclass(frozen=True, slots=True)
+class SessionBootstrapState:
+    user: CurrentUserResponse
+    club: ClubProfile
+    permissions: list[str]
 
 
 def _record_timing(recorder: AuthTimingRecorder | None, step: str, started_at: float) -> None:
@@ -185,12 +225,23 @@ class AuthService:
         session: Session | None = None,
         timing_recorder: AuthTimingRecorder | None = None,
     ) -> tuple[str, int]:
-        token, expires_in, _session_id = self.issue_access_token_with_session(
+        if session is None:
+            token = create_access_token(
+                user.id,
+                claims={
+                    "email": user.email,
+                    "role": user.role.value,
+                    "sid": str(uuid4()),
+                },
+            )
+            return token, ACCESS_TOKEN_TTL_SECONDS
+
+        issued_session = self.issue_session_tokens(
             user,
             session=session,
             timing_recorder=timing_recorder,
         )
-        return token, expires_in
+        return issued_session.access_token, issued_session.expires_in
 
     def issue_access_token_with_session(
         self,
@@ -200,29 +251,149 @@ class AuthService:
         session_id: str | None = None,
         timing_recorder: AuthTimingRecorder | None = None,
     ) -> tuple[str, int, str]:
+        if session is None:
+            resolved_session_id = (session_id or str(uuid4())).strip()
+            token = create_access_token(
+                user.id,
+                claims={
+                    "email": user.email,
+                    "role": user.role.value,
+                    "sid": resolved_session_id,
+                },
+            )
+            return token, ACCESS_TOKEN_TTL_SECONDS, resolved_session_id
+
+        issued_session = self.issue_session_tokens(
+            user,
+            session=session,
+            session_id=session_id,
+            timing_recorder=timing_recorder,
+        )
+        return issued_session.access_token, issued_session.expires_in, issued_session.session_id
+
+    def issue_session_tokens(
+        self,
+        user: User,
+        *,
+        session: Session,
+        session_id: str | None = None,
+        device_id: str | None = None,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+        timing_recorder: AuthTimingRecorder | None = None,
+    ) -> IssuedAuthSession:
+        club = self.ensure_user_club_context(session, user)
         effective_role = user.role
         active_org_id: str | None = None
-        if session is not None:
-            access_context_started_at = perf_counter()
-            access_context = AccessControlService(session).bind_user_access_context(user)
-            _record_timing(timing_recorder, "auth.bind_access_context_ms", access_context_started_at)
-            effective_role = access_context.effective_role
-            active_org_id = access_context.active_organization_id
+        access_context_started_at = perf_counter()
+        access_context = AccessControlService(session).bind_user_access_context(user)
+        _record_timing(timing_recorder, "auth.bind_access_context_ms", access_context_started_at)
+        effective_role = access_context.effective_role
+        active_org_id = access_context.active_organization_id
         session_id_started_at = perf_counter()
         resolved_session_id = (session_id or str(uuid4())).strip()
         _record_timing(timing_recorder, "auth.create_session_id_ms", session_id_started_at)
+        now = utcnow()
         token_started_at = perf_counter()
-        token = create_access_token(
+        access_token = create_access_token(
             user.id,
             claims={
                 "email": user.email,
                 "role": effective_role.value,
                 "org_id": active_org_id,
                 "sid": resolved_session_id,
+                "club_id": club.id,
+            },
+        )
+        refresh_token = create_refresh_token(
+            user.id,
+            claims={
+                "sid": resolved_session_id,
             },
         )
         _record_timing(timing_recorder, "auth.create_access_token_ms", token_started_at)
-        return token, ACCESS_TOKEN_TTL_SECONDS, resolved_session_id
+        persistence_started_at = perf_counter()
+        auth_session = session.get(AuthSession, resolved_session_id)
+        if auth_session is None:
+            auth_session = AuthSession(id=resolved_session_id, user_id=user.id)
+            session.add(auth_session)
+        auth_session.refresh_token_hash = self._hash_refresh_token(refresh_token)
+        auth_session.expires_at = now + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS)
+        auth_session.last_used_at = now
+        auth_session.revoked_at = None
+        auth_session.revocation_reason = None
+        auth_session.device_id = device_id or auth_session.device_id
+        auth_session.user_agent = user_agent or auth_session.user_agent
+        auth_session.ip_address = ip_address or auth_session.ip_address
+        session.flush()
+        _record_timing(timing_recorder, "db.persist_auth_session_ms", persistence_started_at)
+        return IssuedAuthSession(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            session_id=resolved_session_id,
+            expires_in=ACCESS_TOKEN_TTL_SECONDS,
+            refresh_expires_in=REFRESH_TOKEN_TTL_SECONDS,
+        )
+
+    def refresh_session_tokens(
+        self,
+        session: Session,
+        *,
+        refresh_token: str,
+        device_id: str | None = None,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+        timing_recorder: AuthTimingRecorder | None = None,
+    ) -> tuple[User, IssuedAuthSession]:
+        decode_started_at = perf_counter()
+        try:
+            payload = decode_refresh_token(refresh_token)
+        except ValueError as exc:
+            raise InvalidRefreshTokenError("Refresh token is invalid or expired.") from exc
+        _record_timing(timing_recorder, "auth.decode_refresh_token_ms", decode_started_at)
+        subject = payload.get("sub")
+        session_id = payload.get("sid")
+        if not isinstance(subject, str) or not subject or not isinstance(session_id, str) or not session_id:
+            raise InvalidRefreshTokenError("Refresh token is invalid or expired.")
+        lookup_started_at = perf_counter()
+        auth_session = session.get(AuthSession, session_id)
+        _record_timing(timing_recorder, "db.lookup_auth_session_ms", lookup_started_at)
+        if auth_session is None or auth_session.user_id != subject:
+            raise InvalidRefreshTokenError("Refresh token is invalid or expired.")
+        self._assert_active_auth_session(auth_session, expected_refresh_token=refresh_token)
+        user = session.get(User, subject)
+        if user is None or not user.is_active:
+            raise InvalidRefreshTokenError("Refresh token is invalid or expired.")
+        issued_session = self.issue_session_tokens(
+            user,
+            session=session,
+            session_id=auth_session.id,
+            device_id=device_id or auth_session.device_id,
+            user_agent=user_agent or auth_session.user_agent,
+            ip_address=ip_address or auth_session.ip_address,
+            timing_recorder=timing_recorder,
+        )
+        return user, issued_session
+
+    def revoke_session(
+        self,
+        session: Session,
+        *,
+        session_id: str,
+        user_id: str | None = None,
+        reason: str = "logout",
+    ) -> AuthSession | None:
+        auth_session = session.get(AuthSession, session_id)
+        if auth_session is None:
+            return None
+        if user_id is not None and auth_session.user_id != user_id:
+            raise InvalidSessionError("Authenticated session does not belong to the current user.")
+        if auth_session.revoked_at is None:
+            auth_session.revoked_at = utcnow()
+        auth_session.revocation_reason = reason
+        auth_session.last_used_at = utcnow()
+        session.flush()
+        return auth_session
 
     def resolve_user_permissions(self, app, user: User, *, session: Session | None = None) -> list[str]:
         if session is not None:
@@ -328,6 +499,127 @@ class AuthService:
             memberships=tuple(self._membership_views(access_context.memberships)),
             permissions=self.resolve_user_permissions(app, user, session=session),
         )
+
+    def build_session_bootstrap_state(
+        self,
+        session: Session,
+        user: User,
+        *,
+        app=None,
+    ) -> SessionBootstrapState:
+        club = self.ensure_user_club_context(session, user)
+        profile = self.get_current_user_profile(session, user, app=app)
+        return SessionBootstrapState(
+            user=profile,
+            club=club,
+            permissions=list(profile.permissions),
+        )
+
+    def ensure_user_club_context(self, session: Session, user: User) -> ClubProfile:
+        club = self.resolve_user_club(session, user)
+        if club is None:
+            club = self._create_default_club_profile(session, user)
+        owner_user_id = user.id if club.owner_user_id == user.id else None
+        AccessControlService(session).ensure_club_organization(club, owner_user_id=owner_user_id)
+        session.flush()
+        return club
+
+    def resolve_user_club(self, session: Session, user: User) -> ClubProfile | None:
+        owned_club = session.scalar(
+            select(ClubProfile)
+            .where(ClubProfile.owner_user_id == user.id)
+            .order_by(ClubProfile.created_at.asc())
+        )
+        if owned_club is not None:
+            return owned_club
+        return session.scalar(
+            select(ClubProfile)
+            .join(Organization, Organization.club_profile_id == ClubProfile.id)
+            .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
+            .where(OrganizationMembership.user_id == user.id)
+            .order_by(
+                OrganizationMembership.is_primary.desc(),
+                OrganizationMembership.created_at.asc(),
+                ClubProfile.created_at.asc(),
+            )
+        )
+
+    def get_auth_session_record(
+        self,
+        session: Session,
+        *,
+        session_id: str,
+        user_id: str,
+    ) -> AuthSession:
+        auth_session = session.get(AuthSession, session_id)
+        if auth_session is None or auth_session.user_id != user_id:
+            raise InvalidSessionError("Authenticated session is invalid.")
+        self._assert_active_auth_session(auth_session)
+        return auth_session
+
+    @staticmethod
+    def _assert_active_auth_session(
+        auth_session: AuthSession,
+        *,
+        expected_refresh_token: str | None = None,
+    ) -> None:
+        now = utcnow()
+        if auth_session.revoked_at is not None:
+            raise InvalidSessionError("Authenticated session has been revoked.")
+        if AuthService._as_utc_datetime(auth_session.expires_at) <= now:
+            raise InvalidSessionError("Authenticated session has expired.")
+        if expected_refresh_token is not None:
+            expected_hash = AuthService._hash_refresh_token(expected_refresh_token)
+            if auth_session.refresh_token_hash != expected_hash:
+                raise InvalidRefreshTokenError("Refresh token is invalid or expired.")
+
+    def _create_default_club_profile(self, session: Session, user: User) -> ClubProfile:
+        display_seed = (
+            user.display_name
+            or user.full_name
+            or user.username
+            or user.email.split("@", maxsplit=1)[0]
+        ).strip()
+        normalized_seed = display_seed or f"user-{user.id[:8]}"
+        club_name = f"{normalized_seed} FC"
+        compact_seed = re.sub(r"[^A-Za-z0-9]+", "", normalized_seed.upper())
+        short_name = (compact_seed[:4] or "FC")[:40]
+        slug = self._generate_unique_club_slug(session, normalized_seed)
+        country_code = PolicyService(session).resolve_country_code_for_user(user=user)
+        club = ClubProfile(
+            owner_user_id=user.id,
+            club_name=club_name,
+            short_name=short_name,
+            slug=slug,
+            primary_color="#0F766E",
+            secondary_color="#F8FAFC",
+            accent_color="#EA580C",
+            home_venue_name=f"{normalized_seed} Arena",
+            country_code=country_code,
+            visibility="public",
+        )
+        session.add(club)
+        session.flush()
+        ClubReputationService(session).ensure_profile(club.id)
+        ClubDynastyService(session).ensure_progress(club.id)
+        ClubTrophyService(session).ensure_cabinet(club.id)
+        session.flush()
+        RegenBootstrapService(session).bootstrap_for_new_club(club)
+        AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
+        session.flush()
+        return club
+
+    def _generate_unique_club_slug(self, session: Session, seed: str) -> str:
+        base = re.sub(r"[^a-z0-9]+", "-", seed.strip().lower()).strip("-")
+        if not base:
+            base = f"club-{generate_uuid()[:8]}"
+        base = base[:96]
+        candidate = base
+        suffix = 1
+        while session.scalar(select(ClubProfile).where(ClubProfile.slug == candidate)) is not None:
+            candidate = f"{base[:90]}-{suffix}"
+            suffix += 1
+        return candidate
 
     @staticmethod
     def _dedupe_permissions(*permission_sets: list[str] | tuple[str, ...]) -> tuple[str, ...]:
@@ -632,6 +924,10 @@ class AuthService:
     @staticmethod
     def _hash_email_token(code: str) -> str:
         return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _hash_refresh_token(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _as_utc_datetime(value: datetime) -> datetime:
