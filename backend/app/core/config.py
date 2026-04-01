@@ -29,6 +29,7 @@ DATABASE_URL_ENV_VARS = ("DATABASE_URL", "GTE_DATABASE_URL")
 PLAYER_UNIVERSE_WEIGHTING_FILE = "player_universe_weighting.toml"
 SUPPLY_TIERS_FILE = "supply_tiers.toml"
 LIQUIDITY_BANDS_FILE = "liquidity_bands.toml"
+ADMIN_BUYBACK_FILE = "admin_buyback.toml"
 IMAGE_POLICY_FILE = "image_policy.toml"
 VALUE_ENGINE_WEIGHTING_FILE = "value_engine_weighting.toml"
 SUSPICION_THRESHOLDS_FILE = "suspicion_thresholds.toml"
@@ -421,6 +422,17 @@ class LiquidityBandsConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AdminBuybackConfig:
+    p2p_priority_window_hours: int
+    minimum_hold_days: int
+    admin_reserve_cooldown_days: int
+    wash_trade_lookback_hours: int
+    nigeria_aliases: tuple[str, ...]
+    african_allowlist: tuple[str, ...]
+    band_payouts: dict[str, float]
+
+
+@dataclass(frozen=True, slots=True)
 class PriceBandLimit:
     code: str
     min_ratio: float
@@ -764,6 +776,7 @@ class Settings:
     player_universe_weighting: PlayerUniverseWeightingConfig
     supply_tiers: SupplyTiersConfig
     liquidity_bands: LiquidityBandsConfig
+    admin_buyback: AdminBuybackConfig
     image_policy: ImagePolicyConfig
     media_storage: MediaStorageConfig
     sponsorship_inventory: SponsorshipInventoryConfig
@@ -1359,6 +1372,62 @@ def load_liquidity_bands_config(config_root: Path) -> LiquidityBandsConfig:
             raise ValueError(f"Liquidity band '{band.name}' has an invalid price range.")
         previous_ceiling = band.max_price_credits
     return LiquidityBandsConfig(bands=bands)
+
+
+def _default_admin_buyback_config() -> AdminBuybackConfig:
+    return AdminBuybackConfig(
+        p2p_priority_window_hours=48,
+        minimum_hold_days=7,
+        admin_reserve_cooldown_days=7,
+        wash_trade_lookback_hours=72,
+        nigeria_aliases=("Nigeria", "NG", "NGA"),
+        african_allowlist=("Ghana", "Kenya", "South Africa"),
+        band_payouts={
+            "a": 0.45,
+            "b": 0.58,
+            "c": 0.66,
+            "d": 0.72,
+            "e": 0.75,
+        },
+    )
+
+
+def load_admin_buyback_config(config_root: Path) -> AdminBuybackConfig:
+    document = _load_optional_toml_document(config_root / ADMIN_BUYBACK_FILE)
+    defaults = _default_admin_buyback_config()
+    if document is None:
+        return defaults
+
+    payout_document = _require_table(document.get("band_payouts", defaults.band_payouts), name="band_payouts")
+    band_payouts = {str(key).strip().lower(): float(value) for key, value in payout_document.items()}
+    expected_codes = {"a", "b", "c", "d", "e"}
+    if set(band_payouts) != expected_codes:
+        raise ValueError("Admin buyback band_payouts must define exactly: a, b, c, d, e.")
+    for code, ratio in band_payouts.items():
+        if not 0 < ratio < 1:
+            raise ValueError(f"Admin buyback payout ratio for band '{code}' must be between 0 and 1.")
+
+    config = AdminBuybackConfig(
+        p2p_priority_window_hours=int(document.get("p2p_priority_window_hours", defaults.p2p_priority_window_hours)),
+        minimum_hold_days=int(document.get("minimum_hold_days", defaults.minimum_hold_days)),
+        admin_reserve_cooldown_days=int(
+            document.get("admin_reserve_cooldown_days", defaults.admin_reserve_cooldown_days)
+        ),
+        wash_trade_lookback_hours=int(document.get("wash_trade_lookback_hours", defaults.wash_trade_lookback_hours)),
+        nigeria_aliases=_coerce_string_tuple(document.get("nigeria_aliases"), name="nigeria_aliases")
+        or defaults.nigeria_aliases,
+        african_allowlist=_coerce_string_tuple(document.get("african_allowlist"), name="african_allowlist"),
+        band_payouts=band_payouts,
+    )
+    if config.p2p_priority_window_hours <= 0:
+        raise ValueError("Admin buyback p2p_priority_window_hours must be greater than zero.")
+    if config.minimum_hold_days <= 0:
+        raise ValueError("Admin buyback minimum_hold_days must be greater than zero.")
+    if config.admin_reserve_cooldown_days < 0:
+        raise ValueError("Admin buyback admin_reserve_cooldown_days cannot be negative.")
+    if config.wash_trade_lookback_hours <= 0:
+        raise ValueError("Admin buyback wash_trade_lookback_hours must be greater than zero.")
+    return config
 
 
 def load_image_policy_config(config_root: Path) -> ImagePolicyConfig:
@@ -2021,6 +2090,7 @@ def load_settings(
         player_universe_weighting=load_player_universe_weighting_config(resolved_config_root),
         supply_tiers=load_supply_tiers_config(resolved_config_root),
         liquidity_bands=load_liquidity_bands_config(resolved_config_root),
+        admin_buyback=load_admin_buyback_config(resolved_config_root),
         image_policy=load_image_policy_config(resolved_config_root),
         media_storage=load_media_storage_config(resolved_config_root, resolved_environ),
         sponsorship_inventory=load_sponsorship_inventory_config(resolved_config_root),
