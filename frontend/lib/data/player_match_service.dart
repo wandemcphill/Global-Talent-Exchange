@@ -397,14 +397,13 @@ class GtePlayerMatchService {
         if (scoreCompare != 0) {
           return scoreCompare;
         }
-        final int interestCompare = right.player.marketInterestScore.compareTo(
-          left.player.marketInterestScore,
-        );
+        final int interestCompare = (right.player.marketInterestScore ?? 0)
+            .compareTo(left.player.marketInterestScore ?? 0);
         if (interestCompare != 0) {
           return interestCompare;
         }
-        final double rightTrend = right.player.trendScore;
-        final double leftTrend = left.player.trendScore;
+        final double rightTrend = right.player.trendScore ?? 0;
+        final double leftTrend = left.player.trendScore ?? 0;
         final int trendCompare = rightTrend.compareTo(leftTrend);
         if (trendCompare != 0) {
           return trendCompare;

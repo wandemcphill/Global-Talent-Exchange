@@ -156,10 +156,10 @@ class GteMarketPlayerListItem {
   final String? nationality;
   final String? currentClubName;
   final int age;
-  final double currentValueCredits;
-  final double movementPct;
-  final double trendScore;
-  final int marketInterestScore;
+  final double? currentValueCredits;
+  final double? movementPct;
+  final double? trendScore;
+  final int? marketInterestScore;
   final double? averageRating;
   final bool isAvailable;
   final String availabilityLabel;
@@ -169,7 +169,7 @@ class GteMarketPlayerListItem {
   final String? marketplaceNote;
   final PlayerAvatar? avatar;
 
-  bool get isRising => movementPct > 0;
+  bool get isRising => (movementPct ?? 0) > 0;
 
   factory GteMarketPlayerListItem.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -186,16 +186,16 @@ class GteMarketPlayerListItem {
         'currentClubName',
       ]),
       age: GteJson.integer(json, <String>['age']),
-      currentValueCredits: GteJson.number(json, <String>[
+      currentValueCredits: _nullableNumber(json, <String>[
         'current_value_credits',
         'currentValueCredits',
       ]),
-      movementPct: GteJson.number(json, <String>[
+      movementPct: _nullableNumber(json, <String>[
         'movement_pct',
         'movementPct',
       ]),
-      trendScore: GteJson.number(json, <String>['trend_score', 'trendScore']),
-      marketInterestScore: GteJson.integer(json, <String>[
+      trendScore: _nullableNumber(json, <String>['trend_score', 'trendScore']),
+      marketInterestScore: _nullableInteger(json, <String>[
         'market_interest_score',
         'marketInterestScore',
       ]),
