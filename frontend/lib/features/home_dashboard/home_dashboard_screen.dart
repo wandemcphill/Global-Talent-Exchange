@@ -5,6 +5,7 @@ import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
@@ -35,7 +36,14 @@ class HomeDashboardScreen extends StatefulWidget {
     this.clubName,
     this.onOpenClubTab,
     this.onOpenCompetitionsTab,
+    this.onOpenMarketTab,
+    this.onOpenHubTab,
+    this.onOpenWalletTab,
     this.onOpenClubSubtab,
+    this.isCheckingCreatorAccess = false,
+    this.canHostCompetitions = false,
+    this.onOpenCreatorAccessRequest,
+    this.navigationDependencies,
   });
 
   final GteExchangeController exchangeController;
@@ -46,7 +54,14 @@ class HomeDashboardScreen extends StatefulWidget {
   final String? clubName;
   final VoidCallback? onOpenClubTab;
   final VoidCallback? onOpenCompetitionsTab;
+  final VoidCallback? onOpenMarketTab;
+  final VoidCallback? onOpenHubTab;
+  final VoidCallback? onOpenWalletTab;
   final ValueChanged<ClubNavigationTab>? onOpenClubSubtab;
+  final bool isCheckingCreatorAccess;
+  final bool canHostCompetitions;
+  final Future<void> Function()? onOpenCreatorAccessRequest;
+  final GteNavigationDependencies? navigationDependencies;
 
   @override
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
@@ -422,26 +437,40 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   _HomeIdentity _deriveIdentity() {
+    final GteNavigationDependencies? dependencies = widget.navigationDependencies;
     final dynamic session = widget.exchangeController.session;
     final String? displayName = session?.user.displayName?.trim();
     final String username = session?.user.username.trim() ?? '';
     final String sessionUserId = session?.user.id.trim() ?? '';
-    final String userId =
-        sessionUserId.isNotEmpty ? sessionUserId : 'demo-user';
+    final String dependencyUserId = dependencies?.currentUserId.trim() ?? '';
+    final String? dependencyUserName = dependencies?.currentUserName?.trim();
+    final String? dependencyClubId = dependencies?.currentClubId?.trim();
+    final String? dependencyClubName = dependencies?.currentClubName?.trim();
+    final String userId = sessionUserId.isNotEmpty
+        ? sessionUserId
+        : dependencyUserId.isNotEmpty
+        ? dependencyUserId
+        : 'demo-user';
     final String? userName = displayName?.isNotEmpty == true
         ? displayName
         : username.isNotEmpty
-            ? username
-            : null;
+        ? username
+        : dependencyUserName?.isNotEmpty == true
+        ? dependencyUserName
+        : null;
     final String clubName = widget.clubName?.trim().isNotEmpty == true
         ? widget.clubName!.trim()
+        : dependencyClubName?.isNotEmpty == true
+        ? dependencyClubName!
         : displayName?.isNotEmpty == true
-            ? displayName!
-            : username.isNotEmpty
-                ? username
-                : 'Royal Lagos FC';
+        ? displayName!
+        : username.isNotEmpty
+        ? username
+        : 'Royal Lagos FC';
     final String clubId = widget.clubId?.trim().isNotEmpty == true
         ? widget.clubId!.trim()
+        : dependencyClubId?.isNotEmpty == true
+        ? dependencyClubId!
         : _slugifyClub(clubName);
     return _HomeIdentity(
       userId: userId,

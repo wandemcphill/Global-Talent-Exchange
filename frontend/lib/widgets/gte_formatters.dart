@@ -9,8 +9,32 @@ String gteFormatCredits(double value) {
   return _gteFormatUnitAmount(value, 'GTEX Coin');
 }
 
+String gteFormatCompetitionAmount(double value, [String currency = 'credit']) {
+  final String normalized = currency.trim().toLowerCase();
+  if (normalized.isEmpty ||
+      normalized == 'credit' ||
+      normalized == 'credits' ||
+      normalized == 'gtex' ||
+      normalized == 'gtex coin') {
+    return gteFormatCredits(value);
+  }
+  if (normalized == 'coin' ||
+      normalized == 'coins' ||
+      normalized == 'fan coin' ||
+      normalized == 'fan coins' ||
+      normalized == 'fancoin' ||
+      normalized == 'fan_coin') {
+    return gteFormatFanCoins(value);
+  }
+  return _gteFormatUnitAmount(value, currency.trim().toUpperCase());
+}
+
 String gteFormatFanCoins(double value) {
   return _gteFormatUnitAmount(value, 'Fan Coin');
+}
+
+String gteFormatFanCoin(double value) {
+  return gteFormatFanCoins(value);
 }
 
 String gteFormatLedgerUnitName(GteLedgerUnit unit) {

@@ -15,6 +15,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
     required this.hostFeeAmount,
     required this.prizePool,
     required this.currency,
+    this.matchType,
     this.projected = false,
     this.lockNotice,
   });
@@ -28,6 +29,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
   final double hostFeeAmount;
   final double prizePool;
   final String currency;
+  final Object? matchType;
   final bool projected;
   final String? lockNotice;
 

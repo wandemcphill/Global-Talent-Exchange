@@ -142,10 +142,10 @@ class PlayerMatchViewModel {
         nationality: match.player.country,
         currentClubName: match.player.club,
         age: match.player.age,
-        currentValueCredits: null,
-        movementPct: null,
-        trendScore: null,
-        marketInterestScore: null,
+        currentValueCredits: 0,
+        movementPct: 0,
+        trendScore: 0,
+        marketInterestScore: 0,
         averageRating: null,
         isAvailable: true,
         availabilityLabel:
@@ -397,13 +397,14 @@ class GtePlayerMatchService {
         if (scoreCompare != 0) {
           return scoreCompare;
         }
-        final int interestCompare = (right.player.marketInterestScore ?? 0)
-            .compareTo(left.player.marketInterestScore ?? 0);
+        final int interestCompare = right.player.marketInterestScore.compareTo(
+          left.player.marketInterestScore,
+        );
         if (interestCompare != 0) {
           return interestCompare;
         }
-        final double rightTrend = right.player.trendScore ?? 0;
-        final double leftTrend = left.player.trendScore ?? 0;
+        final double rightTrend = right.player.trendScore;
+        final double leftTrend = left.player.trendScore;
         final int trendCompare = rightTrend.compareTo(leftTrend);
         if (trendCompare != 0) {
           return trendCompare;
