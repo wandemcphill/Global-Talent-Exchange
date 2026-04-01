@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from app.value_engine.scoring import credits_from_real_world_value
-
 if TYPE_CHECKING:
     from app.ingestion.models import Player
 
@@ -69,7 +67,7 @@ def _resolve_share_price_coin(
         return _amount(explicit_value)
 
     reference_market_value = _reference_market_value_eur(player)
-    derived_credits = credits_from_real_world_value(reference_market_value)
+    derived_credits = _credits_from_real_world_value(reference_market_value)
     derived_coin_price = Decimal(str(derived_credits / 100.0))
     return max(_amount(derived_coin_price), MIN_SHARE_PRICE_COIN)
 
@@ -125,6 +123,12 @@ def _normalized_position_key(player: Player) -> str | None:
 
 def _amount(value: Decimal | int | float | str | None) -> Decimal:
     return Decimal(str(value or "0.0000")).quantize(AMOUNT_QUANTUM)
+
+
+def _credits_from_real_world_value(real_world_value_eur: float) -> float:
+    from app.value_engine.scoring import credits_from_real_world_value
+
+    return credits_from_real_world_value(real_world_value_eur)
 
 
 __all__ = [
