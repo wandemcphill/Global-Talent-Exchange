@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.dispute import DisputeStatus
 
@@ -31,6 +31,8 @@ class DisputeStatusRequest(BaseModel):
 
 
 class DisputeView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
     admin_user_id: str | None
@@ -46,11 +48,10 @@ class DisputeView(BaseModel):
     resolved_at: datetime | None
     closed_at: datetime | None
 
-    class Config:
-        from_attributes = True
-
 
 class DisputeMessageView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     dispute_id: str
     sender_user_id: str | None
@@ -58,9 +59,6 @@ class DisputeMessageView(BaseModel):
     message: str
     attachment_id: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class DisputeDetailResponse(BaseModel):
