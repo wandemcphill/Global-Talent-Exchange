@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/gte_authed_api.dart';
+import '../../shared/providers/auth_provider.dart';
 import '../shared/data/gte_feature_support.dart';
 
 class LiveMatchOverviewEntry {
