@@ -215,7 +215,15 @@ def register_core(app: FastAPI) -> None:
 
 def check_db(app: FastAPI) -> None:
     logger.info("app.startup.health.database.begin")
-    app.state.container.check_db(check_schema=True)
+    try:
+        app.state.container.check_db(check_schema=True)
+    except RuntimeError as exc:
+        if not _should_attempt_schema_repair(exc):
+            raise
+        logger.warning("app.startup.health.database.schema_repair.begin detail=%s", exc)
+        app.state.container.database.initialize(run_migration_check=True)
+        app.state.container.check_db(check_schema=True)
+        logger.info("app.startup.health.database.schema_repair.complete")
     logger.info("app.startup.health.database.complete")
 
 
@@ -227,6 +235,10 @@ def check_redis(app: FastAPI) -> None:
 
 def _default_asgi_run_migration_check(settings: Settings) -> bool:
     return settings.run_migration_check if settings.app_env.lower() != "production" else False
+
+
+def _should_attempt_schema_repair(exc: RuntimeError) -> bool:
+    return str(exc).startswith("Database schema smoke check failed.")
 
 
 def _configure_cors(app: FastAPI, settings: Settings) -> None:

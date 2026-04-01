@@ -204,6 +204,24 @@ def test_app_startup_runs_migrations_and_registers_core_routes(app_and_engine) -
     assert revision == target_head
 
 
+def test_app_startup_repairs_schema_when_smoke_detects_stale_database(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_schema_repair.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(engine=engine, run_migration_check=False)
+
+    with TestClient(app) as client:
+        ready_response = client.get("/ready")
+
+    assert ready_response.status_code == 200
+    assert ready_response.json()["status"] == "ready"
+
+    with engine.connect() as connection:
+        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+
+    target_head = ScriptDirectory.from_config(build_alembic_config(str(engine.url))).get_current_head()
+    assert revision == target_head
+
+
 def test_ready_returns_service_unavailable_when_database_check_fails(app_and_engine, monkeypatch) -> None:
     app, _engine = app_and_engine
 
