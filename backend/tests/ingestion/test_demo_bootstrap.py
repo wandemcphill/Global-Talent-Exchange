@@ -20,6 +20,7 @@ from app.core.events import InMemoryEventPublisher
 from app.ingestion.demo_bootstrap import (
     DEFAULT_DEMO_PASSWORD,
     DEMO_USER_SPECS,
+    canonical_band_counts_for_player_count,
     DemoBootstrapService,
 )
 from app.ingestion.models import MarketSignal, Player
@@ -130,6 +131,16 @@ def test_demo_bootstrap_service_is_repeatable_for_demo_users_and_balances(demo_s
         assert session.scalar(select(func.count()).select_from(PlayerValueSnapshotRecord)) == 16
 
 
+def test_canonical_band_counts_match_locked_demo_distribution() -> None:
+    assert canonical_band_counts_for_player_count(120) == {
+        "band_a": 45,
+        "band_b": 40,
+        "band_c": 20,
+        "band_d": 10,
+        "band_e": 5,
+    }
+
+
 def test_demo_bootstrap_guarantees_rising_and_falling_players(demo_service) -> None:
     service, session_factory = demo_service
 
@@ -147,6 +158,23 @@ def test_demo_bootstrap_guarantees_rising_and_falling_players(demo_service) -> N
 
     assert rising_count > 0
     assert falling_count > 0
+
+
+def test_demo_bootstrap_exposes_all_canonical_liquidity_tiers_for_discoverability(demo_service) -> None:
+    service, session_factory = demo_service
+
+    summary = service.seed(player_target_count=15, batch_size=15)
+
+    assert summary.universe_seed["canonical_discoverability"]["visible_player_target"] == 15
+
+    with session_factory() as session:
+        band_codes = session.scalars(
+            select(LiquidityBand.code)
+            .join(Player, Player.liquidity_band_id == LiquidityBand.id)
+            .where(Player.source_provider == summary.provider_name)
+        ).all()
+
+    assert set(band_codes) == {"entry", "growth", "premium", "bluechip", "marquee"}
 
 
 def test_demo_bootstrap_can_include_demo_liquidity(demo_service) -> None:
