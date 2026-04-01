@@ -239,3 +239,42 @@ class OrderListView(BaseModel):
     limit: int
     offset: int
     total: int
+
+
+class AdminBuybackPreviewView(BaseModel):
+    model_config = ConfigDict(from_attributes=True, title="AdminBuybackPreviewView")
+
+    order_id: str
+    player_id: str
+    remaining_quantity: Decimal
+    country: str | None
+    liquidity_band_code: str | None
+    liquidity_band_name: str | None
+    buyback_band: str
+    payout_ratio: Decimal
+    fair_value_unit_price: Decimal
+    fair_value_total: Decimal
+    expected_p2p_unit_price: Decimal
+    expected_p2p_total: Decimal
+    admin_unit_price: Decimal
+    admin_total: Decimal
+    p2p_priority_ends_at: datetime
+    country_eligible: bool
+    kyc_eligible: bool
+    priority_window_satisfied: bool
+    minimum_hold_satisfied: bool
+    integrity_clear: bool
+    wash_trade_clear: bool
+    reserve_cooldown_clear: bool
+    eligible: bool
+    reasons: tuple[str, ...]
+    message: str
+
+
+class AdminBuybackExecutionView(BaseModel):
+    model_config = ConfigDict(from_attributes=True, title="AdminBuybackExecutionView")
+
+    execution_id: str
+    settled_at: datetime
+    preview: AdminBuybackPreviewView
+    order: OrderView

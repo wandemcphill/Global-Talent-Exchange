@@ -35,6 +35,7 @@ class HomeDashboardScreen extends StatefulWidget {
     this.onOpenClubTab,
     this.onOpenCompetitionsTab,
     this.onOpenClubSubtab,
+    this.onOpenCoachMarket,
   });
 
   final GteExchangeController exchangeController;
@@ -46,6 +47,7 @@ class HomeDashboardScreen extends StatefulWidget {
   final VoidCallback? onOpenClubTab;
   final VoidCallback? onOpenCompetitionsTab;
   final ValueChanged<ClubNavigationTab>? onOpenClubSubtab;
+  final VoidCallback? onOpenCoachMarket;
 
   @override
   State<HomeDashboardScreen> createState() => _HomeDashboardScreenState();
@@ -268,6 +270,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   onOpenCompetitions: () =>
                       _openTarget(_HomeLinkTarget.competitions),
                   onOpenReplays: () => _openTarget(_HomeLinkTarget.replays),
+                  onOpenCoaches: widget.onOpenCoachMarket,
                   onOpenLogin: widget.onOpenLogin,
                 ),
                 const SizedBox(height: 16),
@@ -657,6 +660,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
     required this.onOpenClub,
     required this.onOpenCompetitions,
     required this.onOpenReplays,
+    this.onOpenCoaches,
     this.onOpenLogin,
   });
 
@@ -664,6 +668,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
   final VoidCallback onOpenClub;
   final VoidCallback onOpenCompetitions;
   final VoidCallback onOpenReplays;
+  final VoidCallback? onOpenCoaches;
   final VoidCallback? onOpenLogin;
 
   @override
@@ -691,6 +696,18 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             accent: GteShellTheme.accentArena,
             actionLabel: 'Open arena',
             onTap: onOpenCompetitions,
+          ),
+          _HomeActionCard(
+            eyebrow: 'COACHES',
+            title: 'Scout free coaches',
+            detail: isAuthenticated
+                ? 'Open the coach market, claim standard coaches for free, and track elite and legendary copy scarcity before the board dries up.'
+                : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
+            icon: Icons.manage_accounts_outlined,
+            accent: GteShellTheme.accentWarm,
+            actionLabel:
+                isAuthenticated ? 'Open coach market' : 'Sign in for coaches',
+            onTap: isAuthenticated ? onOpenCoaches : onOpenLogin,
           ),
           _HomeActionCard(
             eyebrow: isAuthenticated ? 'REPLAYS' : 'UNLOCK',

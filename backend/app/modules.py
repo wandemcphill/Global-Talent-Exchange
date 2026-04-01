@@ -25,6 +25,8 @@ from backend.app.ingestion.router import router as ingestion_router
 from backend.app.leagues.router import router as leagues_router
 from backend.app.market.router import router as market_router
 from backend.app.manager_market.router import router as manager_market_router
+from backend.app.manager_market.seed_catalog import CATALOG_VERSION as MANAGER_MARKET_CATALOG_VERSION
+from backend.app.manager_market.service import ManagerMarketService
 from backend.app.match_engine.api.router import router as match_engine_router
 from backend.app.notifications.router import notifications_router
 from backend.app.players.router import router as players_router
@@ -36,6 +38,7 @@ from backend.app.replay_archive.service import ensure_replay_archive
 from backend.app.surveillance.router import router as surveillance_router
 from backend.app.users.router import router as users_router
 from backend.app.value_engine.router import router as value_engine_router
+from backend.app.wallets.service import WalletService
 from backend.app.wallets.router import router as wallets_router
 from backend.app.world_super_cup.api.router import router as world_super_cup_router
 
@@ -49,6 +52,14 @@ def _with_api_alias(router: APIRouter) -> APIRouter:
 
 def _initialize_replay_archive(app, _context) -> None:
     ensure_replay_archive(app)
+
+
+def _initialize_manager_market(app, context) -> None:
+    service = ManagerMarketService(wallet_service=WalletService())
+    with context.database.session_factory() as session:
+        service.bootstrap_market(app, session)
+        session.commit()
+    app.state.manager_market_catalog_version = MANAGER_MARKET_CATALOG_VERSION
 
 
 DOMAIN_MODULES = (
@@ -69,7 +80,11 @@ DOMAIN_MODULES = (
     DomainModule(name="referrals", router=referrals_router),
     DomainModule(name="admin_referrals", router=admin_referrals_router),
     DomainModule(name="market", router=market_router),
-    DomainModule(name="manager_market", router=manager_market_router),
+    DomainModule(
+        name="manager_market",
+        router=manager_market_router,
+        on_startup=(_initialize_manager_market,),
+    ),
     DomainModule(name="ingestion", router=ingestion_router),
     DomainModule(name="value_engine", router=value_engine_router),
     DomainModule(name="surveillance", router=surveillance_router),

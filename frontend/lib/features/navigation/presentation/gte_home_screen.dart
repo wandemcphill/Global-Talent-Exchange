@@ -69,7 +69,7 @@ class GteHomeScreen extends StatelessWidget {
                       children: <Widget>[
                         GteMetricChip(
                           label: 'Market visible',
-                          value: controller.players.length.toString(),
+                          value: (controller.marketPage?.total ?? controller.players.length).toString(),
                         ),
                         GteMetricChip(
                           label: 'Competitions open',

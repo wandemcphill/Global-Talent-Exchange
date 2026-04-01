@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CATALOG_VERSION = 6
+CATALOG_VERSION = 7
 
 LEGENDARY_MANAGERS: list[dict[str, Any]] = [
     {"name": "Sir Alex Ferguson", "mentality": "balanced", "tactics": ["attacking_rotation", "inverted_wingers", "late_surge_press"], "traits": ["manages_elite_stars", "tactical_flexibility", "late_substitution", "loyalty_to_veterans"], "philosophy": "Relentless standards, squad evolution, and huge-game nerve.", "rarity": "legendary", "club_associations": ["Manchester United", "Aberdeen"]},
@@ -159,9 +159,9 @@ TRAIT_SETS = [
 
 def supply_for_rarity(rarity: str) -> int:
     if rarity == "legendary":
-        return 2
+        return 1
     if rarity == "elite_active":
-        return 3
+        return 2
     return 10
 
 

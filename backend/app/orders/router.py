@@ -7,6 +7,8 @@ from backend.app.auth.dependencies import get_current_user, get_session
 from backend.app.matching.service import InvalidOrderTransitionError, OrderBookSnapshot
 from backend.app.models.user import User
 from backend.app.orders.schemas import (
+    AdminBuybackExecutionView,
+    AdminBuybackPreviewView,
     OrderAcceptedView,
     OrderBookLevelView,
     OrderBookView,
@@ -27,7 +29,10 @@ api_router = APIRouter(prefix="/api/orders")
 
 def _build_order_service(request: Request | None) -> OrderService:
     if request is not None and hasattr(request.app.state, "event_publisher"):
-        return OrderService(event_publisher=request.app.state.event_publisher)
+        return OrderService(
+            event_publisher=request.app.state.event_publisher,
+            settings=getattr(request.app.state, "settings", None),
+        )
     return OrderService()
 
 
@@ -184,6 +189,53 @@ def cancel_order(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return _build_order_view(service, session, order)
+
+
+@legacy_router.get("/{order_id}/admin-buyback-preview", response_model=AdminBuybackPreviewView)
+@api_router.get("/{order_id}/admin-buyback-preview", response_model=AdminBuybackPreviewView)
+def preview_admin_buyback(
+    order_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> AdminBuybackPreviewView:
+    service = _build_order_service(request)
+    try:
+        preview = service.preview_admin_buyback(session, order_id=order_id, user=current_user)
+    except OrderNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return AdminBuybackPreviewView.model_validate(preview)
+
+
+@legacy_router.post("/{order_id}/admin-buyback", response_model=AdminBuybackExecutionView)
+@api_router.post("/{order_id}/admin-buyback", response_model=AdminBuybackExecutionView)
+def execute_admin_buyback(
+    order_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> AdminBuybackExecutionView:
+    service = _build_order_service(request)
+    try:
+        order, execution = service.execute_admin_buyback(session, order_id=order_id, user=current_user)
+        session.commit()
+        session.refresh(order)
+    except OrderNotFoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (InvalidOrderTransitionError, LedgerError) as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except OrderPlacementError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return AdminBuybackExecutionView(
+        execution_id=execution.execution_id,
+        settled_at=execution.settled_at,
+        preview=AdminBuybackPreviewView.model_validate(execution.preview),
+        order=_build_order_view(service, session, order),
+    )
 
 
 router.include_router(legacy_router)

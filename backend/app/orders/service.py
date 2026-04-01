@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import datetime, timezone
 from typing import Sequence
+from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from backend.app.core.config import Settings, get_settings
 from backend.app.ingestion.models import Player
 from backend.app.ledger.models import LedgerEventType
 from backend.app.ledger.service import LedgerEventService
@@ -14,7 +17,9 @@ from backend.app.matching.models import TradeExecution
 from backend.app.matching.service import ExecutionSnapshot, InvalidOrderTransitionError, MatchingService
 from backend.app.models.user import User
 from backend.app.models.wallet import LedgerEntryReason, LedgerUnit
+from backend.app.orders.admin_buyback import AdminBuybackExecution, AdminBuybackPreview, AdminBuybackService
 from backend.app.orders.models import Order, OrderSide, OrderStatus
+from backend.app.risk.service import RiskControlService, RiskValidationError
 from backend.app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -33,11 +38,22 @@ class OrderNotFoundError(OrderPlacementError):
 
 
 class OrderService:
-    def __init__(self, event_publisher: EventPublisher | None = None) -> None:
+    def __init__(
+        self,
+        event_publisher: EventPublisher | None = None,
+        *,
+        settings: Settings | None = None,
+    ) -> None:
         self.event_publisher = event_publisher or InMemoryEventPublisher()
+        self.settings = settings or get_settings()
         self.wallet_service = WalletService(event_publisher=self.event_publisher)
         self.ledger_event_service = LedgerEventService(event_publisher=self.event_publisher)
         self.matching_service = MatchingService()
+        self.risk_service = RiskControlService(wallet_service=self.wallet_service)
+        self.admin_buyback_service = AdminBuybackService(
+            settings=self.settings,
+            wallet_service=self.wallet_service,
+        )
 
     def place_order(
         self,
@@ -59,6 +75,17 @@ class OrderService:
 
         normalized_quantity = self._normalize_amount(quantity)
         normalized_max_price = self._normalize_amount(max_price)
+        try:
+            self.risk_service.validate_trade(
+                session,
+                user,
+                player_id=player.id,
+                side=side,
+                quantity=normalized_quantity,
+                price=normalized_max_price,
+            )
+        except RiskValidationError as exc:
+            raise OrderPlacementError(str(exc)) from exc
         reserved_amount = Decimal("0.0000")
         if side == OrderSide.BUY:
             reserved_amount = self._normalize_amount(normalized_quantity * normalized_max_price)
@@ -79,6 +106,8 @@ class OrderService:
 
         if order.side == OrderSide.BUY and order.reserved_amount > Decimal("0.0000"):
             self._reserve_buy_order_funds(session, order=order, user=user)
+        elif order.side == OrderSide.SELL and order.quantity > Decimal("0.0000"):
+            self._reserve_sell_order_units(session, order=order, user=user)
 
         self._append_order_event(
             session,
@@ -131,6 +160,12 @@ class OrderService:
                 amount=order.reserved_amount,
                 reason="cancel",
             )
+        elif order.side == OrderSide.SELL and order.hold_transaction_id:
+            self._release_reserved_position_units(
+                session,
+                order=order,
+                quantity=order.remaining_quantity,
+            )
 
         self.matching_service.transition_order(order, OrderStatus.CANCELLED)
         self._append_order_event(
@@ -141,6 +176,7 @@ class OrderService:
                 "order_id": order.id,
                 "player_id": order.player_id,
                 "released_amount": str(released_amount),
+                "released_quantity": str(order.remaining_quantity if order.side == OrderSide.SELL else Decimal("0.0000")),
                 "remaining_quantity": str(order.remaining_quantity),
                 "status": order.status.value,
             },
@@ -194,6 +230,103 @@ class OrderService:
         ).all()
         return tuple(orders), total
 
+    def preview_admin_buyback(
+        self,
+        session: Session,
+        *,
+        order_id: str,
+        user: User,
+    ) -> AdminBuybackPreview:
+        order = self.get_order(session, order_id=order_id, user=user)
+        return self.admin_buyback_service.preview(session, user=user, order=order)
+
+    def execute_admin_buyback(
+        self,
+        session: Session,
+        *,
+        order_id: str,
+        user: User,
+    ) -> tuple[Order, AdminBuybackExecution]:
+        order = self.get_order(session, order_id=order_id, user=user)
+        preview = self.admin_buyback_service.preview(session, user=user, order=order)
+        if not preview.eligible:
+            raise OrderPlacementError(preview.message)
+
+        remaining_quantity = self._normalize_amount(order.remaining_quantity)
+        execution_id = f"admin-buyback:{order.id}:{uuid4()}"
+        if order.hold_transaction_id:
+            self.wallet_service.settle_reserved_position_units(
+                session,
+                user=user,
+                player_id=order.player_id,
+                quantity=remaining_quantity,
+                reference=order.id,
+                description=f"Admin buyback settled sell order {order.id}",
+                external_reference=execution_id,
+            )
+        else:
+            self.wallet_service.settle_available_position_units(
+                session,
+                user=user,
+                player_id=order.player_id,
+                quantity=remaining_quantity,
+                reference=order.id,
+                description=f"Admin buyback settled sell order {order.id}",
+                external_reference=execution_id,
+            )
+        self.wallet_service.credit_trade_proceeds(
+            session,
+            user=user,
+            amount=preview.admin_total,
+            reference=order.id,
+            description=f"Admin buyback credited sell order {order.id}",
+            external_reference=execution_id,
+        )
+
+        order.filled_quantity = self._normalize_amount(order.quantity)
+        self.matching_service.transition_order(order, OrderStatus.FILLED)
+        self._append_order_event(
+            session,
+            order=order,
+            event_type=LedgerEventType.ORDER_EXECUTED,
+            payload={
+                "execution_id": execution_id,
+                "player_id": order.player_id,
+                "price": str(preview.admin_unit_price),
+                "quantity": str(remaining_quantity),
+                "notional": str(preview.admin_total),
+                "order_id": order.id,
+                "counterparty_order_id": "admin_buyback",
+                "counterparty_type": "admin_buyback",
+                "remaining_quantity": str(order.remaining_quantity),
+                "status": order.status.value,
+                "buyback_band": preview.buyback_band,
+                "payout_ratio": str(preview.payout_ratio),
+            },
+        )
+        session.flush()
+        settled_at = datetime.now(timezone.utc)
+        self.event_publisher.publish(
+            DomainEvent(
+                name="orders.admin_buyback.executed",
+                payload={
+                    "execution_id": execution_id,
+                    "order_id": order.id,
+                    "user_id": user.id,
+                    "player_id": order.player_id,
+                    "quantity": str(remaining_quantity),
+                    "price": str(preview.admin_unit_price),
+                    "notional": str(preview.admin_total),
+                    "buyback_band": preview.buyback_band,
+                },
+            )
+        )
+        return order, AdminBuybackExecution(
+            preview=preview,
+            execution_id=execution_id,
+            settled_at=settled_at,
+        )
+
     def _reserve_buy_order_funds(self, session: Session, *, order: Order, user: User) -> None:
         entries = self.wallet_service.reserve_order_funds(
             session,
@@ -217,6 +350,30 @@ class OrderService:
             },
         )
 
+    def _reserve_sell_order_units(self, session: Session, *, order: Order, user: User) -> None:
+        entries = self.wallet_service.reserve_position_units(
+            session,
+            user=user,
+            player_id=order.player_id,
+            quantity=order.quantity,
+            reference=order.id,
+            description=f"Reserve units for order {order.id}",
+        )
+        if not entries:
+            return
+        order.hold_transaction_id = entries[0].transaction_id
+        self._append_order_event(
+            session,
+            order=order,
+            event_type=LedgerEventType.ORDER_FUNDS_RESERVED,
+            payload={
+                "order_id": order.id,
+                "player_id": order.player_id,
+                "reserved_quantity": str(order.quantity),
+                "transaction_id": order.hold_transaction_id,
+            },
+        )
+
     def _settle_execution(self, session: Session, *, execution: TradeExecution) -> None:
         buy_order = self.get_order(session, order_id=execution.buy_order_id)
         sell_order = self.get_order(session, order_id=execution.sell_order_id)
@@ -225,18 +382,62 @@ class OrderService:
         if buyer is None or seller is None:
             raise OrderPlacementError("Execution references a missing user.")
 
-        buyer_escrow = self.wallet_service.get_user_escrow_account(session, buyer, LedgerUnit.CREDIT)
-        seller_account = self.wallet_service.get_user_account(session, seller, LedgerUnit.CREDIT)
-        self.wallet_service.append_transaction(
+        if buy_order.hold_transaction_id:
+            self.wallet_service.settle_reserved_funds(
+                session,
+                user=buyer,
+                amount=execution.notional,
+                reference=buy_order.id,
+                description=f"Trade settlement for execution {execution.id}",
+                external_reference=execution.id,
+            )
+        else:
+            self.wallet_service.settle_available_funds(
+                session,
+                user=buyer,
+                amount=execution.notional,
+                reference=buy_order.id,
+                description=f"Trade settlement for execution {execution.id}",
+                external_reference=execution.id,
+            )
+
+        if sell_order.hold_transaction_id:
+            self.wallet_service.settle_reserved_position_units(
+                session,
+                user=seller,
+                player_id=sell_order.player_id,
+                quantity=execution.quantity,
+                reference=sell_order.id,
+                description=f"Trade settlement for execution {execution.id}",
+                external_reference=execution.id,
+            )
+        else:
+            self.wallet_service.settle_available_position_units(
+                session,
+                user=seller,
+                player_id=sell_order.player_id,
+                quantity=execution.quantity,
+                reference=sell_order.id,
+                description=f"Trade settlement for execution {execution.id}",
+                external_reference=execution.id,
+            )
+
+        self.wallet_service.credit_trade_proceeds(
             session,
-            postings=[
-                LedgerPosting(account=buyer_escrow, amount=-execution.notional),
-                LedgerPosting(account=seller_account, amount=execution.notional),
-            ],
-            reason=LedgerEntryReason.TRADE_SETTLEMENT,
-            reference=execution.id,
+            user=seller,
+            amount=execution.notional,
+            reference=sell_order.id,
             description=f"Trade settlement for execution {execution.id}",
-            actor=buyer,
+            external_reference=execution.id,
+        )
+        self.wallet_service.credit_position_units(
+            session,
+            user=buyer,
+            player_id=buy_order.player_id,
+            quantity=execution.quantity,
+            reference=buy_order.id,
+            description=f"Trade settlement for execution {execution.id}",
+            external_reference=execution.id,
         )
 
         price_improvement = Decimal("0.0000")
@@ -368,6 +569,42 @@ class OrderService:
             },
         )
         return release_amount
+
+    def _release_reserved_position_units(
+        self,
+        session: Session,
+        *,
+        order: Order,
+        quantity: Decimal,
+    ) -> Decimal:
+        release_quantity = self._normalize_amount(quantity)
+        if release_quantity <= Decimal("0.0000"):
+            return Decimal("0.0000")
+
+        user = session.get(User, order.user_id)
+        if user is None:
+            raise OrderPlacementError("Order references a missing user.")
+        entries = self.wallet_service.release_reserved_position_units(
+            session,
+            user=user,
+            player_id=order.player_id,
+            quantity=release_quantity,
+            reference=order.id,
+            description=f"Release reserved units for order {order.id}",
+        )
+        self._append_order_event(
+            session,
+            order=order,
+            event_type=LedgerEventType.ORDER_RELEASED,
+            payload={
+                "order_id": order.id,
+                "player_id": order.player_id,
+                "released_quantity": str(release_quantity),
+                "transaction_id": entries[0].transaction_id if entries else None,
+                "remaining_quantity": str(order.remaining_quantity),
+            },
+        )
+        return release_quantity
 
     def _reserved_amount_for_order(self, order: Order) -> Decimal:
         if order.side != OrderSide.BUY or order.max_price is None:

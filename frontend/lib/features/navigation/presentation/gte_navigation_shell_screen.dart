@@ -388,38 +388,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: IconButton(
-                          tooltip: 'Managers market',
-                          onPressed: () {
-                            final session = widget.controller.session;
-                            if (session == null) {
-                              return;
-                            }
-                            Navigator.of(context).push<void>(
-                              MaterialPageRoute<void>(
-                                builder: (BuildContext context) =>
-                                    ManagerMarketScreen(
-                                  baseUrl: widget.apiBaseUrl,
-                                  accessToken: session.accessToken,
-                                  isAdmin: <String>{
-                                    'admin',
-                                    'super_admin'
-                                  }.contains(session.user.role.toLowerCase()),
-                                  onOpenAdmin: () {
-                                    Navigator.of(context).push<void>(
-                                      MaterialPageRoute<void>(
-                                        builder: (BuildContext context) =>
-                                            ManagerAdminScreen(
-                                          baseUrl: widget.apiBaseUrl,
-                                          accessToken: session.accessToken,
-                                          role: session.user.role,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          },
+                          tooltip: 'Coach market',
+                          onPressed: _openCoachMarket,
                           icon: const Icon(Icons.sports_soccer_outlined),
                         ),
                       ),
@@ -534,6 +504,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                             GtePrimaryDestination.competitions,
                           ),
                           onOpenClubSubtab: _openClubSubtab,
+                          onOpenCoachMarket: _openCoachMarket,
                         ),
                         GteCompetitionsHubScreen(
                           key: const PageStorageKey<String>('competitions-hub'),
@@ -768,6 +739,41 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     if (targetRoute != null) {
       _setRoute(targetRoute);
     }
+  }
+
+  void _openCoachMarket() {
+    final session = widget.controller.session;
+    if (session == null) {
+      _openLogin(targetRoute: _route);
+      return;
+    }
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ManagerMarketScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          isAdmin: <String>{'admin', 'super_admin'}
+              .contains(session.user.role.toLowerCase()),
+          onOpenAdmin: _openManagerAdmin,
+        ),
+      ),
+    );
+  }
+
+  void _openManagerAdmin() {
+    final session = widget.controller.session;
+    if (session == null) {
+      return;
+    }
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ManagerAdminScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          role: session.user.role,
+        ),
+      ),
+    );
   }
 
   Future<void> _openPlayer(String playerId) async {
