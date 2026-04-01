@@ -193,6 +193,7 @@ class PlayerValueInput:
 @dataclass(frozen=True, slots=True)
 class ValueBreakdown:
     baseline_credits: float
+    base_reference_weight: float
     football_truth_value_credits: float
     market_signal_value_credits: float
     published_card_value_credits: float
@@ -216,6 +217,7 @@ class ValueBreakdown:
     truth_capped_adjustment_pct: float
     uncapped_adjustment_pct: float
     capped_adjustment_pct: float
+    band_update_cap_pct: float
     trade_trust_score: float
     trusted_trade_count: int
     suspicious_trade_count: int

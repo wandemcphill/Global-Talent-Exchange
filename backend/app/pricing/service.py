@@ -28,6 +28,7 @@ from backend.app.pricing.models import (
     PricingHistoryPoint,
 )
 from backend.app.value_engine.read_models import PlayerValueSnapshotRecord
+from backend.app.value_engine.pricing_curve import round_gtex_display_value
 from backend.app.value_engine.scoring import credits_from_real_world_value
 
 SUPPORTED_CANDLE_INTERVALS: dict[str, timedelta] = {
@@ -369,7 +370,7 @@ class MarketPricingService:
         )
         for candidate in reference_candidates:
             if candidate is not None and candidate > 0:
-                return round(candidate, 2), player.short_name
+                return round_gtex_display_value(candidate), player.short_name
         return None, player.short_name
 
     def _bucket_start(self, timestamp: datetime, bucket_size: timedelta) -> datetime:
@@ -388,7 +389,7 @@ class MarketPricingService:
     def _round_price(self, value: float | None) -> float | None:
         if value is None:
             return None
-        return round(float(value), 2)
+        return round_gtex_display_value(float(value))
 
     def _coerce_float(self, value: object) -> float | None:
         if value is None:

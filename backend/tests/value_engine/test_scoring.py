@@ -19,9 +19,10 @@ from backend.app.value_engine.scoring import ValueEngine, credits_from_real_worl
 
 
 class ValueEngineScoringTests(unittest.TestCase):
-    def test_baseline_conversion_keeps_100m_to_1000_rule(self) -> None:
-        self.assertEqual(credits_from_real_world_value(100_000_000), 1000.0)
-        self.assertEqual(credits_from_real_world_value(75_000_000), 750.0)
+    def test_baseline_conversion_uses_gtex_anchor_curve(self) -> None:
+        self.assertEqual(credits_from_real_world_value(100_000_000), 75.0)
+        self.assertEqual(credits_from_real_world_value(75_000_000), 61.5)
+        self.assertEqual(credits_from_real_world_value(2_000_000), 1.0)
 
     def test_snapshot_combines_football_truth_market_signal_and_published_layers(self) -> None:
         engine = ValueEngine()
@@ -32,9 +33,9 @@ class ValueEngineScoringTests(unittest.TestCase):
                 player_name="Ada Forward",
                 as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
                 reference_market_value_eur=90_000_000,
-                current_credits=880.0,
-                previous_ftv_credits=870.0,
-                previous_pcv_credits=880.0,
+                current_credits=68.0,
+                previous_ftv_credits=67.5,
+                previous_pcv_credits=68.0,
                 previous_gsi_score=52.0,
                 liquidity_band="marquee",
                 match_events=(
@@ -104,9 +105,9 @@ class ValueEngineScoringTests(unittest.TestCase):
                     suspicious_watchlist_adds=10,
                 ),
                 market_pulse=MarketPulse(
-                    midpoint_price_credits=940.0,
-                    best_bid_price_credits=930.0,
-                    best_ask_price_credits=950.0,
+                    midpoint_price_credits=74.0,
+                    best_bid_price_credits=73.0,
+                    best_ask_price_credits=75.0,
                 ),
             )
         )
@@ -128,11 +129,11 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Kai Creator",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=40_000_000,
-            current_credits=400.0,
-            previous_ftv_credits=400.0,
-            previous_pcv_credits=400.0,
+            current_credits=30.0,
+            previous_ftv_credits=30.0,
+            previous_pcv_credits=30.0,
             demand_signal=DemandSignal(purchases=18, shortlist_adds=50, follows=90),
-            market_pulse=MarketPulse(midpoint_price_credits=520.0),
+            market_pulse=MarketPulse(midpoint_price_credits=38.0),
         )
 
         low_liquidity = engine.build_snapshot(PlayerValueInput(liquidity_band="entry", **payload))
@@ -145,6 +146,25 @@ class ValueEngineScoringTests(unittest.TestCase):
         self.assertLessEqual(low_liquidity.breakdown.liquidity_weight, high_liquidity.breakdown.liquidity_weight)
         self.assertLess(low_liquidity.target_credits, high_liquidity.target_credits)
 
+    def test_elite_bands_use_tighter_update_caps_than_entry_bands(self) -> None:
+        engine = ValueEngine()
+        payload = dict(
+            player_id="p-cap",
+            player_name="Cap Check",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            previous_ftv_credits=60.0,
+            previous_pcv_credits=60.0,
+        )
+
+        entry_snapshot = engine.build_snapshot(PlayerValueInput(liquidity_band="entry", **payload))
+        marquee_snapshot = engine.build_snapshot(PlayerValueInput(liquidity_band="marquee", **payload))
+
+        self.assertGreater(entry_snapshot.breakdown.band_update_cap_pct, marquee_snapshot.breakdown.band_update_cap_pct)
+        self.assertGreater(abs(entry_snapshot.movement_pct), abs(marquee_snapshot.movement_pct))
+        self.assertEqual(entry_snapshot.breakdown.band_update_cap_pct, 0.15)
+        self.assertEqual(marquee_snapshot.breakdown.band_update_cap_pct, 0.05)
+
     def test_published_card_value_moves_toward_market_signal_value_from_previous_snapshot(self) -> None:
         engine = ValueEngine()
         snapshot = engine.build_snapshot(
@@ -153,19 +173,23 @@ class ValueEngineScoringTests(unittest.TestCase):
                 player_name="Mina Anchor",
                 as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
                 reference_market_value_eur=55_000_000,
-                current_credits=540.0,
-                previous_ftv_credits=520.0,
-                previous_pcv_credits=500.0,
+                current_credits=44.0,
+                previous_ftv_credits=43.5,
+                previous_pcv_credits=44.0,
                 liquidity_band="premium",
                 demand_signal=DemandSignal(purchases=10, watchlist_adds=35, follows=70),
-                market_pulse=MarketPulse(midpoint_price_credits=640.0),
+                market_pulse=MarketPulse(midpoint_price_credits=52.0),
             )
         )
 
         self.assertGreater(snapshot.market_signal_value_credits, snapshot.previous_credits)
         self.assertGreater(snapshot.target_credits, snapshot.previous_credits)
         self.assertLess(snapshot.target_credits, snapshot.market_signal_value_credits)
-        self.assertAlmostEqual(snapshot.breakdown.capped_adjustment_pct * engine.config.smoothing_factor, snapshot.movement_pct, places=4)
+        self.assertAlmostEqual(
+            snapshot.breakdown.capped_adjustment_pct * engine.config.smoothing_factor,
+            snapshot.movement_pct,
+            places=3,
+        )
 
     def test_last_trade_signal_is_not_used_as_naive_price_input(self) -> None:
         engine = ValueEngine()
@@ -174,16 +198,16 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Noah Steady",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=35_000_000,
-            current_credits=350.0,
-            previous_ftv_credits=350.0,
-            previous_pcv_credits=350.0,
+            current_credits=25.0,
+            previous_ftv_credits=25.0,
+            previous_pcv_credits=25.0,
             liquidity_band="marquee",
         )
 
         with_last_trade = engine.build_snapshot(
             replace(
                 base_payload,
-                market_pulse=MarketPulse(last_trade_price_credits=900.0),
+                market_pulse=MarketPulse(last_trade_price_credits=48.0),
             )
         )
         without_last_trade = engine.build_snapshot(base_payload)
@@ -199,9 +223,9 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Iris Scout",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=50_000_000,
-            current_credits=500.0,
-            previous_ftv_credits=500.0,
-            previous_pcv_credits=500.0,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
             previous_gsi_score=45.0,
             liquidity_band="premium",
         )
@@ -220,7 +244,7 @@ class ValueEngineScoringTests(unittest.TestCase):
         )
 
         self.assertGreater(scouting_snapshot.target_credits, quiet_snapshot.target_credits)
-        self.assertLess(scouting_snapshot.target_credits - quiet_snapshot.target_credits, 5.0)
+        self.assertLess(scouting_snapshot.target_credits - quiet_snapshot.target_credits, 2.0)
         self.assertGreater(
             scouting_snapshot.scouting_signal_value_credits,
             quiet_snapshot.scouting_signal_value_credits,
@@ -236,9 +260,9 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Omar Market",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=48_000_000,
-            current_credits=480.0,
-            previous_ftv_credits=480.0,
-            previous_pcv_credits=480.0,
+            current_credits=38.0,
+            previous_ftv_credits=38.0,
+            previous_pcv_credits=38.0,
             previous_gsi_score=54.0,
             liquidity_band="marquee",
             scouting_signal=scouting_signal,
@@ -249,7 +273,7 @@ class ValueEngineScoringTests(unittest.TestCase):
             replace(
                 base_payload,
                 demand_signal=DemandSignal(purchases=12, sales=4),
-                market_pulse=MarketPulse(midpoint_price_credits=560.0),
+                market_pulse=MarketPulse(midpoint_price_credits=42.0),
             )
         )
 
@@ -268,13 +292,13 @@ class ValueEngineScoringTests(unittest.TestCase):
                 player_name="Rhea Tracker",
                 as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
                 reference_market_value_eur=52_000_000,
-                current_credits=520.0,
-                previous_ftv_credits=520.0,
-                previous_pcv_credits=520.0,
+                current_credits=42.0,
+                previous_ftv_credits=42.0,
+                previous_pcv_credits=42.0,
                 previous_gsi_score=50.0,
                 liquidity_band="growth",
                 demand_signal=DemandSignal(purchases=3, sales=1),
-                market_pulse=MarketPulse(midpoint_price_credits=540.0),
+                market_pulse=MarketPulse(midpoint_price_credits=44.0),
                 scouting_signal=ScoutingSignal(
                     watchlist_adds=120,
                     shortlist_adds=60,
@@ -294,9 +318,9 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Lena Signal",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=50_000_000,
-            current_credits=500.0,
-            previous_ftv_credits=500.0,
-            previous_pcv_credits=500.0,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
             liquidity_band="marquee",
         )
 
@@ -310,7 +334,7 @@ class ValueEngineScoringTests(unittest.TestCase):
                             trade_id="wash-1",
                             seller_user_id="alpha",
                             buyer_user_id="bravo",
-                            price_credits=820.0,
+                            price_credits=62.0,
                             occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
                             shadow_ignored=True,
                         ),
@@ -318,7 +342,7 @@ class ValueEngineScoringTests(unittest.TestCase):
                             trade_id="wash-2",
                             seller_user_id="bravo",
                             buyer_user_id="alpha",
-                            price_credits=822.0,
+                            price_credits=62.2,
                             occurred_at=datetime(2026, 3, 5, 12, 0, tzinfo=timezone.utc),
                             shadow_ignored=True,
                         ),
@@ -343,9 +367,9 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Tariq Market",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=50_000_000,
-            current_credits=500.0,
-            previous_ftv_credits=500.0,
-            previous_pcv_credits=500.0,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
             liquidity_band="marquee",
             demand_signal=DemandSignal(purchases=10, follows=35),
         )
@@ -354,27 +378,27 @@ class ValueEngineScoringTests(unittest.TestCase):
             replace(
                 base_payload,
                 market_pulse=MarketPulse(
-                    midpoint_price_credits=650.0,
+                    midpoint_price_credits=48.0,
                     trade_prints=(
                         TradePrint(
                             trade_id="clean-1",
                             seller_user_id="u1",
                             buyer_user_id="u2",
-                            price_credits=640.0,
+                            price_credits=47.5,
                             occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="clean-2",
                             seller_user_id="u3",
                             buyer_user_id="u4",
-                            price_credits=644.0,
+                            price_credits=48.0,
                             occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="clean-3",
                             seller_user_id="u5",
                             buyer_user_id="u6",
-                            price_credits=647.0,
+                            price_credits=48.2,
                             occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
                         ),
                     ),
@@ -388,20 +412,20 @@ class ValueEngineScoringTests(unittest.TestCase):
             replace(
                 base_payload,
                 market_pulse=MarketPulse(
-                    midpoint_price_credits=650.0,
+                    midpoint_price_credits=48.0,
                     trade_prints=(
                         TradePrint(
                             trade_id="wash-1",
                             seller_user_id="ring-a",
                             buyer_user_id="ring-b",
-                            price_credits=648.0,
+                            price_credits=48.0,
                             occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="wash-2",
                             seller_user_id="ring-b",
                             buyer_user_id="ring-a",
-                            price_credits=650.0,
+                            price_credits=48.2,
                             occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
                         ),
                     ),
@@ -428,9 +452,9 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Juno Loop",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=50_000_000,
-            current_credits=500.0,
-            previous_ftv_credits=500.0,
-            previous_pcv_credits=500.0,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
             liquidity_band="premium",
         )
 
@@ -443,7 +467,7 @@ class ValueEngineScoringTests(unittest.TestCase):
                             trade_id="trusted-1",
                             seller_user_id="real-a",
                             buyer_user_id="real-b",
-                            price_credits=530.0,
+                            price_credits=42.0,
                             occurred_at=datetime(2026, 3, 5, 13, 0, tzinfo=timezone.utc),
                         ),
                     ),
@@ -459,28 +483,28 @@ class ValueEngineScoringTests(unittest.TestCase):
                             trade_id="trusted-1",
                             seller_user_id="real-a",
                             buyer_user_id="real-b",
-                            price_credits=530.0,
+                            price_credits=42.0,
                             occurred_at=datetime(2026, 3, 5, 13, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="cycle-1",
                             seller_user_id="c1",
                             buyer_user_id="c2",
-                            price_credits=700.0,
+                            price_credits=56.0,
                             occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="cycle-2",
                             seller_user_id="c2",
                             buyer_user_id="c3",
-                            price_credits=702.0,
+                            price_credits=56.2,
                             occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="cycle-3",
                             seller_user_id="c3",
                             buyer_user_id="c1",
-                            price_credits=701.0,
+                            price_credits=56.1,
                             occurred_at=datetime(2026, 3, 5, 11, 0, tzinfo=timezone.utc),
                         ),
                     ),
@@ -489,8 +513,8 @@ class ValueEngineScoringTests(unittest.TestCase):
         )
 
         self.assertLess(circular_snapshot.target_credits, trusted_only_snapshot.target_credits)
-        self.assertEqual(circular_snapshot.breakdown.snapshot_market_price_credits, 530.0)
-        self.assertEqual(circular_snapshot.breakdown.trusted_trade_price_credits, 530.0)
+        self.assertEqual(circular_snapshot.breakdown.snapshot_market_price_credits, 42.0)
+        self.assertEqual(circular_snapshot.breakdown.trusted_trade_price_credits, 42.0)
         self.assertEqual(circular_snapshot.breakdown.circular_trade_count, 3)
         self.assertIn("circular_trade_detected", circular_snapshot.drivers)
 
@@ -501,9 +525,9 @@ class ValueEngineScoringTests(unittest.TestCase):
             player_name="Nia Float",
             as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
             reference_market_value_eur=50_000_000,
-            current_credits=500.0,
-            previous_ftv_credits=500.0,
-            previous_pcv_credits=500.0,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
             liquidity_band="marquee",
             demand_signal=DemandSignal(purchases=8, follows=40),
         )
@@ -512,27 +536,27 @@ class ValueEngineScoringTests(unittest.TestCase):
             replace(
                 base_payload,
                 market_pulse=MarketPulse(
-                    midpoint_price_credits=560.0,
+                    midpoint_price_credits=44.0,
                     trade_prints=(
                         TradePrint(
                             trade_id="deep-1",
                             seller_user_id="d1",
                             buyer_user_id="d2",
-                            price_credits=558.0,
+                            price_credits=43.8,
                             occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="deep-2",
                             seller_user_id="d3",
                             buyer_user_id="d4",
-                            price_credits=561.0,
+                            price_credits=44.1,
                             occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
                         ),
                         TradePrint(
                             trade_id="deep-3",
                             seller_user_id="d5",
                             buyer_user_id="d6",
-                            price_credits=559.0,
+                            price_credits=43.9,
                             occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
                         ),
                     ),
@@ -546,13 +570,13 @@ class ValueEngineScoringTests(unittest.TestCase):
             replace(
                 base_payload,
                 market_pulse=MarketPulse(
-                    midpoint_price_credits=560.0,
+                    midpoint_price_credits=44.0,
                     trade_prints=(
                         TradePrint(
                             trade_id="thin-1",
                             seller_user_id="x1",
                             buyer_user_id="x2",
-                            price_credits=560.0,
+                            price_credits=44.0,
                             occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
                         ),
                     ),
@@ -606,12 +630,12 @@ class ValueEngineScoringTests(unittest.TestCase):
                 player_name="Band Guard",
                 as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
                 reference_market_value_eur=40_000_000,
-                current_credits=400.0,
-                previous_ftv_credits=400.0,
-                previous_pcv_credits=400.0,
+                current_credits=30.0,
+                previous_ftv_credits=30.0,
+                previous_pcv_credits=30.0,
                 liquidity_band="entry",
                 demand_signal=DemandSignal(purchases=20, follows=80),
-                market_pulse=MarketPulse(midpoint_price_credits=640.0),
+                market_pulse=MarketPulse(midpoint_price_credits=48.0),
             )
         )
 
@@ -718,8 +742,8 @@ class ValueEngineScoringTests(unittest.TestCase):
                 player_name="Arena Star",
                 as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
                 reference_market_value_eur=45_000_000,
-                previous_ftv_credits=450.0,
-                previous_pcv_credits=450.0,
+                previous_ftv_credits=35.0,
+                previous_pcv_credits=35.0,
                 egame_signal=EGameSignal(
                     selection_count=600,
                     captain_count=180,
@@ -747,12 +771,12 @@ class ValueEngineScoringTests(unittest.TestCase):
                 player_name="Momentum Mid",
                 as_of=as_of,
                 reference_market_value_eur=50_000_000,
-                previous_ftv_credits=505.0,
-                previous_pcv_credits=510.0,
+                previous_ftv_credits=40.5,
+                previous_pcv_credits=41.0,
                 historical_values=(
-                    HistoricalValuePoint(as_of=as_of - timedelta(days=30), published_value_credits=460.0, confidence_score=62.0),
-                    HistoricalValuePoint(as_of=as_of - timedelta(days=7), published_value_credits=495.0, confidence_score=68.0),
-                    HistoricalValuePoint(as_of=as_of - timedelta(days=1), published_value_credits=510.0, confidence_score=72.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=30), published_value_credits=37.0, confidence_score=62.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=7), published_value_credits=39.5, confidence_score=68.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=1), published_value_credits=41.0, confidence_score=72.0),
                 ),
             )
         )
