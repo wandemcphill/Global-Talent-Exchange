@@ -213,6 +213,14 @@ DEMO_SUPPLY_BANDS: tuple[DemoSupplyBand, ...] = (
     ),
 )
 
+CANONICAL_DEMO_LIQUIDITY_BAND_CODES: dict[str, str] = {
+    "band_a": "entry",
+    "band_b": "growth",
+    "band_c": "premium",
+    "band_d": "bluechip",
+    "band_e": "marquee",
+}
+
 
 def build_canonical_demo_seed_plan(
     player_ids: Sequence[str],
@@ -328,6 +336,11 @@ def liquidity_band_code_for_market_value_eur(value: Decimal) -> str:
     if credits < Decimal("1000"):
         return "bluechip"
     return "marquee"
+
+
+def liquidity_band_code_for_canonical_demo_band(code: str) -> str:
+    normalized = code.strip().lower()
+    return CANONICAL_DEMO_LIQUIDITY_BAND_CODES.get(normalized, "entry")
 
 
 def _interpolate_demo_decimal(
@@ -778,7 +791,7 @@ class DemoBootstrapService:
                 select(LiquidityBand).where(
                     LiquidityBand.code.in_(
                         tuple({
-                            liquidity_band_code_for_market_value_eur(profile.market_value_eur)
+                            liquidity_band_code_for_canonical_demo_band(profile.band.code)
                             for profile in seed_plan.player_profiles
                         })
                     )
@@ -794,7 +807,7 @@ class DemoBootstrapService:
             player.is_tradable = True
             player.supply_tier_id = supply_tiers[profile.band.code].id
             liquidity_band = liquidity_bands.get(
-                liquidity_band_code_for_market_value_eur(profile.market_value_eur)
+                liquidity_band_code_for_canonical_demo_band(profile.band.code)
             )
             if liquidity_band is not None:
                 player.liquidity_band_id = liquidity_band.id

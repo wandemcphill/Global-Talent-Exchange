@@ -23,7 +23,7 @@ from backend.app.ingestion.demo_bootstrap import (
     canonical_band_counts_for_player_count,
     DemoBootstrapService,
 )
-from backend.app.ingestion.models import MarketSignal, Player
+from backend.app.ingestion.models import LiquidityBand, MarketSignal, Player
 from backend.app.matching.models import TradeExecution
 from backend.app.models.base import Base
 from backend.app.models.user import User
@@ -158,6 +158,23 @@ def test_demo_bootstrap_guarantees_rising_and_falling_players(demo_service) -> N
 
     assert rising_count > 0
     assert falling_count > 0
+
+
+def test_demo_bootstrap_exposes_all_canonical_liquidity_tiers_for_discoverability(demo_service) -> None:
+    service, session_factory = demo_service
+
+    summary = service.seed(player_target_count=15, batch_size=15)
+
+    assert summary.universe_seed["canonical_discoverability"]["visible_player_target"] == 15
+
+    with session_factory() as session:
+        band_codes = session.scalars(
+            select(LiquidityBand.code)
+            .join(Player, Player.liquidity_band_id == LiquidityBand.id)
+            .where(Player.source_provider == summary.provider_name)
+        ).all()
+
+    assert set(band_codes) == {"entry", "growth", "premium", "bluechip", "marquee"}
 
 
 def test_demo_bootstrap_can_include_demo_liquidity(demo_service) -> None:
