@@ -215,10 +215,13 @@ def register_core(app: FastAPI) -> None:
 
 def check_db(app: FastAPI) -> None:
     logger.info("app.startup.health.database.begin")
+    should_run_schema_check = _should_run_schema_check()
+    if not should_run_schema_check:
+        logger.info("app.startup.health.database.schema_check.skipped env_var=SKIP_SCHEMA_CHECK")
     try:
-        app.state.container.check_db(check_schema=True)
+        app.state.container.check_db(check_schema=should_run_schema_check)
     except RuntimeError as exc:
-        if not _should_attempt_schema_repair(exc):
+        if not should_run_schema_check or not _should_attempt_schema_repair(exc):
             raise
         logger.warning("app.startup.health.database.schema_repair.begin detail=%s", exc)
         app.state.container.database.initialize(run_migration_check=True)
@@ -235,6 +238,10 @@ def check_redis(app: FastAPI) -> None:
 
 def _default_asgi_run_migration_check(settings: Settings) -> bool:
     return settings.run_migration_check if settings.app_env.lower() != "production" else False
+
+
+def _should_run_schema_check() -> bool:
+    return os.getenv("SKIP_SCHEMA_CHECK") != "true"
 
 
 def _should_attempt_schema_repair(exc: RuntimeError) -> bool:

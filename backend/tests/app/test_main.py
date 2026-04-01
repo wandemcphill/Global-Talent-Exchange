@@ -259,6 +259,32 @@ def test_app_startup_fails_when_schema_smoke_fails_even_without_migration_upgrad
             pass
 
 
+def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(monkeypatch, tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_skip_schema_check.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(engine=engine, run_migration_check=True)
+
+    def _raise_schema_error(_self, **_kwargs):
+        raise RuntimeError("schema drift")
+
+    monkeypatch.setenv("SKIP_SCHEMA_CHECK", "true")
+    monkeypatch.setattr(DatabaseRuntime, "check_schema_smoke", _raise_schema_error)
+
+    with TestClient(app) as client:
+        ready_response = client.get("/ready")
+
+    assert ready_response.status_code == 200
+    assert ready_response.json() == {
+        "status": "ready",
+        "checks": {
+            "database": {
+                "status": "ok",
+                "detail": None,
+            }
+        },
+    }
+
+
 @pytest.mark.anyio
 async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and_engine) -> None:
     app, _engine = app_and_engine
