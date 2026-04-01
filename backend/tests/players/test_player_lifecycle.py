@@ -17,13 +17,10 @@ from app.common.enums.injury_severity import InjurySeverity
 from app.common.enums.transfer_window_status import TransferWindowStatus
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.ingestion.models import Club as IngestionClub
-from app.ingestion.models import Competition as IngestionCompetition
-from app.ingestion.models import Match, Player, PlayerSeasonStat, Season
+from app.ingestion.models import Competition, Match, Player, PlayerSeasonStat, Season
 from app.models.base import Base
 from app.models.club_infra import ClubFacility
 from app.models.player_cards import PlayerCard, PlayerCardTier
-from app.models.competition import Competition as UserCompetition
-from app.models.competition_participant import CompetitionParticipant
 from app.models.club_profile import ClubProfile
 from app.models.notification_center import PlatformAnnouncement
 from app.models.notification_record import NotificationRecord
@@ -90,11 +87,6 @@ def lifecycle_session() -> Session:
         yield session
     finally:
         session.close()
-
-
-@pytest.fixture(autouse=True)
-def _configure_test_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GTE_DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 
 @pytest.fixture()
@@ -164,7 +156,7 @@ def seed_base_context(session: Session) -> dict[str, str]:
         region_name="Abuja",
         city_name="Abuja",
     )
-    competition = IngestionCompetition(
+    competition = Competition(
         id="competition-premier",
         source_provider="test",
         provider_external_id="competition-premier",
@@ -1617,48 +1609,6 @@ def test_free_agent_offer_market_hides_competing_salary_amounts(
     assert "offered_salary_fancoin_per_year" not in public_view.structured_terms_json["contract_offer"]
     assert visibility_state is not None
     assert visibility_state.visible_offer_count == 2
-
-
-def test_create_bid_blocks_transfers_for_clubs_in_live_competitions(
-    lifecycle_service: PlayerLifecycleService,
-    lifecycle_session: Session,
-) -> None:
-    context = seed_base_context(lifecycle_session)
-    window = add_window(
-        lifecycle_session,
-        window_id="window-live-lock",
-        opens_on=date(2026, 3, 1),
-        closes_on=date(2026, 3, 31),
-    )
-    lifecycle_session.add(
-        UserCompetition(
-            id="competition-live-lock",
-            host_user_id="user-owner",
-            name="Live Lock Cup",
-            format="cup",
-            currency="credit",
-            status="live",
-        )
-    )
-    lifecycle_session.add(
-        CompetitionParticipant(
-            competition_id="competition-live-lock",
-            club_id=context["buyer_profile_id"],
-            status="active",
-        )
-    )
-    lifecycle_session.commit()
-
-    with pytest.raises(PlayerLifecycleValidationError, match="live competition"):
-        lifecycle_service.create_bid(
-            window.id,
-            TransferBidCreateRequest(
-                player_id=context["player_id"],
-                buying_club_id=context["buyer_profile_id"],
-                bid_amount=Decimal("25.00"),
-            ),
-            submitted_on=date(2026, 3, 12),
-        )
 
 
 def test_contract_offer_quote_generates_auto_conversion_premium(

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 enum NotificationIntensity {
   light,
@@ -29,7 +29,6 @@ enum GteLedgerUnit {
 enum GtePaymentMode {
   manual,
   automatic,
-  hybrid,
 }
 
 enum GteRateDirection {
@@ -632,8 +631,7 @@ class GteAuthSession {
     return GteAuthSession(
       accessToken:
           GteJson.string(json, <String>['access_token', 'accessToken']),
-      sessionId:
-          GteJson.string(json, <String>['session_id', 'sessionId']),
+      sessionId: GteJson.string(json, <String>['session_id', 'sessionId']),
       tokenType: GteJson.string(json, <String>['token_type', 'tokenType'],
           fallback: 'bearer'),
       expiresIn: GteJson.integer(json, <String>['expires_in', 'expiresIn'],
@@ -3041,6 +3039,132 @@ class GteOrderListView {
   }
 }
 
+class GteAdminBuybackPreview {
+  const GteAdminBuybackPreview({
+    required this.orderId,
+    required this.playerId,
+    required this.eligible,
+    required this.reasons,
+    required this.message,
+    required this.country,
+    required this.fairValue,
+    required this.estimatedP2pUnitPrice,
+    required this.estimatedP2pTotal,
+    required this.adminUnitPrice,
+    required this.adminTotal,
+    required this.payoutRatio,
+    required this.liquidityBand,
+    required this.payoutBand,
+    required this.p2pPriorityWindowHours,
+    required this.p2pPriorityWindowEndsAt,
+    required this.minimumHoldDays,
+    required this.minimumHoldExpiresAt,
+    required this.holdDaysRemaining,
+  });
+
+  final String orderId;
+  final String playerId;
+  final bool eligible;
+  final List<String> reasons;
+  final String message;
+  final String? country;
+  final double fairValue;
+  final double estimatedP2pUnitPrice;
+  final double estimatedP2pTotal;
+  final double adminUnitPrice;
+  final double adminTotal;
+  final double payoutRatio;
+  final String liquidityBand;
+  final String payoutBand;
+  final int p2pPriorityWindowHours;
+  final DateTime? p2pPriorityWindowEndsAt;
+  final int minimumHoldDays;
+  final DateTime? minimumHoldExpiresAt;
+  final int holdDaysRemaining;
+
+  factory GteAdminBuybackPreview.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'admin buyback preview');
+    return GteAdminBuybackPreview(
+      orderId: GteJson.string(json, <String>['order_id', 'orderId']),
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      eligible: GteJson.boolean(json, <String>['eligible']),
+      reasons: GteJson.typedList(
+        json,
+        <String>['reasons'],
+        (Object? item) => item?.toString() ?? '',
+      ),
+      message: GteJson.string(json, <String>['message']),
+      country: GteJson.stringOrNull(json, <String>['country']),
+      fairValue: GteJson.number(json, <String>['fair_value', 'fairValue']),
+      estimatedP2pUnitPrice: GteJson.number(
+          json, <String>['estimated_p2p_unit_price', 'estimatedP2pUnitPrice']),
+      estimatedP2pTotal: GteJson.number(
+          json, <String>['estimated_p2p_total', 'estimatedP2pTotal']),
+      adminUnitPrice: GteJson.number(
+          json, <String>['admin_unit_price', 'adminUnitPrice']),
+      adminTotal:
+          GteJson.number(json, <String>['admin_total', 'adminTotal']),
+      payoutRatio:
+          GteJson.number(json, <String>['payout_ratio', 'payoutRatio']),
+      liquidityBand:
+          GteJson.string(json, <String>['liquidity_band', 'liquidityBand']),
+      payoutBand: GteJson.string(json, <String>['payout_band', 'payoutBand']),
+      p2pPriorityWindowHours: GteJson.integer(
+          json, <String>['p2p_priority_window_hours', 'p2pPriorityWindowHours']),
+      p2pPriorityWindowEndsAt: GteJson.dateTimeOrNull(
+        json,
+        <String>[
+          'p2p_priority_window_ends_at',
+          'p2pPriorityWindowEndsAt',
+        ],
+      ),
+      minimumHoldDays:
+          GteJson.integer(json, <String>['minimum_hold_days', 'minimumHoldDays']),
+      minimumHoldExpiresAt: GteJson.dateTimeOrNull(
+        json,
+        <String>['minimum_hold_expires_at', 'minimumHoldExpiresAt'],
+      ),
+      holdDaysRemaining:
+          GteJson.integer(json, <String>['hold_days_remaining', 'holdDaysRemaining']),
+    );
+  }
+}
+
+class GteAdminBuybackExecution {
+  const GteAdminBuybackExecution({
+    required this.preview,
+    required this.order,
+    required this.quantity,
+    required this.unitPrice,
+    required this.total,
+    required this.executedAt,
+  });
+
+  final GteAdminBuybackPreview preview;
+  final GteOrderRecord order;
+  final double quantity;
+  final double unitPrice;
+  final double total;
+  final DateTime? executedAt;
+
+  factory GteAdminBuybackExecution.fromJson(Object? value) {
+    final Map<String, Object?> json =
+        GteJson.map(value, label: 'admin buyback execution');
+    return GteAdminBuybackExecution(
+      preview: GteAdminBuybackPreview.fromJson(
+          GteJson.map(json, keys: <String>['preview'])),
+      order:
+          GteOrderRecord.fromJson(GteJson.map(json, keys: <String>['order'])),
+      quantity: GteJson.number(json, <String>['quantity']),
+      unitPrice: GteJson.number(json, <String>['unit_price', 'unitPrice']),
+      total: GteJson.number(json, <String>['total']),
+      executedAt:
+          GteJson.dateTimeOrNull(json, <String>['executed_at', 'executedAt']),
+    );
+  }
+}
+
 GteOrderSide _orderSideFromString(String value) {
   return value.toLowerCase() == 'sell' ? GteOrderSide.sell : GteOrderSide.buy;
 }
@@ -3074,14 +3198,9 @@ GteLedgerUnit _ledgerUnitFromString(String value) {
 }
 
 GtePaymentMode _paymentModeFromString(String value) {
-  switch (value.toLowerCase()) {
-    case 'automatic':
-      return GtePaymentMode.automatic;
-    case 'hybrid':
-      return GtePaymentMode.hybrid;
-    default:
-      return GtePaymentMode.manual;
-  }
+  return value.toLowerCase() == 'automatic'
+      ? GtePaymentMode.automatic
+      : GtePaymentMode.manual;
 }
 
 GteRateDirection _rateDirectionFromString(String value) {

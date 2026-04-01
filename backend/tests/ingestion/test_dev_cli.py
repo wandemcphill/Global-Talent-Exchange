@@ -207,7 +207,7 @@ def test_run_pytest_defaults_to_ingestion_suite(monkeypatch) -> None:
         observed["check"] = check
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr("backend.app.ingestion.dev_cli.subprocess.run", fake_run)
+    monkeypatch.setattr("app.ingestion.dev_cli.subprocess.run", fake_run)
 
     result = run_pytest(())
 
@@ -225,7 +225,7 @@ def test_run_backend_server_invokes_uvicorn(monkeypatch) -> None:
         observed["env"] = env
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr("backend.app.ingestion.dev_cli.subprocess.run", fake_run)
+    monkeypatch.setattr("app.ingestion.dev_cli.subprocess.run", fake_run)
 
     result = run_backend_server(
         database_url="sqlite+pysqlite:///demo.db",
@@ -246,7 +246,7 @@ def test_run_backend_server_invokes_uvicorn(monkeypatch) -> None:
         sys.executable,
         "-m",
         "uvicorn",
-        "backend.app.simulation.app_factory:create_demo_simulation_app",
+        "app.simulation.app_factory:create_demo_simulation_app",
         "--host",
         "127.0.0.1",
         "--port",

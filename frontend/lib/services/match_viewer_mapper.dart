@@ -21,56 +21,41 @@ class MatchViewerMapper {
   static Future<MatchViewState> load({
     required CompetitionSummary competition,
     required String matchKey,
-    MatchMode mode = MatchMode.standard,
     LiveMatchSnapshot? fallbackSnapshot,
     bool preferFallback = false,
   }) async {
     final LiveMatchSnapshot snapshot =
         fallbackSnapshot ?? LiveMatchFixtures.buildSnapshot(competition);
     if (preferFallback || _config.backendMode == GteBackendMode.fixture) {
-      return _applyLocalModeScaling(
-        _buildFallbackState(
-          matchKey: matchKey,
-          snapshot: snapshot,
-        ),
-        mode: mode,
+      return _buildFallbackState(
+        competition: competition,
+        matchKey: matchKey,
+        snapshot: snapshot,
       );
     }
 
-    final Map<String, Object?> payload = await _api.fetchMatchViewerSession(
-      matchKey,
-      mode: mode,
-    );
-    return MatchViewState.fromJson(payload);
-  }
-
-  static Future<MatchViewState> loadContinuation({
-    required String matchKey,
-    required String continuationToken,
-    MatchMode mode = MatchMode.standard,
-  }) async {
-    final Map<String, Object?> payload = await _api.fetchMatchViewerSession(
-      matchKey,
-      mode: mode,
-      continuationToken: continuationToken,
-    );
-    return MatchViewState.fromJson(payload);
+    try {
+      final Map<String, Object?> payload =
+          await _api.fetchMatchViewer(matchKey);
+      return MatchViewState.fromJson(payload);
+    } catch (_) {
+      return _buildFallbackState(
+        competition: competition,
+        matchKey: matchKey,
+        snapshot: snapshot,
+      );
+    }
   }
 
   static MatchViewState _buildFallbackState({
+    required CompetitionSummary competition,
     required String matchKey,
     required LiveMatchSnapshot snapshot,
   }) {
     final List<_FallbackPlayer> homePlayers = _buildPlayers(snapshot.homeLineup,
-        teamId: 'home',
-        teamName: snapshot.homeTeam,
-        matchId: matchKey,
-        side: MatchViewerSide.home);
+        teamId: 'home', side: MatchViewerSide.home);
     final List<_FallbackPlayer> awayPlayers = _buildPlayers(snapshot.awayLineup,
-        teamId: 'away',
-        teamName: snapshot.awayTeam,
-        matchId: matchKey,
-        side: MatchViewerSide.away);
+        teamId: 'away', side: MatchViewerSide.away);
     final int durationSeconds = max(180, (snapshot.minute * 4) + 45);
     final List<MatchEvent> events = _buildFallbackEvents(
       snapshot: snapshot,
@@ -90,7 +75,6 @@ class MatchViewerMapper {
       source: 'fixture_fallback',
       supportsOffside: true,
       deterministicSeed: null,
-      matchMode: MatchMode.standard,
       durationSeconds: durationSeconds,
       homeTeam: const MatchViewerTeam(
         teamId: 'home',
@@ -122,246 +106,9 @@ class MatchViewerMapper {
     );
   }
 
-  static MatchViewState _applyLocalModeScaling(
-    MatchViewState viewState, {
-    required MatchMode mode,
-  }) {
-    final double baseDuration = max(
-      1,
-      max(
-        viewState.durationSeconds.toDouble(),
-        max(
-          viewState.events.isEmpty ? 0 : viewState.events.last.timeSeconds,
-          viewState.frames.isEmpty ? 0 : viewState.frames.last.timeSeconds,
-        ),
-      ),
-    ).toDouble();
-    final int targetDuration = _targetDurationForMode(viewState, mode: mode);
-    final List<MatchEvent> events = _scaleEvents(
-      viewState.events,
-      baseDuration: baseDuration,
-      targetDuration: targetDuration,
-      mode: mode,
-    );
-    final Map<String, MatchEvent> eventLookup = <String, MatchEvent>{
-      for (final MatchEvent event in events) event.id: event,
-    };
-    final List<MatchTimelineFrame> frames = _normalizeFrames(
-      _scaleFrames(
-        viewState.frames,
-        baseDuration: baseDuration,
-        targetDuration: targetDuration,
-        matchId: viewState.matchId,
-        eventLookup: eventLookup,
-        mode: mode,
-      ),
-      matchId: viewState.matchId,
-      targetDuration: targetDuration,
-    );
-    return viewState.copyWith(
-      matchMode: mode,
-      durationSeconds: targetDuration,
-      events: events,
-      frames: frames,
-    );
-  }
-
-  static int _targetDurationForMode(
-    MatchViewState viewState, {
-    required MatchMode mode,
-  }) {
-    final (int minimum, int maximum) = switch (mode) {
-      MatchMode.quick => (180, 300),
-      MatchMode.standard => (420, 600),
-      MatchMode.cinematic => (600, 900),
-    };
-    double richness = min(viewState.frames.length / 80, 1.0);
-    for (final MatchEvent event in viewState.events) {
-      richness += 0.2;
-      richness += switch (event.type) {
-        MatchViewerEventType.goal => 1.4,
-        MatchViewerEventType.save => 1.1,
-        MatchViewerEventType.miss => 1.1,
-        MatchViewerEventType.offside => 0.8,
-        MatchViewerEventType.redCard => 1.2,
-        MatchViewerEventType.yellowCard => 0.6,
-        MatchViewerEventType.substitution => 0.55,
-        MatchViewerEventType.injury => 0.75,
-        MatchViewerEventType.attack => 0.85,
-        MatchViewerEventType.setPiece => 0.95,
-        MatchViewerEventType.penalty => 1.15,
-        MatchViewerEventType.kickoff ||
-        MatchViewerEventType.halftime ||
-        MatchViewerEventType.fulltime =>
-          0.15,
-        MatchViewerEventType.foul => 0.7,
-        MatchViewerEventType.neutral => 0.45,
-      };
-      richness += max(0, event.emphasisLevel - 1) * 0.15;
-    }
-    final double normalized = ((richness - 6.0) / 10.0).clamp(0.0, 1.0);
-    return (minimum + ((maximum - minimum) * normalized)).round();
-  }
-
-  static List<MatchEvent> _scaleEvents(
-    List<MatchEvent> events, {
-    required double baseDuration,
-    required int targetDuration,
-    required MatchMode mode,
-  }) {
-    final double minimumGap = switch (mode) {
-      MatchMode.quick => 0.35,
-      MatchMode.standard => 0.45,
-      MatchMode.cinematic => 0.55,
-    };
-    final List<MatchEvent> scaled = <MatchEvent>[];
-    double previousTime = -minimumGap;
-    for (int index = 0; index < events.length; index += 1) {
-      final MatchEvent event = events[index];
-      double timeSeconds = event.type == MatchViewerEventType.kickoff
-          ? 0
-          : event.type == MatchViewerEventType.fulltime
-              ? targetDuration.toDouble()
-              : ((event.timeSeconds / baseDuration) * targetDuration)
-                  .clamp(0, targetDuration)
-                  .toDouble();
-      if (timeSeconds <= previousTime) {
-        timeSeconds = previousTime + minimumGap;
-      }
-      scaled.add(event.copyWith(
-          timeSeconds: double.parse(timeSeconds.toStringAsFixed(2))));
-      previousTime = scaled.last.timeSeconds;
-    }
-    return scaled;
-  }
-
-  static List<MatchTimelineFrame> _scaleFrames(
-    List<MatchTimelineFrame> frames, {
-    required double baseDuration,
-    required int targetDuration,
-    required String matchId,
-    required Map<String, MatchEvent> eventLookup,
-    required MatchMode mode,
-  }) {
-    final List<MatchTimelineFrame> scaled = <MatchTimelineFrame>[];
-    for (final MatchTimelineFrame frame in frames) {
-      if (mode == MatchMode.quick && !_keepQuickFrame(frame, eventLookup)) {
-        continue;
-      }
-      final double timeSeconds =
-          ((frame.timeSeconds / baseDuration) * targetDuration)
-              .clamp(0, targetDuration)
-              .toDouble();
-      final String? activeEventId = eventLookup.containsKey(frame.activeEventId)
-          ? frame.activeEventId
-          : null;
-      final String stage = _frameStage(frame.id);
-      scaled.add(
-        frame.copyWith(
-          id: '$matchId:${(timeSeconds * 100).round()}:$stage',
-          timeSeconds: double.parse(timeSeconds.toStringAsFixed(2)),
-          activeEventId: activeEventId,
-          eventBanner: activeEventId == null
-              ? null
-              : eventLookup[activeEventId]?.bannerText,
-        ),
-      );
-    }
-    return scaled;
-  }
-
-  static bool _keepQuickFrame(
-    MatchTimelineFrame frame,
-    Map<String, MatchEvent> eventLookup,
-  ) {
-    final String stage = _frameStage(frame.id);
-    if (stage == 'event' || stage == 'reset') {
-      return true;
-    }
-    final MatchEvent? event = eventLookup[frame.activeEventId];
-    if (stage == 'post') {
-      return event != null &&
-          <MatchViewerEventType>{
-            MatchViewerEventType.fulltime,
-            MatchViewerEventType.goal,
-            MatchViewerEventType.halftime,
-            MatchViewerEventType.redCard,
-          }.contains(event.type);
-    }
-    if (stage == 'pre') {
-      return event != null &&
-          <MatchViewerEventType>{
-            MatchViewerEventType.fulltime,
-            MatchViewerEventType.goal,
-            MatchViewerEventType.halftime,
-            MatchViewerEventType.kickoff,
-          }.contains(event.type);
-    }
-    return false;
-  }
-
-  static List<MatchTimelineFrame> _normalizeFrames(
-    List<MatchTimelineFrame> frames, {
-    required String matchId,
-    required int targetDuration,
-  }) {
-    if (frames.isEmpty) {
-      return frames;
-    }
-    final List<MatchTimelineFrame> ordered =
-        List<MatchTimelineFrame>.from(frames)
-          ..sort((MatchTimelineFrame left, MatchTimelineFrame right) =>
-              left.timeSeconds.compareTo(right.timeSeconds));
-    final List<MatchTimelineFrame> normalized = <MatchTimelineFrame>[];
-    for (final MatchTimelineFrame frame in ordered) {
-      double timeSeconds =
-          frame.timeSeconds.clamp(0, targetDuration).toDouble();
-      if (normalized.isNotEmpty && timeSeconds <= normalized.last.timeSeconds) {
-        timeSeconds = (normalized.last.timeSeconds + 0.05)
-            .clamp(0, targetDuration)
-            .toDouble();
-      }
-      final String stage = _frameStage(frame.id);
-      normalized.add(
-        frame.copyWith(
-          id: '$matchId:${(timeSeconds * 100).round()}:$stage',
-          timeSeconds: double.parse(timeSeconds.toStringAsFixed(2)),
-        ),
-      );
-    }
-    if (normalized.first.timeSeconds > 0) {
-      normalized.insert(
-        0,
-        normalized.first.copyWith(
-          id: '$matchId:0:reset',
-          timeSeconds: 0,
-        ),
-      );
-    }
-    if (normalized.last.timeSeconds < targetDuration) {
-      normalized.add(
-        normalized.last.copyWith(
-          id: '$matchId:${targetDuration * 100}:post',
-          timeSeconds: targetDuration.toDouble(),
-        ),
-      );
-    }
-    return normalized;
-  }
-
-  static String _frameStage(String frameId) {
-    final int separator = frameId.lastIndexOf(':');
-    if (separator < 0 || separator == frameId.length - 1) {
-      return 'event';
-    }
-    return frameId.substring(separator + 1).trim().toLowerCase();
-  }
-
   static List<_FallbackPlayer> _buildPlayers(
     List<LiveMatchLineupPlayer> lineup, {
     required String teamId,
-    required String teamName,
-    required String matchId,
     required MatchViewerSide side,
   }) {
     final List<_FallbackPlayer> players = <_FallbackPlayer>[];
@@ -369,10 +116,7 @@ class MatchViewerMapper {
       final LiveMatchLineupPlayer player = lineup[index];
       players.add(
         _FallbackPlayer(
-          id: player.stablePlayerReference(
-            teamName: teamName,
-            matchId: matchId,
-          ),
+          id: '$teamId-$index',
           teamId: teamId,
           side: side,
           label: '${index + 1}',
@@ -419,12 +163,10 @@ class MatchViewerMapper {
     required LiveMatchSnapshot snapshot,
     required int durationSeconds,
   }) {
-    double secondForMinute(int minute) {
-      return ((minute / 90) * (durationSeconds - 18))
-          .clamp(0, durationSeconds)
-          .toDouble();
-    }
-
+    final List<LiveMatchEvent> commentary =
+        List<LiveMatchEvent>.from(snapshot.commentary)
+          ..sort((LiveMatchEvent left, LiveMatchEvent right) =>
+              left.minute.compareTo(right.minute));
     final List<MatchEvent> events = <MatchEvent>[
       const MatchEvent(
         id: 'kickoff',
@@ -434,6 +176,12 @@ class MatchViewerMapper {
         addedTime: 0,
         clockLabel: '0\'',
         timeSeconds: 0,
+        teamId: null,
+        teamName: null,
+        primaryPlayerId: null,
+        primaryPlayerName: null,
+        secondaryPlayerId: null,
+        secondaryPlayerName: null,
         homeScore: 0,
         awayScore: 0,
         bannerText: 'Kickoff',
@@ -442,212 +190,109 @@ class MatchViewerMapper {
         highlightedPlayerIds: <String>[],
         flags: <String>[],
       ),
-      MatchEvent(
-        id: 'goal-var-confirmed',
-        sequence: 1,
-        type: MatchViewerEventType.goal,
-        minute: 18,
-        addedTime: 0,
-        clockLabel: '18\'',
-        timeSeconds: secondForMinute(18),
-        teamId: 'home',
-        teamName: snapshot.homeTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Goal review',
-        commentary: 'The finish is checked and confirmed by VAR.',
-        emphasisLevel: 3,
-        playbackProfile: 'goal',
-        reviewable: true,
-        reviewReason: 'possible offside in the build-up',
-        reviewDecision: 'confirmed',
-        scoreCommit: 'after_review',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'foul-var-disallowed',
-        sequence: 2,
-        type: MatchViewerEventType.foul,
-        minute: 34,
-        addedTime: 0,
-        clockLabel: '34\'',
-        timeSeconds: secondForMinute(34),
-        teamId: 'away',
-        teamName: snapshot.awayTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Foul review',
-        commentary: 'VAR overturns the foul call and play resumes.',
-        emphasisLevel: 2,
-        playbackProfile: 'foul',
-        reviewable: true,
-        reviewReason: 'possible foul in the challenge',
-        reviewDecision: 'disallowed',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'yellow-card',
-        sequence: 3,
-        type: MatchViewerEventType.yellowCard,
-        minute: 41,
-        addedTime: 0,
-        clockLabel: '41\'',
-        timeSeconds: secondForMinute(41),
-        teamId: 'away',
-        teamName: snapshot.awayTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Yellow card',
-        commentary: 'The challenge earns a booking.',
-        emphasisLevel: 2,
-        playbackProfile: 'foul',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'halftime',
-        sequence: 4,
-        type: MatchViewerEventType.halftime,
-        minute: 45,
-        addedTime: 0,
-        clockLabel: '45\'',
-        timeSeconds: secondForMinute(45),
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Halftime',
-        commentary: 'Halftime',
-        emphasisLevel: 1,
-        highlightedPlayerIds: <String>[],
-        flags: <String>[],
-      ),
-      MatchEvent(
-        id: 'offside',
-        sequence: 5,
-        type: MatchViewerEventType.offside,
-        minute: 58,
-        addedTime: 0,
-        clockLabel: '58\'',
-        timeSeconds: secondForMinute(58),
-        teamId: 'away',
-        teamName: snapshot.awayTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Offside',
-        commentary: 'The move is flagged offside after the shot attempt.',
-        emphasisLevel: 2,
-        playbackProfile: 'offside',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'save-miss',
-        sequence: 6,
-        type: MatchViewerEventType.save,
-        minute: 67,
-        addedTime: 0,
-        clockLabel: '67\'',
-        timeSeconds: secondForMinute(67),
-        teamId: 'home',
-        teamName: snapshot.homeTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Saved chance',
-        commentary: 'The goalkeeper pushes the effort away.',
-        emphasisLevel: 2,
-        playbackProfile: 'attack',
-        missVariant: 'save',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'post-miss',
-        sequence: 7,
-        type: MatchViewerEventType.miss,
-        minute: 74,
-        addedTime: 0,
-        clockLabel: '74\'',
-        timeSeconds: secondForMinute(74),
-        teamId: 'away',
-        teamName: snapshot.awayTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Hits the post',
-        commentary: 'The effort crashes back off the upright.',
-        emphasisLevel: 2,
-        playbackProfile: 'attack',
-        missVariant: 'post',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'wide-miss',
-        sequence: 8,
-        type: MatchViewerEventType.miss,
-        minute: 79,
-        addedTime: 0,
-        clockLabel: '79\'',
-        timeSeconds: secondForMinute(79),
-        teamId: 'home',
-        teamName: snapshot.homeTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Wide chance',
-        commentary: 'The chance drifts wide of the target.',
-        emphasisLevel: 2,
-        playbackProfile: 'attack',
-        missVariant: 'wide',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
-      MatchEvent(
-        id: 'red-card',
-        sequence: 9,
-        type: MatchViewerEventType.redCard,
-        minute: 83,
-        addedTime: 0,
-        clockLabel: '83\'',
-        timeSeconds: secondForMinute(83),
-        teamId: 'home',
-        teamName: snapshot.homeTeam,
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Red card',
-        commentary: 'The challenge leaves the referee with no choice.',
-        emphasisLevel: 3,
-        playbackProfile: 'foul',
-        scoreCommit: 'never',
-        highlightedPlayerIds: const <String>[],
-        flags: const <String>[],
-      ),
+    ];
+
+    int homeScore = 0;
+    int awayScore = 0;
+    final double scale = max(1, snapshot.minute).toDouble();
+    for (int index = 0; index < commentary.length; index += 1) {
+      final LiveMatchEvent item = commentary[index];
+      final MatchViewerEventType type = _viewerTypeFromLiveEvent(item);
+      if (type == MatchViewerEventType.goal) {
+        if (item.team == snapshot.homeTeam) {
+          homeScore += 1;
+        } else {
+          awayScore += 1;
+        }
+      }
+      events.add(
+        MatchEvent(
+          id: 'event-$index',
+          sequence: index + 1,
+          type: type,
+          minute: item.minute,
+          addedTime: 0,
+          clockLabel: '${item.minute}\'',
+          timeSeconds: ((item.minute / scale) * (durationSeconds - 20))
+              .clamp(8, durationSeconds - 8)
+              .toDouble(),
+          teamId: item.team == snapshot.homeTeam ? 'home' : 'away',
+          teamName: item.team,
+          primaryPlayerId: null,
+          primaryPlayerName: item.title,
+          secondaryPlayerId: null,
+          secondaryPlayerName: null,
+          homeScore: homeScore,
+          awayScore: awayScore,
+          bannerText: item.title,
+          commentary: item.detail,
+          emphasisLevel: _emphasisForType(type),
+          highlightedPlayerIds: const <String>[],
+          flags: const <String>[],
+        ),
+      );
+    }
+
+    if (snapshot.isHalftime) {
+      events.add(
+        MatchEvent(
+          id: 'halftime',
+          sequence: events.length,
+          type: MatchViewerEventType.halftime,
+          minute: 45,
+          addedTime: 0,
+          clockLabel: '45\'',
+          timeSeconds: (durationSeconds / 2).toDouble(),
+          teamId: null,
+          teamName: null,
+          primaryPlayerId: null,
+          primaryPlayerName: null,
+          secondaryPlayerId: null,
+          secondaryPlayerName: null,
+          homeScore: homeScore,
+          awayScore: awayScore,
+          bannerText: 'Halftime',
+          commentary: 'Halftime',
+          emphasisLevel: 1,
+          highlightedPlayerIds: const <String>[],
+          flags: const <String>[],
+        ),
+      );
+    }
+
+    events.add(
       MatchEvent(
         id: 'fulltime',
-        sequence: 10,
+        sequence: events.length,
         type: MatchViewerEventType.fulltime,
-        minute: 90,
+        minute: snapshot.isFinal ? 90 : snapshot.minute,
         addedTime: 0,
-        clockLabel: '90\'',
+        clockLabel: snapshot.isFinal ? '90\'' : '${snapshot.minute}\'',
         timeSeconds: durationSeconds.toDouble(),
-        homeScore: 1,
-        awayScore: 0,
-        bannerText: 'Fulltime',
-        commentary: 'Fulltime',
+        teamId: null,
+        teamName: null,
+        primaryPlayerId: null,
+        primaryPlayerName: null,
+        secondaryPlayerId: null,
+        secondaryPlayerName: null,
+        homeScore: snapshot.homeScore,
+        awayScore: snapshot.awayScore,
+        bannerText: snapshot.isFinal ? 'Fulltime' : 'Live',
+        commentary: snapshot.isFinal ? 'Fulltime' : 'Live match',
         emphasisLevel: 1,
         highlightedPlayerIds: const <String>[],
         flags: const <String>[],
       ),
-    ];
-    return _normalizeFallbackEvents(events);
+    );
+    return _normalizeFallbackEvents(
+      _ensureFallbackOffsidePlaceholder(
+        events: events,
+        snapshot: snapshot,
+        durationSeconds: durationSeconds,
+      ),
+    );
   }
 
-  // ignore: unused_element
   static List<MatchEvent> _ensureFallbackOffsidePlaceholder({
     required List<MatchEvent> events,
     required LiveMatchSnapshot snapshot,
@@ -739,19 +384,12 @@ class MatchViewerMapper {
         bannerText: event.bannerText,
         commentary: event.commentary,
         emphasisLevel: event.emphasisLevel,
-        playbackProfile: event.playbackProfile,
-        missVariant: event.missVariant,
-        reviewable: event.reviewable,
-        reviewReason: event.reviewReason,
-        reviewDecision: event.reviewDecision,
-        scoreCommit: event.scoreCommit,
         highlightedPlayerIds: event.highlightedPlayerIds,
         flags: event.flags,
       );
     }, growable: false);
   }
 
-  // ignore: unused_element
   static MatchViewerEventType _viewerTypeFromLiveEvent(LiveMatchEvent item) {
     if (item.type == LiveMatchEventType.goal) {
       return MatchViewerEventType.goal;
@@ -771,16 +409,12 @@ class MatchViewerMapper {
     if (text.contains('offside')) {
       return MatchViewerEventType.offside;
     }
-    if (text.contains('foul')) {
-      return MatchViewerEventType.foul;
-    }
     if (text.contains('miss')) {
       return MatchViewerEventType.miss;
     }
     return MatchViewerEventType.attack;
   }
 
-  // ignore: unused_element
   static int _emphasisForType(MatchViewerEventType type) {
     switch (type) {
       case MatchViewerEventType.goal:
@@ -789,7 +423,6 @@ class MatchViewerMapper {
       case MatchViewerEventType.save:
       case MatchViewerEventType.miss:
       case MatchViewerEventType.offside:
-      case MatchViewerEventType.foul:
         return 2;
       default:
         return 1;
@@ -805,343 +438,113 @@ class MatchViewerMapper {
     required int durationSeconds,
   }) {
     final List<MatchTimelineFrame> frames = <MatchTimelineFrame>[];
-    double lastTime = 0;
+    for (int index = 0; index < events.length; index += 1) {
+      final MatchEvent event = events[index];
+      final MatchEvent? previousEvent = index == 0 ? null : events[index - 1];
+      final double preTime = max(0, event.timeSeconds - 1.4);
+      if (index == 0) {
+        frames.add(
+          _buildFallbackFrame(
+            matchId: matchId,
+            timeSeconds: 0,
+            clockMinute: 0,
+            homeScore: 0,
+            awayScore: 0,
+            phase: MatchViewerPhase.kickoff,
+            event: event,
+            homePlayers: homePlayers,
+            awayPlayers: awayPlayers,
+            stage: 'reset',
+          ),
+        );
+      } else if (preTime > frames.last.timeSeconds + 0.1) {
+        frames.add(
+          _buildFallbackFrame(
+            matchId: matchId,
+            timeSeconds: preTime,
+            clockMinute:
+                max(previousEvent?.minute.toDouble() ?? 0, event.minute - 0.25),
+            homeScore: previousEvent?.homeScore ?? 0,
+            awayScore: previousEvent?.awayScore ?? 0,
+            phase: _phaseForEvent(event.type),
+            event: event,
+            homePlayers: homePlayers,
+            awayPlayers: awayPlayers,
+            stage: 'pre',
+          ),
+        );
+      }
 
-    void appendFrame({
-      required double timeSeconds,
-      required double clockMinute,
-      required int homeScore,
-      required int awayScore,
-      required MatchViewerPhase phase,
-      required String stage,
-      required MatchCameraPreset cameraPreset,
-      String? overlayText,
-      bool pausePlayback = false,
-      double playbackRate = 1,
-      bool flagAnimation = false,
-      String? celebrationTeamId,
-      MatchEvent? event,
-    }) {
-      final double resolvedTime = frames.isEmpty
-          ? timeSeconds
-          : max(timeSeconds, lastTime + 0.05).toDouble();
       frames.add(
         _buildFallbackFrame(
           matchId: matchId,
-          timeSeconds: resolvedTime,
-          clockMinute: clockMinute,
-          homeScore: homeScore,
-          awayScore: awayScore,
-          phase: phase,
+          timeSeconds: event.timeSeconds,
+          clockMinute: event.minute.toDouble(),
+          homeScore: event.homeScore,
+          awayScore: event.awayScore,
+          phase: _phaseForEvent(event.type),
           event: event,
           homePlayers: homePlayers,
           awayPlayers: awayPlayers,
-          stage: stage,
-          cameraPreset: cameraPreset,
-          overlayText: overlayText,
-          pausePlayback: pausePlayback,
-          playbackRate: playbackRate,
-          flagAnimation: flagAnimation,
-          celebrationTeamId: celebrationTeamId,
+          stage: event.type == MatchViewerEventType.goal
+              ? 'event'
+              : event.type == MatchViewerEventType.fulltime
+                  ? 'post'
+                  : 'event',
         ),
-      );
-      lastTime = frames.last.timeSeconds;
-    }
-
-    for (final MatchEvent event in events) {
-      final int priorHomeScore = frames.isEmpty ? 0 : frames.last.homeScore;
-      final int priorAwayScore = frames.isEmpty ? 0 : frames.last.awayScore;
-      final MatchViewerPhase phase = _phaseForEvent(event.type);
-      final double buildUp = event.playbackProfile == 'foul' ||
-              event.type == MatchViewerEventType.foul ||
-              event.type == MatchViewerEventType.yellowCard ||
-              event.type == MatchViewerEventType.redCard
-          ? 1.6
-          : event.type == MatchViewerEventType.goal ||
-                  event.type == MatchViewerEventType.save ||
-                  event.type == MatchViewerEventType.miss ||
-                  event.type == MatchViewerEventType.offside
-              ? 2.2
-              : 1.1;
-
-      if (frames.isEmpty) {
-        appendFrame(
-          timeSeconds: 0,
-          clockMinute: 0,
-          homeScore: 0,
-          awayScore: 0,
-          phase: MatchViewerPhase.kickoff,
-          stage: 'reset',
-          cameraPreset: MatchCameraPreset.broadcast,
-          event: event,
-        );
-      }
-
-      if (event.type == MatchViewerEventType.kickoff) {
-        continue;
-      }
-
-      final double preTime = max(lastTime + 0.4, event.timeSeconds - buildUp);
-      if (preTime > lastTime + 0.1) {
-        appendFrame(
-          timeSeconds: preTime,
-          clockMinute: max(0, event.minute - 0.25).toDouble(),
-          homeScore: priorHomeScore,
-          awayScore: priorAwayScore,
-          phase: phase,
-          stage: 'pre',
-          cameraPreset: event.type == MatchViewerEventType.foul ||
-                  event.type == MatchViewerEventType.yellowCard ||
-                  event.type == MatchViewerEventType.redCard
-              ? MatchCameraPreset.broadcast
-              : MatchCameraPreset.attackPush,
-          event: event,
-        );
-      }
-
-      appendFrame(
-        timeSeconds: max(event.timeSeconds, lastTime + 0.1),
-        clockMinute: event.minute.toDouble(),
-        homeScore: event.type == MatchViewerEventType.goal
-            ? priorHomeScore
-            : event.homeScore,
-        awayScore: event.type == MatchViewerEventType.goal
-            ? priorAwayScore
-            : event.awayScore,
-        phase: phase,
-        stage: 'event',
-        cameraPreset: event.type == MatchViewerEventType.goal ||
-                event.type == MatchViewerEventType.save ||
-                event.type == MatchViewerEventType.miss ||
-                event.type == MatchViewerEventType.offside ||
-                event.type == MatchViewerEventType.foul ||
-                event.type == MatchViewerEventType.yellowCard ||
-                event.type == MatchViewerEventType.redCard
-            ? MatchCameraPreset.boxZoom
-            : MatchCameraPreset.broadcast,
-        event: event,
       );
 
       if (event.type == MatchViewerEventType.goal) {
-        appendFrame(
-          timeSeconds: lastTime + 0.6,
-          clockMinute: event.minute.toDouble(),
-          homeScore: priorHomeScore,
-          awayScore: priorAwayScore,
-          phase: phase,
-          stage: 'hold',
-          cameraPreset: MatchCameraPreset.boxZoom,
-          overlayText: event.reviewable ? 'Checking...' : null,
-          pausePlayback: event.reviewable,
-          event: event,
-        );
-        if (event.reviewable) {
-          appendFrame(
-            timeSeconds: lastTime + 2.4,
-            clockMinute: event.minute.toDouble(),
-            homeScore: priorHomeScore,
-            awayScore: priorAwayScore,
-            phase: phase,
-            stage: 'review',
-            cameraPreset: MatchCameraPreset.varReplay,
-            overlayText: 'Checking...',
-            playbackRate: 0.35,
+        frames.add(
+          _buildFallbackFrame(
+            matchId: matchId,
+            timeSeconds:
+                min(durationSeconds.toDouble(), event.timeSeconds + 1.6),
+            clockMinute: event.minute + 0.3,
+            homeScore: event.homeScore,
+            awayScore: event.awayScore,
+            phase: MatchViewerPhase.kickoff,
             event: event,
-          );
-        }
-        appendFrame(
-          timeSeconds: lastTime + 1.0,
-          clockMinute: event.minute + 0.05,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: phase,
-          stage: 'decision',
-          cameraPreset: MatchCameraPreset.goalCelebration,
-          overlayText: event.reviewable ? 'Confirmed' : 'GOAL',
-          celebrationTeamId: event.teamId,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 1.8,
-          clockMinute: event.minute + 0.12,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: phase,
-          stage: 'post',
-          cameraPreset: MatchCameraPreset.goalCelebration,
-          celebrationTeamId: event.teamId,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 0.8,
-          clockMinute: event.minute + 0.2,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.kickoff,
-          stage: 'reset',
-          cameraPreset: MatchCameraPreset.broadcast,
-          event: event,
-        );
-      } else if (event.type == MatchViewerEventType.foul) {
-        appendFrame(
-          timeSeconds: lastTime + 1.2,
-          clockMinute: event.minute.toDouble(),
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.setPiece,
-          stage: 'hold',
-          cameraPreset: MatchCameraPreset.boxZoom,
-          overlayText: 'Checking...',
-          pausePlayback: true,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 2.4,
-          clockMinute: event.minute.toDouble(),
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.setPiece,
-          stage: 'review',
-          cameraPreset: MatchCameraPreset.varReplay,
-          overlayText: 'Checking...',
-          playbackRate: 0.35,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 1.0,
-          clockMinute: event.minute + 0.04,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.setPiece,
-          stage: 'decision',
-          cameraPreset: MatchCameraPreset.broadcast,
-          overlayText:
-              event.reviewDecision == 'confirmed' ? 'Confirmed' : 'Disallowed',
-          pausePlayback: true,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 0.8,
-          clockMinute: event.minute + 0.1,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.openPlay,
-          stage: 'reset',
-          cameraPreset: MatchCameraPreset.broadcast,
-          event: event,
-        );
-      } else if (event.type == MatchViewerEventType.offside) {
-        appendFrame(
-          timeSeconds: lastTime + 0.6,
-          clockMinute: event.minute.toDouble(),
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: phase,
-          stage: 'hold',
-          cameraPreset: MatchCameraPreset.assistantFlag,
-          pausePlayback: true,
-          flagAnimation: true,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 1.4,
-          clockMinute: event.minute + 0.05,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: phase,
-          stage: 'decision',
-          cameraPreset: MatchCameraPreset.assistantFlag,
-          overlayText: 'OFFSIDE',
-          pausePlayback: true,
-          flagAnimation: true,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 0.8,
-          clockMinute: event.minute + 0.12,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.openPlay,
-          stage: 'reset',
-          cameraPreset: MatchCameraPreset.broadcast,
-          event: event,
-        );
-      } else if (event.type == MatchViewerEventType.yellowCard ||
-          event.type == MatchViewerEventType.redCard) {
-        appendFrame(
-          timeSeconds: lastTime + 0.9,
-          clockMinute: event.minute + 0.05,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: phase,
-          stage: 'post',
-          cameraPreset: MatchCameraPreset.boxZoom,
-          overlayText: event.type == MatchViewerEventType.redCard
-              ? 'RED CARD'
-              : 'YELLOW CARD',
-          pausePlayback: true,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 0.8,
-          clockMinute: event.minute + 0.1,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.openPlay,
-          stage: 'reset',
-          cameraPreset: MatchCameraPreset.broadcast,
-          event: event,
-        );
-      } else if (event.type == MatchViewerEventType.halftime) {
-        appendFrame(
-          timeSeconds: lastTime + 1.0,
-          clockMinute: 45,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.halftime,
-          stage: 'post',
-          cameraPreset: MatchCameraPreset.broadcast,
-          overlayText: 'HALFTIME',
-          pausePlayback: true,
-          event: event,
-        );
-        appendFrame(
-          timeSeconds: lastTime + 1.4,
-          clockMinute: 45.1,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: MatchViewerPhase.kickoff,
-          stage: 'reset',
-          cameraPreset: MatchCameraPreset.broadcast,
-          event: event,
+            homePlayers: homePlayers,
+            awayPlayers: awayPlayers,
+            stage: 'reset',
+          ),
         );
       } else if (event.type != MatchViewerEventType.fulltime) {
-        appendFrame(
-          timeSeconds: lastTime + 1.1,
-          clockMinute: event.minute + 0.12,
-          homeScore: event.homeScore,
-          awayScore: event.awayScore,
-          phase: phase,
-          stage: 'post',
-          cameraPreset: event.type == MatchViewerEventType.save ||
-                  event.type == MatchViewerEventType.miss
-              ? MatchCameraPreset.boxZoom
-              : MatchCameraPreset.broadcast,
-          event: event,
+        frames.add(
+          _buildFallbackFrame(
+            matchId: matchId,
+            timeSeconds:
+                min(durationSeconds.toDouble(), event.timeSeconds + 1.1),
+            clockMinute: event.minute + 0.15,
+            homeScore: event.homeScore,
+            awayScore: event.awayScore,
+            phase: _phaseForEvent(event.type),
+            event: event,
+            homePlayers: homePlayers,
+            awayPlayers: awayPlayers,
+            stage: 'post',
+          ),
         );
       }
     }
 
     if (frames.isEmpty || frames.last.timeSeconds < durationSeconds) {
-      appendFrame(
-        timeSeconds: durationSeconds.toDouble(),
-        clockMinute: 90,
-        homeScore: events.last.homeScore,
-        awayScore: events.last.awayScore,
-        phase: MatchViewerPhase.fulltime,
-        stage: 'post',
-        cameraPreset: MatchCameraPreset.broadcast,
-        event: events.last,
+      frames.add(
+        _buildFallbackFrame(
+          matchId: matchId,
+          timeSeconds: durationSeconds.toDouble(),
+          clockMinute: snapshot.minute.toDouble(),
+          homeScore: snapshot.homeScore,
+          awayScore: snapshot.awayScore,
+          phase: snapshot.isFinal
+              ? MatchViewerPhase.fulltime
+              : MatchViewerPhase.openPlay,
+          event: events.isEmpty ? null : events.last,
+          homePlayers: homePlayers,
+          awayPlayers: awayPlayers,
+          stage: snapshot.isFinal ? 'post' : 'pre',
+        ),
       );
     }
 
@@ -1158,12 +561,6 @@ class MatchViewerMapper {
     required List<_FallbackPlayer> homePlayers,
     required List<_FallbackPlayer> awayPlayers,
     required String stage,
-    required MatchCameraPreset cameraPreset,
-    String? overlayText,
-    bool pausePlayback = false,
-    double playbackRate = 1,
-    bool flagAnimation = false,
-    String? celebrationTeamId,
     MatchEvent? event,
   }) {
     final bool homeAttacksRight = clockMinute < 45;
@@ -1222,13 +619,6 @@ class MatchViewerMapper {
       possessionSide: possessionSide,
       activeEventId: stage == 'pre' ? null : event?.id,
       eventBanner: stage == 'pre' ? null : event?.bannerText,
-      stage: matchPlaybackStageFromString(stage),
-      cameraPreset: cameraPreset,
-      overlayText: overlayText,
-      pausePlayback: pausePlayback,
-      playbackRate: playbackRate,
-      flagAnimation: flagAnimation,
-      celebrationTeamId: celebrationTeamId,
       players: resolvedPlayers,
       ball: ball,
     );
@@ -1548,19 +938,40 @@ extension on MatchViewState {
     required String homeTeamName,
     required String awayTeamName,
   }) {
-    return copyWith(
-      homeTeam: homeTeam.copyWith(
+    return MatchViewState(
+      matchId: matchId,
+      source: source,
+      supportsOffside: supportsOffside,
+      deterministicSeed: deterministicSeed,
+      durationSeconds: durationSeconds,
+      homeTeam: MatchViewerTeam(
+        teamId: homeTeam.teamId,
         teamName: homeTeamName,
         shortName: homeTeamName.length >= 3
             ? homeTeamName.substring(0, 3).toUpperCase()
             : homeTeamName.toUpperCase(),
+        side: homeTeam.side,
+        formation: homeTeam.formation,
+        primaryColorHex: homeTeam.primaryColorHex,
+        secondaryColorHex: homeTeam.secondaryColorHex,
+        accentColorHex: homeTeam.accentColorHex,
+        goalkeeperColorHex: homeTeam.goalkeeperColorHex,
       ),
-      awayTeam: awayTeam.copyWith(
+      awayTeam: MatchViewerTeam(
+        teamId: awayTeam.teamId,
         teamName: awayTeamName,
         shortName: awayTeamName.length >= 3
             ? awayTeamName.substring(0, 3).toUpperCase()
             : awayTeamName.toUpperCase(),
+        side: awayTeam.side,
+        formation: awayTeam.formation,
+        primaryColorHex: awayTeam.primaryColorHex,
+        secondaryColorHex: awayTeam.secondaryColorHex,
+        accentColorHex: awayTeam.accentColorHex,
+        goalkeeperColorHex: awayTeam.goalkeeperColorHex,
       ),
+      events: events,
+      frames: frames,
     );
   }
 }

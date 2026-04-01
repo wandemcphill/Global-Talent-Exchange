@@ -1,58 +1,32 @@
 import '../data/gte_models.dart';
 
+String _gteFormatUnitAmount(double value, String unitLabel) {
+  final bool wholeNumber = value == value.roundToDouble();
+  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} $unitLabel';
+}
+
 String gteFormatCredits(double value) {
-  return gteFormatGtex(value);
+  return _gteFormatUnitAmount(value, 'GTEX Coin');
 }
 
-String gteFormatGtex(double value) {
-  return '${_gteFormatNumber(value)} GTex';
+String gteFormatFanCoins(double value) {
+  return _gteFormatUnitAmount(value, 'Fan Coin');
 }
 
-String gteFormatFanCoin(double value) {
-  return '${_gteFormatNumber(value)} Fan Coin';
-}
-
-String gteLedgerUnitLabel(GteLedgerUnit unit) {
+String gteFormatLedgerUnitName(GteLedgerUnit unit) {
   switch (unit) {
     case GteLedgerUnit.credit:
+      return 'GTEX Coin';
+    case GteLedgerUnit.coin:
       return 'Fan Coin';
-    case GteLedgerUnit.coin:
-      return 'GTex Coin';
     case GteLedgerUnit.unknown:
-      return 'Balance';
-  }
-}
-
-String gteFormatLedgerAmount(double value, GteLedgerUnit unit) {
-  switch (unit) {
-    case GteLedgerUnit.credit:
-      return gteFormatFanCoin(value);
-    case GteLedgerUnit.coin:
-      return gteFormatGtex(value);
-    case GteLedgerUnit.unknown:
-      return _gteFormatNumber(value);
-  }
-}
-
-String gteFormatCompetitionAmount(double value, String currency) {
-  switch (currency.trim().toLowerCase()) {
-    case 'fan_coin':
-    case 'fan-coin':
-    case 'fancoin':
-      return gteFormatFanCoin(value);
-    case 'credit':
-    case 'coin':
-    case 'gtex':
-    case 'gtex_coin':
-    case 'gtex-coin':
-      return gteFormatGtex(value);
-    default:
-      return '${_gteFormatNumber(value)} ${currency.toUpperCase()}';
+      return 'Unit';
   }
 }
 
 String gteFormatFiat(double value, {String currency = 'NGN'}) {
-  return '${_gteFormatNumber(value)} $currency';
+  final bool wholeNumber = value == value.roundToDouble();
+  return '${value.toStringAsFixed(wholeNumber ? 0 : 2)} $currency';
 }
 
 String gteFormatNullableCredits(double? value) {
@@ -66,13 +40,6 @@ String gteFormatMovement(double fraction) {
   final double pct = fraction * 100;
   final String sign = pct > 0 ? '+' : '';
   return '$sign${pct.toStringAsFixed(1)}%';
-}
-
-String gteFormatNullableMovement(double? fraction) {
-  if (fraction == null) {
-    return '--';
-  }
-  return gteFormatMovement(fraction);
 }
 
 String gteFormatDateTime(DateTime? value) {
@@ -92,11 +59,10 @@ String gteFormatDate(DateTime? value) {
 }
 
 String gteFormatOrderStatus(String rawStatus) {
-  final String spaced = rawStatus
-      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
-        return '${match.group(1)} ${match.group(2)}';
-      })
-      .replaceAll('_', ' ');
+  final String spaced =
+      rawStatus.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
+    return '${match.group(1)} ${match.group(2)}';
+  }).replaceAll('_', ' ');
   return spaced.toUpperCase();
 }
 
@@ -122,9 +88,4 @@ String gteFormatRelativeTime(DateTime? value, {DateTime? now}) {
     return '${delta.inDays.abs()}d ago';
   }
   return gteFormatDateTime(value);
-}
-
-String _gteFormatNumber(double value) {
-  final bool wholeNumber = value == value.roundToDouble();
-  return value.toStringAsFixed(wholeNumber ? 0 : 2);
 }

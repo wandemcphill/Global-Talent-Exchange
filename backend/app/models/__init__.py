@@ -1,6 +1,7 @@
 import app.ingestion.models  # noqa: F401
 import app.agents.models  # noqa: F401
 import app.global_memory.models  # noqa: F401
+import app.models.event_backbone  # noqa: F401
 import app.models.scale_backbone  # noqa: F401
 
 from app.models.academy_graduation_event import AcademyGraduationEvent
@@ -242,6 +243,7 @@ from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_daily_stat import EconomyDailyStat
+from app.models.event_backbone import CompetitionQueueRecord, EventConsumerState, EventDeadLetter, EventOutbox
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.fan_experience import (
     FanExperienceTicket,
@@ -818,6 +820,10 @@ __all__ = [
     "GiftCatalogItem",
     "EconomyBurnEvent",
     "EconomyDailyStat",
+    "CompetitionQueueRecord",
+    "EventConsumerState",
+    "EventDeadLetter",
+    "EventOutbox",
     "FancoinPurchaseOrder",
     "PurchaseOrderStatus",
     "GiftComboEvent",

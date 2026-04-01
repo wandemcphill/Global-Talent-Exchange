@@ -70,7 +70,7 @@ def test_demo_bootstrap_service_seeds_demo_users_wallets_and_player_summaries(de
     assert len(summary.featured_players) == 5
     assert len(summary.sample_holdings) == 5
 
-    fan_user = next(user for user in summary.demo_users if user.username == "seed_fan")
+    fan_user = next(user for user in summary.demo_users if user.username == "demo_fan")
     assert fan_user.password == DEFAULT_DEMO_PASSWORD
     assert fan_user.coin_balance == Decimal("150.0000")
     assert fan_user.credit_balance == Decimal("1200.0000")
@@ -88,14 +88,14 @@ def test_demo_bootstrap_service_seeds_demo_users_wallets_and_player_summaries(de
         assert session.scalar(select(func.count()).select_from(PlayerValueSnapshotRecord)) == 24
         assert session.scalar(select(func.count()).select_from(PlayerSummaryReadModel)) == 12
 
-        fan_user = session.scalar(select(User).where(User.username == "seed_fan"))
+        fan_user = session.scalar(select(User).where(User.username == "demo_fan"))
         assert fan_user is not None
 
         portfolio = PortfolioService().build_for_user(session, fan_user)
         expected_player_ids = {
             holding.player_id
             for holding in summary.sample_holdings
-            if holding.owner_username == "seed_fan"
+            if holding.owner_username == "demo_fan"
         }
         assert expected_player_ids
         assert {holding.player_id for holding in portfolio.holdings} == expected_player_ids
@@ -117,9 +117,9 @@ def test_demo_bootstrap_service_is_repeatable_for_demo_users_and_balances(demo_s
         user.username: (user.coin_balance, user.credit_balance)
         for user in second.demo_users
     }
-    assert balances["seed_fan"] == (Decimal("150.0000"), Decimal("1200.0000"))
-    assert balances["seed_scout"] == (Decimal("90.0000"), Decimal("850.0000"))
-    assert balances["seed_admin"] == (Decimal("500.0000"), Decimal("5000.0000"))
+    assert balances["demo_fan"] == (Decimal("150.0000"), Decimal("1200.0000"))
+    assert balances["demo_scout"] == (Decimal("90.0000"), Decimal("850.0000"))
+    assert balances["demo_admin"] == (Decimal("500.0000"), Decimal("5000.0000"))
 
     with session_factory() as session:
         assert session.scalar(select(func.count()).select_from(User)) == len(DEMO_USER_SPECS)

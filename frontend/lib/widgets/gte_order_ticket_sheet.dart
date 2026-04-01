@@ -82,7 +82,7 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                       runSpacing: 12,
                       children: <Widget>[
                         GteMetricChip(
-                          label: 'Available cash',
+                          label: 'Available GTEX Coin',
                           value: widget.controller.walletSummary == null
                               ? '--'
                               : gteFormatCredits(widget
@@ -131,7 +131,7 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                   const SizedBox(height: 12),
                   Text(
                     _side == GteOrderSide.buy
-                        ? 'Buy orders reserve cash immediately when a max price is provided.'
+                        ? 'Buy orders reserve GTEX Coin immediately when a max price is provided.'
                         : 'Sell orders rely on owned units already visible in the portfolio.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -181,7 +181,7 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                     const SizedBox(height: 8),
                     Text(
                       _side == GteOrderSide.buy
-                          ? 'Estimated reserve ${gteFormatCredits(estimatedNotional)} at submission.'
+                          ? 'Estimated GTEX Coin reserve ${gteFormatCredits(estimatedNotional)} at submission.'
                           : 'Estimated trade value ${gteFormatCredits(estimatedNotional)} at the current quote.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),

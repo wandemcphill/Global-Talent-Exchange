@@ -288,18 +288,12 @@ class AvatarMapper {
   }
 
   static PlayerAvatar fromAcademyPlayer(AcademyPlayer player) {
-    return _resolveAvatar(
-      provided: player.avatar,
-      seed: PlayerAvatarSeedData(
-        playerId: player.canonicalPlayerId,
+    return buildAvatar(
+      PlayerAvatarSeedData(
+        playerId: player.id,
         playerName: player.name,
         position: player.position,
-        nationality: player.nationality,
-        nationalityCode: player.nationalityCode,
         age: player.age,
-        preferredFoot: player.dominantFoot,
-        avatarSeedToken: player.avatarSeedToken,
-        avatarDnaSeed: player.avatarDnaSeed,
         contextLabel: player.pathwayStage,
       ),
     );
@@ -313,14 +307,15 @@ class AvatarMapper {
     return _resolveAvatar(
       provided: player.avatar,
       seed: PlayerAvatarSeedData(
-        playerId: player.stablePlayerReference(
-          teamName: teamName,
-          matchId: matchId,
-        ),
+        playerId: player.playerId ??
+            <String>[
+              matchId ?? '',
+              teamName ?? '',
+              player.name,
+            ].where((String value) => value.trim().isNotEmpty).join('|'),
         playerName: player.name,
         position: player.position,
         nationalityCode: player.nationalityCode,
-        preferredFoot: player.dominantFoot,
         avatarSeedToken: player.avatarSeedToken,
         avatarDnaSeed: player.avatarDnaSeed,
         contextLabel: teamName,

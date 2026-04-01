@@ -361,11 +361,11 @@ class MatchViewState {
                   null
               ? null
               : MatchPresentationPackage.fromJson(
-                GteJson.value(json, <String>[
-                  'presentation_package',
-                  'presentationPackage',
-                ]),
-              ),
+                  GteJson.value(json, <String>[
+                    'presentation_package',
+                    'presentationPackage',
+                  ]),
+                ),
     );
   }
 

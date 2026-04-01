@@ -111,6 +111,31 @@ def create_app(
     return app
 
 
+def _resolve_database_engine(
+    *,
+    settings: Settings,
+    engine: Engine | None = None,
+    session_factory: sessionmaker[Session] | None = None,
+) -> Engine:
+    return resolve_database_engine(
+        settings=settings,
+        engine=engine,
+        session_factory=session_factory,
+    )
+
+
+def _bind_application_state(
+    app: FastAPI,
+    *,
+    context: ApplicationContext,
+    engine: Engine | None = None,
+    modules: tuple[DomainModule, ...] = DOMAIN_MODULES,
+) -> None:
+    bind_application_state(app, context=context, modules=modules)
+    if engine is not None:
+        app.state.db_engine = engine
+
+
 def get_asgi_app() -> FastAPI:
     global _ASGI_APP
     if _ASGI_APP is None:

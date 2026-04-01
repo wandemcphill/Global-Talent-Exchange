@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -17,6 +17,7 @@ from app.agents.models import (
 )
 from app.core.events import DomainEvent, InMemoryEventPublisher
 from app.models.base import Base
+from app.models.event_backbone import EventOutbox
 from app.viral.ranking_service import InMemoryViralLeaderboardStore
 
 
@@ -51,6 +52,12 @@ def _build_manager(*, config: AgentRuntimeConfig) -> tuple[CreatorAgentManager, 
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:  # type: ignore[no-untyped-def]
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(
         engine,
         tables=[
@@ -59,6 +66,7 @@ def _build_manager(*, config: AgentRuntimeConfig) -> tuple[CreatorAgentManager, 
             AgentLearningStateRecord.__table__,
             AgentWalletRecord.__table__,
             AgentPerformanceLogRecord.__table__,
+            EventOutbox.__table__,
         ],
     )
     app.state.session_factory = sessionmaker(bind=engine, expire_on_commit=False)
@@ -169,6 +177,25 @@ def test_manager_learning_updates_wallet_and_strategy_after_performance_feedback
     assert receipt.balance > 0.0
     assert agent.profile.strategy.avg_duration <= initial_duration
     assert agent.learning_state.preferred_formats[result.primary_format] > 0.0
+
+
+def test_manager_bootstrap_persists_parent_and_dependent_agent_rows() -> None:
+    manager, _publisher, _leaderboard = _build_manager(
+        config=AgentRuntimeConfig(
+            initial_population=1,
+            max_posts_per_cycle=1,
+            auto_run_on_moment=False,
+            ratio_warm_start_denominator=5,
+        )
+    )
+
+    agent_id = next(iter(manager._agents))
+
+    with manager.app.state.session_factory() as session:
+        assert session.get(AgentRecord, agent_id) is not None
+        assert session.get(AgentStrategyRecord, agent_id) is not None
+        assert session.get(AgentLearningStateRecord, agent_id) is not None
+        assert session.get(AgentWalletRecord, agent_id) is not None
 
 
 def test_manager_persists_agent_state_and_performance_logs_across_restart() -> None:

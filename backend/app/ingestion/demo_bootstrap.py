@@ -22,7 +22,6 @@ from app.models.user import User, UserRole
 from app.models.wallet import (
     LedgerAccount,
     LedgerEntryReason,
-    LedgerSourceTag,
     LedgerUnit,
     PaymentEvent,
     PaymentProvider,
@@ -169,27 +168,27 @@ class DemoBootstrapSummary:
 
 DEMO_USER_SPECS: tuple[DemoUserSpec, ...] = (
     DemoUserSpec(
-        email="seed.fan@gte.local",
-        username="seed_fan",
-        display_name="Seed Fan",
+        email="fan@demo.gte.local",
+        username="demo_fan",
+        display_name="Demo Fan",
         role=UserRole.USER,
         provider=PaymentProvider.MONNIFY,
         coin_balance=Decimal("150.0000"),
         credit_balance=Decimal("1200.0000"),
     ),
     DemoUserSpec(
-        email="seed.scout@gte.local",
-        username="seed_scout",
-        display_name="Seed Scout",
+        email="scout@demo.gte.local",
+        username="demo_scout",
+        display_name="Demo Scout",
         role=UserRole.USER,
         provider=PaymentProvider.FLUTTERWAVE,
         coin_balance=Decimal("90.0000"),
         credit_balance=Decimal("850.0000"),
     ),
     DemoUserSpec(
-        email="seed.admin@gte.local",
-        username="seed_admin",
-        display_name="Seed Admin",
+        email="admin@demo.gte.local",
+        username="demo_admin",
+        display_name="Demo Admin",
         role=UserRole.ADMIN,
         provider=PaymentProvider.PAYSTACK,
         coin_balance=Decimal("500.0000"),
@@ -336,9 +335,6 @@ class DemoBootstrapService:
                 user = auth_service.register_user(
                     session,
                     email=spec.email,
-                    full_name=spec.display_name,
-                    phone_number="0000000000",
-                    is_over_18=True,
                     username=spec.username,
                     password=demo_password,
                     display_name=spec.display_name,
@@ -414,7 +410,6 @@ class DemoBootstrapService:
                 LedgerPosting(account=platform_account, amount=-delta),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=reference,
             description="Demo bootstrap balance reconciliation",
             actor=user,
@@ -662,8 +657,7 @@ class DemoBootstrapService:
                     reference=external_reference,
                     description="Demo bootstrap reset seeded position proceeds",
                     external_reference=external_reference,
-                    unit=LedgerUnit.COIN,
-                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
+                    unit=LedgerUnit.CREDIT,
                 )
                 wallet_service.settle_available_position_units(
                     session,
@@ -673,7 +667,6 @@ class DemoBootstrapService:
                     reference=external_reference,
                     description="Demo bootstrap reset seeded position units",
                     external_reference=external_reference,
-                    source_tag=LedgerSourceTag.PLAYER_CARD_SALE,
                 )
 
     def _seed_demo_holdings(
@@ -707,8 +700,7 @@ class DemoBootstrapService:
                 reference=reference,
                 description="Demo bootstrap portfolio acquisition cash leg",
                 external_reference=reference,
-                unit=LedgerUnit.COIN,
-                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
+                unit=LedgerUnit.CREDIT,
             )
             wallet_service.credit_position_units(
                 session,
@@ -718,7 +710,6 @@ class DemoBootstrapService:
                 reference=reference,
                 description="Demo bootstrap portfolio acquisition asset leg",
                 external_reference=reference,
-                source_tag=LedgerSourceTag.PLAYER_CARD_PURCHASE,
             )
             holdings.append(
                 DemoHoldingSummary(
@@ -740,7 +731,7 @@ class DemoBootstrapService:
         required_amount: Decimal,
         reference: str,
     ) -> None:
-        available_account = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+        available_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
         available_balance = wallet_service.get_balance(session, available_account)
         if available_balance >= required_amount:
             return
@@ -748,7 +739,7 @@ class DemoBootstrapService:
             session,
             wallet_service=wallet_service,
             user=user,
-            unit=LedgerUnit.COIN,
+            unit=LedgerUnit.CREDIT,
             target_balance=required_amount,
             reference=reference,
         )
@@ -857,8 +848,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
     parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
     parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic seed users when auth fixtures are bootstrapped.")
-    parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable player, holding, and optional liquidity fixtures.")
+    parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local demo users for login flows.")
+    parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable demo users, holdings, and optional liquidity.")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
     parser.add_argument("--featured-limit", type=int, default=DEFAULT_FEATURED_PLAYER_LIMIT, help="Number of featured players to include in the summary output.")
     parser.add_argument("--with-liquidity", action=argparse.BooleanOptionalAction, default=False, help="Also seed deterministic exchange-side liquidity and trade history.")

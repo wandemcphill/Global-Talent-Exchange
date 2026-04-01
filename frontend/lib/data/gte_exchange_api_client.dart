@@ -23,9 +23,6 @@ class GteExchangeApiClient {
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
   }) {
-    // Shipped exchange clients prefer live mode. Explicit demo/test data should
-    // come from GteExchangeApiClient.fixture(); any remaining shared
-    // live-then-fixture behavior lives inside the repository as legacy debt.
     final GteRepositoryConfig config = GteRepositoryConfig(
       baseUrl: baseUrl,
       mode: mode,
@@ -440,13 +437,6 @@ class GteExchangeApiClient {
     ).map(GteCareerEntry.fromJson).toList(growable: false);
   }
 
-  Future<PlayerProfile> fetchPlayerProfile(String playerId) {
-    // Maintained live player detail uses fetchPlayerMarket(). This repository
-    // surface remains for fixture-native callers and tests that still request
-    // a PlayerProfile directly.
-    return repository.fetchPlayerProfile(playerId);
-  }
-
   Future<GtePlayerMarketSnapshot> fetchPlayerMarket(
     String playerId, {
     String interval = '1h',
@@ -546,14 +536,11 @@ class GteExchangeApiClient {
             'Live match spectate sessions require the real backend repository.',
       );
     }
-    return GteJson.map(
-      await resolvedRepository.requestJson(
-        'POST',
-        '/api/matches/$matchKey/spectate',
-        query: <String, Object?>{'pay_to_view': payToView},
-        requiresAuth: true,
-      ),
-      label: 'match spectate session',
+    return resolvedRepository.requestJson(
+      'POST',
+      '/api/matches/$matchKey/spectate',
+      query: <String, Object?>{'pay_to_view': payToView},
+      requiresAuth: true,
     );
   }
 
@@ -593,6 +580,12 @@ class GteExchangeApiClient {
 
   Future<GteOrderRecord> cancelOrder(String orderId) =>
       repository.cancelOrder(orderId);
+
+  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId) =>
+      repository.fetchAdminBuybackPreview(orderId);
+
+  Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId) =>
+      repository.executeAdminBuyback(orderId);
 
   Future<GteOrderListView> listOrders({
     int limit = 20,
@@ -651,6 +644,14 @@ class GteExchangeApiClient {
         cause: error,
       );
     }
+  }
+
+  bool _shouldFallback(Object error) {
+    if (config.mode != GteBackendMode.liveThenFixture) {
+      return false;
+    }
+    return (error is GteApiException && error.supportsFixtureFallback) ||
+        error is GteParsingException;
   }
 
   Map<String, Object?> _fixtureSpectateSession(String matchKey) {
@@ -761,34 +762,33 @@ class GteExchangeApiClient {
   Future<GteMarketPlayerDetailView> _fallbackPlayerDetail(
     String playerId,
   ) async {
-    final PlayerSnapshot snapshot = await _loadFixturePlayerSnapshot(playerId);
-    final List<String> drivers = _fixtureTrendDrivers(snapshot);
+    final PlayerProfile profile = await repository.fetchPlayerProfile(playerId);
     final double normalizedMovement = _normalizeMovement(
-      snapshot.valueDeltaPct,
+      profile.snapshot.valueDeltaPct,
     );
     final double previousValue =
         normalizedMovement.abs() < 0.0001
-            ? snapshot.marketCredits.toDouble()
-            : snapshot.marketCredits / (1 + normalizedMovement);
+            ? profile.snapshot.marketCredits.toDouble()
+            : profile.snapshot.marketCredits / (1 + normalizedMovement);
     return GteMarketPlayerDetailView(
-      playerId: snapshot.id,
+      playerId: profile.snapshot.id,
       identity: GteMarketPlayerIdentity(
-        playerName: snapshot.name,
-        firstName: _splitName(snapshot.name, 0),
-        lastName: _splitName(snapshot.name, 1),
+        playerName: profile.snapshot.name,
+        firstName: _splitName(profile.snapshot.name, 0),
+        lastName: _splitName(profile.snapshot.name, 1),
         shortName: null,
-        position: snapshot.position,
-        normalizedPosition: snapshot.position.toLowerCase(),
-        nationality: snapshot.nation,
+        position: profile.snapshot.position,
+        normalizedPosition: profile.snapshot.position.toLowerCase(),
+        nationality: profile.snapshot.nation,
         nationalityCode: null,
-        age: snapshot.age,
+        age: profile.snapshot.age,
         dateOfBirth: null,
         preferredFoot: null,
         shirtNumber: null,
         heightCm: null,
         weightKg: null,
         currentClubId: null,
-        currentClubName: snapshot.club,
+        currentClubName: profile.snapshot.club,
         currentCompetitionId: null,
         currentCompetitionName: null,
         imageUrl: null,
@@ -809,12 +809,12 @@ class GteExchangeApiClient {
       value: GteMarketPlayerValue(
         lastSnapshotId: null,
         lastSnapshotAt: null,
-        currentValueCredits: snapshot.marketCredits.toDouble(),
+        currentValueCredits: profile.snapshot.marketCredits.toDouble(),
         previousValueCredits: previousValue,
         movementPct: normalizedMovement,
-        footballTruthValueCredits: snapshot.marketCredits.toDouble(),
-        marketSignalValueCredits: snapshot.marketCredits.toDouble(),
-        publishedCardValueCredits: snapshot.marketCredits.toDouble(),
+        footballTruthValueCredits: profile.snapshot.marketCredits.toDouble(),
+        marketSignalValueCredits: profile.snapshot.marketCredits.toDouble(),
+        publishedCardValueCredits: profile.snapshot.marketCredits.toDouble(),
         scoutingSignalValueCredits: null,
         egameSignalValueCredits: null,
         confidenceScore: null,
@@ -831,13 +831,13 @@ class GteExchangeApiClient {
         movementTags: const <String>[],
       ),
       trend: GteMarketPlayerTrend(
-        trendScore: snapshot.gsi.toDouble(),
-        marketInterestScore: drivers.length * 10,
-        averageRating: snapshot.formRating,
-        globalScoutingIndex: snapshot.gsi.toDouble(),
+        trendScore: profile.snapshot.gsi.toDouble(),
+        marketInterestScore: profile.snapshot.recentHighlights.length * 10,
+        averageRating: profile.snapshot.formRating,
+        globalScoutingIndex: profile.snapshot.gsi.toDouble(),
         previousGlobalScoutingIndex: null,
         globalScoutingIndexMovementPct: null,
-        drivers: drivers,
+        drivers: List<String>.from(profile.snapshot.recentHighlights),
         trend7dPct: normalizedMovement,
         trend30dPct: null,
         trendDirection:
@@ -854,7 +854,8 @@ class GteExchangeApiClient {
   }
 
   Future<GtePlayerOverview> _fallbackPlayerOverview(String playerId) async {
-    final PlayerSnapshot snapshot = await _loadFixturePlayerSnapshot(playerId);
+    final PlayerProfile profile = await repository.fetchPlayerProfile(playerId);
+    final PlayerSnapshot snapshot = profile.snapshot;
     final DateTime now = DateTime.now().toUtc();
     final DateTime generatedOn = DateTime.utc(now.year, now.month, now.day);
     final GteCareerTotals totals = _fallbackCareerTotals(snapshot);
@@ -916,7 +917,8 @@ class GteExchangeApiClient {
   }
 
   Future<List<GteCareerEntry>> _fallbackPlayerCareer(String playerId) async {
-    final PlayerSnapshot snapshot = await _loadFixturePlayerSnapshot(playerId);
+    final PlayerProfile profile = await repository.fetchPlayerProfile(playerId);
+    final PlayerSnapshot snapshot = profile.snapshot;
     final GteCareerTotals totals = _fallbackCareerTotals(snapshot);
     final List<GteSeasonProgression> progression = _fallbackSeasonalProgression(
       snapshot,
@@ -984,26 +986,6 @@ class GteExchangeApiClient {
               ? null
               : player.recentHighlights.first,
     );
-  }
-
-  Future<PlayerSnapshot> _loadFixturePlayerSnapshot(String playerId) async {
-    final List<PlayerSnapshot> players = await repository.fetchPlayers(
-      limit: 200,
-    );
-    return players.firstWhere(
-      (PlayerSnapshot player) => player.id == playerId,
-      orElse: () => throw StateError('Unknown player id: $playerId'),
-    );
-  }
-
-  List<String> _fixtureTrendDrivers(PlayerSnapshot snapshot) {
-    if (snapshot.recentHighlights.isNotEmpty) {
-      return List<String>.from(snapshot.recentHighlights);
-    }
-    return <String>[
-      '${snapshot.position} market profile',
-      'Fixture snapshot-only fallback',
-    ];
   }
 
   String _fixtureTransferSignal(PlayerSnapshot snapshot) {

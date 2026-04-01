@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
-import 'package:gte_frontend/widgets/gte_formatters.dart';
-
-import '../../models/match_type.dart';
 
 class CompetitionFinancialBreakdownCard extends StatelessWidget {
   const CompetitionFinancialBreakdownCard({
@@ -17,7 +15,6 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
     required this.hostFeeAmount,
     required this.prizePool,
     required this.currency,
-    required this.matchType,
     this.projected = false,
     this.lockNotice,
   });
@@ -31,14 +28,12 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
   final double hostFeeAmount;
   final double prizePool;
   final String currency;
-  final MatchType matchType;
   final bool projected;
   final String? lockNotice;
 
   @override
   Widget build(BuildContext context) {
     final double grossPool = entryFee * participantCount;
-    final bool freeEntry = matchType.isFree;
     return GteSurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,39 +43,34 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
           Text(
             projected
                 ? 'Projected fees at full capacity with transparent payout and secure escrow wording.'
-                : freeEntry
-                ? 'Live fee summary for this GTEX-hosted free competition.'
-                : matchType.isFastMatch
-                ? 'Live fee summary for this paid fast-match queue.'
                 : 'Live fee summary for this creator competition.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 18),
           _MoneyRow(
             label: 'Entry fee',
-            value:
-                freeEntry
-                    ? 'FREE ENTRY'
-                    : '${gteFormatCompetitionAmount(entryFee, currency)} per player',
+            value: '${_formatAmount(entryFee, currency)} per player',
           ),
           _MoneyRow(
-            label: projected ? 'Projected gross pool' : 'Gross pool',
-            value: gteFormatCompetitionAmount(grossPool, currency),
+            label: projected
+                ? 'Projected gross pool'
+                : 'Gross pool',
+            value: _formatAmount(grossPool, currency),
           ),
           _MoneyRow(
             label:
                 'Platform service fee (${(platformFeePct * 100).toStringAsFixed(0)}%)',
-            value: gteFormatCompetitionAmount(platformFeeAmount, currency),
+            value: _formatAmount(platformFeeAmount, currency),
           ),
           if (hostFeePct > 0 || hostFeeAmount > 0)
             _MoneyRow(
               label: 'Host fee (${(hostFeePct * 100).toStringAsFixed(0)}%)',
-              value: gteFormatCompetitionAmount(hostFeeAmount, currency),
+              value: _formatAmount(hostFeeAmount, currency),
             ),
           const Divider(height: 28),
           _MoneyRow(
             label: 'Prize pool',
-            value: gteFormatCompetitionAmount(prizePool, currency),
+            value: _formatAmount(prizePool, currency),
             emphasize: true,
           ),
           const SizedBox(height: 14),
@@ -91,9 +81,7 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  freeEntry
-                      ? 'GTEX funds the promotional pool. Results still settle against the published rules and verified performance.'
-                      : 'Entry fees are held in secure escrow until the published rules settle the transparent payout.',
+                  'Entry fees are held in secure escrow until the published rules settle the transparent payout.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -104,7 +92,10 @@ class CompetitionFinancialBreakdownCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                const Icon(Icons.lock_outline, color: GteShellTheme.accentWarm),
+                const Icon(
+                  Icons.lock_outline,
+                  color: GteShellTheme.accentWarm,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -141,23 +132,33 @@ class _MoneyRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style:
-                  emphasize
-                      ? Theme.of(context).textTheme.titleMedium
-                      : Theme.of(context).textTheme.bodyMedium,
+              style: emphasize
+                  ? Theme.of(context).textTheme.titleMedium
+                  : Theme.of(context).textTheme.bodyMedium,
             ),
           ),
           Text(
             value,
-            style:
-                emphasize
-                    ? Theme.of(context).textTheme.titleLarge?.copyWith(
+            style: emphasize
+                ? Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: GteShellTheme.accent,
                     )
-                    : Theme.of(context).textTheme.titleMedium,
+                : Theme.of(context).textTheme.titleMedium,
           ),
         ],
       ),
     );
   }
+}
+
+String _formatAmount(double value, String currency) {
+  if (currency.toLowerCase() == 'credit') {
+    return gteFormatCredits(value);
+  }
+  if (currency.toLowerCase() == 'coin') {
+    return gteFormatFanCoins(value);
+  }
+  final bool whole = value == value.roundToDouble();
+  final String number = value.toStringAsFixed(whole ? 0 : 2);
+  return '$number ${currency.toUpperCase()}';
 }

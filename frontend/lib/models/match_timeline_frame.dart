@@ -2,18 +2,9 @@ import 'package:gte_frontend/data/gte_models.dart';
 
 const Object _matchTimelineUnset = Object();
 
-enum MatchViewerPhase {
-  kickoff,
-  openPlay,
-  setPiece,
-  halftime,
-  fulltime,
-}
+enum MatchViewerPhase { kickoff, openPlay, setPiece, halftime, fulltime }
 
-enum MatchViewerSide {
-  home,
-  away,
-}
+enum MatchViewerSide { home, away }
 
 enum MatchViewerPlayerState {
   idle,
@@ -37,19 +28,9 @@ enum MatchPlayerAnimationState {
   recover,
 }
 
-enum MatchPlayerLine {
-  goalkeeper,
-  defense,
-  midfield,
-  attack,
-}
+enum MatchPlayerLine { goalkeeper, defense, midfield, attack }
 
-enum MatchViewerRole {
-  goalkeeper,
-  defender,
-  midfielder,
-  forward,
-}
+enum MatchViewerRole { goalkeeper, defender, midfielder, forward }
 
 enum MatchPossessionPhase {
   restart,
@@ -73,15 +54,7 @@ enum MatchTimelineInjectionType {
   neutral,
 }
 
-enum MatchPlaybackStage {
-  pre,
-  event,
-  hold,
-  review,
-  decision,
-  post,
-  reset,
-}
+enum MatchPlaybackStage { pre, event, hold, review, decision, post, reset }
 
 enum MatchCameraPreset {
   broadcast,
@@ -157,17 +130,17 @@ MatchPlayerAnimationState matchPlayerAnimationStateFromString(String value) {
 
 extension MatchPlayerAnimationStateX on MatchPlayerAnimationState {
   String get label => switch (this) {
-        MatchPlayerAnimationState.idle => 'Idle',
-        MatchPlayerAnimationState.jog => 'Jog',
-        MatchPlayerAnimationState.run => 'Run',
-        MatchPlayerAnimationState.sprint => 'Sprint',
-        MatchPlayerAnimationState.control => 'Control',
-        MatchPlayerAnimationState.pass => 'Pass',
-        MatchPlayerAnimationState.shoot => 'Shoot',
-        MatchPlayerAnimationState.tackle => 'Tackle',
-        MatchPlayerAnimationState.intercept => 'Intercept',
-        MatchPlayerAnimationState.recover => 'Recover',
-      };
+    MatchPlayerAnimationState.idle => 'Idle',
+    MatchPlayerAnimationState.jog => 'Jog',
+    MatchPlayerAnimationState.run => 'Run',
+    MatchPlayerAnimationState.sprint => 'Sprint',
+    MatchPlayerAnimationState.control => 'Control',
+    MatchPlayerAnimationState.pass => 'Pass',
+    MatchPlayerAnimationState.shoot => 'Shoot',
+    MatchPlayerAnimationState.tackle => 'Tackle',
+    MatchPlayerAnimationState.intercept => 'Intercept',
+    MatchPlayerAnimationState.recover => 'Recover',
+  };
 }
 
 MatchPlayerLine matchPlayerLineFromString(String value) {
@@ -286,10 +259,7 @@ MatchCameraPreset matchCameraPresetFromString(String value) {
 }
 
 class MatchViewerPoint {
-  const MatchViewerPoint({
-    required this.x,
-    required this.y,
-  });
+  const MatchViewerPoint({required this.x, required this.y});
 
   final double x;
   final double y;
@@ -302,14 +272,8 @@ class MatchViewerPoint {
     );
   }
 
-  MatchViewerPoint copyWith({
-    double? x,
-    double? y,
-  }) {
-    return MatchViewerPoint(
-      x: x ?? this.x,
-      y: y ?? this.y,
-    );
+  MatchViewerPoint copyWith({double? x, double? y}) {
+    return MatchViewerPoint(x: x ?? this.x, y: y ?? this.y);
   }
 
   static MatchViewerPoint lerp(
@@ -365,22 +329,20 @@ class MatchViewerPlayerFrame {
   bool get isGoalkeeper => role == MatchViewerRole.goalkeeper;
 
   factory MatchViewerPlayerFrame.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'match viewer player frame');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'match viewer player frame',
+    );
     return MatchViewerPlayerFrame(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       teamId: GteJson.string(json, <String>['team_id', 'teamId']),
-      side: matchViewerSideFromString(
-        GteJson.string(json, <String>['side']),
-      ),
-      shirtNumber: GteJson.integerOrNull(
-        json,
-        <String>['shirt_number', 'shirtNumber'],
-      ),
+      side: matchViewerSideFromString(GteJson.string(json, <String>['side'])),
+      shirtNumber: GteJson.integerOrNull(json, <String>[
+        'shirt_number',
+        'shirtNumber',
+      ]),
       label: GteJson.string(json, <String>['label'], fallback: '?'),
-      role: matchViewerRoleFromString(
-        GteJson.string(json, <String>['role']),
-      ),
+      role: matchViewerRoleFromString(GteJson.string(json, <String>['role'])),
       line: matchPlayerLineFromString(
         GteJson.string(json, <String>['line'], fallback: 'midfield'),
       ),
@@ -388,11 +350,9 @@ class MatchViewerPlayerFrame {
         GteJson.string(json, <String>['state'], fallback: 'idle'),
       ),
       active: GteJson.boolean(json, <String>['active'], fallback: true),
-      highlighted: GteJson.boolean(
-        json,
-        <String>['highlighted'],
-        fallback: false,
-      ),
+      highlighted: GteJson.boolean(json, <String>[
+        'highlighted',
+      ], fallback: false),
       position: MatchViewerPoint.fromJson(
         GteJson.value(json, <String>['position']),
       ),
@@ -400,27 +360,25 @@ class MatchViewerPlayerFrame {
         GteJson.value(json, <String>['anchor_position', 'anchorPosition']),
       ),
       animationState: matchPlayerAnimationStateFromString(
-        GteJson.string(
-          json,
-          <String>['animation_state', 'animationState'],
-          fallback: 'idle',
-        ),
+        GteJson.string(json, <String>[
+          'animation_state',
+          'animationState',
+        ], fallback: 'idle'),
       ),
-      speedRatio: GteJson.number(
-        json,
-        <String>['speed_ratio', 'speedRatio'],
-        fallback: 0,
-      ).toDouble(),
-      blendFactor: GteJson.number(
-        json,
-        <String>['blend_factor', 'blendFactor'],
-        fallback: 0.2,
-      ).toDouble(),
-      staminaPct: GteJson.integer(
-        json,
-        <String>['stamina_pct', 'staminaPct'],
-        fallback: 100,
-      ),
+      speedRatio:
+          GteJson.number(json, <String>[
+            'speed_ratio',
+            'speedRatio',
+          ], fallback: 0).toDouble(),
+      blendFactor:
+          GteJson.number(json, <String>[
+            'blend_factor',
+            'blendFactor',
+          ], fallback: 0.2).toDouble(),
+      staminaPct: GteJson.integer(json, <String>[
+        'stamina_pct',
+        'staminaPct',
+      ], fallback: 100),
     );
   }
 
@@ -475,16 +433,18 @@ class MatchViewerBallFrame {
   final double elevation;
 
   factory MatchViewerBallFrame.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'match viewer ball frame');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'match viewer ball frame',
+    );
     return MatchViewerBallFrame(
       position: MatchViewerPoint.fromJson(
         GteJson.value(json, <String>['position']),
       ),
-      ownerPlayerId: GteJson.stringOrNull(
-        json,
-        <String>['owner_player_id', 'ownerPlayerId'],
-      ),
+      ownerPlayerId: GteJson.stringOrNull(json, <String>[
+        'owner_player_id',
+        'ownerPlayerId',
+      ]),
       state: GteJson.string(json, <String>['state'], fallback: 'rolling'),
       elevation:
           GteJson.number(json, <String>['elevation'], fallback: 0).toDouble(),
@@ -499,9 +459,10 @@ class MatchViewerBallFrame {
   }) {
     return MatchViewerBallFrame(
       position: position ?? this.position,
-      ownerPlayerId: identical(ownerPlayerId, _matchTimelineUnset)
-          ? this.ownerPlayerId
-          : ownerPlayerId as String?,
+      ownerPlayerId:
+          identical(ownerPlayerId, _matchTimelineUnset)
+              ? this.ownerPlayerId
+              : ownerPlayerId as String?,
       state: state ?? this.state,
       elevation: elevation ?? this.elevation,
     );
@@ -530,13 +491,15 @@ class MatchTimelineInjection {
   final List<String> highlightedPlayerIds;
 
   factory MatchTimelineInjection.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'match timeline injection');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'match timeline injection',
+    );
     final List<Object?> rawHighlighted = GteJson.list(
-      GteJson.value(
-            json,
-            <String>['highlighted_player_ids', 'highlightedPlayerIds'],
-          ) ??
+      GteJson.value(json, <String>[
+            'highlighted_player_ids',
+            'highlightedPlayerIds',
+          ]) ??
           const <Object?>[],
       label: 'timeline injection highlighted players',
     );
@@ -547,10 +510,14 @@ class MatchTimelineInjection {
       ),
       teamId: GteJson.stringOrNull(json, <String>['team_id', 'teamId']),
       bannerText: GteJson.string(json, <String>['banner_text', 'bannerText']),
-      startSeconds:
-          GteJson.number(json, <String>['start_seconds', 'startSeconds']),
-      peakSeconds:
-          GteJson.number(json, <String>['peak_seconds', 'peakSeconds']),
+      startSeconds: GteJson.number(json, <String>[
+        'start_seconds',
+        'startSeconds',
+      ]),
+      peakSeconds: GteJson.number(json, <String>[
+        'peak_seconds',
+        'peakSeconds',
+      ]),
       endSeconds: GteJson.number(json, <String>['end_seconds', 'endSeconds']),
       highlightedPlayerIds: rawHighlighted
           .map((Object? item) => item?.toString() ?? '')
@@ -618,8 +585,10 @@ class MatchTimelineFrame {
   final MatchViewerBallFrame ball;
 
   factory MatchTimelineFrame.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'match timeline frame');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'match timeline frame',
+    );
     final List<Object?> rawPlayers = GteJson.list(
       GteJson.value(json, <String>['players']) ?? const <Object?>[],
       label: 'match frame players',
@@ -634,80 +603,81 @@ class MatchTimelineFrame {
     );
     return MatchTimelineFrame(
       id: GteJson.string(json, <String>['frame_id', 'frameId']),
-      timeSeconds:
-          GteJson.number(json, <String>['time_seconds', 'timeSeconds']),
-      clockMinute:
-          GteJson.number(json, <String>['clock_minute', 'clockMinute']),
+      timeSeconds: GteJson.number(json, <String>[
+        'time_seconds',
+        'timeSeconds',
+      ]),
+      clockMinute: GteJson.number(json, <String>[
+        'clock_minute',
+        'clockMinute',
+      ]),
       phase: matchViewerPhaseFromString(
         GteJson.string(json, <String>['phase'], fallback: 'open_play'),
       ),
       homeScore: GteJson.integer(json, <String>['home_score', 'homeScore']),
       awayScore: GteJson.integer(json, <String>['away_score', 'awayScore']),
-      homeAttacksRight: GteJson.boolean(
-        json,
-        <String>['home_attacks_right', 'homeAttacksRight'],
-        fallback: true,
-      ),
+      homeAttacksRight: GteJson.boolean(json, <String>[
+        'home_attacks_right',
+        'homeAttacksRight',
+      ], fallback: true),
       possessionSide: matchViewerSideFromString(
-        GteJson.string(
-          json,
-          <String>['possession_side', 'possessionSide'],
-          fallback: 'home',
-        ),
+        GteJson.string(json, <String>[
+          'possession_side',
+          'possessionSide',
+        ], fallback: 'home'),
       ),
-      activeEventId: GteJson.stringOrNull(
-        json,
-        <String>['active_event_id', 'activeEventId'],
-      ),
-      eventBanner:
-          GteJson.stringOrNull(json, <String>['event_banner', 'eventBanner']),
+      activeEventId: GteJson.stringOrNull(json, <String>[
+        'active_event_id',
+        'activeEventId',
+      ]),
+      eventBanner: GteJson.stringOrNull(json, <String>[
+        'event_banner',
+        'eventBanner',
+      ]),
       stage: matchPlaybackStageFromString(
-        GteJson.string(
-          json,
-          <String>['stage'],
-          fallback: 'event',
-        ),
+        GteJson.string(json, <String>['stage'], fallback: 'event'),
       ),
       cameraPreset: matchCameraPresetFromString(
-        GteJson.string(
-          json,
-          <String>['camera_preset', 'cameraPreset'],
-          fallback: 'broadcast',
-        ),
+        GteJson.string(json, <String>[
+          'camera_preset',
+          'cameraPreset',
+        ], fallback: 'broadcast'),
       ),
-      overlayText:
-          GteJson.stringOrNull(json, <String>['overlay_text', 'overlayText']),
-      pausePlayback: GteJson.boolean(
-        json,
-        <String>['pause_playback', 'pausePlayback'],
-        fallback: false,
+      overlayText: GteJson.stringOrNull(json, <String>[
+        'overlay_text',
+        'overlayText',
+      ]),
+      pausePlayback: GteJson.boolean(json, <String>[
+        'pause_playback',
+        'pausePlayback',
+      ], fallback: false),
+      playbackRate: GteJson.number(json, <String>[
+        'playback_rate',
+        'playbackRate',
+      ], fallback: 1),
+      flagAnimation: GteJson.boolean(json, <String>[
+        'flag_animation',
+        'flagAnimation',
+      ], fallback: false),
+      celebrationTeamId: GteJson.stringOrNull(json, <String>[
+        'celebration_team_id',
+        'celebrationTeamId',
+      ]),
+      possessionPhase:
+          possessionPhaseValue == null
+              ? null
+              : matchPossessionPhaseFromString(possessionPhaseValue),
+      sequenceId: GteJson.stringOrNull(json, <String>[
+        'sequence_id',
+        'sequenceId',
+      ]),
+      sequenceProgress: _numberOrNull(
+        GteJson.value(json, <String>['sequence_progress', 'sequenceProgress']),
       ),
-      playbackRate: GteJson.number(
-        json,
-        <String>['playback_rate', 'playbackRate'],
-        fallback: 1,
-      ),
-      flagAnimation: GteJson.boolean(
-        json,
-        <String>['flag_animation', 'flagAnimation'],
-        fallback: false,
-      ),
-      celebrationTeamId: GteJson.stringOrNull(
-        json,
-        <String>['celebration_team_id', 'celebrationTeamId'],
-      ),
-      possessionPhase: possessionPhaseValue == null
-          ? null
-          : matchPossessionPhaseFromString(possessionPhaseValue),
-      sequenceId:
-          GteJson.stringOrNull(json, <String>['sequence_id', 'sequenceId']),
-      sequenceProgress: _numberOrNull(GteJson.value(
-          json, <String>['sequence_progress', 'sequenceProgress'])),
-      isSynthetic: GteJson.boolean(
-        json,
-        <String>['is_synthetic', 'isSynthetic'],
-        fallback: false,
-      ),
+      isSynthetic: GteJson.boolean(json, <String>[
+        'is_synthetic',
+        'isSynthetic',
+      ], fallback: false),
       injectedEvents: rawInjectedEvents
           .map(MatchTimelineInjection.fromJson)
           .toList(growable: false),
@@ -755,36 +725,44 @@ class MatchTimelineFrame {
       awayScore: awayScore ?? this.awayScore,
       homeAttacksRight: homeAttacksRight ?? this.homeAttacksRight,
       possessionSide: possessionSide ?? this.possessionSide,
-      activeEventId: identical(activeEventId, _matchTimelineUnset)
-          ? this.activeEventId
-          : activeEventId as String?,
-      eventBanner: identical(eventBanner, _matchTimelineUnset)
-          ? this.eventBanner
-          : eventBanner as String?,
+      activeEventId:
+          identical(activeEventId, _matchTimelineUnset)
+              ? this.activeEventId
+              : activeEventId as String?,
+      eventBanner:
+          identical(eventBanner, _matchTimelineUnset)
+              ? this.eventBanner
+              : eventBanner as String?,
       stage: stage ?? this.stage,
       cameraPreset: cameraPreset ?? this.cameraPreset,
-      overlayText: identical(overlayText, _matchTimelineUnset)
-          ? this.overlayText
-          : overlayText as String?,
+      overlayText:
+          identical(overlayText, _matchTimelineUnset)
+              ? this.overlayText
+              : overlayText as String?,
       pausePlayback: pausePlayback ?? this.pausePlayback,
       playbackRate: playbackRate ?? this.playbackRate,
       flagAnimation: flagAnimation ?? this.flagAnimation,
-      celebrationTeamId: identical(celebrationTeamId, _matchTimelineUnset)
-          ? this.celebrationTeamId
-          : celebrationTeamId as String?,
-      possessionPhase: identical(possessionPhase, _matchTimelineUnset)
-          ? this.possessionPhase
-          : possessionPhase as MatchPossessionPhase?,
-      sequenceId: identical(sequenceId, _matchTimelineUnset)
-          ? this.sequenceId
-          : sequenceId as String?,
-      sequenceProgress: identical(sequenceProgress, _matchTimelineUnset)
-          ? this.sequenceProgress
-          : sequenceProgress as double?,
+      celebrationTeamId:
+          identical(celebrationTeamId, _matchTimelineUnset)
+              ? this.celebrationTeamId
+              : celebrationTeamId as String?,
+      possessionPhase:
+          identical(possessionPhase, _matchTimelineUnset)
+              ? this.possessionPhase
+              : possessionPhase as MatchPossessionPhase?,
+      sequenceId:
+          identical(sequenceId, _matchTimelineUnset)
+              ? this.sequenceId
+              : sequenceId as String?,
+      sequenceProgress:
+          identical(sequenceProgress, _matchTimelineUnset)
+              ? this.sequenceProgress
+              : sequenceProgress as double?,
       isSynthetic: isSynthetic ?? this.isSynthetic,
-      injectedEvents: identical(injectedEvents, _matchTimelineUnset)
-          ? this.injectedEvents
-          : injectedEvents as List<MatchTimelineInjection>,
+      injectedEvents:
+          identical(injectedEvents, _matchTimelineUnset)
+              ? this.injectedEvents
+              : injectedEvents as List<MatchTimelineInjection>,
       players: players ?? this.players,
       ball: ball ?? this.ball,
     );
@@ -815,9 +793,10 @@ class MatchTimelineFrame {
       phase: resolvedT < resolvedChangeover ? phase : next.phase,
       homeScore: resolvedT < resolvedChangeover ? homeScore : next.homeScore,
       awayScore: resolvedT < resolvedChangeover ? awayScore : next.awayScore,
-      homeAttacksRight: resolvedT < resolvedChangeover
-          ? homeAttacksRight
-          : next.homeAttacksRight,
+      homeAttacksRight:
+          resolvedT < resolvedChangeover
+              ? homeAttacksRight
+              : next.homeAttacksRight,
       possessionSide:
           resolvedT < resolvedChangeover ? possessionSide : next.possessionSide,
       activeEventId:
@@ -835,9 +814,10 @@ class MatchTimelineFrame {
           resolvedT < resolvedChangeover ? playbackRate : next.playbackRate,
       flagAnimation:
           resolvedT < resolvedChangeover ? flagAnimation : next.flagAnimation,
-      celebrationTeamId: resolvedT < resolvedChangeover
-          ? celebrationTeamId
-          : next.celebrationTeamId,
+      celebrationTeamId:
+          resolvedT < resolvedChangeover
+              ? celebrationTeamId
+              : next.celebrationTeamId,
       possessionPhase: _interpolatedPossessionPhase(
         next,
         resolvedT,
@@ -855,12 +835,14 @@ class MatchTimelineFrame {
           next.ball.position,
           resolvedT,
         ),
-        ownerPlayerId: resolvedT < resolvedOwnershipSwitch
-            ? ball.ownerPlayerId
-            : next.ball.ownerPlayerId,
+        ownerPlayerId:
+            resolvedT < resolvedOwnershipSwitch
+                ? ball.ownerPlayerId
+                : next.ball.ownerPlayerId,
         state:
             resolvedT < resolvedOwnershipSwitch ? ball.state : next.ball.state,
-        elevation: ball.elevation +
+        elevation:
+            ball.elevation +
             ((next.ball.elevation - ball.elevation) * resolvedT),
       ),
     );
@@ -893,67 +875,70 @@ class MatchTimelineFrame {
   ) {
     final Map<String, MatchViewerPlayerFrame> leftById =
         <String, MatchViewerPlayerFrame>{
-      for (final MatchViewerPlayerFrame player in players)
-        player.playerId: player,
-    };
+          for (final MatchViewerPlayerFrame player in players)
+            player.playerId: player,
+        };
     final Map<String, MatchViewerPlayerFrame> rightById =
         <String, MatchViewerPlayerFrame>{
-      for (final MatchViewerPlayerFrame player in next.players)
-        player.playerId: player,
-    };
+          for (final MatchViewerPlayerFrame player in next.players)
+            player.playerId: player,
+        };
     final bool showRightOnlyPlayers = t >= changeoverT;
     final List<String> orderedIds = _orderedPlayerIds(players, next.players);
-    return orderedIds.map((String playerId) {
-      final MatchViewerPlayerFrame? left = leftById[playerId];
-      final MatchViewerPlayerFrame? right = rightById[playerId];
-      if (left != null && right != null) {
-        return MatchViewerPlayerFrame(
-          playerId: left.playerId,
-          teamId: left.teamId,
-          side: t < changeoverT ? left.side : right.side,
-          shirtNumber: t < changeoverT ? left.shirtNumber : right.shirtNumber,
-          label: t < changeoverT ? left.label : right.label,
-          role: t < changeoverT ? left.role : right.role,
-          line: t < changeoverT ? left.line : right.line,
-          state: t < changeoverT ? left.state : right.state,
-          active: t < changeoverT ? left.active : right.active,
-          highlighted: t < changeoverT ? left.highlighted : right.highlighted,
-          position: MatchViewerPoint.lerp(left.position, right.position, t),
-          anchorPosition: MatchViewerPoint.lerp(
-            left.anchorPosition,
-            right.anchorPosition,
-            t,
-          ),
-          animationState:
-              t < changeoverT ? left.animationState : right.animationState,
-          speedRatio:
-              left.speedRatio + ((right.speedRatio - left.speedRatio) * t),
-          blendFactor:
-              left.blendFactor + ((right.blendFactor - left.blendFactor) * t),
-          staminaPct:
-              (left.staminaPct + ((right.staminaPct - left.staminaPct) * t))
-                  .round(),
-        );
-      }
-      if (left != null) {
-        return showRightOnlyPlayers
-            ? left.copyWith(
-                active: false,
-                highlighted: false,
-                state: left.state == MatchViewerPlayerState.sentOff
-                    ? MatchViewerPlayerState.sentOff
-                    : MatchViewerPlayerState.idle,
-              )
-            : left;
-      }
-      final MatchViewerPlayerFrame incoming = right!;
-      return showRightOnlyPlayers
-          ? incoming
-          : incoming.copyWith(
-              active: false,
-              highlighted: false,
+    return orderedIds
+        .map((String playerId) {
+          final MatchViewerPlayerFrame? left = leftById[playerId];
+          final MatchViewerPlayerFrame? right = rightById[playerId];
+          if (left != null && right != null) {
+            return MatchViewerPlayerFrame(
+              playerId: left.playerId,
+              teamId: left.teamId,
+              side: t < changeoverT ? left.side : right.side,
+              shirtNumber:
+                  t < changeoverT ? left.shirtNumber : right.shirtNumber,
+              label: t < changeoverT ? left.label : right.label,
+              role: t < changeoverT ? left.role : right.role,
+              line: t < changeoverT ? left.line : right.line,
+              state: t < changeoverT ? left.state : right.state,
+              active: t < changeoverT ? left.active : right.active,
+              highlighted:
+                  t < changeoverT ? left.highlighted : right.highlighted,
+              position: MatchViewerPoint.lerp(left.position, right.position, t),
+              anchorPosition: MatchViewerPoint.lerp(
+                left.anchorPosition,
+                right.anchorPosition,
+                t,
+              ),
+              animationState:
+                  t < changeoverT ? left.animationState : right.animationState,
+              speedRatio:
+                  left.speedRatio + ((right.speedRatio - left.speedRatio) * t),
+              blendFactor:
+                  left.blendFactor +
+                  ((right.blendFactor - left.blendFactor) * t),
+              staminaPct:
+                  (left.staminaPct + ((right.staminaPct - left.staminaPct) * t))
+                      .round(),
             );
-    }).toList(growable: false);
+          }
+          if (left != null) {
+            return showRightOnlyPlayers
+                ? left.copyWith(
+                  active: false,
+                  highlighted: false,
+                  state:
+                      left.state == MatchViewerPlayerState.sentOff
+                          ? MatchViewerPlayerState.sentOff
+                          : MatchViewerPlayerState.idle,
+                )
+                : left;
+          }
+          final MatchViewerPlayerFrame incoming = right!;
+          return showRightOnlyPlayers
+              ? incoming
+              : incoming.copyWith(active: false, highlighted: false);
+        })
+        .toList(growable: false);
   }
 
   List<MatchTimelineInjection> _mergedInjections(

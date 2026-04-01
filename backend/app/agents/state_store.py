@@ -87,6 +87,9 @@ class AgentStateStore:
             record.last_generated_clip_id = agent.last_generated_clip_id
             record.last_generated_at = agent.last_generated_at
             record.state_version = 1
+            # Flush the parent row first so dependent agent tables never race
+            # ahead of the base agent insert under stricter databases.
+            session.flush()
 
             strategy_record = session.get(AgentStrategyRecord, agent_id)
             if strategy_record is None:

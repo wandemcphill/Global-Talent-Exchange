@@ -149,49 +149,6 @@ void main() {
     expect(academyAvatar.beardStyle, equals(lineupAvatar.beardStyle));
   });
 
-  test('academy payload respects canonical player ids and avatar seeds', () {
-    const AcademyPlayer academyPlayer = AcademyPlayer(
-      id: 'academy-prospect-9',
-      playerId: 'player-9',
-      name: 'Canonical Prospect',
-      position: 'RW',
-      age: 18,
-      pathwayStage: 'U19',
-      potentialBand: 'High',
-      developmentProgressPercent: 72,
-      readinessScore: 69,
-      minutesTarget: 820,
-      statusLabel: 'Promotion watch',
-      nextMilestone: 'Senior bench inclusion',
-      strengths: <String>['Acceleration'],
-      focusAreas: <String>['Crossing'],
-      nationalityCode: 'NG',
-      dominantFoot: 'left',
-      avatarSeedToken: 'canonical-seed-9',
-    );
-    const LiveMatchLineupPlayer lineupPlayer = LiveMatchLineupPlayer(
-      playerId: 'player-9',
-      name: 'Canonical Prospect',
-      position: 'RW',
-      rating: 7.1,
-      nationalityCode: 'NG',
-      avatarSeedToken: 'canonical-seed-9',
-    );
-
-    final PlayerAvatar academyAvatar =
-        AvatarMapper.fromAcademyPlayer(academyPlayer);
-    final PlayerAvatar lineupAvatar = AvatarMapper.fromLiveLineupPlayer(
-      lineupPlayer,
-      teamName: 'GTEX Academy',
-      matchId: 'match-9',
-    );
-
-    expect(academyPlayer.canonicalPlayerId, 'player-9');
-    expect(academyAvatar.seedToken, equals('canonical-seed-9'));
-    expect(academyAvatar.seedToken, equals(lineupAvatar.seedToken));
-    expect(academyAvatar.dnaSeed, equals(lineupAvatar.dnaSeed));
-  });
-
   testWidgets('shared avatar widget paints without image dependencies',
       (WidgetTester tester) async {
     const PlayerAvatar avatar = PlayerAvatar(

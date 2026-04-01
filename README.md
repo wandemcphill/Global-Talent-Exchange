@@ -1,11 +1,5 @@
 # Global Talent Exchange
 
-See also:
-- `Docs/README.md`
-- `API_DOCUMENTATION.md`
-- `DEPLOYMENT_GUIDE.md`
-- `ADMIN_SETUP_GUIDE.md`
-
 Local backend workflow for SQLite demos, seeded exchange liquidity, deterministic simulation ticks, and repeatable verification.
 
 ## Local setup
@@ -17,49 +11,14 @@ Commands below assume:
 - SQLite for local development
 - no Redis server is required for local boot
 
-Use the checked-in backend dependency manifest when you are starting from a clean virtual environment:
+This repo does not currently include a pinned dependency manifest. If you are starting from a clean virtual environment, install the runtime and test packages explicitly:
 
 ```powershell
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
-python -m pip install -r backend/requirements.txt
+python -m pip install fastapi "uvicorn[standard]" sqlalchemy alembic pydantic pytest anyio redis
 ```
-
-## Transactional email
-
-The backend now supports env-driven transactional email for:
-
-- new signup email confirmation
-- account recovery / password reset
-
-Current SMTP defaults are Brevo SMTP with a temporary Gmail sender identity:
-
-- `EMAIL_PROVIDER=brevo_smtp`
-- `EMAIL_FROM_ADDRESS=vidzimedialtd@gmail.com`
-- `EMAIL_FROM_NAME=GTEX`
-- `EMAIL_REPLY_TO=vidzimedialtd@gmail.com`
-- `BREVO_SMTP_HOST=smtp-relay.brevo.com`
-- `BREVO_SMTP_PORT=587`
-- `BREVO_SMTP_USERNAME=a21b41001@smtp-brevo.com`
-
-Set `BREVO_SMTP_PASSWORD` from env only. Do not hardcode or reuse an exposed key. Use a regenerated Brevo SMTP key. When the sending domain is ready, you can swap the sender and provider settings without changing auth callers.
-
-## Frontend quick start
-
-Flutter commands are run from `frontend/`. The app reads `GTE_API_BASE_URL` and `GTE_BACKEND_MODE` from `--dart-define`; `frontend/.env.example` is a reference file and is not auto-loaded by Flutter.
-
-```powershell
-cd frontend
-flutter pub get
-flutter analyze
-flutter test
-flutter run --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live
-```
-
-If the Android wrapper is incomplete, regenerate it locally with `flutter create . --platforms=android`.
-
-For the full local setup, smoke-test matrix, migration freeze notes, and Android file-lock recovery steps, use the canonical docs in `Docs/`.
 
 ## Fast path
 
@@ -72,16 +31,31 @@ python backend/scripts/dev.py runserver --demo-simulation
 
 This creates:
 
-- a small seeded player universe subset
+- 3 demo users
+- a curated 120-player demo market slice with visible Bands A-E supply coverage
+- 100+ players visible on the first market load in the current app flow
 - precomputed value snapshots and player summaries
-- synthetic local-only QA users for market and portfolio checks
-- seeded market holdings for the synthetic QA users' `/api/portfolio/snapshot` view
-- wallet balances and ledger entries for the synthetic QA users
+- seeded market holdings for the demo users' `/api/portfolio/snapshot` view
+- wallet balances and ledger entries for each demo user
 - seeded buy ladders and sell ladders in the exchange order book
 - seeded trade executions for ticker volume/history
-- liquid and illiquid player examples for local demos and tests
+- 30 higher-activity and 60 thinner-book seeded player markets for local demos and tests
 
-The demo rebuild command writes the exchange-side state into the database. `runserver --demo-simulation` then replays that seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
+Canonical demo supply bands:
+
+- Band A: EUR 0.1m to EUR 1m -> 0.08 to 0.45 GTEX -> 10,000 copies
+- Band B: EUR 1m to EUR 5m -> 0.45 to 2.5 GTEX -> 1,000 copies
+- Band C: EUR 5m to EUR 20m -> 2.5 to 12 GTEX -> 300 copies
+- Band D: EUR 20m to EUR 60m -> 12 to 50 GTEX -> 10 copies
+- Band E: EUR 60m to EUR 100m+ -> 50 to 75 GTEX -> 5 copies
+
+Default demo credentials:
+
+- `fan@demo.gte.local` / `DemoPass123`
+- `scout@demo.gte.local` / `DemoPass123`
+- `admin@demo.gte.local` / `DemoPass123`
+
+The canonical local QA path is `rebuild-demo-market` followed by `runserver --demo-simulation`. The rebuild command writes the exchange-side state into the database, and `runserver --demo-simulation` replays that seeded market into the in-memory market engine so `/api/market/ticker/{player_id}` shows spread and volume immediately on boot.
 
 ## Demo operator runbook
 
@@ -101,6 +75,7 @@ python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
 Notes:
 
 - `rebuild-demo-market` already resets the SQLite database, migrates to head, seeds demo users/players/holdings, and adds demo liquidity. Use the explicit `reset-db` and `migrate` steps when you want to verify the database lifecycle or recover a dirty local DB.
+- `bootstrap-demo` and `backend/scripts/bootstrap_demo.py` remain available as low-level/manual seed entry points, but the canonical launch/test seed path is the two-command `rebuild-demo-market` plus `runserver --demo-simulation` flow above.
 - `seed-demo-liquidity` is safe to rerun after a rebuild when you want to refresh only the exchange-side order book and trade history.
 - If you run tick commands from a separate terminal, restart `runserver --demo-simulation` afterwards so the in-memory ticker projection replays the updated database state.
 
@@ -164,8 +139,6 @@ python backend/scripts/dev.py simulation-ticks --count 3 --start-tick 2
 If you run tick commands from a separate terminal, restart `runserver --demo-simulation` afterwards so the in-memory ticker projection replays the new database state.
 
 ## Migrations
-
-Coordination note: the current merge-lane migration head is expected to be `20260316_0008`. Parallel threads should inspect and apply migrations only; do not create or rewrite files under `backend/migrations/versions/*` unless migration work is explicitly assigned.
 
 Wrapper:
 
@@ -268,7 +241,7 @@ $token = (
     -Method Post `
     -Uri http://127.0.0.1:8000/auth/login `
     -ContentType "application/json" `
-    -Body '{"email":"seed.fan@gte.local","password":"DemoPass123"}'
+    -Body '{"email":"fan@demo.gte.local","password":"DemoPass123"}'
 ).access_token
 ```
 

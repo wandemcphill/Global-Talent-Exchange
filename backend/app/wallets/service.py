@@ -1778,9 +1778,15 @@ class WalletService:
             + self.get_reserved_position_quantity(session, user, player_id)
         )
 
-    def get_reserved_cash_balance(self, session: Session, user: User) -> Decimal:
+    def get_reserved_cash_balance(
+        self,
+        session: Session,
+        user: User,
+        *,
+        unit: LedgerUnit = LedgerUnit.COIN,
+    ) -> Decimal:
         escrow_account = session.scalar(
-            select(LedgerAccount).where(LedgerAccount.code == self._user_escrow_account_code(user.id, LedgerUnit.COIN))
+            select(LedgerAccount).where(LedgerAccount.code == self._user_escrow_account_code(user.id, unit))
         )
         if escrow_account is None:
             return Decimal("0.0000")

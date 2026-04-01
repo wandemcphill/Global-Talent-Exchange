@@ -77,12 +77,26 @@ def _fund_user(session, current_user, *, amount: Decimal) -> None:
     session.commit()
 
 
+def _grant_position(session, current_user, *, player_id: str, quantity: Decimal) -> None:
+    WalletService().credit_position_units(
+        session,
+        user=current_user,
+        player_id=player_id,
+        quantity=quantity,
+        reference=f"grant-{current_user.id}-{player_id}",
+        description="Seed player position for testing",
+        external_reference=f"grant:{current_user.id}:{player_id}",
+    )
+    session.commit()
+
+
 def test_buy_sell_match_success(service_context) -> None:
     session, service = service_context
     player = _create_player(session, provider_external_id="matching-success")
     seller = _create_user(session, email="matching-seller-success@example.com", username="matchingsellersuccess")
     buyer = _create_user(session, email="matching-buyer-success@example.com", username="matchingbuyersuccess")
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("3"))
 
     sell_order = service.place_order(
         session,
@@ -117,6 +131,7 @@ def test_partial_fill_persists_remaining_quantity(service_context) -> None:
     seller = _create_user(session, email="matching-seller-partial@example.com", username="matchingsellerpartial")
     buyer = _create_user(session, email="matching-buyer-partial@example.com", username="matchingbuyerpartial")
     _fund_user(session, buyer, amount=Decimal("100"))
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("4"))
 
     service.place_order(
         session,
@@ -149,6 +164,9 @@ def test_multi_order_matching_respects_price_time_priority(service_context) -> N
     seller_three = _create_user(session, email="seller-three-priority@example.com", username="sellerthreepriority")
     buyer = _create_user(session, email="buyer-priority@example.com", username="buyerpriority")
     _fund_user(session, buyer, amount=Decimal("200"))
+    _grant_position(session, seller_one, player_id=player.id, quantity=Decimal("5"))
+    _grant_position(session, seller_two, player_id=player.id, quantity=Decimal("4"))
+    _grant_position(session, seller_three, player_id=player.id, quantity=Decimal("6"))
 
     sell_order_one = service.place_order(
         session,

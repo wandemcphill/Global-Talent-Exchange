@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-import logging
 from math import ceil
 from threading import RLock
 from typing import Any
-from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.backbone.kafka import KafkaBackboneUnavailable, KafkaJsonConsumer
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.replay_visibility import ReplayVisibility
@@ -19,40 +16,22 @@ from app.common.schemas.competition import ScheduledFixture
 from app.competition_engine.match_dispatcher import MatchDispatcher
 from app.competition_engine.queue_contracts import (
     BracketAdvancementJob,
-    DurableQueuePublisher,
     InMemoryQueuePublisher,
     MatchSimulationJob,
     NotificationJob,
     PayoutSettlementJob,
     QueuedJobRecord,
 )
-from app.core.cache import CacheBackend
-from app.core.event_backbone import build_outbox_event
 from app.core.events import DomainEvent, EventPublisher
-from app.fairness.fairness_guard import FairnessGuard
-from app.fairness.match_integrity_service import MatchIntegrityService
-from app.fairness.spend_balance_controller import SpendBalanceController
-from app.live_matches.highlights import SmartHighlightService
-from app.live_matches.service import LiveMatchHub
-from app.cache.hot_paths import HotPathCache
 from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContribution, LeagueSeasonState
 from app.leagues.service import LeagueSeasonLifecycleService
-from app.manager_marketplace.service import ManagerMarketplaceService
-from app.matches.service import MatchEventLoggerService
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.services.match_simulation_service import MatchSimulationService
-from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
-from app.models.notification_record import NotificationRecord
-from app.observability.tracing import start_internal_span
 from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.match_engine.simulation.models import MatchEventType
-from app.realtime.match_stream_service import MatchStreamService
-from app.services.commentary_service import MatchCommentaryService
 from app.services.player_lifecycle_service import PlayerLifecycleService
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -205,15 +184,12 @@ class LocalMatchExecutionWorker:
     match_service: MatchSimulationService = field(default_factory=MatchSimulationService)
     league_service: LeagueSeasonLifecycleService = field(default_factory=LeagueSeasonLifecycleService)
     team_factory: SyntheticSquadFactory = field(default_factory=SyntheticSquadFactory)
-    match_stream_service: MatchStreamService | None = None
     session_factory: sessionmaker[Session] | None = None
-    cache_backend: CacheBackend | None = None
     _completed_match_jobs: set[str] = field(default_factory=set)
     _completed_advancement_jobs: set[str] = field(default_factory=set)
     _completed_notification_jobs: set[str] = field(default_factory=set)
     _completed_settlement_jobs: set[str] = field(default_factory=set)
     _league_club_user_ids: dict[str, dict[str, str]] = field(default_factory=dict)
-    _live_match_hub: LiveMatchHub | None = field(default=None, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock)
 
     def register_league_club_users(self, season_id: str, *, club_user_ids: dict[str, str]) -> None:
@@ -240,222 +216,155 @@ class LocalMatchExecutionWorker:
         claim_key = job.idempotency_key or job.fixture_id
         if not self._claim_once(self._completed_match_jobs, claim_key):
             return None
-        with start_internal_span(
-            "match.execute_simulation",
-            attributes={
-                "competition.id": job.competition_id,
-                "competition.fixture_id": job.fixture_id,
-                "competition.type": getattr(job.competition_type, "value", job.competition_type),
+        self._publish_match_lifecycle_event(
+            "competition.match.execution.started",
+            job,
+            extra={
+                "claim_key": claim_key,
+                "execution_mode": "local_worker",
             },
-        ):
+        )
+        try:
+            request = self.team_factory.build_request(job)
+            replay_payload = self.match_service.build_replay_payload(request)
+            self._persist_player_lifecycle_incidents(job, replay_payload)
+            self._persist_match_viewer_payload(job, replay_payload)
             self._publish_match_lifecycle_event(
-                "competition.match.execution.started",
+                "competition.match.simulation.completed",
                 job,
+                replay_payload=replay_payload,
+                extra={"execution_mode": "local_worker"},
+            )
+            self._publish_match_lifecycle_event(
+                "competition.match.commentary.generated",
+                job,
+                replay_payload=replay_payload,
                 extra={
-                    "claim_key": claim_key,
-                    "execution_mode": "local_worker",
+                    "commentary_event_count": len(replay_payload.timeline.events),
+                    "key_moments": self._build_key_moment_breakdown(replay_payload),
                 },
             )
-            try:
-                request = self.team_factory.build_request(job)
-                competition_metadata = self._competition_metadata(job.competition_id)
-                locked_context = FairnessGuard().lock_official_request(request)
-                balance_session = self._open_session()
-                try:
-                    normalized_request, balance_metadata = SpendBalanceController(balance_session).apply_balance_controls(
-                        request=locked_context.request,
-                        job=job,
-                        match_seed=locked_context.match_seed,
-                        competition_metadata_json=competition_metadata,
-                    )
-                finally:
-                    if balance_session is not None:
-                        balance_session.close()
-                replay_payload = self.match_service.build_replay_payload(normalized_request)
-                replay_payload = self._enrich_replay_commentary(
-                    job,
-                    request=normalized_request,
-                    replay_payload=replay_payload,
-                )
-                replay_payload = self._attach_live_story_context(job, replay_payload)
-                viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
-                fairness_envelope = MatchIntegrityService().build_fairness_envelope(
-                    locked_context=locked_context,
-                    view_state=viewer_payload,
-                    balance_metadata=balance_metadata,
-                    competition_metadata_json=competition_metadata,
-                )
-                self._persist_player_lifecycle_incidents(job, replay_payload)
-                self._persist_match_viewer_payload(
-                    job,
-                    viewer_payload=viewer_payload,
-                    fairness_envelope=fairness_envelope,
-                    replay_payload=replay_payload,
-                )
-                self._persist_smart_highlights(job.fixture_id, replay_payload)
+            live_templates = self._queue_live_notifications(job)
+            if live_templates:
                 self._publish_match_lifecycle_event(
-                    "competition.match.simulation.completed",
+                    "competition.match.notifications.dispatched",
                     job,
-                    replay_payload=replay_payload,
-                    extra={"execution_mode": "local_worker"},
-                )
-                self._publish_match_lifecycle_event(
-                    "competition.match.commentary.generated",
-                    job,
-                    replay_payload=replay_payload,
                     extra={
-                        "commentary_event_count": len(replay_payload.timeline.events),
-                        "key_moments": self._build_key_moment_breakdown(replay_payload),
+                        "notification_phase": "live",
+                        "notification_count": len(live_templates),
+                        "notification_templates": live_templates,
                     },
                 )
-                live_update_templates = self._queue_live_update_notifications(job, replay_payload)
-                if live_update_templates:
-                    self._publish_match_lifecycle_event(
-                        "competition.match.notifications.dispatched",
-                        job,
-                        replay_payload=replay_payload,
-                        extra={
-                            "notification_phase": "live_update",
-                            "notification_count": len(live_update_templates),
-                            "notification_templates": live_update_templates,
-                        },
-                    )
-                live_templates = self._queue_live_notifications(job)
-                if live_templates:
-                    self._publish_match_lifecycle_event(
-                        "competition.match.notifications.dispatched",
-                        job,
-                        extra={
-                            "notification_phase": "live",
-                            "notification_count": len(live_templates),
-                            "notification_templates": live_templates,
-                        },
-                    )
-                self.event_publisher.publish(
-                    DomainEvent(
-                        name="competition.match.live",
-                        payload={
-                            **self._countdown_payload(job, include_user_ids=True),
-                            "live": True,
-                        },
-                    )
-                )
-                state = self._apply_competition_result(job, replay_payload)
-                self._persist_match_extensions(job, replay_payload)
-                self._publish_match_lifecycle_event(
-                    "competition.match.result.generated",
-                    job,
-                    replay_payload=replay_payload,
-                    state=state,
-                    extra={
-                        "result_status": getattr(replay_payload.summary.status, "value", replay_payload.summary.status),
+            self.event_publisher.publish(
+                DomainEvent(
+                    name="competition.match.live",
+                    payload={
+                        **self._countdown_payload(job, include_user_ids=True),
+                        "live": True,
                     },
                 )
-                if state is not None:
-                    self._publish_match_lifecycle_event(
-                        "competition.match.standings.updated",
-                        job,
-                        replay_payload=replay_payload,
-                        state=state,
-                    )
-                advancement_record = self._queue_advancement(job, replay_payload)
-                if advancement_record is not None:
-                    self._publish_match_lifecycle_event(
-                        "competition.match.advancement.dispatched",
-                        job,
-                        replay_payload=replay_payload,
-                        extra={
-                            "advancement_idempotency_key": advancement_record.idempotency_key,
-                            "stage_code": advancement_record.payload.get("stage_code"),
-                        },
-                    )
+            )
+            state = self._apply_competition_result(job, replay_payload)
+            self._publish_match_lifecycle_event(
+                "competition.match.result.generated",
+                job,
+                replay_payload=replay_payload,
+                state=state,
+                extra={
+                    "result_status": getattr(replay_payload.summary.status, "value", replay_payload.summary.status),
+                },
+            )
+            if state is not None:
                 self._publish_match_lifecycle_event(
-                    "competition.match.replay.prepared",
+                    "competition.match.standings.updated",
                     job,
                     replay_payload=replay_payload,
                     state=state,
                 )
-                self.event_publisher.publish(
-                    DomainEvent(
-                        name="competition.replay.archived",
-                        payload=self._build_replay_archive_payload(job, replay_payload),
-                    )
+            advancement_record = self._queue_advancement(job, replay_payload)
+            if advancement_record is not None:
+                self._publish_match_lifecycle_event(
+                    "competition.match.advancement.dispatched",
+                    job,
+                    replay_payload=replay_payload,
+                    extra={
+                        "advancement_idempotency_key": advancement_record.idempotency_key,
+                        "stage_code": advancement_record.payload.get("stage_code"),
+                    },
                 )
-                highlight_templates = self._queue_highlight_notifications(job, replay_payload)
-                if highlight_templates:
+            self._publish_match_lifecycle_event(
+                "competition.match.replay.prepared",
+                job,
+                replay_payload=replay_payload,
+                state=state,
+            )
+            self.event_publisher.publish(
+                DomainEvent(
+                    name="competition.replay.archived",
+                    payload=self._build_replay_archive_payload(job, replay_payload),
+                )
+            )
+            result_templates = self._queue_result_notifications(job, replay_payload)
+            if result_templates:
+                self._publish_match_lifecycle_event(
+                    "competition.match.notifications.dispatched",
+                    job,
+                    replay_payload=replay_payload,
+                    extra={
+                        "notification_phase": "result",
+                        "notification_count": len(result_templates),
+                        "notification_templates": result_templates,
+                    },
+                )
+            if state is not None and state.status == "completed":
+                transition_templates = self._queue_league_transition_notifications(job, state)
+                if transition_templates:
                     self._publish_match_lifecycle_event(
                         "competition.match.notifications.dispatched",
-                        job,
-                        replay_payload=replay_payload,
-                        extra={
-                            "notification_phase": "highlights",
-                            "notification_count": len(highlight_templates),
-                            "notification_templates": highlight_templates,
-                        },
-                    )
-                result_templates = self._queue_result_notifications(job, replay_payload)
-                if result_templates:
-                    self._publish_match_lifecycle_event(
-                        "competition.match.notifications.dispatched",
-                        job,
-                        replay_payload=replay_payload,
-                        extra={
-                            "notification_phase": "result",
-                            "notification_count": len(result_templates),
-                            "notification_templates": result_templates,
-                        },
-                    )
-                if state is not None and state.status == "completed":
-                    transition_templates = self._queue_league_transition_notifications(job, state)
-                    if transition_templates:
-                        self._publish_match_lifecycle_event(
-                            "competition.match.notifications.dispatched",
-                            job,
-                            replay_payload=replay_payload,
-                            state=state,
-                            extra={
-                                "notification_phase": "season_completion",
-                                "notification_count": len(transition_templates),
-                                "notification_templates": transition_templates,
-                            },
-                        )
-                    settlement_record = self.dispatcher.dispatch_payout_settlement(
-                        competition_id=job.competition_id,
-                        competition_type=job.competition_type,
-                        settlement_scope=job.season_id or job.competition_id,
-                        settlement_date=job.match_date,
-                        source_fixture_id=job.fixture_id,
-                    )
-                    self._publish_match_lifecycle_event(
-                        "competition.match.settlement.dispatched",
                         job,
                         replay_payload=replay_payload,
                         state=state,
                         extra={
-                            "settlement_idempotency_key": settlement_record.idempotency_key,
-                            "settlement_scope": job.season_id or job.competition_id,
+                            "notification_phase": "season_completion",
+                            "notification_count": len(transition_templates),
+                            "notification_templates": transition_templates,
                         },
                     )
+                settlement_record = self.dispatcher.dispatch_payout_settlement(
+                    competition_id=job.competition_id,
+                    competition_type=job.competition_type,
+                    settlement_scope=job.season_id or job.competition_id,
+                    settlement_date=job.match_date,
+                    source_fixture_id=job.fixture_id,
+                )
                 self._publish_match_lifecycle_event(
-                    "competition.match.execution.completed",
+                    "competition.match.settlement.dispatched",
                     job,
                     replay_payload=replay_payload,
                     state=state,
-                )
-                self._publish_realtime_match_stream(job, replay_payload)
-                return replay_payload
-            except Exception as exc:
-                self._persist_failed_execution_event(job, exc)
-                self._publish_match_lifecycle_event(
-                    "competition.match.execution.failed",
-                    job,
                     extra={
-                        "error_message": str(exc),
-                        "error_type": type(exc).__name__,
+                        "settlement_idempotency_key": settlement_record.idempotency_key,
+                        "settlement_scope": job.season_id or job.competition_id,
                     },
                 )
-                self._release_claim(self._completed_match_jobs, claim_key)
-                raise
+            self._publish_match_lifecycle_event(
+                "competition.match.execution.completed",
+                job,
+                replay_payload=replay_payload,
+                state=state,
+            )
+            return replay_payload
+        except Exception as exc:
+            self._publish_match_lifecycle_event(
+                "competition.match.execution.failed",
+                job,
+                extra={
+                    "error_message": str(exc),
+                    "error_type": type(exc).__name__,
+                },
+            )
+            self._release_claim(self._completed_match_jobs, claim_key)
+            raise
 
     def _persist_player_lifecycle_incidents(
         self,
@@ -477,8 +386,6 @@ class LocalMatchExecutionWorker:
     def _persist_match_viewer_payload(
         self,
         job: MatchSimulationJob,
-        viewer_payload,
-        fairness_envelope: dict[str, Any],
         replay_payload: MatchReplayPayloadView,
     ) -> None:
         if self.session_factory is None:
@@ -488,329 +395,16 @@ class LocalMatchExecutionWorker:
             match = session.get(CompetitionMatch, job.fixture_id)
             if match is None:
                 return
+            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
             match.metadata_json = {
                 **(match.metadata_json or {}),
                 "match_viewer": viewer_payload.model_dump(mode="json"),
-                "fairness": fairness_envelope,
-                "replay_payload": replay_payload.model_dump(mode="json"),
             }
             session.commit()
         except Exception:
             session.rollback()
         finally:
             session.close()
-
-    def _persist_smart_highlights(
-        self,
-        match_id: str,
-        replay_payload: MatchReplayPayloadView,
-    ) -> None:
-        if self.session_factory is None:
-            return
-        SmartHighlightService(self.session_factory).persist_from_replay_payload(match_id, replay_payload)
-
-    def _persist_match_extensions(
-        self,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> None:
-        if self.session_factory is None:
-            return
-        session = self.session_factory()
-        try:
-            MatchCommentaryService(session).persist_replay_commentary(
-                job.fixture_id,
-                replay_payload,
-                audience_user_ids=(job.home_user_id, job.away_user_id),
-            )
-            insights = MatchEventLoggerService(session).persist_official_match(
-                match_id=job.fixture_id,
-                replay_payload=replay_payload,
-            )
-            ManagerMarketplaceService(session).record_match_outcome(
-                home_club_id=job.home_club_id,
-                away_club_id=job.away_club_id,
-                winner_club_id=replay_payload.summary.winner_team_id,
-            )
-            from app.services.match_engagement_service import MatchEngagementService
-
-            MatchEngagementService(session).apply_match_result(
-                match_id=job.fixture_id,
-                home_club_id=job.home_club_id,
-                away_club_id=job.away_club_id,
-                home_score=replay_payload.summary.home_score,
-                away_score=replay_payload.summary.away_score,
-                home_user_id=job.home_user_id,
-                away_user_id=job.away_user_id,
-            )
-            self._store_offline_match_notifications(
-                session,
-                job=job,
-                replay_payload=replay_payload,
-                home_analysis=insights.home_analysis,
-                away_analysis=insights.away_analysis,
-            )
-            self._persist_projection_outbox_events(
-                session,
-                job=job,
-                replay_payload=replay_payload,
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-        finally:
-            session.close()
-
-    def _publish_realtime_match_stream(
-        self,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> None:
-        live_stream_started = False
-        live_hub = self._ensure_live_match_hub()
-        if live_hub is not None:
-            try:
-                live_hub.start_stream(
-                    job.fixture_id,
-                    replay_payload,
-                    read_only=True,
-                    target_runtime_seconds=90.0,
-                )
-                live_stream_started = True
-            except Exception:
-                logger.exception("match.live_hub.start_failed fixture_id=%s", job.fixture_id)
-        if self.match_stream_service is None or live_stream_started:
-            return
-        try:
-            self.match_stream_service.publish_replay_timeline(
-                match_id=job.fixture_id,
-                replay_payload=replay_payload,
-                home_team_name=job.home_club_name or job.home_club_id,
-                away_team_name=job.away_club_name or job.away_club_id,
-            )
-        except Exception:
-            logger.exception("match.realtime_stream.publish_failed fixture_id=%s", job.fixture_id)
-
-    def _ensure_live_match_hub(self) -> LiveMatchHub | None:
-        if self.cache_backend is None:
-            return None
-        with self._lock:
-            if self._live_match_hub is None:
-                self._live_match_hub = LiveMatchHub(
-                    session_factory=self.session_factory,
-                    cache_backend=self.cache_backend,
-                )
-            else:
-                self._live_match_hub.session_factory = self.session_factory
-                self._live_match_hub.cache_backend = self.cache_backend
-                self._live_match_hub._hot_cache = HotPathCache(self.cache_backend)
-                self._live_match_hub.commentary_engine.configure(cache_backend=self.cache_backend)
-        return self._live_match_hub
-
-    def _persist_projection_outbox_events(
-        self,
-        session: Session,
-        *,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> None:
-        payload = self._projection_payload(job, replay_payload)
-        for event_name in ("match.result", "match.replay.ready", "match.completed"):
-            session.add(
-                build_outbox_event(
-                    domain_event=DomainEvent(
-                        name=event_name,
-                        event_id=self._backbone_event_id(job.fixture_id, event_name),
-                        payload=payload,
-                        aggregate_id=job.fixture_id,
-                        aggregate_type="fixture",
-                        producer="simulation-service",
-                        partition_key=job.fixture_id,
-                    )
-                )
-            )
-
-    def _persist_failed_execution_event(self, job: MatchSimulationJob, exc: Exception) -> None:
-        if self.session_factory is None:
-            return
-        session = self.session_factory()
-        try:
-            session.add(
-                build_outbox_event(
-                    domain_event=DomainEvent(
-                        name="match.failed",
-                        event_id=self._backbone_event_id(job.fixture_id, "match.failed"),
-                        payload={
-                            **self._base_payload(job),
-                            "competition_type": getattr(job.competition_type, "value", job.competition_type),
-                            "season_id": job.season_id,
-                            "error_message": str(exc),
-                            "error_type": type(exc).__name__,
-                            "user_ids": [user_id for user_id in (job.home_user_id, job.away_user_id) if user_id],
-                        },
-                        aggregate_id=job.fixture_id,
-                        aggregate_type="fixture",
-                        producer="simulation-service",
-                        partition_key=job.fixture_id,
-                    )
-                )
-            )
-            session.commit()
-        except Exception:
-            session.rollback()
-        finally:
-            session.close()
-
-    def _enrich_replay_commentary(
-        self,
-        job: MatchSimulationJob,
-        *,
-        request,
-        replay_payload: MatchReplayPayloadView,
-    ) -> MatchReplayPayloadView:
-        if self.session_factory is None:
-            return replay_payload
-        session = self.session_factory()
-        try:
-            MatchCommentaryService(session).apply_to_replay_payload(
-                replay_payload,
-                request=request,
-            )
-            return replay_payload
-        finally:
-            session.close()
-
-    def _attach_live_story_context(
-        self,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> MatchReplayPayloadView:
-        shared_context = {
-            "is_final": bool(job.is_final),
-            "competition_name": job.competition_name or job.competition_id,
-            "stage_name": job.stage_name or ("final" if job.is_final else "regular"),
-        }
-        story_hook = None
-        if job.is_final:
-            stage_name = shared_context["stage_name"]
-            story_hook = f"{stage_name} pressure leaves no room for hesitation."
-        for event in replay_payload.timeline.events:
-            metadata = dict(event.metadata or {})
-            metadata.update({key: value for key, value in shared_context.items() if value is not None})
-            if story_hook and event.event_type in {
-                MatchEventType.GOAL,
-                MatchEventType.RED_CARD,
-                MatchEventType.SHOT,
-                MatchEventType.SHOT_ON_TARGET,
-                MatchEventType.MISSED_BIG_CHANCE,
-            }:
-                metadata.setdefault("player_story_hook", story_hook)
-            event.metadata = metadata
-        for item in replay_payload.replay_log:
-            payload = dict(item.payload or {})
-            payload.update({key: value for key, value in shared_context.items() if value is not None})
-            if story_hook and item.event_type in {
-                MatchEventType.GOAL,
-                MatchEventType.PENALTY_GOAL,
-                MatchEventType.PENALTY_SCORED,
-                MatchEventType.RED_CARD,
-                MatchEventType.SHOT,
-                MatchEventType.SHOT_ON_TARGET,
-                MatchEventType.MISSED_BIG_CHANCE,
-            }:
-                payload.setdefault("player_story_hook", story_hook)
-            item.payload = payload
-        return replay_payload
-
-    def _store_offline_match_notifications(
-        self,
-        session: Session,
-        *,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-        home_analysis,
-        away_analysis,
-    ) -> None:
-        participants = (
-            (job.home_user_id, "home", home_analysis),
-            (job.away_user_id, "away", away_analysis),
-        )
-        replay_link = f"/matches/{job.fixture_id}/replay"
-        for user_id, team_side, analysis in participants:
-            if user_id is None:
-                continue
-            analysis_link = f"/matches/{job.fixture_id}/analysis?team={team_side}"
-            summary_text = "; ".join(analysis.problems[:2]) if analysis.problems else "No major issues detected."
-            session.add(
-                NotificationRecord(
-                    user_id=user_id,
-                    topic="match_result",
-                    template_key="MATCH_RESULT",
-                    resource_type="competition_match",
-                    resource_id=job.fixture_id,
-                    fixture_id=job.fixture_id,
-                    competition_id=job.competition_id,
-                    message=(
-                        f"{job.home_club_name or 'Home'} {replay_payload.summary.home_score}"
-                        f" - {replay_payload.summary.away_score} {job.away_club_name or 'Away'}"
-                    )[:255],
-                    metadata_json={
-                        "replay_link": replay_link,
-                        "analysis_link": analysis_link,
-                        "analysis_summary": summary_text,
-                        "team": team_side,
-                    },
-                )
-            )
-            session.add(
-                NotificationRecord(
-                    user_id=user_id,
-                    topic="match_analysis",
-                    template_key="MATCH_ANALYSIS_READY",
-                    resource_type="competition_match",
-                    resource_id=job.fixture_id,
-                    fixture_id=job.fixture_id,
-                    competition_id=job.competition_id,
-                    message="Match analysis ready"[:255],
-                    metadata_json={
-                        "analysis_link": analysis_link,
-                        "problems": list(analysis.problems),
-                        "suggestions": list(analysis.suggestions),
-                        "team": team_side,
-                    },
-                )
-            )
-            session.add(
-                NotificationRecord(
-                    user_id=user_id,
-                    topic="match_replay",
-                    template_key="REPLAY_AVAILABLE",
-                    resource_type="competition_match",
-                    resource_id=job.fixture_id,
-                    fixture_id=job.fixture_id,
-                    competition_id=job.competition_id,
-                    message="Replay available"[:255],
-                    metadata_json={
-                        "replay_link": replay_link,
-                        "team": team_side,
-                    },
-                )
-            )
-
-    def _competition_metadata(self, competition_id: str) -> dict[str, Any]:
-        session = self._open_session()
-        if session is None:
-            return {}
-        try:
-            competition = session.get(Competition, competition_id)
-            return dict(competition.metadata_json or {}) if competition is not None else {}
-        finally:
-            session.close()
-
-    def _open_session(self) -> Session | None:
-        if self.session_factory is None:
-            return None
-        return self.session_factory()
 
     def execute_advancement(self, job: BracketAdvancementJob) -> None:
         claim_key = job.idempotency_key or job.source_fixture_id
@@ -931,45 +525,6 @@ class LocalMatchExecutionWorker:
                 },
             )
             templates.append("match_live_now")
-            self.dispatcher.dispatch_notification(
-                competition_id=job.competition_id,
-                competition_type=job.competition_type,
-                template_key="LIVE_MATCH_STARTED",
-                audience_key=user_id,
-                resource_id=f"{job.fixture_id}:live_started",
-                payload={
-                    **self._countdown_payload(job),
-                    "message": f"{job.home_club_name or job.home_club_id or 'Home Club'} vs {job.away_club_name or job.away_club_id or 'Away Club'} is live.",
-                },
-            )
-            templates.append("LIVE_MATCH_STARTED")
-        return tuple(templates)
-
-    def _queue_live_update_notifications(
-        self,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> tuple[str, ...]:
-        preview = self._highlight_preview(replay_payload)
-        if not preview:
-            return ()
-        templates: list[str] = []
-        for user_id in (job.home_user_id, job.away_user_id):
-            if user_id is None:
-                continue
-            self.dispatcher.dispatch_notification(
-                competition_id=job.competition_id,
-                competition_type=job.competition_type,
-                template_key="LIVE_MATCH_UPDATE",
-                audience_key=user_id,
-                resource_id=f"{job.fixture_id}:live_update",
-                payload={
-                    **self._base_payload(job),
-                    "message": preview[0]["description"],
-                    "highlights_preview": preview,
-                },
-            )
-            templates.append("LIVE_MATCH_UPDATE")
         return tuple(templates)
 
     def _queue_result_notifications(
@@ -984,7 +539,6 @@ class LocalMatchExecutionWorker:
             **self._base_payload(job),
             "home_goals": replay_payload.summary.home_score,
             "away_goals": replay_payload.summary.away_score,
-            "highlights_preview": self._highlight_preview(replay_payload),
         }
         templates: list[str] = []
         if job.home_user_id is not None:
@@ -1009,33 +563,6 @@ class LocalMatchExecutionWorker:
                 payload=base_payload,
             )
             templates.append(template_key)
-        return tuple(templates)
-
-    def _queue_highlight_notifications(
-        self,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> tuple[str, ...]:
-        preview = self._highlight_preview(replay_payload)
-        if not preview:
-            return ()
-        templates: list[str] = []
-        for user_id in (job.home_user_id, job.away_user_id):
-            if user_id is None:
-                continue
-            self.dispatcher.dispatch_notification(
-                competition_id=job.competition_id,
-                competition_type=job.competition_type,
-                template_key="HIGHLIGHTS_READY",
-                audience_key=user_id,
-                resource_id=f"{job.fixture_id}:highlights",
-                payload={
-                    **self._base_payload(job),
-                    "message": f"Highlights are ready for {job.home_club_name or job.home_club_id or 'Home Club'} vs {job.away_club_name or job.away_club_id or 'Away Club'}.",
-                    "highlights_preview": preview,
-                },
-            )
-            templates.append("HIGHLIGHTS_READY")
         return tuple(templates)
 
     def _queue_league_transition_notifications(
@@ -1248,7 +775,6 @@ class LocalMatchExecutionWorker:
     ) -> dict[str, Any]:
         payload = {
             **self._base_payload(job),
-            "queued_at": job.queued_at,
             "scheduled_start": _resolve_kickoff(job),
             "home_club": {
                 "club_id": job.home_club_id or "home",
@@ -1331,64 +857,6 @@ class LocalMatchExecutionWorker:
             "timeline_event_count": len(replay_payload.timeline.events),
         }
 
-    def _projection_payload(
-        self,
-        job: MatchSimulationJob,
-        replay_payload: MatchReplayPayloadView,
-    ) -> dict[str, Any]:
-        return {
-            **self._base_payload(job),
-            "competition_type": getattr(job.competition_type, "value", job.competition_type),
-            "season_id": job.season_id,
-            "stage_name": job.stage_name,
-            "round_number": job.round_number,
-            "home_club_id": job.home_club_id,
-            "away_club_id": job.away_club_id,
-            "home_user_id": job.home_user_id,
-            "away_user_id": job.away_user_id,
-            "home_goals": replay_payload.summary.home_score,
-            "away_goals": replay_payload.summary.away_score,
-            "winner_team_id": replay_payload.summary.winner_team_id,
-            "winner_team_name": replay_payload.summary.winner_team_name,
-            "winner_user_id": (
-                job.home_user_id
-                if replay_payload.summary.home_score > replay_payload.summary.away_score
-                else job.away_user_id
-                if replay_payload.summary.away_score > replay_payload.summary.home_score
-                else None
-            ),
-            "match_result": (
-                "home_win"
-                if replay_payload.summary.home_score > replay_payload.summary.away_score
-                else "away_win"
-                if replay_payload.summary.away_score > replay_payload.summary.home_score
-                else "draw"
-            ),
-            "decided_by_penalties": replay_payload.summary.decided_by_penalties,
-            "presentation_duration_seconds": replay_payload.timeline.presentation_duration_seconds,
-            "replay_id": f"replay:{job.fixture_id}",
-            "is_final": job.is_final,
-            "user_ids": [user_id for user_id in (job.home_user_id, job.away_user_id) if user_id],
-            "player_stats": [
-                {
-                    "player_id": item.player_id,
-                    "player_name": item.player_name,
-                    "team_id": item.team_id,
-                    "team_name": item.team_name,
-                    "started": item.started,
-                    "minutes_played": item.minutes_played,
-                    "goals": item.goals,
-                    "assists": item.assists,
-                    "saves": item.saves,
-                    "yellow_cards": item.yellow_cards,
-                    "red_card": item.red_card,
-                    "xg": item.xg,
-                    "rating": item.rating,
-                }
-                for item in replay_payload.summary.player_stats
-            ],
-        }
-
     def _build_key_moment_breakdown(self, replay_payload: MatchReplayPayloadView) -> dict[str, int]:
         breakdown: dict[str, int] = {}
         for event in replay_payload.timeline.events:
@@ -1397,27 +865,6 @@ class LocalMatchExecutionWorker:
                 continue
             breakdown[replay_event_type] = breakdown.get(replay_event_type, 0) + 1
         return breakdown
-
-    def _highlight_preview(self, replay_payload: MatchReplayPayloadView) -> list[dict[str, Any]]:
-        preview: list[dict[str, Any]] = []
-        for event in replay_payload.timeline.events:
-            replay_event_type = self._map_replay_event_type(event.event_type)
-            if replay_event_type is None:
-                continue
-            preview.append(
-                {
-                    "minute": event.minute,
-                    "type": replay_event_type,
-                    "description": event.commentary,
-                }
-            )
-            if len(preview) >= 3:
-                break
-        return preview
-
-    @staticmethod
-    def _backbone_event_id(fixture_id: str, event_name: str) -> str:
-        return str(uuid5(NAMESPACE_URL, f"gtex:{fixture_id}:{event_name}"))
 
     def _claim_once(self, bucket: set[str], key: str) -> bool:
         with self._lock:
@@ -1433,19 +880,10 @@ class LocalMatchExecutionWorker:
 
 def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWorker:
     session_factory = getattr(app.state, "session_factory", None)
-    settings = getattr(app.state, "settings", None)
     queue_publisher = getattr(app.state, "competition_queue_publisher", None)
     if queue_publisher is None:
-        if session_factory is not None:
-            queue_publisher = DurableQueuePublisher(
-                session_factory=session_factory,
-                event_publisher=app.state.event_publisher,
-            )
-        else:
-            queue_publisher = InMemoryQueuePublisher(event_publisher=app.state.event_publisher)
+        queue_publisher = InMemoryQueuePublisher(event_publisher=app.state.event_publisher)
         app.state.competition_queue_publisher = queue_publisher
-    elif isinstance(queue_publisher, DurableQueuePublisher):
-        queue_publisher.session_factory = session_factory
 
     dispatcher = getattr(app.state, "match_dispatcher", None)
     if dispatcher is None:
@@ -1465,37 +903,9 @@ def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWor
         worker.session_factory = session_factory
         worker.team_factory.session_factory = session_factory
 
-    kafka_queue_mode = bool(getattr(settings, "kafka_enabled", False))
-    if not kafka_queue_mode and not getattr(app.state, "_match_execution_worker_subscribed", False):
+    if not getattr(app.state, "_match_execution_worker_subscribed", False):
         app.state.event_publisher.subscribe(worker.handle_event)
         app.state._match_execution_worker_subscribed = True
-    if kafka_queue_mode and getattr(settings, "kafka_api_queue_consumer_enabled", False):
-        consumer_runtime = getattr(app.state, "api_queue_consumer", None)
-        if consumer_runtime is None:
-            try:
-                from app.backbone.queue_runtime import ApiQueueConsumerService
-
-                consumer_runtime = ApiQueueConsumerService(
-                    consumer=KafkaJsonConsumer(
-                        brokers=settings.kafka_brokers,
-                        group_id=settings.kafka_queue_consumer_group,
-                        client_id=f"{settings.kafka_client_id}-api-queue",
-                        topics=KafkaJsonConsumer.topic_names(
-                            prefix=settings.kafka_topic_prefix,
-                            topics=(
-                                "competition.notification.requested",
-                                "competition.advancement.requested",
-                                "competition.settlement.requested",
-                            ),
-                        ),
-                    ),
-                    worker=worker,
-                    metrics=app.state.metrics,
-                )
-                consumer_runtime.start()
-                app.state.api_queue_consumer = consumer_runtime
-            except KafkaBackboneUnavailable:
-                pass
 
     if not hasattr(app.state, "league_match_execution"):
         app.state.league_match_execution = LeagueFixtureExecutionService(

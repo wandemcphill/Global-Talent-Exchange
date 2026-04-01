@@ -11,18 +11,16 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.auth.security import hash_password
 from app.auth.service import AuthService
 from app.core.events import EventPublisher, InMemoryEventPublisher
-from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
 from app.ledger.models import LedgerEventRecord
 from app.market.service import MarketEngine
 from app.matching.models import TradeExecution
 from app.matching.service import MatchingService
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerAccount, LedgerEntryReason, LedgerUnit
 from app.orders.models import Order, OrderSide, OrderStatus
 from app.orders.service import OrderService
 from app.players.read_models import PlayerSummaryReadModel
-from app.simulation.agent_policy import AITradingAgentPolicy, AgentDecision, AgentMarketSnapshot, blocks_agent_trading
 from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -32,7 +30,6 @@ DEFAULT_LIQUID_PLAYER_COUNT = 4
 DEFAULT_ILLIQUID_PLAYER_COUNT = 2
 DEFAULT_SIMULATION_CREDIT_BALANCE = Decimal("250000.0000")
 DEFAULT_TICK_COUNT = 3
-MIN_AGENT_ORDER_QUANTITY = Decimal("0.2500")
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,42 +124,36 @@ class SimulationTickSummary:
         }
 
 
-@dataclass(slots=True)
-class _AgentVolumeState:
-    total_volume: Decimal = Decimal("0.0000")
-    user_volume: dict[str, Decimal] = field(default_factory=dict)
-
-
 SIMULATION_USER_SPECS: tuple[SimulationUserSpec, ...] = (
     SimulationUserSpec(
-        email="simulation.maker.alpha@gte.local",
+        email="maker.alpha@demo.gte.local",
         username="sim_maker_alpha",
-        display_name="AI Trader Alpha",
+        display_name="Simulation Maker Alpha",
     ),
     SimulationUserSpec(
-        email="simulation.maker.beta@gte.local",
+        email="maker.beta@demo.gte.local",
         username="sim_maker_beta",
-        display_name="AI Trader Beta",
+        display_name="Simulation Maker Beta",
     ),
     SimulationUserSpec(
-        email="simulation.maker.gamma@gte.local",
+        email="maker.gamma@demo.gte.local",
         username="sim_maker_gamma",
-        display_name="AI Trader Gamma",
+        display_name="Simulation Maker Gamma",
     ),
     SimulationUserSpec(
-        email="simulation.taker.alpha@gte.local",
+        email="taker.alpha@demo.gte.local",
         username="sim_taker_alpha",
-        display_name="AI Trader Delta",
+        display_name="Simulation Taker Alpha",
     ),
     SimulationUserSpec(
-        email="simulation.taker.beta@gte.local",
+        email="taker.beta@demo.gte.local",
         username="sim_taker_beta",
-        display_name="AI Trader Epsilon",
+        display_name="Simulation Taker Beta",
     ),
     SimulationUserSpec(
-        email="simulation.taker.gamma@gte.local",
+        email="taker.gamma@demo.gte.local",
         username="sim_taker_gamma",
-        display_name="AI Trader Zeta",
+        display_name="Simulation Taker Gamma",
     ),
 )
 
@@ -175,7 +166,6 @@ class SimulationSeedError(ValueError):
 class DemoMarketSimulationService:
     session_factory: sessionmaker[Session]
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
-    agent_policy: AITradingAgentPolicy = field(default_factory=AITradingAgentPolicy)
 
     def seed_demo_liquidity(
         self,
@@ -191,9 +181,8 @@ class DemoMarketSimulationService:
             raise SimulationSeedError("illiquid_player_count must be greater than or equal to zero.")
 
         auth_service = AuthService()
-        simulation_publisher = InMemoryEventPublisher()
-        wallet_service = WalletService(event_publisher=simulation_publisher)
-        order_service = OrderService(event_publisher=simulation_publisher)
+        wallet_service = WalletService(event_publisher=self.event_publisher)
+        order_service = OrderService(event_publisher=self.event_publisher)
         matching_service = MatchingService()
 
         with self.session_factory() as session:
@@ -216,22 +205,15 @@ class DemoMarketSimulationService:
             sell_orders_seeded = 0
             trade_executions_seeded = 0
             player_summaries: list[SeededPlayerSummary] = []
-            volume_tracker: dict[str, _AgentVolumeState] = {}
-            governor = EconomyGovernorService(session=session, wallet_service=wallet_service)
 
             for index, profile in enumerate(profiles):
                 rng = random.Random(random_seed + (index * 997))
-                market_snapshot = self._build_agent_market_snapshot(profile=profile, rng=rng)
-                decision = self.agent_policy.decide(market_snapshot)
                 seeded_trades = self._seed_trade_history_for_player(
                     session,
                     profile=profile,
                     simulation_users=simulation_users,
                     order_service=order_service,
                     rng=rng,
-                    decision=decision,
-                    volume_tracker=volume_tracker,
-                    governor=governor,
                 )
                 trade_executions_seeded += seeded_trades
 
@@ -241,9 +223,6 @@ class DemoMarketSimulationService:
                     simulation_users=simulation_users,
                     order_service=order_service,
                     rng=rng,
-                    decision=decision,
-                    volume_tracker=volume_tracker,
-                    governor=governor,
                 )
                 buy_orders_seeded += bid_levels
                 sell_orders_seeded += ask_levels
@@ -292,7 +271,7 @@ class DemoMarketSimulationService:
         if tick_number < 1:
             raise SimulationSeedError("tick_number must be at least 1.")
 
-        order_service = OrderService(event_publisher=InMemoryEventPublisher())
+        order_service = OrderService(event_publisher=self.event_publisher)
         with self.session_factory() as session:
             simulation_users = self._load_simulation_users(session)
             profiles = self._select_player_profiles(
@@ -308,47 +287,26 @@ class DemoMarketSimulationService:
             orders_created = 0
             trades_created = 0
             touched: list[str] = []
-            volume_tracker: dict[str, _AgentVolumeState] = {}
-            governor = EconomyGovernorService(session=session)
 
             for index, profile in enumerate(profiles):
                 rng = random.Random(random_seed + (tick_number * 10_000) + index)
-                market_snapshot = self._build_agent_market_snapshot(
-                    profile=profile,
-                    rng=rng,
-                    tick_number=tick_number,
+                seller = simulation_users[(index + tick_number) % len(simulation_users)]
+                buyer = simulation_users[(index + tick_number + 1) % len(simulation_users)]
+                price_shift = rng.randint(-profile.activity_intensity, profile.activity_intensity)
+                price = max(
+                    Decimal("1.0000"),
+                    self._normalize_amount(profile.reference_price + Decimal(price_shift)),
                 )
-                decision = self.agent_policy.decide(market_snapshot)
-                quantity = self._agent_order_quantity(
-                    base_quantity=Decimal(profile.activity_intensity),
-                    governor=governor,
-                )
-                seller = self._select_agent_user(
-                    player_id=profile.player_id,
-                    simulation_users=simulation_users,
-                    preferred_index=index + tick_number,
-                    proposed_volume=quantity,
-                    volume_tracker=volume_tracker,
-                    max_agent_volume=governor.agent_market_volume_cap(),
-                )
-                buyer = self._select_agent_user(
-                    player_id=profile.player_id,
-                    simulation_users=simulation_users,
-                    preferred_index=index + tick_number + 1,
-                    proposed_volume=quantity,
-                    volume_tracker=volume_tracker,
-                    max_agent_volume=governor.agent_market_volume_cap(),
-                    excluded_user_ids={seller.id} if seller is not None else None,
-                )
-                if seller is None or buyer is None:
-                    continue
-                price = self._trade_price_for_decision(
-                    profile=profile,
-                    decision=decision,
-                    rng=rng,
-                    governor=governor,
-                )
+                quantity = Decimal(profile.activity_intensity)
 
+                self._ensure_user_position_inventory(
+                    session,
+                    wallet_service=order_service.wallet_service,
+                    user=seller,
+                    player_id=profile.player_id,
+                    required_available=quantity,
+                    reference=f"simulation-tick-{tick_number}-{profile.player_id}-seller",
+                )
                 order_service.place_order(
                     session,
                     user=seller,
@@ -356,12 +314,6 @@ class DemoMarketSimulationService:
                     side=OrderSide.SELL,
                     quantity=quantity,
                     max_price=price,
-                )
-                self._record_agent_volume(
-                    player_id=profile.player_id,
-                    user_id=seller.id,
-                    quantity=quantity,
-                    volume_tracker=volume_tracker,
                 )
                 order_service.place_order(
                     session,
@@ -371,73 +323,35 @@ class DemoMarketSimulationService:
                     quantity=quantity,
                     max_price=price,
                 )
-                self._record_agent_volume(
-                    player_id=profile.player_id,
-                    user_id=buyer.id,
-                    quantity=quantity,
-                    volume_tracker=volume_tracker,
-                )
                 orders_created += 2
                 trades_created += 1
                 touched.append(profile.player_id)
 
-                resting_bid, resting_ask = self._ladder_prices_for_decision(
-                    profile=profile,
-                    decision=decision,
-                    spread_step=profile.activity_intensity,
-                    governor=governor,
-                )
-                resting_quantity = self._agent_order_quantity(
-                    base_quantity=Decimal("1.0000"),
-                    governor=governor,
-                )
-                resting_bid_user = self._select_agent_user(
+                resting_bid = max(Decimal("1.0000"), self._normalize_amount(price - Decimal(profile.activity_intensity)))
+                resting_ask = self._normalize_amount(price + Decimal(profile.activity_intensity))
+                self._ensure_user_position_inventory(
+                    session,
+                    wallet_service=order_service.wallet_service,
+                    user=seller,
                     player_id=profile.player_id,
-                    simulation_users=simulation_users,
-                    preferred_index=index + tick_number + 2,
-                    proposed_volume=resting_quantity,
-                    volume_tracker=volume_tracker,
-                    max_agent_volume=governor.agent_market_volume_cap(),
-                    excluded_user_ids={seller.id, buyer.id},
+                    required_available=Decimal("1.0000"),
+                    reference=f"simulation-resting-{tick_number}-{profile.player_id}-seller",
                 )
-                resting_ask_user = self._select_agent_user(
-                    player_id=profile.player_id,
-                    simulation_users=simulation_users,
-                    preferred_index=index + tick_number + 3,
-                    proposed_volume=resting_quantity,
-                    volume_tracker=volume_tracker,
-                    max_agent_volume=governor.agent_market_volume_cap(),
-                    excluded_user_ids={seller.id, buyer.id, resting_bid_user.id} if resting_bid_user is not None else {seller.id, buyer.id},
-                )
-                if resting_bid_user is None or resting_ask_user is None:
-                    continue
                 order_service.place_order(
                     session,
-                    user=resting_bid_user,
+                    user=buyer,
                     player_id=profile.player_id,
                     side=OrderSide.BUY,
-                    quantity=resting_quantity,
+                    quantity=Decimal("1.0000"),
                     max_price=resting_bid,
-                )
-                self._record_agent_volume(
-                    player_id=profile.player_id,
-                    user_id=resting_bid_user.id,
-                    quantity=resting_quantity,
-                    volume_tracker=volume_tracker,
                 )
                 order_service.place_order(
                     session,
-                    user=resting_ask_user,
+                    user=seller,
                     player_id=profile.player_id,
                     side=OrderSide.SELL,
-                    quantity=resting_quantity,
+                    quantity=Decimal("1.0000"),
                     max_price=resting_ask,
-                )
-                self._record_agent_volume(
-                    player_id=profile.player_id,
-                    user_id=resting_ask_user.id,
-                    quantity=resting_quantity,
-                    volume_tracker=volume_tracker,
                 )
                 orders_created += 2
 
@@ -614,7 +528,7 @@ class DemoMarketSimulationService:
                 wallet_service.ensure_default_accounts(session, user)
                 session.flush()
 
-            self._rebalance_user_wallets(
+            self._rebalance_user_credit_wallet(
                 session,
                 wallet_service=wallet_service,
                 user=user,
@@ -661,7 +575,7 @@ class DemoMarketSimulationService:
             session.execute(delete(Order).where(Order.id.in_(order_ids)))
 
         for spec, user in zip(SIMULATION_USER_SPECS, simulation_users, strict=True):
-            self._rebalance_user_wallets(
+            self._rebalance_user_credit_wallet(
                 session,
                 wallet_service=wallet_service,
                 user=user,
@@ -735,40 +649,21 @@ class DemoMarketSimulationService:
         simulation_users: Sequence[User],
         order_service: OrderService,
         rng: random.Random,
-        decision: AgentDecision,
-        volume_tracker: dict[str, _AgentVolumeState],
-        governor: EconomyGovernorService,
     ) -> int:
         seeded = 0
         for index in range(profile.trade_history_count):
-            quantity = self._agent_order_quantity(
-                base_quantity=Decimal(profile.activity_intensity),
-                governor=governor,
-            )
-            seller = self._select_agent_user(
+            seller = simulation_users[(index * 2) % len(simulation_users)]
+            buyer = simulation_users[(index * 2 + 1) % len(simulation_users)]
+            price_adjustment = rng.randint(-profile.activity_intensity, profile.activity_intensity)
+            trade_price = max(Decimal("1.0000"), self._normalize_amount(profile.reference_price + Decimal(price_adjustment)))
+            quantity = Decimal(profile.activity_intensity)
+            self._ensure_user_position_inventory(
+                session,
+                wallet_service=order_service.wallet_service,
+                user=seller,
                 player_id=profile.player_id,
-                simulation_users=simulation_users,
-                preferred_index=index * 2,
-                proposed_volume=quantity,
-                volume_tracker=volume_tracker,
-                max_agent_volume=governor.agent_market_volume_cap(),
-            )
-            buyer = self._select_agent_user(
-                player_id=profile.player_id,
-                simulation_users=simulation_users,
-                preferred_index=index * 2 + 1,
-                proposed_volume=quantity,
-                volume_tracker=volume_tracker,
-                max_agent_volume=governor.agent_market_volume_cap(),
-                excluded_user_ids={seller.id} if seller is not None else None,
-            )
-            if seller is None or buyer is None:
-                continue
-            trade_price = self._trade_price_for_decision(
-                profile=profile,
-                decision=decision,
-                rng=rng,
-                governor=governor,
+                required_available=quantity,
+                reference=f"simulation-history-{profile.player_id}-{index}-seller",
             )
             order_service.place_order(
                 session,
@@ -778,12 +673,6 @@ class DemoMarketSimulationService:
                 quantity=quantity,
                 max_price=trade_price,
             )
-            self._record_agent_volume(
-                player_id=profile.player_id,
-                user_id=seller.id,
-                quantity=quantity,
-                volume_tracker=volume_tracker,
-            )
             order_service.place_order(
                 session,
                 user=buyer,
@@ -791,12 +680,6 @@ class DemoMarketSimulationService:
                 side=OrderSide.BUY,
                 quantity=quantity,
                 max_price=trade_price,
-            )
-            self._record_agent_volume(
-                player_id=profile.player_id,
-                user_id=buyer.id,
-                quantity=quantity,
-                volume_tracker=volume_tracker,
             )
             seeded += 1
         return seeded
@@ -809,42 +692,18 @@ class DemoMarketSimulationService:
         simulation_users: Sequence[User],
         order_service: OrderService,
         rng: random.Random,
-        decision: AgentDecision,
-        volume_tracker: dict[str, _AgentVolumeState],
-        governor: EconomyGovernorService,
     ) -> tuple[int, int]:
         bid_levels = 0
         ask_levels = 0
         for level_index, spread_step in enumerate(profile.spread_steps):
-            quantity = self._agent_order_quantity(
-                base_quantity=Decimal(profile.activity_intensity + level_index + rng.randint(0, profile.activity_intensity)),
-                governor=governor,
+            bid_user = simulation_users[(level_index + 1) % len(simulation_users)]
+            ask_user = simulation_users[(level_index + 2) % len(simulation_users)]
+            bid_price = max(
+                Decimal("1.0000"),
+                self._normalize_amount(profile.reference_price - Decimal(spread_step)),
             )
-            bid_user = self._select_agent_user(
-                player_id=profile.player_id,
-                simulation_users=simulation_users,
-                preferred_index=level_index + 1,
-                proposed_volume=quantity,
-                volume_tracker=volume_tracker,
-                max_agent_volume=governor.agent_market_volume_cap(),
-            )
-            ask_user = self._select_agent_user(
-                player_id=profile.player_id,
-                simulation_users=simulation_users,
-                preferred_index=level_index + 2,
-                proposed_volume=quantity,
-                volume_tracker=volume_tracker,
-                max_agent_volume=governor.agent_market_volume_cap(),
-                excluded_user_ids={bid_user.id} if bid_user is not None else None,
-            )
-            if bid_user is None or ask_user is None:
-                continue
-            bid_price, ask_price = self._ladder_prices_for_decision(
-                profile=profile,
-                decision=decision,
-                spread_step=spread_step,
-                governor=governor,
-            )
+            ask_price = self._normalize_amount(profile.reference_price + Decimal(spread_step))
+            quantity = Decimal(profile.activity_intensity + level_index + rng.randint(0, profile.activity_intensity))
 
             order_service.place_order(
                 session,
@@ -854,11 +713,13 @@ class DemoMarketSimulationService:
                 quantity=quantity,
                 max_price=bid_price,
             )
-            self._record_agent_volume(
+            self._ensure_user_position_inventory(
+                session,
+                wallet_service=order_service.wallet_service,
+                user=ask_user,
                 player_id=profile.player_id,
-                user_id=bid_user.id,
-                quantity=quantity,
-                volume_tracker=volume_tracker,
+                required_available=quantity,
+                reference=f"simulation-ladder-{profile.player_id}-{level_index}-seller",
             )
             order_service.place_order(
                 session,
@@ -868,139 +729,11 @@ class DemoMarketSimulationService:
                 quantity=quantity,
                 max_price=ask_price,
             )
-            self._record_agent_volume(
-                player_id=profile.player_id,
-                user_id=ask_user.id,
-                quantity=quantity,
-                volume_tracker=volume_tracker,
-            )
             bid_levels += 1
             ask_levels += 1
         return bid_levels, ask_levels
 
-    def _build_agent_market_snapshot(
-        self,
-        *,
-        profile: SimulationPlayerProfile,
-        rng: random.Random,
-        tick_number: int | None = None,
-    ) -> AgentMarketSnapshot:
-        market_type = "low_liquidity" if profile.liquidity_label == "illiquid" else "normal"
-        baseline_trend = ((Decimal(profile.market_interest_score) / Decimal("100")) - Decimal("0.50")) / Decimal("5")
-        random_bias = Decimal(str(round(rng.uniform(-0.0300, 0.0300), 4)))
-        tick_bias = Decimal("0.0050") if tick_number is not None and tick_number % 2 == 0 else Decimal("0.0000")
-        trend = self._normalize_amount(baseline_trend + random_bias + tick_bias)
-        undervalued = market_type != "low_liquidity" and profile.market_interest_score >= 80 and trend <= Decimal("0.0500")
-        return AgentMarketSnapshot(
-            market_type=market_type,
-            trend=trend,
-            undervalued=undervalued,
-        )
-
-    def _trade_price_for_decision(
-        self,
-        *,
-        profile: SimulationPlayerProfile,
-        decision: AgentDecision,
-        rng: random.Random,
-        governor: EconomyGovernorService,
-    ) -> Decimal:
-        if decision == AgentDecision.MOMENTUM_BUY:
-            proposed_price = self._normalize_amount(profile.reference_price + Decimal(profile.activity_intensity))
-        elif decision == AgentDecision.VALUE_BUY:
-            discount = max(1, profile.activity_intensity)
-            proposed_price = max(Decimal("1.0000"), self._normalize_amount(profile.reference_price - Decimal(discount)))
-        else:
-            price_adjustment = rng.randint(-profile.activity_intensity, profile.activity_intensity)
-            proposed_price = max(Decimal("1.0000"), self._normalize_amount(profile.reference_price + Decimal(price_adjustment)))
-        return governor.clamp_price_change(reference_price=profile.reference_price, proposed_price=proposed_price)
-
-    def _ladder_prices_for_decision(
-        self,
-        *,
-        profile: SimulationPlayerProfile,
-        decision: AgentDecision,
-        spread_step: int,
-        governor: EconomyGovernorService,
-    ) -> tuple[Decimal, Decimal]:
-        if decision == AgentDecision.MOMENTUM_BUY:
-            bid_price = max(
-                Decimal("1.0000"),
-                self._normalize_amount(profile.reference_price - Decimal(max(1, spread_step // 2))),
-            )
-            ask_price = self._normalize_amount(profile.reference_price + Decimal(spread_step + profile.activity_intensity))
-        elif decision == AgentDecision.VALUE_BUY:
-            bid_price = max(
-                Decimal("1.0000"),
-                self._normalize_amount(profile.reference_price - Decimal(spread_step + 1)),
-            )
-            ask_price = self._normalize_amount(profile.reference_price + Decimal(max(1, spread_step // 2)))
-        else:
-            bid_price = max(
-                Decimal("1.0000"),
-                self._normalize_amount(profile.reference_price - Decimal(spread_step)),
-            )
-            ask_price = self._normalize_amount(profile.reference_price + Decimal(spread_step))
-        return (
-            governor.clamp_price_change(reference_price=profile.reference_price, proposed_price=bid_price),
-            governor.clamp_price_change(reference_price=profile.reference_price, proposed_price=ask_price),
-        )
-
-    def _select_agent_user(
-        self,
-        *,
-        player_id: str,
-        simulation_users: Sequence[User],
-        preferred_index: int,
-        proposed_volume: Decimal,
-        volume_tracker: dict[str, _AgentVolumeState],
-        max_agent_volume: Decimal,
-        excluded_user_ids: set[str] | None = None,
-    ) -> User | None:
-        state = volume_tracker.setdefault(player_id, _AgentVolumeState())
-        excluded = excluded_user_ids or set()
-        for offset in range(len(simulation_users)):
-            user = simulation_users[(preferred_index + offset) % len(simulation_users)]
-            if user.id in excluded:
-                continue
-            user_volume = state.user_volume.get(user.id, Decimal("0.0000"))
-            active_agent_count = sum(1 for volume in state.user_volume.values() if volume > Decimal("0.0000"))
-            if blocks_agent_trading(
-                agent_volume=user_volume,
-                total_market_volume=state.total_volume,
-                proposed_volume=proposed_volume,
-                active_agent_count=active_agent_count,
-                agent_is_active=user_volume > Decimal("0.0000"),
-                max_agent_volume=max_agent_volume,
-            ):
-                continue
-            return user
-        return None
-
-    def _agent_order_quantity(
-        self,
-        *,
-        base_quantity: Decimal,
-        governor: EconomyGovernorService,
-    ) -> Decimal:
-        scaled_quantity = Decimal(str(base_quantity)) * governor.agent_activity_multiplier()
-        normalized_quantity = self._normalize_amount(scaled_quantity)
-        return max(MIN_AGENT_ORDER_QUANTITY, normalized_quantity)
-
-    @staticmethod
-    def _record_agent_volume(
-        *,
-        player_id: str,
-        user_id: str,
-        quantity: Decimal,
-        volume_tracker: dict[str, _AgentVolumeState],
-    ) -> None:
-        state = volume_tracker.setdefault(player_id, _AgentVolumeState())
-        normalized_quantity = Decimal(str(quantity or "0.0000"))
-        state.total_volume += normalized_quantity
-        state.user_volume[user_id] = state.user_volume.get(user_id, Decimal("0.0000")) + normalized_quantity
-
-    def _rebalance_user_wallets(
+    def _rebalance_user_credit_wallet(
         self,
         session: Session,
         *,
@@ -1009,23 +742,50 @@ class DemoMarketSimulationService:
         available_target: Decimal,
         escrow_target: Decimal,
     ) -> None:
-        for unit in (LedgerUnit.COIN, LedgerUnit.CREDIT):
-            available_account = wallet_service.get_user_account(session, user, unit)
-            escrow_account = wallet_service.get_user_escrow_account(session, user, unit)
-            self._rebalance_account(
-                session,
-                account=available_account,
-                target_balance=available_target,
-                wallet_service=wallet_service,
-                actor=user,
-            )
-            self._rebalance_account(
-                session,
-                account=escrow_account,
-                target_balance=escrow_target,
-                wallet_service=wallet_service,
-                actor=user,
-            )
+        available_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
+        escrow_account = wallet_service.get_user_escrow_account(session, user, LedgerUnit.CREDIT)
+        self._rebalance_account(
+            session,
+            account=available_account,
+            target_balance=available_target,
+            wallet_service=wallet_service,
+            actor=user,
+        )
+        self._rebalance_account(
+            session,
+            account=escrow_account,
+            target_balance=escrow_target,
+            wallet_service=wallet_service,
+            actor=user,
+        )
+
+    def _ensure_user_position_inventory(
+        self,
+        session: Session,
+        *,
+        wallet_service: WalletService,
+        user: User,
+        player_id: str,
+        required_available: Decimal,
+        reference: str,
+    ) -> None:
+        target_quantity = self._normalize_amount(required_available)
+        if target_quantity <= Decimal("0.0000"):
+            return
+        available_quantity = wallet_service.get_available_position_quantity(session, user, player_id)
+        shortfall = self._normalize_amount(target_quantity - available_quantity)
+        if shortfall <= Decimal("0.0000"):
+            return
+        external_reference = f"{reference}:{user.id}:{player_id}"
+        wallet_service.credit_position_units(
+            session,
+            user=user,
+            player_id=player_id,
+            quantity=shortfall,
+            reference=reference,
+            description="Simulation seeded position inventory",
+            external_reference=external_reference,
+        )
 
     def _rebalance_account(
         self,
@@ -1048,7 +808,6 @@ class DemoMarketSimulationService:
                 LedgerPosting(account=platform_account, amount=-delta),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=f"simulation-rebalance-{account.code}",
             description="Simulation wallet rebalance",
             actor=actor,

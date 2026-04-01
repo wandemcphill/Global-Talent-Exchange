@@ -13,7 +13,6 @@ class BallWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double elevation = ball.elevation.clamp(0, 3.2);
     final Color fillColor = switch (ball.state) {
       'saved' => const Color(0xFFD1E9FF),
       'missed' => const Color(0xFFFEE4A8),
@@ -22,39 +21,13 @@ class BallWidget extends StatelessWidget {
       _ => Colors.white,
     };
     return IgnorePointer(
-      child: SizedBox(
+      child: Container(
         width: size,
         height: size,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.bottomCenter,
-          children: <Widget>[
-            Positioned(
-              bottom: size * 0.04,
-              child: Container(
-                width: size * (0.82 - (elevation * 0.08)).clamp(0.52, 0.82),
-                height: size * 0.34,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF0F172A).withValues(
-                    alpha: (0.24 - (elevation * 0.04)).clamp(0.08, 0.24),
-                  ),
-                ),
-              ),
-            ),
-            Transform.translate(
-              offset: Offset(0, -(elevation * size * 0.55)),
-              child: Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: fillColor,
-                  border: Border.all(color: const Color(0xFF0F172A), width: 1),
-                ),
-              ),
-            ),
-          ],
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: fillColor,
+          border: Border.all(color: const Color(0xFF0F172A), width: 1),
         ),
       ),
     );

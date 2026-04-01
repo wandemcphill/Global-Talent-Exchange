@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../shared/data/gte_feature_support.dart';
@@ -148,23 +147,13 @@ abstract class LiveMatchOverviewRepository {
 }
 
 class ApiLiveMatchOverviewRepository implements LiveMatchOverviewRepository {
-  const ApiLiveMatchOverviewRepository({
-    required this.api,
-    required this.isAuthenticated,
-  });
+  const ApiLiveMatchOverviewRepository({required this.api});
 
   final GteAuthedApi api;
-  final bool isAuthenticated;
 
   @override
   Future<LiveMatchOverview> loadOverview() async {
-    if (!isAuthenticated) {
-      throw const GteApiException(
-        type: GteApiErrorType.unauthorized,
-        message: 'Authentication required for /api/broadcast/home.',
-      );
-    }
-    final JsonMap payload = await api.getMap('/api/broadcast/home');
+    final JsonMap payload = await api.getMap('/api/broadcast/home', auth: false);
     return LiveMatchOverview.fromJson(payload);
   }
 }
@@ -173,10 +162,7 @@ final Provider<LiveMatchOverviewRepository>
 liveMatchOverviewRepositoryProvider = Provider<LiveMatchOverviewRepository>((
   Ref ref,
 ) {
-  return ApiLiveMatchOverviewRepository(
-    api: ref.watch(authedApiProvider),
-    isAuthenticated: ref.watch(isAuthenticatedProvider),
-  );
+  return ApiLiveMatchOverviewRepository(api: ref.watch(authedApiProvider));
 });
 
 final liveMatchOverviewProvider =

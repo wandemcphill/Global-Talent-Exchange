@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+import logging
 from threading import RLock
 from typing import Any
 
@@ -22,6 +23,9 @@ from app.core.events import DomainEvent, EventPublisher
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService, build_attention_orchestrator_service
 from app.viral.ranking_service import LeaderboardEnvelope, ViralLeaderboardStore, ensure_viral_leaderboard_store
 from app.viral.schemas import ViralClipDistributionView
+
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:

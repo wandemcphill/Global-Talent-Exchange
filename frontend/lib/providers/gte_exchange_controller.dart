@@ -1,7 +1,7 @@
-import 'dart:async';
+import 'package:flutter/foundation.dart';
+
 import 'dart:collection';
 
-import 'package:flutter/foundation.dart';
 import '../core/app_feedback.dart';
 import '../domain/match/match_weights.dart';
 
@@ -9,7 +9,8 @@ import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
-import '../services/reliability/reliable_event_queue.dart';
+
+const int _marketPageSize = 100;
 
 class GteExchangeController extends ChangeNotifier {
   GteExchangeController({required GteExchangeApiClient api}) : _api = api;
@@ -56,6 +57,7 @@ class GteExchangeController extends ChangeNotifier {
   String? portfolioError;
   String? ordersError;
   String? orderError;
+  String? adminBuybackError;
   String? complianceError;
 
   GteAuthSession? session;
@@ -72,6 +74,10 @@ class GteExchangeController extends ChangeNotifier {
   int openOrderTotal = 0;
 
   final Map<String, GteOrderRecord> _ordersById = <String, GteOrderRecord>{};
+  final Map<String, GteAdminBuybackPreview> _adminBuybackPreviewsByOrderId =
+      <String, GteAdminBuybackPreview>{};
+  final Set<String> _loadingAdminBuybackPreviewOrderIds = <String>{};
+  final Set<String> _executingAdminBuybackOrderIds = <String>{};
   final List<String> _recentOrderIds = <String>[];
   final List<String> _openOrderIds = <String>[];
   final Map<String, _PlayerEngagementState> _playerEngagement =
@@ -94,15 +100,21 @@ class GteExchangeController extends ChangeNotifier {
   String? get accessToken => session?.accessToken;
 
   bool get hasMorePlayers {
-    if (marketPage == null) {
-      return false;
-    }
-    return marketPage!.hasMore;
+    return marketPage?.hasMore ?? false;
   }
 
   List<GteOrderRecord> get recentOrders => _ordersForIds(_recentOrderIds);
 
   List<GteOrderRecord> get openOrders => _ordersForIds(_openOrderIds);
+
+  GteAdminBuybackPreview? adminBuybackPreviewForOrder(String orderId) =>
+      _adminBuybackPreviewsByOrderId[orderId];
+
+  bool isLoadingAdminBuybackPreview(String orderId) =>
+      _loadingAdminBuybackPreviewOrderIds.contains(orderId);
+
+  bool isExecutingAdminBuyback(String orderId) =>
+      _executingAdminBuybackOrderIds.contains(orderId);
 
   bool get hasLoadedOrders =>
       isLoadingOrders ||
@@ -192,7 +204,7 @@ class GteExchangeController extends ChangeNotifier {
       final int offset = shouldReset ? 0 : _nextMarketOffset();
       final GteMarketPlayerListView response = await _api.fetchPlayers(
         query: GteMarketPlayersQuery(
-          limit: 20,
+          limit: _marketPageSize,
           cursor: cursor,
           offset: offset,
           search: nextFilter.search,
@@ -341,12 +353,6 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       session = nextSession;
-      _queueSessionRefreshEvent(
-        state: 'signed_in',
-        source: 'login',
-        sessionContext: nextSession,
-        dedupeKey: 'session:${nextSession.accessToken}:signed_in',
-      );
       await Future.wait<void>(<Future<void>>[
         _refreshTradingState(
           playerId: selectedPlayer?.detail.playerId,
@@ -395,12 +401,6 @@ class GteExchangeController extends ChangeNotifier {
       }
       session = nextSession;
       authError = null;
-      _queueSessionRefreshEvent(
-        state: 'registered',
-        source: 'register',
-        sessionContext: nextSession,
-        dedupeKey: 'session:${nextSession.accessToken}:registered',
-      );
       await refreshAccount();
     } catch (error) {
       if (_authGate.isActive(requestId)) {
@@ -415,7 +415,6 @@ class GteExchangeController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    final GteAuthSession? previousSession = session;
     await _api.logout();
     session = null;
     walletSummary = null;
@@ -424,11 +423,12 @@ class GteExchangeController extends ChangeNotifier {
     complianceStatus = null;
     policyRequirements = const <GtePolicyRequirementSummary>[];
     authError = null;
+    playerProfileError = null;
     portfolioError = null;
     ordersError = null;
     orderError = null;
+    adminBuybackError = null;
     complianceError = null;
-    playerProfileError = null;
     selectedProfile = null;
     recentOrderTotal = 0;
     openOrderTotal = 0;
@@ -436,22 +436,20 @@ class GteExchangeController extends ChangeNotifier {
     _openOrderIds.clear();
     _hasLoadedOrdersOnce = false;
     _ordersById.clear();
+    _adminBuybackPreviewsByOrderId.clear();
+    _loadingAdminBuybackPreviewOrderIds.clear();
+    _executingAdminBuybackOrderIds.clear();
+    _playerEngagement.clear();
     _bootstrapFuture = null;
     _portfolioFuture = null;
     _ordersFuture = null;
-    marketSyncedAt = null;
     marketFilter = const PlayerFilter();
     _weights = MatchWeights.defaultWeights();
+    marketSyncedAt = null;
     playerSyncedAt = null;
     portfolioSyncedAt = null;
     ordersSyncedAt = null;
     complianceSyncedAt = null;
-    _queueSessionRefreshEvent(
-      state: 'signed_out',
-      source: 'logout',
-      sessionContext: previousSession,
-      requiresDelivery: false,
-    );
     notifyListeners();
   }
 
@@ -636,17 +634,6 @@ class GteExchangeController extends ChangeNotifier {
         quantity: quantity,
         maxPrice: maxPrice,
       );
-      _queueMajorInteraction(
-        action: 'place_order',
-        payload: <String, Object?>{
-          'order_id': order.id,
-          'player_id': playerId,
-          'side': side.name,
-          'quantity': quantity,
-          if (maxPrice != null) 'max_price': maxPrice,
-        },
-        dedupeKey: 'order:${order.id}:placed',
-      );
       _mergeOrder(order);
       await _refreshTradingState(playerId: playerId, refreshPlayer: true);
       return _ordersById[order.id] ?? order;
@@ -694,15 +681,6 @@ class GteExchangeController extends ChangeNotifier {
     notifyListeners();
     try {
       final GteOrderRecord order = await _api.cancelOrder(orderId);
-      _queueMajorInteraction(
-        action: 'cancel_order',
-        payload: <String, Object?>{
-          'order_id': order.id,
-          'player_id': order.playerId,
-          'status': order.status.name,
-        },
-        dedupeKey: 'order:${order.id}:cancelled',
-      );
       _mergeOrder(order);
       await _refreshTradingState(
         playerId: order.playerId,
@@ -715,6 +693,59 @@ class GteExchangeController extends ChangeNotifier {
       return null;
     } finally {
       isCancellingOrder = false;
+      notifyListeners();
+    }
+  }
+
+  Future<GteAdminBuybackPreview?> loadAdminBuybackPreview(
+    String orderId,
+  ) async {
+    if (!isAuthenticated ||
+        _loadingAdminBuybackPreviewOrderIds.contains(orderId)) {
+      return _adminBuybackPreviewsByOrderId[orderId];
+    }
+    _loadingAdminBuybackPreviewOrderIds.add(orderId);
+    adminBuybackError = null;
+    notifyListeners();
+    try {
+      final GteAdminBuybackPreview preview = await _api
+          .fetchAdminBuybackPreview(orderId);
+      _adminBuybackPreviewsByOrderId[orderId] = preview;
+      return preview;
+    } catch (error) {
+      adminBuybackError = AppFeedback.messageFor(error);
+      return null;
+    } finally {
+      _loadingAdminBuybackPreviewOrderIds.remove(orderId);
+      notifyListeners();
+    }
+  }
+
+  Future<GteAdminBuybackExecution?> executeAdminBuyback(String orderId) async {
+    if (!isAuthenticated || _executingAdminBuybackOrderIds.contains(orderId)) {
+      return null;
+    }
+    _executingAdminBuybackOrderIds.add(orderId);
+    adminBuybackError = null;
+    notifyListeners();
+    try {
+      final GteAdminBuybackExecution execution = await _api.executeAdminBuyback(
+        orderId,
+      );
+      _adminBuybackPreviewsByOrderId[orderId] = execution.preview;
+      _mergeOrder(execution.order);
+      await _refreshTradingState(
+        playerId: execution.order.playerId,
+        refreshPlayer:
+            selectedPlayer?.detail.playerId == execution.order.playerId,
+      );
+      return execution;
+    } catch (error) {
+      adminBuybackError = AppFeedback.messageFor(error);
+      notifyListeners();
+      return null;
+    } finally {
+      _executingAdminBuybackOrderIds.remove(orderId);
       notifyListeners();
     }
   }
@@ -741,30 +772,16 @@ class GteExchangeController extends ChangeNotifier {
 
   void toggleScouted(String playerId) {
     final _PlayerEngagementState current = _engagementStateFor(playerId);
-    final bool nextValue = !current.isScouted;
-    _playerEngagement[playerId] = current.copyWith(isScouted: nextValue);
-    _queueMajorInteraction(
-      action: nextValue ? 'follow_player' : 'unfollow_player',
-      payload: <String, Object?>{
-        'player_id': playerId,
-        'is_following': nextValue,
-      },
-      dedupeKey: 'player:$playerId:follow:$nextValue',
+    _playerEngagement[playerId] = current.copyWith(
+      isScouted: !current.isScouted,
     );
     notifyListeners();
   }
 
   void toggleShortlist(String playerId) {
     final _PlayerEngagementState current = _engagementStateFor(playerId);
-    final bool nextValue = !current.isShortlisted;
-    _playerEngagement[playerId] = current.copyWith(isShortlisted: nextValue);
-    _queueMajorInteraction(
-      action: 'toggle_shortlist',
-      payload: <String, Object?>{
-        'player_id': playerId,
-        'is_shortlisted': nextValue,
-      },
-      dedupeKey: 'player:$playerId:shortlist:$nextValue',
+    _playerEngagement[playerId] = current.copyWith(
+      isShortlisted: !current.isShortlisted,
     );
     notifyListeners();
   }
@@ -805,6 +822,9 @@ class GteExchangeController extends ChangeNotifier {
 
   void _mergeOrder(GteOrderRecord order) {
     _ordersById[order.id] = order;
+    if (order.side != GteOrderSide.sell || !order.canCancel) {
+      _adminBuybackPreviewsByOrderId.remove(order.id);
+    }
     _recentOrderIds
       ..remove(order.id)
       ..insert(0, order.id);
@@ -829,47 +849,6 @@ class GteExchangeController extends ChangeNotifier {
       return existing;
     }
     return const _PlayerEngagementState(isScouted: false, isShortlisted: false);
-  }
-
-  void _queueSessionRefreshEvent({
-    required String state,
-    required String source,
-    GteAuthSession? sessionContext,
-    String? dedupeKey,
-    bool requiresDelivery = true,
-  }) {
-    final GteAuthSession? context = sessionContext ?? session;
-    unawaited(
-      gteReliableEventQueue.enqueue(
-        topic: 'session',
-        name: 'session_changed',
-        payload: <String, Object?>{
-          'state': state,
-          'source': source,
-          if (context != null) 'user_id': context.user.id,
-          if (context != null) 'role': context.user.role,
-        },
-        dedupeKey: dedupeKey,
-        feedRefreshTrigger: FeedRefreshTrigger.sessionChange,
-        requiresDelivery: requiresDelivery,
-      ),
-    );
-  }
-
-  void _queueMajorInteraction({
-    required String action,
-    required Map<String, Object?> payload,
-    String? dedupeKey,
-  }) {
-    unawaited(
-      gteReliableEventQueue.enqueue(
-        topic: 'interaction',
-        name: 'major_interaction',
-        payload: <String, Object?>{'action': action, ...payload},
-        dedupeKey: dedupeKey,
-        feedRefreshTrigger: FeedRefreshTrigger.majorInteraction,
-      ),
-    );
   }
 }
 

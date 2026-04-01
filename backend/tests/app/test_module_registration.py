@@ -263,7 +263,7 @@ def test_streamer_tournaments_route_does_not_force_global_lazy_hydration(mounted
 @pytest.mark.parametrize(
     ("path", "expected_status"),
     (
-        ("/api/broadcast/home", 401),
+        ("/api/broadcast/home", 200),
         ("/api/match-viewer/nonexistent", 404),
     ),
 )

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/widgets/match/fairness_badge.dart';
 
 class ScoreboardWidget extends StatelessWidget {
   const ScoreboardWidget({
@@ -18,6 +17,7 @@ class ScoreboardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -25,154 +25,96 @@ class ScoreboardWidget extends StatelessWidget {
         color: const Color(0xCC07131F),
         border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          _ScoreLine(
-            viewState: viewState,
-            frame: frame,
+          _TeamBadge(team: viewState.homeTeam),
+          const SizedBox(width: 10),
+          Text(
+            viewState.homeTeam.shortName,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.white,
+              letterSpacing: 1.1,
+            ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          const SizedBox(width: 10),
+          Text(
+            '${frame.homeScore}',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              ':',
+              style:
+                  theme.textTheme.titleLarge?.copyWith(color: Colors.white70),
+            ),
+          ),
+          Text(
+            '${frame.awayScore}',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            viewState.awayTeam.shortName,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.white,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(width: 10),
+          _TeamBadge(team: viewState.awayTeam),
+          const SizedBox(width: 14),
+          Container(
+            width: 1,
+            height: 26,
+            color: Colors.white.withValues(alpha: 0.14),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              _ClockTag(frame: frame),
-              FairnessBadge(viewState: viewState),
-              if (activeEvent != null) _EventTag(event: activeEvent!),
+              Text(
+                _periodLabel(frame),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: Colors.white70,
+                  letterSpacing: 1,
+                ),
+              ),
+              Text(
+                "${frame.clockMinute.floor()}'",
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
+          if (activeEvent != null) ...<Widget>[
+            const SizedBox(width: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: _accentColor(activeEvent!.type).withValues(alpha: 0.2),
+              ),
+              child: Text(
+                activeEvent!.type.name.toUpperCase(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: _accentColor(activeEvent!.type),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ],
-      ),
-    );
-  }
-}
-
-class _ScoreLine extends StatelessWidget {
-  const _ScoreLine({
-    required this.viewState,
-    required this.frame,
-  });
-
-  final MatchViewState viewState;
-  final MatchTimelineFrame frame;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.max,
-      children: <Widget>[
-        _TeamBadge(team: viewState.homeTeam),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            viewState.homeTeam.shortName,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          '${frame.homeScore}',
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text(
-            ':',
-            style: theme.textTheme.titleLarge?.copyWith(color: Colors.white70),
-          ),
-        ),
-        Text(
-          '${frame.awayScore}',
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            viewState.awayTeam.shortName,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              letterSpacing: 1.1,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        _TeamBadge(team: viewState.awayTeam),
-      ],
-    );
-  }
-}
-
-class _ClockTag extends StatelessWidget {
-  const _ClockTag({
-    required this.frame,
-  });
-
-  final MatchTimelineFrame frame;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          _periodLabel(frame),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: Colors.white70,
-            letterSpacing: 1,
-          ),
-        ),
-        Text(
-          "${frame.clockMinute.floor()}'",
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EventTag extends StatelessWidget {
-  const _EventTag({
-    required this.event,
-  });
-
-  final MatchEvent event;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: _accentColor(event.type).withValues(alpha: 0.2),
-      ),
-      child: Text(
-        event.type.name.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: _accentColor(event.type),
-          fontWeight: FontWeight.w700,
-        ),
       ),
     );
   }
@@ -220,8 +162,6 @@ Color _accentColor(MatchViewerEventType type) {
       return const Color(0xFF53B1FD);
     case MatchViewerEventType.miss:
       return const Color(0xFFF79009);
-    case MatchViewerEventType.foul:
-      return const Color(0xFFFDB022);
     case MatchViewerEventType.offside:
       return const Color(0xFFF97066);
     case MatchViewerEventType.redCard:

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../../data/gte_models.dart';
 import '../../providers/gte_exchange_controller.dart';
@@ -9,7 +9,10 @@ import '../../widgets/gte_surface_panel.dart';
 import 'gte_policy_compliance_center_screen.dart';
 
 class GteWalletOverviewScreen extends StatefulWidget {
-  const GteWalletOverviewScreen({super.key, required this.controller});
+  const GteWalletOverviewScreen({
+    super.key,
+    required this.controller,
+  });
 
   final GteExchangeController controller;
 
@@ -28,20 +31,16 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
     super.initState();
     _overviewFuture = widget.controller.api.fetchWalletOverview();
     _eligibilityFuture = widget.controller.api.fetchWithdrawalEligibility();
-    _ledgerFuture = widget.controller.api.fetchWalletLedger(
-      page: 1,
-      pageSize: 12,
-    );
+    _ledgerFuture =
+        widget.controller.api.fetchWalletLedger(page: 1, pageSize: 12);
   }
 
   Future<void> _refresh() async {
     setState(() {
       _overviewFuture = widget.controller.api.fetchWalletOverview();
       _eligibilityFuture = widget.controller.api.fetchWithdrawalEligibility();
-      _ledgerFuture = widget.controller.api.fetchWalletLedger(
-        page: 1,
-        pageSize: 12,
-      );
+      _ledgerFuture =
+          widget.controller.api.fetchWalletLedger(page: 1, pageSize: 12);
     });
   }
 
@@ -63,17 +62,15 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Club Wallet'),
+        title: const Text('Wallet overview'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: FutureBuilder<GteWalletOverview>(
         future: _overviewFuture,
-        builder: (
-          BuildContext context,
-          AsyncSnapshot<GteWalletOverview> snapshot,
-        ) {
+        builder:
+            (BuildContext context, AsyncSnapshot<GteWalletOverview> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -89,10 +86,9 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
           final GteWalletOverview overview = snapshot.data!;
           final int pendingPolicyItems =
               overview.requiredPolicyAcceptancesMissing;
-          final String complianceActionLabel =
-              pendingPolicyItems > 0
-                  ? 'Review $pendingPolicyItems pending item(s)'
-                  : 'Open compliance center';
+          final String complianceActionLabel = pendingPolicyItems > 0
+              ? 'Review $pendingPolicyItems pending item(s)'
+              : 'Open compliance center';
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
@@ -100,14 +96,11 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
               children: <Widget>[
                 FutureBuilder<GteWalletLedgerPage>(
                   future: _ledgerFuture,
-                  builder: (
-                    BuildContext context,
-                    AsyncSnapshot<GteWalletLedgerPage> ledgerSnapshot,
-                  ) {
-                    final double? fanCoinBalance =
-                        ledgerSnapshot.hasData
-                            ? _fanCoinBalance(ledgerSnapshot.data!.items)
-                            : null;
+                  builder: (BuildContext context,
+                      AsyncSnapshot<GteWalletLedgerPage> ledgerSnapshot) {
+                    final double? fanCoinBalance = ledgerSnapshot.hasData
+                        ? _fanCoinBalance(ledgerSnapshot.data!.items)
+                        : null;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
@@ -117,29 +110,12 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                children: const <Widget>[
-                                  _WalletTag(
-                                    label: 'Club wallet',
-                                    color: GteShellTheme.accentCapital,
-                                  ),
-                                  _WalletTag(
-                                    label: 'Rewards lane',
-                                    color: GteShellTheme.accentCommunity,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              Text(
-                                'Club wallet',
-                                style:
-                                    Theme.of(context).textTheme.headlineSmall,
-                              ),
+                              Text('Wallet hub',
+                                  style:
+                                      Theme.of(context).textTheme.titleLarge),
                               const SizedBox(height: 8),
                               Text(
-                                'Fan Coin rewards stay separate from your GTex market balance. 1 GTex converts to 100 Fan Coin for viewing, gifting, and cosmetics.',
+                                'Fan Coin rewards and GTEX Coin market balance stay separated for clarity.',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               const SizedBox(height: 14),
@@ -147,22 +123,20 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                 children: <Widget>[
                                   _BalanceTile(
                                     label: 'Fan Coin',
-                                    value:
-                                        fanCoinBalance == null
-                                            ? 'Syncing...'
-                                            : gteFormatFanCoin(fanCoinBalance),
+                                    value: fanCoinBalance == null
+                                        ? 'Syncing...'
+                                        : gteFormatFanCoins(fanCoinBalance),
                                     caption:
-                                        'Watch-party spend, gifting, and social rewards.',
+                                        'Promo pool rewards and gifting Fan Coin.',
                                     accent: GteShellTheme.accentCommunity,
                                   ),
                                   const SizedBox(width: 12),
                                   _BalanceTile(
-                                    label: 'GTex Coin',
+                                    label: 'GTEX Coin / Market Balance',
                                     value: gteFormatCredits(
-                                      overview.availableBalance,
-                                    ),
+                                        overview.availableBalance),
                                     caption:
-                                        'Balance ready for market trades, club investment, and competition stakes.',
+                                        'Tradeable balance for market and competitions.',
                                     accent: GteShellTheme.accentCapital,
                                   ),
                                 ],
@@ -173,23 +147,19 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                   _MetricTile(
                                     label: 'Pending deposits',
                                     value: gteFormatCredits(
-                                      overview.pendingDeposits,
-                                    ),
+                                        overview.pendingDeposits),
                                   ),
                                   const SizedBox(width: 12),
                                   _MetricTile(
                                     label: 'Pending withdrawals',
                                     value: gteFormatCredits(
-                                      overview.pendingWithdrawals,
-                                    ),
+                                        overview.pendingWithdrawals),
                                   ),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        const _EconomyNoticeBanner(),
                         const SizedBox(height: 16),
                         if (overview.policyBlocked ||
                             overview.requiredPolicyAcceptancesMissing > 0)
@@ -200,11 +170,10 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Text(
-                                    'Compliance action needed',
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
-                                  ),
+                                  Text('Compliance action needed',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
                                   const SizedBox(height: 8),
                                   Text(
                                     overview.policyBlockReason ??
@@ -215,12 +184,10 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                     onPressed: () async {
                                       await Navigator.of(context).push(
                                         MaterialPageRoute<void>(
-                                          builder:
-                                              (_) =>
-                                                  GtePolicyComplianceCenterScreen(
-                                                    controller:
-                                                        widget.controller,
-                                                  ),
+                                          builder: (_) =>
+                                              GtePolicyComplianceCenterScreen(
+                                            controller: widget.controller,
+                                          ),
                                         ),
                                       );
                                       await _refresh();
@@ -233,15 +200,10 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             ),
                           ),
                         Text(
-                          'Money moves',
+                          'Source-tagged history',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          'Every wallet event stays readable by source so rewards, top-ups, and transfers do not blur together.',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 12),
                         if (ledgerSnapshot.connectionState ==
                                 ConnectionState.waiting &&
                             !ledgerSnapshot.hasData)
@@ -256,9 +218,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                             icon: Icons.receipt_long_outlined,
                           )
                         else
-                          ...ledgerSnapshot.data!.items.map((
-                            GteWalletLedgerEntry entry,
-                          ) {
+                          ...ledgerSnapshot.data!.items
+                              .map((GteWalletLedgerEntry entry) {
                             return _LedgerEntryTile(entry: entry);
                           }),
                       ],
@@ -270,20 +231,18 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        'Money in / out',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                      Text('Wallet flow totals',
+                          style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 12),
                       Row(
                         children: <Widget>[
                           _MetricTile(
-                            label: 'Money in',
+                            label: 'Total inflow',
                             value: gteFormatCredits(overview.totalInflow),
                           ),
                           const SizedBox(width: 12),
                           _MetricTile(
-                            label: 'Money out',
+                            label: 'Total outflow',
                             value: gteFormatCredits(overview.totalOutflow),
                           ),
                         ],
@@ -294,10 +253,8 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                 const SizedBox(height: 18),
                 FutureBuilder<GteWithdrawalEligibility>(
                   future: _eligibilityFuture,
-                  builder: (
-                    BuildContext context,
-                    AsyncSnapshot<GteWithdrawalEligibility> eligibilitySnap,
-                  ) {
+                  builder: (BuildContext context,
+                      AsyncSnapshot<GteWithdrawalEligibility> eligibilitySnap) {
                     if (!eligibilitySnap.hasData) {
                       return const GteSurfacePanel(
                         child: Text('Loading withdrawal eligibility...'),
@@ -305,8 +262,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     }
                     final GteWithdrawalEligibility eligibility =
                         eligibilitySnap.data!;
-                    final bool rewardsRestricted =
-                        eligibility.policyBlocked ||
+                    final bool rewardsRestricted = eligibility.policyBlocked ||
                         !eligibility.countryWithdrawalsEnabled ||
                         eligibility.requiresKyc ||
                         eligibility.requiresBankAccount;
@@ -314,25 +270,21 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Text(
-                            'Withdrawal eligibility',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
+                          Text('Withdrawal eligibility',
+                              style: Theme.of(context).textTheme.titleMedium),
                           const SizedBox(height: 12),
                           Row(
                             children: <Widget>[
                               _MetricTile(
                                 label: 'Withdrawable now',
                                 value: gteFormatCredits(
-                                  eligibility.withdrawableNow,
-                                ),
+                                    eligibility.withdrawableNow),
                               ),
                               const SizedBox(width: 12),
                               _MetricTile(
                                 label: 'Remaining allowance',
                                 value: gteFormatCredits(
-                                  eligibility.remainingAllowance,
-                                ),
+                                    eligibility.remainingAllowance),
                               ),
                             ],
                           ),
@@ -357,11 +309,10 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: <Widget>[
-                                  Text(
-                                    'Restricted rewards',
-                                    style:
-                                        Theme.of(context).textTheme.titleSmall,
-                                  ),
+                                  Text('Restricted rewards',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall),
                                   const SizedBox(height: 6),
                                   Text(
                                     eligibility.policyBlockReason ??
@@ -417,8 +368,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                                     eligibility.policyBlockReason ??
                                         'Withdrawal is currently blocked by policy requirements.',
                                   ),
-                                  if (eligibility
-                                      .missingRequiredPolicies
+                                  if (eligibility.missingRequiredPolicies
                                       .isNotEmpty) ...<Widget>[
                                     const SizedBox(height: 8),
                                     Text(
@@ -445,65 +395,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   }
 }
 
-class _WalletTag extends StatelessWidget {
-  const _WalletTag({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: color.withValues(alpha: 0.14),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Text(
-        label.toUpperCase(),
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class _EconomyNoticeBanner extends StatelessWidget {
-  const _EconomyNoticeBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.green.shade100.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.green.shade300),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(Icons.celebration_outlined, color: Colors.green.shade700),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'GTEX competitions are FREE. Win real money.\nUser matches require entry fees.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.green.shade900,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MetricTile extends StatelessWidget {
   const _MetricTile({required this.label, required this.value});
 
@@ -517,22 +408,14 @@ class _MetricTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
-          border: Border.all(
-            color: GteShellTheme.accentCapital.withValues(alpha: 0.12),
-          ),
+          color: Colors.white.withValues(alpha: 0.03),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                letterSpacing: 0.9,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 6),
             Text(value, style: Theme.of(context).textTheme.titleMedium),
           ],
         ),
@@ -567,17 +450,14 @@ class _BalanceTile extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 6),
+            Text(value, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
             Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                letterSpacing: 0.9,
-                fontWeight: FontWeight.w800,
-              ),
+              caption,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(caption, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),
@@ -595,55 +475,27 @@ class _LedgerEntryTile extends StatelessWidget {
     final String label = _sourceLabel(entry.reason);
     final IconData icon = _sourceIcon(entry.reason);
     final bool isPositive = entry.amount >= 0;
-    final Color accent =
-        isPositive ? GteShellTheme.positive : GteShellTheme.accentWarm;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GteSurfacePanel(
-        accentColor: accent,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: accent.withValues(alpha: 0.14),
-              ),
-              child: Icon(icon, color: accent),
-            ),
+            Icon(icon),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: accent.withValues(alpha: 0.14),
-                    ),
-                    child: Text(
-                      label.toUpperCase(),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  Text(label, style: Theme.of(context).textTheme.titleSmall),
                   if (entry.description?.trim().isNotEmpty == true) ...<Widget>[
+                    const SizedBox(height: 4),
                     Text(
                       entry.description!,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const SizedBox(height: 4),
                   ],
+                  const SizedBox(height: 4),
                   Text(
                     'Source: ${entry.reason}',
                     style: Theme.of(context).textTheme.bodySmall,
@@ -655,11 +507,10 @@ class _LedgerEntryTile extends StatelessWidget {
             Text(
               gteFormatCredits(entry.amount),
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color:
-                    isPositive
+                    color: isPositive
                         ? GteShellTheme.positive
                         : GteShellTheme.negative,
-              ),
+                  ),
             ),
           ],
         ),

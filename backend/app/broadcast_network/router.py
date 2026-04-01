@@ -34,7 +34,7 @@ def join_channel(channel_id: str, request: Request, current_user: User = Depends
 
 
 @router.get("/home", response_model=BroadcastHomeView)
-def read_broadcast_home(request: Request, _: User = Depends(get_current_user)) -> BroadcastHomeView:
+def read_broadcast_home(request: Request) -> BroadcastHomeView:
     return ensure_broadcast_network_runtime(request.app).home()
 
 

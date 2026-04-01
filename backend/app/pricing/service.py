@@ -30,6 +30,7 @@ from app.pricing.models import (
     PricingHistoryPoint,
 )
 from app.value_engine.authority import authoritative_reference_credits
+from app.value_engine.pricing_curve import round_gtex_display_value
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 from app.value_engine.scoring import credits_from_real_world_value
 
@@ -382,7 +383,7 @@ class MarketPricingService:
             breakdown_payload=latest_snapshot.breakdown_json if latest_snapshot is not None and isinstance(latest_snapshot.breakdown_json, dict) else {},
         )
         if authoritative_reference is not None:
-            return authoritative_reference, player.short_name
+            return round_gtex_display_value(authoritative_reference), player.short_name
         if player.is_real_player:
             return None, player.short_name
         fallback_reference = self._coerce_float(
@@ -391,7 +392,7 @@ class MarketPricingService:
             else None
         )
         if fallback_reference is not None and fallback_reference > 0:
-            return round(fallback_reference, 2), player.short_name
+            return round_gtex_display_value(fallback_reference), player.short_name
         return None, player.short_name
 
     def _bucket_start(self, timestamp: datetime, bucket_size: timedelta) -> datetime:
@@ -410,7 +411,7 @@ class MarketPricingService:
     def _round_price(self, value: float | None) -> float | None:
         if value is None:
             return None
-        return round(float(value), 2)
+        return round_gtex_display_value(float(value))
 
     def _coerce_float(self, value: object) -> float | None:
         if value is None:

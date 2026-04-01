@@ -77,9 +77,9 @@ class RiskControlService:
         gross_amount = self._normalize_amount(normalized_quantity * normalized_price)
         if normalized_side is TradeSide.BUY:
             available_balance = (
-                self.wallet_service.get_reserved_cash_balance(session, user)
+                self.wallet_service.get_reserved_cash_balance(session, user, unit=LedgerUnit.CREDIT)
                 if use_reserved_balance
-                else self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN).available_balance
+                else self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT).available_balance
             )
             if available_balance < gross_amount:
                 raise InsufficientCashError(

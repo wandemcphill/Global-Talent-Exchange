@@ -36,6 +36,7 @@ PLAYER_CARD_MARKET_INTEGRITY_FILE = "player_card_market_integrity.toml"
 MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 REGEN_GENERATION_FILE = "regen_generation.toml"
+ADMIN_BUYBACK_FILE = "admin_buyback.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
 DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web.onrender.com",)
 DEFAULT_CORS_ALLOW_ORIGIN_REGEX = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
@@ -369,6 +370,14 @@ def _validate_fraction_sum(name: str, values: Mapping[str, float], *, target: fl
         raise ValueError(f"Config section '{name}' must sum to {target}, got {total}.")
 
 
+def _validate_weight_budget(name: str, values: Mapping[str, float]) -> None:
+    total = round(sum(values.values()), 6)
+    if total <= 0:
+        raise ValueError(f"Config section '{name}' must reserve a positive non-baseline weight budget.")
+    if total > 1.001:
+        raise ValueError(f"Config section '{name}' must sum to 1.0 or less, got {total}.")
+
+
 @dataclass(frozen=True, slots=True)
 class PlayerUniverseWeightingConfig:
     target_player_count: int
@@ -578,6 +587,17 @@ class PlayerCardMarketIntegrityConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class AdminBuybackConfig:
+    p2p_priority_window_hours: int
+    minimum_hold_days: int
+    admin_reserve_cooldown_days: int
+    wash_trade_lookback_hours: int
+    nigeria_aliases: tuple[str, ...]
+    african_allowlist: tuple[str, ...]
+    band_payouts: dict[str, float]
+
+
+@dataclass(frozen=True, slots=True)
 class ValueEngineWeightingConfig:
     config_version: str
     baseline_eur_per_credit: int
@@ -750,6 +770,7 @@ class Settings:
     regen_generation: RegenGenerationConfig
     suspicion_thresholds: SuspicionThresholdsConfig
     player_card_market_integrity: PlayerCardMarketIntegrityConfig
+    admin_buyback: AdminBuybackConfig
     value_engine_weighting: ValueEngineWeightingConfig
     live_commentary_llm_enabled: bool = False
     live_commentary_llm_endpoint_url: str | None = None
@@ -887,6 +908,24 @@ def _default_player_card_market_integrity_config() -> PlayerCardMarketIntegrityC
         price_spike_alert_ratio=2.50,
         volume_cluster_window_minutes=60,
         volume_cluster_trade_threshold=12,
+    )
+
+
+def _default_admin_buyback_config() -> AdminBuybackConfig:
+    return AdminBuybackConfig(
+        p2p_priority_window_hours=48,
+        minimum_hold_days=7,
+        admin_reserve_cooldown_days=7,
+        wash_trade_lookback_hours=72,
+        nigeria_aliases=("Nigeria", "NG", "NGA"),
+        african_allowlist=("Ghana", "Kenya", "South Africa"),
+        band_payouts={
+            "a": 0.45,
+            "b": 0.58,
+            "c": 0.66,
+            "d": 0.72,
+            "e": 0.75,
+        },
     )
 
 
@@ -1509,6 +1548,39 @@ def load_player_card_market_integrity_config(config_root: Path) -> PlayerCardMar
     return config
 
 
+def load_admin_buyback_config(config_root: Path) -> AdminBuybackConfig:
+    document = _load_optional_toml_document(config_root / ADMIN_BUYBACK_FILE)
+    if document is None:
+        return _default_admin_buyback_config()
+
+    defaults = _default_admin_buyback_config()
+    band_payouts = {
+        key.strip().lower(): float(value)
+        for key, value in _coerce_float_map(document.get("band_payouts", {}), name="band_payouts").items()
+    }
+    return AdminBuybackConfig(
+        p2p_priority_window_hours=int(
+            document.get("p2p_priority_window_hours", defaults.p2p_priority_window_hours)
+        ),
+        minimum_hold_days=int(document.get("minimum_hold_days", defaults.minimum_hold_days)),
+        admin_reserve_cooldown_days=int(
+            document.get("admin_reserve_cooldown_days", defaults.admin_reserve_cooldown_days)
+        ),
+        wash_trade_lookback_hours=int(
+            document.get("wash_trade_lookback_hours", defaults.wash_trade_lookback_hours)
+        ),
+        nigeria_aliases=_coerce_string_tuple(
+            document.get("nigeria_aliases", list(defaults.nigeria_aliases)),
+            name="nigeria_aliases",
+        ),
+        african_allowlist=_coerce_string_tuple(
+            document.get("african_allowlist", list(defaults.african_allowlist)),
+            name="african_allowlist",
+        ),
+        band_payouts=band_payouts or dict(defaults.band_payouts),
+    )
+
+
 def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightingConfig:
     document = _load_toml_document(config_root / VALUE_ENGINE_WEIGHTING_FILE)
     ftv_msv_blend_weights = _require_table(
@@ -1712,7 +1784,7 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
         raise ValueError("Value engine FTV/MSV blend weights must each be between 0 and 1.")
     if weighting.ftv_weight + weighting.msv_weight <= 0:
         raise ValueError("Value engine FTV/MSV legacy weights must sum to a positive value.")
-    _validate_fraction_sum(
+    _validate_weight_budget(
         "component_weights",
         {
             "ftv_weight": weighting.ftv_weight,
@@ -1739,7 +1811,7 @@ def load_value_engine_weighting_config(config_root: Path) -> ValueEngineWeightin
     if len({profile.code for profile in weighting.weight_profiles}) != len(weighting.weight_profiles):
         raise ValueError("Value engine weight profile codes must be unique.")
     for profile in weighting.weight_profiles:
-        _validate_fraction_sum(
+        _validate_weight_budget(
             f"weight_profiles.{profile.code}",
             {
                 "ftv_weight": profile.ftv_weight,
@@ -1920,6 +1992,7 @@ def load_settings(
         regen_generation=load_regen_generation_config(resolved_config_root),
         suspicion_thresholds=load_suspicion_thresholds_config(resolved_config_root),
         player_card_market_integrity=load_player_card_market_integrity_config(resolved_config_root),
+        admin_buyback=load_admin_buyback_config(resolved_config_root),
         value_engine_weighting=load_value_engine_weighting_config(resolved_config_root),
         live_commentary_llm_enabled=source.live_commentary_llm_enabled,
         live_commentary_llm_endpoint_url=source.live_commentary_llm_endpoint_url,

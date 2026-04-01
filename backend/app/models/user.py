@@ -27,6 +27,7 @@ class KycStatus(StrEnum):
     PENDING = "pending"
     PARTIAL_VERIFIED_NO_ID = "partial_verified_no_id"
     FULLY_VERIFIED = "fully_verified"
+    VERIFIED = "fully_verified"
     REJECTED = "rejected"
 
 

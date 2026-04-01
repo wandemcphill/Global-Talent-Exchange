@@ -194,7 +194,7 @@ class _MarketBody extends ConsumerWidget {
           eyebrow: 'SHARES',
           title: 'Player Shares',
           subtitle:
-              'Discovery is fed by /players/real-universe and tradability only appears when /players/{player_id}/shares/market exists.',
+              'Discovery is fed by /players/real-universe and tradability only appears when /players/{player_id}/shares/market is issued.',
           child: Column(
             children: data.playerShares
                 .map(

@@ -15,6 +15,7 @@ class PlayerShareMarketView(BaseModel):
     circulating_shares: int
     share_price_coin: Decimal
     status: str
+    market_issued: bool = True
     revenue_distributed_coin: Decimal
     metadata_json: dict[str, object]
     created_at: datetime

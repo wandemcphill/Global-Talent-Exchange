@@ -77,12 +77,12 @@ def demo_users_by_username(seeded_demo_market):
 
 @pytest.fixture(scope="module")
 def demo_primary_user(demo_users_by_username):
-    return demo_users_by_username["seed_fan"]
+    return demo_users_by_username.get("demo_fan") or demo_users_by_username["seed_fan"]
 
 
 @pytest.fixture(scope="module")
 def demo_secondary_user(demo_users_by_username):
-    return demo_users_by_username["seed_scout"]
+    return demo_users_by_username.get("demo_scout") or demo_users_by_username["seed_scout"]
 
 
 def _login_demo_user(client: TestClient, *, email: str, password: str) -> dict[str, str]:

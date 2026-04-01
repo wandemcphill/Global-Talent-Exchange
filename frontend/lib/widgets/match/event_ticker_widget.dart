@@ -71,8 +71,6 @@ Color _tickerColor(MatchViewerEventType type) {
       return const Color(0xFF53B1FD);
     case MatchViewerEventType.miss:
       return const Color(0xFFF79009);
-    case MatchViewerEventType.foul:
-      return const Color(0xFFFDB022);
     case MatchViewerEventType.offside:
       return const Color(0xFFF97066);
     case MatchViewerEventType.redCard:

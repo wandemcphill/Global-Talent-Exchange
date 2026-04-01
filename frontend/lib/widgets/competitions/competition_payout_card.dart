@@ -68,9 +68,10 @@ class CompetitionPayoutCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        gteFormatCompetitionAmount(payout.amount, currency),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: GteShellTheme.accent),
+                        _formatAmount(payout.amount, currency),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: GteShellTheme.accent,
+                            ),
                       ),
                     ],
                   ),
@@ -81,4 +82,16 @@ class CompetitionPayoutCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatAmount(double value, String currency) {
+  if (currency.toLowerCase() == 'credit') {
+    return gteFormatCredits(value);
+  }
+  if (currency.toLowerCase() == 'coin') {
+    return gteFormatFanCoins(value);
+  }
+  final bool whole = value == value.roundToDouble();
+  final String number = value.toStringAsFixed(whole ? 0 : 2);
+  return '$number ${currency.toUpperCase()}';
 }

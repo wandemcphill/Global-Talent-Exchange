@@ -1,41 +1,18 @@
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:gte_frontend/core/app_feedback.dart';
-import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/controllers/match_playback_controller.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
-import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
-import 'package:gte_frontend/features/match/presentation/broadcast_package_repository.dart';
-import 'package:gte_frontend/features/match/presentation/real_match_scene_director.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/match_moment_banner_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/match_recap_board_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/player_ratings_strip_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/real_match_scorebug_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/real_match_tactical_hud_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/standings_context_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/storyline_panel_widget.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_monetization.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
-import 'package:gte_frontend/models/real_match_engine_presentation.dart';
+import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/services/match_3d_bridge.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
-import 'package:gte_frontend/services/match_broadcast_presentation.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
+import 'package:gte_frontend/widgets/match/event_ticker_widget.dart';
 import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/gifting_overlay.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/match_3d_upgrade_prompt.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
-
-import '../../controllers/match_3d_timeline_controller.dart';
-import '../../features/match/live_match_viewer_route_support.dart';
-import '../../services/match_3d_bridge.dart';
+import 'package:gte_frontend/widgets/match/scoreboard_widget.dart';
 
 typedef MatchViewStateLoader = Future<MatchViewState> Function();
 typedef MatchViewContinuationLoader =
@@ -52,15 +29,10 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.fallbackSnapshot,
     this.preferFallback = false,
     this.presentationMode = MatchViewerPresentationMode.replay,
+    this.renderMode = RenderMode.twoD,
     this.viewStateLoader,
     this.continuationLoader,
-    this.renderMode = RenderMode.twoD,
-    this.isSpectator = false,
-    this.isMajorMatch = false,
-    this.entitlement,
-    this.monetizationService,
-    this.onPurchaseIntent,
-    this.tournamentBoostPrice,
+    this.entitlement = const Match3dUserEntitlement(),
     this.titleOverride,
     this.engineBridge,
   });
@@ -70,15 +42,10 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final LiveMatchSnapshot? fallbackSnapshot;
   final bool preferFallback;
   final MatchViewerPresentationMode presentationMode;
+  final RenderMode renderMode;
   final MatchViewStateLoader? viewStateLoader;
   final MatchViewContinuationLoader? continuationLoader;
-  final RenderMode renderMode;
-  final bool isSpectator;
-  final bool isMajorMatch;
-  final Match3dUserEntitlement? entitlement;
-  final Match3dMonetizationService? monetizationService;
-  final Match3dPurchaseIntentHandler? onPurchaseIntent;
-  final double? tournamentBoostPrice;
+  final Match3dUserEntitlement entitlement;
   final String? titleOverride;
   final Match3DBridge? engineBridge;
 
@@ -87,148 +54,23 @@ class GtexMatchViewerScreen extends StatefulWidget {
 }
 
 class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
-  final BroadcastPackageRepository _packageRepository =
-      const BroadcastPackageRepository();
-
-  Match3dMonetizationService? _ownedMonetizationService;
-  Match3dMonetizationService? _monetizationService;
-  Match3dTimelineController? _controller;
-  MatchViewState? _viewState;
-  Object? _loadError;
-  bool _loading = true;
-  bool _loadingContinuation = false;
-  bool _resumeAfterLifecycle = false;
-  String? _continuationNotice;
-  String? _statusMessage;
-  int _sourceSession = 0;
-  final List<Match3dOverlayBurst> _activeBursts = <Match3dOverlayBurst>[];
-  final Map<String, Timer> _burstTimers = <String, Timer>{};
-  Timer? _retryTimer;
-  Timer? _statusMessageTimer;
+    with SingleTickerProviderStateMixin {
+  late Future<MatchViewState> _viewStateFuture;
+  MatchPlaybackController? _controller;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _bindMonetizationService(widget.monetizationService);
-    _startInitialLoad();
-  }
-
-  @override
-  void didUpdateWidget(covariant GtexMatchViewerScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.monetizationService != widget.monetizationService ||
-        oldWidget.entitlement != widget.entitlement ||
-        oldWidget.renderMode != widget.renderMode ||
-        oldWidget.onPurchaseIntent != widget.onPurchaseIntent ||
-        oldWidget.tournamentBoostPrice != widget.tournamentBoostPrice) {
-      _bindMonetizationService(widget.monetizationService);
-      _syncControllerSpeedOptions();
-    }
-    final bool sourceChanged =
-        oldWidget.matchKey != widget.matchKey ||
-        oldWidget.viewStateLoader != widget.viewStateLoader ||
-        oldWidget.continuationLoader != widget.continuationLoader ||
-        oldWidget.fallbackSnapshot != widget.fallbackSnapshot ||
-        oldWidget.preferFallback != widget.preferFallback ||
-        oldWidget.presentationMode != widget.presentationMode ||
-        oldWidget.isMajorMatch != widget.isMajorMatch ||
-        oldWidget.isSpectator != widget.isSpectator;
-    if (sourceChanged) {
-      _sourceSession += 1;
-      _controller?.removeListener(_handleControllerTick);
-      _controller?.dispose();
-      _controller = null;
-      _viewState = null;
-      _loadError = null;
-      _cancelTransientTimers();
-      setState(() {
-        _loading = true;
-        _continuationNotice = null;
-        _statusMessage = null;
-        _activeBursts.clear();
-      });
-      _startInitialLoad();
-    }
+    _viewStateFuture = _load();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _controller?.removeListener(_handleControllerTick);
     _controller?.dispose();
-    _cancelTransientTimers();
-    _monetizationService?.removeListener(_handleMonetizationChanged);
-    _ownedMonetizationService?.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final Match3dTimelineController? controller = _controller;
-    if (controller == null) {
-      return;
-    }
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      _resumeAfterLifecycle = controller.isPlaying;
-      controller.pause();
-      return;
-    }
-    if (state == AppLifecycleState.resumed && _resumeAfterLifecycle) {
-      controller.play();
-      _resumeAfterLifecycle = false;
-    }
-  }
-
-  void _bindMonetizationService(Match3dMonetizationService? service) {
-    _monetizationService?.removeListener(_handleMonetizationChanged);
-    _ownedMonetizationService?.dispose();
-    _ownedMonetizationService = null;
-    _monetizationService =
-        service ??
-        Match3dMonetizationService(
-          entitlement: widget.entitlement,
-          initialRenderMode: widget.renderMode,
-          onPurchaseIntent: widget.onPurchaseIntent,
-          tournamentBoostPrice: widget.tournamentBoostPrice,
-        );
-    if (service == null) {
-      _ownedMonetizationService = _monetizationService;
-    } else {
-      _monetizationService!.updateEntitlement(widget.entitlement);
-      _monetizationService!.selectRenderMode(widget.renderMode);
-    }
-    _monetizationService!.addListener(_handleMonetizationChanged);
-  }
-
-  Match3dMonetizationService get _monetization => _monetizationService!;
-
-  void _startInitialLoad() {
-    final int sessionId = ++_sourceSession;
-    unawaited(_loadInitialViewState(sessionId));
-  }
-
-  Future<void> _loadInitialViewState(int sessionId) async {
-    try {
-      final MatchViewState state = await _resolveInitialViewState();
-      if (!mounted || sessionId != _sourceSession) {
-        return;
-      }
-      _installController(state, preservePlaybackState: false);
-    } catch (error) {
-      if (!mounted || sessionId != _sourceSession) {
-        return;
-      }
-      setState(() {
-        _loading = false;
-        _loadError = error;
-      });
-    }
-  }
-
-  Future<MatchViewState> _resolveInitialViewState() {
+  Future<MatchViewState> _load() {
     final MatchViewStateLoader? loader = widget.viewStateLoader;
     if (loader != null) {
       return loader();
@@ -241,2530 +83,359 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     );
   }
 
-  void _installController(
-    MatchViewState state, {
-    required bool preservePlaybackState,
-  }) {
-    final Match3dTimelineController? previous = _controller;
-    final double previousPosition =
-        preservePlaybackState ? previous?.positionSeconds ?? 0 : 0;
-    final bool wasPlaying =
-        preservePlaybackState ? previous?.isPlaying ?? true : true;
-    final MatchPlaybackSpeedMode previousSpeedMode =
-        previous?.speedMode ?? MatchPlaybackSpeedMode.normal;
-
-    previous?.removeListener(_handleControllerTick);
-    final Match3dTimelineController controller = Match3dTimelineController(
-      vsync: this,
-      viewState: state,
-      autoplay: false,
-      initialSpeedMode: previousSpeedMode,
-    );
-    controller.updateSpeedOptions(_monetization.speedOptionsFor(_matchContext));
-    controller.addListener(_handleControllerTick);
-    if (previousPosition > 0) {
-      controller.seekTo(
-        math.min(previousPosition, state.durationSeconds.toDouble()),
-      );
-    }
-    if (wasPlaying) {
-      controller.play();
-    }
-    previous?.dispose();
-    setState(() {
-      _loading = false;
-      _loadError = null;
-      _viewState = state;
-      _controller = controller;
-      _continuationNotice = null;
-      _loadingContinuation = false;
-    });
-  }
-
-  Match3dMatchContext get _matchContext {
-    final String competitionName = widget.competition.name.trim().toLowerCase();
-    return Match3dMatchContext(
-      matchId: widget.matchKey,
-      competitionId: widget.competition.id,
-      isFinal: competitionName.contains('final'),
-      isMajorMatch:
-          widget.isMajorMatch ||
-          widget.presentationMode == MatchViewerPresentationMode.broadcast,
-      isSpectator: widget.isSpectator,
-      presentationMode: widget.presentationMode,
-      performanceSafe: true,
-    );
-  }
-
-  void _handleMonetizationChanged() {
-    _syncControllerSpeedOptions();
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _syncControllerSpeedOptions() {
-    _controller?.updateSpeedOptions(
-      _monetization.speedOptionsFor(_matchContext),
-    );
-  }
-
-  void _handleControllerTick() {
-    _maybeRequestContinuation();
-  }
-
-  void _maybeRequestContinuation() {
-    final Match3dTimelineController? controller = _controller;
-    final MatchViewState? state = _viewState;
-    final MatchViewContinuationLoader? continuationLoader =
-        widget.continuationLoader;
-    if (controller == null ||
-        state == null ||
-        continuationLoader == null ||
-        _loadError != null ||
-        _loadingContinuation ||
-        !state.hasMoreSegments ||
-        state.nextSegmentToken == null ||
-        state.nextSegmentToken!.trim().isEmpty) {
-      return;
-    }
-    final double triggerAt =
-        math.max(0, state.segmentEndSeconds.toDouble() - 0.25).toDouble();
-    if (controller.positionSeconds < triggerAt) {
-      return;
-    }
-    unawaited(
-      _loadContinuation(
-        sessionId: _sourceSession,
-        continuationLoader: continuationLoader,
-        continuationToken: state.nextSegmentToken!,
-      ),
-    );
-  }
-
-  Future<void> _loadContinuation({
-    required int sessionId,
-    required MatchViewContinuationLoader continuationLoader,
-    required String continuationToken,
-    bool isRetry = false,
-  }) async {
-    if (_loadingContinuation) {
-      return;
-    }
-    setState(() {
-      _loadingContinuation = true;
-      if (!isRetry) {
-        _continuationNotice = null;
-      }
-    });
-    try {
-      final MatchViewState nextSegment = await continuationLoader(
-        matchKey: widget.matchKey,
-        continuationToken: continuationToken,
-      );
-      if (!mounted || sessionId != _sourceSession || _viewState == null) {
-        return;
-      }
-      _retryTimer?.cancel();
-      final MatchViewState merged = _mergeSegments(
-        _viewState!,
-        _qualifyContinuationSegment(
-          current: _viewState!,
-          next: nextSegment,
-          continuationToken: continuationToken,
-        ),
-      );
-      _installController(merged, preservePlaybackState: true);
-    } catch (error) {
-      if (!mounted || sessionId != _sourceSession) {
-        return;
-      }
-      if (!_isRetryableContinuationError(error)) {
-        _retryTimer?.cancel();
-        _controller?.pause();
-        setState(() {
-          _loading = false;
-          _loadingContinuation = false;
-          _continuationNotice = null;
-          _loadError = _terminalContinuationError(error);
-        });
-        return;
-      }
-      setState(() {
-        _loadingContinuation = false;
-        _continuationNotice =
-            'Live updates paused. Waiting for the next verified segment...';
-      });
-      _retryTimer?.cancel();
-      _retryTimer = Timer(const Duration(seconds: 1), () {
-        if (!mounted) {
-          return;
-        }
-        unawaited(
-          _loadContinuation(
-            sessionId: sessionId,
-            continuationLoader: continuationLoader,
-            continuationToken: continuationToken,
-            isRetry: true,
-          ),
-        );
-      });
-    }
-  }
-
-  MatchViewState _mergeSegments(MatchViewState current, MatchViewState next) {
-    final Map<String, MatchEvent> eventsById = <String, MatchEvent>{
-      for (final MatchEvent event in current.events) event.id: event,
-    };
-    for (final MatchEvent event in next.events) {
-      eventsById[event.id] = event;
-    }
-    final List<MatchEvent> events = eventsById.values.toList(growable: false)
-      ..sort(
-        (MatchEvent left, MatchEvent right) =>
-            left.timeSeconds.compareTo(right.timeSeconds),
-      );
-
-    final Map<String, MatchTimelineFrame> framesById = <
-      String,
-      MatchTimelineFrame
-    >{for (final MatchTimelineFrame frame in current.frames) frame.id: frame};
-    for (final MatchTimelineFrame frame in next.frames) {
-      framesById[frame.id] = frame;
-    }
-    final List<MatchTimelineFrame> frames = framesById.values.toList(
-      growable: false,
-    )..sort(
-      (MatchTimelineFrame left, MatchTimelineFrame right) =>
-          left.timeSeconds.compareTo(right.timeSeconds),
-    );
-
-    return current.copyWith(
-      source: next.source,
-      durationSeconds: math.max(current.durationSeconds, next.durationSeconds),
-      events: events,
-      frames: frames,
-      segmentStartSeconds: current.segmentStartSeconds,
-      segmentEndSeconds: next.segmentEndSeconds,
-      hasMoreSegments: next.hasMoreSegments,
-      nextSegmentToken: next.nextSegmentToken,
-      monetization:
-          next.monetization.hasPlacements
-              ? next.monetization
-              : current.monetization,
-      presentationPackage:
-          next.presentationPackage ?? current.presentationPackage,
-    );
-  }
-
-  MatchViewState _qualifyContinuationSegment({
-    required MatchViewState current,
-    required MatchViewState next,
-    required String continuationToken,
-  }) {
-    final MatchViewState qualified = qualifyLiveMatchViewerState(
-      matchKey: current.matchId,
-      state: next,
-    );
-    if (qualified.segmentEndSeconds < current.segmentEndSeconds) {
-      throw const GteApiException(
-        type: GteApiErrorType.parsing,
-        message:
-            'Live updates are unavailable because the verified session moved backward.',
-      );
-    }
-    final Set<String> currentFrameIds =
-        current.frames.map((MatchTimelineFrame frame) => frame.id).toSet();
-    final Set<String> currentEventIds =
-        current.events.map((MatchEvent event) => event.id).toSet();
-    final bool advanced =
-        qualified.segmentEndSeconds > current.segmentEndSeconds ||
-        qualified.durationSeconds > current.durationSeconds ||
-        qualified.frames.any(
-          (MatchTimelineFrame frame) => !currentFrameIds.contains(frame.id),
-        ) ||
-        qualified.events.any(
-          (MatchEvent event) => !currentEventIds.contains(event.id),
-        );
-    if (!advanced ||
-        (qualified.hasMoreSegments &&
-            qualified.nextSegmentToken?.trim() == continuationToken.trim())) {
-      throw const GteApiException(
-        type: GteApiErrorType.parsing,
-        message:
-            'Live updates are unavailable because the verified session did not advance.',
-      );
-    }
-    return qualified;
-  }
-
-  bool _isRetryableContinuationError(Object error) {
-    if (error is! GteApiException) {
-      return true;
-    }
-    return error.type == GteApiErrorType.network ||
-        error.type == GteApiErrorType.notFound ||
-        error.type == GteApiErrorType.unavailable ||
-        error.type == GteApiErrorType.unknown;
-  }
-
-  GteApiException _terminalContinuationError(Object error) {
-    if (error is GteApiException) {
-      return error;
-    }
-    return GteApiException(
-      type: GteApiErrorType.unavailable,
-      message: 'Live updates are unavailable for this match session right now.',
-      cause: error,
-    );
-  }
-
-  Future<void> _handleRenderModeSelection(RenderMode mode) async {
-    _monetization.selectRenderMode(mode);
-    if (mode != RenderMode.threeD ||
-        !_monetization.needsThreeDUnlock(_matchContext)) {
-      return;
-    }
-    final Match3dUpgradeAction? action = await Match3dUpgradePrompt.show(
-      context,
-      matchUnlockPrice: Match3dMonetizationService.threeDUnlockPrice,
-      tournamentBoostPrice: widget.tournamentBoostPrice,
-    );
-    if (!mounted || action == null) {
-      return;
-    }
-    switch (action) {
-      case Match3dUpgradeAction.continueIn2d:
-        _monetization.selectRenderMode(RenderMode.twoD);
-      case Match3dUpgradeAction.unlock3d:
-        final Match3dActionResult result = await _monetization
-            .unlockThreeDForMatch(_matchContext);
-        _applyActionResult(result);
-      case Match3dUpgradeAction.upgradeTournament:
-        final Match3dActionResult result = await _monetization
-            .upgradeTournamentExperience(_matchContext);
-        _applyActionResult(result);
-    }
-  }
-
-  Future<void> _unlockInteraction(Match3dPaidInteraction interaction) async {
-    final Match3dActionResult result = await _monetization.unlockInteraction(
-      interaction,
-      _matchContext,
-    );
-    _applyActionResult(result);
-  }
-
-  Future<void> _sendGift(double amount) async {
-    final Match3dActionResult result = await _monetization.sendCoinGift(
-      amount,
-      _matchContext,
-    );
-    _applyActionResult(result);
-  }
-
-  Future<void> _sendReaction(Match3dReaction reaction) async {
-    final Match3dActionResult result = _monetization.sendReaction(
-      reaction,
-      _matchContext,
-    );
-    _applyActionResult(result);
-  }
-
-  Future<void> _claimRewardedAd(MatchAdPlacement placement) async {
-    final int rewardCoins = placement.rewardCoins ?? 0;
-    final Match3dActionResult result = await _monetization.claimRewardedAd(
-      adId: placement.id,
-      rewardCoins: rewardCoins,
-      brand: placement.brand,
-    );
-    _applyActionResult(result);
-  }
-
-  void _applyActionResult(Match3dActionResult result) {
-    if (result.overlayBurst != null) {
-      _activeBursts.insert(0, result.overlayBurst!);
-      _scheduleBurstRemoval(result.overlayBurst!.id);
-    }
-    if (result.message != null && result.message!.trim().isNotEmpty) {
-      _statusMessageTimer?.cancel();
-      setState(() {
-        _statusMessage = result.message;
-      });
-      _statusMessageTimer = Timer(const Duration(seconds: 4), () {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _statusMessage = null;
-        });
-      });
-    } else if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _scheduleBurstRemoval(String burstId) {
-    _burstTimers.remove(burstId)?.cancel();
-    _burstTimers[burstId] = Timer(const Duration(seconds: 4), () {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _activeBursts.removeWhere(
-          (Match3dOverlayBurst burst) => burst.id == burstId,
-        );
-      });
-    });
-  }
-
-  void _cancelTransientTimers() {
-    _retryTimer?.cancel();
-    _statusMessageTimer?.cancel();
-    for (final Timer timer in _burstTimers.values) {
-      timer.cancel();
-    }
-    _burstTimers.clear();
-  }
-
-  Future<void> _reload() async {
-    _sourceSession += 1;
-    _cancelTransientTimers();
-    _controller?.removeListener(_handleControllerTick);
+  void _reload() {
     _controller?.dispose();
     _controller = null;
     setState(() {
-      _loading = true;
-      _loadError = null;
-      _continuationNotice = null;
-      _statusMessage = null;
-      _activeBursts.clear();
+      _viewStateFuture = _load();
     });
-    _startInitialLoad();
   }
 
-  String _routeTitle() {
-    final String? override = widget.titleOverride?.trim();
-    if (override != null && override.isNotEmpty) {
-      return override;
+  MatchPlaybackController _ensureController(MatchViewState viewState) {
+    final MatchPlaybackController? existing = _controller;
+    if (existing != null && existing.viewState.matchId == viewState.matchId) {
+      return existing;
     }
-    if (widget.renderMode == RenderMode.threeD) {
-      return '3D Match Viewer';
-    }
-    return '2D Match Viewer';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool compactToolbar = MediaQuery.sizeOf(context).width < 420;
-    return Scaffold(
-      backgroundColor: const Color(0xFF050B12),
-      appBar: AppBar(
-        title: Text(compactToolbar ? 'Viewer' : _routeTitle()),
-        backgroundColor: const Color(0xFF08121C),
-        foregroundColor: Colors.white,
-        actions:
-            compactToolbar
-                ? const <Widget>[]
-                : <Widget>[
-                  IconButton(
-                    tooltip: 'Refresh viewer',
-                    onPressed: _reload,
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
-                ],
-      ),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              Color(0xFF08131D),
-              Color(0xFF071019),
-              Color(0xFF050A10),
-            ],
-          ),
-        ),
-        child:
-            _loading
-                ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: GteStatePanel(
-                      eyebrow: 'MATCH VIEWER',
-                      title: 'Loading match presentation',
-                      message:
-                          'Preparing the verified timeline, broadcast overlays, and Flutter-rendered match lane.',
-                      icon: Icons.live_tv_rounded,
-                      isLoading: true,
-                    ),
-                  ),
-                )
-                : _loadError != null ||
-                    _viewState == null ||
-                    _controller == null
-                ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: GteStatePanel(
-                      eyebrow: 'MATCH VIEWER',
-                      title: 'Live updates unavailable',
-                      message:
-                          _loadError == null
-                              ? 'The viewer could not load a verified match timeline for this route.'
-                              : AppFeedback.messageFor(
-                                _loadError!,
-                                fallback:
-                                    'The viewer could not load a verified match timeline for this route.',
-                              ),
-                      icon: Icons.warning_amber_rounded,
-                      actionLabel: 'Retry',
-                      onAction: _reload,
-                    ),
-                  ),
-                )
-                : ListenableBuilder(
-                  listenable: _controller!,
-                  builder: (BuildContext context, Widget? child) {
-                    return _LoadedViewerBody(
-                      competition: widget.competition,
-                      matchContext: _matchContext,
-                      presentationMode: widget.presentationMode,
-                      isSpectator: widget.isSpectator,
-                      monetization: _monetization,
-                      packageRepository: _packageRepository,
-                      viewState: _viewState!,
-                      controller: _controller!,
-                      engineBridge: widget.engineBridge,
-                      continuationNotice: _continuationNotice,
-                      statusMessage: _statusMessage,
-                      activeBursts: _activeBursts,
-                      onRestart: () => _controller!.restart(),
-                      onTogglePlayback: () => _controller!.togglePlayPause(),
-                      onJumpToNextEvent: () => _controller!.jumpToNextEvent(),
-                      onRenderModeSelected: _handleRenderModeSelection,
-                      onCameraPresetSelected: (Match3dCameraPreset preset) {
-                        _monetization.setCameraPreset(preset, _matchContext);
-                      },
-                      onUnlockSlowMotion:
-                          () => _unlockInteraction(
-                            Match3dPaidInteraction.slowMotionReplay,
-                          ),
-                      onUnlockAlternateCamera:
-                          () => _unlockInteraction(
-                            Match3dPaidInteraction.alternateCameraAngle,
-                          ),
-                      onUnlockHighlightAttack:
-                          () => _unlockInteraction(
-                            Match3dPaidInteraction.highlightNextAttack,
-                          ),
-                      onUpgradeTournament:
-                          widget.tournamentBoostPrice == null
-                              ? null
-                              : () async {
-                                final Match3dActionResult result =
-                                    await _monetization
-                                        .upgradeTournamentExperience(
-                                          _matchContext,
-                                        );
-                                _applyActionResult(result);
-                              },
-                      onSendGift: _sendGift,
-                      onSendReaction: _sendReaction,
-                      onClaimRewardedAd: _claimRewardedAd,
-                    );
-                  },
-                ),
-      ),
+    existing?.dispose();
+    final MatchPlaybackController created = MatchPlaybackController(
+      vsync: this,
+      viewState: viewState,
+      autoplay: true,
     );
+    _controller = created;
+    return created;
   }
-}
-
-class _LoadedViewerBody extends StatefulWidget {
-  const _LoadedViewerBody({
-    required this.competition,
-    required this.matchContext,
-    required this.presentationMode,
-    required this.isSpectator,
-    required this.monetization,
-    required this.packageRepository,
-    required this.viewState,
-    required this.controller,
-    required this.engineBridge,
-    required this.continuationNotice,
-    required this.statusMessage,
-    required this.activeBursts,
-    required this.onRestart,
-    required this.onTogglePlayback,
-    required this.onJumpToNextEvent,
-    required this.onRenderModeSelected,
-    required this.onCameraPresetSelected,
-    required this.onUnlockSlowMotion,
-    required this.onUnlockAlternateCamera,
-    required this.onUnlockHighlightAttack,
-    required this.onUpgradeTournament,
-    required this.onSendGift,
-    required this.onSendReaction,
-    required this.onClaimRewardedAd,
-  });
-
-  final CompetitionSummary competition;
-  final Match3dMatchContext matchContext;
-  final MatchViewerPresentationMode presentationMode;
-  final bool isSpectator;
-  final Match3dMonetizationService monetization;
-  final BroadcastPackageRepository packageRepository;
-  final MatchViewState viewState;
-  final Match3dTimelineController controller;
-  final Match3DBridge? engineBridge;
-  final String? continuationNotice;
-  final String? statusMessage;
-  final List<Match3dOverlayBurst> activeBursts;
-  final VoidCallback onRestart;
-  final VoidCallback onTogglePlayback;
-  final VoidCallback onJumpToNextEvent;
-  final Future<void> Function(RenderMode mode) onRenderModeSelected;
-  final ValueChanged<Match3dCameraPreset> onCameraPresetSelected;
-  final VoidCallback onUnlockSlowMotion;
-  final VoidCallback onUnlockAlternateCamera;
-  final VoidCallback onUnlockHighlightAttack;
-  final Future<void> Function()? onUpgradeTournament;
-  final Future<void> Function(double amount) onSendGift;
-  final Future<void> Function(Match3dReaction reaction) onSendReaction;
-  final Future<void> Function(MatchAdPlacement placement) onClaimRewardedAd;
-
-  @override
-  State<_LoadedViewerBody> createState() => _LoadedViewerBodyState();
-}
-
-class _LoadedViewerBodyState extends State<_LoadedViewerBody> {
-  MatchRailShortcut _activeShortcut = MatchRailShortcut.shape;
-
-  @override
-  Widget build(BuildContext context) {
-    final MatchTimelineFrame frame = widget.controller.displayFrame;
-    final MatchEvent? activeEvent = widget.controller.activeEvent;
-    final BroadcastPackageData packageData = widget.packageRepository
-        .resolveBroadcastData(
-          matchKey: widget.matchContext.matchId,
-          viewState: widget.viewState,
-        );
-    final MatchPresentationPackage package = packageData.package;
-    final MatchEnginePresentationState realPresentation =
-        RealMatchSceneDirector.resolve(
-          viewState: widget.viewState,
-          frame: frame,
-          package: package,
-          activeEvent: activeEvent,
-          playbackSeconds: widget.controller.positionSeconds,
-        );
-    final MatchBroadcastPresentationState? broadcastPresentation =
-        widget.presentationMode == MatchViewerPresentationMode.broadcast
-            ? MatchBroadcastPresentationBuilder.build(
-              viewState: widget.viewState,
-              controller: widget.controller,
-            )
-            : null;
-    final RenderMode effectiveRenderMode = widget.monetization
-        .effectiveRenderModeFor(widget.matchContext);
-    final MatchEngineCameraPreset resolvedCameraPreset = _resolveCameraPreset(
-      presentation: realPresentation,
-      userPreset: widget.monetization.cameraPreset,
-    );
-    final String cameraStatusLabel = _cameraLabelFor(resolvedCameraPreset);
-    final bool compactSurface = MediaQuery.sizeOf(context).width < 420;
-    final bool showBroadcastMode =
-        widget.presentationMode == MatchViewerPresentationMode.broadcast;
-    final bool showAds =
-        widget.viewState.monetization.adsEnabled &&
-        !(widget.viewState.monetization.premiumAdFree &&
-            widget.monetization.effectiveEntitlement.isPremiumUser);
-    final MatchAdPlacement? preRollPlacement =
-        showAds
-            ? widget.viewState.monetization.firstActiveOfType(
-              MatchAdPlacementType.preRoll,
-              widget.controller.positionSeconds,
-            )
-            : null;
-    final MatchAdPlacement? liveBannerPlacement =
-        showAds
-            ? widget.viewState.monetization.firstActiveOfType(
-              MatchAdPlacementType.liveBanner,
-              widget.controller.positionSeconds,
-            )
-            : null;
-    final MatchAdPlacement? rewardedPlacement =
-        showAds
-            ? widget.viewState.monetization.firstOfType(
-              MatchAdPlacementType.rewardedAd,
-            )
-            : null;
-    final MatchAdPlacement? sponsoredPlacement =
-        showAds
-            ? widget.viewState.monetization.firstOfType(
-              MatchAdPlacementType.sponsoredHighlight,
-            )
-            : null;
-
-    final String surfaceTitle =
-        showBroadcastMode ? 'Live broadcast' : 'Replay lane';
-    final String surfaceSubtitle =
-        showBroadcastMode
-            ? 'Pitch-first broadcast framing with persistent commentary, tactical context, and restrained motion.'
-            : 'Football Manager-style tactical playback with stable camera grammar, denser overlays, and honest module visibility.';
-
-    final Widget sceneWidget =
-        effectiveRenderMode == RenderMode.threeD
-            ? Gtex3dScene(
-              viewState: widget.viewState,
-              frame: frame,
-              activeEvent: activeEvent,
-              cameraPreset: resolvedCameraPreset,
-              bridge: widget.engineBridge,
-              runtimePlayers: widget.controller.playerEntities,
-              runtimeBall: widget.controller.ballEntity,
-            )
-            : Pitch2dWidget(
-              viewState: widget.viewState,
-              frame: frame,
-              showFormationOverlay: false,
-              presentation: broadcastPresentation?.pitchPresentation,
-            );
-
-    final Widget scorebug =
-        showBroadcastMode
-            ? _BroadcastScorebug(
-              package: package,
-              state: broadcastPresentation!,
-            )
-            : RealMatchScorebugWidget(
-              homeName: package.home.displayCode,
-              awayName: package.away.displayCode,
-              homeScore: frame.homeScore,
-              awayScore: frame.awayScore,
-              clockLabel: realPresentation.clockLabel,
-              phaseLabel: realPresentation.phaseLabel,
-              stateLabel: realPresentation.stateLabel,
-              cameraLabel: cameraStatusLabel,
-              eventLabel: realPresentation.scorebugEventLabel,
-              competitionLabel:
-                  package.context.competitionName ?? widget.competition.name,
-              detailLabel:
-                  package.context.competitionStage ?? package.context.venueName,
-              homeAccent: _teamAccent(package.home),
-              awayAccent: _teamAccent(package.away),
-            );
-
-    final Widget commentaryRibbon = CommentaryRibbonWidget(
-      headline:
-          showBroadcastMode
-              ? broadcastPresentation!.commentaryHeadline ?? package.matchLabel
-              : realPresentation.lowerThirdHeadline,
-      detail:
-          showBroadcastMode
-              ? broadcastPresentation!.commentarySubtitle ??
-                  package.context.matchSignificance ??
-                  'Broadcast lane active.'
-              : realPresentation.lowerThirdDetail,
-      trailing:
-          showBroadcastMode
-              ? activeEvent?.clockLabel
-              : realPresentation.lowerThirdTrailing,
-      label:
-          showBroadcastMode
-              ? 'COMMENTARY'
-              : realPresentation.phaseLabel.toUpperCase(),
-      accentColor:
-          showBroadcastMode
-              ? const Color(0xFF53B1FD)
-              : _eventToneColor(realPresentation.eventMapping),
-    );
-
-    final List<Widget> sceneOverlays = <Widget>[
-      Positioned(top: 14, left: 14, right: 14, child: scorebug),
-      Positioned(left: 14, right: 14, bottom: 14, child: commentaryRibbon),
-    ];
-    if (realPresentation.showBanner && !showBroadcastMode && !compactSurface) {
-      sceneOverlays.add(
-        Positioned(
-          top: 112,
-          left: 18,
-          child: MatchMomentBannerWidget(banner: realPresentation.banner!),
-        ),
-      );
-    }
-    if (showBroadcastMode && broadcastPresentation!.showStartingBanner) {
-      final MatchBroadcastPresentationState broadcastState =
-          broadcastPresentation;
-      sceneOverlays.add(
-        Positioned(
-          left: 20,
-          right: 20,
-          top: 108,
-          child: Opacity(
-            opacity: broadcastState.startingBannerOpacity,
-            child: const _CenterTitleBanner(title: 'Match starting...'),
-          ),
-        ),
-      );
-    }
-    if (showBroadcastMode && broadcastPresentation!.showLineupBoard) {
-      final MatchBroadcastPresentationState broadcastState =
-          broadcastPresentation;
-      sceneOverlays.add(
-        Positioned(
-          left: 18,
-          right: 18,
-          bottom: 94,
-          child: Opacity(
-            opacity: broadcastState.lineupBoardOpacity,
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: _FormationTeaserCard(
-                    teamName: package.home.teamName,
-                    formation: package.home.formation,
-                    accent: _teamAccent(package.home),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FormationTeaserCard(
-                    teamName: package.away.teamName,
-                    formation: package.away.formation,
-                    accent: _teamAccent(package.away),
-                    alignEnd: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    if (preRollPlacement != null) {
-      sceneOverlays.add(
-        Positioned(
-          top: 112,
-          right: 18,
-          child: _PlacementCard(
-            key: const Key('match-ad-preroll'),
-            placement: preRollPlacement,
-            compact: true,
-          ),
-        ),
-      );
-    }
-    if (effectiveRenderMode == RenderMode.threeD) {
-      sceneOverlays.add(
-        Positioned.fill(
-          child: GiftingOverlay(
-            activeBursts: widget.activeBursts,
-            availableCoins: widget.monetization.availableCoinBalance,
-            onSendGift: widget.onSendGift,
-            onSendReaction: widget.onSendReaction,
-          ),
-        ),
-      );
-    }
-    if (showBroadcastMode && broadcastPresentation!.isVarChecking) {
-      sceneOverlays.add(
-        Positioned(
-          top: 168,
-          right: 18,
-          child: const _MiniPhaseChip(label: 'VAR', accent: Color(0xFFF79009)),
-        ),
-      );
-    }
-
-    final List<Widget> sceneSupport = <Widget>[
-      PlayerRatingsStripWidget(
-        players: realPresentation.ratingLeaders,
-        homeTeam: package.home,
-        awayTeam: package.away,
-        events: widget.viewState.events,
-        activeEventId: activeEvent?.id,
-        phaseLabel: realPresentation.stateLabel,
-        activeShortcut: _activeShortcut,
-        onShortcutSelected: (MatchRailShortcut shortcut) {
-          setState(() {
-            _activeShortcut = shortcut;
-          });
-        },
-      ),
-      _OperationalDrawerPanel(
-        shortcut: _activeShortcut,
-        package: package,
-        presentation: realPresentation,
-        events: widget.viewState.events,
-        activeEvent: activeEvent,
-      ),
-      if (realPresentation.showSummaryBoard)
-        MatchRecapBoardWidget(
-          summaryBoard: realPresentation.summaryBoard!,
-          events: widget.viewState.events,
-          activeEventId: activeEvent?.id,
-        ),
-    ];
-
-    final Widget premiumControls = PremiumControls(
-      entitlement: widget.monetization.effectiveEntitlement,
-      selectedRenderMode: widget.monetization.selectedRenderMode,
-      effectiveRenderMode: effectiveRenderMode,
-      availableCoins: widget.monetization.availableCoinBalance,
-      cameraPreset: widget.monetization.cameraPreset,
-      canUsePremiumCamera: widget.monetization.canUsePremiumCamera(
-        widget.matchContext,
-      ),
-      canUseFastReplay: widget.monetization.canUseFastReplay(
-        widget.matchContext,
-      ),
-      onRenderModeSelected: (RenderMode mode) {
-        unawaited(widget.onRenderModeSelected(mode));
-      },
-      onCameraPresetSelected: widget.onCameraPresetSelected,
-      onUnlockSlowMotion: widget.onUnlockSlowMotion,
-      onUnlockAlternateCamera: widget.onUnlockAlternateCamera,
-      onUnlockHighlightAttack: widget.onUnlockHighlightAttack,
-      onUpgradeTournament:
-          widget.onUpgradeTournament == null
-              ? null
-              : () {
-                unawaited(widget.onUpgradeTournament!());
-              },
-    );
-
-    final List<Widget> sideRailChildren = <Widget>[
-      if (showBroadcastMode || effectiveRenderMode == RenderMode.threeD)
-        RealMatchTacticalHudWidget(
-          package: package,
-          presentation: realPresentation,
-        ),
-      if (showBroadcastMode || effectiveRenderMode == RenderMode.threeD)
-        const SizedBox(height: 18),
-      premiumControls,
-      if (rewardedPlacement != null) ...<Widget>[
-        const SizedBox(height: 18),
-        _RewardedAdCard(
-          key: const Key('match-rewarded-ad-card'),
-          placement: rewardedPlacement,
-          claimed: widget.monetization.hasClaimedRewardedAd(
-            rewardedPlacement.id,
-          ),
-          onPressed: () => widget.onClaimRewardedAd(rewardedPlacement),
-        ),
-      ],
-      if (sponsoredPlacement != null) ...<Widget>[
-        const SizedBox(height: 18),
-        _PlacementCard(
-          key: const Key('match-sponsored-highlight'),
-          placement: sponsoredPlacement,
-        ),
-      ],
-      const SizedBox(height: 18),
-      if (showBroadcastMode || package.context.hasAnyContent) ...<Widget>[
-        StandingsContextWidget(
-          contextBoard: package.context,
-          homeTeam: package.home,
-          awayTeam: package.away,
-        ),
-      ],
-      if (packageData.hasStorylinePanel) ...<Widget>[
-        const SizedBox(height: 18),
-        StorylinePanelWidget(panel: packageData.storylinePanel),
-      ],
-    ];
-
-    final Widget controlBar =
-        widget.isSpectator
-            ? const SizedBox.shrink()
-            : _ViewerControlBar(
-              isPlaying: widget.controller.isPlaying,
-              speedLabel: widget.controller.speedLabel,
-              durationLabel: 'Duration: ${_resolvedDurationSeconds()}s',
-              onRestart: widget.onRestart,
-              onTogglePlayback: widget.onTogglePlayback,
-              onJumpToNextEvent: widget.onJumpToNextEvent,
-              onCycleSpeed: widget.controller.cycleSpeed,
-            );
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool wide = constraints.maxWidth >= 1220;
-        final Widget scenePanel = _ScenePanel(
-          surfaceTitle: surfaceTitle,
-          surfaceSubtitle: surfaceSubtitle,
-          competition: widget.competition,
-          package: package,
-          phaseLabel:
-              showBroadcastMode
-                  ? (broadcastPresentation?.statusLabel ?? 'LIVE')
-                  : realPresentation.phaseLabel,
-          renderModeLabel:
-              effectiveRenderMode == RenderMode.threeD
-                  ? 'Flutter 3D lane'
-                  : '2D tactical',
-          cameraLabel: showBroadcastMode ? 'BROADCAST' : cameraStatusLabel,
-          scene: sceneWidget,
-          overlays: sceneOverlays,
-          supportModules: sceneSupport,
-        );
-
-        final List<Widget> mainColumnChildren = <Widget>[
-          if (widget.continuationNotice != null)
-            _InlineStatusBanner(
-              text: widget.continuationNotice!,
-              accent: const Color(0xFFF79009),
-            ),
-          if (widget.continuationNotice != null) const SizedBox(height: 14),
-          if (widget.statusMessage != null)
-            _InlineStatusBanner(
-              text: widget.statusMessage!,
-              accent: const Color(0xFF17B26A),
-            ),
-          if (widget.statusMessage != null) const SizedBox(height: 14),
-          scenePanel,
-          if (!widget.isSpectator) ...<Widget>[
-            const SizedBox(height: 18),
-            controlBar,
-          ],
-          if (!wide && constraints.maxWidth >= 420) ...<Widget>[
-            const SizedBox(height: 18),
-            ...sideRailChildren,
-          ],
-          if (liveBannerPlacement != null) ...<Widget>[
-            const SizedBox(height: 18),
-            _LiveBannerCard(
-              key: const Key('match-ad-live-banner'),
-              placement: liveBannerPlacement,
-            ),
-          ],
-        ];
-
-        if (!wide) {
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: mainColumnChildren,
-              ),
-            ),
-          );
-        }
-
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: mainColumnChildren,
-                  ),
-                ),
-                const SizedBox(width: 18),
-                SizedBox(
-                  width: 360,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: sideRailChildren,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  int _resolvedDurationSeconds() {
-    final int eventDuration =
-        widget.viewState.events.isEmpty
-            ? 0
-            : widget.viewState.events.last.timeSeconds.ceil();
-    final int frameDuration =
-        widget.viewState.frames.isEmpty
-            ? 0
-            : widget.viewState.frames.last.timeSeconds.ceil();
-    return math.max(
-      widget.viewState.durationSeconds,
-      math.max(eventDuration, frameDuration),
-    );
-  }
-
-  MatchEngineCameraPreset _resolveCameraPreset({
-    required MatchEnginePresentationState presentation,
-    required Match3dCameraPreset userPreset,
-  }) {
-    switch (userPreset) {
-      case Match3dCameraPreset.broadcast:
-        return presentation.cameraPreset;
-      case Match3dCameraPreset.sideline:
-        if (presentation.moment == MatchEnginePresentationMoment.recap) {
-          return presentation.cameraPreset;
-        }
-        return MatchEngineCameraPreset.tactical_high;
-      case Match3dCameraPreset.goalbox:
-        switch (presentation.eventMapping) {
-          case MatchSceneEventMapping.goal:
-          case MatchSceneEventMapping.save:
-          case MatchSceneEventMapping.shot:
-          case MatchSceneEventMapping.penalty:
-            return MatchEngineCameraPreset.goal_replay;
-          case MatchSceneEventMapping.corner:
-          case MatchSceneEventMapping.free_kick:
-            return presentation.possessionSide == MatchViewerSide.home
-                ? MatchEngineCameraPreset.set_piece_right
-                : MatchEngineCameraPreset.set_piece_left;
-          default:
-            return presentation.cameraPreset;
-        }
-    }
-  }
-
-  String _cameraLabelFor(MatchEngineCameraPreset preset) {
-    return switch (preset) {
-      MatchEngineCameraPreset.stadium_wide => 'WIDE',
-      MatchEngineCameraPreset.kickoff_center => 'KICKOFF',
-      MatchEngineCameraPreset.tactical_high => 'TACTICAL',
-      MatchEngineCameraPreset.attacking_third_left ||
-      MatchEngineCameraPreset.attacking_third_right => 'FINAL THIRD',
-      MatchEngineCameraPreset.defensive_block => 'ANALYST',
-      MatchEngineCameraPreset.set_piece_left ||
-      MatchEngineCameraPreset.set_piece_right => 'SET PIECE',
-      MatchEngineCameraPreset.goal_replay => 'EVENT FOCUS',
-      MatchEngineCameraPreset.halftime_board => 'HALFTIME',
-      MatchEngineCameraPreset.fulltime_board => 'FULL-TIME',
-    };
-  }
-
-  Color _eventToneColor(MatchSceneEventMapping eventMapping) {
-    return switch (eventMapping) {
-      MatchSceneEventMapping.goal => const Color(0xFFF04438),
-      MatchSceneEventMapping.save ||
-      MatchSceneEventMapping.shot => const Color(0xFFF79009),
-      MatchSceneEventMapping.corner ||
-      MatchSceneEventMapping.free_kick ||
-      MatchSceneEventMapping.penalty => const Color(0xFFFDB022),
-      MatchSceneEventMapping.booking ||
-      MatchSceneEventMapping.foul => const Color(0xFFF97316),
-      MatchSceneEventMapping.substitution => const Color(0xFF53B1FD),
-      MatchSceneEventMapping.halftime ||
-      MatchSceneEventMapping.fulltime => const Color(0xFF7DD3FC),
-      MatchSceneEventMapping.kickoff ||
-      MatchSceneEventMapping.possession_phase ||
-      MatchSceneEventMapping.chance_creation => const Color(0xFF17B26A),
-    };
-  }
-
-  Color _teamAccent(MatchPresentationTeam team) {
-    return _colorFromHex(team.accentColorHex, const Color(0xFF53B1FD));
-  }
-
-  Color _colorFromHex(String? value, Color fallback) {
-    if (value == null || value.trim().isEmpty) {
-      return fallback;
-    }
-    var normalized = value.trim().replaceFirst('#', '');
-    if (normalized.length == 6) {
-      normalized = 'FF$normalized';
-    }
-    final int? parsed = int.tryParse(normalized, radix: 16);
-    if (parsed == null) {
-      return fallback;
-    }
-    return Color(parsed);
-  }
-}
-
-class _OperationalDrawerPanel extends StatelessWidget {
-  const _OperationalDrawerPanel({
-    required this.shortcut,
-    required this.package,
-    required this.presentation,
-    required this.events,
-    required this.activeEvent,
-  });
-
-  final MatchRailShortcut shortcut;
-  final MatchPresentationPackage package;
-  final MatchEnginePresentationState presentation;
-  final List<MatchEvent> events;
-  final MatchEvent? activeEvent;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      child: Container(
-        key: ValueKey<MatchRailShortcut>(shortcut),
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: const Color(0xD90A121A),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: _buildContent(context),
-      ),
-    );
-  }
-
-  Widget _buildContent(BuildContext context) {
-    return switch (shortcut) {
-      MatchRailShortcut.tactics => _DrawerSection(
-        title: 'Tactical switches',
-        subtitle:
-            'Persistent coach-facing context stays visible without leaving the field.',
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final bool stacked = constraints.maxWidth < 720;
-            final List<Widget> cards = <Widget>[
-              _TacticalDrawerCard(
-                team: package.home,
-                shape: presentation.homeShape,
-                eventContext: presentation.activeEventContext,
-              ),
-              _TacticalDrawerCard(
-                team: package.away,
-                shape: presentation.awayShape,
-                eventContext: presentation.activeEventContext,
-                alignEnd: true,
-              ),
-            ];
-            if (stacked) {
-              return Column(children: _spaced(cards));
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(child: cards[0]),
-                const SizedBox(width: 12),
-                Expanded(child: cards[1]),
-              ],
-            );
-          },
-        ),
-      ),
-      MatchRailShortcut.subs => _DrawerSection(
-        title: 'Substitutions and bench',
-        subtitle:
-            'Bench context stays compact so the field remains readable during changes.',
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final bool stacked = constraints.maxWidth < 720;
-            final List<Widget> cards = <Widget>[
-              _BenchDrawerCard(team: package.home),
-              _BenchDrawerCard(team: package.away, alignEnd: true),
-            ];
-            if (stacked) {
-              return Column(children: _spaced(cards));
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(child: cards[0]),
-                const SizedBox(width: 12),
-                Expanded(child: cards[1]),
-              ],
-            );
-          },
-        ),
-      ),
-      MatchRailShortcut.shape => _DrawerSection(
-        title: 'Live shape intelligence',
-        subtitle:
-            'Read the block first: compactness, width, and line spacing stay visible while play continues.',
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final bool stacked = constraints.maxWidth < 720;
-            final List<Widget> cards = <Widget>[
-              _ShapeDrawerCard(
-                team: package.home,
-                shape: presentation.homeShape,
-                accent: _drawerAccent(package.home, const Color(0xFF22C55E)),
-              ),
-              _ShapeDrawerCard(
-                team: package.away,
-                shape: presentation.awayShape,
-                accent: _drawerAccent(package.away, const Color(0xFFF97316)),
-                alignEnd: true,
-              ),
-            ];
-            if (stacked) {
-              return Column(children: _spaced(cards));
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(child: cards[0]),
-                const SizedBox(width: 12),
-                Expanded(child: cards[1]),
-              ],
-            );
-          },
-        ),
-      ),
-      MatchRailShortcut.setPiece => _DrawerSection(
-        title: 'Set-piece view',
-        subtitle:
-            'This drawer only expands into event detail when the live phase exposes a real restart situation.',
-        child: _SetPieceDrawerCard(
-          presentation: presentation,
-          activeEvent: activeEvent,
-        ),
-      ),
-      MatchRailShortcut.timeline => _DrawerSection(
-        title: 'Replay timeline',
-        subtitle:
-            'Major events accumulate into a readable match story instead of isolated popups.',
-        child: _TimelineDrawer(events: events, activeEventId: activeEvent?.id),
-      ),
-    };
-  }
-
-  List<Widget> _spaced(List<Widget> widgets) {
-    final List<Widget> output = <Widget>[];
-    for (int index = 0; index < widgets.length; index += 1) {
-      if (index > 0) {
-        output.add(const SizedBox(height: 12));
-      }
-      output.add(widgets[index]);
-    }
-    return output;
-  }
-
-  Color _drawerAccent(MatchPresentationTeam team, Color fallback) {
-    final String? raw = team.accentColorHex;
-    if (raw == null || raw.trim().isEmpty) {
-      return fallback;
-    }
-    String normalized = raw.trim().replaceFirst('#', '');
-    if (normalized.length == 6) {
-      normalized = 'FF$normalized';
-    }
-    final int? parsed = int.tryParse(normalized, radix: 16);
-    return parsed == null ? fallback : Color(parsed);
-  }
-}
-
-class _DrawerSection extends StatelessWidget {
-  const _DrawerSection({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: const Color(0xFFB6C5D5),
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 14),
-        child,
-      ],
-    );
-  }
-}
-
-class _TacticalDrawerCard extends StatelessWidget {
-  const _TacticalDrawerCard({
-    required this.team,
-    required this.shape,
-    required this.eventContext,
-    this.alignEnd = false,
-  });
-
-  final MatchPresentationTeam team;
-  final MatchEngineTeamShape shape;
-  final MatchEngineEventContext? eventContext;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final String? press = _teamInstruction(team, 'press');
-    final String? tempo = _teamInstruction(team, 'tempo');
-    final String? width = _teamInstruction(team, 'width');
-    final String attackFocus =
-        eventContext?.teamId == team.teamId && eventContext?.bannerText != null
-            ? eventContext!.bannerText!
-            : shape.inPossession
-            ? 'Support lanes active'
-            : 'Screen the central lane';
-    return _DrawerCard(
-      title: team.teamName,
-      alignEnd: alignEnd,
-      lines: <String>[
-        'Mentality: ${team.mentality ?? 'Hidden'}',
-        'Tempo: ${tempo ?? 'Hidden'}',
-        'Width: ${width ?? shape.widthLabel}',
-        'Line height: ${_drawerLineHeightLabel(shape)}',
-        'Press: ${press ?? 'Hidden'}',
-        'Focus: $attackFocus',
-      ],
-    );
-  }
-}
-
-class _BenchDrawerCard extends StatelessWidget {
-  const _BenchDrawerCard({required this.team, this.alignEnd = false});
-
-  final MatchPresentationTeam team;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<String> lines =
-        team.bench.isEmpty
-            ? <String>[
-              'Bench module hidden until the live payload exposes substitutes.',
-            ]
-            : team.bench
-                .take(5)
-                .map(
-                  (MatchPresentationPlayer player) =>
-                      '${player.shirtNumber ?? '--'} ${player.playerName} | ${_roleLabel(player.role)}',
-                )
-                .toList(growable: false);
-    return _DrawerCard(
-      title: '${team.teamName} bench',
-      alignEnd: alignEnd,
-      lines: lines,
-    );
-  }
-}
-
-class _ShapeDrawerCard extends StatelessWidget {
-  const _ShapeDrawerCard({
-    required this.team,
-    required this.shape,
-    required this.accent,
-    this.alignEnd = false,
-  });
-
-  final MatchPresentationTeam team;
-  final MatchEngineTeamShape shape;
-  final Color accent;
-  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withValues(alpha: 0.04),
-        border: Border.all(color: accent.withValues(alpha: 0.24)),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            team.teamName,
-            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
+      decoration: gteBackdropDecoration(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: Text(widget.titleOverride ?? '2D Match Viewer'),
+          actions: <Widget>[
+            IconButton(
+              tooltip: 'Reload replay',
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${shape.formation} | ${shape.compactnessLabel}',
-            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            alignment: alignEnd ? WrapAlignment.end : WrapAlignment.start,
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              _MiniDrawerChip(
-                label: 'Width ${shape.widthLabel}',
-                accent: accent,
-              ),
-              _MiniDrawerChip(
-                label: 'Line ${_drawerLineHeightLabel(shape)}',
-                accent: accent,
-              ),
-              _MiniDrawerChip(
-                label: shape.inPossession ? 'On ball' : 'Without ball',
-                accent: accent,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...shape.lanes
-              .where((MatchEngineShapeLane lane) => lane.activeCount > 0)
-              .map(
-                (MatchEngineShapeLane lane) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    mainAxisAlignment:
-                        alignEnd
-                            ? MainAxisAlignment.end
-                            : MainAxisAlignment.start,
-                    children: <Widget>[
-                      if (!alignEnd)
-                        Text(
-                          _laneLabel(lane.line),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelMedium?.copyWith(
-                            color: accent,
-                            fontWeight: FontWeight.w800,
+          ],
+        ),
+        body: FutureBuilder<MatchViewState>(
+          future: _viewStateFuture,
+          builder:
+              (BuildContext context, AsyncSnapshot<MatchViewState> snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: GteStatePanel(
+                  eyebrow: 'MATCH VIEWER',
+                  title: 'Loading replay timeline',
+                  message:
+                      'Preparing the 2D pitch, timeline frames, and replay controls.',
+                  icon: Icons.sports_soccer,
+                  accentColor: GteShellTheme.accentArena,
+                  isLoading: true,
+                ),
+              );
+            }
+            if (!snapshot.hasData) {
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: GteStatePanel(
+                  title: 'Replay unavailable',
+                  message:
+                      'Unable to load the serialized replay timeline right now.',
+                  icon: Icons.warning_amber_outlined,
+                  actionLabel: 'Retry',
+                  onAction: _reload,
+                ),
+              );
+            }
+
+            final MatchViewState viewState = snapshot.data!;
+            final MatchPlaybackController controller =
+                _ensureController(viewState);
+            return LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final bool wide = constraints.maxWidth >= 1040;
+                final Widget viewerPanel = ListenableBuilder(
+                  listenable: controller,
+                  builder: (BuildContext context, Widget? child) {
+                    final MatchEvent? activeEvent = controller.activeEvent;
+                    return Column(
+                      children: <Widget>[
+                        Expanded(
+                          child: Stack(
+                            children: <Widget>[
+                              Positioned.fill(
+                                child: Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                                  child: RepaintBoundary(
+                                    child: Pitch2dWidget(
+                                      viewState: viewState,
+                                      frame: controller.displayFrame,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 28,
+                                left: 28,
+                                right: 28,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    ScoreboardWidget(
+                                      viewState: viewState,
+                                      frame: controller.displayFrame,
+                                      activeEvent: activeEvent,
+                                    ),
+                                    const Spacer(),
+                                    ConstrainedBox(
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 360),
+                                      child:
+                                          EventTickerWidget(event: activeEvent),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      if (!alignEnd) const SizedBox(width: 8),
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: Align(
-                            alignment:
-                                alignEnd
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft,
-                            child: Container(
-                              height: 8,
-                              width:
-                                  (lane.width * 2.6).clamp(24, 130).toDouble(),
-                              color: accent.withValues(alpha: 0.42),
-                            ),
-                          ),
+                        _ControlBar(controller: controller),
+                      ],
+                    );
+                  },
+                );
+
+                final Widget rail =
+                    _EventRail(controller: controller, viewState: viewState);
+                if (wide) {
+                  return Row(
+                    children: <Widget>[
+                      Expanded(flex: 3, child: viewerPanel),
+                      SizedBox(
+                        width: 320,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
+                          child: rail,
                         ),
                       ),
-                      if (alignEnd) const SizedBox(width: 8),
-                      if (alignEnd)
-                        Text(
-                          _laneLabel(lane.line),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelMedium?.copyWith(
-                            color: accent,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
                     ],
-                  ),
-                ),
-              ),
-        ],
-      ),
-    );
-  }
-
-  String _laneLabel(MatchEngineShapeLine line) {
-    return switch (line) {
-      MatchEngineShapeLine.goalkeeper => 'GK',
-      MatchEngineShapeLine.defense => 'DEF',
-      MatchEngineShapeLine.midfield => 'MID',
-      MatchEngineShapeLine.attack => 'ATT',
-    };
-  }
-}
-
-class _SetPieceDrawerCard extends StatelessWidget {
-  const _SetPieceDrawerCard({
-    required this.presentation,
-    required this.activeEvent,
-  });
-
-  final MatchEnginePresentationState presentation;
-  final MatchEvent? activeEvent;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isSetPiece =
-        presentation.eventMapping == MatchSceneEventMapping.corner ||
-        presentation.eventMapping == MatchSceneEventMapping.free_kick ||
-        presentation.eventMapping == MatchSceneEventMapping.penalty;
-    if (!isSetPiece) {
-      return _DrawerCard(
-        title: 'No active set-piece',
-        lines: const <String>[
-          'This module stays quiet until the live phase exposes a real corner, free kick, or penalty.',
-        ],
-      );
-    }
-    return _DrawerCard(
-      title: activeEvent?.bannerText ?? presentation.phaseLabel,
-      lines: <String>[
-        'Scene: ${presentation.cameraLabel}',
-        'Clock: ${presentation.clockLabel}',
-        'Detail: ${activeEvent?.commentary ?? 'Restart detail hidden on this payload.'}',
-      ],
-    );
-  }
-}
-
-class _TimelineDrawer extends StatelessWidget {
-  const _TimelineDrawer({required this.events, required this.activeEventId});
-
-  final List<MatchEvent> events;
-  final String? activeEventId;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<MatchEvent> visibleEvents = events
-        .take(8)
-        .toList(growable: false);
-    return Column(
-      children: visibleEvents
-          .map(
-            (MatchEvent event) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color:
-                      event.id == activeEventId
-                          ? const Color(0x20FDB022)
-                          : Colors.white.withValues(alpha: 0.04),
-                  border: Border.all(
-                    color:
-                        event.id == activeEventId
-                            ? const Color(0x66FDB022)
-                            : Colors.white.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  );
+                }
+                return Column(
                   children: <Widget>[
-                    Icon(
-                      event.icon,
-                      size: 18,
-                      color:
-                          event.id == activeEventId
-                              ? const Color(0xFFFDB022)
-                              : Colors.white70,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            '${event.clockLabel} ${event.bannerText}',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (event.commentary.trim().isNotEmpty) ...<Widget>[
-                            const SizedBox(height: 4),
-                            Text(
-                              event.commentary,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: Colors.white70,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ],
+                    Expanded(child: viewerPanel),
+                    SizedBox(
+                      height: 220,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                        child: rail,
                       ),
                     ),
                   ],
-                ),
-              ),
-            ),
-          )
-          .toList(growable: false),
+                );
+              },
+            );
+          },
+        ),
+      ),
     );
   }
 }
 
-class _DrawerCard extends StatelessWidget {
-  const _DrawerCard({
-    required this.title,
-    required this.lines,
-    this.alignEnd = false,
-  });
+class _ControlBar extends StatelessWidget {
+  const _ControlBar({required this.controller});
 
-  final String title;
-  final List<String> lines;
-  final bool alignEnd;
+  final MatchPlaybackController controller;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white.withValues(alpha: 0.04),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...lines.map(
-            (String line) => Padding(
-              padding: const EdgeInsets.only(bottom: 7),
-              child: Text(
-                line,
-                textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniDrawerChip extends StatelessWidget {
-  const _MiniDrawerChip({required this.label, required this.accent});
-
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: accent.withValues(alpha: 0.14),
-        border: Border.all(color: accent.withValues(alpha: 0.28)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-String? _teamInstruction(MatchPresentationTeam team, String keyword) {
-  for (final String item in team.instructionSummary) {
-    if (item.toLowerCase().contains(keyword.toLowerCase())) {
-      return item;
-    }
-  }
-  return null;
-}
-
-String _drawerLineHeightLabel(MatchEngineTeamShape shape) {
-  MatchEngineShapeLane? defenseLane;
-  for (final MatchEngineShapeLane lane in shape.lanes) {
-    if (lane.line == MatchEngineShapeLine.defense) {
-      defenseLane = lane;
-      break;
-    }
-  }
-  final double lineHeight = defenseLane?.averageX ?? 0;
-  if (shape.side == MatchViewerSide.home) {
-    if (lineHeight >= 34) {
-      return 'High';
-    }
-    if (lineHeight >= 24) {
-      return 'Mid';
-    }
-    return 'Deep';
-  }
-  if (lineHeight <= 66 && lineHeight > 0) {
-    return 'High';
-  }
-  if (lineHeight <= 76 && lineHeight > 0) {
-    return 'Mid';
-  }
-  return 'Deep';
-}
-
-String _roleLabel(String? role) {
-  final String normalized = role?.trim().toLowerCase() ?? '';
-  return switch (normalized) {
-    'goalkeeper' => 'goalkeeper',
-    'defender' => 'defender',
-    'midfielder' => 'midfielder',
-    'forward' => 'forward',
-    _ => 'player',
-  };
-}
-
-class _ScenePanel extends StatelessWidget {
-  const _ScenePanel({
-    required this.surfaceTitle,
-    required this.surfaceSubtitle,
-    required this.competition,
-    required this.package,
-    required this.phaseLabel,
-    required this.renderModeLabel,
-    required this.cameraLabel,
-    required this.scene,
-    required this.overlays,
-    required this.supportModules,
-  });
-
-  final String surfaceTitle;
-  final String surfaceSubtitle;
-  final CompetitionSummary competition;
-  final MatchPresentationPackage package;
-  final String phaseLabel;
-  final String renderModeLabel;
-  final String cameraLabel;
-  final Widget scene;
-  final List<Widget> overlays;
-  final List<Widget> supportModules;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<String> contextLabels = <String>[
-      if (package.context.competitionStage != null &&
-          package.context.competitionStage!.trim().isNotEmpty)
-        package.context.competitionStage!,
-      if (package.context.venueName != null &&
-          package.context.venueName!.trim().isNotEmpty)
-        package.context.venueName!,
-      if (package.context.competitionContext != null &&
-          package.context.competitionContext!.trim().isNotEmpty)
-        package.context.competitionContext!,
-    ];
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Color(0xFF0E1723), Color(0xFF08111A)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              _MiniPhaseChip(
-                label: competition.name,
-                accent: const Color(0xFF53B1FD),
-              ),
-              _MiniPhaseChip(
-                label: phaseLabel.toUpperCase(),
-                accent: const Color(0xFFF79009),
-              ),
-              _MiniPhaseChip(
-                label: renderModeLabel.toUpperCase(),
-                accent: const Color(0xFF17B26A),
-              ),
-              _MiniPhaseChip(
-                label: cameraLabel,
-                accent: const Color(0xFF7DD3FC),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            surfaceTitle,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            surfaceSubtitle,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: const Color(0xFFB6C5D5),
-              height: 1.35,
-            ),
-          ),
-          if (contextLabels.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: contextLabels
-                  .map(
-                    (String label) => _MiniPhaseChip(
-                      label: label,
-                      accent: const Color(0xFF7DD3FC),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  package.home.teamName,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Text(
-                'VS',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF7DD3FC),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  package.away.teamName,
-                  textAlign: TextAlign.right,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: AspectRatio(
-                aspectRatio: 105 / 68,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: <Widget>[scene, ...overlays],
-                ),
-              ),
-            ),
-          ),
-          for (final Widget module in supportModules) ...<Widget>[
-            const SizedBox(height: 18),
-            module,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _BroadcastScorebug extends StatelessWidget {
-  const _BroadcastScorebug({required this.package, required this.state});
-
-  final MatchPresentationPackage package;
-  final MatchBroadcastPresentationState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final String homeScore =
-        state.scoreMasked ? '--' : '${state.visibleHomeScore ?? 0}';
-    final String awayScore =
-        state.scoreMasked ? '--' : '${state.visibleAwayScore ?? 0}';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xF40A1118), Color(0xF4122130)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                _MaskedTeamScore(
-                  name: package.home.displayCode,
-                  score: homeScore,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    children: <Widget>[
-                      Text(
-                        state.clockLabel,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        state.statusLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: const Color(0xFFFDB022),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                _MaskedTeamScore(
-                  name: package.away.displayCode,
-                  score: awayScore,
-                  alignEnd: true,
-                ),
-              ],
-            ),
-            if (state.showCommentary) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                state.commentaryHeadline!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MaskedTeamScore extends StatelessWidget {
-  const _MaskedTeamScore({
-    required this.name,
-    required this.score,
-    this.alignEnd = false,
-  });
-
-  final String name;
-  final String score;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 92,
-      child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            name,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white70,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            score,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ViewerControlBar extends StatelessWidget {
-  const _ViewerControlBar({
-    required this.isPlaying,
-    required this.speedLabel,
-    required this.durationLabel,
-    required this.onRestart,
-    required this.onTogglePlayback,
-    required this.onJumpToNextEvent,
-    required this.onCycleSpeed,
-  });
-
-  final bool isPlaying;
-  final String speedLabel;
-  final String durationLabel;
-  final VoidCallback onRestart;
-  final VoidCallback onTogglePlayback;
-  final VoidCallback onJumpToNextEvent;
-  final VoidCallback onCycleSpeed;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool stacked = constraints.maxWidth < 540;
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            color: const Color(0xD9111C28),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child:
-              stacked
-                  ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _ViewerActionButton(
-                        icon: Icons.restart_alt_rounded,
-                        label: 'Restart',
-                        onPressed: onRestart,
-                        filled: true,
-                      ),
-                      const SizedBox(height: 8),
-                      _ViewerActionButton(
-                        icon:
-                            isPlaying
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                        label: isPlaying ? 'Pause' : 'Play',
-                        onPressed: onTogglePlayback,
-                        filled: true,
-                      ),
-                      const SizedBox(height: 8),
-                      _ViewerActionButton(
-                        icon: Icons.skip_next_rounded,
-                        label: 'Next event',
-                        onPressed: onJumpToNextEvent,
-                        filled: true,
-                      ),
-                      const SizedBox(height: 8),
-                      _ViewerActionButton(
-                        icon: Icons.speed_rounded,
-                        label: speedLabel,
-                        onPressed: onCycleSpeed,
-                        filled: false,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        durationLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  )
-                  : Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: <Widget>[
-                      FilledButton.tonalIcon(
-                        onPressed: onRestart,
-                        icon: const Icon(Icons.restart_alt_rounded),
-                        label: const Text('Restart'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: onTogglePlayback,
-                        icon: Icon(
-                          isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                        ),
-                        label: Text(isPlaying ? 'Pause' : 'Play'),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: onJumpToNextEvent,
-                        icon: const Icon(Icons.skip_next_rounded),
-                        label: const Text('Next event'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: onCycleSpeed,
-                        icon: const Icon(Icons.speed_rounded),
-                        label: Text(speedLabel),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        durationLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-        );
-      },
-    );
-  }
-}
-
-class _ViewerActionButton extends StatelessWidget {
-  const _ViewerActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    required this.filled,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget child = Row(
-      mainAxisSize: MainAxisSize.max,
-      children: <Widget>[
-        Icon(icon),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ],
-    );
-    if (filled) {
-      return FilledButton.tonal(onPressed: onPressed, child: child);
-    }
-    return OutlinedButton(onPressed: onPressed, child: child);
-  }
-}
-
-class _InlineStatusBanner extends StatelessWidget {
-  const _InlineStatusBanner({required this.text, required this.accent});
-
-  final String text;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: accent.withValues(alpha: 0.14),
-        border: Border.all(color: accent.withValues(alpha: 0.36)),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _MiniPhaseChip extends StatelessWidget {
-  const _MiniPhaseChip({required this.label, required this.accent});
-
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: accent.withValues(alpha: 0.16),
-        border: Border.all(color: accent.withValues(alpha: 0.34)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _CenterTitleBanner extends StatelessWidget {
-  const _CenterTitleBanner({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          color: const Color(0xE00C1722),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-        ),
-        child: Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FormationTeaserCard extends StatelessWidget {
-  const _FormationTeaserCard({
-    required this.teamName,
-    required this.formation,
-    required this.accent,
-    this.alignEnd = false,
-  });
-
-  final String teamName;
-  final String formation;
-  final Color accent;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: const Color(0xDD0E1723),
-        border: Border.all(color: accent.withValues(alpha: 0.46)),
-      ),
-      child: Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            teamName,
-            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Formation $formation',
-            textAlign: alignEnd ? TextAlign.right : TextAlign.left,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlacementCard extends StatelessWidget {
-  const _PlacementCard({
-    super.key,
-    required this.placement,
-    this.compact = false,
-  });
-
-  final MatchAdPlacement placement;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: compact ? const BoxConstraints(maxWidth: 240) : null,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xE9111C29), Color(0xE9182839)],
-        ),
-        border: Border.all(color: const Color(0x66F79009)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            placement.brand.toUpperCase(),
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: const Color(0xFFFDB022),
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.9,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            placement.message,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          if (!compact && placement.targetingTags.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              placement.targetingTags.take(3).join(' | '),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.white70),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RewardedAdCard extends StatelessWidget {
-  const _RewardedAdCard({
-    super.key,
-    required this.placement,
-    required this.claimed,
-    required this.onPressed,
-  });
-
-  final MatchAdPlacement placement;
-  final bool claimed;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final int rewardCoins = placement.rewardCoins ?? 0;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: const Color(0xD9111C29),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            placement.brand,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: const Color(0xFFF79009),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            placement.message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: Colors.white, height: 1.35),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.tonalIcon(
-            onPressed: claimed ? null : onPressed,
-            icon: const Icon(Icons.play_circle_outline_rounded),
-            label: Text(
-              claimed ? 'Reward claimed' : 'Watch Ad · +$rewardCoins coins',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LiveBannerCard extends StatelessWidget {
-  const _LiveBannerCard({super.key, required this.placement});
-
-  final MatchAdPlacement placement;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFF0B1723), Color(0xFF142233)],
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
       child: Row(
         children: <Widget>[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              color: const Color(0x1FF79009),
-              border: Border.all(color: const Color(0x55F79009)),
-            ),
-            child: Text(
-              placement.brand.toUpperCase(),
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: const Color(0xFFF79009),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+          FilledButton.icon(
+            onPressed: controller.togglePlayPause,
+            icon: Icon(controller.isPlaying ? Icons.pause : Icons.play_arrow),
+            label: Text(controller.isPlaying ? 'Pause' : 'Play'),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
+          FilledButton.tonalIcon(
+            onPressed: controller.restart,
+            icon: const Icon(Icons.replay),
+            label: const Text('Restart'),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.tonalIcon(
+            onPressed: controller.cycleSpeed,
+            icon: const Icon(Icons.speed),
+            label: Text('${controller.speed.toStringAsFixed(0)}x'),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.tonalIcon(
+            onPressed: controller.jumpToNextEvent,
+            icon: const Icon(Icons.skip_next),
+            label: const Text('Next event'),
+          ),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              placement.message,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+            child: LinearProgressIndicator(
+              value: controller.progress.clamp(0, 1),
+              minHeight: 7,
+              borderRadius: BorderRadius.circular(999),
+              backgroundColor: Colors.white.withValues(alpha: 0.08),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                GteShellTheme.accentArena,
               ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _EventRail extends StatelessWidget {
+  const _EventRail({
+    required this.controller,
+    required this.viewState,
+  });
+
+  final MatchPlaybackController controller;
+  final MatchViewState viewState;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+      ),
+      child: ListenableBuilder(
+        listenable: controller,
+        builder: (BuildContext context, Widget? child) {
+          final MatchEvent? activeEvent = controller.activeEvent;
+          final List<MatchEvent> events = controller.upcomingEvents;
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: <Widget>[
+              Text(
+                'Replay lane',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Source: ${viewState.source} | ${viewState.durationSeconds}s | ${viewState.events.length} events',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 14),
+              if (activeEvent != null)
+                _EventTile(
+                  event: activeEvent,
+                  active: true,
+                ),
+              ...events
+                  .where((MatchEvent item) => item.id != activeEvent?.id)
+                  .map(
+                    (MatchEvent item) => Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _EventTile(event: item),
+                    ),
+                  ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EventTile extends StatelessWidget {
+  const _EventTile({
+    required this.event,
+    this.active = false,
+  });
+
+  final MatchEvent event;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _tileAccent(event.type);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: active
+            ? accent.withValues(alpha: 0.16)
+            : Colors.white.withValues(alpha: 0.04),
+        border: Border.all(
+          color: active
+              ? accent.withValues(alpha: 0.55)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(event.icon, color: accent, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  event.bannerText,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${event.clockLabel} | ${event.teamName ?? 'Match'}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                ),
+                if (event.isDataUnavailable) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Data unavailable placeholder',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.white60,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Color _tileAccent(MatchViewerEventType type) {
+  switch (type) {
+    case MatchViewerEventType.goal:
+      return const Color(0xFF17B26A);
+    case MatchViewerEventType.save:
+      return const Color(0xFF53B1FD);
+    case MatchViewerEventType.miss:
+      return const Color(0xFFF79009);
+    case MatchViewerEventType.offside:
+      return const Color(0xFFF97066);
+    case MatchViewerEventType.redCard:
+      return const Color(0xFFF04438);
+    default:
+      return const Color(0xFFD0D5DD);
   }
 }

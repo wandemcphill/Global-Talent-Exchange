@@ -11,6 +11,7 @@ from app.players.schemas import PlayerSummaryView, RealPlayerSummaryIdentityView
 from app.schemas.regen_universe import RegenPlayerPrestigeSummaryView
 from app.regen_universe.service import RegenUniverseService
 from app.value_engine.models import ValueSnapshot
+from app.value_engine.pricing_curve import round_gtex_display_value
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
@@ -44,8 +45,8 @@ class PlayerSummaryProjector:
                 player_id=snapshot.player_id,
                 player_name=snapshot.player_name,
                 last_snapshot_at=snapshot.as_of,
-                current_value_credits=snapshot.target_credits,
-                previous_value_credits=snapshot.previous_credits,
+                current_value_credits=round_gtex_display_value(snapshot.target_credits) or snapshot.target_credits,
+                previous_value_credits=round_gtex_display_value(snapshot.previous_credits) or snapshot.previous_credits,
                 movement_pct=snapshot.movement_pct,
                 summary_json={},
             )
@@ -58,8 +59,8 @@ class PlayerSummaryProjector:
         summary.current_competition_name = competition.name if competition is not None else None
         summary.last_snapshot_id = snapshot_record.id
         summary.last_snapshot_at = snapshot.as_of
-        summary.current_value_credits = snapshot.target_credits
-        summary.previous_value_credits = snapshot.previous_credits
+        summary.current_value_credits = round_gtex_display_value(snapshot.target_credits) or snapshot.target_credits
+        summary.previous_value_credits = round_gtex_display_value(snapshot.previous_credits) or snapshot.previous_credits
         summary.movement_pct = snapshot.movement_pct
         summary.average_rating = self._resolve_average_rating(latest_match_stat, latest_season_stat)
         summary.market_interest_score = int(round(sum(max(signal.score, 0.0) for signal in player.market_signals)))
@@ -73,11 +74,11 @@ class PlayerSummaryProjector:
             "position": player.normalized_position or player.position,
             "drivers": list(snapshot.drivers),
             "reason_codes": list(snapshot.reason_codes),
-            "football_truth_value_credits": snapshot.football_truth_value_credits,
-            "market_signal_value_credits": snapshot.market_signal_value_credits,
-            "scouting_signal_value_credits": snapshot.scouting_signal_value_credits,
-            "egame_signal_value_credits": snapshot.egame_signal_value_credits,
-            "published_card_value_credits": snapshot.published_card_value_credits,
+            "football_truth_value_credits": round_gtex_display_value(snapshot.football_truth_value_credits),
+            "market_signal_value_credits": round_gtex_display_value(snapshot.market_signal_value_credits),
+            "scouting_signal_value_credits": round_gtex_display_value(snapshot.scouting_signal_value_credits),
+            "egame_signal_value_credits": round_gtex_display_value(snapshot.egame_signal_value_credits),
+            "published_card_value_credits": round_gtex_display_value(snapshot.published_card_value_credits),
             "confidence_score": snapshot.confidence_score,
             "confidence_tier": snapshot.confidence_tier,
             "liquidity_tier": snapshot.liquidity_tier,

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.economy.governor_service import EconomyGovernorService
 from app.ingestion.models import Player
-from app.models.base import generate_uuid
+from app.models.base import generate_uuid, utcnow
 from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
@@ -89,6 +89,14 @@ class PlayerTokenMarketService:
         if market is None:
             raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
         return market
+
+    def get_market_view(self, *, player_id: str) -> PlayerShareMarket | dict[str, Any]:
+        try:
+            return self.get_market(player_id=player_id)
+        except PlayerTokenMarketError as exc:
+            if exc.reason != "market_not_found":
+                raise
+        return self._build_unissued_market_view(player_id=player_id)
 
     def list_events(self, *, player_id: str, limit: int = 50) -> list[PlayerShareEvent]:
         return list(
@@ -352,6 +360,27 @@ class PlayerTokenMarketService:
         if player is None:
             raise PlayerTokenMarketError("Player was not found.", reason="player_not_found")
         return player
+
+    def _build_unissued_market_view(self, *, player_id: str) -> dict[str, Any]:
+        player = self._get_player(player_id)
+        now = utcnow()
+        return {
+            "id": f"unissued:{player.id}",
+            "player_id": player.id,
+            "total_shares": 0,
+            "circulating_shares": 0,
+            "share_price_coin": Decimal("0.0000"),
+            "status": "unissued",
+            "market_issued": False,
+            "revenue_distributed_coin": Decimal("0.0000"),
+            "metadata_json": {
+                "player_name": player.canonical_display_name or player.full_name,
+                "is_real_player": bool(player.is_real_player),
+                "market_issued": False,
+            },
+            "created_at": now,
+            "updated_at": now,
+        }
 
     def _normalize_market_status(self, status: str | None) -> str:
         normalized_status = str(status or "active").strip().lower() or "active"

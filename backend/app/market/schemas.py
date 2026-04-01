@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.market.models import (
     ListingStatus,
@@ -130,15 +130,11 @@ class MarketPlayerListItemView(BaseModel):
 
 
 class MarketPlayerListView(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
-    items: list[MarketPlayerListItemView] = Field(
-        validation_alias=AliasChoices("players", "items"),
-        serialization_alias="players",
-    )
+    items: list[MarketPlayerListItemView]
     limit: int
-    next_cursor: str | None = None
-    has_more: bool
+    offset: int
     total: int
 
 
