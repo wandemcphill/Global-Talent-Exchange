@@ -15,6 +15,7 @@ CORE_BOOT_PATHS = frozenset({"/health", "/ready", "/version", "/diagnostics", "/
 LAZY_HYDRATION_BYPASS_PREFIXES = (
     "/auth",
     "/api/auth",
+    "/api/session",
     "/api/broadcast",
     "/api/competitions",
     "/api/match",

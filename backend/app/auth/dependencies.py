@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+import logging
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -9,10 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.auth.security import TokenError, decode_access_token
 from app.db import get_session as get_database_session
+from app.models.auth_session import AuthSession
 from app.models.user import User, UserRole
 from app.services.runtime_control_service import RuntimeControlService
 
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,7 @@ def _resolve_authenticated_user(
     if credentials is None:
         if allow_missing_credentials:
             return None
+        logger.warning("auth.request.failed reason=missing_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials were not provided.",
@@ -45,6 +49,7 @@ def _resolve_authenticated_user(
     try:
         payload = decode_access_token(credentials.credentials)
     except TokenError as exc:
+        logger.warning("auth.request.failed reason=invalid_access_token error=%s", str(exc))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -53,27 +58,63 @@ def _resolve_authenticated_user(
 
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
+        logger.warning("auth.request.failed reason=missing_subject")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Access token is missing a subject.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    token_session_id = payload.get("sid")
+    if not isinstance(token_session_id, str) or not token_session_id:
+        logger.warning("auth.request.failed user_id=%s reason=missing_session_claim", subject)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token is missing a session identifier.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = session.get(User, subject)
     if user is None or not user.is_active:
+        logger.warning("auth.request.failed user_id=%s session_id=%s reason=user_not_found", subject, token_session_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="The authenticated user could not be loaded.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    auth_session = session.get(AuthSession, token_session_id)
+    if auth_session is None or auth_session.user_id != user.id:
+        logger.warning("auth.request.failed user_id=%s session_id=%s reason=session_not_found", user.id, token_session_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authenticated session is invalid.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if auth_session.revoked_at is not None:
+        logger.warning("auth.request.failed user_id=%s session_id=%s reason=session_revoked", user.id, token_session_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authenticated session has been revoked.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    expires_at = _as_utc_datetime(auth_session.expires_at)
+    if expires_at <= _utcnow():
+        logger.warning("auth.request.failed user_id=%s session_id=%s reason=session_expired", user.id, token_session_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authenticated session has expired.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    auth_session.last_used_at = _utcnow()
 
     from app.access_control.service import AccessControlService
 
     AccessControlService(session).bind_user_access_context(user)
     if request is not None:
         request.state.auth_token_payload = payload
+        request.state.auth_session = auth_session
         control = RuntimeControlService(request.app).get_account_control(user_id=user.id)
         if control is not None and control.freeze_login:
+            logger.warning("auth.request.failed user_id=%s session_id=%s reason=login_frozen", user.id, token_session_id)
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
                 detail=control.reason or "Account access is temporarily frozen.",
@@ -278,3 +319,15 @@ def get_current_super_admin(current_user: User = Depends(get_current_user)) -> U
             detail="Super admin access is required for this action.",
         )
     return current_user
+
+
+def _utcnow():
+    from app.models.base import utcnow
+
+    return utcnow()
+
+
+def _as_utc_datetime(value):
+    if value.tzinfo is None:
+        return value.replace(tzinfo=_utcnow().tzinfo)
+    return value.astimezone(_utcnow().tzinfo)

@@ -33,6 +33,7 @@ class WorldAggregateData {
 final FutureProvider<WorldAggregateData>
 worldAggregateProvider = FutureProvider<WorldAggregateData>((Ref ref) async {
   final GteAuthedApi api = ref.watch(authedApiProvider);
+  final bool authenticated = ref.watch(isAuthenticatedProvider);
   final CompetitionHubData competitions = await ref.watch(
     competitionHubProvider.future,
   );
@@ -91,7 +92,9 @@ worldAggregateProvider = FutureProvider<WorldAggregateData>((Ref ref) async {
     competitions: competitions,
     federationJoinReason:
         clubContext == null
-            ? 'Federation membership is blocked: this session has no verified club context.'
+            ? (authenticated
+                ? 'Club context is still syncing for this session. Retry once bootstrap completes.'
+                : 'Sign in to unlock club-backed federation actions.')
             : 'Federation membership creation requires a live club-backed action flow and remains disabled from the summary tab.',
   );
 });

@@ -6,9 +6,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.schemas import CurrentUserUpdateRequest
-from app.auth.security import decode_access_token, verify_password
-from app.auth.service import AuthService, DuplicateUserError, InvalidCredentialsError
-from app.models import Base, LedgerAccount, LedgerUnit
+from app.auth.security import decode_access_token, decode_refresh_token, verify_password
+from app.auth.service import (
+    AuthService,
+    DuplicateUserError,
+    InvalidCredentialsError,
+    InvalidSessionError,
+)
+from app.models import AuthSession, Base, ClubProfile, LedgerAccount, LedgerUnit
 from app.schemas.club_requests import ClubCreateRequest
 from app.services.club_branding_service import ClubBrandingService
 
@@ -76,14 +81,23 @@ def test_authenticate_user_issues_token_and_updates_last_login(session) -> None:
     session.commit()
 
     authenticated_user = service.authenticate_user(session, email="owner@example.com", password="SuperSecret1")
-    token, expires_in = service.issue_access_token(authenticated_user, session=session)
+    issued_session = service.issue_session_tokens(authenticated_user, session=session)
     session.commit()
 
-    claims = decode_access_token(token)
+    claims = decode_access_token(issued_session.access_token)
+    refresh_claims = decode_refresh_token(issued_session.refresh_token)
+    auth_session = session.get(AuthSession, issued_session.session_id)
+    club = session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user.id))
+
     assert claims["sub"] == user.id
     assert claims["email"] == user.email
-    assert claims["org_id"] is None
-    assert expires_in == 3600
+    assert claims["org_id"] == club.id
+    assert claims["club_id"] == club.id
+    assert refresh_claims["sid"] == issued_session.session_id
+    assert issued_session.expires_in == 900
+    assert issued_session.refresh_expires_in == 2592000
+    assert auth_session is not None
+    assert auth_session.user_id == user.id
     assert authenticated_user.last_login_at is not None
 
 
@@ -117,6 +131,37 @@ def test_issue_access_token_uses_primary_organization_role_for_club_owner(sessio
 
     assert claims["role"] == "club"
     assert claims["org_id"] == club.id
+
+
+def test_refresh_session_rotates_refresh_token_and_logout_revokes_session(session) -> None:
+    service = AuthService()
+    user = service.register_user(
+        session,
+        email="refresh@example.com",
+        username="refresh-owner",
+        password="SuperSecret1",
+        display_name="Refresh Owner",
+    )
+    session.commit()
+
+    issued = service.issue_session_tokens(user, session=session)
+    session.commit()
+
+    refreshed_user, refreshed = service.refresh_session_tokens(
+        session,
+        refresh_token=issued.refresh_token,
+    )
+    session.commit()
+
+    assert refreshed_user.id == user.id
+    assert refreshed.session_id == issued.session_id
+    assert refreshed.refresh_token != issued.refresh_token
+
+    service.revoke_session(session, session_id=issued.session_id, user_id=user.id)
+    session.commit()
+
+    with pytest.raises(InvalidSessionError):
+        service.refresh_session_tokens(session, refresh_token=refreshed.refresh_token)
 
 
 def test_authenticate_user_rejects_invalid_password(session) -> None:

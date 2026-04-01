@@ -70,7 +70,7 @@ class _GuestProfile extends StatelessWidget {
           eyebrow: 'GUEST IDENTITY',
           title: 'This session is not signed in.',
           description:
-              'Protected user, wallet, admin, and club-context actions stay blocked until authentication succeeds.',
+              'Protected user, wallet, admin, and club actions unlock after authentication succeeds.',
           metrics: <Widget>[
             GtexStatTile(
               label: 'Shell',
@@ -80,7 +80,7 @@ class _GuestProfile extends StatelessWidget {
             ),
             const GtexStatTile(
               label: 'Admin',
-              value: 'Blocked',
+              value: 'Sign in',
               support: 'Authentication required',
               tone: GtexSurfaceTone.warning,
             ),

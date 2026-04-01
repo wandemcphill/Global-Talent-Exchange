@@ -283,11 +283,13 @@ class HomeScreen extends ConsumerWidget {
                   label: 'Wallet',
                   value:
                       data.wallet == null
-                          ? 'Blocked'
+                          ? (authenticated ? 'Refreshing' : 'Login required')
                           : data.wallet!.totalEquity.toStringAsFixed(0),
                   support:
                       data.wallet == null
-                          ? 'Sign in or compliance blocked'
+                          ? (authenticated
+                              ? 'Session bootstrap is syncing wallet access'
+                              : 'Sign in to load wallet access')
                           : data.wallet!.complianceMessage,
                   tone:
                       data.wallet == null

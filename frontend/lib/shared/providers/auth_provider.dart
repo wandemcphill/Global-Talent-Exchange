@@ -190,6 +190,9 @@ final Provider<GteAuthedApi> authedApiProvider = Provider<GteAuthedApi>(
     ),
     transport: GteHttpTransport(),
     authSession: ref.watch(authProvider),
+    authSessionStore: ref.watch(authSessionStoreProvider),
+    onSessionChanged:
+        ref.read(appSessionControllerProvider.notifier).updateSession,
     deviceId: ref.watch(deviceIdProvider),
     mode: ref.watch(criticalBackendModeProvider),
   ),
@@ -203,17 +206,17 @@ final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
     return;
   }
   final bool alreadyHydrated =
-      session.role != 'guest' ||
-      session.clubId != null ||
-      session.rawJson.containsKey('user') ||
-      session.rawJson.containsKey('memberships');
+      session.rawJson.containsKey('user') &&
+      session.rawJson.containsKey('club') &&
+      session.rawJson.containsKey('wallet') &&
+      session.rawJson.containsKey('compliance');
   if (alreadyHydrated) {
     return;
   }
   try {
     final Map<String, dynamic> payload = await ref
         .read(authedApiProvider)
-        .getMap('/api/auth/me');
+        .getMap('/api/session/bootstrap');
     await ref
         .read(appSessionControllerProvider.notifier)
         .mergeProfile(Map<String, Object?>.from(payload));
@@ -229,7 +232,10 @@ final Provider<AuthPresentation> authPresentationProvider =
       return AuthPresentation(
         userName: session?.resolvedUserName ?? 'Guest',
         role: session?.role ?? 'Guest',
-        clubName: session?.clubName ?? 'No club context',
+        clubName:
+            session == null || !session.isAuthenticated
+                ? 'Sign in to continue'
+                : (session.clubName ?? 'Syncing club context'),
         avatarAsset: 'assets/branding/gtex_icon.png',
         notifications: 0,
       );

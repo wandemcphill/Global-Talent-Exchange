@@ -8,7 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.access_control.schemas import OrganizationMembershipView
 from app.models.access_control import OrganizationType
 from app.models.user import KycStatus, UserRole
+from app.policies.schemas import UserComplianceStatus
+from app.schemas.club_identity_core import ClubProfileCore
 from app.users.schemas import UserPublic
+from app.wallets.schemas import WalletAdaptiveOverviewView
 
 PROTECTED_PROFILE_FIELDS = frozenset(
     {
@@ -97,6 +100,18 @@ class LoginRequest(BaseModel):
         return value.strip().lower()
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=24, max_length=4096)
+
+    @field_validator("refresh_token")
+    @classmethod
+    def normalize_refresh_token(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("refresh_token is required.")
+        return candidate
+
+
 
 
 class ActionStatusResponse(BaseModel):
@@ -156,9 +171,11 @@ class TokenResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     access_token: str
+    refresh_token: str
     session_id: str
     token_type: str = "bearer"
     expires_in: int
+    refresh_expires_in: int
     user: UserPublic
     permissions: list[str] = Field(default_factory=list)
     landing_route: str = "/"
@@ -188,6 +205,14 @@ class CurrentUserResponse(BaseModel):
     active_organization_name: str | None = None
     active_organization_type: OrganizationType | None = None
     memberships: tuple[OrganizationMembershipView, ...] = ()
+    permissions: list[str] = Field(default_factory=list)
+
+
+class SessionBootstrapResponse(BaseModel):
+    user: CurrentUserResponse
+    club: ClubProfileCore
+    wallet: WalletAdaptiveOverviewView
+    compliance: UserComplianceStatus
     permissions: list[str] = Field(default_factory=list)
 
 

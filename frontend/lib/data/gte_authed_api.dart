@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'gte_api_repository.dart';
+import '../shared/auth/auth_identity_store.dart';
 import '../shared/models/auth_session.dart';
 
 class GteAuthedApi {
@@ -10,6 +11,8 @@ class GteAuthedApi {
     required this.transport,
     this.accessToken,
     this.authSession,
+    this.authSessionStore,
+    this.onSessionChanged,
     this.deviceId,
     this.mode = GteBackendMode.live,
   });
@@ -18,6 +21,8 @@ class GteAuthedApi {
   final GteTransport transport;
   final String? accessToken;
   final AuthSession? authSession;
+  final AuthSessionStore? authSessionStore;
+  final Future<void> Function(AuthSession? session)? onSessionChanged;
   final String? deviceId;
   final GteBackendMode mode;
 
@@ -27,13 +32,15 @@ class GteAuthedApi {
     Map<String, Object?> query = const <String, Object?>{},
     Object? body,
     bool auth = true,
+    bool allowRefresh = true,
   }) async {
     final Map<String, String> headers = <String, String>{
       'Content-Type': 'application/json',
     };
+    final AuthSession? resolvedSession = await _readCurrentSession();
     if (auth) {
       final String resolvedAccessToken =
-          authSession?.accessToken ?? accessToken ?? '';
+          resolvedSession?.accessToken ?? accessToken ?? '';
       if (resolvedAccessToken.isEmpty) {
         throw const GteApiException(
           type: GteApiErrorType.unauthorized,
@@ -45,11 +52,11 @@ class GteAuthedApi {
         resolvedAccessToken,
       );
       final String resolvedUserId = _firstNonEmpty(
-        authSession?.userId,
+        resolvedSession?.userId,
         _stringClaim(tokenClaims, 'sub'),
       );
       final String resolvedSessionId = _firstNonEmpty(
-        authSession?.sessionId,
+        resolvedSession?.sessionId,
         _stringClaim(tokenClaims, 'sid'),
       );
       final String resolvedDeviceId = _firstNonEmpty(deviceId, 'web-client');
@@ -67,6 +74,19 @@ class GteAuthedApi {
         body: body,
       ),
     );
+    if (response.statusCode == 401 &&
+        auth &&
+        allowRefresh &&
+        await _refreshSession(resolvedSession)) {
+      return request(
+        method,
+        path,
+        query: query,
+        body: body,
+        auth: auth,
+        allowRefresh: false,
+      );
+    }
     if (response.statusCode >= 400) {
       throw _toException(response);
     }
@@ -159,6 +179,75 @@ class GteAuthedApi {
       return GteApiErrorType.unavailable;
     }
     return GteApiErrorType.unknown;
+  }
+
+  Future<AuthSession?> _readCurrentSession() async {
+    final AuthSession? stored = await authSessionStore?.readSession();
+    return stored ?? authSession;
+  }
+
+  Future<bool> _refreshSession(AuthSession? currentSession) async {
+    final String refreshToken = currentSession?.refreshToken.trim() ?? '';
+    if (refreshToken.isEmpty) {
+      await _clearSession();
+      return false;
+    }
+    final Map<String, String> headers = <String, String>{
+      'Content-Type': 'application/json',
+      'X-Device-Id': _firstNonEmpty(deviceId, 'web-client'),
+    };
+    final GteTransportResponse response = await transport.send(
+      GteTransportRequest(
+        method: 'POST',
+        uri: config.uriFor('/auth/refresh'),
+        headers: headers,
+        body: <String, Object?>{'refresh_token': refreshToken},
+      ),
+    );
+    if (response.statusCode >= 400 || response.body is! Map) {
+      await _clearSession();
+      return false;
+    }
+    final Map<String, Object?> payload = Map<String, Object?>.from(
+      response.body as Map,
+    );
+    final AuthSession refreshed = AuthSession.fromTokenPayload(payload);
+    final AuthSession bootstrapMerged = await _bootstrapSession(refreshed);
+    await _persistSession(bootstrapMerged);
+    return true;
+  }
+
+  Future<AuthSession> _bootstrapSession(AuthSession session) async {
+    final Map<String, String> headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ${session.accessToken}',
+      'X-User-Id': session.userId,
+      'X-Session-Id': session.sessionId,
+      'X-Device-Id': _firstNonEmpty(deviceId, 'web-client'),
+    };
+    final GteTransportResponse response = await transport.send(
+      GteTransportRequest(
+        method: 'GET',
+        uri: config.uriFor('/api/session/bootstrap'),
+        headers: headers,
+      ),
+    );
+    if (response.statusCode >= 400 || response.body is! Map) {
+      return session;
+    }
+    return session.mergeProfile(
+      Map<String, Object?>.from(response.body as Map),
+    );
+  }
+
+  Future<void> _persistSession(AuthSession session) async {
+    await authSessionStore?.writeSession(session);
+    await onSessionChanged?.call(session);
+  }
+
+  Future<void> _clearSession() async {
+    await authSessionStore?.writeSession(null);
+    await onSessionChanged?.call(null);
   }
 }
 
