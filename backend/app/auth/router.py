@@ -34,6 +34,7 @@ from app.auth.service import (
 from app.models.user import User
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
+from app.wallets.funding_service import WalletFundingService
 from app.wallets.schemas import WalletAdaptiveOverviewView
 from app.wallets.service import WalletService
 
@@ -167,12 +168,15 @@ def _build_compliance_status(session: Session, user: User) -> UserComplianceStat
     policy_service = PolicyService(session)
     country_policy = policy_service.get_country_policy_for_user(user=user)
     missing = policy_service.list_missing_acceptances(user_id=user.id)
+    wallet = WalletFundingService().ensure_wallet(session, user)
+    is_verified = str(wallet.compliance_status or "").strip().lower() == "verified"
     return UserComplianceStatus(
         country_code=country_policy.country_code,
         country_policy_bucket=country_policy.bucket_type,
         deposits_enabled=country_policy.deposits_enabled,
         market_trading_enabled=country_policy.market_trading_enabled,
         platform_reward_withdrawals_enabled=country_policy.platform_reward_withdrawals_enabled,
+        compliance_status=wallet.compliance_status,
         required_policy_acceptances_missing=len(missing),
         missing_policy_acceptances=[
             PolicyRequirementSummary(
@@ -184,9 +188,9 @@ def _build_compliance_status(session: Session, user: User) -> UserComplianceStat
             )
             for version in missing
         ],
-        can_deposit=country_policy.deposits_enabled and not missing,
-        can_withdraw_platform_rewards=country_policy.platform_reward_withdrawals_enabled and not missing,
-        can_trade_market=country_policy.market_trading_enabled and not missing,
+        can_deposit=country_policy.deposits_enabled,
+        can_withdraw_platform_rewards=country_policy.platform_reward_withdrawals_enabled,
+        can_trade_market=country_policy.market_trading_enabled and is_verified,
     )
 
 

@@ -52,6 +52,18 @@ from app.wallets.schemas import (
     WalletSummaryView,
     WalletAdaptiveOverviewView,
     WalletOverviewView,
+    WalletProfileView,
+    WalletTopUpInitiateRequest,
+    WalletTopUpInitiateView,
+    WalletTopUpVerifyRequest,
+    WalletTopUpVerifyView,
+    WalletTransactionRecordView,
+)
+from app.wallets.funding_service import (
+    WalletFundingError,
+    WalletFundingService,
+    WalletTopUpNotFoundError,
+    WalletTopUpVerificationError,
 )
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
@@ -59,7 +71,7 @@ from app.wallets.providers import get_provider_adapter
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
-from app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
+from app.models.treasury import DepositRequest, DepositStatus, PaymentMode, TreasurySettings, TreasuryWithdrawalRequest, TreasuryWithdrawalStatus
 from app.treasury.schemas import (
     DepositQuoteRequest,
     DepositRequestView,
@@ -76,6 +88,7 @@ from app.treasury.service import TreasuryConflictError, TreasuryService
 
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
+public_wallet_router = APIRouter(prefix="/wallet", tags=["wallet"])
 api_router = APIRouter(prefix="/api")
 admin_router = APIRouter(prefix="/api/admin/wallets", tags=["admin-wallets"])
 
@@ -104,6 +117,14 @@ def _build_treasury_service(request: Request | None) -> TreasuryService:
             )
         )
     return TreasuryService()
+
+
+def _build_wallet_funding_service(request: Request | None) -> WalletFundingService:
+    wallet_service = _build_wallet_service(request)
+    return WalletFundingService(
+        wallet_service=wallet_service,
+        treasury_service=TreasuryService(wallet_service=wallet_service),
+    )
 
 
 def _build_wallet_rail_service(request: Request | None, session: Session) -> WalletRailService:
@@ -360,17 +381,11 @@ def _require_gateway_deposit(
     policy = _build_withdrawal_policy_snapshot(request)
     policy_service = PolicyService(session)
     compliance_policy = policy_service.get_country_policy_for_user(user=user)
-    missing_policies = policy_service.list_missing_acceptances(user_id=user.id)
     deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
     if not compliance_policy.deposits_enabled:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Deposits are currently disabled for country policy '{compliance_policy.country_code}'.",
-        )
-    if missing_policies:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Accept the latest required policies before using automatic gateway deposits.",
         )
     if deposit_mode != "gateway":
         raise HTTPException(
@@ -380,6 +395,86 @@ def _require_gateway_deposit(
     processor_mode = "automatic_gateway"
     payout_channel = "gateway"
     return settings, processor_mode, payout_channel
+
+
+@public_wallet_router.get("", response_model=WalletProfileView)
+def get_wallet_profile(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+    request: Request = None,
+) -> WalletProfileView:
+    wallet = _build_wallet_funding_service(request).get_wallet(session, current_user)
+    return WalletProfileView.model_validate(wallet)
+
+
+@public_wallet_router.get("/transactions", response_model=list[WalletTransactionRecordView])
+def list_wallet_transactions(
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+    request: Request = None,
+) -> list[WalletTransactionRecordView]:
+    transactions = _build_wallet_funding_service(request).list_transactions(session, current_user, limit=limit)
+    return [WalletTransactionRecordView.model_validate(item) for item in transactions]
+
+
+@public_wallet_router.post("/top-up/initiate", response_model=WalletTopUpInitiateView, status_code=status.HTTP_201_CREATED)
+def initiate_wallet_top_up(
+    payload: WalletTopUpInitiateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+    request: Request = None,
+) -> WalletTopUpInitiateView:
+    service = _build_wallet_funding_service(request)
+    try:
+        with _wallet_transaction_lock(request, user=current_user, operation="wallet_top_up_initiate"):
+            result = service.initiate_top_up(
+                session,
+                current_user,
+                amount=payload.amount,
+                provider=payload.provider,
+                callback_url=payload.callback_url,
+            )
+            session.commit()
+    except WalletFundingError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return WalletTopUpInitiateView(
+        reference=result.reference,
+        payment_link=result.payment_link,
+        amount=result.amount,
+        currency=result.currency,
+        provider=result.provider,
+        status=result.status,
+        mock_mode=result.mock_mode,
+    )
+
+
+@public_wallet_router.post("/top-up/verify", response_model=WalletTopUpVerifyView)
+def verify_wallet_top_up(
+    payload: WalletTopUpVerifyRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+    request: Request = None,
+) -> WalletTopUpVerifyView:
+    service = _build_wallet_funding_service(request)
+    try:
+        with _wallet_transaction_lock(request, user=current_user, operation="wallet_top_up_verify"):
+            result = service.verify_top_up(session, current_user, reference=payload.reference)
+            session.commit()
+    except WalletTopUpNotFoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except WalletTopUpVerificationError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except WalletFundingError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return WalletTopUpVerifyView(
+        wallet=WalletProfileView.model_validate(result.wallet),
+        transaction=WalletTransactionRecordView.model_validate(result.transaction),
+    )
 
 
 @wallet_router.get("/accounts", response_model=list[WalletAccountBalance])
@@ -1136,17 +1231,11 @@ def create_payment_event(
     settings = treasury.ensure_settings(session)
     policy_service = PolicyService(session)
     compliance_policy = policy_service.get_country_policy_for_user(user=current_user)
-    missing_policies = policy_service.list_missing_acceptances(user_id=current_user.id)
     deposit_mode = "bank_transfer" if settings.deposit_mode == PaymentMode.MANUAL else _selected_deposit_mode(policy)
     if not compliance_policy.deposits_enabled:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Deposits are currently disabled for country policy '{compliance_policy.country_code}'.",
-        )
-    if missing_policies:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Accept the latest required policies before using automatic gateway deposits.",
         )
     if deposit_mode != "gateway":
         raise HTTPException(
@@ -1172,6 +1261,7 @@ def create_payment_event(
     return PaymentEventView.model_validate(payment_event)
 
 
+router.include_router(public_wallet_router)
 router.include_router(wallet_router)
 router.include_router(admin_router)
 router.include_router(orders_legacy_router)

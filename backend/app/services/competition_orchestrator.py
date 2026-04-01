@@ -84,6 +84,7 @@ from app.services.competition_join_service import CompetitionJoinService, JoinDe
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.competition_progression_service import CompetitionProgressionService
 from app.services.competition_rules_engine import CompetitionRulesEngine
+from app.services.competition_auto_runner import CompetitionAutoRunner
 from app.services.competition_validation_service import CompetitionValidationService
 from app.services.competition_visibility_service import CompetitionVisibilityService
 from app.services.competition_wallet_service import CompetitionWalletService
@@ -137,12 +138,14 @@ class CompetitionOrchestrator:
     lifecycle_service: CompetitionLifecycleService = field(init=False)
     competition_wallet_service: CompetitionWalletService = field(init=False)
     progression_service: CompetitionProgressionService = field(init=False)
+    auto_runner: CompetitionAutoRunner = field(init=False)
     event_publisher: EventPublisher = field(default_factory=InMemoryEventPublisher)
 
     def __post_init__(self) -> None:
         self.lifecycle_service = CompetitionLifecycleService(self.session, event_publisher=self.event_publisher)
         self.competition_wallet_service = CompetitionWalletService(self.session)
         self.progression_service = CompetitionProgressionService(self.session)
+        self.auto_runner = CompetitionAutoRunner(self.session)
 
     def create(self, payload: CompetitionCreateRequest) -> CompetitionSummaryView:
         self._validate_against_thread_a_domain(payload)
@@ -486,6 +489,9 @@ class CompetitionOrchestrator:
         self._refresh_financials(competition, rule_set, participant_count=participant_count + 1)
         self.session.commit()
         self.session.refresh(competition)
+        self.auto_runner.run_until_idle(competition)
+        self.session.commit()
+        self.session.refresh(competition)
         return self._to_summary(competition, user_id=user_id, invite_code=invite_code)
 
     def leave(self, competition_id: str, *, user_id: str) -> CompetitionSummaryView | None:
@@ -638,6 +644,9 @@ class CompetitionOrchestrator:
         participant.paid_at = datetime.now(timezone.utc) if fee_result.status == "settled" else None
         participant_count = self._participant_count(competition.id) + 1
         self._refresh_financials(competition, rule_set, participant_count=participant_count)
+        self.session.commit()
+        self.session.refresh(competition)
+        self.auto_runner.run_until_idle(competition)
         self.session.commit()
         self.session.refresh(competition)
         return self._to_summary(competition, user_id=club_id, invite_code=invite.invite_code)
@@ -804,6 +813,7 @@ class CompetitionOrchestrator:
             return self._to_summary(competition)
         try:
             self.lifecycle_service.launch_competition(competition)
+            self.auto_runner.run_until_idle(competition)
         except ValueError as exc:
             raise CompetitionActionError(str(exc), reason="competition_launch_blocked") from exc
         self.session.commit()
@@ -1022,6 +1032,8 @@ class CompetitionOrchestrator:
             format=self._coerce_enum(CompetitionFormat, competition.format, field_name="format"),
             visibility=self._coerce_enum(CompetitionVisibility, competition.visibility, field_name="visibility"),
             status=self._coerce_enum(CompetitionStatus, competition.status, field_name="status"),
+            match_type=self._match_type_for(competition),
+            type=self._match_type_for(competition),
             creator_id=context.creator_id,
             creator_name=metadata.get("creator_name"),
             participant_count=participant_count,
@@ -1623,6 +1635,14 @@ class CompetitionOrchestrator:
             return False
         normalized = source_type.strip().lower()
         return normalized in {"gtex", "platform", "gtex_platform", "gtex_competition", "gtex_hosted"}
+
+    def _match_type_for(self, competition: Competition) -> str:
+        if self._is_platform_competition(competition.source_type):
+            return "gtex_hosted"
+        normalized = self._normalized_string(competition.source_type)
+        if normalized in {"fast_match", "fastmatch", "fast"}:
+            return "fast_match"
+        return "user_hosted"
 
 
 def backend_competition_create_request(

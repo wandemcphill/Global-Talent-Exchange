@@ -190,6 +190,21 @@ def get_current_wallet_user(
     )
 
 
+def get_current_trading_user(
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+) -> User:
+    del request
+    from app.wallets.funding_service import WalletFundingError, WalletFundingService
+
+    try:
+        WalletFundingService().assert_verified_for_trading(session, current_user)
+    except WalletFundingError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return current_user
+
+
 def get_current_match_user(
     request: Request,
     current_user: User = Depends(get_current_user),

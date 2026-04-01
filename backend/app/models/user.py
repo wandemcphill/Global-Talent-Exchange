@@ -11,6 +11,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.wallet import LedgerAccount, LedgerEntry, PaymentEvent, PayoutRequest
+    from app.models.user_wallet import UserWallet, WalletTransactionRecord
 
 
 class UserRole(StrEnum):
@@ -66,3 +67,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     payment_events: Mapped[list["PaymentEvent"]] = relationship(back_populates="user")
     payout_requests: Mapped[list["PayoutRequest"]] = relationship(back_populates="user")
+    wallet_profile: Mapped["UserWallet | None"] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    wallet_transactions: Mapped[list["WalletTransactionRecord"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
