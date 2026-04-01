@@ -264,11 +264,14 @@ class CompetitionDraft {
     return <String, Object?>{
       'name': name.trim(),
       'format': format.name,
+      'type': 'user_hosted',
       'visibility': _visibilityWireValue(visibility),
       'entry_fee': entryFee.toStringAsFixed(2),
       'currency': currency,
       'capacity': capacity,
+      'max_players': capacity,
       'creator_id': creatorId,
+      'source_type': 'user_hosted',
       if (creatorName != null && creatorName!.trim().isNotEmpty)
         'creator_name': creatorName!.trim(),
       'payout_structure': payoutRules
@@ -281,6 +284,7 @@ class CompetitionDraft {
           .toList(growable: false),
       'platform_fee_pct': platformFeePct.toStringAsFixed(4),
       'host_fee_pct': hostFeePct.toStringAsFixed(4),
+      'rules': rulesSummary,
       'rules_summary': rulesSummary,
       'beginner_friendly': beginnerFriendly,
     };

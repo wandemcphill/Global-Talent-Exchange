@@ -32,6 +32,7 @@ void main() {
         session: const AuthSession(
           userId: 'admin-1',
           accessToken: 'token-1',
+          refreshToken: 'refresh-token-1',
           sessionId: 'session-1',
           role: 'admin',
           permissions: <String>['match_3d_premium'],

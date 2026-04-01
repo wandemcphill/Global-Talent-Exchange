@@ -1,66 +1,75 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'gte_api_repository.dart';
 import 'gte_models.dart';
 
 class GteMockApi implements GteApiRepository {
-  GteMockApi({
-    this.latency = const Duration(milliseconds: 250),
-  })  : _catalog = _seedCatalog.map(_cloneSnapshot).toList(growable: false),
-        _profiles = _seedProfiles.map(
-          (String key, PlayerProfile value) => MapEntry<String, PlayerProfile>(
-            key,
-            _cloneProfile(value),
-          ),
+  GteMockApi({this.latency = const Duration(milliseconds: 250)})
+    : _catalog = _seedCatalog.map(_cloneSnapshot).toList(growable: false),
+      _profiles = _seedProfiles.map(
+        (String key, PlayerProfile value) =>
+            MapEntry<String, PlayerProfile>(key, _cloneProfile(value)),
+      ),
+      _baseTickers = Map<String, GteMarketTicker>.from(_seedTickers),
+      _candles = _seedCandles.map(
+        (String key, GteMarketCandles value) =>
+            MapEntry<String, GteMarketCandles>(key, _cloneCandles(value)),
+      ),
+      _baseOrderBooks = _seedOrderBooks.map(
+        (String key, GteOrderBook value) =>
+            MapEntry<String, GteOrderBook>(key, _cloneOrderBook(value)),
+      ),
+      _walletSummary = _seedWalletSummary,
+      _walletLedger = List<GteWalletLedgerEntry>.of(
+        _seedWalletLedger,
+        growable: true,
+      ),
+      _walletTransactions = <GteWalletTransactionRecord>[],
+      _portfolio = GtePortfolioView(
+        holdings: List<GtePortfolioHolding>.of(
+          _seedPortfolioHoldings,
+          growable: false,
         ),
-        _baseTickers = Map<String, GteMarketTicker>.from(_seedTickers),
-        _candles = _seedCandles.map(
-          (String key, GteMarketCandles value) =>
-              MapEntry<String, GteMarketCandles>(
-            key,
-            _cloneCandles(value),
-          ),
-        ),
-        _baseOrderBooks = _seedOrderBooks.map(
-          (String key, GteOrderBook value) => MapEntry<String, GteOrderBook>(
-            key,
-            _cloneOrderBook(value),
-          ),
-        ),
-        _walletSummary = _seedWalletSummary,
-        _walletLedger =
-            List<GteWalletLedgerEntry>.of(_seedWalletLedger, growable: true),
-        _portfolio = GtePortfolioView(
-          holdings: List<GtePortfolioHolding>.of(_seedPortfolioHoldings,
-              growable: false),
-        ),
-        _orders = List<GteOrderRecord>.of(_seedOrders, growable: true),
-        _portfolioSummary = _seedPortfolioSummary,
-        _treasurySettings = _seedTreasurySettings,
-        _treasuryBankAccounts = List<GteTreasuryBankAccount>.of(
-            _seedTreasuryBankAccounts,
-            growable: true),
-        _depositRequests =
-            List<GteDepositRequest>.of(_seedDeposits, growable: true),
-        _withdrawalRequests = List<GteTreasuryWithdrawalRequest>.of(
-            _seedWithdrawals,
-            growable: true),
-        _userBankAccounts =
-            List<GteUserBankAccount>.of(_seedUserBankAccounts, growable: true),
-        _kycProfile = _seedKycProfile,
-        _disputes = List<GteDispute>.of(_seedDisputes, growable: true),
-        _notifications =
-            List<GteNotification>.of(_seedNotifications, growable: true),
-        _attachments = <GteAttachment>[],
-        _analyticsEvents =
-            List<GteAnalyticsEvent>.of(_seedAnalyticsEvents, growable: true),
-        _policyDocuments = List<GtePolicyDocumentDetail>.of(
-            _seedPolicyDocuments,
-            growable: true),
-        _policyAcceptances = List<GtePolicyAcceptanceSummary>.of(
-            _seedPolicyAcceptances,
-            growable: true);
+      ),
+      _orders = List<GteOrderRecord>.of(_seedOrders, growable: true),
+      _portfolioSummary = _seedPortfolioSummary,
+      _treasurySettings = _seedTreasurySettings,
+      _treasuryBankAccounts = List<GteTreasuryBankAccount>.of(
+        _seedTreasuryBankAccounts,
+        growable: true,
+      ),
+      _depositRequests = List<GteDepositRequest>.of(
+        _seedDeposits,
+        growable: true,
+      ),
+      _withdrawalRequests = List<GteTreasuryWithdrawalRequest>.of(
+        _seedWithdrawals,
+        growable: true,
+      ),
+      _userBankAccounts = List<GteUserBankAccount>.of(
+        _seedUserBankAccounts,
+        growable: true,
+      ),
+      _kycProfile = _seedKycProfile,
+      _disputes = List<GteDispute>.of(_seedDisputes, growable: true),
+      _notifications = List<GteNotification>.of(
+        _seedNotifications,
+        growable: true,
+      ),
+      _attachments = <GteAttachment>[],
+      _analyticsEvents = List<GteAnalyticsEvent>.of(
+        _seedAnalyticsEvents,
+        growable: true,
+      ),
+      _policyDocuments = List<GtePolicyDocumentDetail>.of(
+        _seedPolicyDocuments,
+        growable: true,
+      ),
+      _policyAcceptances = List<GtePolicyAcceptanceSummary>.of(
+        _seedPolicyAcceptances,
+        growable: true,
+      );
 
   final Duration latency;
   final List<PlayerSnapshot> _catalog;
@@ -71,6 +80,9 @@ class GteMockApi implements GteApiRepository {
 
   GteWalletSummary _walletSummary;
   final List<GteWalletLedgerEntry> _walletLedger;
+  final List<GteWalletTransactionRecord> _walletTransactions;
+  final Map<String, GteWalletTopUpSession> _topUpSessions =
+      <String, GteWalletTopUpSession>{};
   GtePortfolioView _portfolio;
   GtePortfolioSummary _portfolioSummary;
   final List<GteOrderRecord> _orders;
@@ -90,6 +102,7 @@ class GteMockApi implements GteApiRepository {
 
   int _orderSequence = _seedOrders.length;
   int _ledgerSequence = _seedWalletLedger.length;
+  int _walletTransactionSequence = 0;
   int _depositSequence = _seedDeposits.length;
   int _withdrawalSequence = _seedWithdrawals.length;
   int _disputeSequence = _seedDisputes.length;
@@ -151,10 +164,12 @@ class GteMockApi implements GteApiRepository {
     bool mandatoryOnly = false,
   }) async {
     await _delay();
-    final Iterable<GtePolicyDocumentDetail> docs = mandatoryOnly
-        ? _policyDocuments
-            .where((GtePolicyDocumentDetail doc) => doc.isMandatory)
-        : _policyDocuments;
+    final Iterable<GtePolicyDocumentDetail> docs =
+        mandatoryOnly
+            ? _policyDocuments.where(
+              (GtePolicyDocumentDetail doc) => doc.isMandatory,
+            )
+            : _policyDocuments;
     return docs
         .map(
           (GtePolicyDocumentDetail doc) => GtePolicyDocumentSummary(
@@ -186,18 +201,18 @@ class GteMockApi implements GteApiRepository {
     await _delay();
     final List<GtePolicyRequirementSummary> missing =
         await fetchPolicyRequirements();
-    final bool canDeposit = missing.isEmpty;
     return GteComplianceStatus(
       countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
       countryPolicyBucket: 'regulated_market_disabled',
       depositsEnabled: true,
-      marketTradingEnabled: canDeposit,
-      platformRewardWithdrawalsEnabled: canDeposit,
+      marketTradingEnabled: true,
+      platformRewardWithdrawalsEnabled: true,
+      complianceStatus: 'verified',
       requiredPolicyAcceptancesMissing: missing.length,
       missingPolicyAcceptances: missing,
       canDeposit: true,
-      canWithdrawPlatformRewards: canDeposit,
-      canTradeMarket: canDeposit,
+      canWithdrawPlatformRewards: true,
+      canTradeMarket: true,
     );
   }
 
@@ -210,8 +225,10 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() async {
     await _delay();
-    return List<GtePolicyAcceptanceSummary>.of(_policyAcceptances,
-        growable: false);
+    return List<GtePolicyAcceptanceSummary>.of(
+      _policyAcceptances,
+      growable: false,
+    );
   }
 
   @override
@@ -220,8 +237,9 @@ class GteMockApi implements GteApiRepository {
     String versionLabel,
   ) async {
     await _delay();
-    final GtePolicyDocumentDetail document =
-        await fetchPolicyDocument(documentKey);
+    final GtePolicyDocumentDetail document = await fetchPolicyDocument(
+      documentKey,
+    );
     final int existingIndex = _policyAcceptances.indexWhere(
       (GtePolicyAcceptanceSummary item) => item.documentKey == documentKey,
     );
@@ -293,9 +311,10 @@ class GteMockApi implements GteApiRepository {
 
     final double? spread =
         bestBid != null && bestAsk != null ? bestAsk - bestBid : ticker.spread;
-    final double? midPrice = bestBid != null && bestAsk != null
-        ? (bestBid + bestAsk) / 2
-        : ticker.midPrice;
+    final double? midPrice =
+        bestBid != null && bestAsk != null
+            ? (bestBid + bestAsk) / 2
+            : ticker.midPrice;
     return GteMarketTicker(
       playerId: ticker.playerId,
       symbol: ticker.symbol,
@@ -322,8 +341,9 @@ class GteMockApi implements GteApiRepository {
     if (candles == null) {
       throw StateError('Unknown candle player id: $playerId');
     }
-    final List<GteMarketCandle> trimmed =
-        candles.candles.take(limit).toList(growable: false);
+    final List<GteMarketCandle> trimmed = candles.candles
+        .take(limit)
+        .toList(growable: false);
     return GteMarketCandles(
       playerId: playerId,
       interval: interval,
@@ -347,14 +367,16 @@ class GteMockApi implements GteApiRepository {
     );
     final List<GteOrderBookLevel> bids = _mergeOrderBookSide(
       base.bids,
-      openOrders
-          .where((GteOrderRecord order) => order.side == GteOrderSide.buy),
+      openOrders.where(
+        (GteOrderRecord order) => order.side == GteOrderSide.buy,
+      ),
       descending: true,
     );
     final List<GteOrderBookLevel> asks = _mergeOrderBookSide(
       base.asks,
-      openOrders
-          .where((GteOrderRecord order) => order.side == GteOrderSide.sell),
+      openOrders.where(
+        (GteOrderRecord order) => order.side == GteOrderSide.sell,
+      ),
       descending: false,
     );
     return GteOrderBook(
@@ -375,12 +397,15 @@ class GteMockApi implements GteApiRepository {
     Iterable<GteOrderRecord> filtered = _orders;
     if (statuses != null && statuses.isNotEmpty) {
       final Set<GteOrderStatus> allowed = statuses.toSet();
-      filtered = filtered
-          .where((GteOrderRecord order) => allowed.contains(order.status));
+      filtered = filtered.where(
+        (GteOrderRecord order) => allowed.contains(order.status),
+      );
     }
     final List<GteOrderRecord> ordered = filtered.toList(growable: false);
-    final List<GteOrderRecord> items =
-        ordered.skip(offset).take(limit).toList(growable: false);
+    final List<GteOrderRecord> items = ordered
+        .skip(offset)
+        .take(limit)
+        .toList(growable: false);
     return GteOrderListView(
       items: items,
       limit: limit,
@@ -401,14 +426,18 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteOrderRecord> placeOrder(GteOrderCreateRequest request) async {
     await _delay();
-    final double? referencePrice =
-        _referencePriceFor(request.playerId, request.side);
+    final double? referencePrice = _referencePriceFor(
+      request.playerId,
+      request.side,
+    );
     final double requestedReserve =
         request.side == GteOrderSide.buy && request.maxPrice != null
             ? request.quantity * request.maxPrice!
             : 0.0;
-    final double reservedAmount =
-        math.min(requestedReserve, _walletSummary.availableBalance);
+    final double reservedAmount = math.min(
+      requestedReserve,
+      _walletSummary.availableBalance,
+    );
     final DateTime timestamp = _nextTimestamp();
 
     final GteOrderRecord order = GteOrderRecord(
@@ -423,9 +452,10 @@ class GteMockApi implements GteApiRepository {
       maxPrice: request.maxPrice ?? referencePrice,
       reservedAmount: reservedAmount,
       currency: GteLedgerUnit.credit,
-      holdTransactionId: request.side == GteOrderSide.buy && reservedAmount > 0
-          ? 'ledger-${_ledgerSequence + 1}'
-          : null,
+      holdTransactionId:
+          request.side == GteOrderSide.buy && reservedAmount > 0
+              ? 'ledger-${_ledgerSequence + 1}'
+              : null,
       createdAt: timestamp,
       updatedAt: timestamp,
       executionSummary: const GteOrderExecutionSummary(
@@ -463,8 +493,9 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteOrderRecord> cancelOrder(String orderId) async {
     await _delay();
-    final int index =
-        _orders.indexWhere((GteOrderRecord order) => order.id == orderId);
+    final int index = _orders.indexWhere(
+      (GteOrderRecord order) => order.id == orderId,
+    );
     if (index == -1) {
       throw StateError('Unknown order id: $orderId');
     }
@@ -521,24 +552,30 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
-  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId) async {
+  Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(
+    String orderId,
+  ) async {
     await _delay();
     final GteOrderRecord order = await fetchOrder(orderId);
     final double fairValue =
-        order.maxPrice ?? _referencePriceFor(order.playerId, GteOrderSide.sell) ?? 0;
+        order.maxPrice ??
+        _referencePriceFor(order.playerId, GteOrderSide.sell) ??
+        0;
     final double remainingQuantity =
         order.remainingQuantity < 0 ? 0 : order.remainingQuantity;
     final double estimatedP2pTotal = remainingQuantity * fairValue;
     final double payoutRatio = _adminBuybackPayoutRatio(fairValue);
     final double adminUnitPrice = fairValue * payoutRatio;
     final double adminTotal = remainingQuantity * adminUnitPrice;
-    final DateTime? windowEndsAt = order.createdAt?.add(const Duration(hours: 48));
-    final bool windowElapsed = windowEndsAt == null || !_clock.isBefore(windowEndsAt);
+    final DateTime? windowEndsAt = order.createdAt?.add(
+      const Duration(hours: 48),
+    );
+    final bool windowElapsed =
+        windowEndsAt == null || !_clock.isBefore(windowEndsAt);
     final List<String> reasons = <String>[
       if (order.side != GteOrderSide.sell)
         'Admin quick exit is only available for sell orders.',
-      if (!order.canCancel)
-        'Only open sell orders can use admin quick exit.',
+      if (!order.canCancel) 'Only open sell orders can use admin quick exit.',
       if (!windowElapsed)
         'P2P remains the default path until ${windowEndsAt.toIso8601String()}.',
     ];
@@ -561,8 +598,7 @@ class GteMockApi implements GteApiRepository {
       p2pPriorityWindowHours: 48,
       p2pPriorityWindowEndsAt: windowEndsAt,
       minimumHoldDays: 7,
-      minimumHoldExpiresAt:
-          order.createdAt?.subtract(const Duration(days: 1)),
+      minimumHoldExpiresAt: order.createdAt?.subtract(const Duration(days: 1)),
       holdDaysRemaining: 0,
     );
   }
@@ -570,18 +606,21 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteAdminBuybackExecution> executeAdminBuyback(String orderId) async {
     await _delay();
-    final GteAdminBuybackPreview preview =
-        await fetchAdminBuybackPreview(orderId);
+    final GteAdminBuybackPreview preview = await fetchAdminBuybackPreview(
+      orderId,
+    );
     if (!preview.eligible) {
       throw GteApiException(
         type: GteApiErrorType.validation,
-        message: preview.reasons.isEmpty
-            ? 'Admin buyback is unavailable.'
-            : preview.reasons.first,
+        message:
+            preview.reasons.isEmpty
+                ? 'Admin buyback is unavailable.'
+                : preview.reasons.first,
       );
     }
-    final int index =
-        _orders.indexWhere((GteOrderRecord order) => order.id == orderId);
+    final int index = _orders.indexWhere(
+      (GteOrderRecord order) => order.id == orderId,
+    );
     if (index == -1) {
       throw StateError('Unknown order id: $orderId');
     }
@@ -644,12 +683,29 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
-  Future<GteWalletLedgerPage> fetchWalletLedger(
-      {int page = 1, int pageSize = 20}) async {
+  Future<GteUserWallet> fetchWallet() async {
+    await _delay();
+    return GteUserWallet(
+      id: 'wallet-fixture',
+      userId: _fixtureSession.user.id,
+      balance: _walletSummary.availableBalance,
+      currency: _walletSummary.currency.name,
+      complianceStatus: 'verified',
+      createdAt: _clock,
+    );
+  }
+
+  @override
+  Future<GteWalletLedgerPage> fetchWalletLedger({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     await _delay();
     final int offset = (page - 1) * pageSize;
-    final List<GteWalletLedgerEntry> items =
-        _walletLedger.skip(offset).take(pageSize).toList(growable: false);
+    final List<GteWalletLedgerEntry> items = _walletLedger
+        .skip(offset)
+        .take(pageSize)
+        .toList(growable: false);
     return GteWalletLedgerPage(
       page: page,
       pageSize: pageSize,
@@ -665,6 +721,102 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
+  Future<List<GteWalletTransactionRecord>> listWalletTransactions({
+    int limit = 50,
+  }) async {
+    await _delay();
+    return _walletTransactions.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<GteWalletTopUpSession> initiateWalletTopUp(
+    GteWalletTopUpInitiateRequest request,
+  ) async {
+    await _delay();
+    final String reference = 'WTX-${++_walletTransactionSequence}';
+    final GteWalletTopUpSession session = GteWalletTopUpSession(
+      reference: reference,
+      paymentLink: 'https://mock.paystack.local/$reference',
+      amount: request.amount,
+      currency: 'credit',
+      provider: request.provider,
+      status: 'pending',
+      mockMode: true,
+    );
+    _topUpSessions[reference] = session;
+    _walletTransactions.insert(
+      0,
+      GteWalletTransactionRecord(
+        id: 'wallet-txn-$reference',
+        userId: _fixtureSession.user.id,
+        type: 'credit',
+        amount: request.amount,
+        status: 'pending',
+        reference: reference,
+        createdAt: _nextTimestamp(),
+      ),
+    );
+    return session;
+  }
+
+  @override
+  Future<GteWalletTopUpVerificationResult> verifyWalletTopUp(
+    String reference,
+  ) async {
+    await _delay();
+    final GteWalletTopUpSession? pendingSession = _topUpSessions[reference];
+    if (pendingSession == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.notFound,
+        message: 'Top-up reference was not found.',
+      );
+    }
+    final int transactionIndex = _walletTransactions.indexWhere(
+      (GteWalletTransactionRecord item) => item.reference == reference,
+    );
+    if (transactionIndex < 0) {
+      throw const GteApiException(
+        type: GteApiErrorType.notFound,
+        message: 'Wallet transaction was not found.',
+      );
+    }
+    final GteWalletTransactionRecord existing =
+        _walletTransactions[transactionIndex];
+    final DateTime timestamp = _nextTimestamp();
+    final GteWalletTransactionRecord updated = GteWalletTransactionRecord(
+      id: existing.id,
+      userId: existing.userId,
+      type: existing.type,
+      amount: existing.amount,
+      status: 'verified',
+      reference: existing.reference,
+      createdAt: existing.createdAt ?? timestamp,
+    );
+    _walletTransactions[transactionIndex] = updated;
+    _topUpSessions.remove(reference);
+    _walletSummary = GteWalletSummary(
+      availableBalance: _walletSummary.availableBalance + updated.amount,
+      reservedBalance: _walletSummary.reservedBalance,
+      totalBalance: _walletSummary.totalBalance + updated.amount,
+      currency: _walletSummary.currency,
+    );
+    _walletLedger.insert(
+      0,
+      GteWalletLedgerEntry(
+        id: 'ledger-${++_ledgerSequence}',
+        amount: updated.amount,
+        reason: 'wallet_top_up',
+        description: 'Wallet top-up credited via Paystack',
+        createdAt: timestamp,
+      ),
+    );
+    return GteWalletTopUpVerificationResult(
+      wallet: await fetchWallet(),
+      transaction: updated,
+    );
+  }
+
+  @override
   Future<GteWithdrawalEligibility> fetchWithdrawalEligibility() async {
     await _delay();
     return _computeWithdrawalEligibility();
@@ -672,23 +824,28 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteWithdrawalQuote> fetchWithdrawalQuote(
-      GteWithdrawalQuoteRequest request) async {
+    GteWithdrawalQuoteRequest request,
+  ) async {
     await _delay();
     final GteWithdrawalEligibility eligibility =
         _computeWithdrawalEligibility();
     final int feeBps = 1000;
     final double minimumFee = 5;
-    final double feeAmount =
-        math.max(request.amountCoin * feeBps.toDouble() / 10000, minimumFee);
+    final double feeAmount = math.max(
+      request.amountCoin * feeBps.toDouble() / 10000,
+      minimumFee,
+    );
     final double totalDebit = request.amountCoin + feeAmount;
     final double rateValue = _treasurySettings.withdrawalRateValue;
-    final double estimatedFiat = _treasurySettings.withdrawalRateDirection ==
-            GteRateDirection.fiatPerCoin
-        ? request.amountCoin * rateValue
-        : request.amountCoin / math.max(rateValue, 0.0001);
+    final double estimatedFiat =
+        _treasurySettings.withdrawalRateDirection ==
+                GteRateDirection.fiatPerCoin
+            ? request.amountCoin * rateValue
+            : request.amountCoin / math.max(rateValue, 0.0001);
     String? blockedReason;
     if (eligibility.policyBlocked) {
-      blockedReason = eligibility.policyBlockReason ??
+      blockedReason =
+          eligibility.policyBlockReason ??
           'Policy acceptance required before withdrawal is enabled.';
     } else if (eligibility.requiresKyc) {
       blockedReason = 'KYC required before withdrawals are enabled.';
@@ -707,9 +864,10 @@ class GteMockApi implements GteApiRepository {
       rateValue: rateValue,
       rateDirection: _treasurySettings.withdrawalRateDirection,
       estimatedFiatPayout: estimatedFiat,
-      processorMode: _treasurySettings.withdrawalMode == GtePaymentMode.manual
-          ? 'manual_bank_transfer'
-          : 'automatic_gateway',
+      processorMode:
+          _treasurySettings.withdrawalMode == GtePaymentMode.manual
+              ? 'manual_bank_transfer'
+              : 'automatic_gateway',
       payoutChannel: 'bank_transfer',
       feeBps: feeBps,
       minimumFee: minimumFee,
@@ -720,15 +878,18 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(
-      String withdrawalId) async {
+    String withdrawalId,
+  ) async {
     await _delay();
-    final GteTreasuryWithdrawalRequest withdrawal =
-        _withdrawalRequests.firstWhere(
-      (GteTreasuryWithdrawalRequest item) => item.id == withdrawalId,
-      orElse: () => _withdrawalRequests.isNotEmpty
-          ? _withdrawalRequests.first
-          : _buildWithdrawalFixture(withdrawalId),
-    );
+    final GteTreasuryWithdrawalRequest withdrawal = _withdrawalRequests
+        .firstWhere(
+          (GteTreasuryWithdrawalRequest item) => item.id == withdrawalId,
+          orElse:
+              () =>
+                  _withdrawalRequests.isNotEmpty
+                      ? _withdrawalRequests.first
+                      : _buildWithdrawalFixture(withdrawalId),
+        );
     return GteWithdrawalReceipt(
       withdrawal: withdrawal,
       grossAmount: withdrawal.amountCoin,
@@ -736,16 +897,18 @@ class GteMockApi implements GteApiRepository {
       netAmount: withdrawal.amountCoin,
       totalDebit: withdrawal.totalDebit,
       sourceScope: 'trade',
-      processorMode: _treasurySettings.withdrawalMode == GtePaymentMode.manual
-          ? 'manual_bank_transfer'
-          : 'automatic_gateway',
+      processorMode:
+          _treasurySettings.withdrawalMode == GtePaymentMode.manual
+              ? 'manual_bank_transfer'
+              : 'automatic_gateway',
       payoutChannel: 'bank_transfer',
     );
   }
 
   @override
   Future<GteDepositRequest> createDepositRequest(
-      GteDepositCreateRequest request) async {
+    GteDepositCreateRequest request,
+  ) async {
     await _delay();
     final GteTreasuryBankAccount bank =
         _treasurySettings.activeBankAccount ?? _treasuryBankAccounts.first;
@@ -757,14 +920,16 @@ class GteMockApi implements GteApiRepository {
     double amountCoin = 0;
     if (request.inputUnit == 'coin') {
       amountCoin = request.amount;
-      amountFiat = fiatPerCoin
-          ? request.amount * rateValue
-          : request.amount / math.max(rateValue, 0.0001);
+      amountFiat =
+          fiatPerCoin
+              ? request.amount * rateValue
+              : request.amount / math.max(rateValue, 0.0001);
     } else {
       amountFiat = request.amount;
-      amountCoin = fiatPerCoin
-          ? request.amount / math.max(rateValue, 0.0001)
-          : request.amount * rateValue;
+      amountCoin =
+          fiatPerCoin
+              ? request.amount / math.max(rateValue, 0.0001)
+              : request.amount * rateValue;
     }
     final String reference = 'DEP-${++_depositSequence}';
     final GteDepositRequest deposit = GteDepositRequest(
@@ -803,10 +968,13 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteDepositRequest> submitDepositRequest(
-      String depositId, GteDepositSubmitRequest request) async {
+    String depositId,
+    GteDepositSubmitRequest request,
+  ) async {
     await _delay();
-    final int index = _depositRequests
-        .indexWhere((GteDepositRequest item) => item.id == depositId);
+    final int index = _depositRequests.indexWhere(
+      (GteDepositRequest item) => item.id == depositId,
+    );
     if (index == -1) {
       throw StateError('Deposit not found');
     }
@@ -856,7 +1024,8 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
-      GteWithdrawalCreateRequest request) async {
+    GteWithdrawalCreateRequest request,
+  ) async {
     await _delay();
     final GteWithdrawalEligibility eligibility =
         _computeWithdrawalEligibility();
@@ -874,42 +1043,44 @@ class GteMockApi implements GteApiRepository {
     }
     final GteUserBankAccount bank = _resolveBankAccount(request.bankAccountId);
     final double rateValue = _treasurySettings.withdrawalRateValue;
-    final bool fiatPerCoin = _treasurySettings.withdrawalRateDirection ==
+    final bool fiatPerCoin =
+        _treasurySettings.withdrawalRateDirection ==
         GteRateDirection.fiatPerCoin;
-    final double amountFiat = fiatPerCoin
-        ? request.amountCoin * rateValue
-        : request.amountCoin / math.max(rateValue, 0.0001);
+    final double amountFiat =
+        fiatPerCoin
+            ? request.amountCoin * rateValue
+            : request.amountCoin / math.max(rateValue, 0.0001);
     final DateTime createdAt = _nextTimestamp();
     final String reference = 'WDR-${++_withdrawalSequence}';
     final GteTreasuryWithdrawalRequest withdrawal =
         GteTreasuryWithdrawalRequest(
-      id: 'withdrawal-${_withdrawalSequence}',
-      payoutRequestId: 'payout-${_withdrawalSequence}',
-      reference: reference,
-      status: GteWithdrawalStatus.pendingReview,
-      unit: GteLedgerUnit.coin,
-      amountCoin: request.amountCoin,
-      amountFiat: amountFiat,
-      currencyCode: _treasurySettings.currencyCode,
-      rateValue: rateValue,
-      rateDirection: _treasurySettings.withdrawalRateDirection,
-      bankName: bank.bankName,
-      bankAccountNumber: bank.accountNumber,
-      bankAccountName: bank.accountName,
-      bankCode: bank.bankCode,
-      kycStatusSnapshot: _kycStatusToString(_kycProfile.status),
-      kycTierSnapshot: _kycStatusToString(_kycProfile.status),
-      feeAmount: 0,
-      totalDebit: request.amountCoin,
-      notes: request.notes,
-      createdAt: createdAt,
-      reviewedAt: null,
-      approvedAt: null,
-      processedAt: null,
-      paidAt: null,
-      rejectedAt: null,
-      cancelledAt: null,
-    );
+          id: 'withdrawal-${_withdrawalSequence}',
+          payoutRequestId: 'payout-${_withdrawalSequence}',
+          reference: reference,
+          status: GteWithdrawalStatus.pendingReview,
+          unit: GteLedgerUnit.coin,
+          amountCoin: request.amountCoin,
+          amountFiat: amountFiat,
+          currencyCode: _treasurySettings.currencyCode,
+          rateValue: rateValue,
+          rateDirection: _treasurySettings.withdrawalRateDirection,
+          bankName: bank.bankName,
+          bankAccountNumber: bank.accountNumber,
+          bankAccountName: bank.accountName,
+          bankCode: bank.bankCode,
+          kycStatusSnapshot: _kycStatusToString(_kycProfile.status),
+          kycTierSnapshot: _kycStatusToString(_kycProfile.status),
+          feeAmount: 0,
+          totalDebit: request.amountCoin,
+          notes: request.notes,
+          createdAt: createdAt,
+          reviewedAt: null,
+          approvedAt: null,
+          processedAt: null,
+          paidAt: null,
+          rejectedAt: null,
+          cancelledAt: null,
+        );
     _withdrawalRequests.insert(0, withdrawal);
     _walletSummary = GteWalletSummary(
       availableBalance: _walletSummary.availableBalance - request.amountCoin,
@@ -939,8 +1110,10 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests() async {
     await _delay();
-    return List<GteTreasuryWithdrawalRequest>.of(_withdrawalRequests,
-        growable: false);
+    return List<GteTreasuryWithdrawalRequest>.of(
+      _withdrawalRequests,
+      growable: false,
+    );
   }
 
   @override
@@ -986,7 +1159,8 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteUserBankAccount> createUserBankAccount(
-      GteUserBankAccountCreate request) async {
+    GteUserBankAccountCreate request,
+  ) async {
     await _delay();
     if (request.setActive) {
       for (int i = 0; i < _userBankAccounts.length; i++) {
@@ -1027,10 +1201,13 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteUserBankAccount> updateUserBankAccount(
-      String bankAccountId, GteUserBankAccountUpdate request) async {
+    String bankAccountId,
+    GteUserBankAccountUpdate request,
+  ) async {
     await _delay();
     final int index = _userBankAccounts.indexWhere(
-        (GteUserBankAccount account) => account.id == bankAccountId);
+      (GteUserBankAccount account) => account.id == bankAccountId,
+    );
     if (index == -1) {
       throw StateError('Bank account not found');
     }
@@ -1119,16 +1296,20 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteDispute> fetchDispute(String disputeId) async {
     await _delay();
-    return _disputes
-        .firstWhere((GteDispute dispute) => dispute.id == disputeId);
+    return _disputes.firstWhere(
+      (GteDispute dispute) => dispute.id == disputeId,
+    );
   }
 
   @override
   Future<GteDisputeMessage> sendDisputeMessage(
-      String disputeId, GteDisputeMessageRequest request) async {
+    String disputeId,
+    GteDisputeMessageRequest request,
+  ) async {
     await _delay();
-    final int index =
-        _disputes.indexWhere((GteDispute dispute) => dispute.id == disputeId);
+    final int index = _disputes.indexWhere(
+      (GteDispute dispute) => dispute.id == disputeId,
+    );
     if (index == -1) {
       throw StateError('Dispute not found');
     }
@@ -1171,10 +1352,12 @@ class GteMockApi implements GteApiRepository {
   Future<List<GteNotification>> listNotifications({int limit = 20}) async {
     await _delay();
     final List<GteNotification> sorted = List<GteNotification>.of(
-        _notifications,
-        growable: false)
-      ..sort((GteNotification a, GteNotification b) =>
-          (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+      _notifications,
+      growable: false,
+    )..sort(
+      (GteNotification a, GteNotification b) =>
+          (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)),
+    );
     return sorted.take(limit).toList(growable: false);
   }
 
@@ -1182,8 +1365,9 @@ class GteMockApi implements GteApiRepository {
   Future<void> markNotificationRead(String notificationId) async {
     await _delay();
     final int index = _notifications.indexWhere(
-        (GteNotification notification) =>
-            notification.notificationId == notificationId);
+      (GteNotification notification) =>
+          notification.notificationId == notificationId,
+    );
     if (index == -1) {
       return;
     }
@@ -1277,10 +1461,10 @@ class GteMockApi implements GteApiRepository {
       counts[event.name] = (counts[event.name] ?? 0) + 1;
     }
     final List<GteAnalyticsSummaryItem> totals = counts.entries
-        .map((MapEntry<String, int> entry) => GteAnalyticsSummaryItem(
-              name: entry.key,
-              count: entry.value,
-            ))
+        .map(
+          (MapEntry<String, int> entry) =>
+              GteAnalyticsSummaryItem(name: entry.key, count: entry.value),
+        )
         .toList(growable: false);
     return GteAnalyticsSummary(
       since:
@@ -1298,23 +1482,31 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteTreasuryDashboard> fetchTreasuryDashboard() async {
     await _delay();
-    final int pendingDeposits = _depositRequests
-        .where((GteDepositRequest deposit) =>
-            deposit.status == GteDepositStatus.awaitingPayment ||
-            deposit.status == GteDepositStatus.paymentSubmitted ||
-            deposit.status == GteDepositStatus.underReview)
-        .length;
-    final int pendingWithdrawals = _withdrawalRequests
-        .where((GteTreasuryWithdrawalRequest withdrawal) =>
-            withdrawal.status == GteWithdrawalStatus.pendingReview ||
-            withdrawal.status == GteWithdrawalStatus.processing ||
-            withdrawal.status == GteWithdrawalStatus.approved)
-        .length;
+    final int pendingDeposits =
+        _depositRequests
+            .where(
+              (GteDepositRequest deposit) =>
+                  deposit.status == GteDepositStatus.awaitingPayment ||
+                  deposit.status == GteDepositStatus.paymentSubmitted ||
+                  deposit.status == GteDepositStatus.underReview,
+            )
+            .length;
+    final int pendingWithdrawals =
+        _withdrawalRequests
+            .where(
+              (GteTreasuryWithdrawalRequest withdrawal) =>
+                  withdrawal.status == GteWithdrawalStatus.pendingReview ||
+                  withdrawal.status == GteWithdrawalStatus.processing ||
+                  withdrawal.status == GteWithdrawalStatus.approved,
+            )
+            .length;
     final int pendingKyc = _kycProfile.status == GteKycStatus.pending ? 1 : 0;
-    final int openDisputes = _disputes
-        .where(
-            (GteDispute dispute) => dispute.status != GteDisputeStatus.closed)
-        .length;
+    final int openDisputes =
+        _disputes
+            .where(
+              (GteDispute dispute) => dispute.status != GteDisputeStatus.closed,
+            )
+            .length;
     return GteTreasuryDashboard(
       totalUsers: 12840,
       activeUsers: 3210,
@@ -1337,7 +1529,8 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteTreasurySettings> updateTreasurySettings(
-      GteTreasurySettingsUpdate request) async {
+    GteTreasurySettingsUpdate request,
+  ) async {
     await _delay();
     _treasurySettings = GteTreasurySettings(
       id: _treasurySettings.id,
@@ -1345,11 +1538,13 @@ class GteMockApi implements GteApiRepository {
       currencyCode: request.currencyCode ?? _treasurySettings.currencyCode,
       depositRateValue:
           request.depositRateValue ?? _treasurySettings.depositRateValue,
-      depositRateDirection: request.depositRateDirection ??
+      depositRateDirection:
+          request.depositRateDirection ??
           _treasurySettings.depositRateDirection,
       withdrawalRateValue:
           request.withdrawalRateValue ?? _treasurySettings.withdrawalRateValue,
-      withdrawalRateDirection: request.withdrawalRateDirection ??
+      withdrawalRateDirection:
+          request.withdrawalRateDirection ??
           _treasurySettings.withdrawalRateDirection,
       minDeposit: request.minDeposit ?? _treasurySettings.minDeposit,
       maxDeposit: request.maxDeposit ?? _treasurySettings.maxDeposit,
@@ -1362,13 +1557,14 @@ class GteMockApi implements GteApiRepository {
           request.maintenanceMessage ?? _treasurySettings.maintenanceMessage,
       whatsappNumber:
           request.whatsappNumber ?? _treasurySettings.whatsappNumber,
-      activeBankAccount: request.activeBankAccountId == null
-          ? _treasurySettings.activeBankAccount
-          : _treasuryBankAccounts.firstWhere(
-              (GteTreasuryBankAccount account) =>
-                  account.id == request.activeBankAccountId,
-              orElse: () => _treasuryBankAccounts.first,
-            ),
+      activeBankAccount:
+          request.activeBankAccountId == null
+              ? _treasurySettings.activeBankAccount
+              : _treasuryBankAccounts.firstWhere(
+                (GteTreasuryBankAccount account) =>
+                    account.id == request.activeBankAccountId,
+                orElse: () => _treasuryBankAccounts.first,
+              ),
       createdAt: _treasurySettings.createdAt,
       updatedAt: _nextTimestamp(),
     );
@@ -1383,13 +1579,16 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts() async {
     await _delay();
-    return List<GteTreasuryBankAccount>.of(_treasuryBankAccounts,
-        growable: false);
+    return List<GteTreasuryBankAccount>.of(
+      _treasuryBankAccounts,
+      growable: false,
+    );
   }
 
   @override
   Future<GteTreasuryBankAccount> createTreasuryBankAccount(
-      GteTreasuryBankAccountCreate request) async {
+    GteTreasuryBankAccountCreate request,
+  ) async {
     await _delay();
     final DateTime now = _nextTimestamp();
     final GteTreasuryBankAccount account = GteTreasuryBankAccount(
@@ -1425,10 +1624,13 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
-      String accountId, GteTreasuryBankAccountUpdate request) async {
+    String accountId,
+    GteTreasuryBankAccountUpdate request,
+  ) async {
     await _delay();
     final int index = _treasuryBankAccounts.indexWhere(
-        (GteTreasuryBankAccount account) => account.id == accountId);
+      (GteTreasuryBankAccount account) => account.id == accountId,
+    );
     if (index == -1) {
       throw StateError('Treasury bank account not found');
     }
@@ -1476,40 +1678,45 @@ class GteMockApi implements GteApiRepository {
     Iterable<GteDepositRequest> items = _depositRequests;
     if (status != null) {
       final GteDepositStatus parsed = _depositStatusFromString(status);
-      items =
-          items.where((GteDepositRequest deposit) => deposit.status == parsed);
+      items = items.where(
+        (GteDepositRequest deposit) => deposit.status == parsed,
+      );
     }
     if (query != null && query.isNotEmpty) {
       final String needle = query.toLowerCase();
-      items = items.where((GteDepositRequest deposit) =>
-          deposit.reference.toLowerCase().contains(needle) ||
-          (deposit.payerName ?? '').toLowerCase().contains(needle) ||
-          (deposit.senderBank ?? '').toLowerCase().contains(needle));
+      items = items.where(
+        (GteDepositRequest deposit) =>
+            deposit.reference.toLowerCase().contains(needle) ||
+            (deposit.payerName ?? '').toLowerCase().contains(needle) ||
+            (deposit.senderBank ?? '').toLowerCase().contains(needle),
+      );
     }
     final List<GteAdminDeposit> mapped = items
         .skip(offset)
         .take(limit)
-        .map((GteDepositRequest deposit) => GteAdminDeposit(
-              id: deposit.id,
-              reference: deposit.reference,
-              status: deposit.status,
-              amountFiat: deposit.amountFiat,
-              amountCoin: deposit.amountCoin,
-              currencyCode: deposit.currencyCode,
-              payerName: deposit.payerName,
-              senderBank: deposit.senderBank,
-              transferReference: deposit.transferReference,
-              createdAt: deposit.createdAt,
-              submittedAt: deposit.submittedAt,
-              reviewedAt: deposit.reviewedAt,
-              confirmedAt: deposit.confirmedAt,
-              rejectedAt: deposit.rejectedAt,
-              adminNotes: deposit.adminNotes,
-              userId: _fixtureSession.user.id,
-              userEmail: _fixtureSession.user.email,
-              userFullName: _fixtureSession.user.fullName,
-              userPhoneNumber: _fixtureSession.user.phoneNumber,
-            ))
+        .map(
+          (GteDepositRequest deposit) => GteAdminDeposit(
+            id: deposit.id,
+            reference: deposit.reference,
+            status: deposit.status,
+            amountFiat: deposit.amountFiat,
+            amountCoin: deposit.amountCoin,
+            currencyCode: deposit.currencyCode,
+            payerName: deposit.payerName,
+            senderBank: deposit.senderBank,
+            transferReference: deposit.transferReference,
+            createdAt: deposit.createdAt,
+            submittedAt: deposit.submittedAt,
+            reviewedAt: deposit.reviewedAt,
+            confirmedAt: deposit.confirmedAt,
+            rejectedAt: deposit.rejectedAt,
+            adminNotes: deposit.adminNotes,
+            userId: _fixtureSession.user.id,
+            userEmail: _fixtureSession.user.email,
+            userFullName: _fixtureSession.user.fullName,
+            userPhoneNumber: _fixtureSession.user.phoneNumber,
+          ),
+        )
         .toList(growable: false);
     return GteAdminQueuePage<GteAdminDeposit>(
       items: mapped,
@@ -1520,11 +1727,14 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
-  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
-      {String? adminNotes}) async {
+  Future<GteDepositRequest> adminConfirmDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) async {
     await _delay();
-    final int index = _depositRequests
-        .indexWhere((GteDepositRequest deposit) => deposit.id == depositId);
+    final int index = _depositRequests.indexWhere(
+      (GteDepositRequest deposit) => deposit.id == depositId,
+    );
     if (index == -1) {
       throw StateError('Deposit not found');
     }
@@ -1581,11 +1791,14 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
-  Future<GteDepositRequest> adminRejectDeposit(String depositId,
-      {String? adminNotes}) async {
+  Future<GteDepositRequest> adminRejectDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) async {
     await _delay();
-    final int index = _depositRequests
-        .indexWhere((GteDepositRequest deposit) => deposit.id == depositId);
+    final int index = _depositRequests.indexWhere(
+      (GteDepositRequest deposit) => deposit.id == depositId,
+    );
     if (index == -1) {
       throw StateError('Deposit not found');
     }
@@ -1626,11 +1839,14 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
-  Future<GteDepositRequest> adminReviewDeposit(String depositId,
-      {String? adminNotes}) async {
+  Future<GteDepositRequest> adminReviewDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) async {
     await _delay();
-    final int index = _depositRequests
-        .indexWhere((GteDepositRequest deposit) => deposit.id == depositId);
+    final int index = _depositRequests.indexWhere(
+      (GteDepositRequest deposit) => deposit.id == depositId,
+    );
     if (index == -1) {
       throw StateError('Deposit not found');
     }
@@ -1676,41 +1892,47 @@ class GteMockApi implements GteApiRepository {
     Iterable<GteTreasuryWithdrawalRequest> items = _withdrawalRequests;
     if (status != null) {
       final GteWithdrawalStatus parsed = _withdrawalStatusFromString(status);
-      items = items.where((GteTreasuryWithdrawalRequest withdrawal) =>
-          withdrawal.status == parsed);
+      items = items.where(
+        (GteTreasuryWithdrawalRequest withdrawal) =>
+            withdrawal.status == parsed,
+      );
     }
     if (query != null && query.isNotEmpty) {
       final String needle = query.toLowerCase();
-      items = items.where((GteTreasuryWithdrawalRequest withdrawal) =>
-          withdrawal.reference.toLowerCase().contains(needle) ||
-          withdrawal.bankAccountName.toLowerCase().contains(needle) ||
-          withdrawal.bankAccountNumber.contains(needle));
+      items = items.where(
+        (GteTreasuryWithdrawalRequest withdrawal) =>
+            withdrawal.reference.toLowerCase().contains(needle) ||
+            withdrawal.bankAccountName.toLowerCase().contains(needle) ||
+            withdrawal.bankAccountNumber.contains(needle),
+      );
     }
     final List<GteAdminWithdrawal> mapped = items
         .skip(offset)
         .take(limit)
-        .map((GteTreasuryWithdrawalRequest withdrawal) => GteAdminWithdrawal(
-              id: withdrawal.id,
-              reference: withdrawal.reference,
-              status: withdrawal.status,
-              amountCoin: withdrawal.amountCoin,
-              amountFiat: withdrawal.amountFiat,
-              currencyCode: withdrawal.currencyCode,
-              bankName: withdrawal.bankName,
-              bankAccountNumber: withdrawal.bankAccountNumber,
-              bankAccountName: withdrawal.bankAccountName,
-              createdAt: withdrawal.createdAt,
-              reviewedAt: withdrawal.reviewedAt,
-              approvedAt: withdrawal.approvedAt,
-              processedAt: withdrawal.processedAt,
-              paidAt: withdrawal.paidAt,
-              rejectedAt: withdrawal.rejectedAt,
-              cancelledAt: withdrawal.cancelledAt,
-              userId: _fixtureSession.user.id,
-              userEmail: _fixtureSession.user.email,
-              userFullName: _fixtureSession.user.fullName,
-              userPhoneNumber: _fixtureSession.user.phoneNumber,
-            ))
+        .map(
+          (GteTreasuryWithdrawalRequest withdrawal) => GteAdminWithdrawal(
+            id: withdrawal.id,
+            reference: withdrawal.reference,
+            status: withdrawal.status,
+            amountCoin: withdrawal.amountCoin,
+            amountFiat: withdrawal.amountFiat,
+            currencyCode: withdrawal.currencyCode,
+            bankName: withdrawal.bankName,
+            bankAccountNumber: withdrawal.bankAccountNumber,
+            bankAccountName: withdrawal.bankAccountName,
+            createdAt: withdrawal.createdAt,
+            reviewedAt: withdrawal.reviewedAt,
+            approvedAt: withdrawal.approvedAt,
+            processedAt: withdrawal.processedAt,
+            paidAt: withdrawal.paidAt,
+            rejectedAt: withdrawal.rejectedAt,
+            cancelledAt: withdrawal.cancelledAt,
+            userId: _fixtureSession.user.id,
+            userEmail: _fixtureSession.user.email,
+            userFullName: _fixtureSession.user.fullName,
+            userPhoneNumber: _fixtureSession.user.phoneNumber,
+          ),
+        )
         .toList(growable: false);
     return GteAdminQueuePage<GteAdminWithdrawal>(
       items: mapped,
@@ -1728,8 +1950,9 @@ class GteMockApi implements GteApiRepository {
   }) async {
     await _delay();
     final int index = _withdrawalRequests.indexWhere(
-        (GteTreasuryWithdrawalRequest withdrawal) =>
-            withdrawal.id == withdrawalId);
+      (GteTreasuryWithdrawalRequest withdrawal) =>
+          withdrawal.id == withdrawalId,
+    );
     if (index == -1) {
       throw StateError('Withdrawal not found');
     }
@@ -1756,10 +1979,11 @@ class GteMockApi implements GteApiRepository {
       totalDebit: existing.totalDebit,
       notes: existing.notes,
       createdAt: existing.createdAt,
-      reviewedAt: status == GteWithdrawalStatus.pendingReview ||
-              status == GteWithdrawalStatus.approved
-          ? now
-          : existing.reviewedAt,
+      reviewedAt:
+          status == GteWithdrawalStatus.pendingReview ||
+                  status == GteWithdrawalStatus.approved
+              ? now
+              : existing.reviewedAt,
       approvedAt:
           status == GteWithdrawalStatus.approved ? now : existing.approvedAt,
       processedAt:
@@ -1774,8 +1998,10 @@ class GteMockApi implements GteApiRepository {
     if (status == GteWithdrawalStatus.paid) {
       _walletSummary = GteWalletSummary(
         availableBalance: _walletSummary.availableBalance,
-        reservedBalance:
-            math.max(0, _walletSummary.reservedBalance - existing.amountCoin),
+        reservedBalance: math.max(
+          0,
+          _walletSummary.reservedBalance - existing.amountCoin,
+        ),
         totalBalance: _walletSummary.totalBalance - existing.amountCoin,
         currency: _walletSummary.currency,
       );
@@ -1788,8 +2014,10 @@ class GteMockApi implements GteApiRepository {
         status == GteWithdrawalStatus.cancelled) {
       _walletSummary = GteWalletSummary(
         availableBalance: _walletSummary.availableBalance + existing.amountCoin,
-        reservedBalance:
-            math.max(0, _walletSummary.reservedBalance - existing.amountCoin),
+        reservedBalance: math.max(
+          0,
+          _walletSummary.reservedBalance - existing.amountCoin,
+        ),
         totalBalance: _walletSummary.totalBalance,
         currency: _walletSummary.currency,
       );
@@ -1839,7 +2067,9 @@ class GteMockApi implements GteApiRepository {
 
   @override
   Future<GteKycProfile> adminReviewKyc(
-      String profileId, GteKycReviewRequest request) async {
+    String profileId,
+    GteKycReviewRequest request,
+  ) async {
     await _delay();
     if (profileId != _kycProfile.id) {
       throw StateError('KYC profile not found');
@@ -1863,12 +2093,14 @@ class GteMockApi implements GteApiRepository {
       updatedAt: now,
     );
     _pushNotification(
-      topic: request.status == GteKycStatus.rejected
-          ? 'kyc_rejected'
-          : 'kyc_approved',
-      message: request.status == GteKycStatus.rejected
-          ? 'KYC rejected. Please review the notes.'
-          : 'KYC verified.',
+      topic:
+          request.status == GteKycStatus.rejected
+              ? 'kyc_rejected'
+              : 'kyc_approved',
+      message:
+          request.status == GteKycStatus.rejected
+              ? 'KYC rejected. Please review the notes.'
+              : 'KYC verified.',
       resourceId: _kycProfile.id,
     );
     return _kycProfile;
@@ -1889,11 +2121,15 @@ class GteMockApi implements GteApiRepository {
     }
     if (query != null && query.isNotEmpty) {
       final String needle = query.toLowerCase();
-      items = items.where((GteDispute dispute) =>
-          dispute.reference.toLowerCase().contains(needle));
+      items = items.where(
+        (GteDispute dispute) =>
+            dispute.reference.toLowerCase().contains(needle),
+      );
     }
-    final List<GteDispute> paged =
-        items.skip(offset).take(limit).toList(growable: false);
+    final List<GteDispute> paged = items
+        .skip(offset)
+        .take(limit)
+        .toList(growable: false);
     return GteAdminQueuePage<GteDispute>(
       items: paged,
       total: items.length,
@@ -1905,16 +2141,20 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteDispute> fetchAdminDispute(String disputeId) async {
     await _delay();
-    return _disputes
-        .firstWhere((GteDispute dispute) => dispute.id == disputeId);
+    return _disputes.firstWhere(
+      (GteDispute dispute) => dispute.id == disputeId,
+    );
   }
 
   @override
   Future<GteDisputeMessage> adminSendDisputeMessage(
-      String disputeId, GteDisputeMessageRequest request) async {
+    String disputeId,
+    GteDisputeMessageRequest request,
+  ) async {
     await _delay();
-    final int index =
-        _disputes.indexWhere((GteDispute dispute) => dispute.id == disputeId);
+    final int index = _disputes.indexWhere(
+      (GteDispute dispute) => dispute.id == disputeId,
+    );
     if (index == -1) {
       throw StateError('Dispute not found');
     }
@@ -1957,8 +2197,10 @@ class GteMockApi implements GteApiRepository {
   Future<GtePortfolioView> fetchPortfolio() async {
     await _delay();
     return GtePortfolioView(
-      holdings:
-          List<GtePortfolioHolding>.of(_portfolio.holdings, growable: false),
+      holdings: List<GtePortfolioHolding>.of(
+        _portfolio.holdings,
+        growable: false,
+      ),
     );
   }
 
@@ -2013,31 +2255,35 @@ class GteMockApi implements GteApiRepository {
 
   GteWalletOverview _buildWalletOverview() {
     final double pendingDeposits = _depositRequests
-        .where((GteDepositRequest deposit) =>
-            deposit.status == GteDepositStatus.awaitingPayment ||
-            deposit.status == GteDepositStatus.paymentSubmitted ||
-            deposit.status == GteDepositStatus.underReview)
+        .where(
+          (GteDepositRequest deposit) =>
+              deposit.status == GteDepositStatus.awaitingPayment ||
+              deposit.status == GteDepositStatus.paymentSubmitted ||
+              deposit.status == GteDepositStatus.underReview,
+        )
         .fold<double>(0, (double sum, GteDepositRequest deposit) {
-      return sum + deposit.amountCoin;
-    });
+          return sum + deposit.amountCoin;
+        });
     final double pendingWithdrawals = _withdrawalRequests
-        .where((GteTreasuryWithdrawalRequest withdrawal) =>
-            withdrawal.status == GteWithdrawalStatus.pendingReview ||
-            withdrawal.status == GteWithdrawalStatus.processing ||
-            withdrawal.status == GteWithdrawalStatus.approved)
+        .where(
+          (GteTreasuryWithdrawalRequest withdrawal) =>
+              withdrawal.status == GteWithdrawalStatus.pendingReview ||
+              withdrawal.status == GteWithdrawalStatus.processing ||
+              withdrawal.status == GteWithdrawalStatus.approved,
+        )
         .fold<double>(0, (double sum, GteTreasuryWithdrawalRequest withdrawal) {
-      return sum + withdrawal.amountCoin;
-    });
+          return sum + withdrawal.amountCoin;
+        });
     final double totalInflow = _walletLedger
         .where((GteWalletLedgerEntry entry) => entry.amount > 0)
         .fold<double>(0, (double sum, GteWalletLedgerEntry entry) {
-      return sum + entry.amount;
-    });
+          return sum + entry.amount;
+        });
     final double totalOutflow = _walletLedger
         .where((GteWalletLedgerEntry entry) => entry.amount < 0)
         .fold<double>(0, (double sum, GteWalletLedgerEntry entry) {
-      return sum + entry.amount.abs();
-    });
+          return sum + entry.amount.abs();
+        });
     final GteWithdrawalEligibility eligibility =
         _computeWithdrawalEligibility();
     final List<GtePolicyRequirementSummary> missing =
@@ -2053,19 +2299,23 @@ class GteMockApi implements GteApiRepository {
       countryCode: _kycProfile.country?.toUpperCase() ?? 'NG',
       requiredPolicyAcceptancesMissing: missing.length,
       policyBlocked: missing.isNotEmpty,
-      policyBlockReason: missing.isEmpty
-          ? null
-          : 'Accept the latest required policy documents to unlock full wallet access.',
+      policyBlockReason:
+          missing.isEmpty
+              ? null
+              : 'Accept the latest required policy documents to unlock full wallet access.',
     );
   }
 
   List<GtePolicyRequirementSummary> _currentMissingPolicyRequirements() {
-    final Set<String> acceptedKeys = _policyAcceptances
-        .map((GtePolicyAcceptanceSummary item) => item.documentKey)
-        .toSet();
+    final Set<String> acceptedKeys =
+        _policyAcceptances
+            .map((GtePolicyAcceptanceSummary item) => item.documentKey)
+            .toSet();
     return _policyDocuments
-        .where((GtePolicyDocumentDetail doc) =>
-            doc.isMandatory && !acceptedKeys.contains(doc.documentKey))
+        .where(
+          (GtePolicyDocumentDetail doc) =>
+              doc.isMandatory && !acceptedKeys.contains(doc.documentKey),
+        )
         .map(
           (GtePolicyDocumentDetail doc) => GtePolicyRequirementSummary(
             documentKey: doc.documentKey,
@@ -2080,11 +2330,14 @@ class GteMockApi implements GteApiRepository {
 
   GteWithdrawalEligibility _computeWithdrawalEligibility() {
     final GteKycStatus status = _kycProfile.status;
-    final bool requiresKyc = status == GteKycStatus.unverified ||
+    final bool requiresKyc =
+        status == GteKycStatus.unverified ||
         status == GteKycStatus.pending ||
         status == GteKycStatus.rejected;
-    final bool requiresBankAccount = !_userBankAccounts
-        .any((GteUserBankAccount account) => account.isActive);
+    final bool requiresBankAccount =
+        !_userBankAccounts.any(
+          (GteUserBankAccount account) => account.isActive,
+        );
     final double available = _walletSummary.availableBalance;
     double withdrawable = available;
     double remainingAllowance = available;
@@ -2096,37 +2349,46 @@ class GteMockApi implements GteApiRepository {
     } else if (status == GteKycStatus.partialVerifiedNoId) {
       final DateTime windowStart = now.subtract(const Duration(hours: 24));
       final List<GteTreasuryWithdrawalRequest> recent = _withdrawalRequests
-          .where((GteTreasuryWithdrawalRequest withdrawal) =>
-              (withdrawal.createdAt ?? now).isAfter(windowStart) &&
-              (withdrawal.status == GteWithdrawalStatus.pendingReview ||
-                  withdrawal.status == GteWithdrawalStatus.processing ||
-                  withdrawal.status == GteWithdrawalStatus.approved ||
-                  withdrawal.status == GteWithdrawalStatus.paid))
+          .where(
+            (GteTreasuryWithdrawalRequest withdrawal) =>
+                (withdrawal.createdAt ?? now).isAfter(windowStart) &&
+                (withdrawal.status == GteWithdrawalStatus.pendingReview ||
+                    withdrawal.status == GteWithdrawalStatus.processing ||
+                    withdrawal.status == GteWithdrawalStatus.approved ||
+                    withdrawal.status == GteWithdrawalStatus.paid),
+          )
           .toList(growable: false);
       final double recentTotal = recent.fold<double>(
-          0,
-          (double sum, GteTreasuryWithdrawalRequest withdrawal) =>
-              sum + withdrawal.amountCoin);
+        0,
+        (double sum, GteTreasuryWithdrawalRequest withdrawal) =>
+            sum + withdrawal.amountCoin,
+      );
       final double limit = available * 0.3;
       remainingAllowance = math.max(0, limit - recentTotal);
       withdrawable = math.min(available, remainingAllowance);
       if (remainingAllowance <= 0 && recent.isNotEmpty) {
         final DateTime earliest = recent
-            .map((GteTreasuryWithdrawalRequest withdrawal) =>
-                withdrawal.createdAt ?? now)
-            .reduce((DateTime left, DateTime right) =>
-                left.isBefore(right) ? left : right);
+            .map(
+              (GteTreasuryWithdrawalRequest withdrawal) =>
+                  withdrawal.createdAt ?? now,
+            )
+            .reduce(
+              (DateTime left, DateTime right) =>
+                  left.isBefore(right) ? left : right,
+            );
         nextEligibleAt = earliest.add(const Duration(hours: 24));
       }
     }
     final double pendingWithdrawals = _withdrawalRequests
-        .where((GteTreasuryWithdrawalRequest withdrawal) =>
-            withdrawal.status == GteWithdrawalStatus.pendingReview ||
-            withdrawal.status == GteWithdrawalStatus.processing ||
-            withdrawal.status == GteWithdrawalStatus.approved)
+        .where(
+          (GteTreasuryWithdrawalRequest withdrawal) =>
+              withdrawal.status == GteWithdrawalStatus.pendingReview ||
+              withdrawal.status == GteWithdrawalStatus.processing ||
+              withdrawal.status == GteWithdrawalStatus.approved,
+        )
         .fold<double>(0, (double sum, GteTreasuryWithdrawalRequest withdrawal) {
-      return sum + withdrawal.amountCoin;
-    });
+          return sum + withdrawal.amountCoin;
+        });
     final List<GtePolicyRequirementSummary> missing =
         _currentMissingPolicyRequirements();
     if (missing.isNotEmpty) {
@@ -2148,19 +2410,22 @@ class GteMockApi implements GteApiRepository {
           .map((GtePolicyRequirementSummary item) => item.documentKey)
           .toList(growable: false),
       policyBlocked: missing.isNotEmpty,
-      policyBlockReason: missing.isEmpty
-          ? null
-          : 'Policy acceptance required before withdrawal is enabled.',
+      policyBlockReason:
+          missing.isEmpty
+              ? null
+              : 'Policy acceptance required before withdrawal is enabled.',
     );
   }
 
   GteUserBankAccount _resolveBankAccount(String? bankAccountId) {
     if (bankAccountId != null) {
       return _userBankAccounts.firstWhere(
-          (GteUserBankAccount account) => account.id == bankAccountId);
+        (GteUserBankAccount account) => account.id == bankAccountId,
+      );
     }
-    final Iterable<GteUserBankAccount> active = _userBankAccounts
-        .where((GteUserBankAccount account) => account.isActive);
+    final Iterable<GteUserBankAccount> active = _userBankAccounts.where(
+      (GteUserBankAccount account) => account.isActive,
+    );
     if (active.isNotEmpty) {
       return active.first;
     }
@@ -2227,12 +2492,9 @@ class GteMockApi implements GteApiRepository {
         return;
       }
       final String key = price.toStringAsFixed(4);
-      final _MutableBookLevel existing = byPrice[key] ??
-          _MutableBookLevel(
-            price: price,
-            quantity: 0.0,
-            orderCount: 0,
-          );
+      final _MutableBookLevel existing =
+          byPrice[key] ??
+          _MutableBookLevel(price: price, quantity: 0.0, orderCount: 0);
       existing.quantity += quantity;
       existing.orderCount += orderCount;
       byPrice[key] = existing;
@@ -2257,13 +2519,13 @@ class GteMockApi implements GteApiRepository {
       );
     }
 
-    final List<_MutableBookLevel> merged =
-        byPrice.values.toList(growable: false)
-          ..sort((_MutableBookLevel left, _MutableBookLevel right) {
-            return descending
-                ? right.price.compareTo(left.price)
-                : left.price.compareTo(right.price);
-          });
+    final List<_MutableBookLevel> merged = byPrice.values.toList(
+      growable: false,
+    )..sort((_MutableBookLevel left, _MutableBookLevel right) {
+      return descending
+          ? right.price.compareTo(left.price)
+          : left.price.compareTo(right.price);
+    });
     return merged
         .map(
           (_MutableBookLevel level) => GteOrderBookLevel(
@@ -2328,10 +2590,13 @@ class GteMockApi implements GteApiRepository {
     double deltaQuantity, {
     required double currentPrice,
   }) {
-    final List<GtePortfolioHolding> nextHoldings =
-        List<GtePortfolioHolding>.of(_portfolio.holdings, growable: true);
-    final int index = nextHoldings
-        .indexWhere((GtePortfolioHolding holding) => holding.playerId == playerId);
+    final List<GtePortfolioHolding> nextHoldings = List<GtePortfolioHolding>.of(
+      _portfolio.holdings,
+      growable: true,
+    );
+    final int index = nextHoldings.indexWhere(
+      (GtePortfolioHolding holding) => holding.playerId == playerId,
+    );
     if (index == -1) {
       return;
     }
@@ -2501,68 +2766,68 @@ String _kycStatusToString(GteKycStatus status) {
 
 final List<GtePolicyDocumentDetail> _seedPolicyDocuments =
     <GtePolicyDocumentDetail>[
-  GtePolicyDocumentDetail(
-    id: 'policy-terms',
-    documentKey: 'terms_and_conditions',
-    title: 'Terms & Conditions',
-    isMandatory: true,
-    active: true,
-    latestVersion: GtePolicyDocumentVersionSummary(
-      id: 'policy-terms-v1',
-      versionLabel: 'v1.0',
-      effectiveAt: DateTime.utc(2026, 3, 1),
-      publishedAt: DateTime.utc(2026, 3, 1),
-      changelog: 'Initial public release.',
-    ),
-    bodyMarkdown: '''# Terms & Conditions
+      GtePolicyDocumentDetail(
+        id: 'policy-terms',
+        documentKey: 'terms_and_conditions',
+        title: 'Terms & Conditions',
+        isMandatory: true,
+        active: true,
+        latestVersion: GtePolicyDocumentVersionSummary(
+          id: 'policy-terms-v1',
+          versionLabel: 'v1.0',
+          effectiveAt: DateTime.utc(2026, 3, 1),
+          publishedAt: DateTime.utc(2026, 3, 1),
+          changelog: 'Initial public release.',
+        ),
+        bodyMarkdown: '''# Terms & Conditions
 
 GTEX is a rules-driven football competition and exchange platform. Use of wallet, competition, and reward surfaces is subject to market rules, integrity controls, and local availability.''',
-  ),
-  GtePolicyDocumentDetail(
-    id: 'policy-privacy',
-    documentKey: 'privacy_policy',
-    title: 'Privacy Policy',
-    isMandatory: true,
-    active: true,
-    latestVersion: GtePolicyDocumentVersionSummary(
-      id: 'policy-privacy-v1',
-      versionLabel: 'v1.0',
-      effectiveAt: DateTime.utc(2026, 3, 1),
-      publishedAt: DateTime.utc(2026, 3, 1),
-      changelog: 'Initial public release.',
-    ),
-    bodyMarkdown: '''# Privacy Policy
+      ),
+      GtePolicyDocumentDetail(
+        id: 'policy-privacy',
+        documentKey: 'privacy_policy',
+        title: 'Privacy Policy',
+        isMandatory: true,
+        active: true,
+        latestVersion: GtePolicyDocumentVersionSummary(
+          id: 'policy-privacy-v1',
+          versionLabel: 'v1.0',
+          effectiveAt: DateTime.utc(2026, 3, 1),
+          publishedAt: DateTime.utc(2026, 3, 1),
+          changelog: 'Initial public release.',
+        ),
+        bodyMarkdown: '''# Privacy Policy
 
 We collect account, KYC, payment proof, and gameplay telemetry needed to operate GTEX, detect abuse, and satisfy moderation, anti-fraud, and regional controls.''',
-  ),
-  GtePolicyDocumentDetail(
-    id: 'policy-withdrawal',
-    documentKey: 'withdrawal_policy',
-    title: 'Withdrawal Policy',
-    isMandatory: true,
-    active: true,
-    latestVersion: GtePolicyDocumentVersionSummary(
-      id: 'policy-withdrawal-v1',
-      versionLabel: 'v1.0',
-      effectiveAt: DateTime.utc(2026, 3, 1),
-      publishedAt: DateTime.utc(2026, 3, 1),
-      changelog: 'Clarifies KYC, bank account, and regional restrictions.',
-    ),
-    bodyMarkdown: '''# Withdrawal Policy
+      ),
+      GtePolicyDocumentDetail(
+        id: 'policy-withdrawal',
+        documentKey: 'withdrawal_policy',
+        title: 'Withdrawal Policy',
+        isMandatory: true,
+        active: true,
+        latestVersion: GtePolicyDocumentVersionSummary(
+          id: 'policy-withdrawal-v1',
+          versionLabel: 'v1.0',
+          effectiveAt: DateTime.utc(2026, 3, 1),
+          publishedAt: DateTime.utc(2026, 3, 1),
+          changelog: 'Clarifies KYC, bank account, and regional restrictions.',
+        ),
+        bodyMarkdown: '''# Withdrawal Policy
 
 Withdrawals depend on KYC state, verified bank details, active policy acceptance, treasury review, and regional feature flags.''',
-  ),
-];
+      ),
+    ];
 
 final List<GtePolicyAcceptanceSummary> _seedPolicyAcceptances =
     <GtePolicyAcceptanceSummary>[
-  GtePolicyAcceptanceSummary(
-    documentKey: 'terms_and_conditions',
-    title: 'Terms & Conditions',
-    versionLabel: 'v1.0',
-    acceptedAt: DateTime.utc(2026, 3, 2, 10),
-  ),
-];
+      GtePolicyAcceptanceSummary(
+        documentKey: 'terms_and_conditions',
+        title: 'Terms & Conditions',
+        versionLabel: 'v1.0',
+        acceptedAt: DateTime.utc(2026, 3, 2, 10),
+      ),
+    ];
 
 final GteAuthSession _fixtureSession = GteAuthSession(
   accessToken: 'fixture-session-token',
@@ -3244,10 +3509,7 @@ final List<GteOrderRecord> _seedOrders = <GteOrderRecord>[
       lastExecutedAt: DateTime.utc(2026, 3, 10, 18, 16),
       executions: <GteOrderExecution>[
         GteOrderExecution(
-          payload: <String, Object?>{
-            'price': 920,
-            'quantity': 1,
-          },
+          payload: <String, Object?>{'price': 920, 'quantity': 1},
         ),
       ],
     ),
@@ -3267,9 +3529,7 @@ final GteTreasuryBankAccount _seedTreasuryBankAccount = GteTreasuryBankAccount(
 );
 
 final List<GteTreasuryBankAccount> _seedTreasuryBankAccounts =
-    <GteTreasuryBankAccount>[
-  _seedTreasuryBankAccount,
-];
+    <GteTreasuryBankAccount>[_seedTreasuryBankAccount];
 
 final GteTreasurySettings _seedTreasurySettings = GteTreasurySettings(
   id: 'treasury-settings-1',
@@ -3379,35 +3639,35 @@ final List<GteDepositRequest> _seedDeposits = <GteDepositRequest>[
 
 final List<GteTreasuryWithdrawalRequest> _seedWithdrawals =
     <GteTreasuryWithdrawalRequest>[
-  GteTreasuryWithdrawalRequest(
-    id: 'withdrawal-1',
-    payoutRequestId: 'payout-1',
-    reference: 'WDR-2001',
-    status: GteWithdrawalStatus.processing,
-    unit: GteLedgerUnit.coin,
-    amountCoin: 120,
-    amountFiat: 105600,
-    currencyCode: 'NGN',
-    rateValue: 880,
-    rateDirection: GteRateDirection.fiatPerCoin,
-    bankName: 'Zenith Bank',
-    bankAccountNumber: '0123456789',
-    bankAccountName: 'Ayo Martins',
-    bankCode: 'ZENITH',
-    kycStatusSnapshot: 'partial_verified_no_id',
-    kycTierSnapshot: 'partial_verified_no_id',
-    feeAmount: 0,
-    totalDebit: 120,
-    notes: 'Weekly payout',
-    createdAt: DateTime.utc(2026, 3, 11, 7),
-    reviewedAt: DateTime.utc(2026, 3, 11, 7, 10),
-    approvedAt: DateTime.utc(2026, 3, 11, 7, 12),
-    processedAt: DateTime.utc(2026, 3, 11, 7, 30),
-    paidAt: null,
-    rejectedAt: null,
-    cancelledAt: null,
-  ),
-];
+      GteTreasuryWithdrawalRequest(
+        id: 'withdrawal-1',
+        payoutRequestId: 'payout-1',
+        reference: 'WDR-2001',
+        status: GteWithdrawalStatus.processing,
+        unit: GteLedgerUnit.coin,
+        amountCoin: 120,
+        amountFiat: 105600,
+        currencyCode: 'NGN',
+        rateValue: 880,
+        rateDirection: GteRateDirection.fiatPerCoin,
+        bankName: 'Zenith Bank',
+        bankAccountNumber: '0123456789',
+        bankAccountName: 'Ayo Martins',
+        bankCode: 'ZENITH',
+        kycStatusSnapshot: 'partial_verified_no_id',
+        kycTierSnapshot: 'partial_verified_no_id',
+        feeAmount: 0,
+        totalDebit: 120,
+        notes: 'Weekly payout',
+        createdAt: DateTime.utc(2026, 3, 11, 7),
+        reviewedAt: DateTime.utc(2026, 3, 11, 7, 10),
+        approvedAt: DateTime.utc(2026, 3, 11, 7, 12),
+        processedAt: DateTime.utc(2026, 3, 11, 7, 30),
+        paidAt: null,
+        rejectedAt: null,
+        cancelledAt: null,
+      ),
+    ];
 
 final List<GteDispute> _seedDisputes = <GteDispute>[
   GteDispute(

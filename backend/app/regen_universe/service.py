@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
+from random import Random
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import (
     Competition,
+    Country,
     InternalLeague,
     Match,
     Player,
@@ -17,6 +19,7 @@ from app.ingestion.models import (
     Season as IngestionSeason,
     TeamStanding,
 )
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.regen import RegenDiscoveryBadge, RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
 from app.regen_universe.awards_engine import AwardDefinition, AwardsEngine, DEFAULT_AWARD_DEFINITIONS
 from app.regen_universe.models import (
@@ -28,6 +31,7 @@ from app.regen_universe.models import (
     RegenSeason,
 )
 from app.regen_universe.ranking_engine import PerformanceInput, RankingEngine
+from app.schemas.regen_core import AbilityRangeView, RegenOriginView, RegenPersonalityView, RegenProfileView, RegenStorySeedView
 from app.services.regen_market_service import RegenAwardEvent, RegenMarketService
 
 
@@ -42,6 +46,90 @@ _LEGACY_AWARD_CODE_MAP = {
     "DEFENDER": "BEST_DEFENDER",
     "GOALKEEPER": "BEST_GOALKEEPER",
 }
+
+_FALLBACK_COUNTRY_PROFILES = (
+    {
+        "code": "BR",
+        "name": "Brazil",
+        "weight": 1.6,
+        "first_names": ("Joao", "Pedro", "Lucas", "Gabriel", "Vitor"),
+        "last_names": ("Silva", "Santos", "Costa", "Oliveira", "Souza"),
+    },
+    {
+        "code": "NG",
+        "name": "Nigeria",
+        "weight": 1.5,
+        "first_names": ("Tunde", "Kelechi", "Musa", "David", "Samuel"),
+        "last_names": ("Okafor", "Adebayo", "Iheanacho", "Onyeka", "Nwosu"),
+    },
+    {
+        "code": "AR",
+        "name": "Argentina",
+        "weight": 1.2,
+        "first_names": ("Mateo", "Tomas", "Thiago", "Julian", "Santiago"),
+        "last_names": ("Romero", "Fernandez", "Gomez", "Alvarez", "Lopez"),
+    },
+    {
+        "code": "FR",
+        "name": "France",
+        "weight": 1.1,
+        "first_names": ("Theo", "Hugo", "Kylian", "Amine", "Youssouf"),
+        "last_names": ("Diallo", "Camara", "Benzema", "Konate", "Dembele"),
+    },
+    {
+        "code": "ES",
+        "name": "Spain",
+        "weight": 1.0,
+        "first_names": ("Pablo", "Mario", "Diego", "Alvaro", "Martin"),
+        "last_names": ("Garcia", "Ruiz", "Martin", "Lopez", "Torres"),
+    },
+    {
+        "code": "SN",
+        "name": "Senegal",
+        "weight": 0.9,
+        "first_names": ("Sadio", "Pape", "Moussa", "Idrissa", "Cheikh"),
+        "last_names": ("Ndiaye", "Sarr", "Diop", "Faye", "Niane"),
+    },
+)
+
+_POSITION_ROLLS = (
+    ("ST", 1.0),
+    ("RW", 0.8),
+    ("LW", 0.8),
+    ("AM", 0.9),
+    ("CM", 1.0),
+    ("DM", 0.75),
+    ("CB", 0.95),
+    ("RB", 0.6),
+    ("LB", 0.6),
+    ("GK", 0.45),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _UniverseProspect:
+    lookup_id: str
+    player_id: str | None
+    regen_id: str
+    name: str
+    age: int
+    nationality: str
+    nationality_code: str | None
+    position: str
+    potential: int
+    current_rating: int
+    growth_curve: float
+    club_id: str | None
+    generated_at: datetime
+    source_type: str
+    regen_type: str
+    uniqueness_score: float
+    story_snippet: str | None = None
+    discovery_badges: tuple[str, ...] = ()
+    market_value_coin: int | None = None
+    profile: RegenProfileView | None = None
+    card: dict[str, object] | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -122,6 +210,48 @@ def _competition_importance(competition: Competition | None, internal_league: In
     if internal_league is not None:
         importance += max(0, 6 - internal_league.rank) * 0.04
     return round(importance, 4)
+
+
+def _normalize_position_label(position: str | None) -> str:
+    token = (position or "").strip().upper()
+    if not token:
+        return "CM"
+    aliases = {
+        "CF": "ST",
+        "CAM": "AM",
+        "CDM": "DM",
+        "RCB": "CB",
+        "LCB": "CB",
+        "RWB": "RB",
+        "LWB": "LB",
+    }
+    return aliases.get(token, token)
+
+
+def _position_story_label(position: str | None) -> str:
+    mapping = {
+        "GK": "goalkeeper",
+        "CB": "centre-back",
+        "RB": "full-back",
+        "LB": "full-back",
+        "DM": "holding midfielder",
+        "CM": "midfielder",
+        "AM": "midfielder",
+        "RW": "winger",
+        "LW": "winger",
+        "ST": "striker",
+    }
+    return mapping.get(_normalize_position_label(position), "prospect")
+
+
+def _growth_curve_label(growth_curve: float) -> str:
+    if growth_curve >= 0.82:
+        return "rocket"
+    if growth_curve >= 0.68:
+        return "surging"
+    if growth_curve >= 0.54:
+        return "steady"
+    return "raw"
 
 
 @dataclass(slots=True)
@@ -504,6 +634,358 @@ class RegenUniverseService:
             "recent_awards": awards_payload,
         }
 
+    def _resolve_country_name(self, country_code: str | None, *, fallback_name: str | None = None) -> str:
+        if fallback_name:
+            return fallback_name
+        normalized = (country_code or "").strip().upper()
+        if not normalized:
+            return "Unknown"
+        country = self.session.scalar(
+            select(Country).where(
+                or_(
+                    Country.alpha2_code == normalized,
+                    Country.alpha3_code == normalized,
+                    Country.fifa_code == normalized,
+                )
+            )
+        )
+        return country.name if country is not None else normalized
+
+    @staticmethod
+    def _seed_age(seed: NationalRegenSeed) -> int:
+        metadata = dict(seed.metadata_json or {})
+        explicit = metadata.get("age")
+        if isinstance(explicit, int):
+            return explicit
+        return 18
+
+    @staticmethod
+    def _seed_uniqueness_score(seed: NationalRegenSeed) -> float:
+        return {
+            "legendary": 0.92,
+            "elite": 0.84,
+            "rare": 0.74,
+            "common": 0.62,
+        }.get(str(seed.rarity_tier or "").strip().lower(), 0.58)
+
+    @staticmethod
+    def _seed_market_value(seed: NationalRegenSeed) -> int:
+        return max(75_000, (seed.current_rating * 1_800) + (seed.potential_rating * 2_400))
+
+    @staticmethod
+    def _weighted_potential_roll(rng: Random) -> int:
+        roll = rng.random()
+        if roll < 0.48:
+            return rng.randint(68, 78)
+        if roll < 0.78:
+            return rng.randint(79, 86)
+        if roll < 0.95:
+            return rng.randint(87, 92)
+        return rng.randint(93, 97)
+
+    def _synthetic_profile_from_prospect(self, prospect: _UniverseProspect) -> RegenProfileView:
+        minimum_current = max(40, prospect.current_rating - 4)
+        maximum_current = min(99, prospect.current_rating + 2)
+        minimum_potential = max(prospect.current_rating, prospect.potential - 6)
+        story_seed = None
+        if prospect.story_snippet:
+            story_seed = RegenStorySeedView(
+                background="academy_hype",
+                temperament=_growth_curve_label(prospect.growth_curve),
+                ambition="world_stage",
+                pressure_response="composed",
+                snippet=prospect.story_snippet,
+            )
+        personality_tags = tuple(dict.fromkeys(prospect.discovery_badges))
+        return RegenProfileView(
+            id=prospect.regen_id,
+            regen_id=prospect.regen_id,
+            club_id=prospect.club_id or "independent-pool",
+            player_id=prospect.lookup_id,
+            linked_unique_card_id=f"synthetic-card:{prospect.regen_id}",
+            display_name=prospect.name,
+            age=prospect.age,
+            birth_country_code=prospect.nationality_code or "UNK",
+            primary_position=prospect.position,
+            secondary_positions=tuple(),
+            current_gsi=prospect.current_rating,
+            current_ability_range=AbilityRangeView(minimum=minimum_current, maximum=maximum_current),
+            potential_range=AbilityRangeView(minimum=minimum_potential, maximum=prospect.potential),
+            current_rating=prospect.current_rating,
+            potential=prospect.potential,
+            scout_confidence="medium",
+            generation_source=prospect.source_type,
+            regen_type=prospect.regen_type,
+            status="scout_pool",
+            is_special_lineage=prospect.regen_type == "legend_regen",
+            uniqueness_score=prospect.uniqueness_score,
+            growth_curve=prospect.growth_curve,
+            morale=0.62,
+            chemistry_affinity={},
+            story_seed=story_seed,
+            generated_at=prospect.generated_at,
+            club_quality_score=60.0,
+            personality=RegenPersonalityView(
+                temperament=58,
+                leadership=50,
+                ambition=74,
+                loyalty=52,
+                work_rate=68,
+                flair=72,
+                resilience=66,
+                personality_tags=personality_tags,
+            ),
+            origin=RegenOriginView(
+                country_code=prospect.nationality_code or "UNK",
+                region_name=None,
+                city_name=None,
+            ),
+            metadata=dict(prospect.metadata),
+        )
+
+    def _synthetic_card_payload(self, prospect: _UniverseProspect) -> dict[str, object]:
+        badges: list[dict[str, str]] = []
+        if prospect.potential >= 90:
+            badges.append({"code": "elite_potential", "label": "Elite Potential", "emphasis": "highlight"})
+        if prospect.source_type == "national_seed":
+            badges.append({"code": "national_pool", "label": "National Pool", "emphasis": "standard"})
+        if prospect.source_type == "generated":
+            badges.append({"code": "generated", "label": "Generated", "emphasis": "standard"})
+        for badge in prospect.discovery_badges:
+            badges.append({"code": badge.lower().replace(" ", "_"), "label": badge, "emphasis": "standard"})
+        return {
+            "name": prospect.name,
+            "position": prospect.position,
+            "rating": prospect.current_rating,
+            "potential": prospect.potential,
+            "regen_type_badge": "Legend Echo" if prospect.regen_type == "legend_regen" else "New Wave",
+            "uniqueness_badge": "Elite DNA" if prospect.uniqueness_score >= 0.82 else "Scouting Pulse",
+            "legacy_score": 0.0,
+            "traits_icons": tuple(dict.fromkeys([_growth_curve_label(prospect.growth_curve), prospect.position.lower()])),
+            "personality_tag": prospect.discovery_badges[0] if prospect.discovery_badges else None,
+            "story_snippet": prospect.story_snippet,
+            "badges": tuple(badges),
+        }
+
+    def _player_summary_payload(self, prospect: _UniverseProspect) -> dict[str, object]:
+        return {
+            "id": prospect.lookup_id,
+            "name": prospect.name,
+            "age": prospect.age,
+            "nationality": prospect.nationality,
+            "nationality_code": prospect.nationality_code,
+            "position": prospect.position,
+            "potential": prospect.potential,
+            "current_rating": prospect.current_rating,
+            "growth_curve": round(prospect.growth_curve, 4),
+            "club_id": prospect.club_id,
+            "source_type": prospect.source_type,
+        }
+
+    def _scouting_note_for_prospect(self, prospect: _UniverseProspect) -> str:
+        position_label = _position_story_label(prospect.position)
+        growth_label = _growth_curve_label(prospect.growth_curve)
+        return (
+            f"{prospect.age}-year-old {position_label} from {prospect.nationality} with "
+            f"{prospect.current_rating}/{prospect.potential} upside and a {growth_label} growth curve."
+        )
+
+    def _prospect_from_regen(
+        self,
+        *,
+        regen: RegenProfile,
+        market_service: RegenMarketService,
+    ) -> _UniverseProspect | None:
+        profile = market_service.get_profile_view(regen.id)
+        if profile.status == "retired":
+            return None
+        latest_value = market_service.get_latest_value_view(regen.id)
+        discovery_badges = tuple(badge.badge_name for badge in market_service.list_discovery_badges(regen.id))
+        return _UniverseProspect(
+            lookup_id=profile.player_id or f"regen:{profile.regen_id}",
+            player_id=profile.player_id,
+            regen_id=profile.regen_id,
+            name=profile.display_name,
+            age=profile.age,
+            nationality=self._resolve_country_name(profile.birth_country_code),
+            nationality_code=profile.birth_country_code,
+            position=_normalize_position_label(profile.primary_position),
+            potential=profile.potential or profile.current_rating or profile.current_gsi,
+            current_rating=profile.current_rating or profile.current_gsi,
+            growth_curve=profile.growth_curve,
+            club_id=profile.club_id,
+            generated_at=profile.generated_at,
+            source_type="regen",
+            regen_type=profile.regen_type,
+            uniqueness_score=profile.uniqueness_score,
+            story_snippet=profile.story_seed.snippet if profile.story_seed is not None else None,
+            discovery_badges=discovery_badges,
+            market_value_coin=latest_value.current_value_coin,
+            profile=profile,
+            card=self._card_payload(profile, legacy_score=0.0, discovery_badges=list(discovery_badges)),
+            metadata=dict(profile.metadata),
+        )
+
+    def _prospect_from_seed(self, seed: NationalRegenSeed) -> _UniverseProspect:
+        story_seed = dict((seed.personality_seed_json or {}).get("story_seed") or {})
+        lookup_id = f"seed:{seed.id}"
+        prospect = _UniverseProspect(
+            lookup_id=lookup_id,
+            player_id=None,
+            regen_id=lookup_id,
+            name=seed.display_name,
+            age=self._seed_age(seed),
+            nationality=self._resolve_country_name(seed.country_code, fallback_name=seed.country_name),
+            nationality_code=seed.country_code,
+            position=_normalize_position_label(seed.primary_position),
+            potential=seed.potential_rating,
+            current_rating=seed.current_rating,
+            growth_curve=round(float(seed.growth_curve), 4),
+            club_id=f"national-pool-{str(seed.country_code or 'global').lower()}",
+            generated_at=seed.created_at,
+            source_type="national_seed",
+            regen_type="legend_regen" if seed.seed_type == "legendary_regen" or seed.rarity_tier == "legendary" else "organic_newgen",
+            uniqueness_score=self._seed_uniqueness_score(seed),
+            story_snippet=str(story_seed.get("snippet")).strip() or None,
+            discovery_badges=tuple(
+                dict.fromkeys(
+                    [
+                        str(seed.rarity_tier).title(),
+                        "National Pool",
+                    ]
+                )
+            ),
+            market_value_coin=self._seed_market_value(seed),
+            metadata=dict(seed.metadata_json or {}),
+        )
+        profile = self._synthetic_profile_from_prospect(prospect)
+        return replace(prospect, profile=profile, card=self._synthetic_card_payload(prospect))
+
+    def _fallback_country_catalog(self) -> tuple[dict[str, object], ...]:
+        countries = list(
+            self.session.scalars(
+                select(Country)
+                .where(Country.is_enabled_for_universe.is_(True))
+                .order_by(Country.name.asc(), Country.id.asc())
+            ).all()
+        )
+        if not countries:
+            return _FALLBACK_COUNTRY_PROFILES
+        catalog: list[dict[str, object]] = []
+        for country in countries[:12]:
+            code = country.alpha2_code or country.fifa_code or country.alpha3_code or country.id[:2].upper()
+            weight = 1.0
+            if (country.market_region or "").strip().lower() in {"europe", "south_america", "africa"}:
+                weight += 0.2
+            catalog.append(
+                {
+                    "code": code,
+                    "name": country.name,
+                    "weight": weight,
+                    "first_names": ("Ayo", "Leo", "Milan", "Rayan", "Noah"),
+                    "last_names": ("Cole", "Diallo", "Costa", "Nwosu", "Torres"),
+                }
+            )
+        return tuple(catalog) if catalog else _FALLBACK_COUNTRY_PROFILES
+
+    def _generate_fallback_prospects(self, *, limit: int, age_min: int, age_max: int) -> list[_UniverseProspect]:
+        rng = Random(f"regen-universe:{date.today().isoformat()}:{limit}:{age_min}:{age_max}")
+        countries = self._fallback_country_catalog()
+        prospects: list[_UniverseProspect] = []
+        position_choices = [item[0] for item in _POSITION_ROLLS]
+        position_weights = [item[1] for item in _POSITION_ROLLS]
+        for index in range(limit):
+            country = rng.choices(countries, weights=[float(item["weight"]) for item in countries], k=1)[0]
+            potential = self._weighted_potential_roll(rng)
+            age = rng.choices(
+                list(range(age_min, age_max + 1)),
+                weights=[1, 3, 4, 4, 3, 2, 1][: (age_max - age_min + 1)],
+                k=1,
+            )[0]
+            current_rating = max(58, min(potential - 1, potential - rng.randint(7, 20)))
+            growth_curve = round(min(0.98, 0.38 + ((potential - current_rating) / 40.0) + (rng.random() * 0.18)), 4)
+            position = rng.choices(position_choices, weights=position_weights, k=1)[0]
+            name = f"{rng.choice(country['first_names'])} {rng.choice(country['last_names'])}"
+            lookup_id = f"generated:{country['code']}:{index + 1}"
+            prospect = _UniverseProspect(
+                lookup_id=lookup_id,
+                player_id=None,
+                regen_id=lookup_id,
+                name=name,
+                age=age,
+                nationality=str(country["name"]),
+                nationality_code=str(country["code"]),
+                position=position,
+                potential=potential,
+                current_rating=current_rating,
+                growth_curve=growth_curve,
+                club_id="independent-scout-pool",
+                generated_at=_utcnow() - timedelta(hours=index * 2),
+                source_type="generated",
+                regen_type="organic_newgen",
+                uniqueness_score=round(0.58 + (rng.random() * 0.28), 4),
+                story_snippet=f"{_position_story_label(position).title()} prospect climbing out of the {country['name']} youth stream.",
+                discovery_badges=("Generated", "Scout Watch"),
+                market_value_coin=max(50_000, (current_rating * 1_550) + (potential * 2_100)),
+                metadata={"generated": True},
+            )
+            profile = self._synthetic_profile_from_prospect(prospect)
+            prospects.append(replace(prospect, profile=profile, card=self._synthetic_card_payload(prospect)))
+        return prospects
+
+    def _discovery_pool(self, *, limit: int, age_min: int = 15, age_max: int = 21) -> list[_UniverseProspect]:
+        market_service = RegenMarketService(self.session)
+        prospects: list[_UniverseProspect] = []
+        for regen in self.session.scalars(select(RegenProfile).order_by(RegenProfile.generated_at.desc())):
+            prospect = self._prospect_from_regen(regen=regen, market_service=market_service)
+            if prospect is None or prospect.age < age_min or prospect.age > age_max:
+                continue
+            prospects.append(prospect)
+        seeds = list(
+            self.session.scalars(
+                select(NationalRegenSeed)
+                .where(NationalRegenSeed.status == "available")
+                .order_by(
+                    NationalRegenSeed.potential_rating.desc(),
+                    NationalRegenSeed.current_rating.desc(),
+                    NationalRegenSeed.created_at.desc(),
+                )
+            ).all()
+        )
+        for seed in seeds:
+            age = self._seed_age(seed)
+            if age < age_min or age > age_max:
+                continue
+            prospects.append(self._prospect_from_seed(seed))
+        if not prospects:
+            prospects.extend(self._generate_fallback_prospects(limit=max(limit, 12), age_min=age_min, age_max=age_max))
+        unique: dict[str, _UniverseProspect] = {}
+        for prospect in prospects:
+            unique.setdefault(prospect.lookup_id, prospect)
+        return list(unique.values())
+
+    def _prospect_lookup(self, player_id: str) -> _UniverseProspect | None:
+        normalized = (player_id or "").strip()
+        if not normalized:
+            return None
+        for prospect in self._discovery_pool(limit=64, age_min=15, age_max=21):
+            if normalized in {prospect.lookup_id, prospect.player_id or ""}:
+                return prospect
+        return None
+
+    def get_player_lookup(self, player_id: str) -> dict[str, object] | None:
+        prospect = self._prospect_lookup(player_id)
+        if prospect is None or prospect.profile is None or prospect.card is None:
+            return None
+        return {
+            "player": self._player_summary_payload(prospect),
+            "profile": prospect.profile,
+            "card": prospect.card,
+            "scouting_note": self._scouting_note_for_prospect(prospect),
+            "discovery_badges": list(prospect.discovery_badges),
+            "market_value_coin": prospect.market_value_coin,
+        }
+
     def get_player_showcase(self, player_id: str) -> dict[str, object] | None:
         regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player_id))
         if regen is None:
@@ -539,39 +1021,38 @@ class RegenUniverseService:
 
     def list_rising_stars(self, *, limit: int = 20, age_max: int = 21) -> dict[str, object]:
         candidates: list[tuple[float, dict[str, object]]] = []
-        market_service = RegenMarketService(self.session)
-        for regen in self.session.scalars(select(RegenProfile).order_by(RegenProfile.generated_at.desc())):
-            profile = market_service.get_profile_view(regen.id)
-            if profile.age > age_max or profile.status == "retired":
+        for prospect in self._discovery_pool(limit=max(limit * 3, 24), age_min=15, age_max=age_max):
+            if prospect.profile is None or prospect.card is None:
                 continue
-            latest_value = market_service.get_latest_value_view(regen.id)
-            prestige = self.get_player_prestige_summary(profile.player_id) if profile.player_id is not None else None
+            prestige = (
+                self.get_player_prestige_summary(prospect.player_id)
+                if prospect.player_id is not None and not prospect.lookup_id.startswith("seed:")
+                else None
+            )
             legacy_score = float(prestige["legacy_score"]) if prestige is not None else 0.0
             entry = {
-                "player_id": profile.player_id,
-                "profile": profile,
-                "card": self._card_payload(
-                    profile,
-                    legacy_score=legacy_score,
-                    discovery_badges=[badge.badge_name for badge in market_service.list_discovery_badges(regen.id)],
-                ),
+                "player_id": prospect.lookup_id,
+                "player": self._player_summary_payload(prospect),
+                "profile": prospect.profile,
+                "card": prospect.card,
                 "legacy_score": legacy_score,
-                "market_value_coin": latest_value.current_value_coin,
-                "momentum_label": self._rising_star_momentum_label(profile),
+                "market_value_coin": prospect.market_value_coin,
+                "momentum_label": self._rising_star_momentum_label(prospect.profile),
             }
             score = (
-                (profile.potential or profile.current_rating or 0) * 1.6
-                + (profile.uniqueness_score * 100.0)
-                + (legacy_score * 0.25)
-                + ((profile.current_rating or 0) * 0.5)
+                (prospect.potential * 1.7)
+                + (prospect.current_rating * 0.6)
+                + (prospect.uniqueness_score * 100.0)
+                + (legacy_score * 0.2)
+                + (6.0 if prospect.source_type == "regen" else 1.5 if prospect.source_type == "national_seed" else 0.0)
             )
             candidates.append((score, entry))
 
         candidates.sort(
             key=lambda item: (
                 item[0],
-                item[1]["profile"].potential or 0,
-                item[1]["profile"].uniqueness_score,
+                item[1]["player"]["potential"],
+                item[1]["player"]["current_rating"],
                 item[1]["profile"].generated_at,
             ),
             reverse=True,
@@ -654,57 +1135,54 @@ class RegenUniverseService:
         return {"entries": chains[:limit]}
 
     def list_scouting_feed(self, *, limit: int = 20) -> dict[str, object]:
-        market_service = RegenMarketService(self.session)
         items: list[dict[str, object]] = []
-        regens = list(
-            self.session.scalars(
-                select(RegenProfile).order_by(RegenProfile.generated_at.desc())
-            )
-        )
-        for regen in regens[: max(limit, 10)]:
-            profile = market_service.get_profile_view(regen.id)
+        for prospect in self._discovery_pool(limit=max(limit * 2, 20), age_min=15, age_max=21):
             items.append(
                 {
-                    "feed_id": f"new:{regen.id}",
+                    "feed_id": f"discover:{prospect.lookup_id}",
                     "feed_type": "new_regen_discovered",
-                    "player_id": profile.player_id,
-                    "regen_id": profile.regen_id,
-                    "title": f"{profile.display_name} enters the universe",
-                    "summary": profile.story_seed.snippet if profile.story_seed is not None else "Freshly generated prospect added to the pool.",
-                    "occurred_at": profile.generated_at,
-                    "importance": round(0.45 + (profile.uniqueness_score * 0.55), 4),
-                    "badges": [profile.regen_type],
+                    "player_id": prospect.lookup_id,
+                    "regen_id": prospect.regen_id,
+                    "player": self._player_summary_payload(prospect),
+                    "title": f"{prospect.age}-year-old {_position_story_label(prospect.position)} from {prospect.nationality} discovered",
+                    "summary": prospect.story_snippet or self._scouting_note_for_prospect(prospect),
+                    "occurred_at": prospect.generated_at,
+                    "importance": round(0.48 + (prospect.uniqueness_score * 0.45), 4),
+                    "badges": list(dict.fromkeys([prospect.source_type, *prospect.discovery_badges])),
                 }
             )
-            if profile.age <= 21 and (profile.potential or 0) >= 86 and (profile.current_rating or 0) >= 68:
+            if (prospect.potential - prospect.current_rating) >= 14:
                 items.append(
                     {
-                        "feed_id": f"breakout:{regen.id}",
-                        "feed_type": "breakout_player",
-                        "player_id": profile.player_id,
-                        "regen_id": profile.regen_id,
-                        "title": f"{profile.display_name} is trending as a breakout",
-                        "summary": "High current level and elite ceiling are converging into a fast-rising profile.",
-                        "occurred_at": profile.generated_at,
-                        "importance": round(0.55 + (((profile.current_rating or 0) + (profile.potential or 0)) / 400.0), 4),
-                        "badges": ["breakout", "rising_star"],
+                        "feed_id": f"spike:{prospect.lookup_id}",
+                        "feed_type": "potential_spike",
+                        "player_id": prospect.lookup_id,
+                        "regen_id": prospect.regen_id,
+                        "player": self._player_summary_payload(prospect),
+                        "title": f"{_position_story_label(prospect.position).title()} potential spike tracked",
+                        "summary": f"{prospect.name} is carrying a {prospect.current_rating} to {prospect.potential} development window.",
+                        "occurred_at": prospect.generated_at,
+                        "importance": round(0.54 + ((prospect.potential - prospect.current_rating) / 100.0), 4),
+                        "badges": ["potential_spike", _growth_curve_label(prospect.growth_curve)],
                     }
                 )
-            if profile.uniqueness_score >= 0.75:
+            if prospect.potential >= 90 or prospect.uniqueness_score >= 0.82:
                 items.append(
                     {
-                        "feed_id": f"hidden:{regen.id}",
+                        "feed_id": f"hidden:{prospect.lookup_id}",
                         "feed_type": "hidden_gem",
-                        "player_id": profile.player_id,
-                        "regen_id": profile.regen_id,
-                        "title": f"{profile.display_name} grades as a hidden gem",
-                        "summary": "Rare trait mix, high narrative value, and unusual upside create a premium scouting signal.",
-                        "occurred_at": profile.generated_at,
-                        "importance": round(0.5 + (profile.uniqueness_score * 0.5), 4),
-                        "badges": ["hidden_gem"],
+                        "player_id": prospect.lookup_id,
+                        "regen_id": prospect.regen_id,
+                        "player": self._player_summary_payload(prospect),
+                        "title": f"{prospect.name} is rising as a hidden gem",
+                        "summary": "Scouts are flagging rare upside, quick development potential, and immediate national-team intrigue.",
+                        "occurred_at": prospect.generated_at,
+                        "importance": round(0.58 + (prospect.uniqueness_score * 0.4), 4),
+                        "badges": ["hidden_gem", prospect.source_type],
                     }
                 )
 
+        market_service = RegenMarketService(self.session)
         recent_reports = list(
             self.session.scalars(
                 select(RegenScoutReport).order_by(RegenScoutReport.created_at.desc(), RegenScoutReport.id.asc())
@@ -723,6 +1201,19 @@ class RegenUniverseService:
                     "feed_type": "hidden_gem",
                     "player_id": profile.player_id,
                     "regen_id": profile.regen_id,
+                    "player": {
+                        "id": profile.player_id,
+                        "name": profile.display_name,
+                        "age": profile.age,
+                        "nationality": self._resolve_country_name(profile.birth_country_code),
+                        "nationality_code": profile.birth_country_code,
+                        "position": _normalize_position_label(profile.primary_position),
+                        "potential": profile.potential or profile.current_rating or profile.current_gsi,
+                        "current_rating": profile.current_rating or profile.current_gsi,
+                        "growth_curve": round(profile.growth_curve, 4),
+                        "club_id": profile.club_id,
+                        "source_type": "regen",
+                    },
                     "title": f"Scouting alert on {profile.display_name}",
                     "summary": report.summary_text,
                     "occurred_at": report.created_at,

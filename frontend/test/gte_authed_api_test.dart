@@ -27,6 +27,7 @@ void main() {
       authSession: const AuthSession(
         userId: 'user-123',
         accessToken: 'session-token',
+        refreshToken: 'refresh-session-token',
         sessionId: 'session-abc',
       ),
       deviceId: 'device-xyz',
@@ -56,7 +57,12 @@ void main() {
           mode: GteBackendMode.live,
         ),
         transport: transport,
-        authSession: AuthSession(userId: '', accessToken: token, sessionId: ''),
+        authSession: AuthSession(
+          userId: '',
+          accessToken: token,
+          refreshToken: 'refresh-derived-token',
+          sessionId: '',
+        ),
         mode: GteBackendMode.live,
       );
 

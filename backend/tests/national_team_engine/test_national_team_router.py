@@ -460,6 +460,8 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     assert auto_build_payload["selected_count"] == 11
     assert Decimal(str(auto_build_payload["total_cost_coin"])) <= Decimal("700.0000")
     assert all(item["country_code"] == home_code for item in auto_build_payload["players"])
+    assert auto_build_payload["source_mix"]["real"] >= 1
+    assert auto_build_payload["source_mix"]["regen"] >= 1
 
 
 def test_claim_free_players_grants_starter_pack_shape_from_national_pool(client, demo_seed, app_session_factory) -> None:

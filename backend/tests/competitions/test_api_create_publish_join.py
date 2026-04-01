@@ -130,3 +130,113 @@ def test_join_returns_conflict_before_publish(client, auth_user_factory) -> None
     )
     assert join_response.status_code == 409
     assert join_response.json() == {"detail": "competition_not_open"}
+
+
+def test_creator_can_publish_and_auto_run_full_competition(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="creator-host")
+    challenger = auth_user_factory(suffix="creator-challenger")
+
+    create_response = client.post(
+        "/api/competitions/create",
+        json={
+            "name": "Creator Clash League",
+            "format": "league",
+            "type": "user_hosted",
+            "visibility": "public",
+            "entry_fee": "0.00",
+            "currency": "coin",
+            "capacity": 2,
+            "max_players": 2,
+            "creator_id": host["user_id"],
+            "creator_name": "Host Club",
+            "payout_structure": [
+                {"place": 1, "percent": "1.00"},
+            ],
+            "rules": "Winner takes the league match.",
+        },
+    )
+    assert create_response.status_code == 201
+    competition_id = create_response.json()["id"]
+    assert create_response.json()["match_type"] == "user_hosted"
+
+    publish_response = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=host["headers"],
+        json={"open_for_join": True},
+    )
+    assert publish_response.status_code == 200
+    assert publish_response.json()["status"] == "open"
+
+    host_join = client.post(
+        "/api/competitions/join",
+        headers=host["headers"],
+        json={
+            "competition_id": competition_id,
+            "user_id": host["user_id"],
+            "user_name": "Host Club",
+        },
+    )
+    assert host_join.status_code == 200
+    assert host_join.json()["status"] == "open"
+
+    challenger_join = client.post(
+        "/api/competitions/join",
+        headers=challenger["headers"],
+        json={
+            "competition_id": competition_id,
+            "user_id": challenger["user_id"],
+            "user_name": "Challenger Club",
+        },
+    )
+    assert challenger_join.status_code == 200
+    settled = challenger_join.json()
+    assert settled["status"] == "settled"
+    assert settled["participant_count"] == 2
+
+    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures")
+    assert fixtures.status_code == 200
+    fixture_payload = fixtures.json()
+    assert len(fixture_payload) == 1
+    assert fixture_payload[0]["status"] == "completed"
+
+    events = client.get(
+        f"/api/competitions/{competition_id}/matches/{fixture_payload[0]['id']}/events"
+    )
+    assert events.status_code == 200
+    assert len(events.json()) > 0
+
+
+def test_non_owner_cannot_publish_someone_elses_competition(client, auth_user_factory) -> None:
+    host = auth_user_factory(suffix="creator-owner")
+    intruder = auth_user_factory(suffix="creator-intruder")
+
+    create_response = client.post(
+        "/api/competitions/create",
+        json={
+            "name": "Private Owner League",
+            "format": "league",
+            "type": "user_hosted",
+            "visibility": "public",
+            "entry_fee": "0.00",
+            "currency": "coin",
+            "capacity": 2,
+            "creator_id": host["user_id"],
+            "creator_name": "Owner Club",
+            "payout_structure": [
+                {"place": 1, "percent": "1.00"},
+            ],
+            "rules": "Only the owner should be allowed to publish.",
+        },
+    )
+    assert create_response.status_code == 201
+    competition_id = create_response.json()["id"]
+
+    publish_response = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=intruder["headers"],
+        json={"open_for_join": True},
+    )
+    assert publish_response.status_code == 403
+    assert publish_response.json() == {
+        "detail": "Admin access is required for this action."
+    }

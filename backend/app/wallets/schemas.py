@@ -515,3 +515,58 @@ class WalletOverviewView(BaseModel):
     total_outflow: Decimal
     withdrawable_now: Decimal
     currency: LedgerUnit
+
+
+class WalletProfileView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str
+    balance: Decimal
+    currency: str
+    compliance_status: str
+    created_at: datetime
+
+
+class WalletTransactionRecordView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str
+    type: str
+    amount: Decimal
+    status: str
+    reference: str
+    created_at: datetime
+
+
+class WalletTopUpInitiateRequest(BaseModel):
+    amount: Decimal
+    provider: str = Field(default="paystack", min_length=3, max_length=32)
+    callback_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("amount")
+    @classmethod
+    def validate_top_up_amount(cls, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise ValueError("Top-up amount must be positive.")
+        return value
+
+
+class WalletTopUpInitiateView(BaseModel):
+    reference: str
+    payment_link: str
+    amount: Decimal
+    currency: str
+    provider: str
+    status: str
+    mock_mode: bool = False
+
+
+class WalletTopUpVerifyRequest(BaseModel):
+    reference: str = Field(min_length=1, max_length=128)
+
+
+class WalletTopUpVerifyView(BaseModel):
+    wallet: WalletProfileView
+    transaction: WalletTransactionRecordView

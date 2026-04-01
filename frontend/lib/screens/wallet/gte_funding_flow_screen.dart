@@ -1,5 +1,5 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_feedback.dart';
 import '../../data/gte_models.dart';
@@ -8,13 +8,9 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
-import 'gte_policy_compliance_center_screen.dart';
 
 class GteFundWalletScreen extends StatefulWidget {
-  const GteFundWalletScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteFundWalletScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -24,30 +20,11 @@ class GteFundWalletScreen extends StatefulWidget {
 
 class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   final TextEditingController _amountController = TextEditingController();
-  bool _inputFiat = true;
   bool _isSubmitting = false;
-  bool _awaitingInitialComplianceCheck = false;
+  bool _isVerifying = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _awaitingInitialComplianceCheck = widget.controller.isAuthenticated &&
-        widget.controller.complianceStatus == null;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.controller.isAuthenticated) {
-        return;
-      }
-      widget.controller.refreshCompliance().whenComplete(() {
-        if (!mounted || !_awaitingInitialComplianceCheck) {
-          return;
-        }
-        setState(() {
-          _awaitingInitialComplianceCheck = false;
-        });
-      });
-    });
-  }
+  GteWalletTopUpSession? _session;
+  GteWalletTopUpVerificationResult? _verification;
 
   @override
   void dispose() {
@@ -55,34 +32,20 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final GteComplianceStatus? compliance = widget.controller.complianceStatus;
-    if (widget.controller.isLoadingCompliance && compliance == null) {
+  Future<void> _launchPaymentLink(String link) async {
+    final Uri uri = Uri.parse(link);
+    final bool launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && mounted) {
       setState(() {
-        _error = 'Compliance status is still loading. Please retry.';
+        _error = 'Unable to open the payment link on this device.';
       });
-      return;
     }
-    if (widget.controller.complianceError != null && compliance == null) {
-      setState(() {
-        _error =
-            'Deposit access could not be verified. Retry the compliance check.';
-      });
-      return;
-    }
-    if (compliance == null) {
-      setState(() {
-        _error = 'Deposit access is still syncing. Please retry in a moment.';
-      });
-      return;
-    }
-    if (!compliance.canDeposit) {
-      setState(() {
-        _error =
-            'Deposits are blocked until compliance requirements are completed.';
-      });
-      return;
-    }
+  }
+
+  Future<void> _initiateTopUp() async {
     final double? amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
       setState(() {
@@ -95,24 +58,18 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       _isSubmitting = true;
     });
     try {
-      final GteDepositRequest deposit =
-          await widget.controller.api.createDepositRequest(
-        GteDepositCreateRequest(
-          amount: amount,
-          inputUnit: _inputFiat ? 'fiat' : 'coin',
-        ),
-      );
+      final GteWalletTopUpSession session = await widget.controller.api
+          .initiateWalletTopUp(GteWalletTopUpInitiateRequest(amount: amount));
       if (!mounted) {
         return;
       }
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) => GteDepositInstructionsScreen(
-            controller: widget.controller,
-            deposit: deposit,
-          ),
-        ),
-      );
+      setState(() {
+        _session = session;
+        _verification = null;
+      });
+      if (session.paymentLink.trim().isNotEmpty) {
+        await _launchPaymentLink(session.paymentLink);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -129,258 +86,27 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Top Up Wallet')),
-      body: AnimatedBuilder(
-        animation: widget.controller,
-        builder: (BuildContext context, Widget? child) {
-          final GteComplianceStatus? compliance =
-              widget.controller.complianceStatus;
-          final bool compliancePending = _awaitingInitialComplianceCheck ||
-              (widget.controller.isLoadingCompliance && compliance == null);
-          final bool complianceUnavailable =
-              widget.controller.complianceError != null && compliance == null;
-          final bool blocked = compliance != null && !compliance.canDeposit;
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: <Widget>[
-              if (compliancePending) ...<Widget>[
-                const GteSurfacePanel(
-                  accentColor: GteShellTheme.accentCapital,
-                  child: Text(
-                    'Checking top-up access before bank transfer opens...',
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (complianceUnavailable) ...<Widget>[
-                GteStatePanel(
-                  title: 'Deposit access unavailable',
-                  message:
-                      'We could not verify whether this account can create a manual deposit request. Retry the compliance check before continuing.',
-                  icon: Icons.sync_problem_outlined,
-                  actionLabel: 'Retry',
-                  onAction: widget.controller.refreshCompliance,
-                ),
-                const SizedBox(height: 16),
-              ],
-              if (blocked) ...<Widget>[
-                GteSurfacePanel(
-                  accentColor: GteShellTheme.accentWarm,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'Compliance action required',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        compliance.requiredPolicyAcceptancesMissing <= 0
-                            ? 'Complete required policy acceptances to unlock deposits.'
-                            : 'Complete ${compliance.requiredPolicyAcceptancesMissing} policy items to unlock deposits.',
-                      ),
-                      const SizedBox(height: 12),
-                      FilledButton.tonalIcon(
-                        onPressed: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => GtePolicyComplianceCenterScreen(
-                                controller: widget.controller,
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.gavel_outlined),
-                        label: const Text('Open compliance center'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                  const GteStatePanel(
-                    title: 'Top-ups stay locked',
-                    message:
-                        'Manual bank transfer instructions and exact payment references appear only after compliance review unlocks deposits for this account.',
-                    icon: Icons.lock_outline,
-                  ),
-              ] else if (!compliancePending && !complianceUnavailable)
-                GteSurfacePanel(
-                  emphasized: true,
-                  accentColor: GteShellTheme.accentCapital,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text('Top up by bank transfer',
-                          style: Theme.of(context).textTheme.titleLarge),
-                      const SizedBox(height: 8),
-                      Text(
-                        'We will generate the exact amount and payment reference for you.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      ToggleButtons(
-                        isSelected: <bool>[_inputFiat, !_inputFiat],
-                        onPressed: _isSubmitting
-                            ? null
-                            : (int index) {
-                                setState(() {
-                                  _inputFiat = index == 0;
-                                });
-                              },
-                        children: const <Widget>[
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Text('NGN'),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 16),
-                            child: Text('Coins'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _amountController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: InputDecoration(
-                          labelText:
-                              _inputFiat ? 'Amount in NGN' : 'Amount in coins',
-                          prefixIcon: const Icon(Icons.payments_outlined),
-                        ),
-                      ),
-                      if (_error != null) ...<Widget>[
-                        const SizedBox(height: 12),
-                        GteStatePanel(
-                          title: 'Deposit error',
-                          message: _error!,
-                          icon: Icons.warning_amber_rounded,
-                        ),
-                      ],
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _isSubmitting ? null : _submit,
-                          icon: const Icon(Icons.account_balance_outlined),
-                          label: Text(
-                            _isSubmitting
-                                ? 'Generating instructions...'
-                                : 'Get bank transfer details',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class GteDepositInstructionsScreen extends StatefulWidget {
-  const GteDepositInstructionsScreen({
-    super.key,
-    required this.controller,
-    required this.deposit,
-  });
-
-  final GteExchangeController controller;
-  final GteDepositRequest deposit;
-
-  @override
-  State<GteDepositInstructionsScreen> createState() =>
-      _GteDepositInstructionsScreenState();
-}
-
-class _GteDepositInstructionsScreenState
-    extends State<GteDepositInstructionsScreen> {
-  late final TextEditingController _payerNameController;
-  late final TextEditingController _senderBankController;
-  late final TextEditingController _transferRefController;
-  GteAttachment? _attachment;
-  bool _isSubmitting = false;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _payerNameController =
-        TextEditingController(text: widget.deposit.payerName ?? '');
-    _senderBankController =
-        TextEditingController(text: widget.deposit.senderBank ?? '');
-    _transferRefController =
-        TextEditingController(text: widget.deposit.transferReference ?? '');
-  }
-
-  @override
-  void dispose() {
-    _payerNameController.dispose();
-    _senderBankController.dispose();
-    _transferRefController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickAttachment() async {
-    final FilePickerResult? result = await FilePicker.platform.pickFiles(
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-    final PlatformFile file = result.files.first;
-    final List<int> bytes = file.bytes ?? const <int>[];
-    if (bytes.isEmpty) {
-      throw Exception('Unable to read the selected file.');
-    }
-    final GteAttachment attachment =
-        await widget.controller.api.uploadAttachment(file.name, bytes);
-    if (!mounted) {
+  Future<void> _verifyTopUp() async {
+    final GteWalletTopUpSession? session = _session;
+    if (session == null) {
       return;
     }
     setState(() {
-      _attachment = attachment;
-    });
-  }
-
-  Future<void> _submitPayment() async {
-    setState(() {
-      _isSubmitting = true;
       _error = null;
+      _isVerifying = true;
     });
     try {
-      final GteDepositRequest updated =
-          await widget.controller.api.submitDepositRequest(
-        widget.deposit.id,
-        GteDepositSubmitRequest(
-          payerName: _payerNameController.text.trim().isEmpty
-              ? null
-              : _payerNameController.text.trim(),
-          senderBank: _senderBankController.text.trim().isEmpty
-              ? null
-              : _senderBankController.text.trim(),
-          transferReference: _transferRefController.text.trim().isEmpty
-              ? null
-              : _transferRefController.text.trim(),
-          proofAttachmentId: _attachment?.id,
-        ),
-      );
+      final GteWalletTopUpVerificationResult result = await widget
+          .controller
+          .api
+          .verifyWalletTopUp(session.reference);
+      await widget.controller.loadPortfolio();
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'Payment submitted for ${updated.reference}. Await admin confirmation.'),
-        ),
-      );
-      Navigator.of(context).pop();
+      setState(() {
+        _verification = result;
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -391,154 +117,184 @@ class _GteDepositInstructionsScreenState
     } finally {
       if (mounted) {
         setState(() {
-          _isSubmitting = false;
+          _isVerifying = false;
         });
       }
     }
   }
 
+  void _resetFlow() {
+    setState(() {
+      _amountController.clear();
+      _error = null;
+      _session = null;
+      _verification = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final GteDepositRequest deposit = widget.deposit;
+    final GteWalletTopUpSession? session = _session;
+    final GteWalletTopUpVerificationResult? verification = _verification;
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment instructions')),
+      appBar: AppBar(title: const Text('Top up wallet')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
           GteSurfacePanel(
-            emphasized: true,
             accentColor: GteShellTheme.accentCapital,
+            emphasized: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text('Transfer exact amount',
-                    style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  'Fund with Paystack',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 8),
                 Text(
-                  'Reference: ${deposit.reference}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: GteShellTheme.accentCapital),
+                  'Create a payment session, complete payment in Paystack, then verify it here to update your live wallet balance.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
-                _InstructionRow(
-                  label: 'Amount (NGN)',
-                  value: gteFormatFiat(deposit.amountFiat,
-                      currency: deposit.currencyCode),
-                ),
-                _InstructionRow(
-                  label: 'Coins credited',
-                  value: gteFormatCredits(deposit.amountCoin),
-                ),
-                const Divider(height: 28),
-                _InstructionRow(label: 'Bank', value: deposit.bankName),
-                _InstructionRow(
-                    label: 'Account number', value: deposit.bankAccountNumber),
-                _InstructionRow(
-                    label: 'Account name', value: deposit.bankAccountName),
-                if (deposit.bankCode != null)
-                  _InstructionRow(label: 'Bank code', value: deposit.bankCode!),
-                const SizedBox(height: 12),
-                Text(
-                  'Use the reference exactly so the treasury team can match your transfer.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          GteSurfacePanel(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Confirm payment',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
                 TextField(
-                  controller: _payerNameController,
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  enabled: !_isSubmitting && session == null,
                   decoration: const InputDecoration(
-                    labelText: 'Payer name (optional)',
-                    prefixIcon: Icon(Icons.person_outline),
+                    labelText: 'Amount',
+                    prefixIcon: Icon(Icons.payments_outlined),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _senderBankController,
-                  decoration: const InputDecoration(
-                    labelText: 'Sender bank (optional)',
-                    prefixIcon: Icon(Icons.account_balance_outlined),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _transferRefController,
-                  decoration: const InputDecoration(
-                    labelText: 'Transfer note/reference (optional)',
-                    prefixIcon: Icon(Icons.receipt_long_outlined),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickAttachment,
-                        icon: const Icon(Icons.attach_file),
-                        label: Text(
-                          _attachment == null
-                              ? 'Upload proof'
-                              : 'Proof: ${_attachment!.filename}',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_error != null) ...<Widget>[
-                  const SizedBox(height: 12),
-                  GteStatePanel(
-                    title: 'Submission error',
-                    message: _error!,
-                    icon: Icons.warning_amber_rounded,
-                  ),
-                ],
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _isSubmitting ? null : _submitPayment,
-                    child: Text(_isSubmitting
-                        ? 'Submitting...'
-                        : 'I have made payment'),
+                  child: FilledButton.icon(
+                    onPressed:
+                        _isSubmitting || session != null
+                            ? null
+                            : _initiateTopUp,
+                    icon: const Icon(Icons.open_in_new_outlined),
+                    label: Text(
+                      _isSubmitting
+                          ? 'Creating payment session...'
+                          : 'Continue to Paystack',
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+          if (session != null) ...<Widget>[
+            const SizedBox(height: 18),
+            GteSurfacePanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Payment session ready',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 10),
+                  Text('Reference: ${session.reference}'),
+                  const SizedBox(height: 6),
+                  Text('Amount: ${gteFormatCredits(session.amount)}'),
+                  const SizedBox(height: 6),
+                  Text('Status: ${_titleCase(session.status)}'),
+                  if (session.mockMode) ...<Widget>[
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Mock mode is active because no Paystack secret key is configured locally.',
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: <Widget>[
+                      FilledButton.icon(
+                        onPressed:
+                            _isVerifying
+                                ? null
+                                : () => _launchPaymentLink(session.paymentLink),
+                        icon: const Icon(Icons.open_in_browser_outlined),
+                        label: const Text('Open Paystack'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _isVerifying ? null : _verifyTopUp,
+                        icon: const Icon(Icons.verified_outlined),
+                        label: Text(
+                          _isVerifying ? 'Verifying...' : 'Verify payment',
+                        ),
+                      ),
+                      OutlinedButton(
+                        onPressed:
+                            _isSubmitting || _isVerifying ? null : _resetFlow,
+                        child: const Text('Start again'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (verification != null) ...<Widget>[
+            const SizedBox(height: 18),
+            GteSurfacePanel(
+              accentColor: GteShellTheme.positive,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Wallet updated',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'New balance: ${gteFormatCredits(verification.wallet.balance)}',
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Transaction status: ${_titleCase(verification.transaction.status)}',
+                  ),
+                  const SizedBox(height: 14),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Back to wallet'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_error != null) ...<Widget>[
+            const SizedBox(height: 18),
+            GteStatePanel(
+              title: 'Top-up issue',
+              message: _error!,
+              icon: Icons.warning_amber_rounded,
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _InstructionRow extends StatelessWidget {
-  const _InstructionRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ),
-          Text(value, style: Theme.of(context).textTheme.titleMedium),
-        ],
-      ),
-    );
+String _titleCase(String value) {
+  final List<String> parts = value
+      .split(RegExp(r'[_\s-]+'))
+      .map((String part) => part.trim())
+      .where((String part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return value;
   }
+  return parts
+      .map(
+        (String part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
+      .join(' ');
 }

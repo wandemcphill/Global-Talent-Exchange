@@ -120,6 +120,7 @@ def test_real_app_registers_competition_and_identity_modules(mounted_app) -> Non
     assert "/api/clubs/{club_id}/identity" in openapi_paths
     assert "/regen-universe/awards" in openapi_paths
     assert "/regen-universe/rising-stars" in openapi_paths
+    assert "/regen-universe/player/{player_id}" in openapi_paths
     assert "/regen-universe/bloodlines" in openapi_paths
     assert "/regen-universe/scouting-feed" in openapi_paths
     assert "/regen-universe/youth-tournaments" in openapi_paths

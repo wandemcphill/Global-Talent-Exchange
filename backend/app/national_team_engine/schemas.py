@@ -166,6 +166,8 @@ class NationalTeamAutoBuildResponse(BaseModel):
     remaining_budget_coin: Decimal
     selected_count: int
     complete: bool
+    mix_applied: bool = False
+    source_mix: dict[str, int] = Field(default_factory=dict)
     unfilled_slots: list[str] = Field(default_factory=list)
     players: list[NationalTeamAutoBuildPlayerView] = Field(default_factory=list)
 

@@ -683,6 +683,93 @@ class NationalTeamTournamentService:
             "unfilled_slots": unfilled_slots,
         }
 
+    def _source_mix_summary(self, players: list[dict[str, Any]]) -> dict[str, int]:
+        summary = {
+            SOURCE_BUCKET_REAL: 0,
+            SOURCE_BUCKET_PRESEEDED: 0,
+            SOURCE_BUCKET_CLUB: 0,
+            "regen": 0,
+        }
+        for item in players:
+            bucket = str(item.get("source_bucket") or "").strip().lower()
+            if bucket in {SOURCE_BUCKET_REAL, SOURCE_BUCKET_PRESEEDED, SOURCE_BUCKET_CLUB}:
+                summary[bucket] += 1
+            if bucket != SOURCE_BUCKET_REAL:
+                summary["regen"] += 1
+        return summary
+
+    @staticmethod
+    def _remaining_slots(slots: tuple[str, ...], selected: list[dict[str, Any]]) -> tuple[str, ...]:
+        remaining = list(slots)
+        for item in selected:
+            assigned_slot = item.get("assigned_slot")
+            if assigned_slot in remaining:
+                remaining.remove(assigned_slot)
+        return tuple(remaining)
+
+    def _pick_mixed_auto_build(
+        self,
+        *,
+        pool: list[dict[str, Any]],
+        slots: tuple[str, ...],
+        budget_coin: Decimal,
+    ) -> dict[str, Any]:
+        base_selection = self._pick_slot_players(pool=pool, slots=slots, excluded_player_ids=set(), budget_coin=budget_coin)
+        base_players = list(base_selection["selected"])
+        base_mix = self._source_mix_summary(base_players)
+
+        has_real = any(str(item.get("source_bucket") or "") == SOURCE_BUCKET_REAL for item in pool)
+        has_regen = any(str(item.get("source_bucket") or "") != SOURCE_BUCKET_REAL for item in pool)
+        if not has_real or not has_regen or (base_mix[SOURCE_BUCKET_REAL] > 0 and base_mix["regen"] > 0):
+            return {**base_selection, "mix_applied": False}
+
+        regen_pool = [item for item in pool if str(item.get("source_bucket") or "") != SOURCE_BUCKET_REAL]
+        preferred_regen_slots = tuple(slot for slot in slots if slot in {"AM", "CM", "DM", "RW", "LW", "ST"})[:3]
+        if not preferred_regen_slots:
+            return {**base_selection, "mix_applied": False}
+
+        regen_budget = (budget_coin * Decimal("0.40")).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+        seeded_selection = self._pick_slot_players(
+            pool=regen_pool,
+            slots=preferred_regen_slots,
+            excluded_player_ids=set(),
+            budget_coin=regen_budget,
+        )
+        seeded_players = list(seeded_selection["selected"])
+        if not seeded_players:
+            return {**base_selection, "mix_applied": False}
+
+        remaining_slots = self._remaining_slots(slots, seeded_players)
+        remaining_budget = (
+            budget_coin - self._normalize_amount(seeded_selection["total_cost_coin"])
+        ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+        completion_selection = self._pick_slot_players(
+            pool=pool,
+            slots=remaining_slots,
+            excluded_player_ids={item["player_id"] for item in seeded_players},
+            budget_coin=remaining_budget,
+        )
+        mixed_players = [*seeded_players, *list(completion_selection["selected"])]
+        mixed_mix = self._source_mix_summary(mixed_players)
+        if mixed_mix[SOURCE_BUCKET_REAL] <= 0 or mixed_mix["regen"] <= 0:
+            return {**base_selection, "mix_applied": False}
+        if len(mixed_players) < len(base_players):
+            return {**base_selection, "mix_applied": False}
+
+        total_cost_coin = (
+            self._normalize_amount(seeded_selection["total_cost_coin"])
+            + self._normalize_amount(completion_selection["total_cost_coin"])
+        ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+        return {
+            "selected": mixed_players,
+            "total_cost_coin": total_cost_coin,
+            "unfilled_slots": [
+                *list(seeded_selection["unfilled_slots"]),
+                *list(completion_selection["unfilled_slots"]),
+            ],
+            "mix_applied": True,
+        }
+
     def _resolve_auto_build_formation(self, tactic: str | None) -> tuple[str, str]:
         normalized_tactic = self._normalize_token(tactic) or "balanced"
         if normalized_tactic in AUTO_BUILD_FORMATIONS:
@@ -720,15 +807,15 @@ class NationalTeamTournamentService:
             tradable_only=tradable_only,
         )
         pool = [self._priced_pool_item(item) for item in self._national_pool(filters=filters, limit=1500)]
-        selection = self._pick_slot_players(
+        selection = self._pick_mixed_auto_build(
             pool=pool,
             slots=AUTO_BUILD_FORMATIONS[formation],
-            excluded_player_ids=set(),
             budget_coin=requested_budget,
         )
         total_cost_coin = self._normalize_amount(selection["total_cost_coin"])
         remaining_budget_coin = (requested_budget - total_cost_coin).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
         selected_players = list(selection["selected"])
+        source_mix = self._source_mix_summary(selected_players)
         return {
             "competition_id": competition_id,
             "country_code": normalized_country,
@@ -739,6 +826,8 @@ class NationalTeamTournamentService:
             "remaining_budget_coin": remaining_budget_coin,
             "selected_count": len(selected_players),
             "complete": not selection["unfilled_slots"] and len(selected_players) == len(AUTO_BUILD_FORMATIONS[formation]),
+            "mix_applied": bool(selection.get("mix_applied")),
+            "source_mix": source_mix,
             "unfilled_slots": list(selection["unfilled_slots"]),
             "players": selected_players,
         }

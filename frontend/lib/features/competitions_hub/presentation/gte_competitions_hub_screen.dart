@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
-import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/competitions_hub/data/competition_hub_curator.dart';
@@ -114,11 +113,11 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
             children: <Widget>[
               GtexHeroBanner(
-                eyebrow: 'MATCHDAY ARENA',
+                eyebrow: 'COMPETITIONS HUB',
                 title:
-                    'Fixtures, brackets, storylines, and adaptive simulations live here.',
+                    'GTEX competitions, creator brackets, and E-Games live here.',
                 description:
-                    'Jump into leagues, cups, fast brackets, world stages, and quick-fire match stories.',
+                    'Jump into leagues, cups, live simulations, and creator-led E-Games from one hub.',
                 accent: Colors.deepPurpleAccent,
                 chips: <Widget>[
                   GteMetricChip(
@@ -388,6 +387,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     List<CompetitionSummary> competitions,
   ) {
     final String hostDescription = _hostDescription();
+    final CompetitionSummary? joinTarget = _primaryJoinTarget(competitions);
     final List<CompetitionSummary> featured =
         competitionHubFeaturedCompetitions(competitions);
 
@@ -424,6 +424,13 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
         .toList(growable: false);
 
     return <Widget>[
+      const _ArenaSectionHeader(
+        eyebrow: 'E-GAMES',
+        title: 'Competitions Hub',
+        description:
+            'GTEX-hosted fixtures, creator competitions, and fast-match E-Games share one launch surface so joining and hosting stay obvious.',
+      ),
+      const SizedBox(height: 12),
       GteSurfacePanel(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,14 +504,19 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
                   label: Text(_hostLabel()),
                 ),
                 OutlinedButton.icon(
-                  onPressed: () {
-                    AppFeedback.showSuccess(
-                      context,
-                      'Invite codes are generated from the competition detail share screen.',
-                    );
-                  },
-                  icon: const Icon(Icons.share_outlined),
-                  label: const Text('Invite/join flow'),
+                  onPressed:
+                      joinTarget == null
+                          ? null
+                          : () {
+                            if (!widget.isAuthenticated &&
+                                widget.onOpenLogin != null) {
+                              widget.onOpenLogin!.call();
+                              return;
+                            }
+                            _openCompetition(joinTarget.id);
+                          },
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('Join Competition'),
                 ),
               ],
             ),
@@ -867,7 +879,7 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     if (!widget.canHostCompetitions) {
       return 'Request creator access to host';
     }
-    return 'Host competition';
+    return 'Host Competition';
   }
 
   IconData _hostIcon() {
@@ -895,6 +907,19 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
     }
     return 'Create a creator competition, publish transparent rules, and share invite codes for private joins.';
   }
+
+  CompetitionSummary? _primaryJoinTarget(
+    List<CompetitionSummary> competitions,
+  ) {
+    for (final CompetitionSummary competition in competitions) {
+      if (competition.joinEligibility.eligible ||
+          competition.status == CompetitionStatus.openForJoin ||
+          competition.status == CompetitionStatus.published) {
+        return competition;
+      }
+    }
+    return null;
+  }
 }
 
 class _ArenaRoutePanel extends StatelessWidget {
@@ -918,12 +943,12 @@ class _ArenaRoutePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'More arena routes',
+            'E-Games and more',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'These routes open tournament, prediction, national-team, world, and transfer shells without disturbing the arena tab model.',
+            'These routes open E-Games, prediction, national-team, world, and transfer shells without disturbing the competitions hub tab model.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 14),
@@ -934,7 +959,7 @@ class _ArenaRoutePanel extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onOpenStreamerTournaments,
                 icon: const Icon(Icons.live_tv_outlined),
-                label: const Text('Streamer tournaments'),
+                label: const Text('E-Games'),
               ),
               FilledButton.tonalIcon(
                 onPressed: null,

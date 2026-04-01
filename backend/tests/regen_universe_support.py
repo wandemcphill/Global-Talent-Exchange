@@ -26,6 +26,7 @@ from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.models.player_rivalry import PlayerRivalry
 from app.models.player_story import PlayerStory
 from app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardSale, PlayerCardTier
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.regen import (
     RegenAward as MarketRegenAward,
     RegenDemandSignal,
@@ -88,6 +89,9 @@ def build_regen_universe_session() -> Session:
             PlayerCard.__table__,
             PlayerCardListing.__table__,
             PlayerCardSale.__table__,
+            PlayerShareMarket.__table__,
+            PlayerShareHolding.__table__,
+            PlayerShareEvent.__table__,
             RegenProfile.__table__,
             RegenPersonalityProfile.__table__,
             RegenOriginMetadata.__table__,

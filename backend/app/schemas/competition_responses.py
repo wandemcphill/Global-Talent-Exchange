@@ -48,6 +48,8 @@ class CompetitionSummaryView(CommonSchema):
     format: CompetitionFormat
     visibility: CompetitionVisibility
     status: CompetitionStatus
+    match_type: str
+    type: str
     creator_id: str
     creator_name: str | None = None
     participant_count: int = Field(ge=0)

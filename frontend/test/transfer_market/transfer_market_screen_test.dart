@@ -18,6 +18,7 @@ void main() {
               (Ref ref) => const AuthSession(
                 userId: 'user-1',
                 accessToken: 'token-1',
+                refreshToken: 'refresh-1',
                 sessionId: 'session-1',
                 role: 'user',
               ),
@@ -50,7 +51,7 @@ void main() {
                     currentValueCredits: 1325,
                     marketInterestScore: 98,
                     marketStatus: 'unissued',
-                    marketMessage: 'Not tradable yet: no issued share market.',
+                    marketMessage: 'Market initializing.',
                   ),
                 ],
                 holdings: <PlayerShareHoldingSummary>[
@@ -176,9 +177,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await _scrollTo(tester, find.text('Resolve market access'));
     expect(find.text('Resolve market access'), findsOneWidget);
     expect(find.text('Sign in to unlock market access'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Sign in'), findsWidgets);
+    await _scrollTo(tester, find.text('Sign in to bid on transfer listings'));
     expect(find.text('Sign in to bid on transfer listings'), findsOneWidget);
   });
 }

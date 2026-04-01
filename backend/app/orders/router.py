@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_session
+from app.auth.dependencies import get_current_trading_user, get_current_user, get_session
 from app.matching.service import InvalidOrderTransitionError, OrderBookSnapshot
 from app.models.user import User
 from app.orders.schemas import (
@@ -109,7 +109,7 @@ def list_orders(
 def place_order(
     payload: OrderCreateRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     request: Request = None,
 ) -> OrderAcceptedView:
     service = _build_order_service(request)

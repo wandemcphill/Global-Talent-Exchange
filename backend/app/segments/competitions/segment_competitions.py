@@ -9,6 +9,7 @@ from app.auth.dependencies import get_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
 from app.models.user import User, UserRole
+from app.models.competition import Competition
 from app.schemas.competition_lifecycle import (
     CompetitionAdvanceRequest,
     CompetitionFinalizeRequest,
@@ -28,6 +29,7 @@ from app.schemas.competition_lifecycle import (
 from app.schemas.competition_requests import (
     CompetitionCreateRequest,
     CompetitionInviteCreateRequest,
+    CompetitionJoinActionRequest,
     CompetitionJoinRequest,
     CompetitionLeaveRequest,
     CompetitionPublishRequest,
@@ -75,12 +77,45 @@ def _require_manage_competitions_permission(request: Request, actor: User) -> No
         ) from exc
 
 
+def _is_platform_competition(source_type: str | None) -> bool:
+    if source_type is None:
+        return False
+    normalized = source_type.strip().lower()
+    return normalized in {
+        "gtex",
+        "platform",
+        "gtex_platform",
+        "gtex_competition",
+        "gtex_hosted",
+    }
+
+
+def _require_manage_competitions_or_creator(
+    request: Request,
+    actor: User,
+    competition: Competition,
+) -> None:
+    if competition.host_user_id == actor.id and not _is_platform_competition(
+        competition.source_type
+    ):
+        return
+    _require_manage_competitions_permission(request, actor)
+
+
 @router.post("", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 def create_competition(
     payload: CompetitionCreateRequest,
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
     return _handle_competition_errors(lambda: orchestrator.create(payload))
+
+
+@router.post("/create", response_model=CompetitionSummaryView, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
+def create_competition_alias(
+    payload: CompetitionCreateRequest,
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    return create_competition(payload, orchestrator)
 
 
 @router.patch("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
@@ -103,7 +138,10 @@ def publish_competition(
     actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    _require_manage_competitions_permission(request, actor)
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = orchestrator.publish(competition_id, open_for_join=payload.open_for_join)
     if result is None:
         raise _not_found(competition_id)
@@ -163,6 +201,35 @@ def join_competition(
     payload: CompetitionJoinRequest,
     current_user: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    return _join_competition_response(
+        competition_id,
+        payload,
+        current_user=current_user,
+        orchestrator=orchestrator,
+    )
+
+
+@router.post("/join", response_model=CompetitionSummaryView, response_model_exclude_none=True)
+def join_competition_alias(
+    payload: CompetitionJoinActionRequest,
+    current_user: User = Depends(get_current_user),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> CompetitionSummaryView:
+    return _join_competition_response(
+        payload.competition_id,
+        payload,
+        current_user=current_user,
+        orchestrator=orchestrator,
+    )
+
+
+def _join_competition_response(
+    competition_id: str,
+    payload: CompetitionJoinRequest,
+    *,
+    current_user: User,
+    orchestrator: CompetitionOrchestrator,
 ) -> CompetitionSummaryView:
     if payload.user_id != current_user.id:
         raise HTTPException(
@@ -333,7 +400,10 @@ def launch_competition(
     actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    _require_manage_competitions_permission(request, actor)
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.launch_competition(competition_id))
     if result is None:
         raise _not_found(competition_id)

@@ -10,11 +10,11 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 class _SeededCompetitionController extends CompetitionController {
   _SeededCompetitionController(this._seeded)
-      : super(
-          api: CompetitionApi.fixture(),
-          currentUserId: 'arena-user',
-          currentUserName: 'Arena User',
-        ) {
+    : super(
+        api: CompetitionApi.fixture(),
+        currentUserId: 'arena-user',
+        currentUserName: 'Arena User',
+      ) {
     competitions = List<CompetitionSummary>.of(_seeded);
     discoverySyncedAt = DateTime.utc(2026, 3, 19, 8, 30);
   }
@@ -34,171 +34,173 @@ class _SeededCompetitionController extends CompetitionController {
 
 void main() {
   testWidgets(
-      'arena overview renders fixture snapshots when valid seeded data exists',
-      (WidgetTester tester) async {
-    final CompetitionController controller = CompetitionController(
-      api: CompetitionApi.fixture(),
-      currentUserId: 'fixture-user',
-      currentUserName: 'Fixture Trader',
-    );
+    'arena overview renders fixture snapshots when valid seeded data exists',
+    (WidgetTester tester) async {
+      final CompetitionController controller = CompetitionController(
+        api: CompetitionApi.fixture(),
+        currentUserId: 'fixture-user',
+        currentUserName: 'Fixture Trader',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteCompetitionsHubScreen(
-          controller: controller,
-          currentDestination: CompetitionHubDestination.overview,
-          onDestinationChanged: (_) {},
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteCompetitionsHubScreen(
+            controller: controller,
+            currentDestination: CompetitionHubDestination.overview,
+            onDestinationChanged: (_) {},
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.dragUntilVisible(
-      find.text('Live fixture desk'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.text('Live fixture desk'),
+        find.byType(ListView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Live fixture desk'), findsOneWidget);
-    expect(find.text('GTEX Spotlight Cup'), findsWidgets);
+      expect(find.text('Live fixture desk'), findsOneWidget);
+      expect(find.text('GTEX Spotlight Cup'), findsWidgets);
 
-    await tester.dragUntilVisible(
-      find.text('User-hosted competitions'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.text('User-hosted competitions'),
+        find.byType(ListView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('User-hosted competitions'), findsOneWidget);
+      expect(find.text('User-hosted competitions'), findsOneWidget);
 
-    await tester.dragUntilVisible(
-      find.text('Featured now'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.text('Featured now'),
+        find.byType(ListView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Featured now'), findsOneWidget);
-  });
+      expect(find.text('Featured now'), findsOneWidget);
+    },
+  );
 
   testWidgets(
-      'arena overview separates live, final, and replay-ready sections for valid payloads',
-      (WidgetTester tester) async {
-    final CompetitionController controller = _SeededCompetitionController(
-      <CompetitionSummary>[
-        _competition(
-          id: 'arena-live-league',
-          name: 'Arena Live League',
-          creatorName: 'GTEX Arena',
-          format: CompetitionFormat.league,
-          status: CompetitionStatus.inProgress,
-          participantCount: 12,
-          capacity: 12,
-          updatedAt: DateTime.utc(2026, 3, 19, 7, 0),
+    'arena overview separates live, final, and replay-ready sections for valid payloads',
+    (WidgetTester tester) async {
+      final CompetitionController controller =
+          _SeededCompetitionController(<CompetitionSummary>[
+            _competition(
+              id: 'arena-live-league',
+              name: 'Arena Live League',
+              creatorName: 'GTEX Arena',
+              format: CompetitionFormat.league,
+              status: CompetitionStatus.inProgress,
+              participantCount: 12,
+              capacity: 12,
+              updatedAt: DateTime.utc(2026, 3, 19, 7, 0),
+            ),
+            _competition(
+              id: 'arena-up-next-cup',
+              name: 'Up Next Creator Cup',
+              creatorName: 'Creator Channel',
+              format: CompetitionFormat.cup,
+              status: CompetitionStatus.published,
+              participantCount: 6,
+              capacity: 8,
+              updatedAt: DateTime.utc(2026, 3, 19, 6, 30),
+            ),
+            _competition(
+              id: 'arena-replay-showcase',
+              name: 'Replay Showcase Cup',
+              creatorName: 'Replay Studio',
+              format: CompetitionFormat.cup,
+              status: CompetitionStatus.completed,
+              participantCount: 8,
+              capacity: 8,
+              updatedAt: DateTime.utc(2026, 3, 19, 5, 30),
+            ),
+            _competition(
+              id: 'arena-final-whistle',
+              name: 'Final Whistle Classic',
+              creatorName: 'Replay Studio',
+              format: CompetitionFormat.league,
+              status: CompetitionStatus.completed,
+              participantCount: 10,
+              capacity: 10,
+              updatedAt: DateTime.utc(2026, 3, 19, 4, 45),
+            ),
+          ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteCompetitionsHubScreen(
+            controller: controller,
+            currentDestination: CompetitionHubDestination.overview,
+            onDestinationChanged: (_) {},
+          ),
         ),
-        _competition(
-          id: 'arena-up-next-cup',
-          name: 'Up Next Creator Cup',
-          creatorName: 'Creator Channel',
-          format: CompetitionFormat.cup,
-          status: CompetitionStatus.published,
-          participantCount: 6,
-          capacity: 8,
-          updatedAt: DateTime.utc(2026, 3, 19, 6, 30),
-        ),
-        _competition(
-          id: 'arena-replay-showcase',
-          name: 'Replay Showcase Cup',
-          creatorName: 'Replay Studio',
-          format: CompetitionFormat.cup,
-          status: CompetitionStatus.completed,
-          participantCount: 8,
-          capacity: 8,
-          updatedAt: DateTime.utc(2026, 3, 19, 5, 30),
-        ),
-        _competition(
-          id: 'arena-final-whistle',
-          name: 'Final Whistle Classic',
-          creatorName: 'Replay Studio',
-          format: CompetitionFormat.league,
-          status: CompetitionStatus.completed,
-          participantCount: 10,
-          capacity: 10,
-          updatedAt: DateTime.utc(2026, 3, 19, 4, 45),
-        ),
-      ],
-    );
+      );
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteCompetitionsHubScreen(
-          controller: controller,
-          currentDestination: CompetitionHubDestination.overview,
-          onDestinationChanged: (_) {},
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.text('Live fixture desk'),
+        find.byType(ListView).first,
+        const Offset(0, -300),
+      );
+      await tester.dragUntilVisible(
+        find.text('Arena Live League'),
+        find.byType(ListView).first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Arena Live League'), findsWidgets);
 
-    await tester.dragUntilVisible(
-      find.text('Live fixture desk'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.dragUntilVisible(
-      find.text('Arena Live League'),
-      find.byType(ListView).first,
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Arena Live League'), findsWidgets);
+      await tester.dragUntilVisible(
+        find.text('Up Next Creator Cup'),
+        find.byType(ListView).first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Up Next Creator Cup'), findsWidgets);
 
-    await tester.dragUntilVisible(
-      find.text('Up Next Creator Cup'),
-      find.byType(ListView).first,
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Up Next Creator Cup'), findsWidgets);
+      await tester.dragUntilVisible(
+        find.text('Recently settled'),
+        find.byType(ListView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Recently settled'), findsOneWidget);
 
-    await tester.dragUntilVisible(
-      find.text('Recently settled'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Recently settled'), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.text('Replay Showcase Cup'),
+        find.byType(ListView).first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Replay Showcase Cup'), findsWidgets);
 
-    await tester.dragUntilVisible(
-      find.text('Replay Showcase Cup'),
-      find.byType(ListView).first,
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Replay Showcase Cup'), findsWidgets);
+      await tester.dragUntilVisible(
+        find.text('Highlight-ready competitions'),
+        find.byType(ListView).first,
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Highlight-ready competitions'), findsOneWidget);
 
-    await tester.dragUntilVisible(
-      find.text('Highlight-ready competitions'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Highlight-ready competitions'), findsOneWidget);
+      await tester.dragUntilVisible(
+        find.text('Final Whistle Classic'),
+        find.byType(ListView).first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Final Whistle Classic'), findsWidgets);
+    },
+  );
 
-    await tester.dragUntilVisible(
-      find.text('Final Whistle Classic'),
-      find.byType(ListView).first,
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Final Whistle Classic'), findsWidgets);
-  });
-
-  testWidgets('arena host CTA is truthfully gated for ineligible users',
-      (WidgetTester tester) async {
+  testWidgets('arena host CTA is truthfully gated for ineligible users', (
+    WidgetTester tester,
+  ) async {
     final CompetitionController controller = CompetitionController(
       api: CompetitionApi.fixture(),
       currentUserId: 'fixture-user',
@@ -231,7 +233,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Request creator access to host'), findsOneWidget);
-    expect(find.text('Host competition'), findsNothing);
+    expect(find.text('Host Competition'), findsNothing);
 
     await tester.tap(find.text('Request creator access to host'));
     await tester.pumpAndSettle();

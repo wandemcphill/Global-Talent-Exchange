@@ -92,6 +92,7 @@ class CompetitionApi {
   Future<CompetitionSummary> createCompetition(CompetitionDraft draft) {
     return _withFallback<CompetitionSummary>(() async {
       final Object? payload = await _sendBest('POST', const <String>[
+        '/api/competitions/create',
         '/api/competitions',
       ], body: draft.toCreateRequestJson());
       return CompetitionSummary.fromJson(payload);
@@ -130,8 +131,12 @@ class CompetitionApi {
       () async {
         final Object? payload = await _sendBest(
           'POST',
-          <String>['/api/competitions/$competitionId/join'],
+          <String>[
+            '/api/competitions/join',
+            '/api/competitions/$competitionId/join',
+          ],
           body: <String, Object?>{
+            'competition_id': competitionId,
             'user_id': userId,
             if (userName != null && userName.trim().isNotEmpty)
               'user_name': userName.trim(),

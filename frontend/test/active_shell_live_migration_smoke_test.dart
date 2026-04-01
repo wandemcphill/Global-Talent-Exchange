@@ -21,6 +21,7 @@ void main() {
   final AuthSession session = AuthSession(
     userId: 'user-1',
     accessToken: 'token',
+    refreshToken: 'refresh-token',
     sessionId: 'session-1',
     role: 'user',
   );

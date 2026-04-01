@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from shutil import copyfile
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 import pytest
 
@@ -13,9 +13,25 @@ from app.core.database import ensure_database_schema_current
 from app.models.treasury import PaymentMode
 from app.models.policy import CountryFeaturePolicy
 from app.models.user import User
+from app.models.user_wallet import WalletTransactionRecord
 from app.treasury.service import TreasuryService
-from app.wallets.router import create_payment_event, create_wallet_conversion, list_wallet_accounts, quote_wallet_conversion
-from app.wallets.schemas import PaymentEventCreate, WalletConversionQuoteRequest, WalletConversionRequest
+from app.wallets.router import (
+    create_payment_event,
+    create_wallet_conversion,
+    get_wallet_profile,
+    initiate_wallet_top_up,
+    list_wallet_accounts,
+    list_wallet_transactions,
+    quote_wallet_conversion,
+    verify_wallet_top_up,
+)
+from app.wallets.schemas import (
+    PaymentEventCreate,
+    WalletConversionQuoteRequest,
+    WalletConversionRequest,
+    WalletTopUpInitiateRequest,
+    WalletTopUpVerifyRequest,
+)
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 
@@ -157,3 +173,41 @@ def test_create_wallet_conversion_route_moves_balance(session) -> None:
     assert payload.target_amount == Decimal("100.0000")
     assert wallet_service.get_balance(session, user_coin_account) == Decimal("1.0000")
     assert wallet_service.get_balance(session, user_credit_account) == Decimal("100.0000")
+
+
+def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> None:
+    current_user = _register_and_load_user(session)
+    _seed_global_policy(session)
+
+    initiated = initiate_wallet_top_up(
+        WalletTopUpInitiateRequest(amount=Decimal("250")),
+        session=session,
+        current_user=current_user,
+    )
+    assert initiated.reference
+    assert initiated.payment_link
+    assert initiated.status == "pending"
+    assert initiated.mock_mode is True
+
+    pending_wallet = get_wallet_profile(session=session, current_user=current_user)
+    pending_transactions = list_wallet_transactions(session=session, current_user=current_user)
+    assert pending_wallet.balance == Decimal("0.0000")
+    assert len(pending_transactions) == 1
+    assert pending_transactions[0].reference == initiated.reference
+    assert pending_transactions[0].status == "pending"
+
+    verified = verify_wallet_top_up(
+        WalletTopUpVerifyRequest(reference=initiated.reference),
+        session=session,
+        current_user=current_user,
+    )
+    session.expire_all()
+
+    stored_transaction = session.scalar(
+        select(WalletTransactionRecord).where(WalletTransactionRecord.reference == initiated.reference)
+    )
+    assert verified.wallet.balance == Decimal("250.0000")
+    assert verified.wallet.currency == "credit"
+    assert verified.transaction.status == "verified"
+    assert stored_transaction is not None
+    assert stored_transaction.status == "verified"

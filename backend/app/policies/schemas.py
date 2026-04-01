@@ -114,8 +114,9 @@ class UserComplianceStatus(BaseModel):
     deposits_enabled: bool
     market_trading_enabled: bool
     platform_reward_withdrawals_enabled: bool
+    compliance_status: str = "verified"
     required_policy_acceptances_missing: int = 0
-    missing_policy_acceptances: list[PolicyRequirementSummary] = []
+    missing_policy_acceptances: list[PolicyRequirementSummary] = Field(default_factory=list)
     can_deposit: bool = True
     can_withdraw_platform_rewards: bool = True
     can_trade_market: bool = True

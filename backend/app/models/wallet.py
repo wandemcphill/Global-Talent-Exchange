@@ -64,6 +64,7 @@ class LedgerSourceTag(StrEnum):
     PLAYER_CARD_SALE = "player_card_sale"
     PLAYER_CARD_PURCHASE = "player_card_purchase"
     PLAYER_SHARE_PURCHASE = "player_share_purchase"
+    PLAYER_SHARE_SALE = "player_share_sale"
     PLAYER_SHARE_DIVIDEND = "player_share_dividend"
     CLUB_SALE_SALE = "club_sale_sale"
     CLUB_SALE_PURCHASE = "club_sale_purchase"

@@ -118,7 +118,7 @@ def get_creator_player(
         raise_gtex_http_exception(exc)
 
 
-@router.post("/market/buy", response_model=CreatorTradeView, status_code=status.HTTP_201_CREATED)
+@router.post("/gtex/market/buy", response_model=CreatorTradeView, status_code=status.HTTP_201_CREATED)
 def buy_creator_shares(
     payload: CreatorTradeRequest,
     session: Session = Depends(get_session),
@@ -139,7 +139,7 @@ def buy_creator_shares(
     return CreatorTradeView.model_validate(trade)
 
 
-@router.post("/market/sell", response_model=CreatorTradeView, status_code=status.HTTP_201_CREATED)
+@router.post("/gtex/market/sell", response_model=CreatorTradeView, status_code=status.HTTP_201_CREATED)
 def sell_creator_shares(
     payload: CreatorTradeRequest,
     session: Session = Depends(get_session),

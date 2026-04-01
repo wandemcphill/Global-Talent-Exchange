@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -70,7 +71,7 @@ class SystemStatusService:
             )
 
         checks: dict[str, ReadinessCheck] = {"database": ReadinessCheck(status="ok")}
-        if check_schema:
+        if check_schema and os.getenv("SKIP_SCHEMA_CHECK") != "true":
             try:
                 database.check_schema_smoke()
             except Exception as exc:

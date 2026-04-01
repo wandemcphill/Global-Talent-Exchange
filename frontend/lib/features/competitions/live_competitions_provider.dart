@@ -26,7 +26,7 @@ extension CompetitionFamilyRouteX on CompetitionFamilyRoute {
     return switch (this) {
       CompetitionFamilyRoute.gtex => 'GTEX Hosted Football',
       CompetitionFamilyRoute.hosted => 'User Hosted Football',
-      CompetitionFamilyRoute.streamer => 'Creator E-Game Tournaments',
+      CompetitionFamilyRoute.streamer => 'E-Games',
     };
   }
 

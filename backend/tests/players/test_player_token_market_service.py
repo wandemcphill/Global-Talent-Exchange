@@ -108,13 +108,55 @@ def test_player_share_market_lifecycle(session) -> None:
     assert market.total_shares == 1000
     assert purchase["gross_amount_coin"] == Decimal("0.7500")
     assert purchase["transaction_id"]
-    assert repriced.share_price_coin == Decimal("0.0788")
+    assert purchase["market"]["share_price_coin"] == Decimal("0.0769")
+    assert repriced.share_price_coin == Decimal("0.0807")
     assert dividend["gross_amount_coin"] == Decimal("7.5000")
     assert holding is not None
     assert holding.share_count == 10
     assert holding.average_cost_coin == Decimal("0.0750")
     assert holding.dividends_earned_coin == Decimal("7.5000")
     assert len(events) >= 4
+
+
+def test_player_share_market_auto_initializes_for_new_players(session) -> None:
+    player = _create_player(session, player_id="player-token-auto")
+
+    market = PlayerTokenMarketService(session=session).get_market_view(player_id=player.id)
+
+    assert market["player_id"] == player.id
+    assert market["status"] == "active"
+    assert market["total_shares"] == 1000
+    assert Decimal(str(market["share_price_coin"])) > Decimal("0.0000")
+    assert Decimal(str(market["liquidity_coin"])) > Decimal("0.0000")
+
+
+def test_player_share_market_sell_flow_updates_holding_and_price(session) -> None:
+    wallet = WalletService()
+    admin = _create_user(session, user_id="token-sell-admin", role=UserRole.ADMIN)
+    fan = _create_user(session, user_id="token-sell-fan")
+    player = _create_player(session, player_id="player-token-sell")
+    _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
+
+    service = PlayerTokenMarketService(session=session, wallet_service=wallet)
+    service.issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=1000,
+        share_price_coin=Decimal("0.5000"),
+        liquidity_coin=Decimal("20.0000"),
+    )
+    service.buy_shares(actor=fan, player_id=player.id, share_count=10)
+    sale = service.sell_shares(actor=fan, player_id=player.id, share_count=4)
+    holding = service.get_holding(user_id=fan.id, player_id=player.id)
+    events = service.list_events(player_id=player.id)
+
+    assert sale["transaction_id"]
+    assert sale["gross_amount_coin"] > Decimal("0.0000")
+    assert sale["market"]["circulating_shares"] == 6
+    assert Decimal(str(sale["market"]["share_price_coin"])) < Decimal("0.5125")
+    assert holding is not None
+    assert holding.share_count == 6
+    assert events[0].event_type == "sell"
 
 
 def test_player_share_market_respects_governor_price_caps(session) -> None:

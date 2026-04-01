@@ -38,10 +38,13 @@ from app.players.token_schemas import (
     PlayerShareEventView,
     PlayerShareHoldingView,
     PlayerShareMarketIssueRequest,
+    PlayerShareMarketListView,
     PlayerShareMarketView,
     PlayerSharePerformanceRequest,
     PlayerSharePurchaseRequest,
     PlayerSharePurchaseView,
+    PlayerShareSaleRequest,
+    PlayerShareSaleView,
 )
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.players.service import PlayerSummaryQueryService
@@ -96,16 +99,20 @@ def raise_player_face_http_exception(exc: PlayerFaceError) -> Never:
 
 
 def raise_player_token_market_http_exception(exc: PlayerTokenMarketError) -> Never:
-    if exc.reason in {"player_not_found", "market_not_found"}:
+    if exc.reason in {"player_not_found", "market_not_found", "holding_not_found"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail) from exc
     if exc.reason in {
         "admin_required",
         "total_shares_invalid",
         "share_price_invalid",
+        "liquidity_invalid",
         "market_status_invalid",
         "share_count_invalid",
         "market_inactive",
         "share_supply_insufficient",
+        "shares_not_owned",
+        "insufficient_balance",
+        "market_liquidity_insufficient",
         "multiplier_invalid",
         "dividend_invalid",
         "no_shareholders",
@@ -140,6 +147,24 @@ def list_recent_player_summaries(
 ) -> list[PlayerSummaryView]:
     service = PlayerSummaryQueryService(session)
     return service.list_recent_views(limit)
+
+
+@router.get("/markets", response_model=PlayerShareMarketListView)
+def list_player_share_markets(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+) -> PlayerShareMarketListView:
+    try:
+        payload = PlayerTokenMarketService(session).list_markets(
+            limit=limit,
+            offset=offset,
+            search=search,
+        )
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    return PlayerShareMarketListView.model_validate(payload)
 
 
 @router.get("/{player_id}/summary", response_model=PlayerSummaryView)
@@ -187,8 +212,8 @@ def list_my_player_share_holdings(
     return [PlayerShareHoldingView.model_validate(item) for item in holdings]
 
 
-@router.post("/{player_id}/shares/issue", response_model=PlayerShareMarketView)
-def issue_player_share_market(
+@router.post("/{player_id}/shares/market", response_model=PlayerShareMarketView)
+def create_player_share_market(
     player_id: str,
     payload: PlayerShareMarketIssueRequest,
     request: Request,
@@ -203,13 +228,31 @@ def issue_player_share_market(
             player_id=player_id,
             total_shares=payload.total_shares,
             share_price_coin=payload.share_price_coin,
+            liquidity_coin=payload.liquidity_coin,
             status=payload.status,
         )
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
     session.commit()
     session.refresh(market)
-    return PlayerShareMarketView.model_validate(market)
+    return PlayerShareMarketView.model_validate(service.get_market_view(player_id=player_id))
+
+
+@router.post("/{player_id}/shares/issue", response_model=PlayerShareMarketView)
+def issue_player_share_market(
+    player_id: str,
+    payload: PlayerShareMarketIssueRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_admin),
+) -> PlayerShareMarketView:
+    return create_player_share_market(
+        player_id=player_id,
+        payload=payload,
+        request=request,
+        session=session,
+        actor=actor,
+    )
 
 
 @router.post("/{player_id}/shares/buy", response_model=PlayerSharePurchaseView, status_code=status.HTTP_201_CREATED)
@@ -225,9 +268,30 @@ def buy_player_shares(
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
     session.commit()
-    session.refresh(result["market"])
     session.refresh(result["holding"])
     return PlayerSharePurchaseView(
+        market=PlayerShareMarketView.model_validate(result["market"]),
+        holding=PlayerShareHoldingView.model_validate(result["holding"]),
+        transaction_id=result["transaction_id"],
+        gross_amount_coin=result["gross_amount_coin"],
+    )
+
+
+@router.post("/{player_id}/shares/sell", response_model=PlayerShareSaleView, status_code=status.HTTP_201_CREATED)
+def sell_player_shares(
+    player_id: str,
+    payload: PlayerShareSaleRequest,
+    session: Session = Depends(get_session),
+    actor: User = Depends(get_current_user),
+) -> PlayerShareSaleView:
+    service = PlayerTokenMarketService(session)
+    try:
+        result = service.sell_shares(actor=actor, player_id=player_id, share_count=payload.share_count)
+    except PlayerTokenMarketError as exc:
+        raise_player_token_market_http_exception(exc)
+    session.commit()
+    session.refresh(result["holding"])
+    return PlayerShareSaleView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         holding=PlayerShareHoldingView.model_validate(result["holding"]),
         transaction_id=result["transaction_id"],
@@ -279,7 +343,6 @@ def distribute_player_share_dividends(
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
     session.commit()
-    session.refresh(result["market"])
     return PlayerShareDividendView(
         market=PlayerShareMarketView.model_validate(result["market"]),
         transaction_id=result["transaction_id"],

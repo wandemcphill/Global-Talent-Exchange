@@ -196,7 +196,7 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
                                       ? _openJoin
                                       : null,
                               icon: const Icon(Icons.group_add_outlined),
-                              label: const Text('Join competition'),
+                              label: const Text('Join Competition'),
                             ),
                             FilledButton.tonalIcon(
                               onPressed: _openShare,

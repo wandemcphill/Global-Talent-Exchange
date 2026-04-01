@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
@@ -13,7 +14,7 @@ from app.auth.service import (
     InvalidCredentialsError,
     InvalidSessionError,
 )
-from app.models import AuthSession, Base, ClubProfile, LedgerAccount, LedgerUnit
+from app.models import AuthSession, Base, ClubProfile, LedgerAccount, LedgerUnit, UserWallet
 from app.schemas.club_requests import ClubCreateRequest
 from app.services.club_branding_service import ClubBrandingService
 
@@ -47,7 +48,12 @@ def test_register_user_creates_default_accounts(session) -> None:
     session.commit()
 
     accounts = session.scalars(select(LedgerAccount).where(LedgerAccount.owner_user_id == user.id)).all()
+    wallet = session.scalar(select(UserWallet).where(UserWallet.user_id == user.id))
     assert {account.unit for account in accounts} == {LedgerUnit.COIN, LedgerUnit.CREDIT}
+    assert wallet is not None
+    assert wallet.balance == Decimal("0.0000")
+    assert wallet.currency == "credit"
+    assert wallet.compliance_status == "verified"
     assert verify_password("SuperSecret1", user.password_hash)
 
 

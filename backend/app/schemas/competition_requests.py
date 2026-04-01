@@ -23,9 +23,11 @@ class CompetitionCreateRequest(CommonSchema):
     name: str = Field(min_length=3, max_length=120)
     format: CompetitionFormat
     visibility: CompetitionVisibility = CompetitionVisibility.PUBLIC
+    type: str | None = Field(default=None, max_length=48)
     entry_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
     currency: str = Field(default="credit", min_length=1, max_length=12)
     capacity: int = Field(default=20, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
+    max_players: int | None = Field(default=None, ge=2, le=USER_COMPETITION_MAX_PARTICIPANTS)
     creator_id: str = Field(min_length=1, max_length=36)
     creator_name: str | None = Field(default=None, min_length=1, max_length=120)
     competition_type: str | None = Field(default=None, max_length=32)
@@ -34,6 +36,7 @@ class CompetitionCreateRequest(CommonSchema):
     payout_structure: tuple[PayoutRuleRequest, ...] | None = None
     platform_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
     host_fee_pct: Decimal | None = Field(default=None, ge=0, le=_ONE_HUNDRED)
+    rules: str | None = Field(default=None, max_length=280)
     rules_summary: str | None = Field(default=None, max_length=280)
     beginner_friendly: bool | None = None
     scheduled_start_at: datetime | None = None
@@ -44,6 +47,12 @@ class CompetitionCreateRequest(CommonSchema):
 
     @model_validator(mode="after")
     def validate_competition(self) -> "CompetitionCreateRequest":
+        if self.type and self.source_type is None:
+            self.source_type = self.type
+        if self.max_players is not None:
+            self.capacity = self.max_players
+        if self.rules and self.rules_summary is None:
+            self.rules_summary = self.rules
         _validate_fee_shares(
             platform_fee_pct=self.platform_fee_pct,
             host_fee_pct=self.host_fee_pct,
@@ -87,6 +96,10 @@ class CompetitionJoinRequest(CommonSchema):
     user_id: str = Field(min_length=1, max_length=36)
     user_name: str | None = Field(default=None, min_length=1, max_length=120)
     invite_code: str | None = Field(default=None, min_length=4, max_length=32)
+
+
+class CompetitionJoinActionRequest(CompetitionJoinRequest):
+    competition_id: str = Field(min_length=1, max_length=36)
 
 
 class CompetitionLeaveRequest(CommonSchema):

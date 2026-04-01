@@ -11,10 +11,7 @@ import '../widgets/gte_surface_panel.dart';
 import '../widgets/gtex_branding.dart';
 
 class GteLoginScreen extends StatefulWidget {
-  const GteLoginScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteLoginScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -60,7 +57,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                           widget.controller.complianceStatus;
                       final bool requiresPolicyAction =
                           compliance?.hasMissingRequiredPolicies ?? false;
-                      final bool hasRestrictedAccess = compliance != null &&
+                      final bool hasRestrictedAccess =
+                          compliance != null &&
                           (!compliance.canDeposit ||
                               !compliance.canTradeMarket ||
                               !compliance.canWithdrawPlatformRewards);
@@ -69,12 +67,14 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
                             GteStatePanel(
-                              title: hasRestrictedAccess
-                                  ? 'Session active'
-                                  : 'Mission confirmed',
-                              message: hasRestrictedAccess
-                                  ? 'Active session for ${widget.controller.session!.user.username}. GTEX access is live, but some capital actions remain restricted until compliance clears this account.'
-                                  : 'Active session for ${widget.controller.session!.user.username}. The exchange floor, e-game arena, and control tower are now unlocked for this account.',
+                              title:
+                                  hasRestrictedAccess
+                                      ? 'Session active'
+                                      : 'Mission confirmed',
+                              message:
+                                  hasRestrictedAccess
+                                      ? 'Active session for ${widget.controller.session!.user.username}. GTEX access is live, but some capital actions remain restricted until compliance clears this account.'
+                                      : 'Active session for ${widget.controller.session!.user.username}. The exchange floor, e-game arena, and control tower are now unlocked for this account.',
                               actionLabel: 'Enter GTEX',
                               onAction: () {
                                 Navigator.of(context).pop(true);
@@ -84,9 +84,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                             const SizedBox(height: 16),
                             if (widget.controller.isLoadingCompliance)
                               const GteSurfacePanel(
-                                child: Text(
-                                  'Loading compliance status...',
-                                ),
+                                child: Text('Loading compliance status...'),
                               )
                             else if (widget.controller.complianceError != null)
                               GteStatePanel(
@@ -98,9 +96,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               )
                             else if (compliance != null)
                               GteSurfacePanel(
-                                accentColor: hasRestrictedAccess
-                                    ? GteShellTheme.accentWarm
-                                    : GteShellTheme.accentCapital,
+                                accentColor:
+                                    hasRestrictedAccess
+                                        ? GteShellTheme.accentWarm
+                                        : GteShellTheme.accentCapital,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
@@ -108,19 +107,20 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                       requiresPolicyAction
                                           ? 'Compliance action required'
                                           : hasRestrictedAccess
-                                              ? 'Access restrictions active'
-                                              : 'Compliance status',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
+                                          ? 'Access restrictions active'
+                                          : 'Compliance status',
+                                      style:
+                                          Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium,
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
                                       requiresPolicyAction
                                           ? 'Complete the required policy acceptances to unlock deposits, withdrawals, and trading.'
                                           : hasRestrictedAccess
-                                              ? 'This session is active, but one or more capital actions remain restricted for this region or policy bucket.'
-                                              : 'All required policies are accepted. Wallet actions are cleared to proceed.',
+                                          ? 'This session is active, but one or more capital actions remain restricted for this region or policy bucket.'
+                                          : 'All required policies are accepted. Wallet actions are cleared to proceed.',
                                     ),
                                     const SizedBox(height: 12),
                                     Wrap(
@@ -132,14 +132,20 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                               'Country ${compliance.countryCode}',
                                         ),
                                         _SignalPill(
-                                          label: compliance.marketTradingEnabled
-                                              ? 'Trading enabled'
-                                              : 'Trading blocked',
+                                          label:
+                                              compliance.canTradeMarket
+                                                  ? 'Trading enabled'
+                                                  : 'Trading review needed',
                                         ),
                                         _SignalPill(
-                                          label: compliance.depositsEnabled
-                                              ? 'Deposits enabled'
-                                              : 'Deposits blocked',
+                                          label:
+                                              compliance.canDeposit
+                                                  ? 'Deposits enabled'
+                                                  : 'Deposit review needed',
+                                        ),
+                                        _SignalPill(
+                                          label:
+                                              'Compliance ${compliance.complianceStatus}',
                                         ),
                                       ],
                                     ),
@@ -148,9 +154,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                       if (requiresPolicyAction) ...<Widget>[
                                         Text(
                                           'Missing: ${compliance.requiredPolicyAcceptancesMissing} item(s)',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium,
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
                                         ),
                                         const SizedBox(height: 10),
                                       ],
@@ -158,16 +165,19 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                         onPressed: () async {
                                           await Navigator.of(context).push(
                                             MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  GtePolicyComplianceCenterScreen(
-                                                controller: widget.controller,
-                                              ),
+                                              builder:
+                                                  (_) =>
+                                                      GtePolicyComplianceCenterScreen(
+                                                        controller:
+                                                            widget.controller,
+                                                      ),
                                             ),
                                           );
                                         },
                                         icon: const Icon(Icons.gavel_outlined),
                                         label: const Text(
-                                            'Open compliance center'),
+                                          'Open compliance center',
+                                        ),
                                       ),
                                     ],
                                   ],
@@ -179,8 +189,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                     }
 
                     return LayoutBuilder(
-                      builder:
-                          (BuildContext context, BoxConstraints constraints) {
+                      builder: (
+                        BuildContext context,
+                        BoxConstraints constraints,
+                      ) {
                         final bool stacked = constraints.maxWidth < 900;
                         final Widget story = Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,7 +217,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                 _SignalPill(label: 'Hire scarce managers'),
                                 _SignalPill(label: 'Run adaptive competitions'),
                                 _SignalPill(
-                                    label: 'Watch 3-5 min match stories'),
+                                  label: 'Watch 3-5 min match stories',
+                                ),
                               ],
                             ),
                             const SizedBox(height: 22),
@@ -221,17 +234,19 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     runSpacing: 10,
                                     children: <Widget>[
                                       _OpeningMoveChip(
-                                          label:
-                                              '1. Sign in and trade instantly',
-                                          accent: GteShellTheme.accent),
+                                        label: '1. Sign in and trade instantly',
+                                        accent: GteShellTheme.accent,
+                                      ),
                                       _OpeningMoveChip(
-                                          label:
-                                              '2. Preview the live match center',
-                                          accent: GteShellTheme.accentArena),
+                                        label:
+                                            '2. Preview the live match center',
+                                        accent: GteShellTheme.accentArena,
+                                      ),
                                       _OpeningMoveChip(
-                                          label:
-                                              '3. Unlock wallet + portfolio control',
-                                          accent: GteShellTheme.accentCapital),
+                                        label:
+                                            '3. Unlock wallet + portfolio control',
+                                        accent: GteShellTheme.accentCapital,
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -244,26 +259,29 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   'GTEX should feel premium from the first frame. The market reads like a terminal, the arena reads like match night, and the wallet reads like a control room.',
                               tiles: <Widget>[
                                 GtexSignalTile(
-                                    label: 'Trade',
-                                    value: 'FAST TAPE',
-                                    caption:
-                                        'Dense, analytical, and execution-led.',
-                                    icon: Icons.show_chart,
-                                    color: GteShellTheme.accent),
+                                  label: 'Trade',
+                                  value: 'FAST TAPE',
+                                  caption:
+                                      'Dense, analytical, and execution-led.',
+                                  icon: Icons.show_chart,
+                                  color: GteShellTheme.accent,
+                                ),
                                 GtexSignalTile(
-                                    label: 'Arena',
-                                    value: 'LIVE STORY',
-                                    caption:
-                                        'Fixtures, highlights, and bracket energy.',
-                                    icon: Icons.stadium_outlined,
-                                    color: GteShellTheme.accentArena),
+                                  label: 'Arena',
+                                  value: 'LIVE STORY',
+                                  caption:
+                                      'Fixtures, highlights, and bracket energy.',
+                                  icon: Icons.stadium_outlined,
+                                  color: GteShellTheme.accentArena,
+                                ),
                                 GtexSignalTile(
-                                    label: 'Capital',
-                                    value: 'TRUST LAYER',
-                                    caption:
-                                        'Balances, orders, and control signals.',
-                                    icon: Icons.account_balance_wallet_outlined,
-                                    color: GteShellTheme.accentCapital),
+                                  label: 'Capital',
+                                  value: 'TRUST LAYER',
+                                  caption:
+                                      'Balances, orders, and control signals.',
+                                  icon: Icons.account_balance_wallet_outlined,
+                                  color: GteShellTheme.accentCapital,
+                                ),
                               ],
                             ),
                             const SizedBox(height: 22),
@@ -275,21 +293,25 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   Text('What opens after login'),
                                   SizedBox(height: 10),
                                   _BulletLine(
-                                      icon: Icons.show_chart,
-                                      text:
-                                          'A high-speed trading floor for player assets and market depth.'),
+                                    icon: Icons.show_chart,
+                                    text:
+                                        'A high-speed trading floor for player assets and market depth.',
+                                  ),
                                   _BulletLine(
-                                      icon: Icons.stadium_outlined,
-                                      text:
-                                          'A separate e-game arena built for fixtures, highlights, and competitive tension.'),
+                                    icon: Icons.stadium_outlined,
+                                    text:
+                                        'A separate e-game arena built for fixtures, highlights, and competitive tension.',
+                                  ),
                                   _BulletLine(
-                                      icon: Icons.psychology_alt_outlined,
-                                      text:
-                                          'Managers and coaches with real tactical fingerprints, not cardboard cut-outs.'),
+                                    icon: Icons.psychology_alt_outlined,
+                                    text:
+                                        'Managers and coaches with real tactical fingerprints, not cardboard cut-outs.',
+                                  ),
                                   _BulletLine(
-                                      icon: Icons.admin_panel_settings_outlined,
-                                      text:
-                                          'Admins use this same login. Role assignment happens invisibly and securely on the backend.'),
+                                    icon: Icons.admin_panel_settings_outlined,
+                                    text:
+                                        'Admins use this same login. Role assignment happens invisibly and securely on the backend.',
+                                  ),
                                 ],
                               ),
                             ),
@@ -310,16 +332,20 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
-                                        Text('Sign in',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .headlineSmall),
+                                        Text(
+                                          'Sign in',
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.headlineSmall,
+                                        ),
                                         const SizedBox(height: 4),
                                         Text(
                                           'One doorway for users, managers, admins, and super admins. Access unfolds after authentication.',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium,
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
                                         ),
                                       ],
                                     ),
@@ -360,31 +386,31 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(18),
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .error
-                                        .withValues(alpha: 0.12),
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.error.withValues(alpha: 0.12),
                                     border: Border.all(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .error
+                                      color: Theme.of(context).colorScheme.error
                                           .withValues(alpha: 0.32),
                                     ),
                                   ),
                                   child: Row(
                                     children: <Widget>[
-                                      Icon(Icons.error_outline,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .error),
+                                      Icon(
+                                        Icons.error_outline,
+                                        color:
+                                            Theme.of(context).colorScheme.error,
+                                      ),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
                                           widget.controller.authError!,
                                           style: TextStyle(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .error),
+                                            color:
+                                                Theme.of(
+                                                  context,
+                                                ).colorScheme.error,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -398,8 +424,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   borderRadius: BorderRadius.circular(18),
                                   color: Colors.white.withValues(alpha: 0.04),
                                   border: Border.all(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.08)),
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                  ),
                                 ),
                                 child: const Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,7 +433,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     Text('Guest preview'),
                                     SizedBox(height: 8),
                                     Text(
-                                        'You can explore the shell before login, but order entry, wallet actions, and protected creator or admin controls stay locked until authentication succeeds.'),
+                                      'You can explore the shell before login, but order entry, wallet actions, and protected creator or admin controls stay locked until authentication succeeds.',
+                                    ),
                                   ],
                                 ),
                               ),
@@ -415,9 +442,10 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton.icon(
-                                  onPressed: widget.controller.isSigningIn
-                                      ? null
-                                      : _submit,
+                                  onPressed:
+                                      widget.controller.isSigningIn
+                                          ? null
+                                          : _submit,
                                   icon: const Icon(Icons.login),
                                   label: Text(
                                     widget.controller.isSigningIn
@@ -428,34 +456,43 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               ),
                               const SizedBox(height: 12),
                               TextButton(
-                                onPressed: widget.controller.isSigningIn
-                                    ? null
-                                    : () async {
-                                        await Navigator.of(context).push<void>(
-                                          MaterialPageRoute<void>(
-                                            builder: (BuildContext context) =>
-                                                GteSignupScreen(
-                                              controller: widget.controller,
+                                onPressed:
+                                    widget.controller.isSigningIn
+                                        ? null
+                                        : () async {
+                                          await Navigator.of(
+                                            context,
+                                          ).push<void>(
+                                            MaterialPageRoute<void>(
+                                              builder:
+                                                  (BuildContext context) =>
+                                                      GteSignupScreen(
+                                                        controller:
+                                                            widget.controller,
+                                                      ),
                                             ),
-                                          ),
-                                        );
-                                      },
+                                          );
+                                        },
                                 child: const Text('Create a new account'),
                               ),
                               TextButton(
-                                onPressed: widget.controller.isSigningIn
-                                    ? null
-                                    : () async {
-                                        await Navigator.of(context).push<void>(
-                                          MaterialPageRoute<void>(
-                                            builder: (BuildContext context) =>
-                                                CreatorAccessRequestScreen(
-                                              exchangeController:
-                                                  widget.controller,
+                                onPressed:
+                                    widget.controller.isSigningIn
+                                        ? null
+                                        : () async {
+                                          await Navigator.of(
+                                            context,
+                                          ).push<void>(
+                                            MaterialPageRoute<void>(
+                                              builder:
+                                                  (BuildContext context) =>
+                                                      CreatorAccessRequestScreen(
+                                                        exchangeController:
+                                                            widget.controller,
+                                                      ),
                                             ),
-                                          ),
-                                        );
-                                      },
+                                          );
+                                        },
                                 child: const Text('Apply for creator access'),
                               ),
                             ],
@@ -567,7 +604,8 @@ class _BulletLine extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-              child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+            child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+          ),
         ],
       ),
     );

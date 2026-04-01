@@ -5,8 +5,11 @@ from typing import Never
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_trading_user, get_current_user
 from app.auth.dependencies import get_session
+from app.gtex.runtime import ensure_gtex_runtime
+from app.gtex.schemas import CreatorTradeRequest, CreatorTradeView
+from app.gtex.service import GtexConflictError, GtexError, GtexNotFoundError, GtexValidationError
 from app.market.read_models import MarketSummaryReadModel
 from app.market.projections import MarketSummaryProjector
 from app.market.schemas import (
@@ -22,6 +25,14 @@ from app.market.schemas import (
     TradeIntentCreate,
     TradeIntentView,
 )
+from app.players.token_schemas import (
+    PlayerShareHoldingView,
+    PlayerSharePurchaseView,
+    PlayerShareSaleView,
+    PlayerShareTradeRequest,
+    PlayerShareMarketView,
+)
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.pricing.schemas import MarketCandlesView, MarketMoversView, MarketTickerView
 from app.market.service import (
     MarketConflictError,
@@ -74,10 +85,45 @@ def raise_market_http_exception(exc: MarketError) -> Never:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
+def raise_gtex_http_exception(exc: GtexError) -> Never:
+    if isinstance(exc, GtexNotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, GtexConflictError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if isinstance(exc, GtexValidationError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+
+def raise_player_share_market_http_exception(exc: PlayerTokenMarketError) -> Never:
+    if exc.reason in {"player_not_found", "market_not_found", "holding_not_found"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail) from exc
+    if exc.reason in {
+        "admin_required",
+        "total_shares_invalid",
+        "share_price_invalid",
+        "liquidity_invalid",
+        "market_status_invalid",
+        "share_count_invalid",
+        "market_inactive",
+        "share_supply_insufficient",
+        "shares_not_owned",
+        "insufficient_balance",
+        "market_liquidity_insufficient",
+        "multiplier_invalid",
+        "dividend_invalid",
+        "no_shareholders",
+        "no_circulation",
+        "total_shares_below_circulation",
+    }:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+
+
 @router.post("/listings", response_model=ListingView, status_code=status.HTTP_201_CREATED)
 def create_listing(
     payload: ListingCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> ListingView:
     try:
@@ -224,6 +270,90 @@ def get_market_movers(
     return MarketMoversView.model_validate(result)
 
 
+@router.post("/buy", response_model=CreatorTradeView | PlayerSharePurchaseView, status_code=status.HTTP_201_CREATED)
+def buy_market_position(
+    payload: CreatorTradeRequest | PlayerShareTradeRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_trading_user),
+) -> CreatorTradeView | PlayerSharePurchaseView:
+    if isinstance(payload, CreatorTradeRequest):
+        runtime = ensure_gtex_runtime(request.app)
+        try:
+            trade = runtime.creator_market.buy_shares(
+                session,
+                buyer=current_user,
+                player_id=payload.player_id,
+                shares=payload.shares,
+            )
+            session.commit()
+        except GtexError as exc:
+            session.rollback()
+            raise_gtex_http_exception(exc)
+        return CreatorTradeView.model_validate(trade)
+
+    service = PlayerTokenMarketService(session)
+    try:
+        result = service.buy_shares(
+            actor=current_user,
+            player_id=payload.player_id,
+            share_count=payload.share_count,
+        )
+    except PlayerTokenMarketError as exc:
+        raise_player_share_market_http_exception(exc)
+
+    session.commit()
+    session.refresh(result["holding"])
+    return PlayerSharePurchaseView(
+        market=PlayerShareMarketView.model_validate(result["market"]),
+        holding=PlayerShareHoldingView.model_validate(result["holding"]),
+        transaction_id=result["transaction_id"],
+        gross_amount_coin=result["gross_amount_coin"],
+    )
+
+
+@router.post("/sell", response_model=CreatorTradeView | PlayerShareSaleView, status_code=status.HTTP_201_CREATED)
+def sell_market_position(
+    payload: CreatorTradeRequest | PlayerShareTradeRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_trading_user),
+) -> CreatorTradeView | PlayerShareSaleView:
+    if isinstance(payload, CreatorTradeRequest):
+        runtime = ensure_gtex_runtime(request.app)
+        try:
+            trade = runtime.creator_market.sell_shares(
+                session,
+                seller=current_user,
+                player_id=payload.player_id,
+                shares=payload.shares,
+            )
+            session.commit()
+        except GtexError as exc:
+            session.rollback()
+            raise_gtex_http_exception(exc)
+        return CreatorTradeView.model_validate(trade)
+
+    service = PlayerTokenMarketService(session)
+    try:
+        result = service.sell_shares(
+            actor=current_user,
+            player_id=payload.player_id,
+            share_count=payload.share_count,
+        )
+    except PlayerTokenMarketError as exc:
+        raise_player_share_market_http_exception(exc)
+
+    session.commit()
+    session.refresh(result["holding"])
+    return PlayerShareSaleView(
+        market=PlayerShareMarketView.model_validate(result["market"]),
+        holding=PlayerShareHoldingView.model_validate(result["holding"]),
+        transaction_id=result["transaction_id"],
+        gross_amount_coin=result["gross_amount_coin"],
+    )
+
+
 @router.get("/listings/{listing_id}/offers", response_model=list[OfferView])
 def list_listing_offers(
     listing_id: str,
@@ -256,7 +386,7 @@ def list_trade_intent_matches(
 @router.post("/offers", response_model=OfferView, status_code=status.HTTP_201_CREATED)
 def create_offer(
     payload: OfferCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> OfferView:
     try:
@@ -279,7 +409,7 @@ def create_offer(
 def counter_offer(
     offer_id: str,
     payload: OfferCounterCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> OfferView:
     try:
@@ -299,7 +429,7 @@ def counter_offer(
 @router.post("/offers/{offer_id}/accept", response_model=OfferView)
 def accept_offer(
     offer_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> OfferView:
     try:
@@ -327,7 +457,7 @@ def reject_offer(
 @router.post("/trade-intents", response_model=TradeIntentView, status_code=status.HTTP_201_CREATED)
 def create_trade_intent(
     payload: TradeIntentCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_trading_user),
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> TradeIntentView:
     try:

@@ -13,7 +13,7 @@ extension CompetitionHubDestinationX on CompetitionHubDestination {
   String get label {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Overview';
+        return 'Competitions Hub';
       case CompetitionHubDestination.leagues:
         return 'Leagues';
       case CompetitionHubDestination.championsLeague:
@@ -66,7 +66,7 @@ extension CompetitionHubDestinationX on CompetitionHubDestination {
   String get homeDescription {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Jump into the live competition map.';
+        return 'Open the competitions hub.';
       case CompetitionHubDestination.leagues:
         return 'Track table races and season climbs.';
       case CompetitionHubDestination.championsLeague:
@@ -83,7 +83,7 @@ extension CompetitionHubDestinationX on CompetitionHubDestination {
   String get hubDescription {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Jump between every competition from one matchday board, then dive into what is live now.';
+        return 'Browse GTEX fixtures, creator tournaments, and E-Games from one matchday board.';
       case CompetitionHubDestination.leagues:
         return 'Track title races, points tables, and season momentum.';
       case CompetitionHubDestination.championsLeague:
@@ -100,7 +100,7 @@ extension CompetitionHubDestinationX on CompetitionHubDestination {
   String get emptyTitle {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Arena is warming up';
+        return 'Competitions Hub is warming up';
       case CompetitionHubDestination.leagues:
         return 'No league races live';
       case CompetitionHubDestination.championsLeague:
@@ -117,7 +117,7 @@ extension CompetitionHubDestinationX on CompetitionHubDestination {
   String get emptyMessage {
     switch (this) {
       case CompetitionHubDestination.overview:
-        return 'Pull to refresh when new cups go live.';
+        return 'Pull to refresh when new competitions and E-Games go live.';
       case CompetitionHubDestination.leagues:
         return 'League cards show up here when a new season opens.';
       case CompetitionHubDestination.championsLeague:

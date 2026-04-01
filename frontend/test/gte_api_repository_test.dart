@@ -734,6 +734,7 @@ void main() {
       const AuthSession(
         userId: 'user-1',
         accessToken: 'live-token',
+        refreshToken: 'refresh-live-token',
         sessionId: 'session-1',
       ),
     );

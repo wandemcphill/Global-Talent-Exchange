@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.models.regen import RegenDiscoveryBadge, RegenLegacyRecord, RegenLineageProfile, RegenProfile, RegenScoutReport
+from app.models.regen_ecosystem import NationalRegenSeed
 from app.regen_universe.service import RegenUniverseService
 from tests.regen_universe_support import build_regen_universe_session, seed_two_season_universe
 
@@ -149,6 +150,20 @@ def test_regen_universe_showcase_lists_rising_stars_bloodlines_and_feed() -> Non
                     tags_json=["hidden_gem", "wonderkid"],
                     metadata_json={},
                 ),
+                NationalRegenSeed(
+                    seed_key="seed:showcase:br:1",
+                    display_name="Joao Aurora",
+                    country_code="BR",
+                    country_name="Brazil",
+                    seed_type="preseeded_national_pool",
+                    primary_position="ST",
+                    current_rating=72,
+                    potential_rating=92,
+                    growth_curve=0.84,
+                    rarity_tier="elite",
+                    status="available",
+                    metadata_json={"age": 17},
+                ),
             ]
         )
         session.flush()
@@ -166,6 +181,49 @@ def test_regen_universe_showcase_lists_rising_stars_bloodlines_and_feed() -> Non
         feed_types = {item["feed_type"] for item in scouting_feed["items"]}
         assert "new_regen_discovered" in feed_types
         assert "hidden_gem" in feed_types
-        assert "breakout_player" in feed_types
+        assert "potential_spike" in feed_types
+        assert any(item["player"]["age"] >= 15 for item in scouting_feed["items"] if item.get("player"))
+        assert any(entry["player_id"].startswith("seed:") for entry in rising_stars["entries"])
+    finally:
+        session.close()
+
+
+def test_regen_universe_player_lookup_resolves_real_and_seeded_players() -> None:
+    session = build_regen_universe_session()
+    try:
+        bundle = seed_two_season_universe(session)
+        wonderkid = bundle["players"]["wonderkid"]
+        seed = NationalRegenSeed(
+            seed_key="seed:lookup:ng:1",
+            display_name="Tunde Skyline",
+            country_code="NG",
+            country_name="Nigeria",
+            seed_type="preseeded_national_pool",
+            primary_position="AM",
+            current_rating=70,
+            potential_rating=89,
+            growth_curve=0.79,
+            rarity_tier="rare",
+            status="available",
+            metadata_json={"age": 18},
+        )
+        session.add(seed)
+        session.flush()
+
+        service = RegenUniverseService(session)
+
+        real_lookup = service.get_player_lookup(wonderkid.id)
+        seed_lookup = service.get_player_lookup(f"seed:{seed.id}")
+
+        assert real_lookup is not None
+        assert real_lookup["player"]["id"] == wonderkid.id
+        assert real_lookup["player"]["source_type"] == "regen"
+        assert real_lookup["profile"].display_name == wonderkid.full_name
+
+        assert seed_lookup is not None
+        assert seed_lookup["player"]["id"] == f"seed:{seed.id}"
+        assert seed_lookup["player"]["source_type"] == "national_seed"
+        assert seed_lookup["player"]["nationality"] == "Nigeria"
+        assert seed_lookup["card"]["position"] == "AM"
     finally:
         session.close()

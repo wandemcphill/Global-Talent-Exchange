@@ -52,6 +52,7 @@ TRADE_BUY_SOURCE_TAGS = frozenset(
 TRADE_SELL_SOURCE_TAGS = frozenset(
     {
         LedgerSourceTag.PLAYER_CARD_SALE,
+        LedgerSourceTag.PLAYER_SHARE_SALE,
         LedgerSourceTag.CLUB_SALE_SALE,
     }
 )

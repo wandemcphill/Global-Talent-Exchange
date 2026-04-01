@@ -43,6 +43,7 @@ void main() {
         session: const AuthSession(
           userId: 'basic-user',
           accessToken: 'token-2',
+          refreshToken: 'refresh-token-2',
           sessionId: 'session-2',
           role: 'user',
         ),
@@ -67,6 +68,7 @@ Widget _buildWidget({
   AuthSession? session = const AuthSession(
     userId: 'premium-user',
     accessToken: 'token-1',
+    refreshToken: 'refresh-token-1',
     sessionId: 'session-1',
     role: 'user',
     permissions: <String>['match_3d_premium'],

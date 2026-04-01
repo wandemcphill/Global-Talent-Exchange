@@ -22,6 +22,7 @@ void main() {
           const AuthSession(
             userId: 'user-1',
             accessToken: 'token-1',
+            refreshToken: 'refresh-token-1',
             sessionId: 'session-1',
             role: 'admin',
           ),
@@ -59,6 +60,7 @@ void main() {
           const AuthSession(
             userId: 'user-1',
             accessToken: 'token-2',
+            refreshToken: 'refresh-token-2',
             sessionId: 'session-2',
             role: 'super_admin',
             permissions: <String>['manage_payment_rails'],

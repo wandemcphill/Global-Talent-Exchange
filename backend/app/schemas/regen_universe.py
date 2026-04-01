@@ -154,8 +154,32 @@ class RegenUniversePlayerShowcaseView(CommonSchema):
     discovery_badges: list[str] = Field(default_factory=list)
 
 
+class RegenPlayerView(CommonSchema):
+    id: str
+    name: str
+    age: int
+    nationality: str
+    nationality_code: str | None = None
+    position: str
+    potential: int
+    current_rating: int
+    growth_curve: float
+    club_id: str | None = None
+    source_type: str = "regen"
+
+
+class RegenUniversePlayerLookupView(CommonSchema):
+    player: RegenPlayerView
+    profile: RegenProfileView
+    card: RegenCardView
+    scouting_note: str | None = None
+    discovery_badges: list[str] = Field(default_factory=list)
+    market_value_coin: int | None = None
+
+
 class RegenRisingStarEntryView(CommonSchema):
     player_id: str
+    player: RegenPlayerView | None = None
     profile: RegenProfileView
     card: RegenCardView
     legacy_score: float = 0.0
@@ -199,6 +223,7 @@ class RegenScoutingFeedItemView(CommonSchema):
     feed_type: str
     player_id: str
     regen_id: str
+    player: RegenPlayerView | None = None
     title: str
     summary: str
     occurred_at: datetime

@@ -20,6 +20,7 @@ from app.ingestion.models import Player
 from app.ledger.models import LedgerEventRecord
 from app.models.base import Base
 from app.models.user import KycStatus
+from app.models.user_wallet import UserWallet
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.orders.models import Order
 from app.orders.router import router
@@ -121,6 +122,29 @@ def _ledger_events_for_order(session, order_id: str) -> list[LedgerEventRecord]:
         .where(LedgerEventRecord.aggregate_id == order_id)
         .order_by(LedgerEventRecord.created_at.asc(), LedgerEventRecord.id.asc())
     ).all()
+
+
+def test_place_order_requires_verified_wallet_compliance(api_context) -> None:
+    client, session, auth_state = api_context
+    player = _create_player(session, provider_external_id="player-order-compliance")
+    _fund_user(session, auth_state["user"], amount=Decimal("100"))
+    wallet = session.scalar(select(UserWallet).where(UserWallet.user_id == auth_state["user"].id))
+    assert wallet is not None
+    wallet.compliance_status = "pending"
+    session.commit()
+
+    response = client.post(
+        "/api/orders",
+        json={
+            "player_id": player.id,
+            "side": "buy",
+            "quantity": 1,
+            "max_price": 5,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Trading is unavailable until wallet compliance is verified."
 
 
 def test_place_order_returns_open_order_with_hold_details(api_context) -> None:

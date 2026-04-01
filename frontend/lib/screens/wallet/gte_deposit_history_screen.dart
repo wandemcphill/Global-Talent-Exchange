@@ -6,14 +6,10 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
-import '../support/gte_support_dispute_screens.dart';
 import 'gte_funding_flow_screen.dart';
 
 class GteDepositHistoryScreen extends StatefulWidget {
-  const GteDepositHistoryScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteDepositHistoryScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -23,42 +19,60 @@ class GteDepositHistoryScreen extends StatefulWidget {
 }
 
 class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
-  late Future<List<GteDepositRequest>> _depositsFuture;
+  late Future<List<GteWalletTransactionRecord>> _transactionsFuture;
 
   @override
   void initState() {
     super.initState();
-    _depositsFuture = widget.controller.api.listDepositRequests();
+    _transactionsFuture = widget.controller.api.listWalletTransactions();
   }
 
   Future<void> _refresh() async {
     setState(() {
-      _depositsFuture = widget.controller.api.listDepositRequests();
+      _transactionsFuture = widget.controller.api.listWalletTransactions();
     });
+  }
+
+  Future<void> _openTopUp() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => GteFundWalletScreen(controller: widget.controller),
+      ),
+    );
+    await _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Top Up History'),
+        title: const Text('Wallet transactions'),
         actions: <Widget>[
           IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh)),
         ],
       ),
-      body: FutureBuilder<List<GteDepositRequest>>(
-        future: _depositsFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<List<GteDepositRequest>> snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openTopUp,
+        icon: const Icon(Icons.add),
+        label: const Text('Top up'),
+      ),
+      body: FutureBuilder<List<GteWalletTransactionRecord>>(
+        future: _transactionsFuture,
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<List<GteWalletTransactionRecord>> snapshot,
+        ) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final List<GteDepositRequest> deposits = snapshot.data ?? <GteDepositRequest>[];
-          if (deposits.isEmpty) {
+          final List<GteWalletTransactionRecord> transactions =
+              snapshot.data ?? <GteWalletTransactionRecord>[];
+          if (transactions.isEmpty) {
             return const Center(
               child: GteStatePanel(
-                title: 'No deposits yet',
-                message: 'Start a top-up to get your first wallet credit moving.',
+                title: 'No wallet transactions yet',
+                message: 'Start a top-up to create your first wallet credit.',
                 icon: Icons.account_balance_wallet_outlined,
               ),
             );
@@ -67,68 +81,49 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
             onRefresh: _refresh,
             child: ListView.separated(
               padding: const EdgeInsets.all(20),
-              itemCount: deposits.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemCount: transactions.length,
+              separatorBuilder: (_, index) => const SizedBox(height: 12),
               itemBuilder: (BuildContext context, int index) {
-                final GteDepositRequest deposit = deposits[index];
+                final GteWalletTransactionRecord transaction =
+                    transactions[index];
+                final bool isCredit =
+                    transaction.type.toLowerCase() == 'credit';
+                final Color statusColor =
+                    transaction.status.toLowerCase() == 'verified'
+                        ? GteShellTheme.positive
+                        : transaction.status.toLowerCase() == 'failed'
+                        ? GteShellTheme.negative
+                        : GteShellTheme.accentWarm;
                 return GteSurfacePanel(
                   accentColor: GteShellTheme.accentCapital,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(deposit.reference,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 6),
                       Text(
-                        'Status: ${gteFormatOrderStatus(_depositStatusLabel(deposit.status))}',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        transaction.reference,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${gteFormatFiat(deposit.amountFiat, currency: deposit.currencyCode)} • ${gteFormatCredits(deposit.amountCoin)}',
+                        '${_titleCase(transaction.type)} • ${_titleCase(transaction.status)}',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: statusColor),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        gteFormatCredits(
+                          isCredit ? transaction.amount : -transaction.amount,
+                        ),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Created ${gteFormatDateTime(deposit.createdAt)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        children: <Widget>[
-                          OutlinedButton(
-                            onPressed: () {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: (BuildContext context) =>
-                                      GteDepositInstructionsScreen(
-                                    controller: widget.controller,
-                                    deposit: deposit,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text('View instructions'),
-                          ),
-                          OutlinedButton(
-                            onPressed: () {
-                              Navigator.of(context).push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: (BuildContext context) =>
-                                      GteDisputeCreateScreen(
-                                    controller: widget.controller,
-                                    reference: deposit.reference,
-                                    resourceId: deposit.id,
-                                    resourceType: 'deposit',
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text('Open dispute'),
-                          ),
-                        ],
-                      ),
+                      if (transaction.createdAt != null) ...<Widget>[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Created ${gteFormatDateTime(transaction.createdAt)}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -141,21 +136,19 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
   }
 }
 
-String _depositStatusLabel(GteDepositStatus status) {
-  switch (status) {
-    case GteDepositStatus.awaitingPayment:
-      return 'awaiting_payment';
-    case GteDepositStatus.paymentSubmitted:
-      return 'payment_submitted';
-    case GteDepositStatus.underReview:
-      return 'under_review';
-    case GteDepositStatus.confirmed:
-      return 'confirmed';
-    case GteDepositStatus.rejected:
-      return 'rejected';
-    case GteDepositStatus.expired:
-      return 'expired';
-    case GteDepositStatus.disputed:
-      return 'disputed';
+String _titleCase(String value) {
+  final List<String> parts = value
+      .split(RegExp(r'[_\s-]+'))
+      .map((String part) => part.trim())
+      .where((String part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return value;
   }
+  return parts
+      .map(
+        (String part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
+      .join(' ');
 }

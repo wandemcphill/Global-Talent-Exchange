@@ -211,7 +211,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
             marketStatus: marketStatus,
             marketMessage:
                 !marketIssued
-                    ? 'Not tradable yet: no issued share market.'
+                    ? 'Market initializing.'
                     : 'Share market is live.',
             sharePriceCoin:
                 !marketIssued ? null : numberValue(market['share_price_coin']),

@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.core.database import load_model_modules
 from app.ingestion.models import Player
+from app.market.router import router as market_router
 from app.models.base import Base
 from app.models.player_token_market import PlayerShareHolding
 from app.models.real_player_profile import RealPlayerProfile
@@ -158,6 +159,7 @@ def _build_client(
 ) -> tuple[TestClient, dict[str, User]]:
     app = FastAPI()
     app.include_router(players_router)
+    app.include_router(market_router)
 
     auth_context = {"admin": admin_user, "user": current_user}
 
@@ -182,8 +184,8 @@ def test_issue_player_share_market_for_imported_real_player_records_issue_event(
 
         with client:
             response = client.post(
-                f"/players/{player.id}/shares/issue",
-                json={"total_shares": 1500, "share_price_coin": "0.7500", "status": "active"},
+                f"/players/{player.id}/shares/market",
+                json={"total_shares": 1500, "price": "0.7500", "liquidity": "30.0000", "status": "active"},
             )
             events_response = client.get(f"/players/{player.id}/shares/events")
 
@@ -196,6 +198,7 @@ def test_issue_player_share_market_for_imported_real_player_records_issue_event(
         assert payload["player_id"] == player.id
         assert payload["total_shares"] == 1500
         assert payload["share_price_coin"] == "0.7500"
+        assert payload["liquidity_coin"] == "30.0000"
         assert payload["status"] == "active"
         assert payload["metadata_json"]["is_real_player"] is True
         assert events[0]["event_type"] == "issue"
@@ -217,7 +220,7 @@ def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
 
         with client:
             issue_response = client.post(
-                f"/players/{player.id}/shares/issue",
+                f"/players/{player.id}/shares/market",
                 json={"total_shares": 1000, "share_price_coin": "1.2500", "status": "active"},
             )
             market_response = client.get(f"/players/{player.id}/shares/market")
@@ -242,7 +245,7 @@ def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
         engine.dispose()
 
 
-def test_read_player_share_market_returns_unissued_payload_before_issue(monkeypatch) -> None:
+def test_read_player_share_market_auto_initializes_before_manual_issue(monkeypatch) -> None:
     engine, session = _build_session()
     try:
         admin = _create_user(session, user_id="share-unissued-admin", role=UserRole.ADMIN)
@@ -256,12 +259,14 @@ def test_read_player_share_market_returns_unissued_payload_before_issue(monkeypa
         assert market_response.status_code == 200, market_response.text
         payload = market_response.json()
         assert payload["player_id"] == player.id
-        assert payload["status"] == "unissued"
-        assert payload["market_issued"] is False
-        assert payload["total_shares"] == 0
+        assert payload["status"] == "active"
+        assert payload["market_issued"] is True
+        assert payload["total_shares"] == 1000
         assert payload["circulating_shares"] == 0
-        assert payload["share_price_coin"] == "0.0000"
-        assert payload["metadata_json"]["market_issued"] is False
+        assert Decimal(payload["share_price_coin"]) > Decimal("0.0000")
+        assert Decimal(payload["liquidity_coin"]) > Decimal("0.0000")
+        assert payload["metadata_json"]["market_issued"] is True
+        assert payload["metadata_json"]["auto_initialized"] is True
     finally:
         session.close()
         engine.dispose()
@@ -278,7 +283,7 @@ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> 
 
         with client:
             issue_response = client.post(
-                f"/players/{player.id}/shares/issue",
+                f"/players/{player.id}/shares/market",
                 json={"total_shares": 1000, "share_price_coin": "0.5000", "status": "active"},
             )
             auth["user"] = fan
@@ -306,6 +311,64 @@ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> 
         assert [item["event_type"] for item in events] == ["buy", "issue"]
         assert events[0]["metadata_json"]["transaction_id"] == payload["transaction_id"]
         assert events[0]["metadata_json"]["circulating_shares"] == 10
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_list_player_share_markets_returns_only_tradable_active_markets(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-list-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-list-fan")
+        tradable = _seed_imported_real_player(session, player_id="real-player-tradable")
+        blocked = _seed_imported_real_player(session, player_id="real-player-blocked")
+        blocked.is_tradable = False
+        session.flush()
+        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            response = client.get("/players/markets")
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        item_ids = {item["player_id"] for item in payload["items"]}
+
+        assert tradable.id in item_ids
+        assert blocked.id not in item_ids
+        assert all(item["status"] == "active" for item in payload["items"])
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_market_buy_and_sell_endpoints_execute_share_trades(monkeypatch) -> None:
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="share-market-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="share-market-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-market-trade")
+        _seed_coin_balance(session, user=fan, amount=Decimal("50.0000"))
+        client, auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            client.post(
+                f"/players/{player.id}/shares/market",
+                json={"total_shares": 1000, "share_price_coin": "0.5000", "liquidity_coin": "20.0000"},
+            )
+            auth["user"] = fan
+            buy_response = client.post("/market/buy", json={"player_id": player.id, "share_count": 10})
+            sell_response = client.post("/market/sell", json={"player_id": player.id, "share_count": 4})
+
+        assert buy_response.status_code == 201, buy_response.text
+        assert sell_response.status_code == 201, sell_response.text
+
+        buy_payload = buy_response.json()
+        sell_payload = sell_response.json()
+        assert buy_payload["holding"]["share_count"] == 10
+        assert sell_payload["holding"]["share_count"] == 6
+        assert sell_payload["market"]["circulating_shares"] == 6
+        assert Decimal(sell_payload["gross_amount_coin"]) > Decimal("0.0000")
     finally:
         session.close()
         engine.dispose()

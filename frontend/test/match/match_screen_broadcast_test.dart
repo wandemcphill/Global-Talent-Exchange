@@ -22,6 +22,7 @@ void main() {
             const AuthSession(
               userId: 'user-1',
               accessToken: 'token-1',
+              refreshToken: 'refresh-1',
               sessionId: 'session-1',
               role: 'admin',
             ),
@@ -74,6 +75,7 @@ void main() {
             const AuthSession(
               userId: 'user-1',
               accessToken: 'token-1',
+              refreshToken: 'refresh-1',
               sessionId: 'session-1',
               role: 'admin',
             ),

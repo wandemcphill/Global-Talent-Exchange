@@ -666,6 +666,7 @@ AuthSession _clubSession() {
   return const AuthSession(
     userId: 'user-1',
     accessToken: 'token-1',
+    refreshToken: 'refresh-token-1',
     sessionId: 'session-1',
     role: 'user',
     permissions: <String>['match_3d_premium'],
@@ -678,6 +679,7 @@ AuthSession _hostSession() {
   return const AuthSession(
     userId: 'host-user-1',
     accessToken: 'host-token-1',
+    refreshToken: 'host-refresh-token-1',
     sessionId: 'host-session-1',
     role: 'admin',
     permissions: <String>['match_3d_premium'],

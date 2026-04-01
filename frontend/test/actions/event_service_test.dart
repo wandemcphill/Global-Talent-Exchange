@@ -16,6 +16,7 @@ void main() {
         const AuthSession(
           userId: 'user-1',
           accessToken: 'token-1',
+          refreshToken: 'refresh-1',
           sessionId: 'session-1',
         ),
       );
@@ -75,6 +76,7 @@ void main() {
       const AuthSession(
         userId: 'user-retry',
         accessToken: 'token-retry',
+        refreshToken: 'refresh-retry',
         sessionId: 'session-retry',
       ),
     );
@@ -142,6 +144,7 @@ void main() {
       const AuthSession(
         userId: 'user-stale',
         accessToken: 'token-stale',
+        refreshToken: 'refresh-stale',
         sessionId: 'session-stale',
       ),
     );

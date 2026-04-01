@@ -12,10 +12,7 @@ import 'creators/creator_access_request_screen.dart';
 import 'wallet/gte_policy_compliance_center_screen.dart';
 
 class GteSignupScreen extends StatefulWidget {
-  const GteSignupScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteSignupScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -54,10 +51,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
     Map<String, Object?> metadata = const <String, Object?>{},
   }) async {
     try {
-      await widget.controller.api.trackAnalyticsEvent(
-        name,
-        metadata: metadata,
-      );
+      await widget.controller.api.trackAnalyticsEvent(name, metadata: metadata);
     } catch (_) {
       // Analytics must not block signup on pre-auth screens.
     }
@@ -116,7 +110,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
           return AlertDialog(
             title: const Text('Compliance step required'),
             content: Text(
-              'You have ${compliance.requiredPolicyAcceptancesMissing} policy items to accept before deposits, withdrawals, and trading are enabled.',
+              'You have ${compliance.requiredPolicyAcceptancesMissing} policy items to review in the compliance center.',
             ),
             actions: <Widget>[
               TextButton(
@@ -134,9 +128,10 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
       if (openCompliance == true && mounted) {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => GtePolicyComplianceCenterScreen(
-              controller: widget.controller,
-            ),
+            builder:
+                (_) => GtePolicyComplianceCenterScreen(
+                  controller: widget.controller,
+                ),
           ),
         );
       }
@@ -162,13 +157,16 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                   builder: (BuildContext context, Widget? child) {
                     final bool isSubmitting = widget.controller.isSigningIn;
                     final String? authError = widget.controller.authError;
-                    final String? error = _localError ??
+                    final String? error =
+                        _localError ??
                         (authError == null
                             ? null
                             : AppFeedback.messageFor(authError));
                     return LayoutBuilder(
-                      builder:
-                          (BuildContext context, BoxConstraints constraints) {
+                      builder: (
+                        BuildContext context,
+                        BoxConstraints constraints,
+                      ) {
                         final bool stacked = constraints.maxWidth < 900;
                         final Widget story = Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,18 +191,20 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                                   Text('What you unlock'),
                                   SizedBox(height: 10),
                                   _BulletLine(
-                                      icon:
-                                          Icons.account_balance_wallet_outlined,
-                                      text:
-                                          'Smart wallet balances, deposit tracking, and withdrawal eligibility.'),
+                                    icon: Icons.account_balance_wallet_outlined,
+                                    text:
+                                        'Smart wallet balances, deposit tracking, and withdrawal eligibility.',
+                                  ),
                                   _BulletLine(
-                                      icon: Icons.receipt_long_outlined,
-                                      text:
-                                          'Manual bank transfer funding with exact references.'),
+                                    icon: Icons.receipt_long_outlined,
+                                    text:
+                                        'Manual bank transfer funding with exact references.',
+                                  ),
                                   _BulletLine(
-                                      icon: Icons.support_agent_outlined,
-                                      text:
-                                          'In-app dispute chat and WhatsApp escalation.'),
+                                    icon: Icons.support_agent_outlined,
+                                    text:
+                                        'In-app dispute chat and WhatsApp escalation.',
+                                  ),
                                 ],
                               ),
                             ),
@@ -225,16 +225,20 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
-                                        Text('Create account',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .headlineSmall),
+                                        Text(
+                                          'Create account',
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.headlineSmall,
+                                        ),
                                         const SizedBox(height: 4),
                                         Text(
                                           'Use your real name. Wallets are created automatically.',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium,
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
                                         ),
                                       ],
                                     ),
@@ -299,17 +303,19 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                                   children: <Widget>[
                                     Checkbox(
                                       value: _isOver18,
-                                      onChanged: isSubmitting
-                                          ? null
-                                          : (bool? value) {
-                                              setState(() {
-                                                _isOver18 = value ?? false;
-                                              });
-                                            },
+                                      onChanged:
+                                          isSubmitting
+                                              ? null
+                                              : (bool? value) {
+                                                setState(() {
+                                                  _isOver18 = value ?? false;
+                                                });
+                                              },
                                     ),
                                     const Expanded(
                                       child: Text(
-                                          'I confirm that I am 18 or older.'),
+                                        'I confirm that I am 18 or older.',
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -339,27 +345,32 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
                               ),
                               const SizedBox(height: 12),
                               TextButton(
-                                onPressed: isSubmitting
-                                    ? null
-                                    : () {
-                                        Navigator.of(context).pop();
-                                      },
+                                onPressed:
+                                    isSubmitting
+                                        ? null
+                                        : () {
+                                          Navigator.of(context).pop();
+                                        },
                                 child: const Text('I already have a login'),
                               ),
                               TextButton(
-                                onPressed: isSubmitting
-                                    ? null
-                                    : () async {
-                                        await Navigator.of(context).push<void>(
-                                          MaterialPageRoute<void>(
-                                            builder: (BuildContext context) =>
-                                                CreatorAccessRequestScreen(
-                                              exchangeController:
-                                                  widget.controller,
+                                onPressed:
+                                    isSubmitting
+                                        ? null
+                                        : () async {
+                                          await Navigator.of(
+                                            context,
+                                          ).push<void>(
+                                            MaterialPageRoute<void>(
+                                              builder:
+                                                  (BuildContext context) =>
+                                                      CreatorAccessRequestScreen(
+                                                        exchangeController:
+                                                            widget.controller,
+                                                      ),
                                             ),
-                                          ),
-                                        );
-                                      },
+                                          );
+                                        },
                                 child: const Text('Apply for creator access'),
                               ),
                             ],
@@ -399,10 +410,7 @@ class _GteSignupScreenState extends State<GteSignupScreen> {
 }
 
 class _BulletLine extends StatelessWidget {
-  const _BulletLine({
-    required this.icon,
-    required this.text,
-  });
+  const _BulletLine({required this.icon, required this.text});
 
   final IconData icon;
   final String text;

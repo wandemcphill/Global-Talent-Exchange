@@ -73,6 +73,7 @@ class _RecordingEventService extends EventService {
               const AuthSession(
                 userId: 'user-pipeline',
                 accessToken: 'token-pipeline',
+                refreshToken: 'refresh-pipeline',
                 sessionId: 'session-pipeline',
               ),
             ),

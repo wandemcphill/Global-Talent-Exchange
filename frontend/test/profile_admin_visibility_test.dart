@@ -21,6 +21,7 @@ void main() {
             const AuthSession(
               userId: 'admin-1',
               accessToken: 'token-1',
+              refreshToken: 'refresh-token-1',
               sessionId: 'session-1',
               role: 'admin',
             ),
@@ -60,6 +61,7 @@ void main() {
             const AuthSession(
               userId: 'user-1',
               accessToken: 'token-1',
+              refreshToken: 'refresh-token-1',
               sessionId: 'session-1',
               role: 'user',
             ),
@@ -101,6 +103,7 @@ void main() {
               const AuthSession(
                 userId: 'scoped-admin-1',
                 accessToken: 'token-1',
+                refreshToken: 'refresh-token-1',
                 sessionId: 'session-1',
                 role: 'scoped_admin',
                 permissions: <String>['manage_manager_supply'],

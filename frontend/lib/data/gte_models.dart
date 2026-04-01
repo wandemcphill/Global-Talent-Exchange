@@ -1,15 +1,8 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
-enum NotificationIntensity {
-  light,
-  standard,
-  scoutMode,
-}
+enum NotificationIntensity { light, standard, scoutMode }
 
-enum GteOrderSide {
-  buy,
-  sell,
-}
+enum GteOrderSide { buy, sell }
 
 enum GteOrderStatus {
   open,
@@ -20,21 +13,11 @@ enum GteOrderStatus {
   unknown,
 }
 
-enum GteLedgerUnit {
-  credit,
-  coin,
-  unknown,
-}
+enum GteLedgerUnit { credit, coin, unknown }
 
-enum GtePaymentMode {
-  manual,
-  automatic,
-}
+enum GtePaymentMode { manual, automatic }
 
-enum GteRateDirection {
-  fiatPerCoin,
-  coinPerFiat,
-}
+enum GteRateDirection { fiatPerCoin, coinPerFiat }
 
 enum GteDepositStatus {
   awaitingPayment,
@@ -66,13 +49,7 @@ enum GteKycStatus {
   rejected,
 }
 
-enum GteDisputeStatus {
-  open,
-  awaitingUser,
-  awaitingAdmin,
-  resolved,
-  closed,
-}
+enum GteDisputeStatus { open, awaitingUser, awaitingAdmin, resolved, closed }
 
 class GteParsingException implements FormatException {
   const GteParsingException(this.messageText, [this.sourceText]);
@@ -155,7 +132,9 @@ class GteJson {
         return fallback;
       }
       throw GteParsingException(
-          'Missing required string field: ${keys.join(' / ')}.', json);
+        'Missing required string field: ${keys.join(' / ')}.',
+        json,
+      );
     }
     final String parsed = rawValue.toString().trim();
     if (parsed.isEmpty) {
@@ -163,7 +142,9 @@ class GteJson {
         return fallback;
       }
       throw GteParsingException(
-          'Empty string field: ${keys.join(' / ')}.', json);
+        'Empty string field: ${keys.join(' / ')}.',
+        json,
+      );
     }
     return parsed;
   }
@@ -247,7 +228,9 @@ class GteJson {
   }
 
   static DateTime? dateTimeOrNull(
-      Map<String, Object?> json, List<String> keys) {
+    Map<String, Object?> json,
+    List<String> keys,
+  ) {
     final Object? rawValue = value(json, keys);
     if (rawValue == null) {
       return null;
@@ -258,10 +241,7 @@ class GteJson {
     return DateTime.tryParse(rawValue.toString())?.toUtc();
   }
 
-  static DateTime dateTime(
-    Map<String, Object?> json,
-    List<String> keys,
-  ) {
+  static DateTime dateTime(Map<String, Object?> json, List<String> keys) {
     final DateTime? parsed = dateTimeOrNull(json, keys);
     if (parsed != null) {
       return parsed;
@@ -281,9 +261,10 @@ class GteJson {
     if (rawValue == null) {
       return <T>[];
     }
-    return list(rawValue, label: keys.join(' / '))
-        .map(parser)
-        .toList(growable: false);
+    return list(
+      rawValue,
+      label: keys.join(' / '),
+    ).map(parser).toList(growable: false);
   }
 
   static Map<String, Object?> decodeObject(String body) {
@@ -305,10 +286,7 @@ class GteJson {
 }
 
 class TrendPoint {
-  const TrendPoint({
-    required this.label,
-    required this.value,
-  });
+  const TrendPoint({required this.label, required this.value});
 
   final String label;
   final double value;
@@ -317,8 +295,11 @@ class TrendPoint {
     final Map<String, Object?> json = GteJson.map(value, label: 'trend point');
     return TrendPoint(
       label: GteJson.string(json, <String>['label', 'timestamp']),
-      value: GteJson.number(
-          json, <String>['value', 'close', 'current_value_credits']),
+      value: GteJson.number(json, <String>[
+        'value',
+        'close',
+        'current_value_credits',
+      ]),
     );
   }
 }
@@ -511,18 +492,15 @@ class MarketPulse {
 }
 
 class GteAuthLoginRequest {
-  const GteAuthLoginRequest({
-    required this.email,
-    required this.password,
-  });
+  const GteAuthLoginRequest({required this.email, required this.password});
 
   final String email;
   final String password;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'email': email,
-        'password': password,
-      };
+    'email': email,
+    'password': password,
+  };
 }
 
 class GteAuthRegisterRequest {
@@ -545,14 +523,14 @@ class GteAuthRegisterRequest {
   final String password;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'email': email,
-        'full_name': fullName,
-        'phone_number': phoneNumber,
-        'is_over_18': isOver18,
-        'region_code': regionCode.trim().toUpperCase(),
-        if (username != null) 'username': username,
-        'password': password,
-      };
+    'email': email,
+    'full_name': fullName,
+    'phone_number': phoneNumber,
+    'is_over_18': isOver18,
+    'region_code': regionCode.trim().toUpperCase(),
+    if (username != null) 'username': username,
+    'password': password,
+  };
 }
 
 class GteCurrentUser {
@@ -589,17 +567,27 @@ class GteCurrentUser {
       email: GteJson.string(json, <String>['email']),
       username: GteJson.string(json, <String>['username']),
       fullName: GteJson.stringOrNull(json, <String>['full_name', 'fullName']),
-      phoneNumber:
-          GteJson.stringOrNull(json, <String>['phone_number', 'phoneNumber']),
-      displayName:
-          GteJson.stringOrNull(json, <String>['display_name', 'displayName']),
+      phoneNumber: GteJson.stringOrNull(json, <String>[
+        'phone_number',
+        'phoneNumber',
+      ]),
+      displayName: GteJson.stringOrNull(json, <String>[
+        'display_name',
+        'displayName',
+      ]),
       role: GteJson.string(json, <String>['role'], fallback: 'user'),
-      kycStatus:
-          GteJson.stringOrNull(json, <String>['kyc_status', 'kycStatus']),
-      isActive: GteJson.boolean(json, <String>['is_active', 'isActive'],
-          fallback: true),
-      ageConfirmedAt: GteJson.dateTimeOrNull(
-          json, <String>['age_confirmed_at', 'ageConfirmedAt']),
+      kycStatus: GteJson.stringOrNull(json, <String>[
+        'kyc_status',
+        'kycStatus',
+      ]),
+      isActive: GteJson.boolean(json, <String>[
+        'is_active',
+        'isActive',
+      ], fallback: true),
+      ageConfirmedAt: GteJson.dateTimeOrNull(json, <String>[
+        'age_confirmed_at',
+        'ageConfirmedAt',
+      ]),
       rawJson: Map<String, Object?>.unmodifiable(json),
     );
   }
@@ -633,28 +621,35 @@ class GteAuthSession {
   factory GteAuthSession.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'auth session');
     return GteAuthSession(
-      accessToken:
-          GteJson.string(json, <String>['access_token', 'accessToken']),
-      refreshToken: GteJson.string(
-        json,
-        <String>['refresh_token', 'refreshToken'],
-        fallback: '',
-      ),
+      accessToken: GteJson.string(json, <String>[
+        'access_token',
+        'accessToken',
+      ]),
+      refreshToken: GteJson.string(json, <String>[
+        'refresh_token',
+        'refreshToken',
+      ], fallback: ''),
       sessionId: GteJson.string(json, <String>['session_id', 'sessionId']),
-      tokenType: GteJson.string(json, <String>['token_type', 'tokenType'],
-          fallback: 'bearer'),
-      expiresIn: GteJson.integer(json, <String>['expires_in', 'expiresIn'],
-          fallback: 0),
-      refreshExpiresIn: GteJson.integer(
-        json,
-        <String>['refresh_expires_in', 'refreshExpiresIn'],
-        fallback: 0,
-      ),
+      tokenType: GteJson.string(json, <String>[
+        'token_type',
+        'tokenType',
+      ], fallback: 'bearer'),
+      expiresIn: GteJson.integer(json, <String>[
+        'expires_in',
+        'expiresIn',
+      ], fallback: 0),
+      refreshExpiresIn: GteJson.integer(json, <String>[
+        'refresh_expires_in',
+        'refreshExpiresIn',
+      ], fallback: 0),
       user: GteCurrentUser.fromJson(GteJson.value(json, <String>['user'])),
-      permissions: GteJson.typedList<String>(
-          json, <String>['permissions'], (Object? value) => value.toString()),
-      landingRoute:
-          GteJson.stringOrNull(json, <String>['landing_route', 'landingRoute']),
+      permissions: GteJson.typedList<String>(json, <String>[
+        'permissions',
+      ], (Object? value) => value.toString()),
+      landingRoute: GteJson.stringOrNull(json, <String>[
+        'landing_route',
+        'landingRoute',
+      ]),
       rawJson: Map<String, Object?>.unmodifiable(json),
     );
   }
@@ -688,8 +683,10 @@ class GteMarketTicker {
   final double volume24h;
 
   factory GteMarketTicker.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'market ticker');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market ticker',
+    );
     return GteMarketTicker(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       symbol: GteJson.stringOrNull(json, <String>['symbol', 'player_name']),
@@ -697,26 +694,35 @@ class GteMarketTicker {
           GteJson.value(json, <String>['last_price', 'lastPrice']) == null
               ? null
               : GteJson.number(json, <String>['last_price', 'lastPrice']),
-      bestBid: GteJson.value(json, <String>['best_bid', 'bestBid']) == null
-          ? null
-          : GteJson.number(json, <String>['best_bid', 'bestBid']),
-      bestAsk: GteJson.value(json, <String>['best_ask', 'bestAsk']) == null
-          ? null
-          : GteJson.number(json, <String>['best_ask', 'bestAsk']),
-      spread: GteJson.value(json, <String>['spread']) == null
-          ? null
-          : GteJson.number(json, <String>['spread']),
-      midPrice: GteJson.value(json, <String>['mid_price', 'midPrice']) == null
-          ? null
-          : GteJson.number(json, <String>['mid_price', 'midPrice']),
-      referencePrice: GteJson.value(
-                  json, <String>['reference_price', 'referencePrice']) ==
-              null
-          ? null
-          : GteJson.number(json, <String>['reference_price', 'referencePrice']),
+      bestBid:
+          GteJson.value(json, <String>['best_bid', 'bestBid']) == null
+              ? null
+              : GteJson.number(json, <String>['best_bid', 'bestBid']),
+      bestAsk:
+          GteJson.value(json, <String>['best_ask', 'bestAsk']) == null
+              ? null
+              : GteJson.number(json, <String>['best_ask', 'bestAsk']),
+      spread:
+          GteJson.value(json, <String>['spread']) == null
+              ? null
+              : GteJson.number(json, <String>['spread']),
+      midPrice:
+          GteJson.value(json, <String>['mid_price', 'midPrice']) == null
+              ? null
+              : GteJson.number(json, <String>['mid_price', 'midPrice']),
+      referencePrice:
+          GteJson.value(json, <String>['reference_price', 'referencePrice']) ==
+                  null
+              ? null
+              : GteJson.number(json, <String>[
+                'reference_price',
+                'referencePrice',
+              ]),
       dayChange: GteJson.number(json, <String>['day_change', 'dayChange']),
-      dayChangePercent: GteJson.number(
-          json, <String>['day_change_percent', 'dayChangePercent']),
+      dayChangePercent: GteJson.number(json, <String>[
+        'day_change_percent',
+        'dayChangePercent',
+      ]),
       volume24h: GteJson.number(json, <String>['volume_24h', 'volume24h']),
     );
   }
@@ -740,10 +746,13 @@ class GteMarketCandle {
   final double volume;
 
   factory GteMarketCandle.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'market candle');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market candle',
+    );
     return GteMarketCandle(
-      timestamp: GteJson.dateTimeOrNull(json, <String>['timestamp']) ??
+      timestamp:
+          GteJson.dateTimeOrNull(json, <String>['timestamp']) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       open: GteJson.number(json, <String>['open']),
       high: GteJson.number(json, <String>['high']),
@@ -766,13 +775,16 @@ class GteMarketCandles {
   final List<GteMarketCandle> candles;
 
   factory GteMarketCandles.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'market candles');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market candles',
+    );
     return GteMarketCandles(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       interval: GteJson.string(json, <String>['interval'], fallback: '1h'),
-      candles: GteJson.typedList(
-          json, <String>['candles'], GteMarketCandle.fromJson),
+      candles: GteJson.typedList(json, <String>[
+        'candles',
+      ], GteMarketCandle.fromJson),
     );
   }
 }
@@ -789,13 +801,17 @@ class GteOrderBookLevel {
   final int orderCount;
 
   factory GteOrderBookLevel.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'order book level');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'order book level',
+    );
     return GteOrderBookLevel(
       price: GteJson.number(json, <String>['price']),
       quantity: GteJson.number(json, <String>['quantity']),
-      orderCount: GteJson.integer(json, <String>['order_count', 'orderCount'],
-          fallback: 1),
+      orderCount: GteJson.integer(json, <String>[
+        'order_count',
+        'orderCount',
+      ], fallback: 1),
     );
   }
 }
@@ -817,12 +833,16 @@ class GteOrderBook {
     final Map<String, Object?> json = GteJson.map(value, label: 'order book');
     return GteOrderBook(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
-      bids:
-          GteJson.typedList(json, <String>['bids'], GteOrderBookLevel.fromJson),
-      asks:
-          GteJson.typedList(json, <String>['asks'], GteOrderBookLevel.fromJson),
-      generatedAt:
-          GteJson.dateTimeOrNull(json, <String>['generated_at', 'generatedAt']),
+      bids: GteJson.typedList(json, <String>[
+        'bids',
+      ], GteOrderBookLevel.fromJson),
+      asks: GteJson.typedList(json, <String>[
+        'asks',
+      ], GteOrderBookLevel.fromJson),
+      generatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'generated_at',
+        'generatedAt',
+      ]),
     );
   }
 }
@@ -841,17 +861,26 @@ class GteWalletSummary {
   final GteLedgerUnit currency;
 
   factory GteWalletSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'wallet summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet summary',
+    );
     return GteWalletSummary(
-      availableBalance: GteJson.number(
-          json, <String>['available_balance', 'availableBalance']),
-      reservedBalance:
-          GteJson.number(json, <String>['reserved_balance', 'reservedBalance']),
-      totalBalance:
-          GteJson.number(json, <String>['total_balance', 'totalBalance']),
+      availableBalance: GteJson.number(json, <String>[
+        'available_balance',
+        'availableBalance',
+      ]),
+      reservedBalance: GteJson.number(json, <String>[
+        'reserved_balance',
+        'reservedBalance',
+      ]),
+      totalBalance: GteJson.number(json, <String>[
+        'total_balance',
+        'totalBalance',
+      ]),
       currency: _ledgerUnitFromString(
-          GteJson.string(json, <String>['currency'], fallback: 'unknown')),
+        GteJson.string(json, <String>['currency'], fallback: 'unknown'),
+      ),
     );
   }
 }
@@ -872,15 +901,19 @@ class GteWalletLedgerEntry {
   final DateTime? createdAt;
 
   factory GteWalletLedgerEntry.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'wallet ledger entry');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet ledger entry',
+    );
     return GteWalletLedgerEntry(
       id: GteJson.string(json, <String>['id']),
       amount: GteJson.number(json, <String>['amount']),
       reason: GteJson.string(json, <String>['reason']),
       description: GteJson.stringOrNull(json, <String>['description']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
     );
   }
 }
@@ -899,15 +932,20 @@ class GteWalletLedgerPage {
   final List<GteWalletLedgerEntry> items;
 
   factory GteWalletLedgerPage.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'wallet ledger page');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet ledger page',
+    );
     return GteWalletLedgerPage(
       page: GteJson.integer(json, <String>['page'], fallback: 1),
-      pageSize: GteJson.integer(json, <String>['page_size', 'pageSize'],
-          fallback: 20),
+      pageSize: GteJson.integer(json, <String>[
+        'page_size',
+        'pageSize',
+      ], fallback: 20),
       total: GteJson.integer(json, <String>['total']),
-      items: GteJson.typedList(
-          json, <String>['items'], GteWalletLedgerEntry.fromJson),
+      items: GteJson.typedList(json, <String>[
+        'items',
+      ], GteWalletLedgerEntry.fromJson),
     );
   }
 }
@@ -940,36 +978,220 @@ class GteWalletOverview {
   final String? policyBlockReason;
 
   factory GteWalletOverview.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'wallet overview');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet overview',
+    );
     return GteWalletOverview(
-      availableBalance: GteJson.number(
-          json, <String>['available_balance', 'availableBalance']),
-      pendingDeposits:
-          GteJson.number(json, <String>['pending_deposits', 'pendingDeposits']),
-      pendingWithdrawals: GteJson.number(
-          json, <String>['pending_withdrawals', 'pendingWithdrawals']),
-      totalInflow:
-          GteJson.number(json, <String>['total_inflow', 'totalInflow']),
-      totalOutflow:
-          GteJson.number(json, <String>['total_outflow', 'totalOutflow']),
-      withdrawableNow:
-          GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
+      availableBalance: GteJson.number(json, <String>[
+        'available_balance',
+        'availableBalance',
+      ]),
+      pendingDeposits: GteJson.number(json, <String>[
+        'pending_deposits',
+        'pendingDeposits',
+      ]),
+      pendingWithdrawals: GteJson.number(json, <String>[
+        'pending_withdrawals',
+        'pendingWithdrawals',
+      ]),
+      totalInflow: GteJson.number(json, <String>[
+        'total_inflow',
+        'totalInflow',
+      ]),
+      totalOutflow: GteJson.number(json, <String>[
+        'total_outflow',
+        'totalOutflow',
+      ]),
+      withdrawableNow: GteJson.number(json, <String>[
+        'withdrawable_now',
+        'withdrawableNow',
+      ]),
       currency: _ledgerUnitFromString(
-          GteJson.string(json, <String>['currency'], fallback: 'coin')),
-      countryCode:
-          GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
-      requiredPolicyAcceptancesMissing: GteJson.integer(
-        json,
-        <String>[
-          'required_policy_acceptances_missing',
-          'requiredPolicyAcceptancesMissing'
-        ],
+        GteJson.string(json, <String>['currency'], fallback: 'coin'),
       ),
-      policyBlocked:
-          GteJson.boolean(json, <String>['policy_blocked', 'policyBlocked']),
-      policyBlockReason: GteJson.stringOrNull(
-          json, <String>['policy_block_reason', 'policyBlockReason']),
+      countryCode: GteJson.stringOrNull(json, <String>[
+        'country_code',
+        'countryCode',
+      ]),
+      requiredPolicyAcceptancesMissing: GteJson.integer(json, <String>[
+        'required_policy_acceptances_missing',
+        'requiredPolicyAcceptancesMissing',
+      ]),
+      policyBlocked: GteJson.boolean(json, <String>[
+        'policy_blocked',
+        'policyBlocked',
+      ]),
+      policyBlockReason: GteJson.stringOrNull(json, <String>[
+        'policy_block_reason',
+        'policyBlockReason',
+      ]),
+    );
+  }
+}
+
+class GteUserWallet {
+  const GteUserWallet({
+    required this.id,
+    required this.userId,
+    required this.balance,
+    required this.currency,
+    required this.complianceStatus,
+    this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final double balance;
+  final String currency;
+  final String complianceStatus;
+  final DateTime? createdAt;
+
+  factory GteUserWallet.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'user wallet');
+    return GteUserWallet(
+      id: GteJson.string(json, <String>['id']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      balance: GteJson.number(json, <String>['balance']),
+      currency: GteJson.string(json, <String>['currency'], fallback: 'credit'),
+      complianceStatus: GteJson.string(json, <String>[
+        'compliance_status',
+        'complianceStatus',
+      ], fallback: 'verified'),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+    );
+  }
+}
+
+class GteWalletTransactionRecord {
+  const GteWalletTransactionRecord({
+    required this.id,
+    required this.userId,
+    required this.type,
+    required this.amount,
+    required this.status,
+    required this.reference,
+    this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final String type;
+  final double amount;
+  final String status;
+  final String reference;
+  final DateTime? createdAt;
+
+  factory GteWalletTransactionRecord.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet transaction',
+    );
+    return GteWalletTransactionRecord(
+      id: GteJson.string(json, <String>['id']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      type: GteJson.string(json, <String>['type']),
+      amount: GteJson.number(json, <String>['amount']),
+      status: GteJson.string(json, <String>['status'], fallback: 'pending'),
+      reference: GteJson.string(json, <String>['reference']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+    );
+  }
+}
+
+class GteWalletTopUpSession {
+  const GteWalletTopUpSession({
+    required this.reference,
+    required this.paymentLink,
+    required this.amount,
+    required this.currency,
+    required this.provider,
+    required this.status,
+    this.mockMode = false,
+  });
+
+  final String reference;
+  final String paymentLink;
+  final double amount;
+  final String currency;
+  final String provider;
+  final String status;
+  final bool mockMode;
+
+  factory GteWalletTopUpSession.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet top-up session',
+    );
+    return GteWalletTopUpSession(
+      reference: GteJson.string(json, <String>['reference']),
+      paymentLink: GteJson.string(json, <String>[
+        'payment_link',
+        'paymentLink',
+      ]),
+      amount: GteJson.number(json, <String>['amount']),
+      currency: GteJson.string(json, <String>['currency'], fallback: 'credit'),
+      provider: GteJson.string(json, <String>[
+        'provider',
+      ], fallback: 'paystack'),
+      status: GteJson.string(json, <String>['status'], fallback: 'pending'),
+      mockMode: GteJson.boolean(json, <String>[
+        'mock_mode',
+        'mockMode',
+      ], fallback: false),
+    );
+  }
+}
+
+class GteWalletTopUpInitiateRequest {
+  const GteWalletTopUpInitiateRequest({
+    required this.amount,
+    this.provider = 'paystack',
+    this.callbackUrl,
+  });
+
+  final double amount;
+  final String provider;
+  final String? callbackUrl;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'amount': amount,
+      'provider': provider,
+      if (callbackUrl != null && callbackUrl!.trim().isNotEmpty)
+        'callback_url': callbackUrl!.trim(),
+    };
+  }
+}
+
+class GteWalletTopUpVerificationResult {
+  const GteWalletTopUpVerificationResult({
+    required this.wallet,
+    required this.transaction,
+  });
+
+  final GteUserWallet wallet;
+  final GteWalletTransactionRecord transaction;
+
+  factory GteWalletTopUpVerificationResult.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'wallet top-up verification',
+    );
+    return GteWalletTopUpVerificationResult(
+      wallet: GteUserWallet.fromJson(
+        GteJson.value(json, <String>['wallet']) ?? const <String, Object?>{},
+      ),
+      transaction: GteWalletTransactionRecord.fromJson(
+        GteJson.value(json, <String>['transaction']) ??
+            const <String, Object?>{},
+      ),
     );
   }
 }
@@ -1006,44 +1228,67 @@ class GteWithdrawalEligibility {
   final String? policyBlockReason;
 
   factory GteWithdrawalEligibility.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'withdrawal eligibility');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'withdrawal eligibility',
+    );
     return GteWithdrawalEligibility(
-      availableBalance: GteJson.number(
-          json, <String>['available_balance', 'availableBalance']),
-      withdrawableNow:
-          GteJson.number(json, <String>['withdrawable_now', 'withdrawableNow']),
-      remainingAllowance: GteJson.number(
-          json, <String>['remaining_allowance', 'remainingAllowance']),
-      nextEligibleAt: GteJson.dateTimeOrNull(
-          json, <String>['next_eligible_at', 'nextEligibleAt']),
-      kycStatus: _kycStatusFromString(GteJson.string(
-          json, <String>['kyc_status', 'kycStatus'],
-          fallback: 'unverified')),
-      requiresKyc:
-          GteJson.boolean(json, <String>['requires_kyc', 'requiresKyc']),
-      requiresBankAccount: GteJson.boolean(
-          json, <String>['requires_bank_account', 'requiresBankAccount']),
-      pendingWithdrawals: GteJson.number(
-          json, <String>['pending_withdrawals', 'pendingWithdrawals']),
-      countryCode:
-          GteJson.stringOrNull(json, <String>['country_code', 'countryCode']),
-      countryWithdrawalsEnabled: GteJson.boolean(
-        json,
-        <String>['country_withdrawals_enabled', 'countryWithdrawalsEnabled'],
-        fallback: true,
+      availableBalance: GteJson.number(json, <String>[
+        'available_balance',
+        'availableBalance',
+      ]),
+      withdrawableNow: GteJson.number(json, <String>[
+        'withdrawable_now',
+        'withdrawableNow',
+      ]),
+      remainingAllowance: GteJson.number(json, <String>[
+        'remaining_allowance',
+        'remainingAllowance',
+      ]),
+      nextEligibleAt: GteJson.dateTimeOrNull(json, <String>[
+        'next_eligible_at',
+        'nextEligibleAt',
+      ]),
+      kycStatus: _kycStatusFromString(
+        GteJson.string(json, <String>[
+          'kyc_status',
+          'kycStatus',
+        ], fallback: 'unverified'),
       ),
-      missingRequiredPolicies: GteJson.typedList(
-        json,
-        <String>['missing_required_policies', 'missingRequiredPolicies'],
-        (Object? value) => value?.toString() ?? '',
-      )
+      requiresKyc: GteJson.boolean(json, <String>[
+        'requires_kyc',
+        'requiresKyc',
+      ]),
+      requiresBankAccount: GteJson.boolean(json, <String>[
+        'requires_bank_account',
+        'requiresBankAccount',
+      ]),
+      pendingWithdrawals: GteJson.number(json, <String>[
+        'pending_withdrawals',
+        'pendingWithdrawals',
+      ]),
+      countryCode: GteJson.stringOrNull(json, <String>[
+        'country_code',
+        'countryCode',
+      ]),
+      countryWithdrawalsEnabled: GteJson.boolean(json, <String>[
+        'country_withdrawals_enabled',
+        'countryWithdrawalsEnabled',
+      ], fallback: true),
+      missingRequiredPolicies: GteJson.typedList(json, <String>[
+            'missing_required_policies',
+            'missingRequiredPolicies',
+          ], (Object? value) => value?.toString() ?? '')
           .where((String value) => value.trim().isNotEmpty)
           .toList(growable: false),
-      policyBlocked:
-          GteJson.boolean(json, <String>['policy_blocked', 'policyBlocked']),
-      policyBlockReason: GteJson.stringOrNull(
-          json, <String>['policy_block_reason', 'policyBlockReason']),
+      policyBlocked: GteJson.boolean(json, <String>[
+        'policy_blocked',
+        'policyBlocked',
+      ]),
+      policyBlockReason: GteJson.stringOrNull(json, <String>[
+        'policy_block_reason',
+        'policyBlockReason',
+      ]),
     );
   }
 }
@@ -1084,37 +1329,54 @@ class GteWithdrawalQuote {
   final String? blockedReason;
 
   factory GteWithdrawalQuote.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'withdrawal quote');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'withdrawal quote',
+    );
     return GteWithdrawalQuote(
-      grossAmount:
-          GteJson.number(json, <String>['gross_amount', 'grossAmount']),
+      grossAmount: GteJson.number(json, <String>[
+        'gross_amount',
+        'grossAmount',
+      ]),
       feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
       netAmount: GteJson.number(json, <String>['net_amount', 'netAmount']),
       totalDebit: GteJson.number(json, <String>['total_debit', 'totalDebit']),
-      sourceScope: GteJson.string(json, <String>['source_scope', 'sourceScope'],
-          fallback: 'trade'),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      sourceScope: GteJson.string(json, <String>[
+        'source_scope',
+        'sourceScope',
+      ], fallback: 'trade'),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
       rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
-      rateDirection: _rateDirectionFromString(GteJson.string(
-          json, <String>['rate_direction', 'rateDirection'],
-          fallback: 'fiat_per_coin')),
-      estimatedFiatPayout: GteJson.number(
-          json, <String>['estimated_fiat_payout', 'estimatedFiatPayout']),
-      processorMode: GteJson.string(
-          json, <String>['processor_mode', 'processorMode'],
-          fallback: 'manual_bank_transfer'),
-      payoutChannel: GteJson.string(
-          json, <String>['payout_channel', 'payoutChannel'],
-          fallback: 'bank_transfer'),
+      rateDirection: _rateDirectionFromString(
+        GteJson.string(json, <String>[
+          'rate_direction',
+          'rateDirection',
+        ], fallback: 'fiat_per_coin'),
+      ),
+      estimatedFiatPayout: GteJson.number(json, <String>[
+        'estimated_fiat_payout',
+        'estimatedFiatPayout',
+      ]),
+      processorMode: GteJson.string(json, <String>[
+        'processor_mode',
+        'processorMode',
+      ], fallback: 'manual_bank_transfer'),
+      payoutChannel: GteJson.string(json, <String>[
+        'payout_channel',
+        'payoutChannel',
+      ], fallback: 'bank_transfer'),
       feeBps: GteJson.integer(json, <String>['fee_bps', 'feeBps']),
       minimumFee: GteJson.number(json, <String>['minimum_fee', 'minimumFee']),
       eligibility: GteWithdrawalEligibility.fromJson(
         GteJson.value(json, <String>['eligibility']),
       ),
-      blockedReason: GteJson.stringOrNull(
-          json, <String>['blocked_reason', 'blockedReason']),
+      blockedReason: GteJson.stringOrNull(json, <String>[
+        'blocked_reason',
+        'blockedReason',
+      ]),
     );
   }
 }
@@ -1129,9 +1391,9 @@ class GteWithdrawalQuoteRequest {
   final String sourceScope;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'amount_coin': amountCoin,
-        'source_scope': sourceScope,
-      };
+    'amount_coin': amountCoin,
+    'source_scope': sourceScope,
+  };
 }
 
 class GteWithdrawalReceipt {
@@ -1156,25 +1418,33 @@ class GteWithdrawalReceipt {
   final String payoutChannel;
 
   factory GteWithdrawalReceipt.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'withdrawal receipt');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'withdrawal receipt',
+    );
     return GteWithdrawalReceipt(
       withdrawal: GteTreasuryWithdrawalRequest.fromJson(
         GteJson.value(json, <String>['withdrawal']),
       ),
-      grossAmount:
-          GteJson.number(json, <String>['gross_amount', 'grossAmount']),
+      grossAmount: GteJson.number(json, <String>[
+        'gross_amount',
+        'grossAmount',
+      ]),
       feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
       netAmount: GteJson.number(json, <String>['net_amount', 'netAmount']),
       totalDebit: GteJson.number(json, <String>['total_debit', 'totalDebit']),
-      sourceScope: GteJson.string(json, <String>['source_scope', 'sourceScope'],
-          fallback: 'trade'),
-      processorMode: GteJson.string(
-          json, <String>['processor_mode', 'processorMode'],
-          fallback: 'manual_bank_transfer'),
-      payoutChannel: GteJson.string(
-          json, <String>['payout_channel', 'payoutChannel'],
-          fallback: 'bank_transfer'),
+      sourceScope: GteJson.string(json, <String>[
+        'source_scope',
+        'sourceScope',
+      ], fallback: 'trade'),
+      processorMode: GteJson.string(json, <String>[
+        'processor_mode',
+        'processorMode',
+      ], fallback: 'manual_bank_transfer'),
+      payoutChannel: GteJson.string(json, <String>[
+        'payout_channel',
+        'payoutChannel',
+      ], fallback: 'bank_transfer'),
     );
   }
 }
@@ -1195,16 +1465,24 @@ class GtePolicyDocumentVersionSummary {
   final String? changelog;
 
   factory GtePolicyDocumentVersionSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'policy document version');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'policy document version',
+    );
     return GtePolicyDocumentVersionSummary(
       id: GteJson.string(json, <String>['id']),
-      versionLabel:
-          GteJson.string(json, <String>['version_label', 'versionLabel']),
-      effectiveAt:
-          GteJson.dateTimeOrNull(json, <String>['effective_at', 'effectiveAt']),
-      publishedAt:
-          GteJson.dateTimeOrNull(json, <String>['published_at', 'publishedAt']),
+      versionLabel: GteJson.string(json, <String>[
+        'version_label',
+        'versionLabel',
+      ]),
+      effectiveAt: GteJson.dateTimeOrNull(json, <String>[
+        'effective_at',
+        'effectiveAt',
+      ]),
+      publishedAt: GteJson.dateTimeOrNull(json, <String>[
+        'published_at',
+        'publishedAt',
+      ]),
       changelog: GteJson.stringOrNull(json, <String>['changelog']),
     );
   }
@@ -1228,21 +1506,30 @@ class GtePolicyDocumentSummary {
   final GtePolicyDocumentVersionSummary? latestVersion;
 
   factory GtePolicyDocumentSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'policy document summary');
-    final Object? latestVersionPayload =
-        GteJson.value(json, <String>['latest_version', 'latestVersion']);
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'policy document summary',
+    );
+    final Object? latestVersionPayload = GteJson.value(json, <String>[
+      'latest_version',
+      'latestVersion',
+    ]);
     return GtePolicyDocumentSummary(
       id: GteJson.string(json, <String>['id']),
-      documentKey:
-          GteJson.string(json, <String>['document_key', 'documentKey']),
+      documentKey: GteJson.string(json, <String>[
+        'document_key',
+        'documentKey',
+      ]),
       title: GteJson.string(json, <String>['title']),
-      isMandatory:
-          GteJson.boolean(json, <String>['is_mandatory', 'isMandatory']),
+      isMandatory: GteJson.boolean(json, <String>[
+        'is_mandatory',
+        'isMandatory',
+      ]),
       active: GteJson.boolean(json, <String>['active'], fallback: true),
-      latestVersion: latestVersionPayload == null
-          ? null
-          : GtePolicyDocumentVersionSummary.fromJson(latestVersionPayload),
+      latestVersion:
+          latestVersionPayload == null
+              ? null
+              : GtePolicyDocumentVersionSummary.fromJson(latestVersionPayload),
     );
   }
 }
@@ -1261,10 +1548,13 @@ class GtePolicyDocumentDetail extends GtePolicyDocumentSummary {
   final String? bodyMarkdown;
 
   factory GtePolicyDocumentDetail.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'policy document detail');
-    final GtePolicyDocumentSummary summary =
-        GtePolicyDocumentSummary.fromJson(json);
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'policy document detail',
+    );
+    final GtePolicyDocumentSummary summary = GtePolicyDocumentSummary.fromJson(
+      json,
+    );
     return GtePolicyDocumentDetail(
       id: summary.id,
       documentKey: summary.documentKey,
@@ -1272,8 +1562,10 @@ class GtePolicyDocumentDetail extends GtePolicyDocumentSummary {
       isMandatory: summary.isMandatory,
       active: summary.active,
       latestVersion: summary.latestVersion,
-      bodyMarkdown:
-          GteJson.stringOrNull(json, <String>['body_markdown', 'bodyMarkdown']),
+      bodyMarkdown: GteJson.stringOrNull(json, <String>[
+        'body_markdown',
+        'bodyMarkdown',
+      ]),
     );
   }
 }
@@ -1292,16 +1584,24 @@ class GtePolicyAcceptanceSummary {
   final DateTime? acceptedAt;
 
   factory GtePolicyAcceptanceSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'policy acceptance summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'policy acceptance summary',
+    );
     return GtePolicyAcceptanceSummary(
-      documentKey:
-          GteJson.string(json, <String>['document_key', 'documentKey']),
+      documentKey: GteJson.string(json, <String>[
+        'document_key',
+        'documentKey',
+      ]),
       title: GteJson.string(json, <String>['title']),
-      versionLabel:
-          GteJson.string(json, <String>['version_label', 'versionLabel']),
-      acceptedAt:
-          GteJson.dateTimeOrNull(json, <String>['accepted_at', 'acceptedAt']),
+      versionLabel: GteJson.string(json, <String>[
+        'version_label',
+        'versionLabel',
+      ]),
+      acceptedAt: GteJson.dateTimeOrNull(json, <String>[
+        'accepted_at',
+        'acceptedAt',
+      ]),
     );
   }
 }
@@ -1322,18 +1622,28 @@ class GtePolicyRequirementSummary {
   final DateTime? effectiveAt;
 
   factory GtePolicyRequirementSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'policy requirement summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'policy requirement summary',
+    );
     return GtePolicyRequirementSummary(
-      documentKey:
-          GteJson.string(json, <String>['document_key', 'documentKey']),
+      documentKey: GteJson.string(json, <String>[
+        'document_key',
+        'documentKey',
+      ]),
       title: GteJson.string(json, <String>['title']),
-      versionLabel:
-          GteJson.string(json, <String>['version_label', 'versionLabel']),
-      isMandatory:
-          GteJson.boolean(json, <String>['is_mandatory', 'isMandatory']),
-      effectiveAt:
-          GteJson.dateTimeOrNull(json, <String>['effective_at', 'effectiveAt']),
+      versionLabel: GteJson.string(json, <String>[
+        'version_label',
+        'versionLabel',
+      ]),
+      isMandatory: GteJson.boolean(json, <String>[
+        'is_mandatory',
+        'isMandatory',
+      ]),
+      effectiveAt: GteJson.dateTimeOrNull(json, <String>[
+        'effective_at',
+        'effectiveAt',
+      ]),
     );
   }
 }
@@ -1345,6 +1655,7 @@ class GteComplianceStatus {
     required this.depositsEnabled,
     required this.marketTradingEnabled,
     required this.platformRewardWithdrawalsEnabled,
+    required this.complianceStatus,
     required this.requiredPolicyAcceptancesMissing,
     required this.missingPolicyAcceptances,
     required this.canDeposit,
@@ -1357,6 +1668,7 @@ class GteComplianceStatus {
   final bool depositsEnabled;
   final bool marketTradingEnabled;
   final bool platformRewardWithdrawalsEnabled;
+  final String complianceStatus;
   final int requiredPolicyAcceptancesMissing;
   final List<GtePolicyRequirementSummary> missingPolicyAcceptances;
   final bool canDeposit;
@@ -1366,50 +1678,55 @@ class GteComplianceStatus {
   bool get hasMissingRequiredPolicies => requiredPolicyAcceptancesMissing > 0;
 
   factory GteComplianceStatus.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'compliance status');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'compliance status',
+    );
     return GteComplianceStatus(
-      countryCode: GteJson.string(json, <String>['country_code', 'countryCode'],
-          fallback: 'GLOBAL'),
-      countryPolicyBucket: GteJson.string(
-          json, <String>['country_policy_bucket', 'countryPolicyBucket'],
-          fallback: 'default'),
-      depositsEnabled: GteJson.boolean(
-          json, <String>['deposits_enabled', 'depositsEnabled'],
-          fallback: true),
-      marketTradingEnabled: GteJson.boolean(
-          json, <String>['market_trading_enabled', 'marketTradingEnabled'],
-          fallback: true),
-      platformRewardWithdrawalsEnabled: GteJson.boolean(
-        json,
-        <String>[
-          'platform_reward_withdrawals_enabled',
-          'platformRewardWithdrawalsEnabled'
-        ],
-        fallback: true,
-      ),
-      requiredPolicyAcceptancesMissing: GteJson.integer(
-        json,
-        <String>[
-          'required_policy_acceptances_missing',
-          'requiredPolicyAcceptancesMissing'
-        ],
-      ),
-      missingPolicyAcceptances: GteJson.typedList(
-        json,
-        <String>['missing_policy_acceptances', 'missingPolicyAcceptances'],
-        GtePolicyRequirementSummary.fromJson,
-      ),
-      canDeposit: GteJson.boolean(json, <String>['can_deposit', 'canDeposit'],
-          fallback: true),
-      canWithdrawPlatformRewards: GteJson.boolean(
-        json,
-        <String>['can_withdraw_platform_rewards', 'canWithdrawPlatformRewards'],
-        fallback: true,
-      ),
-      canTradeMarket: GteJson.boolean(
-          json, <String>['can_trade_market', 'canTradeMarket'],
-          fallback: true),
+      countryCode: GteJson.string(json, <String>[
+        'country_code',
+        'countryCode',
+      ], fallback: 'GLOBAL'),
+      countryPolicyBucket: GteJson.string(json, <String>[
+        'country_policy_bucket',
+        'countryPolicyBucket',
+      ], fallback: 'default'),
+      depositsEnabled: GteJson.boolean(json, <String>[
+        'deposits_enabled',
+        'depositsEnabled',
+      ], fallback: true),
+      marketTradingEnabled: GteJson.boolean(json, <String>[
+        'market_trading_enabled',
+        'marketTradingEnabled',
+      ], fallback: true),
+      platformRewardWithdrawalsEnabled: GteJson.boolean(json, <String>[
+        'platform_reward_withdrawals_enabled',
+        'platformRewardWithdrawalsEnabled',
+      ], fallback: true),
+      complianceStatus: GteJson.string(json, <String>[
+        'compliance_status',
+        'complianceStatus',
+      ], fallback: 'verified'),
+      requiredPolicyAcceptancesMissing: GteJson.integer(json, <String>[
+        'required_policy_acceptances_missing',
+        'requiredPolicyAcceptancesMissing',
+      ]),
+      missingPolicyAcceptances: GteJson.typedList(json, <String>[
+        'missing_policy_acceptances',
+        'missingPolicyAcceptances',
+      ], GtePolicyRequirementSummary.fromJson),
+      canDeposit: GteJson.boolean(json, <String>[
+        'can_deposit',
+        'canDeposit',
+      ], fallback: true),
+      canWithdrawPlatformRewards: GteJson.boolean(json, <String>[
+        'can_withdraw_platform_rewards',
+        'canWithdrawPlatformRewards',
+      ], fallback: true),
+      canTradeMarket: GteJson.boolean(json, <String>[
+        'can_trade_market',
+        'canTradeMarket',
+      ], fallback: true),
     );
   }
 }
@@ -1466,49 +1783,83 @@ class GteDepositRequest {
   final DateTime? expiresAt;
 
   factory GteDepositRequest.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'deposit request');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'deposit request',
+    );
     return GteDepositRequest(
       id: GteJson.string(json, <String>['id']),
       reference: GteJson.string(json, <String>['reference']),
-      status: _depositStatusFromString(GteJson.string(json, <String>['status'],
-          fallback: 'awaiting_payment')),
+      status: _depositStatusFromString(
+        GteJson.string(json, <String>['status'], fallback: 'awaiting_payment'),
+      ),
       amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
       amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
       rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
-      rateDirection: _rateDirectionFromString(GteJson.string(
-          json, <String>['rate_direction', 'rateDirection'],
-          fallback: 'fiat_per_coin')),
+      rateDirection: _rateDirectionFromString(
+        GteJson.string(json, <String>[
+          'rate_direction',
+          'rateDirection',
+        ], fallback: 'fiat_per_coin'),
+      ),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      bankAccountNumber: GteJson.string(
-          json, <String>['bank_account_number', 'bankAccountNumber']),
-      bankAccountName: GteJson.string(
-          json, <String>['bank_account_name', 'bankAccountName']),
+      bankAccountNumber: GteJson.string(json, <String>[
+        'bank_account_number',
+        'bankAccountNumber',
+      ]),
+      bankAccountName: GteJson.string(json, <String>[
+        'bank_account_name',
+        'bankAccountName',
+      ]),
       bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
-      payerName:
-          GteJson.stringOrNull(json, <String>['payer_name', 'payerName']),
-      senderBank:
-          GteJson.stringOrNull(json, <String>['sender_bank', 'senderBank']),
-      transferReference: GteJson.stringOrNull(
-          json, <String>['transfer_reference', 'transferReference']),
-      proofAttachmentId: GteJson.stringOrNull(
-          json, <String>['proof_attachment_id', 'proofAttachmentId']),
-      adminNotes:
-          GteJson.stringOrNull(json, <String>['admin_notes', 'adminNotes']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      submittedAt:
-          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
-      reviewedAt:
-          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
-      confirmedAt:
-          GteJson.dateTimeOrNull(json, <String>['confirmed_at', 'confirmedAt']),
-      rejectedAt:
-          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
-      expiresAt:
-          GteJson.dateTimeOrNull(json, <String>['expires_at', 'expiresAt']),
+      payerName: GteJson.stringOrNull(json, <String>[
+        'payer_name',
+        'payerName',
+      ]),
+      senderBank: GteJson.stringOrNull(json, <String>[
+        'sender_bank',
+        'senderBank',
+      ]),
+      transferReference: GteJson.stringOrNull(json, <String>[
+        'transfer_reference',
+        'transferReference',
+      ]),
+      proofAttachmentId: GteJson.stringOrNull(json, <String>[
+        'proof_attachment_id',
+        'proofAttachmentId',
+      ]),
+      adminNotes: GteJson.stringOrNull(json, <String>[
+        'admin_notes',
+        'adminNotes',
+      ]),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      submittedAt: GteJson.dateTimeOrNull(json, <String>[
+        'submitted_at',
+        'submittedAt',
+      ]),
+      reviewedAt: GteJson.dateTimeOrNull(json, <String>[
+        'reviewed_at',
+        'reviewedAt',
+      ]),
+      confirmedAt: GteJson.dateTimeOrNull(json, <String>[
+        'confirmed_at',
+        'confirmedAt',
+      ]),
+      rejectedAt: GteJson.dateTimeOrNull(json, <String>[
+        'rejected_at',
+        'rejectedAt',
+      ]),
+      expiresAt: GteJson.dateTimeOrNull(json, <String>[
+        'expires_at',
+        'expiresAt',
+      ]),
     );
   }
 }
@@ -1523,9 +1874,9 @@ class GteDepositCreateRequest {
   final String inputUnit;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'amount': amount,
-        'input_unit': inputUnit,
-      };
+    'amount': amount,
+    'input_unit': inputUnit,
+  };
 }
 
 class GteDepositSubmitRequest {
@@ -1542,11 +1893,11 @@ class GteDepositSubmitRequest {
   final String? proofAttachmentId;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        if (payerName != null) 'payer_name': payerName,
-        if (senderBank != null) 'sender_bank': senderBank,
-        if (transferReference != null) 'transfer_reference': transferReference,
-        if (proofAttachmentId != null) 'proof_attachment_id': proofAttachmentId,
-      };
+    if (payerName != null) 'payer_name': payerName,
+    if (senderBank != null) 'sender_bank': senderBank,
+    if (transferReference != null) 'transfer_reference': transferReference,
+    if (proofAttachmentId != null) 'proof_attachment_id': proofAttachmentId,
+  };
 }
 
 class GteTreasuryWithdrawalRequest {
@@ -1607,53 +1958,82 @@ class GteTreasuryWithdrawalRequest {
   final DateTime? cancelledAt;
 
   factory GteTreasuryWithdrawalRequest.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'withdrawal request');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'withdrawal request',
+    );
     return GteTreasuryWithdrawalRequest(
       id: GteJson.string(json, <String>['id']),
-      payoutRequestId: GteJson.string(
-          json, <String>['payout_request_id', 'payoutRequestId']),
+      payoutRequestId: GteJson.string(json, <String>[
+        'payout_request_id',
+        'payoutRequestId',
+      ]),
       reference: GteJson.string(json, <String>['reference']),
       status: _withdrawalStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'pending_review')),
+        GteJson.string(json, <String>['status'], fallback: 'pending_review'),
+      ),
       unit: _ledgerUnitFromString(
-          GteJson.string(json, <String>['unit'], fallback: 'coin')),
+        GteJson.string(json, <String>['unit'], fallback: 'coin'),
+      ),
       amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
       amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
       rateValue: GteJson.number(json, <String>['rate_value', 'rateValue']),
-      rateDirection: _rateDirectionFromString(GteJson.string(
-          json, <String>['rate_direction', 'rateDirection'],
-          fallback: 'fiat_per_coin')),
+      rateDirection: _rateDirectionFromString(
+        GteJson.string(json, <String>[
+          'rate_direction',
+          'rateDirection',
+        ], fallback: 'fiat_per_coin'),
+      ),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      bankAccountNumber: GteJson.string(
-          json, <String>['bank_account_number', 'bankAccountNumber']),
-      bankAccountName: GteJson.string(
-          json, <String>['bank_account_name', 'bankAccountName']),
+      bankAccountNumber: GteJson.string(json, <String>[
+        'bank_account_number',
+        'bankAccountNumber',
+      ]),
+      bankAccountName: GteJson.string(json, <String>[
+        'bank_account_name',
+        'bankAccountName',
+      ]),
       bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
-      kycStatusSnapshot: GteJson.string(
-          json, <String>['kyc_status_snapshot', 'kycStatusSnapshot'],
-          fallback: 'unverified'),
-      kycTierSnapshot: GteJson.string(
-          json, <String>['kyc_tier_snapshot', 'kycTierSnapshot'],
-          fallback: 'unverified'),
+      kycStatusSnapshot: GteJson.string(json, <String>[
+        'kyc_status_snapshot',
+        'kycStatusSnapshot',
+      ], fallback: 'unverified'),
+      kycTierSnapshot: GteJson.string(json, <String>[
+        'kyc_tier_snapshot',
+        'kycTierSnapshot',
+      ], fallback: 'unverified'),
       feeAmount: GteJson.number(json, <String>['fee_amount', 'feeAmount']),
       totalDebit: GteJson.number(json, <String>['total_debit', 'totalDebit']),
       notes: GteJson.stringOrNull(json, <String>['notes']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      reviewedAt:
-          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
-      approvedAt:
-          GteJson.dateTimeOrNull(json, <String>['approved_at', 'approvedAt']),
-      processedAt:
-          GteJson.dateTimeOrNull(json, <String>['processed_at', 'processedAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      reviewedAt: GteJson.dateTimeOrNull(json, <String>[
+        'reviewed_at',
+        'reviewedAt',
+      ]),
+      approvedAt: GteJson.dateTimeOrNull(json, <String>[
+        'approved_at',
+        'approvedAt',
+      ]),
+      processedAt: GteJson.dateTimeOrNull(json, <String>[
+        'processed_at',
+        'processedAt',
+      ]),
       paidAt: GteJson.dateTimeOrNull(json, <String>['paid_at', 'paidAt']),
-      rejectedAt:
-          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
-      cancelledAt:
-          GteJson.dateTimeOrNull(json, <String>['cancelled_at', 'cancelledAt']),
+      rejectedAt: GteJson.dateTimeOrNull(json, <String>[
+        'rejected_at',
+        'rejectedAt',
+      ]),
+      cancelledAt: GteJson.dateTimeOrNull(json, <String>[
+        'cancelled_at',
+        'cancelledAt',
+      ]),
     );
   }
 }
@@ -1672,11 +2052,11 @@ class GteWithdrawalCreateRequest {
   final String sourceScope;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'amount_coin': amountCoin,
-        if (bankAccountId != null) 'bank_account_id': bankAccountId,
-        if (notes != null) 'notes': notes,
-        'source_scope': sourceScope,
-      };
+    'amount_coin': amountCoin,
+    if (bankAccountId != null) 'bank_account_id': bankAccountId,
+    if (notes != null) 'notes': notes,
+    'source_scope': sourceScope,
+  };
 }
 
 class GteUserBankAccount {
@@ -1703,23 +2083,35 @@ class GteUserBankAccount {
   final DateTime? updatedAt;
 
   factory GteUserBankAccount.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'user bank account');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'user bank account',
+    );
     return GteUserBankAccount(
       id: GteJson.string(json, <String>['id']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      accountNumber:
-          GteJson.string(json, <String>['account_number', 'accountNumber']),
-      accountName:
-          GteJson.string(json, <String>['account_name', 'accountName']),
+      accountNumber: GteJson.string(json, <String>[
+        'account_number',
+        'accountNumber',
+      ]),
+      accountName: GteJson.string(json, <String>[
+        'account_name',
+        'accountName',
+      ]),
       bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
       isActive: GteJson.boolean(json, <String>['is_active', 'isActive']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      updatedAt:
-          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
     );
   }
 }
@@ -1742,13 +2134,13 @@ class GteUserBankAccountCreate {
   final bool setActive;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'bank_name': bankName,
-        'account_number': accountNumber,
-        'account_name': accountName,
-        if (bankCode != null) 'bank_code': bankCode,
-        'currency_code': currencyCode,
-        'set_active': setActive,
-      };
+    'bank_name': bankName,
+    'account_number': accountNumber,
+    'account_name': accountName,
+    if (bankCode != null) 'bank_code': bankCode,
+    'currency_code': currencyCode,
+    'set_active': setActive,
+  };
 }
 
 class GteUserBankAccountUpdate {
@@ -1769,13 +2161,13 @@ class GteUserBankAccountUpdate {
   final bool? isActive;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        if (bankName != null) 'bank_name': bankName,
-        if (accountNumber != null) 'account_number': accountNumber,
-        if (accountName != null) 'account_name': accountName,
-        if (bankCode != null) 'bank_code': bankCode,
-        if (currencyCode != null) 'currency_code': currencyCode,
-        if (isActive != null) 'is_active': isActive,
-      };
+    if (bankName != null) 'bank_name': bankName,
+    if (accountNumber != null) 'account_number': accountNumber,
+    if (accountName != null) 'account_name': accountName,
+    if (bankCode != null) 'bank_code': bankCode,
+    if (currencyCode != null) 'currency_code': currencyCode,
+    if (isActive != null) 'is_active': isActive,
+  };
 }
 
 class GteKycProfile {
@@ -1818,28 +2210,45 @@ class GteKycProfile {
     return GteKycProfile(
       id: GteJson.string(json, <String>['id']),
       status: _kycStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'unverified')),
+        GteJson.string(json, <String>['status'], fallback: 'unverified'),
+      ),
       nin: GteJson.stringOrNull(json, <String>['nin']),
       bvn: GteJson.stringOrNull(json, <String>['bvn']),
-      addressLine1:
-          GteJson.stringOrNull(json, <String>['address_line1', 'addressLine1']),
-      addressLine2:
-          GteJson.stringOrNull(json, <String>['address_line2', 'addressLine2']),
+      addressLine1: GteJson.stringOrNull(json, <String>[
+        'address_line1',
+        'addressLine1',
+      ]),
+      addressLine2: GteJson.stringOrNull(json, <String>[
+        'address_line2',
+        'addressLine2',
+      ]),
       city: GteJson.stringOrNull(json, <String>['city']),
       state: GteJson.stringOrNull(json, <String>['state']),
       country: GteJson.stringOrNull(json, <String>['country']),
-      idDocumentAttachmentId: GteJson.stringOrNull(json,
-          <String>['id_document_attachment_id', 'idDocumentAttachmentId']),
-      submittedAt:
-          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
-      reviewedAt:
-          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
-      rejectionReason: GteJson.stringOrNull(
-          json, <String>['rejection_reason', 'rejectionReason']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      updatedAt:
-          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+      idDocumentAttachmentId: GteJson.stringOrNull(json, <String>[
+        'id_document_attachment_id',
+        'idDocumentAttachmentId',
+      ]),
+      submittedAt: GteJson.dateTimeOrNull(json, <String>[
+        'submitted_at',
+        'submittedAt',
+      ]),
+      reviewedAt: GteJson.dateTimeOrNull(json, <String>[
+        'reviewed_at',
+        'reviewedAt',
+      ]),
+      rejectionReason: GteJson.stringOrNull(json, <String>[
+        'rejection_reason',
+        'rejectionReason',
+      ]),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
     );
   }
 }
@@ -1866,31 +2275,28 @@ class GteKycSubmitRequest {
   final String? idDocumentAttachmentId;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        if (nin != null) 'nin': nin,
-        if (bvn != null) 'bvn': bvn,
-        'address_line1': addressLine1,
-        if (addressLine2 != null) 'address_line2': addressLine2,
-        if (city != null) 'city': city,
-        if (state != null) 'state': state,
-        if (country != null) 'country': country,
-        if (idDocumentAttachmentId != null)
-          'id_document_attachment_id': idDocumentAttachmentId,
-      };
+    if (nin != null) 'nin': nin,
+    if (bvn != null) 'bvn': bvn,
+    'address_line1': addressLine1,
+    if (addressLine2 != null) 'address_line2': addressLine2,
+    if (city != null) 'city': city,
+    if (state != null) 'state': state,
+    if (country != null) 'country': country,
+    if (idDocumentAttachmentId != null)
+      'id_document_attachment_id': idDocumentAttachmentId,
+  };
 }
 
 class GteKycReviewRequest {
-  const GteKycReviewRequest({
-    required this.status,
-    this.rejectionReason,
-  });
+  const GteKycReviewRequest({required this.status, this.rejectionReason});
 
   final GteKycStatus status;
   final String? rejectionReason;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'status': _kycStatusToString(status),
-        if (rejectionReason != null) 'rejection_reason': rejectionReason,
-      };
+    'status': _kycStatusToString(status),
+    if (rejectionReason != null) 'rejection_reason': rejectionReason,
+  };
 }
 
 class GteDisputeMessage {
@@ -1911,19 +2317,29 @@ class GteDisputeMessage {
   final DateTime? createdAt;
 
   factory GteDisputeMessage.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'dispute message');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'dispute message',
+    );
     return GteDisputeMessage(
       id: GteJson.string(json, <String>['id']),
-      senderUserId: GteJson.stringOrNull(
-          json, <String>['sender_user_id', 'senderUserId']),
-      senderRole: GteJson.string(json, <String>['sender_role', 'senderRole'],
-          fallback: 'user'),
+      senderUserId: GteJson.stringOrNull(json, <String>[
+        'sender_user_id',
+        'senderUserId',
+      ]),
+      senderRole: GteJson.string(json, <String>[
+        'sender_role',
+        'senderRole',
+      ], fallback: 'user'),
       message: GteJson.string(json, <String>['message']),
-      attachmentId:
-          GteJson.stringOrNull(json, <String>['attachment_id', 'attachmentId']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      attachmentId: GteJson.stringOrNull(json, <String>[
+        'attachment_id',
+        'attachmentId',
+      ]),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
     );
   }
 }
@@ -1966,26 +2382,40 @@ class GteDispute {
     return GteDispute(
       id: GteJson.string(json, <String>['id']),
       status: _disputeStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'open')),
+        GteJson.string(json, <String>['status'], fallback: 'open'),
+      ),
       reference: GteJson.string(json, <String>['reference']),
-      resourceType:
-          GteJson.string(json, <String>['resource_type', 'resourceType']),
+      resourceType: GteJson.string(json, <String>[
+        'resource_type',
+        'resourceType',
+      ]),
       resourceId: GteJson.string(json, <String>['resource_id', 'resourceId']),
       subject: GteJson.stringOrNull(json, <String>['subject']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      updatedAt:
-          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
-      lastMessageAt: GteJson.dateTimeOrNull(
-          json, <String>['last_message_at', 'lastMessageAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
+      lastMessageAt: GteJson.dateTimeOrNull(json, <String>[
+        'last_message_at',
+        'lastMessageAt',
+      ]),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
-      userFullName: GteJson.stringOrNull(
-          json, <String>['user_full_name', 'userFullName']),
-      userPhoneNumber: GteJson.stringOrNull(
-          json, <String>['user_phone_number', 'userPhoneNumber']),
-      messages: GteJson.typedList(
-          json, <String>['messages'], GteDisputeMessage.fromJson),
+      userFullName: GteJson.stringOrNull(json, <String>[
+        'user_full_name',
+        'userFullName',
+      ]),
+      userPhoneNumber: GteJson.stringOrNull(json, <String>[
+        'user_phone_number',
+        'userPhoneNumber',
+      ]),
+      messages: GteJson.typedList(json, <String>[
+        'messages',
+      ], GteDisputeMessage.fromJson),
     );
   }
 }
@@ -2008,28 +2438,25 @@ class GteDisputeCreateRequest {
   final String? attachmentId;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'resource_type': resourceType,
-        'resource_id': resourceId,
-        'reference': reference,
-        if (subject != null) 'subject': subject,
-        'message': message,
-        if (attachmentId != null) 'attachment_id': attachmentId,
-      };
+    'resource_type': resourceType,
+    'resource_id': resourceId,
+    'reference': reference,
+    if (subject != null) 'subject': subject,
+    'message': message,
+    if (attachmentId != null) 'attachment_id': attachmentId,
+  };
 }
 
 class GteDisputeMessageRequest {
-  const GteDisputeMessageRequest({
-    required this.message,
-    this.attachmentId,
-  });
+  const GteDisputeMessageRequest({required this.message, this.attachmentId});
 
   final String message;
   final String? attachmentId;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'message': message,
-        if (attachmentId != null) 'attachment_id': attachmentId,
-      };
+    'message': message,
+    if (attachmentId != null) 'attachment_id': attachmentId,
+  };
 }
 
 class GteNotification {
@@ -2068,25 +2495,39 @@ class GteNotification {
       label: 'notification metadata',
     );
     return GteNotification(
-      notificationId:
-          GteJson.string(json, <String>['notification_id', 'notificationId']),
+      notificationId: GteJson.string(json, <String>[
+        'notification_id',
+        'notificationId',
+      ]),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       topic: GteJson.stringOrNull(json, <String>['topic']),
-      templateKey:
-          GteJson.stringOrNull(json, <String>['template_key', 'templateKey']),
-      resourceId:
-          GteJson.stringOrNull(json, <String>['resource_id', 'resourceId']),
-      fixtureId:
-          GteJson.stringOrNull(json, <String>['fixture_id', 'fixtureId']),
-      competitionId: GteJson.stringOrNull(
-          json, <String>['competition_id', 'competitionId']),
+      templateKey: GteJson.stringOrNull(json, <String>[
+        'template_key',
+        'templateKey',
+      ]),
+      resourceId: GteJson.stringOrNull(json, <String>[
+        'resource_id',
+        'resourceId',
+      ]),
+      fixtureId: GteJson.stringOrNull(json, <String>[
+        'fixture_id',
+        'fixtureId',
+      ]),
+      competitionId: GteJson.stringOrNull(json, <String>[
+        'competition_id',
+        'competitionId',
+      ]),
       message: GteJson.stringOrNull(json, <String>['message']),
       metadata: metadataJson,
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
       readAt: GteJson.dateTimeOrNull(json, <String>['read_at', 'readAt']),
-      isRead:
-          GteJson.boolean(json, <String>['is_read', 'isRead'], fallback: false),
+      isRead: GteJson.boolean(json, <String>[
+        'is_read',
+        'isRead',
+      ], fallback: false),
     );
   }
 }
@@ -2111,11 +2552,15 @@ class GteAttachment {
     return GteAttachment(
       id: GteJson.string(json, <String>['id']),
       filename: GteJson.string(json, <String>['filename']),
-      contentType:
-          GteJson.string(json, <String>['content_type', 'contentType']),
+      contentType: GteJson.string(json, <String>[
+        'content_type',
+        'contentType',
+      ]),
       sizeBytes: GteJson.integer(json, <String>['size_bytes', 'sizeBytes']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
     );
   }
 }
@@ -2144,23 +2589,35 @@ class GteTreasuryBankAccount {
   final DateTime? updatedAt;
 
   factory GteTreasuryBankAccount.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'treasury bank account');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'treasury bank account',
+    );
     return GteTreasuryBankAccount(
       id: GteJson.string(json, <String>['id']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      accountNumber:
-          GteJson.string(json, <String>['account_number', 'accountNumber']),
-      accountName:
-          GteJson.string(json, <String>['account_name', 'accountName']),
+      accountNumber: GteJson.string(json, <String>[
+        'account_number',
+        'accountNumber',
+      ]),
+      accountName: GteJson.string(json, <String>[
+        'account_name',
+        'accountName',
+      ]),
       bankCode: GteJson.stringOrNull(json, <String>['bank_code', 'bankCode']),
       isActive: GteJson.boolean(json, <String>['is_active', 'isActive']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      updatedAt:
-          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
     );
   }
 }
@@ -2207,49 +2664,84 @@ class GteTreasurySettings {
   final DateTime? updatedAt;
 
   factory GteTreasurySettings.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'treasury settings');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'treasury settings',
+    );
     return GteTreasurySettings(
       id: GteJson.string(json, <String>['id']),
-      settingsKey:
-          GteJson.string(json, <String>['settings_key', 'settingsKey']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
-      depositRateValue: GteJson.number(
-          json, <String>['deposit_rate_value', 'depositRateValue']),
-      depositRateDirection: _rateDirectionFromString(GteJson.string(
-          json, <String>['deposit_rate_direction', 'depositRateDirection'],
-          fallback: 'fiat_per_coin')),
-      withdrawalRateValue: GteJson.number(
-          json, <String>['withdrawal_rate_value', 'withdrawalRateValue']),
-      withdrawalRateDirection: _rateDirectionFromString(GteJson.string(json,
-          <String>['withdrawal_rate_direction', 'withdrawalRateDirection'],
-          fallback: 'fiat_per_coin')),
+      settingsKey: GteJson.string(json, <String>[
+        'settings_key',
+        'settingsKey',
+      ]),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
+      depositRateValue: GteJson.number(json, <String>[
+        'deposit_rate_value',
+        'depositRateValue',
+      ]),
+      depositRateDirection: _rateDirectionFromString(
+        GteJson.string(json, <String>[
+          'deposit_rate_direction',
+          'depositRateDirection',
+        ], fallback: 'fiat_per_coin'),
+      ),
+      withdrawalRateValue: GteJson.number(json, <String>[
+        'withdrawal_rate_value',
+        'withdrawalRateValue',
+      ]),
+      withdrawalRateDirection: _rateDirectionFromString(
+        GteJson.string(json, <String>[
+          'withdrawal_rate_direction',
+          'withdrawalRateDirection',
+        ], fallback: 'fiat_per_coin'),
+      ),
       minDeposit: GteJson.number(json, <String>['min_deposit', 'minDeposit']),
       maxDeposit: GteJson.number(json, <String>['max_deposit', 'maxDeposit']),
-      minWithdrawal:
-          GteJson.number(json, <String>['min_withdrawal', 'minWithdrawal']),
-      maxWithdrawal:
-          GteJson.number(json, <String>['max_withdrawal', 'maxWithdrawal']),
-      depositMode: _paymentModeFromString(GteJson.string(
-          json, <String>['deposit_mode', 'depositMode'],
-          fallback: 'manual')),
-      withdrawalMode: _paymentModeFromString(GteJson.string(
-          json, <String>['withdrawal_mode', 'withdrawalMode'],
-          fallback: 'manual')),
-      maintenanceMessage: GteJson.stringOrNull(
-          json, <String>['maintenance_message', 'maintenanceMessage']),
-      whatsappNumber: GteJson.stringOrNull(
-          json, <String>['whatsapp_number', 'whatsappNumber']),
+      minWithdrawal: GteJson.number(json, <String>[
+        'min_withdrawal',
+        'minWithdrawal',
+      ]),
+      maxWithdrawal: GteJson.number(json, <String>[
+        'max_withdrawal',
+        'maxWithdrawal',
+      ]),
+      depositMode: _paymentModeFromString(
+        GteJson.string(json, <String>[
+          'deposit_mode',
+          'depositMode',
+        ], fallback: 'manual'),
+      ),
+      withdrawalMode: _paymentModeFromString(
+        GteJson.string(json, <String>[
+          'withdrawal_mode',
+          'withdrawalMode',
+        ], fallback: 'manual'),
+      ),
+      maintenanceMessage: GteJson.stringOrNull(json, <String>[
+        'maintenance_message',
+        'maintenanceMessage',
+      ]),
+      whatsappNumber: GteJson.stringOrNull(json, <String>[
+        'whatsapp_number',
+        'whatsappNumber',
+      ]),
       activeBankAccount:
           GteJson.value(json, <String>['active_bank_account']) == null
               ? null
               : GteTreasuryBankAccount.fromJson(
-                  GteJson.value(json, <String>['active_bank_account'])),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      updatedAt:
-          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+                GteJson.value(json, <String>['active_bank_account']),
+              ),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
     );
   }
 }
@@ -2288,28 +2780,27 @@ class GteTreasurySettingsUpdate {
   final String? activeBankAccountId;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        if (currencyCode != null) 'currency_code': currencyCode,
-        if (depositRateValue != null) 'deposit_rate_value': depositRateValue,
-        if (depositRateDirection != null)
-          'deposit_rate_direction':
-              _rateDirectionToString(depositRateDirection!),
-        if (withdrawalRateValue != null)
-          'withdrawal_rate_value': withdrawalRateValue,
-        if (withdrawalRateDirection != null)
-          'withdrawal_rate_direction':
-              _rateDirectionToString(withdrawalRateDirection!),
-        if (minDeposit != null) 'min_deposit': minDeposit,
-        if (maxDeposit != null) 'max_deposit': maxDeposit,
-        if (minWithdrawal != null) 'min_withdrawal': minWithdrawal,
-        if (maxWithdrawal != null) 'max_withdrawal': maxWithdrawal,
-        if (depositMode != null) 'deposit_mode': depositMode!.name,
-        if (withdrawalMode != null) 'withdrawal_mode': withdrawalMode!.name,
-        if (maintenanceMessage != null)
-          'maintenance_message': maintenanceMessage,
-        if (whatsappNumber != null) 'whatsapp_number': whatsappNumber,
-        if (activeBankAccountId != null)
-          'active_bank_account_id': activeBankAccountId,
-      };
+    if (currencyCode != null) 'currency_code': currencyCode,
+    if (depositRateValue != null) 'deposit_rate_value': depositRateValue,
+    if (depositRateDirection != null)
+      'deposit_rate_direction': _rateDirectionToString(depositRateDirection!),
+    if (withdrawalRateValue != null)
+      'withdrawal_rate_value': withdrawalRateValue,
+    if (withdrawalRateDirection != null)
+      'withdrawal_rate_direction': _rateDirectionToString(
+        withdrawalRateDirection!,
+      ),
+    if (minDeposit != null) 'min_deposit': minDeposit,
+    if (maxDeposit != null) 'max_deposit': maxDeposit,
+    if (minWithdrawal != null) 'min_withdrawal': minWithdrawal,
+    if (maxWithdrawal != null) 'max_withdrawal': maxWithdrawal,
+    if (depositMode != null) 'deposit_mode': depositMode!.name,
+    if (withdrawalMode != null) 'withdrawal_mode': withdrawalMode!.name,
+    if (maintenanceMessage != null) 'maintenance_message': maintenanceMessage,
+    if (whatsappNumber != null) 'whatsapp_number': whatsappNumber,
+    if (activeBankAccountId != null)
+      'active_bank_account_id': activeBankAccountId,
+  };
 }
 
 class GteTreasuryBankAccountCreate {
@@ -2330,13 +2821,13 @@ class GteTreasuryBankAccountCreate {
   final bool isActive;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'bank_name': bankName,
-        'account_number': accountNumber,
-        'account_name': accountName,
-        if (bankCode != null) 'bank_code': bankCode,
-        'currency_code': currencyCode,
-        'is_active': isActive,
-      };
+    'bank_name': bankName,
+    'account_number': accountNumber,
+    'account_name': accountName,
+    if (bankCode != null) 'bank_code': bankCode,
+    'currency_code': currencyCode,
+    'is_active': isActive,
+  };
 }
 
 class GteTreasuryBankAccountUpdate {
@@ -2357,13 +2848,13 @@ class GteTreasuryBankAccountUpdate {
   final bool? isActive;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        if (bankName != null) 'bank_name': bankName,
-        if (accountNumber != null) 'account_number': accountNumber,
-        if (accountName != null) 'account_name': accountName,
-        if (bankCode != null) 'bank_code': bankCode,
-        if (currencyCode != null) 'currency_code': currencyCode,
-        if (isActive != null) 'is_active': isActive,
-      };
+    if (bankName != null) 'bank_name': bankName,
+    if (accountNumber != null) 'account_number': accountNumber,
+    if (accountName != null) 'account_name': accountName,
+    if (bankCode != null) 'bank_code': bankCode,
+    if (currencyCode != null) 'currency_code': currencyCode,
+    if (isActive != null) 'is_active': isActive,
+  };
 }
 
 class GteTreasuryDashboard {
@@ -2392,27 +2883,45 @@ class GteTreasuryDashboard {
   final double pendingTreasuryExposure;
 
   factory GteTreasuryDashboard.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'treasury dashboard');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'treasury dashboard',
+    );
     return GteTreasuryDashboard(
       totalUsers: GteJson.integer(json, <String>['total_users', 'totalUsers']),
-      activeUsers:
-          GteJson.integer(json, <String>['active_users', 'activeUsers']),
-      pendingDeposits: GteJson.integer(
-          json, <String>['pending_deposits', 'pendingDeposits']),
-      pendingWithdrawals: GteJson.integer(
-          json, <String>['pending_withdrawals', 'pendingWithdrawals']),
+      activeUsers: GteJson.integer(json, <String>[
+        'active_users',
+        'activeUsers',
+      ]),
+      pendingDeposits: GteJson.integer(json, <String>[
+        'pending_deposits',
+        'pendingDeposits',
+      ]),
+      pendingWithdrawals: GteJson.integer(json, <String>[
+        'pending_withdrawals',
+        'pendingWithdrawals',
+      ]),
       pendingKyc: GteJson.integer(json, <String>['pending_kyc', 'pendingKyc']),
-      openDisputes:
-          GteJson.integer(json, <String>['open_disputes', 'openDisputes']),
-      depositsConfirmedToday: GteJson.integer(
-          json, <String>['deposits_confirmed_today', 'depositsConfirmedToday']),
-      withdrawalsPaidToday: GteJson.integer(
-          json, <String>['withdrawals_paid_today', 'withdrawalsPaidToday']),
-      walletLiability:
-          GteJson.number(json, <String>['wallet_liability', 'walletLiability']),
-      pendingTreasuryExposure: GteJson.number(json,
-          <String>['pending_treasury_exposure', 'pendingTreasuryExposure']),
+      openDisputes: GteJson.integer(json, <String>[
+        'open_disputes',
+        'openDisputes',
+      ]),
+      depositsConfirmedToday: GteJson.integer(json, <String>[
+        'deposits_confirmed_today',
+        'depositsConfirmedToday',
+      ]),
+      withdrawalsPaidToday: GteJson.integer(json, <String>[
+        'withdrawals_paid_today',
+        'withdrawalsPaidToday',
+      ]),
+      walletLiability: GteJson.number(json, <String>[
+        'wallet_liability',
+        'walletLiability',
+      ]),
+      pendingTreasuryExposure: GteJson.number(json, <String>[
+        'pending_treasury_exposure',
+        'pendingTreasuryExposure',
+      ]),
     );
   }
 }
@@ -2461,41 +2970,68 @@ class GteAdminDeposit {
   final String? userPhoneNumber;
 
   factory GteAdminDeposit.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'admin deposit');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin deposit',
+    );
     return GteAdminDeposit(
       id: GteJson.string(json, <String>['id']),
       reference: GteJson.string(json, <String>['reference']),
-      status: _depositStatusFromString(GteJson.string(json, <String>['status'],
-          fallback: 'awaiting_payment')),
+      status: _depositStatusFromString(
+        GteJson.string(json, <String>['status'], fallback: 'awaiting_payment'),
+      ),
       amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
       amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
-      payerName:
-          GteJson.stringOrNull(json, <String>['payer_name', 'payerName']),
-      senderBank:
-          GteJson.stringOrNull(json, <String>['sender_bank', 'senderBank']),
-      transferReference: GteJson.stringOrNull(
-          json, <String>['transfer_reference', 'transferReference']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      submittedAt:
-          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
-      reviewedAt:
-          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
-      confirmedAt:
-          GteJson.dateTimeOrNull(json, <String>['confirmed_at', 'confirmedAt']),
-      rejectedAt:
-          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
-      adminNotes:
-          GteJson.stringOrNull(json, <String>['admin_notes', 'adminNotes']),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
+      payerName: GteJson.stringOrNull(json, <String>[
+        'payer_name',
+        'payerName',
+      ]),
+      senderBank: GteJson.stringOrNull(json, <String>[
+        'sender_bank',
+        'senderBank',
+      ]),
+      transferReference: GteJson.stringOrNull(json, <String>[
+        'transfer_reference',
+        'transferReference',
+      ]),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      submittedAt: GteJson.dateTimeOrNull(json, <String>[
+        'submitted_at',
+        'submittedAt',
+      ]),
+      reviewedAt: GteJson.dateTimeOrNull(json, <String>[
+        'reviewed_at',
+        'reviewedAt',
+      ]),
+      confirmedAt: GteJson.dateTimeOrNull(json, <String>[
+        'confirmed_at',
+        'confirmedAt',
+      ]),
+      rejectedAt: GteJson.dateTimeOrNull(json, <String>[
+        'rejected_at',
+        'rejectedAt',
+      ]),
+      adminNotes: GteJson.stringOrNull(json, <String>[
+        'admin_notes',
+        'adminNotes',
+      ]),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
-      userFullName: GteJson.stringOrNull(
-          json, <String>['user_full_name', 'userFullName']),
-      userPhoneNumber: GteJson.stringOrNull(
-          json, <String>['user_phone_number', 'userPhoneNumber']),
+      userFullName: GteJson.stringOrNull(json, <String>[
+        'user_full_name',
+        'userFullName',
+      ]),
+      userPhoneNumber: GteJson.stringOrNull(json, <String>[
+        'user_phone_number',
+        'userPhoneNumber',
+      ]),
     );
   }
 }
@@ -2546,41 +3082,66 @@ class GteAdminWithdrawal {
   final String? userPhoneNumber;
 
   factory GteAdminWithdrawal.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'admin withdrawal');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin withdrawal',
+    );
     return GteAdminWithdrawal(
       id: GteJson.string(json, <String>['id']),
       reference: GteJson.string(json, <String>['reference']),
       status: _withdrawalStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'pending_review')),
+        GteJson.string(json, <String>['status'], fallback: 'pending_review'),
+      ),
       amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
       amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
-      currencyCode:
-          GteJson.string(json, <String>['currency_code', 'currencyCode']),
+      currencyCode: GteJson.string(json, <String>[
+        'currency_code',
+        'currencyCode',
+      ]),
       bankName: GteJson.string(json, <String>['bank_name', 'bankName']),
-      bankAccountNumber: GteJson.string(
-          json, <String>['bank_account_number', 'bankAccountNumber']),
-      bankAccountName: GteJson.string(
-          json, <String>['bank_account_name', 'bankAccountName']),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      reviewedAt:
-          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
-      approvedAt:
-          GteJson.dateTimeOrNull(json, <String>['approved_at', 'approvedAt']),
-      processedAt:
-          GteJson.dateTimeOrNull(json, <String>['processed_at', 'processedAt']),
+      bankAccountNumber: GteJson.string(json, <String>[
+        'bank_account_number',
+        'bankAccountNumber',
+      ]),
+      bankAccountName: GteJson.string(json, <String>[
+        'bank_account_name',
+        'bankAccountName',
+      ]),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      reviewedAt: GteJson.dateTimeOrNull(json, <String>[
+        'reviewed_at',
+        'reviewedAt',
+      ]),
+      approvedAt: GteJson.dateTimeOrNull(json, <String>[
+        'approved_at',
+        'approvedAt',
+      ]),
+      processedAt: GteJson.dateTimeOrNull(json, <String>[
+        'processed_at',
+        'processedAt',
+      ]),
       paidAt: GteJson.dateTimeOrNull(json, <String>['paid_at', 'paidAt']),
-      rejectedAt:
-          GteJson.dateTimeOrNull(json, <String>['rejected_at', 'rejectedAt']),
-      cancelledAt:
-          GteJson.dateTimeOrNull(json, <String>['cancelled_at', 'cancelledAt']),
+      rejectedAt: GteJson.dateTimeOrNull(json, <String>[
+        'rejected_at',
+        'rejectedAt',
+      ]),
+      cancelledAt: GteJson.dateTimeOrNull(json, <String>[
+        'cancelled_at',
+        'cancelledAt',
+      ]),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
-      userFullName: GteJson.stringOrNull(
-          json, <String>['user_full_name', 'userFullName']),
-      userPhoneNumber: GteJson.stringOrNull(
-          json, <String>['user_phone_number', 'userPhoneNumber']),
+      userFullName: GteJson.stringOrNull(json, <String>[
+        'user_full_name',
+        'userFullName',
+      ]),
+      userPhoneNumber: GteJson.stringOrNull(json, <String>[
+        'user_phone_number',
+        'userPhoneNumber',
+      ]),
     );
   }
 }
@@ -2626,25 +3187,38 @@ class GteAdminKyc {
       id: GteJson.string(json, <String>['id']),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
       status: _kycStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'unverified')),
+        GteJson.string(json, <String>['status'], fallback: 'unverified'),
+      ),
       nin: GteJson.stringOrNull(json, <String>['nin']),
       bvn: GteJson.stringOrNull(json, <String>['bvn']),
-      addressLine1:
-          GteJson.stringOrNull(json, <String>['address_line1', 'addressLine1']),
+      addressLine1: GteJson.stringOrNull(json, <String>[
+        'address_line1',
+        'addressLine1',
+      ]),
       city: GteJson.stringOrNull(json, <String>['city']),
       state: GteJson.stringOrNull(json, <String>['state']),
       country: GteJson.stringOrNull(json, <String>['country']),
-      submittedAt:
-          GteJson.dateTimeOrNull(json, <String>['submitted_at', 'submittedAt']),
-      reviewedAt:
-          GteJson.dateTimeOrNull(json, <String>['reviewed_at', 'reviewedAt']),
-      rejectionReason: GteJson.stringOrNull(
-          json, <String>['rejection_reason', 'rejectionReason']),
+      submittedAt: GteJson.dateTimeOrNull(json, <String>[
+        'submitted_at',
+        'submittedAt',
+      ]),
+      reviewedAt: GteJson.dateTimeOrNull(json, <String>[
+        'reviewed_at',
+        'reviewedAt',
+      ]),
+      rejectionReason: GteJson.stringOrNull(json, <String>[
+        'rejection_reason',
+        'rejectionReason',
+      ]),
       userEmail: GteJson.string(json, <String>['user_email', 'userEmail']),
-      userFullName: GteJson.stringOrNull(
-          json, <String>['user_full_name', 'userFullName']),
-      userPhoneNumber: GteJson.stringOrNull(
-          json, <String>['user_phone_number', 'userPhoneNumber']),
+      userFullName: GteJson.stringOrNull(json, <String>[
+        'user_full_name',
+        'userFullName',
+      ]),
+      userPhoneNumber: GteJson.stringOrNull(json, <String>[
+        'user_phone_number',
+        'userPhoneNumber',
+      ]),
     );
   }
 }
@@ -2692,8 +3266,10 @@ class GteAnalyticsEvent {
   final DateTime? createdAt;
 
   factory GteAnalyticsEvent.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'analytics event');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'analytics event',
+    );
     final Map<String, Object?> metadataJson = GteJson.map(
       GteJson.value(json, <String>['metadata_json', 'metadata']) ??
           const <String, Object?>{},
@@ -2704,24 +3280,25 @@ class GteAnalyticsEvent {
       name: GteJson.string(json, <String>['name']),
       userId: GteJson.stringOrNull(json, <String>['user_id', 'userId']),
       metadata: metadataJson,
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
     );
   }
 }
 
 class GteAnalyticsSummaryItem {
-  const GteAnalyticsSummaryItem({
-    required this.name,
-    required this.count,
-  });
+  const GteAnalyticsSummaryItem({required this.name, required this.count});
 
   final String name;
   final int count;
 
   factory GteAnalyticsSummaryItem.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'analytics summary item');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'analytics summary item',
+    );
     return GteAnalyticsSummaryItem(
       name: GteJson.string(json, <String>['name']),
       count: GteJson.integer(json, <String>['count']),
@@ -2730,37 +3307,36 @@ class GteAnalyticsSummaryItem {
 }
 
 class GteAnalyticsSummary {
-  const GteAnalyticsSummary({
-    required this.since,
-    required this.totals,
-  });
+  const GteAnalyticsSummary({required this.since, required this.totals});
 
   final DateTime? since;
   final List<GteAnalyticsSummaryItem> totals;
 
   factory GteAnalyticsSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'analytics summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'analytics summary',
+    );
     return GteAnalyticsSummary(
       since: GteJson.dateTimeOrNull(json, <String>['since']),
-      totals: GteJson.typedList(
-          json, <String>['totals'], GteAnalyticsSummaryItem.fromJson),
+      totals: GteJson.typedList(json, <String>[
+        'totals',
+      ], GteAnalyticsSummaryItem.fromJson),
     );
   }
 }
 
 class GteAnalyticsFunnelStep {
-  const GteAnalyticsFunnelStep({
-    required this.name,
-    required this.users,
-  });
+  const GteAnalyticsFunnelStep({required this.name, required this.users});
 
   final String name;
   final int users;
 
   factory GteAnalyticsFunnelStep.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'analytics funnel step');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'analytics funnel step',
+    );
     return GteAnalyticsFunnelStep(
       name: GteJson.string(json, <String>['name']),
       users: GteJson.integer(json, <String>['users']),
@@ -2769,21 +3345,21 @@ class GteAnalyticsFunnelStep {
 }
 
 class GteAnalyticsFunnel {
-  const GteAnalyticsFunnel({
-    required this.since,
-    required this.steps,
-  });
+  const GteAnalyticsFunnel({required this.since, required this.steps});
 
   final DateTime? since;
   final List<GteAnalyticsFunnelStep> steps;
 
   factory GteAnalyticsFunnel.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'analytics funnel');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'analytics funnel',
+    );
     return GteAnalyticsFunnel(
       since: GteJson.dateTimeOrNull(json, <String>['since']),
-      steps: GteJson.typedList(
-          json, <String>['steps'], GteAnalyticsFunnelStep.fromJson),
+      steps: GteJson.typedList(json, <String>[
+        'steps',
+      ], GteAnalyticsFunnelStep.fromJson),
     );
   }
 }
@@ -2808,21 +3384,33 @@ class GtePortfolioHolding {
   final double unrealizedPlPercent;
 
   factory GtePortfolioHolding.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'portfolio holding');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'portfolio holding',
+    );
     return GtePortfolioHolding(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       quantity: GteJson.number(json, <String>['quantity']),
-      averageCost:
-          GteJson.number(json, <String>['average_cost', 'averageCost']),
-      currentPrice:
-          GteJson.number(json, <String>['current_price', 'currentPrice']),
-      marketValue:
-          GteJson.number(json, <String>['market_value', 'marketValue']),
-      unrealizedPl:
-          GteJson.number(json, <String>['unrealized_pl', 'unrealizedPl']),
-      unrealizedPlPercent: GteJson.number(
-          json, <String>['unrealized_pl_percent', 'unrealizedPlPercent']),
+      averageCost: GteJson.number(json, <String>[
+        'average_cost',
+        'averageCost',
+      ]),
+      currentPrice: GteJson.number(json, <String>[
+        'current_price',
+        'currentPrice',
+      ]),
+      marketValue: GteJson.number(json, <String>[
+        'market_value',
+        'marketValue',
+      ]),
+      unrealizedPl: GteJson.number(json, <String>[
+        'unrealized_pl',
+        'unrealizedPl',
+      ]),
+      unrealizedPlPercent: GteJson.number(json, <String>[
+        'unrealized_pl_percent',
+        'unrealizedPlPercent',
+      ]),
     );
   }
 }
@@ -2843,35 +3431,46 @@ class GtePortfolioSummary {
   final double realizedPlTotal;
 
   factory GtePortfolioSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'portfolio summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'portfolio summary',
+    );
     return GtePortfolioSummary(
-      totalMarketValue: GteJson.number(
-          json, <String>['total_market_value', 'totalMarketValue']),
-      cashBalance:
-          GteJson.number(json, <String>['cash_balance', 'cashBalance']),
-      totalEquity:
-          GteJson.number(json, <String>['total_equity', 'totalEquity']),
-      unrealizedPlTotal: GteJson.number(
-          json, <String>['unrealized_pl_total', 'unrealizedPlTotal']),
-      realizedPlTotal: GteJson.number(
-          json, <String>['realized_pl_total', 'realizedPlTotal']),
+      totalMarketValue: GteJson.number(json, <String>[
+        'total_market_value',
+        'totalMarketValue',
+      ]),
+      cashBalance: GteJson.number(json, <String>[
+        'cash_balance',
+        'cashBalance',
+      ]),
+      totalEquity: GteJson.number(json, <String>[
+        'total_equity',
+        'totalEquity',
+      ]),
+      unrealizedPlTotal: GteJson.number(json, <String>[
+        'unrealized_pl_total',
+        'unrealizedPlTotal',
+      ]),
+      realizedPlTotal: GteJson.number(json, <String>[
+        'realized_pl_total',
+        'realizedPlTotal',
+      ]),
     );
   }
 }
 
 class GtePortfolioView {
-  const GtePortfolioView({
-    required this.holdings,
-  });
+  const GtePortfolioView({required this.holdings});
 
   final List<GtePortfolioHolding> holdings;
 
   factory GtePortfolioView.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'portfolio');
     return GtePortfolioView(
-      holdings: GteJson.typedList(
-          json, <String>['holdings'], GtePortfolioHolding.fromJson),
+      holdings: GteJson.typedList(json, <String>[
+        'holdings',
+      ], GtePortfolioHolding.fromJson),
     );
   }
 }
@@ -2890,17 +3489,15 @@ class GteOrderCreateRequest {
   final double? maxPrice;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'player_id': playerId,
-        'side': side.name,
-        'quantity': quantity.toStringAsFixed(4),
-        if (maxPrice != null) 'max_price': maxPrice!.toStringAsFixed(4),
-      };
+    'player_id': playerId,
+    'side': side.name,
+    'quantity': quantity.toStringAsFixed(4),
+    if (maxPrice != null) 'max_price': maxPrice!.toStringAsFixed(4),
+  };
 }
 
 class GteOrderExecution {
-  const GteOrderExecution({
-    required this.payload,
-  });
+  const GteOrderExecution({required this.payload});
 
   final Map<String, Object?> payload;
 
@@ -2927,26 +3524,30 @@ class GteOrderExecutionSummary {
   final List<GteOrderExecution> executions;
 
   factory GteOrderExecutionSummary.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'order execution summary');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'order execution summary',
+    );
     return GteOrderExecutionSummary(
-      executionCount:
-          GteJson.integer(json, <String>['execution_count', 'executionCount']),
-      totalNotional:
-          GteJson.number(json, <String>['total_notional', 'totalNotional']),
+      executionCount: GteJson.integer(json, <String>[
+        'execution_count',
+        'executionCount',
+      ]),
+      totalNotional: GteJson.number(json, <String>[
+        'total_notional',
+        'totalNotional',
+      ]),
       averagePrice:
           GteJson.value(json, <String>['average_price', 'averagePrice']) == null
               ? null
               : GteJson.number(json, <String>['average_price', 'averagePrice']),
-      lastExecutedAt: GteJson.dateTimeOrNull(
-        json,
-        <String>['last_executed_at', 'lastExecutedAt'],
-      ),
-      executions: GteJson.typedList(
-        json,
-        <String>['executions'],
-        GteOrderExecution.fromJson,
-      ),
+      lastExecutedAt: GteJson.dateTimeOrNull(json, <String>[
+        'last_executed_at',
+        'lastExecutedAt',
+      ]),
+      executions: GteJson.typedList(json, <String>[
+        'executions',
+      ], GteOrderExecution.fromJson),
     );
   }
 }
@@ -2997,31 +3598,45 @@ class GteOrderRecord {
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       side: _orderSideFromString(GteJson.string(json, <String>['side'])),
       status: _orderStatusFromString(
-          GteJson.string(json, <String>['status'], fallback: 'unknown')),
+        GteJson.string(json, <String>['status'], fallback: 'unknown'),
+      ),
       quantity: GteJson.number(json, <String>['quantity']),
-      filledQuantity:
-          GteJson.number(json, <String>['filled_quantity', 'filledQuantity']),
-      remainingQuantity: GteJson.number(
-          json, <String>['remaining_quantity', 'remainingQuantity']),
-      maxPrice: GteJson.value(json, <String>['max_price', 'maxPrice']) == null
-          ? null
-          : GteJson.number(json, <String>['max_price', 'maxPrice']),
+      filledQuantity: GteJson.number(json, <String>[
+        'filled_quantity',
+        'filledQuantity',
+      ]),
+      remainingQuantity: GteJson.number(json, <String>[
+        'remaining_quantity',
+        'remainingQuantity',
+      ]),
+      maxPrice:
+          GteJson.value(json, <String>['max_price', 'maxPrice']) == null
+              ? null
+              : GteJson.number(json, <String>['max_price', 'maxPrice']),
       currency: _ledgerUnitFromString(
         GteJson.string(json, <String>['currency'], fallback: 'credit'),
       ),
-      reservedAmount:
-          GteJson.number(json, <String>['reserved_amount', 'reservedAmount']),
-      holdTransactionId: GteJson.stringOrNull(
-        json,
-        <String>['hold_transaction_id', 'holdTransactionId'],
-      ),
-      createdAt:
-          GteJson.dateTimeOrNull(json, <String>['created_at', 'createdAt']),
-      updatedAt:
-          GteJson.dateTimeOrNull(json, <String>['updated_at', 'updatedAt']),
+      reservedAmount: GteJson.number(json, <String>[
+        'reserved_amount',
+        'reservedAmount',
+      ]),
+      holdTransactionId: GteJson.stringOrNull(json, <String>[
+        'hold_transaction_id',
+        'holdTransactionId',
+      ]),
+      createdAt: GteJson.dateTimeOrNull(json, <String>[
+        'created_at',
+        'createdAt',
+      ]),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
       executionSummary: GteOrderExecutionSummary.fromJson(
-        GteJson.value(
-                json, <String>['execution_summary', 'executionSummary']) ??
+        GteJson.value(json, <String>[
+              'execution_summary',
+              'executionSummary',
+            ]) ??
             const <String, Object?>{},
       ),
     );
@@ -3044,8 +3659,9 @@ class GteOrderListView {
   factory GteOrderListView.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'order list');
     return GteOrderListView(
-      items:
-          GteJson.typedList(json, <String>['items'], GteOrderRecord.fromJson),
+      items: GteJson.typedList(json, <String>[
+        'items',
+      ], GteOrderRecord.fromJson),
       limit: GteJson.integer(json, <String>['limit'], fallback: 20),
       offset: GteJson.integer(json, <String>['offset']),
       total: GteJson.integer(json, <String>['total']),
@@ -3097,50 +3713,62 @@ class GteAdminBuybackPreview {
   final int holdDaysRemaining;
 
   factory GteAdminBuybackPreview.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'admin buyback preview');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin buyback preview',
+    );
     return GteAdminBuybackPreview(
       orderId: GteJson.string(json, <String>['order_id', 'orderId']),
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       eligible: GteJson.boolean(json, <String>['eligible']),
-      reasons: GteJson.typedList(
-        json,
-        <String>['reasons'],
-        (Object? item) => item?.toString() ?? '',
-      ),
+      reasons: GteJson.typedList(json, <String>[
+        'reasons',
+      ], (Object? item) => item?.toString() ?? ''),
       message: GteJson.string(json, <String>['message']),
       country: GteJson.stringOrNull(json, <String>['country']),
       fairValue: GteJson.number(json, <String>['fair_value', 'fairValue']),
-      estimatedP2pUnitPrice: GteJson.number(
-          json, <String>['estimated_p2p_unit_price', 'estimatedP2pUnitPrice']),
-      estimatedP2pTotal: GteJson.number(
-          json, <String>['estimated_p2p_total', 'estimatedP2pTotal']),
-      adminUnitPrice: GteJson.number(
-          json, <String>['admin_unit_price', 'adminUnitPrice']),
-      adminTotal:
-          GteJson.number(json, <String>['admin_total', 'adminTotal']),
-      payoutRatio:
-          GteJson.number(json, <String>['payout_ratio', 'payoutRatio']),
-      liquidityBand:
-          GteJson.string(json, <String>['liquidity_band', 'liquidityBand']),
+      estimatedP2pUnitPrice: GteJson.number(json, <String>[
+        'estimated_p2p_unit_price',
+        'estimatedP2pUnitPrice',
+      ]),
+      estimatedP2pTotal: GteJson.number(json, <String>[
+        'estimated_p2p_total',
+        'estimatedP2pTotal',
+      ]),
+      adminUnitPrice: GteJson.number(json, <String>[
+        'admin_unit_price',
+        'adminUnitPrice',
+      ]),
+      adminTotal: GteJson.number(json, <String>['admin_total', 'adminTotal']),
+      payoutRatio: GteJson.number(json, <String>[
+        'payout_ratio',
+        'payoutRatio',
+      ]),
+      liquidityBand: GteJson.string(json, <String>[
+        'liquidity_band',
+        'liquidityBand',
+      ]),
       payoutBand: GteJson.string(json, <String>['payout_band', 'payoutBand']),
-      p2pPriorityWindowHours: GteJson.integer(
-          json, <String>['p2p_priority_window_hours', 'p2pPriorityWindowHours']),
-      p2pPriorityWindowEndsAt: GteJson.dateTimeOrNull(
-        json,
-        <String>[
-          'p2p_priority_window_ends_at',
-          'p2pPriorityWindowEndsAt',
-        ],
-      ),
-      minimumHoldDays:
-          GteJson.integer(json, <String>['minimum_hold_days', 'minimumHoldDays']),
-      minimumHoldExpiresAt: GteJson.dateTimeOrNull(
-        json,
-        <String>['minimum_hold_expires_at', 'minimumHoldExpiresAt'],
-      ),
-      holdDaysRemaining:
-          GteJson.integer(json, <String>['hold_days_remaining', 'holdDaysRemaining']),
+      p2pPriorityWindowHours: GteJson.integer(json, <String>[
+        'p2p_priority_window_hours',
+        'p2pPriorityWindowHours',
+      ]),
+      p2pPriorityWindowEndsAt: GteJson.dateTimeOrNull(json, <String>[
+        'p2p_priority_window_ends_at',
+        'p2pPriorityWindowEndsAt',
+      ]),
+      minimumHoldDays: GteJson.integer(json, <String>[
+        'minimum_hold_days',
+        'minimumHoldDays',
+      ]),
+      minimumHoldExpiresAt: GteJson.dateTimeOrNull(json, <String>[
+        'minimum_hold_expires_at',
+        'minimumHoldExpiresAt',
+      ]),
+      holdDaysRemaining: GteJson.integer(json, <String>[
+        'hold_days_remaining',
+        'holdDaysRemaining',
+      ]),
     );
   }
 }
@@ -3163,18 +3791,24 @@ class GteAdminBuybackExecution {
   final DateTime? executedAt;
 
   factory GteAdminBuybackExecution.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'admin buyback execution');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin buyback execution',
+    );
     return GteAdminBuybackExecution(
       preview: GteAdminBuybackPreview.fromJson(
-          GteJson.map(json, keys: <String>['preview'])),
-      order:
-          GteOrderRecord.fromJson(GteJson.map(json, keys: <String>['order'])),
+        GteJson.map(json, keys: <String>['preview']),
+      ),
+      order: GteOrderRecord.fromJson(
+        GteJson.map(json, keys: <String>['order']),
+      ),
       quantity: GteJson.number(json, <String>['quantity']),
       unitPrice: GteJson.number(json, <String>['unit_price', 'unitPrice']),
       total: GteJson.number(json, <String>['total']),
-      executedAt:
-          GteJson.dateTimeOrNull(json, <String>['executed_at', 'executedAt']),
+      executedAt: GteJson.dateTimeOrNull(json, <String>[
+        'executed_at',
+        'executedAt',
+      ]),
     );
   }
 }

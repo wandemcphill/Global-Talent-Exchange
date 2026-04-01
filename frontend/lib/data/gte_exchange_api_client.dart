@@ -603,11 +603,29 @@ class GteExchangeApiClient {
   Future<GteWalletSummary> fetchWalletSummary() =>
       repository.fetchWalletSummary();
 
+  Future<GteUserWallet> fetchWallet() => repository.fetchWallet();
+
   Future<GteWalletLedgerPage> fetchWalletLedger({
     int page = 1,
     int pageSize = 20,
   }) {
     return repository.fetchWalletLedger(page: page, pageSize: pageSize);
+  }
+
+  Future<List<GteWalletTransactionRecord>> listWalletTransactions({
+    int limit = 50,
+  }) {
+    return repository.listWalletTransactions(limit: limit);
+  }
+
+  Future<GteWalletTopUpSession> initiateWalletTopUp(
+    GteWalletTopUpInitiateRequest request,
+  ) {
+    return repository.initiateWalletTopUp(request);
+  }
+
+  Future<GteWalletTopUpVerificationResult> verifyWalletTopUp(String reference) {
+    return repository.verifyWalletTopUp(reference);
   }
 
   Future<GtePortfolioView> fetchPortfolio() => repository.fetchPortfolio();
