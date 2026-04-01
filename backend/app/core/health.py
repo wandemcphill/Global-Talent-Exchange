@@ -155,8 +155,7 @@ def read_ready(
     response: Response,
     service: SystemStatusService = Depends(get_system_status_service),
 ) -> ReadinessResponse:
-    check_schema = request.app.state.settings.run_migration_check if request.app.state.run_migration_check is None else request.app.state.run_migration_check
-    readiness = service.build_readiness(request.app.state.context.database, check_schema=check_schema)
+    readiness = service.build_readiness(request.app.state.context.database, check_schema=True)
     if readiness.status != "ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return readiness

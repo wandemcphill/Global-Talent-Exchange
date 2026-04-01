@@ -215,8 +215,7 @@ def register_core(app: FastAPI) -> None:
 
 def check_db(app: FastAPI) -> None:
     logger.info("app.startup.health.database.begin")
-    run_schema_smoke = app.state.settings.run_migration_check if app.state.run_migration_check is None else app.state.run_migration_check
-    app.state.container.check_db(check_schema=run_schema_smoke)
+    app.state.container.check_db(check_schema=True)
     logger.info("app.startup.health.database.complete")
 
 
