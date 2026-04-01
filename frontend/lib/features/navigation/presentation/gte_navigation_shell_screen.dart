@@ -95,6 +95,7 @@ const List<GtePrimaryDestination> _shellPrimaryDestinations =
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   late GteNavigationRoute _route;
+  late GtePrimaryDestination _selectedPrimaryLane;
   late CompetitionController _competitionController;
   late CreatorApplicationController _creatorApplicationController;
   late CreatorController _creatorController;
@@ -108,6 +109,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   void initState() {
     super.initState();
     _route = widget.initialRoute;
+    _selectedPrimaryLane = _resolvePrimaryLane(_route.primaryDestination);
     widget.controller.addListener(_handleExchangeControllerChanged);
     _competitionUserId = _resolveCompetitionUserId();
     _competitionUserName = _resolveCompetitionUserName();
@@ -150,6 +152,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         widget.initialRoute != _route) {
       setState(() {
         _route = widget.initialRoute;
+        _selectedPrimaryLane =
+            _resolvePrimaryLane(widget.initialRoute.primaryDestination);
       });
       _primeRouteData();
     }
@@ -308,9 +312,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                             if (!mounted) {
                               return;
                             }
-                            setState(() {
-                              _route = const GteNavigationRoute.home();
-                            });
+                            _setRoute(const GteNavigationRoute.home());
                           },
                           child: const Text('Sign out'),
                         ),
@@ -663,19 +665,52 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     );
   }
 
-  void _openPrimaryDestination(GtePrimaryDestination destination) {
+  Widget _buildHubDestination() {
+    if (!widget.controller.isAuthenticated) {
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: GteStatePanel(
+          eyebrow: 'HUB ACCESS',
+          title: 'Sign in to open Hub',
+          message:
+              'Hub keeps creator invites, referral milestones, and community momentum in one lane. Sign in to load the live data behind it.',
+          icon: Icons.groups_outlined,
+          accentColor: const Color(0xFF5FE3A1),
+          actionLabel: 'Sign in',
+          onAction: () =>
+              _openLogin(targetRoute: const GteNavigationRoute.hub()),
+        ),
+      );
+    }
+
+    return ReferralHubScreen(
+      key: const PageStorageKey<String>('hub-screen'),
+      referralController: _referralController,
+      creatorController: _creatorController,
+    );
+  }
+
+  GtePrimaryDestination _resolvePrimaryLane(GtePrimaryDestination destination) {
+    return _primaryLaneDestinations.contains(destination)
+        ? destination
+        : GtePrimaryDestination.home;
+  }
+
+  void _setRoute(GteNavigationRoute route) {
     setState(() {
-      _route = _route.withPrimaryDestination(destination);
+      _route = route;
+      _selectedPrimaryLane = _resolvePrimaryLane(route.primaryDestination);
     });
     widget.onRouteChanged?.call(_route);
     _primeRouteData();
   }
 
+  void _openPrimaryDestination(GtePrimaryDestination destination) {
+    _setRoute(_route.withPrimaryDestination(destination));
+  }
+
   void _openCompetitionDestination(CompetitionHubDestination destination) {
-    setState(() {
-      _route = _route.withCompetitionDestination(destination);
-    });
-    widget.onRouteChanged?.call(_route);
+    _setRoute(_route.withCompetitionDestination(destination));
   }
 
   Future<bool> _openLogin({GteNavigationRoute? targetRoute}) async {
@@ -704,6 +739,41 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         widget.controller.isAuthenticated) {
       widget.controller.refreshAccount();
     }
+  }
+
+  void _openCoachMarket() {
+    final session = widget.controller.session;
+    if (session == null) {
+      _openLogin(targetRoute: _route);
+      return;
+    }
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ManagerMarketScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          isAdmin: <String>{'admin', 'super_admin'}
+              .contains(session.user.role.toLowerCase()),
+          onOpenAdmin: _openManagerAdmin,
+        ),
+      ),
+    );
+  }
+
+  void _openManagerAdmin() {
+    final session = widget.controller.session;
+    if (session == null) {
+      return;
+    }
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext context) => ManagerAdminScreen(
+          baseUrl: widget.apiBaseUrl,
+          accessToken: session.accessToken,
+          role: session.user.role,
+        ),
+      ),
+    );
   }
 
   Future<void> _openPlayer(String playerId) async {
@@ -783,6 +853,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   GteSyncStatusCard _buildModeSyncCard(BuildContext context) {
     final Color accent = _routeAccentFor(context, _route.primaryDestination);
     switch (_route.primaryDestination) {
+      case GtePrimaryDestination.competitions:
+        return GteSyncStatusCard(
+          title: 'Play lane',
+          status: _competitionController.discoveryError == null
+              ? 'Fixtures, brackets, and replay narratives are synced.'
+              : 'Play feed degraded. Showing the latest competition snapshot.',
+          syncedAt: _competitionController.discoverySyncedAt,
+          accent: accent,
+          isRefreshing: _competitionController.isLoadingDiscovery,
+          onRefresh: _competitionController.loadDiscovery,
+        );
       case GtePrimaryDestination.market:
         return GteSyncStatusCard(
           title: 'Transfer market',
@@ -795,7 +876,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           isRefreshing: widget.controller.isLoadingMarket,
           onRefresh: () => widget.controller.loadMarket(reset: true),
         );
-      case GtePrimaryDestination.competitions:
+      case GtePrimaryDestination.hub:
         return GteSyncStatusCard(
           title: 'Play center',
           status:
@@ -804,8 +885,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                   : 'Arena feed degraded. Showing the latest competition snapshot.',
           syncedAt: _competitionController.discoverySyncedAt,
           accent: accent,
-          isRefreshing: _competitionController.isLoadingDiscovery,
-          onRefresh: _competitionController.loadDiscovery,
+          isRefreshing:
+              _referralController.isLoading || _creatorController.isLoading,
+          onRefresh: widget.controller.isAuthenticated
+              ? () {
+                  _referralController.load();
+                  _creatorController.load();
+                }
+              : null,
         );
       case GtePrimaryDestination.community:
         return GteSyncStatusCard(

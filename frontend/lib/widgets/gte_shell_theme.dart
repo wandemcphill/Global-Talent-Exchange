@@ -74,7 +74,7 @@ class GteShellTheme {
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: resolvedDefinition.metadata.brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: tokens.background,
       canvasColor: tokens.background,
@@ -406,6 +406,13 @@ Color _surfaceTint(
 ) {
   return Color.alphaBlend(
     visuals.heroAccent.withValues(alpha: alpha),
+    tokens.panelStrong,
+  );
+}
+
+Color _surfaceTint(GteThemeTokens tokens, double alpha) {
+  return Color.alphaBlend(
+    tokens.surfaceHighlight.withValues(alpha: alpha),
     tokens.panelStrong,
   );
 }

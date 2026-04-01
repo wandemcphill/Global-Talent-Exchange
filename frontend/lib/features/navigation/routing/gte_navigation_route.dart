@@ -3,7 +3,6 @@ import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_d
 
 enum GtePrimaryDestination {
   home,
-  market,
   competitions,
   community,
   club,
@@ -32,6 +31,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return 'home';
+      case GtePrimaryDestination.competitions:
+        return 'play';
       case GtePrimaryDestination.market:
         return 'market';
       case GtePrimaryDestination.competitions:
@@ -41,7 +42,7 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
       case GtePrimaryDestination.club:
         return 'club';
       case GtePrimaryDestination.wallet:
-        return 'wallet';
+        return 'capital';
     }
   }
 
@@ -51,6 +52,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return Icons.home_outlined;
+      case GtePrimaryDestination.competitions:
+        return Icons.play_circle_outline;
       case GtePrimaryDestination.market:
         return Icons.storefront_outlined;
       case GtePrimaryDestination.competitions:
@@ -68,8 +71,6 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return const Color(0xFF72F0D8);
-      case GtePrimaryDestination.market:
-        return const Color(0xFF72F0D8);
       case GtePrimaryDestination.competitions:
         return const Color(0xFFB26DFF);
       case GtePrimaryDestination.community:
@@ -85,6 +86,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
     switch (this) {
       case GtePrimaryDestination.home:
         return Icons.home;
+      case GtePrimaryDestination.competitions:
+        return Icons.play_circle;
       case GtePrimaryDestination.market:
         return Icons.storefront;
       case GtePrimaryDestination.competitions:
@@ -121,6 +124,9 @@ class GteNavigationRoute {
   const GteNavigationRoute.community()
     : this._(primaryDestination: GtePrimaryDestination.community);
 
+  const GteNavigationRoute.hub()
+      : this._(primaryDestination: GtePrimaryDestination.hub);
+
   const GteNavigationRoute.club()
     : this._(primaryDestination: GtePrimaryDestination.club);
 
@@ -138,7 +144,7 @@ class GteNavigationRoute {
 
   String get path {
     if (isCompetitions) {
-      return '/app/competitions/${effectiveCompetitionDestination.pathSegment}';
+      return '/app/play/${effectiveCompetitionDestination.pathSegment}';
     }
     return primaryDestination.routePath;
   }
@@ -147,8 +153,6 @@ class GteNavigationRoute {
     switch (destination) {
       case GtePrimaryDestination.home:
         return const GteNavigationRoute.home();
-      case GtePrimaryDestination.market:
-        return const GteNavigationRoute.market();
       case GtePrimaryDestination.competitions:
         return GteNavigationRoute.competitions(
           destination: effectiveCompetitionDestination,
@@ -195,8 +199,7 @@ class GteNavigationRoute {
     }
 
     switch (normalizedSegments.first.toLowerCase()) {
-      case 'market':
-        return const GteNavigationRoute.market();
+      case 'play':
       case 'competitions':
         return GteNavigationRoute.competitions(
           destination: competitionHubDestinationFromPathSegment(
@@ -207,6 +210,7 @@ class GteNavigationRoute {
         return const GteNavigationRoute.community();
       case 'club':
         return const GteNavigationRoute.club();
+      case 'capital':
       case 'wallet':
         return const GteNavigationRoute.wallet();
       case 'home':

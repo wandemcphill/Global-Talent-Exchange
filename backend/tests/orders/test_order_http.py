@@ -780,3 +780,83 @@ def test_price_improvement_releases_unused_reserved_funds(api_context) -> None:
     release_event = next(event for event in buyer_events if event.event_type.value == "order.released")
     assert release_event.payload_json["reason"] == "price_improvement"
     assert Decimal(release_event.payload_json["released_amount"]) == Decimal("9.0000")
+
+
+def test_sell_order_requires_owned_units(api_context) -> None:
+    client, session, auth_state = api_context
+    player = _create_player(session, provider_external_id="player-order-no-holdings")
+
+    response = client.post(
+        "/api/orders",
+        json={
+            "player_id": player.id,
+            "side": "sell",
+            "quantity": 1,
+            "max_price": 5,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "owned quantity" in response.json()["detail"]
+
+
+def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> None:
+    client, session, auth_state = api_context
+    player = _create_player(session, provider_external_id="player-admin-buyback")
+    seller = auth_state["user"]
+    _grant_position(session, seller, player_id=player.id, quantity=Decimal("2"))
+    session.execute(text("UPDATE ledger_entries SET created_at = DATETIME('now', '-8 days')"))
+    session.commit()
+    session.execute(
+        text("ALTER TABLE users ADD COLUMN nationality VARCHAR(120)")
+    )
+    session.commit()
+    session.execute(
+        text("UPDATE users SET nationality = 'Nigeria' WHERE id = :user_id"),
+        {"user_id": seller.id},
+    )
+    seller.kyc_status = KycStatus.VERIFIED
+    session.commit()
+
+    sell_response = client.post(
+        "/api/orders",
+        json={
+            "player_id": player.id,
+            "side": "sell",
+            "quantity": 2,
+            "max_price": 9,
+        },
+    )
+    assert sell_response.status_code == 201
+    order_id = sell_response.json()["id"]
+
+    preview_response = client.get(f"/api/orders/{order_id}/admin-buyback-preview")
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["eligible"] is False
+    assert "P2P remains the priority" in preview_payload["reasons"][0]
+
+    session.execute(
+        text(
+            "UPDATE exchange_orders SET created_at = DATETIME('now', '-49 hours'), updated_at = DATETIME('now', '-49 hours') WHERE id = :order_id"
+        ),
+        {"order_id": order_id},
+    )
+    session.commit()
+
+    matured_preview_response = client.get(f"/api/orders/{order_id}/admin-buyback-preview")
+    assert matured_preview_response.status_code == 200
+    matured_preview = matured_preview_response.json()
+    assert matured_preview["eligible"] is True
+    assert Decimal(matured_preview["admin_total"]) > Decimal("0")
+    assert Decimal(matured_preview["expected_p2p_total"]) > Decimal(matured_preview["admin_total"])
+
+    execute_response = client.post(f"/api/orders/{order_id}/admin-buyback")
+    assert execute_response.status_code == 200
+    execution_payload = execute_response.json()
+    assert execution_payload["order"]["status"] == "filled"
+    assert execution_payload["preview"]["eligible"] is True
+    assert execution_payload["execution_id"].startswith("admin-buyback:")
+
+    wallet_summary = WalletService().get_wallet_summary(session, seller)
+    assert wallet_summary.available_balance == Decimal(str(execution_payload["preview"]["admin_total"]))

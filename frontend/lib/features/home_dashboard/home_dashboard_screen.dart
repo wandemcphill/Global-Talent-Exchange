@@ -711,6 +711,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
     required this.onOpenClub,
     required this.onOpenCompetitions,
     required this.onOpenReplays,
+    this.onOpenCoaches,
     this.onOpenLogin,
   });
 
@@ -718,6 +719,7 @@ class _HomeQuickActionsStrip extends StatelessWidget {
   final VoidCallback onOpenClub;
   final VoidCallback onOpenCompetitions;
   final VoidCallback onOpenReplays;
+  final VoidCallback? onOpenCoaches;
   final VoidCallback? onOpenLogin;
 
   @override
@@ -745,6 +747,18 @@ class _HomeQuickActionsStrip extends StatelessWidget {
             accent: GteShellTheme.accentArena,
             actionLabel: 'Open arena',
             onTap: onOpenCompetitions,
+          ),
+          _HomeActionCard(
+            eyebrow: 'COACHES',
+            title: 'Scout free coaches',
+            detail: isAuthenticated
+                ? 'Open the coach market, claim standard coaches for free, and track elite and legendary copy scarcity before the board dries up.'
+                : 'Coach discovery is live in GTEX. Sign in to claim free coaches and chase the scarce elite and legendary copies.',
+            icon: Icons.manage_accounts_outlined,
+            accent: GteShellTheme.accentWarm,
+            actionLabel:
+                isAuthenticated ? 'Open coach market' : 'Sign in for coaches',
+            onTap: isAuthenticated ? onOpenCoaches : onOpenLogin,
           ),
           _HomeActionCard(
             eyebrow: isAuthenticated ? 'REPLAYS' : 'UNLOCK',
@@ -2709,11 +2723,9 @@ String _formatCompetitionAmount(double value, String currency) {
 }
 
 String _competitionStatusLabel(CompetitionStatus status) {
-  return status.name
-      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
-        return '${match.group(1)} ${match.group(2)}';
-      })
-      .replaceAll('_', ' ');
+  return status.name.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (Match match) {
+    return '${match.group(1)} ${match.group(2)}';
+  }).replaceAll('_', ' ');
 }
 
 String _spotsLabel(CompetitionSummary competition) {

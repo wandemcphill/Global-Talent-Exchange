@@ -144,14 +144,15 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   List<String> get _rarities =>
       _availableRarities.isNotEmpty ? _availableRarities : _fallbackRarities;
 
-
   Map<String, Object?> _catalogQuery() {
     return <String, Object?>{
       'limit': 500,
-      if (_searchController.text.trim().isNotEmpty) 'search': _searchController.text.trim(),
+      if (_searchController.text.trim().isNotEmpty)
+        'search': _searchController.text.trim(),
       if (_tactic != null && _tactic!.isNotEmpty) 'tactic': _tactic!,
       if (_trait != null && _trait!.isNotEmpty) 'trait': _trait!,
-      if (_mentality != null && _mentality!.isNotEmpty) 'mentality': _mentality!,
+      if (_mentality != null && _mentality!.isNotEmpty)
+        'mentality': _mentality!,
       if (_rarity != null && _rarity!.isNotEmpty) 'rarity': _rarity!,
     };
   }
@@ -164,8 +165,10 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       });
     }
     try {
-      final Map<String, dynamic> filterData = await _managerRepository.fetchFilters();
-      final Map<String, dynamic> catalogData = await _managerRepository.fetchCatalog(
+      final Map<String, dynamic> filterData =
+          await _managerRepository.fetchFilters();
+      final Map<String, dynamic> catalogData =
+          await _managerRepository.fetchCatalog(
         search: _searchController.text,
         tactic: _tactic,
         trait: _trait,
@@ -173,7 +176,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         rarity: _rarity,
         limit: 500,
       );
-      final Map<String, dynamic> nextTeam = await _managerRepository.fetchTeam();
+      final Map<String, dynamic> nextTeam =
+          await _managerRepository.fetchTeam();
       final int totalOwned = (nextTeam['total_owned'] as int?) ?? 0;
       final int participants = totalOwned < 2 ? 2 : totalOwned;
       final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
@@ -182,7 +186,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         _managerRepository.fetchListings(),
         _managerRepository.fetchMyListings(),
         _managerRepository.fetchRecommendation(),
-        _competitionRepository.fetchRuntime('fast_league', participants: participants),
+        _competitionRepository.fetchRuntime('fast_league',
+            participants: participants),
         _managerRepository.fetchTradeHistory(),
       ]);
 
@@ -190,33 +195,42 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         return;
       }
       setState(() {
-        _availableTactics = (filterData['tactics'] as List<dynamic>? ?? <dynamic>[])
-            .map((dynamic item) => item.toString())
-            .toList();
-        _availableTraits = (filterData['traits'] as List<dynamic>? ?? <dynamic>[])
-            .map((dynamic item) => item.toString())
-            .toList();
+        _availableTactics =
+            (filterData['tactics'] as List<dynamic>? ?? <dynamic>[])
+                .map((dynamic item) => item.toString())
+                .toList();
+        _availableTraits =
+            (filterData['traits'] as List<dynamic>? ?? <dynamic>[])
+                .map((dynamic item) => item.toString())
+                .toList();
         _availableMentalities =
             (filterData['mentalities'] as List<dynamic>? ?? <dynamic>[])
                 .map((dynamic item) => item.toString())
                 .toList();
-        _availableRarities = (filterData['rarities'] as List<dynamic>? ?? <dynamic>[])
-            .map((dynamic item) => item.toString())
-            .toList();
-        _catalog = ((payload[0] as Map<String, dynamic>)['items'] as List<dynamic>? ?? <dynamic>[])
-            .whereType<Map>()
-            .map((dynamic item) => Map<String, dynamic>.from(item as Map))
-            .toList();
+        _availableRarities =
+            (filterData['rarities'] as List<dynamic>? ?? <dynamic>[])
+                .map((dynamic item) => item.toString())
+                .toList();
+        _catalog =
+            ((payload[0] as Map<String, dynamic>)['items'] as List<dynamic>? ??
+                    <dynamic>[])
+                .whereType<Map>()
+                .map((dynamic item) => Map<String, dynamic>.from(item as Map))
+                .toList();
         _team = payload[1] as Map<String, dynamic>;
         _listings = (payload[2] as List<dynamic>).cast<Map<String, dynamic>>();
-        _myListings = (payload[3] as List<dynamic>).cast<Map<String, dynamic>>();
+        _myListings =
+            (payload[3] as List<dynamic>).cast<Map<String, dynamic>>();
         _recommendation = payload[4] as Map<String, dynamic>;
         _fastLeagueRuntime = payload[5] as Map<String, dynamic>;
-        _tradeHistory = (payload[6] as List<dynamic>).cast<Map<String, dynamic>>();
+        _tradeHistory =
+            (payload[6] as List<dynamic>).cast<Map<String, dynamic>>();
         final List<Map<String, dynamic>> catalogItems = _catalog;
         if (catalogItems.length >= 2) {
-          _compareLeftManagerId ??= (catalogItems.first['manager_id'] ?? '').toString();
-          _compareRightManagerId ??= (catalogItems[1]['manager_id'] ?? '').toString();
+          _compareLeftManagerId ??=
+              (catalogItems.first['manager_id'] ?? '').toString();
+          _compareRightManagerId ??=
+              (catalogItems[1]['manager_id'] ?? '').toString();
         }
       });
       await _loadComparison();
@@ -241,7 +255,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       return;
     }
     try {
-      final Map<String, dynamic> comparison = await _managerRepository.compareManagers(
+      final Map<String, dynamic> comparison =
+          await _managerRepository.compareManagers(
         _compareLeftManagerId!,
         _compareRightManagerId!,
       );
@@ -291,7 +306,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
     await _runAction(() async {
       await _managerRepository.recruit(managerId);
       await _load();
-    }, successMessage: 'Manager recruited.');
+    }, successMessage: 'Coach recruited for free.');
   }
 
   Future<void> _assign(String assetId, String slot) async {
@@ -326,7 +341,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(priceController.text.trim()),
+            onPressed: () =>
+                Navigator.of(context).pop(priceController.text.trim()),
             child: const Text('List'),
           ),
         ],
@@ -367,11 +383,13 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       ...bench,
     ];
     if (owned.isEmpty) {
-      AppFeedback.showError(context, 'Recruit at least one manager before offering a swap.');
+      AppFeedback.showError(
+          context, 'Recruit at least one manager before offering a swap.');
       return;
     }
     String proposerAssetId = (owned.first['asset_id'] ?? '').toString();
-    final TextEditingController cashController = TextEditingController(text: '0');
+    final TextEditingController cashController =
+        TextEditingController(text: '0');
     final Map<String, dynamic>? result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (BuildContext context) => StatefulBuilder(
@@ -407,9 +425,10 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: cashController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration:
-                      const InputDecoration(labelText: 'Cash adjustment (optional)'),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Cash adjustment (optional)'),
                 ),
               ],
             ),
@@ -422,9 +441,10 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                 onPressed: () => Navigator.of(context).pop(
                   <String, dynamic>{
                     'proposer_asset_id': proposerAssetId,
-                    'cash_adjustment_credits': cashController.text.trim().isEmpty
-                        ? '0'
-                        : cashController.text.trim(),
+                    'cash_adjustment_credits':
+                        cashController.text.trim().isEmpty
+                            ? '0'
+                            : cashController.text.trim(),
                   },
                 ),
                 child: const Text('Submit'),
@@ -573,7 +593,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       return ListTile(
         leading: const Icon(Icons.person_off_outlined),
         title: Text('$label manager'),
-        subtitle: const Text('No manager assigned to this slot yet. Bench managers can be promoted here instantly.'),
+        subtitle: const Text(
+            'No manager assigned to this slot yet. Bench managers can be promoted here instantly.'),
       );
     }
     return ListTile(
@@ -611,7 +632,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
               value: 'academy',
               child: Text('Move to academy'),
             ),
-          const PopupMenuItem<String>(value: 'list', child: Text('List for trade')),
+          const PopupMenuItem<String>(
+              value: 'list', child: Text('List for trade')),
           const PopupMenuItem<String>(value: 'release', child: Text('Release')),
         ],
       ),
@@ -644,7 +666,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         },
         itemBuilder: (BuildContext context) => const <PopupMenuEntry<String>>[
           PopupMenuItem<String>(value: 'main', child: Text('Assign to main')),
-          PopupMenuItem<String>(value: 'academy', child: Text('Assign to academy')),
+          PopupMenuItem<String>(
+              value: 'academy', child: Text('Assign to academy')),
           PopupMenuItem<String>(value: 'list', child: Text('List for trade')),
           PopupMenuItem<String>(value: 'release', child: Text('Release')),
         ],
@@ -659,9 +682,9 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         child: Column(
           children: <Widget>[
             _sectionHeader(
-              'Manager catalog',
+              'Coach catalog',
               subtitle:
-                  'Legendary copies are scarce, elite active managers are rarer, and every pick carries tactical flavor rather than base price value.',
+                  'Catalog coaches are free to acquire. Legendary coaches have 1 digital copy each, elite coaches have 2, and standard coaches stay open while supply lasts.',
               trailing: Text('${_catalog.length} loaded'),
             ),
             const SizedBox(height: 12),
@@ -686,10 +709,14 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
               )
             else
               ..._catalog.take(120).map((Map<String, dynamic> item) {
-                final int supplyAvailable = (item['supply_available'] ?? 0) as int? ?? 0;
+                final int supplyAvailable =
+                    (item['supply_available'] ?? 0) as int? ?? 0;
+                final int supplyTotal =
+                    (item['supply_total'] ?? 0) as int? ?? 0;
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text((item['display_name'] ?? '').toString()),
+                  leading: Text('$supplyAvailable/$supplyTotal left'),
                   subtitle: Text(
                     '${(item['rarity'] ?? '').toString()} • ${(item['mentality'] ?? '').toString()} • '
                     'tactics: ${(item['tactics'] as List<dynamic>? ?? <dynamic>[]).join(', ')}\n'
@@ -700,7 +727,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                     onPressed: supplyAvailable > 0 && !_isRunningAction
                         ? () => _recruit((item['manager_id'] ?? '').toString())
                         : null,
-                    child: Text(supplyAvailable > 0 ? 'Recruit' : 'Sold out'),
+                    child:
+                        Text(supplyAvailable > 0 ? 'Claim free' : 'Sold out'),
                   ),
                 );
               }),
@@ -750,20 +778,23 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                         OutlinedButton(
                           onPressed: _isRunningAction
                               ? null
-                              : () => _cancelListing((item['listing_id'] ?? '').toString()),
+                              : () => _cancelListing(
+                                  (item['listing_id'] ?? '').toString()),
                           child: const Text('Cancel'),
                         )
                       else ...<Widget>[
                         FilledButton.tonal(
                           onPressed: _isRunningAction
                               ? null
-                              : () => _swapForListing((item['asset_id'] ?? '').toString()),
+                              : () => _swapForListing(
+                                  (item['asset_id'] ?? '').toString()),
                           child: const Text('Swap'),
                         ),
                         FilledButton(
                           onPressed: _isRunningAction
                               ? null
-                              : () => _buy((item['listing_id'] ?? '').toString()),
+                              : () =>
+                                  _buy((item['listing_id'] ?? '').toString()),
                           child: const Text('Buy'),
                         ),
                       ],
@@ -782,17 +813,22 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         (_recommendation?['summary'] ?? 'No recommendation loaded yet.')
             .toString();
     final String positions =
-        ((_recommendation?['recommended_positions'] as List<dynamic>? ?? <dynamic>[])
+        ((_recommendation?['recommended_positions'] as List<dynamic>? ??
+                <dynamic>[])
             .join(' • '));
     final String actions =
-        ((_recommendation?['suggested_actions'] as List<dynamic>? ?? <dynamic>[])
+        ((_recommendation?['suggested_actions'] as List<dynamic>? ??
+                <dynamic>[])
             .join(' • '));
     final String rationale =
-        ((_recommendation?['rationale'] as List<dynamic>? ?? <dynamic>[]).join(' • '));
+        ((_recommendation?['rationale'] as List<dynamic>? ?? <dynamic>[])
+            .join(' • '));
     final String risks =
-        ((_recommendation?['risk_flags'] as List<dynamic>? ?? <dynamic>[]).join(' • '));
+        ((_recommendation?['risk_flags'] as List<dynamic>? ?? <dynamic>[])
+            .join(' • '));
     final int fitScore = (_recommendation?['style_fit_score'] as int?) ?? 0;
-    final String selectedTactic = (_recommendation?['selected_tactic'] ?? 'manual').toString();
+    final String selectedTactic =
+        (_recommendation?['selected_tactic'] ?? 'manual').toString();
 
     return Card(
       child: ListTile(
@@ -818,7 +854,9 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _sectionHeader('Manager comparison', subtitle: 'Pit two tactical identities against each other before you recruit or trade.'),
+            _sectionHeader('Manager comparison',
+                subtitle:
+                    'Pit two tactical identities against each other before you recruit or trade.'),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
@@ -828,11 +866,17 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   width: 220,
                   child: DropdownButtonFormField<String>(
                     value: _compareLeftManagerId,
-                    decoration: const InputDecoration(labelText: 'Left manager'),
-                    items: _catalog.take(80).map((Map<String, dynamic> item) => DropdownMenuItem<String>(
-                      value: (item['manager_id'] ?? '').toString(),
-                      child: Text((item['display_name'] ?? '').toString()),
-                    )).toList(),
+                    decoration:
+                        const InputDecoration(labelText: 'Left manager'),
+                    items: _catalog
+                        .take(80)
+                        .map((Map<String, dynamic> item) =>
+                            DropdownMenuItem<String>(
+                              value: (item['manager_id'] ?? '').toString(),
+                              child:
+                                  Text((item['display_name'] ?? '').toString()),
+                            ))
+                        .toList(),
                     onChanged: (String? value) {
                       setState(() => _compareLeftManagerId = value);
                       _loadComparison();
@@ -843,11 +887,17 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   width: 220,
                   child: DropdownButtonFormField<String>(
                     value: _compareRightManagerId,
-                    decoration: const InputDecoration(labelText: 'Right manager'),
-                    items: _catalog.take(80).map((Map<String, dynamic> item) => DropdownMenuItem<String>(
-                      value: (item['manager_id'] ?? '').toString(),
-                      child: Text((item['display_name'] ?? '').toString()),
-                    )).toList(),
+                    decoration:
+                        const InputDecoration(labelText: 'Right manager'),
+                    items: _catalog
+                        .take(80)
+                        .map((Map<String, dynamic> item) =>
+                            DropdownMenuItem<String>(
+                              value: (item['manager_id'] ?? '').toString(),
+                              child:
+                                  Text((item['display_name'] ?? '').toString()),
+                            ))
+                        .toList(),
                     onChanged: (String? value) {
                       setState(() => _compareRightManagerId = value);
                       _loadComparison();
@@ -858,7 +908,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             ),
             const SizedBox(height: 12),
             if (comparison == null)
-              const Text('Choose two managers to compare tactical overlap and style fit.')
+              const Text(
+                  'Choose two managers to compare tactical overlap and style fit.')
             else
               Text(
                 '${(comparison['left_name'] ?? '').toString()} fit ${(comparison['style_fit_left'] ?? 0).toString()} vs '
@@ -879,13 +930,16 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: <Widget>[
-            _sectionHeader('Manager trade history', subtitle: 'Recent settlement trails for your manager market journey.'),
+            _sectionHeader('Manager trade history',
+                subtitle:
+                    'Recent settlement trails for your manager market journey.'),
             const SizedBox(height: 12),
             if (_tradeHistory.isEmpty)
               _stateCard(
                 icon: Icons.history_toggle_off,
                 title: 'No trade history yet',
-                message: 'Complete a manager trade or swap to start filling this ledger trail.',
+                message:
+                    'Complete a manager trade or swap to start filling this ledger trail.',
               )
             else
               ..._tradeHistory.take(12).map((Map<String, dynamic> entry) => ListTile(
@@ -921,8 +975,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasFilters =
-        _tactic != null ||
+    final bool hasFilters = _tactic != null ||
         _trait != null ||
         _mentality != null ||
         _rarity != null ||
@@ -953,7 +1006,8 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   eyebrow: 'MANAGER MARKET',
                   icon: Icons.manage_accounts_outlined,
                   title: 'Loading dugout exchange',
-                  message: 'Coach profiles, listings, tactical fit, and runtime checks are being arranged into one premium desk.',
+                  message:
+                      'Coach profiles, listings, tactical fit, and runtime checks are being arranged into one premium desk.',
                   actionLabel: 'Refreshing market',
                   onAction: null,
                   accent: GteShellTheme.accentWarm,
@@ -987,10 +1041,13 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                           children: <Widget>[
                             Text(
                               'MANAGER MARKET',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: GteShellTheme.accentWarm,
-                                letterSpacing: 1.1,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(
+                                    color: GteShellTheme.accentWarm,
+                                    letterSpacing: 1.1,
+                                  ),
                             ),
                             const SizedBox(height: 10),
                             Text(
@@ -1065,9 +1122,9 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                               _mentality,
                               _mentalities,
                               (String? value) {
-                                  setState(() => _mentality = value);
-                                  _load();
-                                },
+                                setState(() => _mentality = value);
+                                _load();
+                              },
                             ),
                           ),
                           SizedBox(

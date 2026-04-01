@@ -38,15 +38,27 @@ from app.value_engine.read_models import PlayerValueSnapshotRecord
 from app.value_engine.service import IngestionValueEngineBridge
 from app.wallets.service import LedgerPosting, WalletService
 
+from .demo_discoverability import (
+    CANONICAL_DEMO_PLAYER_COUNT,
+    CANONICAL_ILLIQUID_PLAYER_COUNT,
+    CANONICAL_LIQUID_PLAYER_COUNT,
+    CanonicalDemoPlayerProfile,
+    CanonicalDemoSeedPlan,
+    DEMO_SUPPLY_BANDS,
+    build_canonical_demo_seed_plan,
+    liquidity_band_code_for_market_value_eur,
+)
 from .player_universe_seeder import VerifiedPlayerUniverseSeeder
 
-DEFAULT_DEMO_PLAYER_COUNT = 24
+DEFAULT_DEMO_PLAYER_COUNT = CANONICAL_DEMO_PLAYER_COUNT
 DEFAULT_DEMO_PROVIDER_NAME = "demo-universe"
 DEFAULT_DEMO_SIGNAL_PROVIDER = "demo-market-signals"
 DEFAULT_DEMO_PASSWORD = "DemoPass123"
 DEFAULT_DEMO_RANDOM_SEED = 20260311
 DEFAULT_DEMO_BATCH_SIZE = 500
 DEFAULT_FEATURED_PLAYER_LIMIT = 5
+DEFAULT_LIQUID_PLAYER_COUNT = CANONICAL_LIQUID_PLAYER_COUNT
+DEFAULT_ILLIQUID_PLAYER_COUNT = CANONICAL_ILLIQUID_PLAYER_COUNT
 DEFAULT_PREVIOUS_SNAPSHOT_AT = datetime(2026, 3, 10, 12, 0, tzinfo=timezone.utc)
 DEFAULT_CURRENT_SNAPSHOT_AT = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
 
@@ -242,10 +254,15 @@ class DemoBootstrapService:
                 replace_provider_data=True,
                 batch_size=batch_size,
             )
-            player_ids = self._list_demo_player_ids(session, provider_name=provider_name)
+            canonical_seed_plan = self._curate_canonical_demo_players(
+                session,
+                provider_name=provider_name,
+                random_seed=random_seed,
+            )
+            player_ids = [profile.player_id for profile in canonical_seed_plan.player_profiles]
             market_signals_seeded = self._seed_market_signals(
                 session,
-                player_ids=player_ids,
+                player_profiles=canonical_seed_plan.player_profiles,
                 signal_provider=signal_provider,
                 previous_snapshot_at=previous_snapshot_at,
                 current_snapshot_at=current_snapshot_at,
@@ -263,9 +280,10 @@ class DemoBootstrapService:
         current_snapshots = value_bridge.run(as_of=current_snapshot_at, player_ids=player_ids)
 
         with self.session_factory() as session:
-            self._ensure_frontend_market_states(
+            self._apply_canonical_market_snapshot_overrides(
                 session,
-                player_ids=player_ids,
+                player_profiles=canonical_seed_plan.player_profiles,
+                previous_snapshot_at=previous_snapshot_at,
                 current_snapshot_at=current_snapshot_at,
             )
             featured_players = self._load_featured_players(
@@ -300,7 +318,14 @@ class DemoBootstrapService:
                 demo_password=demo_password,
             ).to_dict()
             if market_engine is not None:
-                liquidity_seed = liquidity_service.replay_market_state(market_engine).to_dict()
+                liquidity_seed = liquidity_service.replay_market_state(
+                    market_engine,
+                    liquid_player_count=liquid_player_count,
+                    illiquid_player_count=illiquid_player_count,
+                ).to_dict()
+
+        universe_seed = universe_summary.to_dict()
+        universe_seed["canonical_discoverability"] = canonical_seed_plan.to_dict()
 
         return DemoBootstrapSummary(
             provider_name=provider_name,
@@ -309,7 +334,7 @@ class DemoBootstrapService:
             random_seed=random_seed,
             previous_snapshot_at=previous_snapshot_at,
             current_snapshot_at=current_snapshot_at,
-            universe_seed=universe_summary.to_dict(),
+            universe_seed=universe_seed,
             players_seeded=len(player_ids),
             market_signals_seeded=market_signals_seeded,
             value_snapshots_seeded=len(previous_snapshots) + len(current_snapshots),
@@ -435,67 +460,147 @@ class DemoBootstrapService:
         )
         return list(session.scalars(statement))
 
+    def _curate_canonical_demo_players(
+        self,
+        session: Session,
+        *,
+        provider_name: str,
+        random_seed: int,
+    ) -> CanonicalDemoSeedPlan:
+        players = session.scalars(
+            select(Player)
+            .where(Player.source_provider == provider_name)
+            .order_by(Player.market_value_eur.asc(), Player.full_name.asc(), Player.id.asc())
+        ).all()
+        seed_plan = build_canonical_demo_seed_plan(
+            [player.id for player in players],
+            random_seed=random_seed,
+        )
+        if not players:
+            return seed_plan
+
+        supply_tiers = self._ensure_canonical_supply_tiers(session)
+        liquidity_bands = {
+            band.code: band
+            for band in session.scalars(
+                select(LiquidityBand).where(
+                    LiquidityBand.code.in_(
+                        tuple({
+                            liquidity_band_code_for_market_value_eur(profile.market_value_eur)
+                            for profile in seed_plan.player_profiles
+                        })
+                    )
+                )
+            )
+        }
+        profile_by_player_id = seed_plan.profile_by_player_id()
+        for player in players:
+            profile = profile_by_player_id.get(player.id)
+            if profile is None:
+                continue
+            player.market_value_eur = float(profile.market_value_eur)
+            player.is_tradable = True
+            player.supply_tier_id = supply_tiers[profile.band.code].id
+            liquidity_band = liquidity_bands.get(
+                liquidity_band_code_for_market_value_eur(profile.market_value_eur)
+            )
+            if liquidity_band is not None:
+                player.liquidity_band_id = liquidity_band.id
+        session.flush()
+        return seed_plan
+
+    def _ensure_canonical_supply_tiers(self, session: Session) -> dict[str, SupplyTier]:
+        existing = {
+            tier.code: tier
+            for tier in session.scalars(
+                select(SupplyTier).where(SupplyTier.code.in_(tuple(band.code for band in DEMO_SUPPLY_BANDS)))
+            )
+        }
+        for band in DEMO_SUPPLY_BANDS:
+            tier = existing.get(band.code)
+            tier_rank = 100 + band.rank
+            if tier is None:
+                tier = SupplyTier(
+                    code=band.code,
+                    name=band.name,
+                    rank=tier_rank,
+                    min_score=float(band.rank - 1),
+                    max_score=float(band.rank),
+                    target_share=float(band.target_share),
+                    circulating_supply=band.circulating_supply,
+                    daily_pack_supply=band.daily_pack_supply,
+                    season_mint_cap=band.season_mint_cap,
+                    is_active=True,
+                )
+                session.add(tier)
+                existing[band.code] = tier
+                continue
+            tier.name = band.name
+            tier.rank = tier_rank
+            tier.min_score = float(band.rank - 1)
+            tier.max_score = float(band.rank)
+            tier.target_share = float(band.target_share)
+            tier.circulating_supply = band.circulating_supply
+            tier.daily_pack_supply = band.daily_pack_supply
+            tier.season_mint_cap = band.season_mint_cap
+            tier.is_active = True
+        session.flush()
+        return existing
+
     def _seed_market_signals(
         self,
         session: Session,
         *,
-        player_ids: Sequence[str],
+        player_profiles: Sequence[CanonicalDemoPlayerProfile],
         signal_provider: str,
         previous_snapshot_at: datetime,
         current_snapshot_at: datetime,
     ) -> int:
         session.execute(delete(MarketSignal).where(MarketSignal.source_provider == signal_provider))
-        if not player_ids:
+        if not player_profiles:
             return 0
 
         rows: list[dict[str, Any]] = []
         previous_anchor = previous_snapshot_at - timedelta(hours=1)
         current_anchor = current_snapshot_at - timedelta(hours=1)
-        for index, player_id in enumerate(player_ids):
-            base_value = 42 + (index * 3)
-            trend_direction = 1 if index % 4 in (0, 1) else -1
-            trend_delta = 6 + (index % 4)
-            # Alternate winners and decliners so the frontend seed always has both states available.
-            current_value = base_value + trend_delta if trend_direction > 0 else max(1, base_value - trend_delta)
-            watchlist_score = 10 + (index % 5) if trend_direction > 0 else 4 + (index % 3)
-            holder_count_score = 18 + index if trend_direction > 0 else 9 + index
+        for index, profile in enumerate(player_profiles):
             rows.extend(
                 (
                     {
                         "source_provider": signal_provider,
-                        "provider_external_id": f"{player_id}-current-previous",
-                        "player_id": player_id,
+                        "provider_external_id": f"{profile.player_id}-current-previous",
+                        "player_id": profile.player_id,
                         "signal_type": "current_credits",
-                        "score": float(base_value),
+                        "score": float(profile.previous_credits),
                         "as_of": previous_anchor,
-                        "notes": "Demo seed previous snapshot anchor",
+                        "notes": f"Canonical demo {profile.band.name} previous snapshot anchor",
                     },
                     {
                         "source_provider": signal_provider,
-                        "provider_external_id": f"{player_id}-current-latest",
-                        "player_id": player_id,
+                        "provider_external_id": f"{profile.player_id}-current-latest",
+                        "player_id": profile.player_id,
                         "signal_type": "current_credits",
-                        "score": float(current_value),
+                        "score": float(profile.current_credits),
                         "as_of": current_anchor,
-                        "notes": "Demo seed current snapshot anchor",
+                        "notes": f"Canonical demo {profile.band.name} current snapshot anchor",
                     },
                     {
                         "source_provider": signal_provider,
-                        "provider_external_id": f"{player_id}-watchlist",
-                        "player_id": player_id,
+                        "provider_external_id": f"{profile.player_id}-watchlist",
+                        "player_id": profile.player_id,
                         "signal_type": "watchlist_adds",
-                        "score": float(watchlist_score),
+                        "score": float(profile.watchlist_score),
                         "as_of": current_snapshot_at - timedelta(days=index % 4),
-                        "notes": "Demo scouting activity",
+                        "notes": f"Canonical demo watchlist activity for {profile.band.name}",
                     },
                     {
                         "source_provider": signal_provider,
-                        "provider_external_id": f"{player_id}-holder-count",
-                        "player_id": player_id,
+                        "provider_external_id": f"{profile.player_id}-holder-count",
+                        "player_id": profile.player_id,
                         "signal_type": "holder_count",
-                        "score": float(holder_count_score),
+                        "score": float(profile.holder_count_score),
                         "as_of": current_anchor,
-                        "notes": "Demo holder count",
+                        "notes": f"Canonical demo holder count for {profile.band.name}",
                     },
                 )
             )
@@ -541,63 +646,111 @@ class DemoBootstrapService:
             )
         return tuple(summaries)
 
-    def _ensure_frontend_market_states(
+    def _apply_canonical_market_snapshot_overrides(
         self,
         session: Session,
         *,
-        player_ids: Sequence[str],
+        player_profiles: Sequence[CanonicalDemoPlayerProfile],
+        previous_snapshot_at: datetime,
         current_snapshot_at: datetime,
     ) -> None:
-        if not player_ids:
+        if not player_profiles:
             return
 
+        player_ids = tuple(profile.player_id for profile in player_profiles)
         snapshots = session.scalars(
             select(PlayerValueSnapshotRecord)
             .where(
                 PlayerValueSnapshotRecord.player_id.in_(tuple(player_ids)),
-                PlayerValueSnapshotRecord.as_of == current_snapshot_at,
+                PlayerValueSnapshotRecord.as_of.in_((previous_snapshot_at, current_snapshot_at)),
             )
-            .order_by(PlayerValueSnapshotRecord.player_id.asc())
         ).all()
-        if not snapshots:
-            return
+        snapshots_by_key = {(snapshot.player_id, snapshot.as_of): snapshot for snapshot in snapshots}
 
-        if not any(snapshot.movement_pct > 0 for snapshot in snapshots):
-            self._apply_demo_market_state(session, snapshot=snapshots[0], state="rising")
-        if not any(snapshot.movement_pct < 0 for snapshot in snapshots):
-            self._apply_demo_market_state(session, snapshot=snapshots[-1], state="falling")
-
+        for profile in player_profiles:
+            previous_snapshot = snapshots_by_key.get((profile.player_id, previous_snapshot_at))
+            if previous_snapshot is not None:
+                self._apply_snapshot_profile(
+                    snapshot=previous_snapshot,
+                    profile=profile,
+                    target_credits=profile.previous_credits,
+                    previous_credits=profile.previous_credits,
+                    movement_pct=Decimal("0.0000"),
+                    state="flat",
+                )
+            current_snapshot = snapshots_by_key.get((profile.player_id, current_snapshot_at))
+            if current_snapshot is not None:
+                self._apply_snapshot_profile(
+                    snapshot=current_snapshot,
+                    profile=profile,
+                    target_credits=profile.current_credits,
+                    previous_credits=profile.previous_credits,
+                    movement_pct=profile.movement_pct,
+                    state=profile.trend_state,
+                )
+            summary = session.get(PlayerSummaryReadModel, profile.player_id)
+            if summary is None:
+                continue
+            summary.current_value_credits = float(profile.current_credits)
+            summary.previous_value_credits = float(profile.previous_credits)
+            summary.movement_pct = float(profile.movement_pct)
+            summary.last_snapshot_at = current_snapshot_at
+            if current_snapshot is not None:
+                summary.last_snapshot_id = current_snapshot.id
+            summary_payload = dict(summary.summary_json) if isinstance(summary.summary_json, dict) else {}
+            summary_payload.update(
+                {
+                    "drivers": [
+                        "demo_canonical_seed",
+                        f"demo_{profile.band.code}",
+                        f"demo_{profile.trend_state}",
+                    ],
+                    "football_truth_value_credits": float(profile.current_credits),
+                    "market_signal_value_credits": float(profile.current_credits),
+                    "published_card_value_credits": float(profile.current_credits),
+                    "canonical_demo_band": {
+                        "code": profile.band.code,
+                        "name": profile.band.name,
+                        "display_label": profile.band.display_label,
+                        "circulating_supply": profile.band.circulating_supply,
+                    },
+                    "demo_market_state": profile.trend_state,
+                }
+            )
+            summary.summary_json = summary_payload
         session.flush()
 
-    def _apply_demo_market_state(
+    def _apply_snapshot_profile(
         self,
-        session: Session,
         *,
         snapshot: PlayerValueSnapshotRecord,
+        profile: CanonicalDemoPlayerProfile,
+        target_credits: Decimal,
+        previous_credits: Decimal,
+        movement_pct: Decimal,
         state: str,
     ) -> None:
-        movement_pct = 0.084 if state == "rising" else -0.084
-        target_credits = round(max(snapshot.previous_credits * (1.0 + movement_pct), 1.0), 2)
-
         breakdown_payload = dict(snapshot.breakdown_json) if isinstance(snapshot.breakdown_json, dict) else {}
-        breakdown_payload["demo_market_state"] = state
-        breakdown_payload["published_card_value_credits"] = target_credits
+        breakdown_payload.update(
+            {
+                "demo_market_state": state,
+                "published_card_value_credits": float(target_credits),
+                "canonical_demo_band": profile.band.code,
+                "canonical_demo_band_supply": profile.band.circulating_supply,
+            }
+        )
 
-        snapshot.target_credits = target_credits
-        snapshot.movement_pct = movement_pct
-        snapshot.football_truth_value_credits = target_credits
-        snapshot.market_signal_value_credits = target_credits
+        snapshot.previous_credits = float(previous_credits)
+        snapshot.target_credits = float(target_credits)
+        snapshot.movement_pct = float(movement_pct)
+        snapshot.football_truth_value_credits = float(target_credits)
+        snapshot.market_signal_value_credits = float(target_credits)
         snapshot.breakdown_json = breakdown_payload
-        snapshot.drivers_json = [driver for driver in ("demo_seed_frontend_state", f"demo_{state}") if driver]
-
-        summary = session.get(PlayerSummaryReadModel, snapshot.player_id)
-        if summary is not None:
-            summary.current_value_credits = target_credits
-            summary.previous_value_credits = snapshot.previous_credits
-            summary.movement_pct = movement_pct
-            summary_payload = dict(summary.summary_json) if isinstance(summary.summary_json, dict) else {}
-            summary_payload["demo_market_state"] = state
-            summary.summary_json = summary_payload
+        snapshot.drivers_json = [
+            "demo_canonical_seed",
+            f"demo_{profile.band.code}",
+            f"demo_{state}",
+        ]
 
     def _load_featured_players(
         self,

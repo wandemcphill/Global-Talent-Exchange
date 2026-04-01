@@ -54,9 +54,9 @@ class GteSurfacePanel extends StatelessWidget {
             offset: const Offset(0, 18),
           ),
           BoxShadow(
-            color: glow.withValues(alpha: emphasized ? 0.1 : 0.06),
-            blurRadius: 34,
-            spreadRadius: 2,
+            color: glow.withValues(alpha: emphasized ? 0.08 : 0.04),
+            blurRadius: 24,
+            spreadRadius: 1,
           ),
         ],
       ),

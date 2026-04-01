@@ -5,9 +5,10 @@ def test_seed_catalog_includes_tunde_oni() -> None:
     catalog = build_seed_catalog()
     tunde = next(item for item in catalog if item["name"] == "Tunde Oni")
 
-    assert CATALOG_VERSION >= 5
+    assert CATALOG_VERSION >= 7
     assert tunde["mentality"] == "balanced"
     assert tunde["rarity"] == "elite_active"
+    assert tunde["supply_total"] == 2
     assert tunde["club_associations"] == ["Nigeria"]
     assert set(tunde["tactics"]) == {
         "counter_attack",
@@ -27,3 +28,13 @@ def test_seed_catalog_includes_tunde_oni() -> None:
     assert "great motivator" in tunde["philosophy"]
     assert "play through the middle" in tunde["philosophy"]
     assert "short passing" in tunde["philosophy"]
+
+
+def test_seed_catalog_applies_locked_scarcity_rules() -> None:
+    catalog = build_seed_catalog()
+    entries = {item["name"]: item for item in catalog}
+
+    assert entries["Sir Alex Ferguson"]["supply_total"] == 1
+    assert entries["Arsene Wenger"]["supply_total"] == 1
+    assert entries["Pep Guardiola"]["supply_total"] == 2
+    assert entries["Tunde Oni"]["supply_total"] == 2
