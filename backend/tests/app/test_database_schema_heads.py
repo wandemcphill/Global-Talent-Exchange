@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from alembic import command as alembic_command
 from types import SimpleNamespace
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 
 from app.core import database as database_module
@@ -44,6 +45,38 @@ def test_ensure_database_schema_current_upgrades_single_head(monkeypatch, tmp_pa
 
     assert upgrade_targets == ["head"]
     assert heads == ("rev-a",)
+
+
+def test_history_engagement_schema_repair_restores_missing_season_pass_tables(tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'history-engagement-repair.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    config = database_module.build_alembic_config(database_url)
+    repair_target = "20260330_0078_user_role_width_repair"
+    dropped_tables = (
+        "user_season_mission_progress",
+        "user_season_reward_claims",
+        "user_season_progress",
+        "season_pass_missions",
+        "season_pass_rewards",
+        "season_pass_seasons",
+    )
+
+    alembic_command.upgrade(config, repair_target)
+
+    with engine.begin() as connection:
+        for table_name in dropped_tables:
+            connection.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+
+    alembic_command.upgrade(config, "head")
+
+    table_inspector = inspect(engine)
+    for table_name in dropped_tables:
+        assert table_inspector.has_table(table_name)
+
+    checked_tables = database_module.check_runtime_schema_smoke(engine)
+    assert "season_pass_seasons" in checked_tables
+    assert "season_pass_rewards" in checked_tables
+    assert "season_pass_missions" in checked_tables
 
 
 def test_create_app_registers_world_simulation_routes_without_running_lifespan() -> None:
