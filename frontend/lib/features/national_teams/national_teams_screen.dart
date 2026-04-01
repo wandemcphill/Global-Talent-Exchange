@@ -147,6 +147,41 @@ class _NationalTeamsScreenState extends ConsumerState<NationalTeamsScreen> {
                                 .toList(growable: false),
                           ),
                 ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
+                  title: 'U17 national regen pool',
+                  subtitle:
+                      'Live `/regen-universe/national-regens` feed filtered to the 14-17 preseeded batch.',
+                  child:
+                      data.nationalRegens.isEmpty
+                          ? const _EmptyState(
+                            message:
+                                'No preseeded 14-17 national regens are published yet.',
+                          )
+                          : Column(
+                            children: data.nationalRegens
+                                .take(12)
+                                .map(
+                                  (JsonMap item) => Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: spacingSM,
+                                    ),
+                                    child: GtexListTile(
+                                      title: stringValue(
+                                        item['display_name'],
+                                        fallback: 'National regen',
+                                      ),
+                                      subtitle:
+                                          '${stringValue(item['country_name'])} | ${stringValue(item['primary_position'])} | Age ${intValue(item['age'])} | OVR ${intValue(item['current_rating'])} | POT ${intValue(item['potential_rating'])} | ${stringValue(item['rarity_tier']).toUpperCase()}',
+                                      leadingIcon:
+                                          Icons.workspace_premium_rounded,
+                                      tone: GtexSurfaceTone.warning,
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                ),
                 if (managedEntries.isNotEmpty) ...<Widget>[
                   const SizedBox(height: spacingMD),
                   _SectionCard(

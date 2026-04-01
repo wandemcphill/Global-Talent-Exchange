@@ -375,6 +375,29 @@ def _seed_regen_universe_preseeded_national_pool(app, context) -> None:
     _run_startup_seed(context, seed_name="regen_universe_preseeded_national_pool", seed_action=_seed)
 
 
+def _seed_regen_universe_preseeded_national_u17_pool(app, context) -> None:
+    def _seed() -> None:
+        with context.database.session_factory() as session:
+            from app.regen_universe.expansion_service import (
+                RegenUniverseExpansionService,
+                RegenUniverseExpansionValidationError,
+            )
+
+            service = RegenUniverseExpansionService(session)
+            try:
+                service.seed_preseeded_national_regens(
+                    age_min=14,
+                    age_max=17,
+                    preseed_batch="u17_batch",
+                )
+            except RegenUniverseExpansionValidationError as exc:
+                if str(exc) != "preseed_countries_not_found":
+                    raise
+            session.commit()
+
+    _run_startup_seed(context, seed_name="regen_universe_preseeded_national_u17_pool", seed_action=_seed)
+
+
 DOMAIN_MODULES = (
     _module("health"),
     _module("observability", router_path="app.observability.router:router"),
@@ -560,6 +583,7 @@ DOMAIN_MODULES = (
         on_startup=(
             _seed_regen_universe_defaults,
             _seed_regen_universe_preseeded_national_pool,
+            _seed_regen_universe_preseeded_national_u17_pool,
         ),
     ),
     _module("regen_universe_admin", router_path="app.regen_universe.router:admin_router"),

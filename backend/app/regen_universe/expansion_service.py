@@ -1550,8 +1550,13 @@ class RegenUniverseExpansionService:
         *,
         country_code: str | None = None,
         seed_type: str | None = None,
+        preseed_batch: str | None = None,
+        age_min: int | None = None,
+        age_max: int | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
+        if age_min is not None and age_max is not None and age_min > age_max:
+            raise RegenUniverseExpansionValidationError("preseed_invalid_age_range")
         stmt = select(NationalRegenSeed).order_by(
             NationalRegenSeed.country_name.asc(),
             NationalRegenSeed.rarity_tier.desc(),
@@ -1562,7 +1567,22 @@ class RegenUniverseExpansionService:
             stmt = stmt.where(NationalRegenSeed.country_code == country_code.strip().upper())
         if seed_type:
             stmt = stmt.where(NationalRegenSeed.seed_type == seed_type.strip().lower())
-        return [self._national_seed_view(item) for item in self.session.scalars(stmt.limit(limit)).all()]
+        if preseed_batch:
+            stmt = stmt.where(NationalRegenSeed.preseed_batch == preseed_batch.strip())
+        seeds = list(self.session.scalars(stmt).all())
+        if age_min is not None or age_max is not None:
+            filtered: list[NationalRegenSeed] = []
+            for seed in seeds:
+                age = self._legacy_national_seed_age(seed)
+                if age is None:
+                    continue
+                if age_min is not None and age < age_min:
+                    continue
+                if age_max is not None and age > age_max:
+                    continue
+                filtered.append(seed)
+            seeds = filtered
+        return [self._national_seed_view(item) for item in seeds[:limit]]
 
     def build_regen_tracking(self) -> dict[str, Any]:
         seeds = list(self.session.scalars(select(NationalRegenSeed)).all())

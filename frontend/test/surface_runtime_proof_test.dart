@@ -1468,6 +1468,41 @@ class _FakeNationalTeamsApi extends NationalTeamsApi {
   }
 
   @override
+  Future<List<JsonMap>> listNationalRegens({
+    int limit = 12,
+    int? ageMin = 14,
+    int? ageMax = 17,
+    String? preseedBatch = 'u17_batch',
+  }) async {
+    return <JsonMap>[
+      <String, Object?>{
+        'id': 'seed-ng-14',
+        'display_name': 'Sodiq Adebayo',
+        'age': 14,
+        'country_code': 'NG',
+        'country_name': 'Nigeria',
+        'primary_position': 'AM',
+        'current_rating': 66,
+        'potential_rating': 89,
+        'rarity_tier': 'elite',
+        'preseed_batch': 'u17_batch',
+      },
+      <String, Object?>{
+        'id': 'seed-gh-16',
+        'display_name': 'Kojo Mensah',
+        'age': 16,
+        'country_code': 'GH',
+        'country_name': 'Ghana',
+        'primary_position': 'CB',
+        'current_rating': 68,
+        'potential_rating': 87,
+        'rarity_tier': 'rare',
+        'preseed_batch': 'u17_batch',
+      },
+    ];
+  }
+
+  @override
   Future<JsonMap> buildAutoSquad({
     required String competitionId,
     required String countryCode,

@@ -326,3 +326,40 @@ def test_preseeded_national_regens_support_extra_u17_batch_sizes() -> None:
         assert all(item["metadata"]["source_generation"] == "preseeded_u17_batch" for item in seeds)
     finally:
         session.close()
+
+
+def test_list_preseeded_national_regens_can_filter_by_batch_and_age_range() -> None:
+    session = build_regen_universe_session()
+    try:
+        seed_two_season_universe(session)
+        service = RegenUniverseExpansionService(session)
+
+        service.seed_preseeded_national_regens(
+            country_codes=["NG"],
+            seeds_per_country=10,
+            include_legendary_regens=True,
+            preseed_batch="system_start",
+        )
+        service.seed_preseeded_national_regens(
+            country_codes=["NG"],
+            seeds_per_country=10,
+            age_min=14,
+            age_max=17,
+            include_legendary_regens=True,
+            preseed_batch="u17_batch",
+        )
+
+        filtered = service.list_preseeded_national_regens(
+            country_code="NG",
+            preseed_batch="u17_batch",
+            age_min=14,
+            age_max=17,
+            limit=20,
+        )
+
+        assert len(filtered) == 10
+        assert {item["preseed_batch"] for item in filtered} == {"u17_batch"}
+        assert all(14 <= int(item["age"]) <= 17 for item in filtered)
+        assert all(item["metadata"]["age_band"] == "14-17" for item in filtered)
+    finally:
+        session.close()

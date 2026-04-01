@@ -23,6 +23,7 @@ from app.schemas.regen_universe import (
     RegenSeasonView,
     RegenScoutingFeedView,
     RegenUniverseCloseResultView,
+    RegenUniversePlayerLookupView,
     RegenUniversePlayerShowcaseView,
 )
 from app.schemas.regen_universe_expansion import (
@@ -116,6 +117,17 @@ def get_regen_player_showcase(
     return RegenUniversePlayerShowcaseView.model_validate(payload)
 
 
+@router.get("/player/{player_id}", response_model=RegenUniversePlayerLookupView)
+def get_regen_player(
+    player_id: str,
+    session: Session = Depends(get_session),
+) -> RegenUniversePlayerLookupView:
+    payload = RegenUniverseService(session).get_player_lookup(player_id)
+    if payload is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="regen_universe_player_not_found")
+    return RegenUniversePlayerLookupView.model_validate(payload)
+
+
 @router.get("/rising-stars", response_model=RegenRisingStarsView)
 def list_regen_rising_stars(
     limit: int = Query(default=20, ge=1, le=100),
@@ -171,6 +183,9 @@ def get_youth_tournament(
 def list_national_regens(
     country_code: str | None = Query(default=None),
     seed_type: str | None = Query(default=None),
+    preseed_batch: str | None = Query(default=None),
+    age_min: int | None = Query(default=None, ge=0, le=99),
+    age_max: int | None = Query(default=None, ge=0, le=99),
     limit: int = Query(default=100, ge=1, le=250),
     session: Session = Depends(get_session),
 ) -> list[NationalRegenSeedView]:
@@ -179,6 +194,9 @@ def list_national_regens(
         for item in RegenUniverseExpansionService(session).list_preseeded_national_regens(
             country_code=country_code,
             seed_type=seed_type,
+            preseed_batch=preseed_batch,
+            age_min=age_min,
+            age_max=age_max,
             limit=limit,
         )
     ]

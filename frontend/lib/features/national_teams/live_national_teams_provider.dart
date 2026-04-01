@@ -46,11 +46,13 @@ class NationalTeamsHubData {
   const NationalTeamsHubData({
     required this.competitions,
     required this.rankings,
+    required this.nationalRegens,
     required this.history,
   });
 
   final List<NationalTeamCompetition> competitions;
   final List<NationalTeamCountryRankingRecord> rankings;
+  final List<JsonMap> nationalRegens;
   final NationalTeamUserHistory? history;
 }
 
@@ -125,6 +127,27 @@ class NationalTeamsApi {
     return NationalTeamUserHistory.fromJson(payload);
   }
 
+  Future<List<JsonMap>> listNationalRegens({
+    int limit = 12,
+    int? ageMin = 14,
+    int? ageMax = 17,
+    String? preseedBatch = 'u17_batch',
+  }) async {
+    final List<dynamic> payload = await client.getList(
+      '/regen-universe/national-regens',
+      auth: false,
+      query: compactQuery(<String, Object?>{
+        'limit': limit,
+        'age_min': ageMin,
+        'age_max': ageMax,
+        'preseed_batch': preseedBatch,
+      }),
+    );
+    return payload
+        .map((dynamic item) => jsonMap(item, label: 'national regen seed'))
+        .toList(growable: false);
+  }
+
   Future<JsonMap> buildAutoSquad({
     required String competitionId,
     required String countryCode,
@@ -157,6 +180,8 @@ final FutureProvider<NationalTeamsHubData> nationalTeamsHubProvider =
           api.listCompetitions();
       final Future<List<NationalTeamCountryRankingRecord>> rankingsFuture =
           api.listRankings();
+      final Future<List<JsonMap>> nationalRegensFuture =
+          api.listNationalRegens();
       NationalTeamUserHistory? history;
       if (authenticated) {
         try {
@@ -168,12 +193,13 @@ final FutureProvider<NationalTeamsHubData> nationalTeamsHubProvider =
       return NationalTeamsHubData(
         competitions: await competitionsFuture,
         rankings: await rankingsFuture,
+        nationalRegens: await nationalRegensFuture,
         history: history,
       );
     });
 
-final dynamic nationalTeamCompetitionDetailProvider = FutureProvider
-    .family<NationalTeamCompetitionDetailData, String>((
+final dynamic nationalTeamCompetitionDetailProvider =
+    FutureProvider.family<NationalTeamCompetitionDetailData, String>((
       Ref ref,
       String competitionId,
     ) async {
