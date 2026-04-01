@@ -410,13 +410,6 @@ Color _surfaceTint(
   );
 }
 
-Color _surfaceTint(GteThemeTokens tokens, double alpha) {
-  return Color.alphaBlend(
-    tokens.surfaceHighlight.withValues(alpha: alpha),
-    tokens.panelStrong,
-  );
-}
-
 BoxDecoration gteBackdropDecoration() {
   final GteThemeTokens tokens = GteShellTheme.activeTokens;
   final GteThemeVisuals visuals = GteShellTheme.activeVisuals;

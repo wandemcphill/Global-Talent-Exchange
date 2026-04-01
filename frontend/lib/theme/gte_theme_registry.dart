@@ -525,10 +525,10 @@ class GteThemeRegistry {
     ),
   );
 
-  static const GteThemeDefinition aiArenaCrimson = GteThemeDefinition(
+  static const GteThemeDefinition ultraRed = GteThemeDefinition(
     metadata: GteThemeMetadata(
-      id: GteThemeId.aiArenaCrimson,
-      label: 'AI Arena Crimson',
+      id: GteThemeId.ultraRed,
+      label: 'Ultra Red',
       tagline: 'High-intensity stadium night',
       description:
           'Black, deep crimson, and silver contrast for matchday, clips, finals, and emotional event-heavy storytelling surfaces.',
@@ -651,7 +651,7 @@ class GteThemeRegistry {
     paloAltoGlass,
     sandHillGold,
     menloNightBlue,
-    aiArenaCrimson,
+    ultraRed,
   ];
 
   static GteThemeDefinition resolve(GteThemeId id) {
@@ -664,8 +664,8 @@ class GteThemeRegistry {
         return sandHillGold;
       case GteThemeId.menloNightBlue:
         return menloNightBlue;
-      case GteThemeId.aiArenaCrimson:
-        return aiArenaCrimson;
+      case GteThemeId.ultraRed:
+        return ultraRed;
     }
   }
 }

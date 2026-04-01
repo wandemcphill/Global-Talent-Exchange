@@ -77,6 +77,7 @@ Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
       return tokens.accent;
     case GtePrimaryDestination.competitions:
       return tokens.accentArena;
+    case GtePrimaryDestination.hub:
     case GtePrimaryDestination.community:
       return tokens.accentCommunity;
     case GtePrimaryDestination.club:
@@ -91,6 +92,8 @@ const List<GtePrimaryDestination> _shellPrimaryDestinations =
       GtePrimaryDestination.home,
       GtePrimaryDestination.competitions,
       GtePrimaryDestination.market,
+      GtePrimaryDestination.hub,
+      GtePrimaryDestination.club,
     ];
 
 class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
@@ -691,7 +694,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   GtePrimaryDestination _resolvePrimaryLane(GtePrimaryDestination destination) {
-    return _primaryLaneDestinations.contains(destination)
+    return _shellPrimaryDestinations.contains(destination)
         ? destination
         : GtePrimaryDestination.home;
   }

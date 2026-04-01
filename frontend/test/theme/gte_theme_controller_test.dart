@@ -31,11 +31,11 @@ void main() {
         store: await GteSharedPreferencesThemeStore.create(),
       );
 
-      await controller.selectTheme(GteThemeId.aiArenaCrimson);
+      await controller.selectTheme(GteThemeId.ultraRed);
 
       final SharedPreferences preferences =
           await SharedPreferences.getInstance();
-      expect(preferences.getString('gte_theme_id'), 'ai_arena_crimson');
+      expect(preferences.getString('gte_theme_id'), 'ultra_red');
     });
 
     testWidgets('builds a renderable ThemeData for every registered theme', (

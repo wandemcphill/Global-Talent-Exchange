@@ -5,7 +5,7 @@ enum GteThemeId {
   paloAltoGlass,
   sandHillGold,
   menloNightBlue,
-  aiArenaCrimson,
+  ultraRed,
 }
 
 extension GteThemeIdX on GteThemeId {
@@ -19,8 +19,8 @@ extension GteThemeIdX on GteThemeId {
         return 'sand_hill_gold';
       case GteThemeId.menloNightBlue:
         return 'menlo_night_blue';
-      case GteThemeId.aiArenaCrimson:
-        return 'ai_arena_crimson';
+      case GteThemeId.ultraRed:
+        return 'ultra_red';
     }
   }
 

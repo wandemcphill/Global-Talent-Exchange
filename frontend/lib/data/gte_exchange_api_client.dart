@@ -92,25 +92,6 @@ class GteExchangeApiClient {
     );
   }
 
-  Future<GteAuthSession> register({
-    required String fullName,
-    required String phoneNumber,
-    required String email,
-    required String password,
-    required bool isOver18,
-    String? username,
-  }) {
-    return repository.register(
-      GteAuthRegisterRequest(
-        email: email,
-        fullName: fullName,
-        phoneNumber: phoneNumber,
-        isOver18: isOver18,
-        username: username,
-        password: password,
-      ),
-    );
-  }
 
   Future<void> logout() => repository.logout();
 
@@ -572,19 +553,6 @@ class GteExchangeApiClient {
     );
   }
 
-  Future<Map<String, Object?>> fetchMatchLiveFeed(String matchKey) async {
-    return GteJson.map(
-      await _sendPublicGet('/api/match-engine/live-feed/$matchKey'),
-      label: 'match live feed',
-    );
-  }
-
-  Future<Map<String, Object?>> fetchMatchHighlights(String matchKey) async {
-    return GteJson.map(
-      await _sendPublicGet('/api/match-engine/highlights/$matchKey'),
-      label: 'match highlights',
-    );
-  }
 
   Future<GteMarketCandles> fetchCandles(
     String playerId, {

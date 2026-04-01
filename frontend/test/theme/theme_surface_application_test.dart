@@ -17,7 +17,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final GteThemeController controller = GteThemeController(
-      initialThemeId: GteThemeId.aiArenaCrimson,
+      initialThemeId: GteThemeId.ultraRed,
     );
 
     await tester.pumpWidget(
@@ -38,7 +38,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('AI Arena Crimson'), findsWidgets);
+    expect(find.text('Ultra Red'), findsWidgets);
     expect(find.text('Open theme selector'), findsOneWidget);
   });
 
