@@ -837,8 +837,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Seed the local demo dataset used by frontend demos and QA.",
         epilog=(
             "Examples:\n"
-            "  python backend/scripts/bootstrap_demo.py --player-count 24 --seed 20260311\n"
-            "  python backend/scripts/bootstrap_demo.py --player-count 24 --with-liquidity --seed 20260311"
+            "  python backend/scripts/dev.py rebuild-demo-market --seed 20260311\n"
+            "  python backend/scripts/dev.py runserver --demo-simulation --seed 20260311\n"
+            "  python backend/scripts/bootstrap_demo.py --player-count 120 --with-liquidity --seed 20260311"
         ),
         formatter_class=_HelpFormatter,
     )
