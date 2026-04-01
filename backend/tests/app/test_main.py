@@ -226,6 +226,21 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
     }
 
 
+def test_app_startup_fails_when_schema_smoke_fails_even_without_migration_upgrade(monkeypatch, tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_schema_smoke_failure.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(engine=engine, run_migration_check=False)
+
+    def _raise_schema_error(_self):
+        raise RuntimeError("schema drift")
+
+    monkeypatch.setattr(DatabaseRuntime, "check_schema_smoke", _raise_schema_error)
+
+    with pytest.raises(RuntimeError, match="schema drift"):
+        with TestClient(app):
+            pass
+
+
 @pytest.mark.anyio
 async def test_connected_modules_share_database_bootstrap_and_value_jobs(app_and_engine) -> None:
     app, _engine = app_and_engine

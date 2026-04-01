@@ -58,6 +58,7 @@ RUNTIME_SCHEMA_SMOKE_TABLES = (
     "leaderboard_season_snapshots",
     "leaderboard_season_rewards",
     "national_regen_seeds",
+    "season_pass_seasons",
 )
 logger = logging.getLogger(__name__)
 
