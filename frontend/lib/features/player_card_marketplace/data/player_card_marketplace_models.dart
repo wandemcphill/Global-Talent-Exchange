@@ -336,6 +336,9 @@ class PlayerCardMarketplaceListing {
   double? get salePriceCredits => raw['sale_price_credits'] == null
       ? null
       : numberValue(raw['sale_price_credits']);
+  double? get latestValueCredits => raw['latest_value_credits'] == null
+      ? null
+      : numberValue(raw['latest_value_credits']);
   double? get loanFeeCredits => raw['loan_fee_credits'] == null
       ? null
       : numberValue(raw['loan_fee_credits']);

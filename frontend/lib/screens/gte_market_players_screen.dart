@@ -4,6 +4,7 @@ import '../features/app_routes/gte_navigation_helpers.dart';
 import '../features/app_routes/gte_route_data.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../data/gte_exchange_models.dart';
+import '../data/player_match_service.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../services/avatar_mapper.dart';
 import '../widgets/gte_formatters.dart';
@@ -21,12 +22,14 @@ class GteMarketPlayersScreen extends StatefulWidget {
     required this.controller,
     required this.onOpenPlayer,
     required this.onOpenLogin,
+    this.matchService,
     this.navigationDependencies,
   });
 
   final GteExchangeController controller;
   final ValueChanged<String> onOpenPlayer;
   final VoidCallback onOpenLogin;
+  final GtePlayerMatchService? matchService;
   final GteNavigationDependencies? navigationDependencies;
 
   @override

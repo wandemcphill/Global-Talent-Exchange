@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
@@ -23,18 +25,27 @@ enum _LiveViewMode {
   keyMoments,
 }
 
+typedef GteLiveMatchSnapshotLoader =
+    Future<LiveMatchSnapshot> Function(CompetitionSummary competition);
+typedef GteLiveMatchCommentaryStreamLoader =
+    Stream<List<LiveMatchEvent>> Function(CompetitionSummary competition);
+
 class GteLiveMatchCenterScreen extends StatefulWidget {
   const GteLiveMatchCenterScreen({
     super.key,
     required this.competition,
     this.isAuthenticated = false,
     this.onOpenLogin,
+    this.snapshotLoader,
+    this.commentaryStreamLoader,
     this.navigationDependencies,
   });
 
   final CompetitionSummary competition;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
+  final GteLiveMatchSnapshotLoader? snapshotLoader;
+  final GteLiveMatchCommentaryStreamLoader? commentaryStreamLoader;
   final GteNavigationDependencies? navigationDependencies;
 
   @override
@@ -55,13 +66,21 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
   @override
   void initState() {
     super.initState();
-    _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+    _snapshotFuture = _loadSnapshot();
   }
 
   void _reload() {
     setState(() {
-      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+      _snapshotFuture = _loadSnapshot();
     });
+  }
+
+  Future<LiveMatchSnapshot> _loadSnapshot() {
+    final GteLiveMatchSnapshotLoader? loader = widget.snapshotLoader;
+    if (loader != null) {
+      return loader(widget.competition);
+    }
+    return loadLiveMatchSnapshot(widget.competition);
   }
 
   Future<void> _openFeatureRoute(GteAppRouteData route) {

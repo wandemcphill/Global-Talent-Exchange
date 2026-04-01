@@ -33,6 +33,8 @@ class GtexMatchViewerScreen extends StatefulWidget {
     this.viewStateLoader,
     this.continuationLoader,
     this.entitlement = const Match3dUserEntitlement(),
+    this.isSpectator = false,
+    this.monetizationService,
     this.titleOverride,
     this.engineBridge,
   });
@@ -46,6 +48,8 @@ class GtexMatchViewerScreen extends StatefulWidget {
   final MatchViewStateLoader? viewStateLoader;
   final MatchViewContinuationLoader? continuationLoader;
   final Match3dUserEntitlement entitlement;
+  final bool isSpectator;
+  final Match3dMonetizationService? monetizationService;
   final String? titleOverride;
   final Match3DBridge? engineBridge;
 
