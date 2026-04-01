@@ -404,8 +404,8 @@ class GtePlayerMatchService {
         if (interestCompare != 0) {
           return interestCompare;
         }
-        final double rightTrend = right.player.trendScore ?? 0;
-        final double leftTrend = left.player.trendScore ?? 0;
+        final double rightTrend = right.player.trendScore;
+        final double leftTrend = left.player.trendScore;
         final int trendCompare = rightTrend.compareTo(leftTrend);
         if (trendCompare != 0) {
           return trendCompare;

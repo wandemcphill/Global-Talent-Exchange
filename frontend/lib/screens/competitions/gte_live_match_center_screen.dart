@@ -98,8 +98,16 @@ class _GteLiveMatchCenterScreenState extends State<GteLiveMatchCenterScreen> {
 
   void _reload() {
     setState(() {
-      _snapshotFuture = loadLiveMatchSnapshot(widget.competition);
+      _snapshotFuture = _loadSnapshot();
     });
+  }
+
+  Future<LiveMatchSnapshot> _loadSnapshot() {
+    final GteLiveMatchSnapshotLoader? loader = widget.snapshotLoader;
+    if (loader != null) {
+      return loader(widget.competition);
+    }
+    return loadLiveMatchSnapshot(widget.competition);
   }
 
   Future<void> _openFeatureRoute(GteAppRouteData route) {
