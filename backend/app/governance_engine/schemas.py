@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.governance_engine import (
     GovernanceProposalScope,
@@ -35,6 +35,8 @@ class GovernanceProposalStatusRequest(BaseModel):
 
 
 class GovernanceProposalView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     club_id: str | None
     proposer_user_id: str
@@ -56,11 +58,10 @@ class GovernanceProposalView(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class GovernanceVoteView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     proposal_id: str
     voter_user_id: str
@@ -73,9 +74,6 @@ class GovernanceVoteView(BaseModel):
     metadata_json: dict[str, object]
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class GovernanceProposalListResponse(BaseModel):
