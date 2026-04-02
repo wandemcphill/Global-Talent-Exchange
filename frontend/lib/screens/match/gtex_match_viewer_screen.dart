@@ -68,16 +68,6 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   String? _statusMessage;
   Match3dOverlayBurst? _overlayBurst;
 
-  RenderMode get _requestedRenderMode {
-    switch (widget.renderMode) {
-      case RenderMode.threeD:
-        return RenderMode.threeD;
-      case RenderMode.auto:
-      case RenderMode.twoD:
-        return RenderMode.twoD;
-    }
-  }
-
   @override
   void initState() {
     super.initState();

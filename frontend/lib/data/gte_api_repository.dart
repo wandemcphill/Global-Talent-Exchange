@@ -382,135 +382,6 @@ abstract class GteApiRepository {
     GteDisputeMessageRequest request,
   );
 
-
-  Future<GteWithdrawalEligibility> fetchWithdrawalEligibility();
-
-  Future<GteWithdrawalQuote> fetchWithdrawalQuote(
-      GteWithdrawalQuoteRequest request);
-
-  Future<GteWithdrawalReceipt> fetchWithdrawalReceipt(String withdrawalId);
-
-  Future<GteDepositRequest> createDepositRequest(
-      GteDepositCreateRequest request);
-
-  Future<GteDepositRequest> submitDepositRequest(
-      String depositId, GteDepositSubmitRequest request);
-
-  Future<List<GteDepositRequest>> listDepositRequests();
-
-  Future<GteTreasuryWithdrawalRequest> createWithdrawalRequest(
-      GteWithdrawalCreateRequest request);
-
-  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests();
-
-  Future<GteKycProfile> fetchKycProfile();
-
-  Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request);
-
-  Future<List<GteUserBankAccount>> listUserBankAccounts();
-
-  Future<GteUserBankAccount> createUserBankAccount(
-      GteUserBankAccountCreate request);
-
-  Future<GteUserBankAccount> updateUserBankAccount(
-      String bankAccountId, GteUserBankAccountUpdate request);
-
-  Future<List<GteDispute>> listDisputes();
-
-  Future<GteDispute> openDispute(GteDisputeCreateRequest request);
-
-  Future<GteDispute> fetchDispute(String disputeId);
-
-  Future<GteDisputeMessage> sendDisputeMessage(
-      String disputeId, GteDisputeMessageRequest request);
-
-  Future<List<GteNotification>> listNotifications({int limit = 20});
-
-  Future<void> markNotificationRead(String notificationId);
-
-  Future<void> markAllNotificationsRead();
-
-  Future<GteAttachment> uploadAttachment(
-    String filename,
-    List<int> bytes, {
-    String? contentType,
-  });
-
-  Future<GteAnalyticsEvent> trackAnalyticsEvent(
-    String name, {
-    Map<String, Object?> metadata = const <String, Object?>{},
-  });
-
-  Future<GteAnalyticsSummary> fetchAnalyticsSummary();
-
-  Future<GteAnalyticsFunnel> fetchAnalyticsFunnel();
-
-  Future<GteTreasuryDashboard> fetchTreasuryDashboard();
-
-  Future<GteTreasurySettings> fetchTreasurySettings();
-
-  Future<GteTreasurySettings> updateTreasurySettings(
-      GteTreasurySettingsUpdate request);
-
-  Future<List<GteTreasuryBankAccount>> listTreasuryBankAccounts();
-
-  Future<GteTreasuryBankAccount> createTreasuryBankAccount(
-      GteTreasuryBankAccountCreate request);
-
-  Future<GteTreasuryBankAccount> updateTreasuryBankAccount(
-      String accountId, GteTreasuryBankAccountUpdate request);
-
-  Future<GteAdminQueuePage<GteAdminDeposit>> fetchAdminDeposits({
-    int limit = 50,
-    int offset = 0,
-    String? status,
-    String? query,
-  });
-
-  Future<GteDepositRequest> adminConfirmDeposit(String depositId,
-      {String? adminNotes});
-
-  Future<GteDepositRequest> adminRejectDeposit(String depositId,
-      {String? adminNotes});
-
-  Future<GteDepositRequest> adminReviewDeposit(String depositId,
-      {String? adminNotes});
-
-  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
-    int limit = 50,
-    int offset = 0,
-    String? status,
-    String? query,
-  });
-
-  Future<GteTreasuryWithdrawalRequest> adminUpdateWithdrawalStatus(
-    String withdrawalId, {
-    required GteWithdrawalStatus status,
-    String? adminNotes,
-  });
-
-  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
-    int limit = 50,
-    int offset = 0,
-    String? status,
-    String? query,
-  });
-
-  Future<GteKycProfile> adminReviewKyc(
-      String profileId, GteKycReviewRequest request);
-
-  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
-    int limit = 50,
-    int offset = 0,
-    String? status,
-    String? query,
-  });
-
-  Future<GteDispute> fetchAdminDispute(String disputeId);
-
-  Future<GteDisputeMessage> adminSendDisputeMessage(
-      String disputeId, GteDisputeMessageRequest request);
-
   Future<GtePortfolioView> fetchPortfolio();
 
   Future<GtePortfolioSummary> fetchPortfolioSummary();
@@ -541,10 +412,7 @@ class GteReliableApiRepository implements GteApiRepository {
       () => fixtures.login(request),
       allowFixtureFallback: false,
     );
-    await _persistAuthSession(
-      session,
-      bootstrap: config.mode != GteBackendMode.fixture,
-    );
+    await _persistAuthSession(session);
     return session;
   }
 
@@ -557,10 +425,7 @@ class GteReliableApiRepository implements GteApiRepository {
       () => fixtures.register(request),
       allowFixtureFallback: false,
     );
-    await _persistAuthSession(
-      session,
-      bootstrap: config.mode != GteBackendMode.fixture,
-    );
+    await _persistAuthSession(session);
     return session;
   }
 
@@ -629,7 +494,8 @@ class GteReliableApiRepository implements GteApiRepository {
       return payload
           .map(GtePolicyDocumentSummary.fromJson)
           .toList(growable: false);
-    }, () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly));
+    }, () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly),
+        allowFixtureFallback: false);
   }
 
   @override
@@ -649,6 +515,7 @@ class GteReliableApiRepository implements GteApiRepository {
       ),
       () =>
           fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
+      allowFixtureFallback: false,
     );
   }
 
@@ -659,6 +526,7 @@ class GteReliableApiRepository implements GteApiRepository {
         await _request('GET', '/policies/me/compliance', requiresAuth: true),
       ),
       fixtures.fetchComplianceStatus,
+      allowFixtureFallback: false,
     );
   }
 
@@ -672,7 +540,7 @@ class GteReliableApiRepository implements GteApiRepository {
       return payload
           .map(GtePolicyRequirementSummary.fromJson)
           .toList(growable: false);
-    }, fixtures.fetchPolicyRequirements);
+    }, fixtures.fetchPolicyRequirements, allowFixtureFallback: false);
   }
 
   @override
@@ -685,7 +553,7 @@ class GteReliableApiRepository implements GteApiRepository {
       return payload
           .map(GtePolicyAcceptanceSummary.fromJson)
           .toList(growable: false);
-    }, fixtures.fetchMyPolicyAcceptances);
+    }, fixtures.fetchMyPolicyAcceptances, allowFixtureFallback: false);
   }
 
   @override
@@ -721,126 +589,8 @@ class GteReliableApiRepository implements GteApiRepository {
           'acceptedAt',
         ]),
       );
-    }, () => fixtures.acceptPolicyDocument(documentKey, versionLabel));
-  }
-
-
-  @override
-  Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
-    bool mandatoryOnly = false,
-  }) {
-    return _withFallback<List<GtePolicyDocumentSummary>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request(
-            'GET',
-            '/policies/documents',
-            query: <String, Object?>{'mandatory_only': mandatoryOnly},
-          ),
-          label: 'policy documents',
-        );
-        return payload
-            .map(GtePolicyDocumentSummary.fromJson)
-            .toList(growable: false);
-      },
-      () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly),
-    );
-  }
-
-  @override
-  Future<GtePolicyDocumentDetail> fetchPolicyDocument(
-    String documentKey, {
-    String? versionLabel,
-  }) {
-    return _withFallback<GtePolicyDocumentDetail>(
-      () async => GtePolicyDocumentDetail.fromJson(
-        await _request(
-          'GET',
-          '/policies/documents/$documentKey',
-          query: <String, Object?>{
-            if (versionLabel != null) 'version_label': versionLabel
-          },
-        ),
-      ),
-      () =>
-          fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
-    );
-  }
-
-  @override
-  Future<GteComplianceStatus> fetchComplianceStatus() {
-    return _withFallback<GteComplianceStatus>(
-      () async => GteComplianceStatus.fromJson(
-        await _request('GET', '/policies/me/compliance', requiresAuth: true),
-      ),
-      fixtures.fetchComplianceStatus,
-    );
-  }
-
-  @override
-  Future<List<GtePolicyRequirementSummary>> fetchPolicyRequirements() {
-    return _withFallback<List<GtePolicyRequirementSummary>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request('GET', '/policies/me/requirements',
-              requiresAuth: true),
-          label: 'policy requirements',
-        );
-        return payload
-            .map(GtePolicyRequirementSummary.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.fetchPolicyRequirements,
-    );
-  }
-
-  @override
-  Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() {
-    return _withFallback<List<GtePolicyAcceptanceSummary>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request('GET', '/policies/me/acceptances', requiresAuth: true),
-          label: 'policy acceptances',
-        );
-        return payload
-            .map(GtePolicyAcceptanceSummary.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.fetchMyPolicyAcceptances,
-    );
-  }
-
-  @override
-  Future<GtePolicyAcceptanceSummary> acceptPolicyDocument(
-    String documentKey,
-    String versionLabel,
-  ) {
-    return _withFallback<GtePolicyAcceptanceSummary>(
-      () async {
-        final Map<String, Object?> payload = GteJson.map(
-          await _request(
-            'POST',
-            '/policies/acceptances',
-            body: <String, Object?>{
-              'document_key': documentKey,
-              'version_label': versionLabel,
-            },
-            requiresAuth: true,
-          ),
-          label: 'policy acceptance response',
-        );
-        return GtePolicyAcceptanceSummary(
-          documentKey:
-              GteJson.string(payload, <String>['document_key', 'documentKey']),
-          title: documentKey,
-          versionLabel: GteJson.string(
-              payload, <String>['version_label', 'versionLabel']),
-          acceptedAt: GteJson.dateTimeOrNull(
-              payload, <String>['accepted_at', 'acceptedAt']),
-        );
-      },
-      () => fixtures.acceptPolicyDocument(documentKey, versionLabel),
-    );
+    }, () => fixtures.acceptPolicyDocument(documentKey, versionLabel),
+        allowFixtureFallback: false);
   }
 
   @override
@@ -854,19 +604,12 @@ class GteReliableApiRepository implements GteApiRepository {
         ),
         label: 'market players',
       );
-      final Map<String, PlayerSnapshot> fixtureById = {
-        for (final PlayerSnapshot player in await fixtures.fetchPlayers(
-          limit: limit,
-        ))
-          player.id: player,
-      };
       return GteJson.typedList(payload, <String>['items'], (Object? value) {
         final Map<String, Object?> item = GteJson.map(
           value,
           label: 'market player item',
         );
-        final String playerId = GteJson.string(item, <String>['player_id']);
-        return _mapPlayerSnapshot(item, fixtureById[playerId]);
+        return _mapPlayerSnapshot(item, null);
       });
     }, () => fixtures.fetchPlayers(limit: limit));
   }
@@ -874,9 +617,6 @@ class GteReliableApiRepository implements GteApiRepository {
   @override
   Future<PlayerProfile> fetchPlayerProfile(String playerId) {
     return _withFallback<PlayerProfile>(() async {
-      final PlayerProfile? fixtureProfile = await _safeFixture<PlayerProfile?>(
-        () => fixtures.fetchPlayerProfile(playerId),
-      );
       final Map<String, Object?> detail = GteJson.map(
         await _request('GET', '/api/market/players/$playerId'),
         label: 'market player detail',
@@ -889,7 +629,7 @@ class GteReliableApiRepository implements GteApiRepository {
         ticker,
         candles,
         orderBook,
-        fixtureProfile,
+        null,
       );
     }, () => fixtures.fetchPlayerProfile(playerId));
   }
@@ -897,11 +637,10 @@ class GteReliableApiRepository implements GteApiRepository {
   @override
   Future<MarketPulse> fetchMarketPulse() {
     return _withFallback<MarketPulse>(() async {
-      final MarketPulse fixturePulse = await fixtures.fetchMarketPulse();
       final List<PlayerSnapshot> players = await fetchPlayers(limit: 6);
       final double marketMomentum =
           players.isEmpty
-              ? fixturePulse.marketMomentum
+              ? 0
               : players.fold<double>(
                     0,
                     (double sum, PlayerSnapshot player) =>
@@ -928,10 +667,10 @@ class GteReliableApiRepository implements GteApiRepository {
                     .length *
                 73 +
             131,
-        liveDeals: fixturePulse.transferRoom.length,
-        hottestLeague: fixturePulse.hottestLeague,
-        tickers: tickers.isEmpty ? fixturePulse.tickers : tickers,
-        transferRoom: fixturePulse.transferRoom,
+        liveDeals: 0,
+        hottestLeague: 'Global Exchange',
+        tickers: tickers,
+        transferRoom: const <TransferRoomEntry>[],
       );
     }, fixtures.fetchMarketPulse);
   }
@@ -1972,14 +1711,6 @@ class GteReliableApiRepository implements GteApiRepository {
         return fixtureCall();
       }
       rethrow;
-    }
-  }
-
-  Future<T?> _safeFixture<T>(Future<T> Function() callback) async {
-    try {
-      return await callback();
-    } catch (_) {
-      return null;
     }
   }
 

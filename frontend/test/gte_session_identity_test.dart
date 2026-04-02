@@ -131,20 +131,3 @@ GteAuthSession _sessionFromJson(Map<String, Object?> payload) {
     ...payload,
   });
 }
-
-GteAuthSession _sessionFromJson(Map<String, Object?> payload) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'token_type': 'bearer',
-      'expires_in': 3600,
-      'user': <String, Object?>{
-        'id': 'test-user',
-        'email': 'test-user@gtex.test',
-        'username': 'tester',
-        'role': 'user',
-      },
-      ...payload,
-    },
-  );
-}

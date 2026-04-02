@@ -20,7 +20,6 @@ class ClubProfileScreen extends StatelessWidget {
   final ClubController? controller;
   final String baseUrl;
   final GteBackendMode backendMode;
-  final String? accessToken;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
 

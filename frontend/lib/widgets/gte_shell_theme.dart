@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import '../theme/gte_theme_controller.dart';
 import '../theme/gte_theme_extensions.dart';
 import '../theme/gte_theme_registry.dart';
 import '../theme/gte_theme_scope.dart';
@@ -406,13 +405,6 @@ Color _surfaceTint(
 ) {
   return Color.alphaBlend(
     visuals.heroAccent.withValues(alpha: alpha),
-    tokens.panelStrong,
-  );
-}
-
-Color _surfaceTint(GteThemeTokens tokens, double alpha) {
-  return Color.alphaBlend(
-    tokens.surfaceHighlight.withValues(alpha: alpha),
     tokens.panelStrong,
   );
 }

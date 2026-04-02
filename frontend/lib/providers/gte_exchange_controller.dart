@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'dart:collection';
@@ -358,7 +359,7 @@ class GteExchangeController extends ChangeNotifier {
           playerId: selectedPlayer?.detail.playerId,
           refreshPlayer: selectedPlayer != null,
         ),
-      );
+      ]);
       unawaited(refreshCompliance());
     } catch (error) {
       if (_authGate.isActive(requestId)) {
@@ -379,47 +380,6 @@ class GteExchangeController extends ChangeNotifier {
     required String password,
     required bool isOver18,
     required String regionCode,
-    String? username,
-  }) async {
-    final int requestId = _authGate.begin();
-    authError = null;
-    isSigningIn = true;
-    notifyListeners();
-
-    try {
-      final GteAuthSession nextSession = await _api.register(
-        fullName: fullName,
-        phoneNumber: phoneNumber,
-        email: email,
-        password: password,
-        isOver18: isOver18,
-        regionCode: regionCode,
-        username: username,
-      );
-      if (!_authGate.isActive(requestId)) {
-        return;
-      }
-      session = nextSession;
-      authError = null;
-      await refreshAccount();
-    } catch (error) {
-      if (_authGate.isActive(requestId)) {
-        authError = AppFeedback.messageFor(error);
-      }
-    } finally {
-      if (_authGate.isActive(requestId)) {
-        isSigningIn = false;
-        notifyListeners();
-      }
-    }
-  }
-
-  Future<void> register({
-    required String fullName,
-    required String phoneNumber,
-    required String email,
-    required String password,
-    required bool isOver18,
     String? username,
   }) async {
     final int requestId = _authGate.begin();

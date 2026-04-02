@@ -23,6 +23,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   final TextEditingController _amountController = TextEditingController();
   bool _isSubmitting = false;
   bool _isVerifying = false;
+  bool _awaitingInitialComplianceCheck = false;
   String? _error;
   GteWalletTopUpSession? _session;
   GteWalletTopUpVerificationResult? _verification;
@@ -157,6 +158,10 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   Widget build(BuildContext context) {
     final GteWalletTopUpSession? session = _session;
     final GteWalletTopUpVerificationResult? verification = _verification;
+    final GteComplianceStatus? compliance = widget.controller.complianceStatus;
+    final bool blocked =
+        (compliance?.complianceStatus.toLowerCase() == 'blocked') ||
+        (compliance?.hasMissingRequiredPolicies ?? false);
     return Scaffold(
       appBar: AppBar(title: const Text('Top up wallet')),
       body: ListView(
