@@ -40,9 +40,9 @@ class PremiumControls extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final bool stackedActions = constraints.maxWidth < 400;
+        final bool stackedActions = constraints.maxWidth < 340;
         return Container(
-          constraints: const BoxConstraints(maxWidth: 360),
+          constraints: const BoxConstraints(maxWidth: 420),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),

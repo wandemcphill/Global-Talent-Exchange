@@ -15,20 +15,10 @@ const String adminPermissionManageManagerCatalog = 'manage_manager_catalog';
 const String adminPermissionManageManagerSupply = 'manage_manager_supply';
 
 final Provider<AuthSessionStore> authSessionStoreProvider =
-    Provider<AuthSessionStore>(
-      (Ref ref) =>
-          throw UnimplementedError(
-            'authSessionStoreProvider must be overridden.',
-          ),
-    );
+    Provider<AuthSessionStore>((Ref ref) => MemoryAuthSessionStore());
 
 final Provider<DeviceIdentityStore> deviceIdentityStoreProvider =
-    Provider<DeviceIdentityStore>(
-      (Ref ref) =>
-          throw UnimplementedError(
-            'deviceIdentityStoreProvider must be overridden.',
-          ),
-    );
+    Provider<DeviceIdentityStore>((Ref ref) => MemoryDeviceIdentityStore());
 
 final Provider<AuthSession?> initialAuthSessionProvider =
     Provider<AuthSession?>((Ref ref) => null);
@@ -44,7 +34,7 @@ final Provider<AuthSession?> authProvider = Provider<AuthSession?>(
 );
 
 final Provider<String> deviceIdProvider = Provider<String>(
-  (Ref ref) => throw UnimplementedError('deviceIdProvider must be overridden.'),
+  (Ref ref) => 'gtex-local-device',
 );
 
 final Provider<bool> isAuthenticatedProvider = Provider<bool>(

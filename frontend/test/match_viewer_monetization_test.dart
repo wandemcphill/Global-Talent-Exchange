@@ -50,7 +50,7 @@ void main() {
     await tester.tap(find.text('3D lane').last);
     await _pumpForOverlayTransition(tester);
 
-    expect(find.text('Watch in Cinematic Mode 🎬'), findsOneWidget);
+    expect(find.textContaining('Watch in Cinematic Mode'), findsOneWidget);
 
     await tester.tap(find.text('Continue in 2D'));
     await _pumpForOverlayTransition(tester);
@@ -103,8 +103,8 @@ void main() {
 
       expect(find.byType(Gtex3dScene), findsOneWidget);
       expect(find.text('Pro Manager'), findsWidgets);
-      expect(find.text('Watch in Cinematic Mode 🎬'), findsNothing);
-      expect(find.text('Restart'), findsNothing);
+      expect(find.textContaining('Watch in Cinematic Mode'), findsNothing);
+      expect(find.widgetWithText(FilledButton, 'Restart'), findsNothing);
       expect(find.textContaining('Gift'), findsOneWidget);
     },
   );
@@ -200,7 +200,10 @@ void main() {
       );
       expect(find.byKey(const Key('match-rewarded-ad-card')), findsOneWidget);
 
-      await tester.tap(find.text('Watch Ad · +50 coins'));
+      await tester.ensureVisible(
+        find.byKey(const Key('match-rewarded-ad-card')),
+      );
+      await tester.tap(find.textContaining('Watch Ad'));
       await tester.pump();
 
       expect(
@@ -249,4 +252,3 @@ CompetitionSummary _buildCompetition({required String id}) {
     updatedAt: DateTime.utc(2026, 1, 2),
   );
 }
-

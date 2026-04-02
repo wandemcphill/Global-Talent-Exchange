@@ -9,8 +9,9 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
 void main() {
-  testWidgets('frontend app renders the GTEX command center shell',
-      (WidgetTester tester) async {
+  testWidgets('frontend app renders the GTEX command center shell', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -37,13 +38,12 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
 
-    expect(find.text('Command Center'), findsOneWidget);
-    expect(find.text('Ibadan Lions FC'), findsOneWidget);
-    expect(find.text('Play Match'), findsOneWidget);
-    expect(find.text('Trending regens'), findsOneWidget);
+    expect(find.text('Home Lobby'), findsOneWidget);
+    expect(find.textContaining('matchday lobby'), findsOneWidget);
+    expect(find.text('App-wide premium sync'), findsOneWidget);
+    expect(find.text('Open coach market'), findsOneWidget);
   });
 }
 
@@ -53,22 +53,20 @@ GteAuthSession _authenticatedSession({
   String? clubId,
   String? clubName,
 }) {
-  return GteAuthSession.fromJson(
-    <String, Object?>{
-      'access_token': 'test-token',
-      'token_type': 'bearer',
-      'expires_in': 3600,
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    if (clubId != null) 'current_club_id': clubId,
+    if (clubName != null) 'current_club_name': clubName,
+    'user': <String, Object?>{
+      'id': userId,
+      'email': '$userId@gtex.test',
+      'username': userId,
+      'display_name': userName,
+      'role': 'user',
       if (clubId != null) 'current_club_id': clubId,
       if (clubName != null) 'current_club_name': clubName,
-      'user': <String, Object?>{
-        'id': userId,
-        'email': '$userId@gtex.test',
-        'username': userId,
-        'display_name': userName,
-        'role': 'user',
-        if (clubId != null) 'current_club_id': clubId,
-        if (clubName != null) 'current_club_name': clubName,
-      },
     },
-  );
+  });
 }

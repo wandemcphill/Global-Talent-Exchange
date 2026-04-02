@@ -625,7 +625,9 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           ),
                       ],
                     );
-                    final Widget wideRail = Column(
+                    final Widget railContent = Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
                         if (wide) ...<Widget>[
                           RealMatchTacticalHudWidget(
@@ -634,6 +636,21 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                           ),
                           const SizedBox(height: 12),
                         ],
+                        if (rewardedPlacement != null) ...<Widget>[
+                          _RewardedAdCard(
+                            placement: rewardedPlacement,
+                            claimed: rewardClaimed,
+                            onClaim:
+                                rewardClaimed
+                                    ? null
+                                    : () => _claimRewardedAd(rewardedPlacement),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_statusMessage != null) ...<Widget>[
+                          _StatusCard(message: _statusMessage!),
+                          const SizedBox(height: 12),
+                        ],
                         PremiumControls(
                           entitlement: monetizationService.effectiveEntitlement,
                           selectedRenderMode:
@@ -680,95 +697,6 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                                   : () =>
                                       _upgradeTournamentExperience(viewState),
                         ),
-                        if (_statusMessage != null) ...<Widget>[
-                          const SizedBox(height: 12),
-                          _StatusCard(message: _statusMessage!),
-                        ],
-                        if (rewardedPlacement != null) ...<Widget>[
-                          const SizedBox(height: 12),
-                          _RewardedAdCard(
-                            placement: rewardedPlacement,
-                            claimed: rewardClaimed,
-                            onClaim:
-                                rewardClaimed
-                                    ? null
-                                    : () => _claimRewardedAd(rewardedPlacement),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        Expanded(
-                          child: _EventRail(
-                            controller: controller,
-                            viewState: viewState,
-                            scrollable: true,
-                          ),
-                        ),
-                      ],
-                    );
-                    final Widget narrowRail = Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        PremiumControls(
-                          entitlement: monetizationService.effectiveEntitlement,
-                          selectedRenderMode:
-                              monetizationService.selectedRenderMode,
-                          effectiveRenderMode: effectiveRenderMode,
-                          threeDAvailable: canAccess3D(
-                            matchContext,
-                            monetizationService.effectiveEntitlement,
-                          ),
-                          availableCoins:
-                              monetizationService.availableCoinBalance,
-                          cameraPreset: monetizationService.cameraPreset,
-                          canUsePremiumCamera: monetizationService
-                              .canUsePremiumCamera(matchContext),
-                          canUseFastReplay: monetizationService
-                              .canUseFastReplay(matchContext),
-                          onRenderModeSelected:
-                              (RenderMode mode) =>
-                                  _selectRenderMode(viewState, mode),
-                          onCameraPresetSelected:
-                              (Match3dCameraPreset preset) =>
-                                  monetizationService.setCameraPreset(
-                                    preset,
-                                    matchContext,
-                                  ),
-                          onUnlockSlowMotion:
-                              () => _unlockInteraction(
-                                Match3dPaidInteraction.slowMotionReplay,
-                                viewState,
-                              ),
-                          onUnlockAlternateCamera:
-                              () => _unlockInteraction(
-                                Match3dPaidInteraction.alternateCameraAngle,
-                                viewState,
-                              ),
-                          onUnlockHighlightAttack:
-                              () => _unlockInteraction(
-                                Match3dPaidInteraction.highlightNextAttack,
-                                viewState,
-                              ),
-                          onUpgradeTournament:
-                              monetizationService.tournamentBoostPrice == null
-                                  ? null
-                                  : () =>
-                                      _upgradeTournamentExperience(viewState),
-                        ),
-                        if (_statusMessage != null) ...<Widget>[
-                          const SizedBox(height: 12),
-                          _StatusCard(message: _statusMessage!),
-                        ],
-                        if (rewardedPlacement != null) ...<Widget>[
-                          const SizedBox(height: 12),
-                          _RewardedAdCard(
-                            placement: rewardedPlacement,
-                            claimed: rewardClaimed,
-                            onClaim:
-                                rewardClaimed
-                                    ? null
-                                    : () => _claimRewardedAd(rewardedPlacement),
-                          ),
-                        ],
                         const SizedBox(height: 12),
                         _EventRail(
                           controller: controller,
@@ -782,10 +710,15 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                         children: <Widget>[
                           Expanded(flex: 3, child: viewerPanel),
                           SizedBox(
-                            width: 360,
+                            width: 400,
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(0, 18, 18, 18),
-                              child: wideRail,
+                              child: Scrollbar(
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  child: railContent,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -801,7 +734,7 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                          child: narrowRail,
+                          child: railContent,
                         ),
                       ],
                     );

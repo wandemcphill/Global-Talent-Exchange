@@ -46,11 +46,12 @@ class CommentaryRibbonWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             if (showMetaRow) ...<Widget>[
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: <Widget>[
                   if (label != null && label!.trim().isNotEmpty)
                     _RibbonMetaChip(label: label!, accentColor: accentColor),
-                  const Spacer(),
                   if (trailing != null && trailing!.trim().isNotEmpty)
                     _RibbonMetaChip(
                       label: trailing!,
@@ -127,6 +128,8 @@ class _RibbonMetaChip extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
           color: Colors.white,
           fontWeight: FontWeight.w800,
